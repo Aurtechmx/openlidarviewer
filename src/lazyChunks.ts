@@ -64,6 +64,18 @@ export const loadContourExportAdapter = () => import('./ui/contourExportAdapter'
  */
 export const loadApplyDisplayProfile = () => import('./render/applyDisplayProfile');
 
+/**
+ * Load the layer-health builders on demand. The card is empty until a scan
+ * loads, and the builders carry the card's full explanatory wording — dead
+ * weight in the startup shell. First layer refresh kicks the import; the
+ * service re-pushes when it resolves, so the card fills within the same
+ * refresh cycle.
+ */
+export const loadLayerHealth = () => import('./app/layerHealth');
+
+/** The health card component itself — same reasoning, same boundary. */
+export const loadLayerHealthCard = () => import('./ui/LayerHealthCard');
+
 /** Load the streaming point-cloud module (COPC octree + IO). */
 export const loadStreamingPointCloud = () =>
   import('./render/streaming/StreamingPointCloud');

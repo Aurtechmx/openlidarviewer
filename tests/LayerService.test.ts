@@ -81,6 +81,7 @@ function setup(
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
   const restoreCalls: string[] = [];
   const placements = new Set<string>();
+  const healthCalls: Array<{ n: number; report: unknown }> = [];
   const compatCalls = new Map<string, string>();
   const mountCalls = new Map<string, boolean>();
   const unmountedCalls: string[][] = [];
@@ -139,6 +140,9 @@ function setup(
     setLayerCrsFlags: (ids: Set<string>, summary: unknown, _c?: unknown, unmounted?: ReadonlySet<string>) => {
       crsFlagCalls.push({ ids: [...ids], summary });
       unmountedCalls.push([...(unmounted ?? [])].sort());
+    },
+    setLayerHealth: (layers: unknown[], report: unknown) => {
+      healthCalls.push({ n: layers.length, report });
     },
     setLayerCompareAvailable: (b: boolean) => {
       compareCalls.push(b);

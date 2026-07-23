@@ -25,6 +25,7 @@ import {
   alignsVertically,
   type LayerCompatibility,
 } from '../model/layerCompatibility';
+import { loadLayerHealth } from '../lazyChunks';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 
@@ -185,6 +186,11 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
    */
   let lastCompatibility = new Map<string, LayerCompatibility>();
   let lastUnmounted: string[] = [];
+  /** Per-layer mount-precision result from the last frame pass — health card input. */
+  let lastPrecision = new Map<string, { errorMetres: number | null; basis: string }>();
+  /** Lazy health builders (lazyChunks.loadLayerHealth) — wording stays out of the shell. */
+  let healthMod: typeof import('./layerHealth') | null = null;
+  let healthLoading = false;
 
   function syncProjectFrame(infos: readonly LayerInfo[]): void {
     const viewer = getViewer();
@@ -266,6 +272,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       // mount on geographic coordinates is refused outright rather than
       // converted through a latitude-dependent approximation.
       const precision = mountPrecision(info, cloud, aligned ? frame : null);
+      lastPrecision.set(info.id, precision);
       const precisionSafe = precision.errorMetres !== null
         && precision.errorMetres <= REBASE_QUANTUM_BUDGET_M;
 
@@ -323,6 +330,56 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       lastCompatibility,
       new Set(lastUnmounted),
     );
+    // The health card reads the same pass: one assembly, so the card and the
+    // estimators can never disagree about a layer's state. Fields fail closed
+    // (null) wherever the fact is not established — see app/layerHealth.ts.
+    if (!healthMod) {
+      if (!healthLoading) {
+        healthLoading = true;
+        // Re-push through the same refresh once the wording arrives.
+        void loadLayerHealth().then((m) => { healthMod = m; refreshCrsFlags(); });
+      }
+    } else {
+      const { buildLayerHealth, buildCompatibilityReport } = healthMod;
+      const viewer2 = getViewer();
+      const frame2 = deps.projectFrame.frame;
+      const healthLayers = infos.map((info) => {
+        const c = viewer2.getCloud(info.id);
+        const crs = c?.metadata?.crs ?? null;
+        const inFrame =
+          frame2 != null && !lastUnmounted.includes(info.id) &&
+          !deps.projectFrame.unaligned.includes(info.id);
+        const tf = inFrame ? deps.projectFrame.transformFor(info.id) : null;
+        const p = lastPrecision.get(info.id) ?? null;
+        return {
+          rows: buildLayerHealth({
+            name: info.name,
+            crsName: info.crsName ?? null,
+            crsSource: (crs as { source?: string } | null)?.source ?? null,
+            horizontalUnit:
+              crs && crs.linearUnit && crs.linearUnit !== 'unknown' ? crs.linearUnit : null,
+            verticalUnit: null, // no declared vertical unit NAME exists; never reverse-map the factor
+            verticalDatum: info.verticalDatum ?? null,
+            compatibility: lastCompatibility.get(info.id) ?? null,
+            mounted: !lastUnmounted.includes(info.id),
+            sourceOrigin: c?.sourceOrigin ? [c.sourceOrigin[0], c.sourceOrigin[1], c.sourceOrigin[2]] : null,
+            frameOffset: tf ? [tf.sourceToProject[0], tf.sourceToProject[1], tf.sourceToProject[2]] : null,
+            precisionMm: p && p.errorMetres !== null ? p.errorMetres * 1000 : null,
+            precisionBasis: (p?.basis as 'projected-linear-unit' | 'geographic' | 'unknown' | undefined) ?? null,
+            streaming: false,
+          }),
+          name: info.name,
+        };
+      });
+      const report = buildCompatibilityReport(
+        infos.map((info) => ({
+          name: info.name,
+          compatibility: lastCompatibility.get(info.id) ?? null,
+          verticalDatumKnown: (info.verticalDatum ?? null) !== null,
+        })),
+      );
+      inspector.setLayerHealth(healthLayers, report);
+    }
     // The two-epoch compare needs exactly two loaded layers.
     inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);
     // Show the compass once a scan is open; hide it again when the last layer goes.

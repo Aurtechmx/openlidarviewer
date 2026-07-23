@@ -22,7 +22,7 @@ Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:sl
 - **Rebase precision is quantified, not assumed.** `PointCloud.rebaseQuantum` reports the Float32 step a mount would land on. Measured: a lone georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); the cost scales with inter-layer separation, reaching 1 mm at 100 km apart. Positions remain Float32, so widely-separated layers trade residual precision for correct relative placement — see Known Limitations.
 - **Progressive EPT attach.** `tests/eptStreaming.test.ts` verifies first-paint-then-continue parity with the full walk and that a persistently-failing fetch terminates (no allocation loop).
 
-Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 3,089 passed / 16 skipped, export 616, terrain 1,240, ui 429, slow 517 — 5,891 passed / 16 skipped; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 4 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
+Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 3,132 passed / 16 skipped, export 616, terrain 1,240, ui 429, slow 517 — 5,934 passed / 16 skipped; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 4 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
 
 ## What was NOT tested (and is staged, not claimed)
 

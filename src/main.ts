@@ -31,6 +31,7 @@ import {
 import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import { bootTour, type TourHandle } from './ui/onboarding/bootTour';
+import { buildMeasureConfidenceContext } from './app/measureConfidenceContext';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
@@ -5465,18 +5466,17 @@ let _lastMeasurementCount = 0;
 /** Refresh the Measurements panel's contents and visibility. */
 function refreshMeasurePanel(): void {
   measurePanel.update(viewer.measure.getSummaries());
+  measurePanel.setConfidenceContext(buildMeasureConfidenceContext(viewer, crsService.current()));
   const measurements = viewer.measure.getMeasurements();
   const hasMeasurements = measurements.length > 0;
   measurePanel.setVisible(viewer.measureMode || hasMeasurements);
-  // Local-first counter — fires only when a new measurement is placed.
-  // Categorical (the kind) only; never the coordinates, never the name.
+  // Local-first counter, categorical (the kind) only — never coordinates or names.
   if (measurements.length > _lastMeasurementCount) {
     const newest = measurements[measurements.length - 1];
     if (newest) recordUsage('measurement', newest.kind);
   }
   _lastMeasurementCount = measurements.length;
-  // Keep the Export panel's Products lane (measurement GeoJSON/CSV) in sync with
-  // the live measurement count.
+  // Keep the Export panel's Products lane in sync with the measurement count.
   exportPanel.refresh();
 }
 
