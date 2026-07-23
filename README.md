@@ -319,7 +319,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 - Firefox
 - Safari (WebGL fallback may apply)
 
-Very large LiDAR datasets are best handled as COPC or EPT, which stream progressively with bounded memory; other very large formats may need downsampling or preprocessing. Full detail is in [`docs/performance.md`](docs/performance.md).
+Very large LiDAR datasets are best handled as COPC or EPT, which stream progressively with bounded memory; other very large formats may need downsampling or preprocessing. The complete guide — how the streaming works, server requirements, and what a streamed export contains — is [`docs/copc.md`](docs/copc.md); performance detail is in [`docs/performance.md`](docs/performance.md).
 
 ## Mobile Browser Support
 
