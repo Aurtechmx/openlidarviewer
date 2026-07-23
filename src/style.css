@@ -4127,6 +4127,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   flex: 1 1 auto; min-width: 0;
   white-space: normal; overflow-wrap: anywhere; text-align: right;
 }
+/* Measurement-context line beneath each value: states what kind of number it
+ * is (viewer measurement with a resolved datum / approximate scene-local
+ * figure / no shared basis). Right-aligned under the value it qualifies; the
+ * reason lives on the tooltip. Amber for the approximate state follows the
+ * existing CRS-mismatch warning vocabulary (var(--warn, #e0a030)); the other
+ * states stay in the muted text scale. */
+.olv-mp-confidence {
+  font-size: var(--text-xs); color: var(--text-faint);
+  text-align: right; line-height: 1.35; cursor: help;
+}
+.olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
+.olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
 .olv-mp-del {
   background: none; border: none; color: var(--text-faint);
   font-size: var(--text-lg); line-height: 1; flex-shrink: 0; padding: 0 var(--space-2xs);
