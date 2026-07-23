@@ -115,12 +115,9 @@ import {
   GAUSSIAN_SPLAT_SHARPNESS,
 } from './splatShader';
 import type { SplatMode } from './splatShader';
-import {
-  filterSelectionToVisible,
-  selectByLasso,
-  volumeFromLassoWithFootprint,
-} from './measure/lassoVolume';
+import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
+import { computeLassoVolume as computeLassoVolumeWalk } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -132,10 +129,7 @@ export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
 import type { VolumeResult } from './measure/volume';
-import {
-  decideVolumeBudget,
-  type VolumeBudgetDecision,
-} from './measure/volumeBudget';
+import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
 export interface LassoVolumeReturn {
@@ -200,7 +194,7 @@ import {
   streamingMayCombine,
   sourceClassifiesGround,
 } from './integrableClouds';
-import { classifyLayerCompatibility, type LayerCompatibility } from '../model/layerCompatibility';
+import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
@@ -229,11 +223,9 @@ import {
 } from './rgbAppearance';
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
-import {
-  decompose2Pointer,
-  isZero as gestureIsZero,
-  type Pointer as TouchPointer,
-} from './touchGesture';
+import { TouchTracker } from './touchTracker';
+import { RenderActivityGate } from './renderActivityGate';
+import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import type { SavedCameraState } from './annotate/types';
@@ -573,7 +565,6 @@ const MAX_PIXEL_RATIO = 1.5;
  * the streaming scheduler keeps its cadence — only the actual
  * GPU `render()` call is gated.
  */
-const RENDER_HOLDOVER_MS = 350;
 /**
  * P6 proxy (until the P4 scheduler emits real coverage / spacing signals): ms
  * after the camera parks at which the center is treated as "refined", so the
@@ -581,7 +572,6 @@ const RENDER_HOLDOVER_MS = 350;
  * Kept short so the view re-sharpens promptly after navigation stops.
  */
 const PHASE_CENTER_PROXY_MS = 250;
-const IDLE_HEARTBEAT_FRAMES = 6;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
@@ -642,27 +632,6 @@ const BYTES_PER_GPU_POINT = 24;
  * approximation — matches three.js's `Color.SRGBToLinear` and PNG
  * exports stay in lock-step with the on-screen image.
  */
-/**
- * Build a strided copy of an interleaved xyz position buffer — keeps
- * every `stride`-th point. Used by `computeLassoVolume` when the
- * adaptive budget downsamples a heavy workload. O(n / stride) on the
- * source length; allocates one new Float32Array. The selection's
- * indices are remapped back to source space at the call site so the
- * highlight pipeline still points at real per-cloud points.
- */
-function stridePositions(src: Float32Array, stride: number): Float32Array {
-  if (stride <= 1) return src;
-  const points = Math.floor(src.length / 3);
-  const kept = Math.floor(points / stride);
-  const out = new Float32Array(kept * 3);
-  for (let i = 0; i < kept; i++) {
-    const srcIdx = i * stride * 3;
-    out[i * 3] = src[srcIdx];
-    out[i * 3 + 1] = src[srcIdx + 1];
-    out[i * 3 + 2] = src[srcIdx + 2];
-  }
-  return out;
-}
 
 function toFloatColors(u8: Uint8Array): Float32Array {
   const f = new Float32Array(u8.length);
@@ -887,7 +856,7 @@ export class Viewer {
    * rAF rate. Bumped on every user input via `_bumpRenderActivity`.
    * Past this point, the loop falls back to a heartbeat render.
    */
-  private _renderActivityUntilMs: number = 0;
+  private readonly _renderGate = new RenderActivityGate();
   /**
    * Counter for the idle-render heartbeat. Increments when the loop
    * skips a render; reaches `IDLE_HEARTBEAT_FRAMES` and forces a
@@ -895,7 +864,7 @@ export class Viewer {
    * to commit any newly-resident nodes). Reset to 0 on every actual
    * render so the next heartbeat window starts clean.
    */
-  private _idleRenderHeartbeat: number = IDLE_HEARTBEAT_FRAMES;
+
 
   // ── Frame timing (debug overlay) ─────────────────────────────────────────
   /** Rolling buffer of recent frame times, in ms — feeds {@link frameStats}. */
@@ -1181,7 +1150,7 @@ export class Viewer {
   private _onCanvasPointerUp!: (e: PointerEvent) => void;
   private _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
-  private readonly _activeTouches = new Map<number, TouchPointer>();
+  private readonly _touchTracker = new TouchTracker();
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
    * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
@@ -1643,31 +1612,10 @@ export class Viewer {
       ) {
         return;
       }
-      const prev = this._activeTouches.get(e.pointerId);
-      if (!prev) return;
-      const cur: TouchPointer = { x: e.offsetX, y: e.offsetY };
-      // Need exactly 2 pointers for the 2-finger gesture model.
-      if (this._activeTouches.size === 2) {
-        // Pull the OTHER pointer out of the map — it stays put for this
-        // frame (its own pointermove will run later in the same tick).
-        let otherId = -1;
-        let other: TouchPointer | null = null;
-        for (const [id, p] of this._activeTouches) {
-          if (id !== e.pointerId) {
-            otherId = id;
-            other = p;
-            break;
-          }
-        }
-        if (other) {
-          const delta = decompose2Pointer(prev, other, cur, other);
-          if (!gestureIsZero(delta)) {
-            this._applyTouchGesture(delta);
-          }
-        }
-        void otherId;
-      }
-      this._activeTouches.set(e.pointerId, cur);
+      // The tracker owns the two-pointer state machine and the recogniser;
+      // this handler keeps only the DOM concerns above it.
+      const delta = this._touchTracker.move(e.pointerId, e.offsetX, e.offsetY);
+      if (delta) this._applyTouchGesture(delta);
     };
     this._onCanvasPointerLeave = () => {
       this._pointerOnCanvas = false;
@@ -1683,7 +1631,7 @@ export class Viewer {
       this._bumpRenderActivity();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
-      this._activeTouches.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+      this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
       // Capture so we keep getting moves even if the finger slides off
       // the canvas before lift.
       try {
@@ -1695,7 +1643,7 @@ export class Viewer {
     };
     this._onCanvasPointerUp = (e) => {
       if (e.pointerType !== 'touch') return;
-      this._activeTouches.delete(e.pointerId);
+      this._touchTracker.up(e.pointerId);
       try {
         canvas.releasePointerCapture(e.pointerId);
       } catch {
@@ -2253,21 +2201,17 @@ export class Viewer {
     if (!stream) return null;
     const scrs = stream.crs?.() ?? null;
     const statics = integrableClouds(this._clouds.values()).map(({ cloud }) => ({
-      id: cloud.name,
       epsg: cloud.metadata?.crs?.epsg,
       crsName: cloud.metadata?.crs?.name,
       verticalDatum: cloud.metadata?.crs?.verticalDatum,
       verticalEpsg: cloud.metadata?.crs?.verticalEpsg,
     }));
-    const STREAM_ID = '\u0000stream';
-    const states = classifyLayerCompatibility([
-      ...statics,
-      {
-        id: STREAM_ID, epsg: scrs?.epsg, crsName: scrs?.name,
-        verticalDatum: scrs?.verticalDatum, verticalEpsg: scrs?.verticalEpsg,
-      },
-    ]);
-    return states.get(STREAM_ID) ?? 'unknown';
+    return resolveStreamingCompatibility(statics, {
+      epsg: scrs?.epsg,
+      crsName: scrs?.name,
+      verticalDatum: scrs?.verticalDatum,
+      verticalEpsg: scrs?.verticalEpsg,
+    });
   }
 
   /**
@@ -2513,8 +2457,8 @@ export class Viewer {
     const display =
       mode === 'elevation'
         ? {
-            min: range.min + entry.cloud.origin[upAxis],
-            max: range.max + entry.cloud.origin[upAxis],
+            min: range.min + entry.cloud.sourceOrigin[upAxis],
+            max: range.max + entry.cloud.sourceOrigin[upAxis],
           }
         : range;
     return buildActiveColorbarSpec({
@@ -3765,7 +3709,7 @@ export class Viewer {
     const entry = this._clouds.values().next().value;
     if (entry) {
       const b = entry.cloud.bounds();
-      const o = entry.cloud.origin[axisIdx];
+      const o = entry.cloud.sourceOrigin[axisIdx];
       return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
     }
     // Streaming: the tight data bounds come from the file header (known at open,
@@ -4168,15 +4112,15 @@ export class Viewer {
      */
     vert: number = lin,
   ): LassoVolumeReturn | null {
-    if (lasso.length < 3) return null;
-
     const canvas = this._canvas;
     if (!canvas) return null;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return null;
 
-    // ── Build projector once, reuse per cloud. ──────────────────────
+    // Build the projector from the live camera. This is the only part of the
+    // walk that needs three.js, which is why it stays here and the rest moved
+    // to a module that can be tested without a WebGL context.
     this._camera.updateMatrixWorld(true);
     const projMatrix = this._camera.projectionMatrix;
     const viewMatrix = this._camera.matrixWorldInverse;
@@ -4184,142 +4128,46 @@ export class Viewer {
     const project = (x: number, y: number, z: number) => {
       tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
       if (tmp.z < -1 || tmp.z > 1) return null;
-      const sx = (tmp.x * 0.5 + 0.5) * w;
-      const sy = (1 - (tmp.y * 0.5 + 0.5)) * h;
-      return { x: sx, y: sy };
+      return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
 
-    // ── Adaptive-degradation budget ─────────────────────────────────
-    // Count candidate points BEFORE walking — every static cloud
-    // plus every streaming-resident node — so the budget can decide
-    // whether to stride or walk exhaustively. The decision is
-    // attached to the result so the inspector caption reads
-    // "estimated (sampled — n%)" when the stride > 1.
-    let candidatePointCount = 0;
-    for (const entry of integrableClouds(this._clouds.values())) {
-      candidatePointCount += entry.cloud.positions.length / 3;
-    }
-    if (this._streaming) {
-      for (const positions of this._streaming.renderer.positionArrays()) {
-        candidatePointCount += positions.length / 3;
-      }
-    }
-    const budget = decideVolumeBudget({
-      candidatePointCount,
-      // Footprint area isn't known until selection; pass 0 so the
-      // density branch sits out. Ceiling branch still fires on cloud
-      // size alone, which is the bigger lever in practice.
-      footprintAreaM2: 0,
-    });
-    const stride = budget.stride;
-
-    // ── Walk each static cloud INDEPENDENTLY so we can report per-
-    //    cloud indices to the highlight pipeline. Concatenate the
-    //    selected XYZ subset for the volume math. ──────────────────
-    const selectionByCloudId = new Map<string, ReadonlyArray<number>>();
-    const subsetParts: Float32Array[] = [];
-    let totalSelected = 0;
-    // True once any cloud that contributes selected points was voxel-reduced to
-    // fit the device budget — the volume's honesty caveat reflects the thinner
-    // sample. (See `_cloudWasReduced`.)
-    let anySourceReduced = false;
+    const integrable: Array<readonly [string, { readonly cloud: PointCloud }]> = [];
     for (const [id, entry] of this._clouds) {
-      // Skip hidden / locked layers — the picker won't place vertices on them,
-      // so the lasso volume must not select through them either.
-      if (!isIntegrable(entry)) continue;
-      const positions =
-        stride === 1
-          ? entry.cloud.positions
-          : stridePositions(entry.cloud.positions, stride);
-      const localIndices = selectByLasso({
-        positions,
-        lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
-        project,
-      });
-      if (localIndices.length === 0) continue;
-      // When strided, translate indices back to the source cloud's
-      // index space so the highlight pipeline still lights up the
-      // right points.
-      const sourceIndices =
-        stride === 1
-          ? localIndices
-          : localIndices.map((i) => i * stride);
-      selectionByCloudId.set(id, sourceIndices);
-      if (this._cloudWasReduced(entry.cloud)) anySourceReduced = true;
-      totalSelected += localIndices.length;
-      // Pack the selected points' xyz into a contiguous buffer for
-      // the volume math.
-      const part = new Float32Array(localIndices.length * 3);
-      for (let i = 0; i < localIndices.length; i++) {
-        const idx = localIndices[i];
-        part[i * 3] = positions[idx * 3];
-        part[i * 3 + 1] = positions[idx * 3 + 1];
-        part[i * 3 + 2] = positions[idx * 3 + 2];
-      }
-      subsetParts.push(part);
+      // Hidden and locked layers are skipped: the picker won't place vertices
+      // on them, so the lasso must not select through them either.
+      if (isIntegrable(entry)) integrable.push([id, entry]);
     }
-    // Streaming clouds — still selected, but indices aren't returned
-    // (the streaming highlight surface is a follow-up cut). The
-    // volume math still consumes their positions.
-    if (this._streaming) {
-      for (const sourcePositions of this._streaming.renderer.positionArrays()) {
-        const positions =
-          stride === 1
-            ? sourcePositions
-            : stridePositions(sourcePositions, stride);
-        const indices = selectByLasso({
-          positions,
-          lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
-          project,
-        });
-        if (indices.length === 0) continue;
-        totalSelected += indices.length;
-        const part = new Float32Array(indices.length * 3);
-        for (let i = 0; i < indices.length; i++) {
-          const idx = indices[i];
-          part[i * 3] = positions[idx * 3];
-          part[i * 3 + 1] = positions[idx * 3 + 1];
-          part[i * 3 + 2] = positions[idx * 3 + 2];
-        }
-        subsetParts.push(part);
-      }
-    }
-    if (totalSelected < 3) return null;
 
-    // Concatenate the per-cloud subset parts into one buffer for
-    // volumeFromLasso, then call it with indices 0..N-1 (since the
-    // buffer already contains ONLY selected points).
-    let len = 0;
-    for (const p of subsetParts) len += p.length;
-    const selectedPositions = new Float32Array(len);
-    let off = 0;
-    for (const p of subsetParts) {
-      selectedPositions.set(p, off);
-      off += p.length;
-    }
-    const allIndices = new Array(totalSelected);
-    for (let i = 0; i < totalSelected; i++) allIndices[i] = i;
-    const lassoOut = volumeFromLassoWithFootprint({
-      positions: selectedPositions,
-      selected: allIndices,
+    const out = computeLassoVolumeWalk({
+      host: {
+        project,
+        integrable,
+        streamingPositions: this._streaming
+          ? [...this._streaming.renderer.positionArrays()]
+          : [],
+        wasReduced: (cloud) => this._cloudWasReduced(cloud),
+      },
+      lasso: lasso as ReadonlyArray<{ x: number; y: number }>,
       referencePercentile: percentile,
     });
+    if (!out) return null;
+
     return {
-      result: lassoOut.result,
+      result: out.result,
       stockpileSuffix: stockpileToastSuffix(
-        lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
-        selectedPositions,
+        out.polygon3D,
+        out.selectedPositions,
         lin,
-        anySourceReduced,
+        out.anySourceReduced,
         densityUnitKnown,
         vert,
       ),
-      selectedCount: totalSelected,
+      selectedCount: out.selectedCount,
       lasso,
-      selectionByCloudId,
-      budget,
-      polygon3D: lassoOut.polygon3D as ReadonlyArray<[number, number, number]>,
-      referenceZ: lassoOut.referenceZ,
+      selectionByCloudId: out.selectionByCloudId,
+      budget: out.budget,
+      polygon3D: out.polygon3D,
+      referenceZ: out.referenceZ,
     };
   }
 
@@ -4425,7 +4273,7 @@ export class Viewer {
         ONE: THREE.TOUCH.ROTATE,
         TWO: THREE.TOUCH.DOLLY_PAN,
       };
-      this._activeTouches.clear();
+      this._touchTracker.clear();
     } else {
       this._controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -5531,7 +5379,7 @@ export class Viewer {
     this._canvas.removeEventListener('pointerdown', this._onCanvasPointerDown);
     this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
-    this._activeTouches.clear();
+    this._touchTracker.clear();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -6590,7 +6438,7 @@ export class Viewer {
       // `point` is in local space; the cloud's origin restores real-world
       // coordinates — the absolute survey position engineers expect.
       local: [point.x, point.y, point.z],
-      origin: cloud.origin,
+      origin: [cloud.sourceOrigin[0], cloud.sourceOrigin[1], cloud.sourceOrigin[2]],
       distance: this._camera.position.distanceTo(point),
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,
@@ -6698,7 +6546,7 @@ export class Viewer {
     const now = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    this._renderActivityUntilMs = now + RENDER_HOLDOVER_MS;
+    this._renderGate.bump(now);
   }
 
   /**
@@ -6715,21 +6563,20 @@ export class Viewer {
    * orbit-pivot maintenance) so resume-on-input is glitch-free.
    */
   private _shouldRenderFrame(): boolean {
-    if (this._nav.isTweening) return true;
     const now = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    if (now < this._renderActivityUntilMs) return true;
-    // Streaming activity check — scheduler reports `loading > 0` when
-    // there are in-flight node fetches. We render full-rate during
-    // load bursts so freshly-decoded nodes appear without latency,
-    // then the heartbeat takes over when the scheduler is quiet.
+    // Streaming counts as busy when the scheduler has in-flight or queued
+    // fetches, so freshly-decoded nodes reach the screen without latency.
+    let streamingBusy = false;
     if (this._streaming) {
       const stats = this._streaming.scheduler.stats();
-      if (stats.loading > 0 || stats.queued > 0) return true;
+      streamingBusy = stats.loading > 0 || stats.queued > 0;
     }
-    if (this._idleRenderHeartbeat >= IDLE_HEARTBEAT_FRAMES) return true;
-    return false;
+    return this._renderGate.shouldRender(now, {
+      tweening: this._nav.isTweening,
+      streamingBusy,
+    });
   }
 
   /**
@@ -6826,12 +6673,12 @@ export class Viewer {
       const nowMs = (typeof performance !== 'undefined' && performance.now)
         ? performance.now()
         : Date.now();
-      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderActivityUntilMs);
+      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderGate.activityUntilMs);
       const wantEdl = edlActiveThisFrame(this._edlEnabled, moving);
       // P5 — pick this frame's DPR before rendering so the render uses it.
       this._applyAdaptiveDpr(moving, delta, nowMs, rendered);
       if (rendered) {
-        this._idleRenderHeartbeat = 0;
+        this._renderGate.noteRendered();
         // EDL when parked → render through the post-processing pipeline; moving
         // or EDL off → render the scene directly for zero post-processing cost.
         if (wantEdl) this._post.render();
@@ -6840,11 +6687,11 @@ export class Viewer {
       } else if (wantEdl && !this._edlPaintedAtRest) {
         // Motion just settled and the last paint had EDL off — force one EDL
         // repaint so the depth cue snaps back, then resume idle throttling.
-        this._idleRenderHeartbeat = 0;
+        this._renderGate.noteRendered();
         this._post.render();
         this._edlPaintedAtRest = true;
       } else {
-        this._idleRenderHeartbeat++;
+        this._renderGate.noteSkipped();
       }
       // Streaming COPC — run the view-dependent scheduler on a throttled
       // cadence (~10 Hz at 60 fps), never every frame.

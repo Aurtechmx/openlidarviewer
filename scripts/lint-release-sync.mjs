@@ -168,17 +168,49 @@ try {
 // silent and points a reviewer at the wrong release's evidence. That is exactly
 // what happened at alpha.2: README, AI_ASSISTANCE, ARTIFACT_EVALUATION and the
 // docs-site include all still named the alpha.1 validation report.
+// READINESS_REPORT is deliberately NOT here. It is internal go/no-go
+// deliberation, export-ignored from the source archive, so requiring it would
+// make the archive fail its own release-sync — the packaged tree cannot
+// contain a file the packaging step strips. The public evidence set is the
+// three reports that DO ship.
 const EVIDENCE = [
   'VALIDATION_REPORT',
   'KNOWN_LIMITATIONS',
   'REPRODUCIBILITY',
-  'READINESS_REPORT',
 ];
 for (const name of EVIDENCE) {
   const path = `${name}_v${version}.md`;
   if (!existsSync(resolve(ROOT, path))) {
     problems.push(`${path} is missing — every release needs its own ${name} file.`);
   }
+}
+
+// SBOM root identity. A stale SBOM shipped once identifying the app as the
+// previous release: `metadata.component` still said alpha.2 while package.json
+// was alpha.3. The SBOM is generated (regenerate with
+// `npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json`), so this
+// checks its ROOT identity against package.json rather than editing it by hand.
+if (existsSync(resolve(ROOT, 'sbom.json'))) {
+  try {
+    const sbom = JSON.parse(read('sbom.json'));
+    const root = sbom?.metadata?.component ?? {};
+    if (root.name !== 'openlidarviewer') {
+      problems.push(`sbom.json root component name is "${root.name}", expected "openlidarviewer".`);
+    }
+    if (root.version !== version) {
+      problems.push(`sbom.json root version is ${root.version}, expected ${version} — regenerate the SBOM from the alpha's lockfile.`);
+    }
+    if (root['bom-ref'] && !String(root['bom-ref']).includes(version)) {
+      problems.push(`sbom.json root bom-ref "${root['bom-ref']}" does not identify v${version}.`);
+    }
+    if (root.purl && !String(root.purl).includes(version)) {
+      problems.push(`sbom.json root purl "${root.purl}" does not identify v${version}.`);
+    }
+  } catch {
+    problems.push('sbom.json is present but not valid JSON — regenerate it.');
+  }
+} else {
+  problems.push('sbom.json is missing.');
 }
 
 // A docs-site release page per release; the site's release list stops dead

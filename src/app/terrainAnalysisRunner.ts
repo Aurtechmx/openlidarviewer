@@ -230,7 +230,7 @@ export function createTerrainAnalysisRunner(
     const viewer = getViewer();
     const id = getActiveId();
     const origin =
-      (id ? viewer.getCloud(id)?.origin : null) ??
+      (id ? viewer.getCloud(id)?.sourceOrigin : null) ??
       viewer.streamingCloud?.renderOrigin ??
       null;
     if (!origin) return null;

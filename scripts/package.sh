@@ -42,7 +42,34 @@ OUT_DIR="${1:-$ROOT/release}"
 mkdir -p "$OUT_DIR"
 
 VERSION="$(node -p "require('./package.json').version")"
-TS="$(date +%Y%m%d-%H%M)"
+
+# ── Reproducible timestamps ──────────────────────────────────────────────────
+# Two packaging runs of the SAME commit should produce the same bytes. Using
+# "now" for the archive name and leaving mtimes to the filesystem guaranteed
+# they never would, which makes a hash comparison between a maintainer's cut and
+# a reviewer's rebuild meaningless.
+#
+# SOURCE_DATE_EPOCH (the reproducible-builds convention) is honoured when set;
+# otherwise it defaults to the commit's own timestamp. Both `date` dialects are
+# handled because this runs on macOS locally and GNU/Linux in CI.
+if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+  SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct HEAD 2>/dev/null || date +%s)"
+fi
+export SOURCE_DATE_EPOCH
+epoch_fmt() { # $1 = strftime format
+  date -u -r "$SOURCE_DATE_EPOCH" "$1" 2>/dev/null || date -u -d "@$SOURCE_DATE_EPOCH" "$1"
+}
+TS="$(epoch_fmt +%Y%m%d-%H%M)"
+TOUCH_STAMP="$(epoch_fmt +%Y%m%d%H%M.%S)"
+
+# Zip a directory deterministically: every entry stamped at SOURCE_DATE_EPOCH,
+# entries added in a stable byte-order (LC_ALL=C), and -X to drop the extra
+# platform metadata that otherwise varies per machine.
+zip_deterministic() {
+  src="$1"; out="$2"
+  find "$src" -exec touch -h -t "$TOUCH_STAMP" {} + 2>/dev/null || true
+  ( cd "$src" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 zip -qX "$out" )
+}
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -90,7 +117,7 @@ if [ "$SOURCE_ONLY" != "1" ]; then
   find "$TMP/deploy" -type f -exec chmod 644 {} +
 
   DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
-  ( cd "$TMP/deploy" && zip -rqX "$TMP/$DEPLOY" . )
+  zip_deterministic "$TMP/deploy" "$TMP/$DEPLOY"
   cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
   verify_zip "$OUT_DIR/$DEPLOY"
 fi
@@ -156,7 +183,7 @@ fi
 echo "  ✓ archive carries no internal or superseded release material"
 
 SOURCE="openlidarviewer-v${VERSION}-source-${TS}.zip"
-( cd "$TMP/source" && zip -rqX "$TMP/$SOURCE" . )
+zip_deterministic "$TMP/source" "$TMP/$SOURCE"
 cp "$TMP/$SOURCE" "$OUT_DIR/$SOURCE"
 verify_zip "$OUT_DIR/$SOURCE"
 
@@ -186,46 +213,50 @@ fi
 #
 # A published archive makes three claims a reader cannot check for themselves:
 # that it was built from a clean tree, that the tests described in its evidence
-# describe THIS code, and that the commit named is the one tagged. Each was
-# previously left to whoever ran the command.
+# describe THIS code, and that the commit named is the one tagged.
 #
 # Enforced only when OLV_RELEASE_GATE=1 — a development cut should not need a
 # tag — so the strict path is the one deliberately taken for a real release.
+#
+# The evidence consumed here is the AUTHORITATIVE record a release-mode gate
+# writes to release/test-evidence-v<version>.json without committing anything,
+# so its commit can EQUAL HEAD. An earlier revision read the committed
+# development evidence and allowed its commit to be an ancestor when only
+# evidence documents changed in between; that tolerance existed because a
+# committed record can never name the commit it ships in, and it is exactly
+# the ambiguity the release-mode gate removes. There is nothing left for an
+# ancestor exception to excuse, so there is none.
 if [ "${OLV_RELEASE_GATE:-0}" = "1" ]; then
   fail=0
   if [ "$DIRTY" != "false" ]; then
     echo "✗ release gate: working tree is not clean (tracked or untracked changes)." >&2
     fail=1
   fi
-  EV="$ROOT/docs/validation/test-evidence.json"
-  if [ ! -f "$EV" ]; then
-    echo "✗ release gate: $EV is missing; run npm run evidence." >&2
-    fail=1
-  else
-    EV_COMMIT="$(node -e "process.stdout.write(require('$EV').commit||'')" 2>/dev/null || echo '')"
-    HEAD_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo '')"
-    # Exact equality is impossible by construction: evidence is collected FROM
-    # a commit, and committing the evidence file necessarily moves HEAD past
-    # it. What must hold is that nothing which could change a test result
-    # changed in between — so the diff is allowed to contain the evidence file
-    # and the documents that quote it, and nothing else.
-    if [ "$EV_COMMIT" != "$HEAD_COMMIT" ]; then
-      DRIFT="$(git diff --name-only "$EV_COMMIT" "$HEAD_COMMIT" 2>/dev/null \
-        | grep -vE '^(docs/validation/test-evidence\.json|(REPRODUCIBILITY|VALIDATION_REPORT|READINESS_REPORT|KNOWN_LIMITATIONS)_v[0-9].*\.md)$' || true)"
-      if [ -n "$DRIFT" ]; then
-        echo "✗ release gate: code changed after the evidence was collected (${EV_COMMIT:0:7} → ${HEAD_COMMIT:0:7}):" >&2
-        echo "$DRIFT" | sed 's/^/    /' >&2
-        echo "  The published figures would describe different code than the archive. Re-run npm run evidence." >&2
-        fail=1
-      fi
-    fi
-  fi
   if ! git describe --exact-match --tags HEAD >/dev/null 2>&1; then
     echo "✗ release gate: HEAD is not tagged. Tag the release commit before packaging." >&2
     fail=1
   fi
+  EV="$ROOT/release/test-evidence-v${VERSION}.json"
+  if [ ! -f "$EV" ]; then
+    echo "✗ release gate: $EV is missing. Run OLV_GATE_MODE=release npm run gate at the tagged commit first." >&2
+    fail=1
+  else
+    if ! node -e "
+      const e = require('$EV');
+      const { execSync } = require('node:child_process');
+      const head = execSync('git rev-parse HEAD', { cwd: '$ROOT' }).toString().trim();
+      const version = '$VERSION';
+      const probs = [];
+      if (e.releaseAuthoritative !== true) probs.push('evidence is not release-authoritative; it was not produced by a release-mode gate');
+      if (e.commit !== head) probs.push('evidence commit ' + e.commit + ' is not HEAD ' + head);
+      if (e.tag !== 'v' + version) probs.push('evidence tag ' + e.tag + ' is not v' + version);
+      if (e.version !== version) probs.push('evidence version ' + e.version + ' is not ' + version);
+      if (e.gateExit !== 0) probs.push('evidence records gate exit ' + e.gateExit);
+      if (probs.length) { console.error(probs.map((p) => '✗ release gate: ' + p).join('\n')); process.exit(1); }
+    "; then fail=1; fi
+  fi
   [ "$fail" = "0" ] || { echo "Release gate failed. Unset OLV_RELEASE_GATE for a development cut." >&2; exit 1; }
-  echo "→ Release gate: clean tree, evidence matches HEAD, HEAD is tagged."
+  echo "→ Release gate: clean tree, HEAD is tagged, authoritative evidence names this exact commit."
 fi
 
 NODE_V="$(node -v 2>/dev/null || echo unknown)"
@@ -242,7 +273,10 @@ NODE_V="$(node -v 2>/dev/null || echo unknown)"
     DEPLOY_SHA="$(shasum -a 256 "$DEPLOY" | cut -d' ' -f1)"
     DEPLOY_ENTRY="{ \"file\": \"${DEPLOY}\", \"sha256\": \"${DEPLOY_SHA}\" }"
   fi
-  cat > "release-manifest-v${VERSION}.json" <<JSON
+  # Build metadata, not the release manifest. The published manifest is the
+  # one create-release-manifest.mjs binds over the staged asset set; keeping a
+  # second file under the same name invited the two to drift apart.
+  cat > "package-build-metadata-v${VERSION}.json" <<JSON
 {
   "project": "openlidarviewer",
   "version": "${VERSION}",
@@ -266,4 +300,4 @@ echo "✓ Packaged v${VERSION}:"
 [ "$SOURCE_ONLY" = "1" ] || echo "    $OUT_DIR/$DEPLOY"
 echo "    $OUT_DIR/$SOURCE"
 echo "    $OUT_DIR/SHA256SUMS"
-echo "    $OUT_DIR/release-manifest-v${VERSION}.json"
+echo "    $OUT_DIR/package-build-metadata-v${VERSION}.json"

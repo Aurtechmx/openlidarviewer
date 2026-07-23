@@ -40,8 +40,9 @@ npm run build
 ```
 
 `npm test` runs the whole unit suite. It is large, so it is also split into
-four coverage-complete buckets you can run individually (and CI runs in
-parallel): `npm run test:unit`, `test:terrain`, `test:ui`, and `test:slow`.
+five coverage-complete buckets you can run individually (and CI runs in
+parallel): `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, and
+`test:slow`.
 The buckets always union to the full suite — a newly added test defaults into
 `unit`; `npm run test:buckets:verify` asserts that partition holds. Playwright
 specs run via `npm run test:e2e`.

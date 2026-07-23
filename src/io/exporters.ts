@@ -7,7 +7,7 @@
  * a download.
  *
  * Coordinates are written in **global** space (the cloud's local positions
- * plus its `origin`), so an exported file carries real-world survey
+ * plus its `sourceOrigin`), so an exported file carries real-world survey
  * coordinates and round-trips back through the importers at the written
  * precision — each text importer re-reads coordinates in float64 and
  * recentres before narrowing to float32 (PLY declares `double` x/y/z so
@@ -34,6 +34,12 @@
  * with any non-finite coordinate is skipped, declared counts follow the
  * emitted rows, and the omission count is stated through the same comment
  * channel.
+ *
+ * A fourth rule (v0.6.0): **a sampled cloud says so.** When the viewer holds
+ * fewer points than the file declared — a display-sample cap, a load stride —
+ * the header states how many of how many were written and what caused it.
+ * Without it the export is indistinguishable from a complete export of a
+ * smaller scan, which is the dropped-channel failure one level up.
  *
  * CSV is the deliberate exception to the comment rules: it has no comment
  * convention naive parsers survive, so it stays pure data — header row, then
@@ -71,6 +77,42 @@ function finitePointCount(positions: Float32Array, n: number): number {
 /** Disclosure line for skipped non-finite points (comment prefix per format). */
 function omittedPointsLine(omitted: number): string {
   return `${omitted} point${omitted === 1 ? '' : 's'} with non-finite coordinates — omitted`;
+}
+
+/**
+ * Disclosure line for a cloud that holds fewer points than its file declared.
+ *
+ * The dropped-channel rule exists because a silent drop looks identical to
+ * "the source never had it". Dropped POINTS are the same failure one level up:
+ * a display-sample cap or a load stride leaves the viewer holding a fraction
+ * of the file, and the export then looks exactly like a complete export of a
+ * smaller scan. Nothing in the file contradicts that reading, so the reader
+ * has no way to discover it.
+ *
+ * Only a declared count can establish the full size, so a cloud that declares
+ * nothing stays silent rather than guessing. A cloud holding at least what it
+ * declared is not a subset — a merge or a densify legitimately lands there, and
+ * calling it one would be its own false statement.
+ */
+function subsetLine(cloud: PointCloud): string | null {
+  const declared = cloud.declaredPointCount;
+  if (declared === undefined || !Number.isFinite(declared)) return null;
+  const held = cloud.pointCount;
+  if (held >= declared) return null;
+  const pct = (held / declared) * 100;
+  // Two significant-ish digits: "12.3 %" for a typical cap, "0.4 %" for a
+  // heavy stride, never "0.0 %" for something that did write points.
+  const share = pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2);
+  const stride = cloud.loadStride;
+  const cause =
+    stride !== undefined && stride > 1
+      ? ` (load stride ${stride} — one record kept per ${stride})`
+      : '';
+  return (
+    `SUBSET: ${held.toLocaleString('en-US')} of ${declared.toLocaleString('en-US')} ` +
+    `points the source declared (${share} %)${cause} — this file is a sample of the ` +
+    `scan, not the whole scan`
+  );
 }
 
 /**
@@ -176,7 +218,12 @@ function droppedChannelLines(
  * parsers must always see the header row first.
  */
 export function toXyz(cloud: PointCloud, delimiter = ' '): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const omitted = n - finitePointCount(positions, n);
   const lines: string[] = [];
@@ -211,6 +258,8 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   if (csv) lines.push(columns.join(','));
   else {
     for (const l of provenanceLines(cloud)) lines.push(`# ${l}`);
+    const subset = subsetLine(cloud);
+    if (subset) lines.push(`# ${subset}`);
     if (derivedNote) lines.push(derivedNote);
     for (const l of droppedChannelLines(cloud, { intensity: true, classification: true }, []))
       lines.push(`# ${l}`);
@@ -221,9 +270,9 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
     const row: Array<string | number> = [
-      hcoord(positions[i * 3] + origin[0]),
-      hcoord(positions[i * 3 + 1] + origin[1]),
-      coord(positions[i * 3 + 2] + origin[2]),
+      hcoord(positions[i * 3] + sourceOrigin[0]),
+      hcoord(positions[i * 3 + 1] + sourceOrigin[1]),
+      coord(positions[i * 3 + 2] + sourceOrigin[2]),
     ];
     if (colors) row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
     if (intensity) row.push(intensity[i]);
@@ -240,7 +289,12 @@ export function toCsv(cloud: PointCloud): string {
 
 /** Serialise to ASCII PLY, with `uchar` RGB when the cloud carries colour. */
 export function toPly(cloud: PointCloud): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -255,6 +309,7 @@ export function toPly(cloud: PointCloud): string {
     'format ascii 1.0',
     'comment Generated by OpenLiDARViewer',
     ...provenanceLines(cloud).map((l) => `comment ${l}`),
+    ...(subsetLine(cloud) ? [`comment ${subsetLine(cloud)}`] : []),
     ...droppedChannelLines(cloud, {}, []).map((l) => `comment ${l}`),
     ...(omitted > 0 ? [`comment ${omittedPointsLine(omitted)}`] : []),
     `element vertex ${finite}`,
@@ -270,9 +325,9 @@ export function toPly(cloud: PointCloud): string {
   const lines: string[] = [header.join('\n')];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + origin[0]);
-    const y = hcoord(positions[i * 3 + 1] + origin[1]);
-    const z = coord(positions[i * 3 + 2] + origin[2]);
+    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
+    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
+    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
     if (colors) {
       lines.push(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
     } else {
@@ -289,7 +344,12 @@ export function toPly(cloud: PointCloud): string {
  * channels are disclosed as omitted rather than dropped silently.
  */
 export function toObj(cloud: PointCloud): string {
-  const { positions, colors, origin } = cloud;
+  // World coordinates come from the SOURCE origin, which is fixed for the
+  // cloud's life. `origin` moves when a layer mounts into a project frame;
+  // sourceOrigin does not, so an export stays in the file's real-world frame
+  // regardless of project membership. (Today the two coincide — mounting is
+  // off — so this is a no-op that stays correct once mounting rebases layers.)
+  const { positions, colors, sourceOrigin } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -299,14 +359,15 @@ export function toObj(cloud: PointCloud): string {
     '# OpenLiDARViewer point-cloud export',
     `# ${finite} points`,
     ...provenanceLines(cloud).map((l) => `# ${l}`),
+    ...(subsetLine(cloud) ? [`# ${subsetLine(cloud)}`] : []),
     ...droppedChannelLines(cloud, {}, ['intensity', 'classification']).map((l) => `# ${l}`),
     ...(omitted > 0 ? [`# ${omittedPointsLine(omitted)}`] : []),
   ];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + origin[0]);
-    const y = hcoord(positions[i * 3 + 1] + origin[1]);
-    const z = coord(positions[i * 3 + 2] + origin[2]);
+    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
+    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
+    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
     if (colors) {
       const r = (colors[i * 3] / 255).toFixed(4);
       const g = (colors[i * 3 + 1] / 255).toFixed(4);

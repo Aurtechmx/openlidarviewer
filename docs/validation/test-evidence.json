@@ -1,26 +1,40 @@
 {
-  "version": "0.6.0-alpha.2",
-  "commit": "b556cd283fc632e580e1a4d69b78cd1a6f7fa1e2",
-  "gateExit": 0,
-  "generatedAt": "2026-07-21T21:15:43.119Z",
-  "nodeVersion": "v26.0.0",
+  "schemaVersion": 2,
+  "project": "openlidarviewer",
+  "version": "0.6.0-alpha.3",
+  "releaseChannel": "development",
+  "releaseAuthoritative": false,
+  "tag": null,
+  "commit": "6dc9c6bdba4989074654279a9f3843d6aa156497",
+  "repository": null,
+  "generatedAt": "2026-07-23T03:11:39.811Z",
+  "nodeVersion": "v22.17.1",
+  "npmVersion": "10.9.2",
   "platform": "darwin-arm64",
+  "workflow": null,
+  "workflowRunId": null,
+  "workflowRunAttempt": null,
+  "workflowSha": null,
+  "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "943c087ed2c31613d80f805e634f013de237223c1d3b8e58c04ee85bb7c205a2",
+  "gateLogSha256": "8dc93957a94ddc98c350a95c20ea2f5bb1cb4f36daeb19ff3c00026a4fce97e0",
+  "stages": {
+    "staticGate": "passed"
+  },
   "buckets": {
     "unit": {
-      "passed": 2952,
+      "passed": 3077,
       "skipped": 16,
       "runs": 3
     },
     "export": {
-      "passed": 605,
+      "passed": 616,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 1221,
-      "skipped": 1,
+      "passed": 1240,
+      "skipped": 0,
       "runs": 2
     },
     "ui": {
@@ -29,17 +43,32 @@
       "runs": 1
     },
     "slow": {
-      "passed": 508,
+      "passed": 517,
       "skipped": 0,
       "runs": 2
     }
   },
   "total": {
-    "passed": 5715,
-    "skipped": 17
+    "passed": 5879,
+    "skipped": 16
   },
   "bundle": {
-    "liveEntryKiB": 710,
+    "liveEntryKiB": 713,
     "ceilingKiB": 720
+  },
+  "packageLockSha256": "d3729549ec5fb55b7af829994bd46e30f9b23a168efeb2cbb5aba1faf3094700",
+  "sbom": {
+    "sha256": "759c064406048bd62ef720fb13a5cad1346a5028a663269b49a0e73f2fbe8382",
+    "rootName": "openlidarviewer",
+    "rootVersion": "0.6.0-alpha.3",
+    "bomRef": "openlidarviewer@0.6.0-alpha.3",
+    "components": 59
+  },
+  "science": {
+    "e4ClaimCount": 1,
+    "e4Claims": [
+      "SLOPE-RASTER"
+    ],
+    "suppliedReferenceSlots": 1
   }
 }

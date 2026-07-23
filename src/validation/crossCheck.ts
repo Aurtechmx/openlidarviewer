@@ -204,9 +204,10 @@ export interface ReferenceSlot {
 }
 
 /**
- * The reference-fixture manifest. Every slot is `pending`: the harness is in
+ * The reference-fixture manifest. SLOPE-RASTER is `supplied` (compared against
+ * GDAL 3.13.1 on the analytic fixture); every other slot is `pending`: the harness is in
  * place and the procedure is documented, but no external reference output has
- * been generated and committed yet, so nothing here has reached E4. When a
+ * been generated and committed for those, so only slope has reached E4. When a
  * reference is produced per `docs/validation/cross-implementation.md`, flip its
  * `status` to `supplied` and wire the loaded grids into `crossCheck`.
  */
@@ -214,7 +215,7 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' },
-  { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'pending' },
+  { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'pending' },
   { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },

@@ -55,11 +55,18 @@ pnpm-debug.log*
 # stops packaged output from being committed and shipped as stale artifacts
 # inside the git-archive source zip. Also excluded from git archive via
 # `.gitattributes` (release/ export-ignore).
-release/
+#
+# Anchored to the ROOT. Unanchored, `release/` matches a directory of that name
+# at any depth, which silently swallowed docs/release/ — documentation that is
+# meant to ship.
+/release/
 
 # ── Local scratch & verification scripts (not for publishing) ────────────────
+# Anchored for the same reason as /release/: unanchored, `verify-*.mjs` matched
+# scripts/verify-release-assets.mjs, so the script `npm run release:verify`
+# invokes was never committed and the command was broken for anyone who cloned.
 _*.mjs
-verify-*.mjs
+/verify-*.mjs
 trycheck*.mjs
 *.tmp
 _rmtest*

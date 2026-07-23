@@ -30,8 +30,11 @@ export interface GlobalPoints {
 }
 
 /**
- * Lift a `PointCloud` into global coordinates. `global = local + origin`,
- * computed in Float64 so survey eastings/northings keep their precision.
+ * Lift a `PointCloud` into global coordinates. `global = local + sourceOrigin`,
+ * computed in Float64 so survey eastings/northings keep their precision. The
+ * source origin is the file's own frame, fixed for the cloud's life, so a
+ * global export stays in real-world coordinates even after a layer mounts
+ * into a project frame (the two origins coincide until then).
  */
 export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
   const n = cloud.pointCount;
@@ -39,7 +42,7 @@ export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
   const y = new Float64Array(n);
   const z = new Float64Array(n);
   const p = cloud.positions;
-  const [ox, oy, oz] = cloud.origin;
+  const [ox, oy, oz] = cloud.sourceOrigin;
   for (let i = 0; i < n; i++) {
     x[i] = p[i * 3] + ox;
     y[i] = p[i * 3 + 1] + oy;

@@ -112,10 +112,20 @@ describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', ()
 });
 
 describe('reference manifest honesty', () => {
-  it('ships every reference slot as pending (nothing is E4)', () => {
+  it('supplies only SLOPE-RASTER, and ships every other slot as pending', () => {
+    // SLOPE-RASTER reached E4 once a GDAL Horn reference was committed beside
+    // its fixture; the cross-check agreed with GDAL and with the closed-form
+    // gradient inside the preregistered tolerance. No other slot has a real
+    // reference yet, so the rest must still ship pending — a slot cannot read
+    // `supplied` without a committed reference file (that coupling is enforced
+    // in slopeCrossCheck.test.ts).
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
-    expect(REFERENCE_SLOTS.every((s) => s.status === 'pending')).toBe(true);
-    expect(allReferencesPending()).toBe(true);
+    const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
+    expect(supplied).toEqual(['SLOPE-RASTER']);
+    const others = REFERENCE_SLOTS.filter((s) => s.claimId !== 'SLOPE-RASTER');
+    expect(others.every((s) => s.status === 'pending')).toBe(true);
+    // Not every slot is pending any more, so the "all pending" helper is false.
+    expect(allReferencesPending()).toBe(false);
   });
 
   it('pendingCrossCheck returns a pending verdict with no invented numbers', () => {

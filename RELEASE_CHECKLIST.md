@@ -48,6 +48,35 @@ hardening steps are deliberately staged and easy to forget.
 - [ ] Spot-check the deploy zip: `index.html`, `assets/`, `.htaccess`, `_headers`
       at the archive root.
 
-## 5. Tag + push
+## 5. Release asset set (attach all to the prerelease)
+
+Every asset must be produced from the **exact final tagged commit**, and the
+staged set must contain all of:
+
+- [ ] source ZIP (`openlidarviewer-v<X.Y.Z>-source-<timestamp>.zip`)
+- [ ] deploy ZIP (`openlidarviewer-v<X.Y.Z>-deploy-root-<timestamp>.zip`)
+- [ ] `sbom.json`
+- [ ] release manifest (`release-manifest-v<X.Y.Z>.json`)
+- [ ] `SHA256SUMS`
+- [ ] `gate.log`
+- [ ] `gate.log.sha256`
+- [ ] `test-evidence.json`
+- [ ] `RELEASE_NOTES_v<X.Y.Z>.md`
+
+Assertions before publishing:
+
+- [ ] `test-evidence.json` records the same commit as the tag.
+- [ ] The `gate.log` hash recorded in evidence/manifest matches the attached log
+      (`shasum -a 256 -c gate.log.sha256`).
+- [ ] The SBOM root version equals `package.json` `version`.
+- [ ] Source and deploy ZIP checksums verify against `SHA256SUMS`.
+- [ ] The source archive may exclude generated `release/` output, but the GitHub
+      prerelease attaches the evidence files (`sbom.json`, manifest,
+      `test-evidence.json`, `gate.log`, `gate.log.sha256`, `SHA256SUMS`)
+      separately.
+- [ ] No internal audit deliberation or private readiness files are published
+      (`docs/_audit/`, `*READINESS*`, private notes stay export-ignored).
+
+## 6. Tag + push
 
 - [ ] Commit, tag `v<X.Y.Z>`, push branch + tag, publish the release notes.

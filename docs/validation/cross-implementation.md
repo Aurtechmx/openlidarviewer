@@ -6,10 +6,23 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Nothing in the repo is at E4 yet. The harness (`src/validation/crossCheck.ts`)
-is in place and unit-tested, and every entry in `REFERENCE_SLOTS` ships
-`pending`. No reference output is bundled or fabricated. A product moves to E4
-only after someone runs the steps below and commits the real reference file.
+One product is at E4: **`SLOPE-RASTER`**. Our Horn slope was compared against
+GDAL 3.13.1's Horn slope on the frozen analytic fixture in
+`tests/fixtures/reference/slope/`, and against the surface's closed-form
+gradient, in the same run (`tests/slopeCrossCheck.test.ts`). All three agreed
+to within a maximum of 0.001 degree over 11,564 interior cells, well inside the
+0.5 degree tolerance registered before the reference was generated. The GDAL
+raster, the exact command, the tool version and the checksums are committed
+beside the input DEM.
+
+This validates the slope *algorithm* against an independent implementation on a
+known surface. It does not validate the point-cloud-to-DTM pipeline, does not
+establish field or survey-grade accuracy, and says nothing about the other
+terrain products — each carries its own claim and its own evidence level.
+
+Every other entry in `REFERENCE_SLOTS` still ships `pending`. No reference
+output is bundled or fabricated; a product moves to E4 only after someone runs
+the steps below and commits the real reference file.
 
 ## Why this is not automated in CI
 

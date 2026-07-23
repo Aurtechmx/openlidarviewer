@@ -172,11 +172,7 @@ import type { PointCloud } from './model/PointCloud';
 // imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
 // lazy chunk fetched only when a COPC scan is actually opened.
 import { detectCopc } from './io/copc/copcDetect';
-import {
-  RangeReadError,
-  sanitizeUrlForDisplay,
-  validateRemoteCopcUrl,
-} from './io/range/RangeSource';
+import { validateRemoteCopcUrl } from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
@@ -266,6 +262,8 @@ import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
+import { remoteEptName, remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
+import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
@@ -684,36 +682,6 @@ function saveLassoVolumeIfPending(): void {
   }
 }
 
-/**
- * Translate a `VolumeResult` (from the lasso math) into the persisted
- * `VolumeRecord` shape used by Volume measurements. The two carry
- * almost identical fields; the record drops the sample-walk telemetry
- * and adds the confidence band derived from `pointsInPolygon`.
- */
-function deriveVolumeRecord(
-  result: import('./render/measure/volume').VolumeResult,
-  referenceZ: number,
-): import('./render/measure/types').VolumeRecord {
-  const inPoly = result.pointsInPolygon;
-  const confidence: 'high' | 'medium' | 'low' =
-    inPoly >= 1000 ? 'high' : inPoly >= 100 ? 'medium' : 'low';
-  const record: import('./render/measure/types').VolumeRecord = {
-    fill: result.fill,
-    cut: result.cut,
-    net: result.net,
-    referenceZ,
-    footprintArea: result.footprintArea,
-    pointsInPolygon: result.pointsInPolygon,
-    densityNative: result.densityNative,
-    confidence,
-  };
-  // Non-finite returns inside the footprint were excluded from the
-  // integration — keep the count on the record so the partial coverage
-  // stays disclosed.
-  const skippedNonFinite = result.skippedNonFinite ?? 0;
-  if (skippedNonFinite > 0) record.skippedNonFinite = skippedNonFinite;
-  return record;
-}
 
 // ── Lasso volume button in the measure dock ──────────────────────────────
 // Placed at the end of the measure-kind row, paired with Volume. The
@@ -6884,16 +6852,6 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
   }
 }
 
-/** Display name for a remote EPT scan — the parent directory of ept.json. */
-function remoteEptName(url: string): string {
-  try {
-    const path = new URL(url).pathname.replace(/\/ept\.json$/i, '');
-    const last = path.slice(path.lastIndexOf('/') + 1);
-    return last ? `${decodeURIComponent(last)} (EPT)` : 'remote.ept';
-  } catch {
-    return 'remote.ept';
-  }
-}
 
 /**
  * Open a remote COPC scan over HTTP range requests. The host must allow
@@ -6971,58 +6929,8 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
   }
 }
 
-/** A short, readable form of a URL — its host — for progress and error text. */
-function shortUrl(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
 
-/** The display name for a remote COPC scan — the file name from its URL path. */
-function remoteCopcName(url: string): string {
-  try {
-    const path = new URL(url).pathname;
-    const last = path.slice(path.lastIndexOf('/') + 1);
-    return last ? decodeURIComponent(last) : 'remote.copc.laz';
-  } catch {
-    return 'remote.copc.laz';
-  }
-}
 
-/**
- * Turn a remote-COPC failure into a clear, honest message. `HttpRangeSource`
- * already classifies range-read failures (an unreachable or CORS-blocked host,
- * a host with no range support, a host that ignored the range); a non-range
- * error from the pipeline most often means the URL is reachable but the file
- * behind it is not a valid COPC.
- */
-function describeRemoteCopcError(err: unknown, url: string): string {
-  const safeUrl = sanitizeUrlForDisplay(url);
-  if (err instanceof RangeReadError) {
-    if (err.code === 'range-unsupported') {
-      return (
-        `${err.message} Try hosting the file on S3 or a static CDN — most support range requests by default.`
-      );
-    }
-    if (err.code === 'transport') {
-      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;
-    }
-    if (err.code === 'timeout') {
-      return `${err.message} Try again in a moment, or pick a faster host.`;
-    }
-    if (err.code === 'content-mismatch') {
-      return `${err.message} This usually means a proxy or CDN ignored the byte-range request.`;
-    }
-    if (err.code === 'server-error') {
-      return `${err.message} The host returned a server-side error — wait a moment and try again.`;
-    }
-    return err.message;
-  }
-  const detail = err instanceof Error ? err.message : 'unknown error';
-  return `${shortUrl(safeUrl)} was reached, but it could not be read as a COPC scan — ${detail}.`;
-}
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
@@ -7395,29 +7303,6 @@ function resetToEmptyState(): void {
  * clouds may take a moment.
  */
 
-/**
- * The larger of a cloud's X/Y world-frame spans, from a strided sample — a cheap
- * scale for the epoch-alignment refuse gate (residual ≫ a fraction of the scene
- * span means the fit never registered). Unit-agnostic (metres or feet).
- */
-function horizontalSpanXY(positions: Float32Array, origin?: readonly [number, number, number]): number {
-  const n = (positions.length / 3) | 0;
-  if (n === 0) return 0;
-  const ox = origin?.[0] ?? 0;
-  const oy = origin?.[1] ?? 0;
-  const stride = Math.max(1, Math.floor(n / 2000));
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (let i = 0; i < n; i += stride) {
-    const x = positions[i * 3] + ox;
-    const y = positions[i * 3 + 1] + oy;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  }
-  return minX <= maxX ? Math.max(maxX - minX, maxY - minY) : 0;
-}
 
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
@@ -7446,7 +7331,7 @@ function compareLoadedLayers(): void {
       // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25.
       const beforeCloud = {
         positions: a.positions,
-        origin: a.origin,
+        origin: a.sourceOrigin, // source frame: the epoch world comparison, not the live project origin
         crs: a.metadata?.crs?.name ?? null,
         verticalDatum: a.metadata?.crs?.verticalDatum ?? null,
         isGeographic: a.metadata?.crs?.isGeographic ?? null,
@@ -7454,7 +7339,7 @@ function compareLoadedLayers(): void {
       };
       const afterCloud = {
         positions: b.positions,
-        origin: b.origin,
+        origin: b.sourceOrigin,
         crs: b.metadata?.crs?.name ?? null,
         verticalDatum: b.metadata?.crs?.verticalDatum ?? null,
         isGeographic: b.metadata?.crs?.isGeographic ?? null,
@@ -7468,7 +7353,7 @@ function compareLoadedLayers(): void {
       // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
       // while the gate option is metres, so convert by the CRS's linear factor —
       // geographic frames don't have one, but alignment refuses those outright.
-      const span = horizontalSpanXY(a.positions, a.origin);
+      const span = horizontalSpanXY(a.positions, a.sourceOrigin);
       const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
         maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined,

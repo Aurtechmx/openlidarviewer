@@ -1,0 +1,226 @@
+name: Release
+
+# The exact-tag release run, and the ONLY producer of authoritative evidence.
+# It checks out the tag, runs the complete release-mode gate against that exact
+# commit, packages the same unchanged checkout, stages the asset set, binds the
+# manifest, and verifies the closed set. The tested commit, the packaged
+# commit, the evidence commit and the manifest commit are one object by
+# construction.
+#
+# The release-mode gate writes its record to release/ and never touches a
+# tracked file. An earlier revision ran the development gate here, which
+# regenerates the COMMITTED evidence; the tree came out dirty and the packaging
+# step, which refuses a dirty tree, could never pass. The workflow blocked
+# itself. OLV_GATE_MODE=release exists because of that run.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual runs are dry runs: every job up to release-ready executes, and the
+  # publish job stays skipped unless the ref IS a version tag. A branch cannot
+  # be published by dispatching with the right inputs, because there are no
+  # inputs to dispatch.
+  workflow_dispatch:
+
+# Least privilege by default. Only the publication job is granted write, and
+# only after every blocking job has passed.
+permissions:
+  contents: read
+
+# A release run must never be replaced mid-flight: cancelling one during
+# packaging would leave half a staged asset set behind.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ── Cheap refusal ─────────────────────────────────────────────────────────
+  # Everything knowable in a second, checked before spending forty minutes.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags, so the ref validator can resolve the target
+      - uses: actions/setup-node@v5
+        with:
+          # .nvmrc pins the exact canonical version. `node-version: 22` floats
+          # to the newest 22.x, which now ships npm 10.9.8 while the evidence
+          # asserts the packageManager pin; a floating minor breaks the
+          # toolchain check the day upstream cuts a release.
+          node-version-file: '.nvmrc'
+      - name: Toolchain is the canonical one
+        run: |
+          node --version
+          npm --version
+          test "$(node -p 'process.versions.node')" = "$(cat .nvmrc)"
+          test "$(npm --version)" = "$(node -p "require('./package.json').packageManager.split('@')[1]")"
+      - name: Ref is publishable (tag matches package, HEAD is the tag, tree clean)
+        run: node scripts/validate-release-ref.mjs
+
+  # ── Every mandatory stage, one log, one record ────────────────────────────
+  # Static gate, e2e, docs build, production audit, fixture checksums,
+  # coverage and mutation all run here, in release mode, into one gate.log.
+  # The evidence is derived from that log's stage markers, so a stage that
+  # did not run cannot be described as passed. Packaging happens in the SAME
+  # job on the SAME still-clean checkout.
+  gate:
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - name: Lockfile is unchanged by a clean install
+        run: git diff --exit-code -- package-lock.json
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Release-mode gate (all mandatory stages)
+        env:
+          OLV_GATE_MODE: release
+        run: npm run gate
+
+      - name: Working tree is still clean after the gate
+        run: git status --porcelain && test -z "$(git status --porcelain)"
+
+      - name: Package from this same checkout
+        env:
+          OLV_RELEASE_GATE: '1'
+        run: npm run package
+
+      # Everything the stage job needs, in ONE flat directory. Uploading mixed
+      # repo-root and release/ paths makes the artifact's internal layout
+      # depend on upload-artifact's common-ancestor rule, and the download side
+      # then guesses wrong. A flat payload has no layout to guess.
+      - name: Assemble the flat release payload
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          mkdir -p release/payload
+          cp release/openlidarviewer-*.zip release/payload/
+          cp release/gate.log release/gate.log.sha256 release/payload/
+          cp "release/test-evidence-v${V}.json" release/payload/
+          cp release/production-audit.json release/payload/
+          cp sbom.json release/payload/
+          cp "RELEASE_NOTES_v${V}.md" release/payload/
+          ls -la release/payload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-payload
+          retention-days: 14
+          path: release/payload/
+
+      - name: Failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-failure-diagnostics
+          retention-days: 7
+          path: |
+            release/gate.log
+            playwright-report/
+            test-results/
+
+  # ── Stage, bind, and verify the closed asset set ──────────────────────────
+  stage:
+    runs-on: ubuntu-latest
+    needs: gate
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: '.nvmrc'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-payload
+          path: incoming
+
+      # Nothing is rebuilt here. The assets that were tested are the assets
+      # that ship; this job only assembles and checks them. The payload is
+      # flat, so these copies name files, not guessed directories.
+      - name: Stage the asset set
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          STAGE="release/staged-v${V}"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          cp incoming/openlidarviewer-*.zip "$STAGE"/
+          cp incoming/sbom.json "$STAGE"/
+          cp incoming/gate.log incoming/gate.log.sha256 "$STAGE"/
+          cp "incoming/test-evidence-v${V}.json" "$STAGE"/
+          cp "incoming/RELEASE_NOTES_v${V}.md" "$STAGE"/
+          ls -la "$STAGE"
+
+      - name: Bind the manifest
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          STAGE="release/staged-v${V}"
+          node scripts/create-release-manifest.mjs \
+            --asset-dir "$STAGE" \
+            --evidence "$STAGE/test-evidence-v${V}.json" \
+            --output "$STAGE/release-manifest-v${V}.json"
+
+      - name: Checksum everything, manifest included
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          cd "release/staged-v${V}"
+          shasum -a 256 * > SHA256SUMS.tmp || true
+          grep -v ' SHA256SUMS' SHA256SUMS.tmp > SHA256SUMS
+          rm SHA256SUMS.tmp
+          shasum -a 256 -c SHA256SUMS
+
+      - name: Verify the closed asset set
+        run: |
+          set -euo pipefail
+          V="$(node -p "require('./package.json').version")"
+          npm run release:verify -- --dir "release/staged-v${V}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          retention-days: 30
+          path: release/staged-*/
+
+  # ── The single status to gate publication on ──────────────────────────────
+  release-ready:
+    runs-on: ubuntu-latest
+    needs: [validate, gate, stage]
+    steps:
+      - run: echo "Every blocking job passed for ${{ github.ref_name }}."
+
+  # ── Draft prerelease, tag refs only ───────────────────────────────────────
+  # A draft, never auto-published: a human reads the body and presses publish.
+  # The tag-only condition is deliberate. An earlier revision let a manual
+  # dispatch with an input flag reach this job from a branch, which would have
+  # tried to create a release named after the branch.
+  publish:
+    runs-on: ubuntu-latest
+    needs: release-ready
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: assets
+      - name: Create the draft prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: true
+          tag_name: ${{ github.ref_name }}
+          files: assets/**/*
+          fail_on_unmatched_files: true

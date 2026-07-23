@@ -206,7 +206,12 @@ export const scanReport: AnalysisModule = {
     // coordinates (local bounds plus the origin subtracted on load). Shown
     // under the Advanced report; survey and topographic work needs absolute
     // coordinates, not the viewer's internal recentred values.
-    const origin = cloud.origin;
+    //
+    // The world frame is the SOURCE origin, fixed for the cloud's life. The
+    // live origin moves when a layer mounts into a project frame; the reported
+    // survey corner must stay in the file's frame regardless. The two coincide
+    // today (mounting is off), so this is a no-op that stays correct later.
+    const origin = cloud.sourceOrigin;
     const corner = (c: [number, number, number]): string =>
       `${(c[0] + origin[0]).toFixed(3)}, ${(c[1] + origin[1]).toFixed(3)}, ` +
       `${(c[2] + origin[2]).toFixed(3)}`;

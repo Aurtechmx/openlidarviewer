@@ -5,7 +5,7 @@
   `npm run docs:render`. tests/renderClaimRegister.test.ts fails on drift.
 -->
 
-_Register last reviewed at software version **0.6.0-alpha.2**, dated 2026-07-19. 25 claims._
+_Register last reviewed at software version **0.6.0-alpha.3**, dated 2026-07-19. 25 claims._
 
 | Claim | Product | Method@version | Current evidence | Required | External status | Approved claim | Prohibited claims |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -21,7 +21,7 @@ _Register last reviewed at software version **0.6.0-alpha.2**, dated 2026-07-19.
 | `DSM` | DSM (top surface) | Top-return gridded surface @ v0.4.4 | `E3_SYNTHETICALLY_VALIDATED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | DSM equals the top surface on synthetic scenes. | field-validated DSM accuracy |
 | `CHM` | CHM (canopy height, DSM − DTM) | DSM − DTM with NoData preservation @ v0.4.4 | `E3_SYNTHETICALLY_VALIDATED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | Canopy-height reconstruction validated on synthetic scenes. | field-validated canopy height |
 | `CONTOURS` | Contours | Marching squares + stitching + evidence grading @ v0.4.x | `E3_SYNTHETICALLY_VALIDATED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | Contours validated against synthetic surfaces; grade tracks confidence. | survey-grade contours |
-| `SLOPE-RASTER` | Slope raster | Horn 3x3 gradient @ v0.4.x | `E2_ANALYTICALLY_VERIFIED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | Slope = atan(gradient) verified on analytic planes. | cross-validated against GDAL/SAGA (pending) |
+| `SLOPE-RASTER` | Slope raster | Horn 3x3 gradient @ v0.4.x | `E4_CROSS_IMPLEMENTATION_VALIDATED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | partial | Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree). | field-validated slope accuracy; survey-grade slope; all terrain products independently validated; point-cloud-to-DTM pipeline validated; slope validated on every terrain type |
 | `HILLSHADE` | Hillshade | ESRI illumination model (Lambert) @ v0.4.x | `E2_ANALYTICALLY_VERIFIED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | Exact flat-plane Lambert value + correct N/E/S/W ordering, verified analytically. | cross-implementation agreement with GDAL/ESRI (pending) |
 | `VRM-TPI` | VRM / TPI terrain descriptors | Vector ruggedness measure / topographic position index @ v0.4.x | `E1_UNIT_VERIFIED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | pending | Index per the documented convention + neighbourhood. | standardised / cross-validated ruggedness |
 | `HOLDOUT-RMSE` | Hold-out RMSE (interpolation) | Conditional point-wise interpolation holdout @ v0.4.x | `E3_SYNTHETICALLY_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | pending | Internal holdout RMSE against known synthetic surfaces. | independent checkpoint accuracy; field accuracy; spatially-blocked error (pending) |

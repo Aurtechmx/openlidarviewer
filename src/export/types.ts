@@ -90,6 +90,15 @@ export interface ExportSceneAdapter {
   /** Does any loaded cloud carry per-point classification? */
   hasClassification(): boolean;
   /**
+   * Share of points carrying an ASSIGNED class (ASPRS code > 1 — 0 Created and
+   * 1 Unclassified both mean no class), in 0..1, or null when the channel is
+   * absent or the viewer cannot count it (a streaming source holds only the
+   * loaded nodes). Presence and coverage are different questions: a file whose
+   * every code is 0 has the channel and none of the classes, and a report that
+   * prints a bare "Yes" for it states something untrue.
+   */
+  classificationAssignedFraction?(): number | null;
+  /**
    * Does any loaded cloud carry per-point normals? Drives the Normal Map
    * exporter's `isAvailable` gate. Streaming COPC + EPT sources never carry
    * normals (LAS/LAZ doesn't reserve a field for them and EPT writers rarely
