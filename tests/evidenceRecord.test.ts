@@ -10,11 +10,13 @@
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types
-import { buildEvidenceRecord, CANONICAL_NPM } from '../scripts/collect-evidence.mjs';
+import { buildEvidenceRecord, parseGateStages, CANONICAL_NPM, MANDATORY_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 const fullBuckets = () =>
   Object.fromEntries(BUCKETS.map((b) => [b, { passed: 10, skipped: 0, runs: 1 }]));
+const allStages = () =>
+  Object.fromEntries((MANDATORY_RELEASE_STAGES as string[]).map((s) => [s, 0]));
 
 const base = (over: Record<string, unknown> = {}) => ({
   mode: 'release',
@@ -30,6 +32,7 @@ const base = (over: Record<string, unknown> = {}) => ({
   generatedAt: '2026-07-22T00:00:00.000Z',
   gateLogSha256: 'b'.repeat(64),
   science: { e4ClaimCount: 1, e4Claims: ['SLOPE-RASTER'], suppliedReferenceSlots: 1 },
+  stages: allStages(),
   ...over,
 });
 
@@ -96,6 +99,56 @@ describe('buildEvidenceRecord — release mode', () => {
   it('reports every problem at once rather than stopping at the first', () => {
     const p = problems({ tag: null, commit: null, nodeVersion: 'v26.0.0' });
     expect(p.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('refuses when a mandatory stage never ran', () => {
+    const s = allStages();
+    delete (s as Record<string, number>).mutation;
+    expect(problems({ stages: s }).some((p) => p.includes('mutation') && p.includes('did not run'))).toBe(true);
+  });
+
+  it('refuses when a mandatory stage failed', () => {
+    const s = allStages();
+    (s as Record<string, number>).e2e = 1;
+    expect(problems({ stages: s }).some((p) => p.includes('e2e') && p.includes('exited 1'))).toBe(true);
+  });
+
+  it('refuses a missing npm version instead of skipping the check', () => {
+    // The old guard was `npmVersion && ...`: a machine where `npm --version`
+    // failed produced release evidence with no npm assertion at all.
+    expect(problems({ npmVersion: null }).some((p) => p.includes('npm'))).toBe(true);
+  });
+
+  it('requires the exact canonical Node when one is pinned', () => {
+    expect(
+      problems({ canonicalNode: '22.17.1', nodeVersion: 'v22.16.0' })
+        .some((p) => p.includes('22.17.1')),
+    ).toBe(true);
+    const ok = buildEvidenceRecord(base({ canonicalNode: '22.17.1', nodeVersion: 'v22.17.1' }));
+    expect(ok.ok).toBe(true);
+  });
+
+  it('records every stage as passed in the release record', () => {
+    const r = buildEvidenceRecord(base());
+    for (const s of MANDATORY_RELEASE_STAGES as string[]) {
+      expect(r.record.stages[s]).toBe('passed');
+    }
+  });
+});
+
+describe('parseGateStages', () => {
+  it('reads stage markers and keeps the last occurrence per name', () => {
+    const log = [
+      'GATE STAGE staticGate EXIT: 0',
+      'noise',
+      'GATE STAGE e2e EXIT: 1',
+      'GATE STAGE e2e EXIT: 0',
+    ].join('\n');
+    expect(parseGateStages(log)).toEqual({ staticGate: 0, e2e: 0 });
+  });
+
+  it('returns an empty object for a log without markers', () => {
+    expect(parseGateStages('Tests 5 passed\nGATE EXIT: 0')).toEqual({});
   });
 });
 

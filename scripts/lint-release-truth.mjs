@@ -146,6 +146,34 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
+  // ── 4b. Dependency audit names the canonical toolchain, not a stale one ──
+  // The heading check above caught a document still titled for the previous
+  // release. It did not catch one titled correctly while recording the wrong
+  // runtime: the audit shipped saying Node 26 / npm 11 after the project had
+  // pinned 22.17.1 / 10.9.2. Derive the expected strings from .nvmrc and the
+  // packageManager pin so this check moves when the pins move.
+  {
+    const text = read(DEPS);
+    if (text != null) {
+      const nvmrc = (read('.nvmrc') ?? '').trim();
+      if (/^\d+\.\d+\.\d+$/.test(nvmrc) && !text.includes(nvmrc)) {
+        problems.push(`${DEPS} never names the canonical Node ${nvmrc} (.nvmrc).`);
+      }
+      const pmNpm = String(pkg.packageManager ?? '').split('@')[1];
+      if (pmNpm && !text.includes(pmNpm)) {
+        problems.push(`${DEPS} never names the canonical npm ${pmNpm} (package.json packageManager).`);
+      }
+      const lockText = read('package-lock.json');
+      if (lockText) {
+        const lockfileVersion = JSON.parse(lockText).lockfileVersion;
+        const row = new RegExp(`lockfileVersion[^\n]*\\b${lockfileVersion}\\b`);
+        if (!row.test(text)) {
+          problems.push(`${DEPS} does not state lockfileVersion ${lockfileVersion} from package-lock.json.`);
+        }
+      }
+    }
+  }
+
   // ── 5. THIRD_PARTY_NOTICES direct-dep rows agree with the manifest ────────
   {
     const text = read(NOTICES);

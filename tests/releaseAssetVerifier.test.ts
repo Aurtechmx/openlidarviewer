@@ -46,7 +46,17 @@ const SOURCE_FILES: Record<string, string> = {
   'docs/validation/claim-register.yaml': 'claims',
   'docs/release/RELEASE_ASSETS.md': 'asset guide',
   'tests/fixtures/reference/slope/SHA256SUMS': 'sums',
+  [`RELEASE_NOTES_v${VERSION}.md`]: 'notes',
+  [`KNOWN_LIMITATIONS_v${VERSION}.md`]: 'limits',
+  [`VALIDATION_REPORT_v${VERSION}.md`]: 'validation',
+  [`REPRODUCIBILITY_v${VERSION}.md`]: 'repro',
 };
+
+const ALL_STAGES = [
+  'staticGate', 'e2e', 'docsBuild', 'productionAudit',
+  'fixtureChecksums', 'coverage', 'mutation',
+] as const;
+const passedStages = () => Object.fromEntries(ALL_STAGES.map((s) => [s, 'passed']));
 
 const DEPLOY_FILES: Record<string, string> = {
   'index.html': '<!doctype html>',
@@ -68,6 +78,7 @@ function evidenceRecord(over: Record<string, unknown> = {}) {
     total: { passed: 5797, skipped: 16 },
     bundle: { liveEntryKiB: 713, ceilingKiB: 720 },
     science: { e4ClaimCount: 1, e4Claims: ['SLOPE-RASTER'], suppliedReferenceSlots: 1 },
+    stages: passedStages(),
     gateLogSha256: '',
     ...over,
   };
@@ -195,6 +206,41 @@ describe('release:verify — provenance', () => {
     stageRelease();
     writeFileSync(join(dir, 'sbom.json'), JSON.stringify({ metadata: { component: { version: '0.6.0-alpha.2' } } }));
     failsWith('SBOM root version');
+  });
+});
+
+describe('release:verify — versioned evidence documents in the source zip', () => {
+  for (const doc of [
+    `RELEASE_NOTES_v${VERSION}.md`,
+    `KNOWN_LIMITATIONS_v${VERSION}.md`,
+    `VALIDATION_REPORT_v${VERSION}.md`,
+    `REPRODUCIBILITY_v${VERSION}.md`,
+  ]) {
+    it(`rejects a source zip missing ${doc}`, () => {
+      const files = { ...SOURCE_FILES };
+      delete files[doc];
+      stageRelease({ sourceFiles: files });
+      failsWith(doc);
+    });
+  }
+});
+
+describe('release:verify — mandatory stage record', () => {
+  it('rejects evidence with no stage record at all', () => {
+    stageRelease({ evidence: { stages: null } });
+    failsWith('mandatory stage');
+  });
+
+  it('rejects evidence whose stage record omits a mandatory stage', () => {
+    const s = passedStages();
+    delete (s as Record<string, string>).mutation;
+    stageRelease({ evidence: { stages: s } });
+    failsWith('mutation');
+  });
+
+  it('rejects evidence recording a mandatory stage as failed', () => {
+    stageRelease({ evidence: { stages: { ...passedStages(), coverage: 'failed' } } });
+    failsWith('coverage');
   });
 });
 

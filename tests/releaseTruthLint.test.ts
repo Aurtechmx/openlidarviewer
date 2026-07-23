@@ -86,6 +86,14 @@ describe('lint:release-truth', () => {
     expect(problems.some((p) => p.includes('inherited unchanged'))).toBe(true);
   });
 
+  it('fails when the dependency audit drops the canonical toolchain', () => {
+    // The heading check caught a doc titled for the wrong release; this one
+    // catches a doc titled correctly while recording a stale runtime.
+    const doc = realRead(DEPS)!.replace(/22\.17\.1/g, '26.0.0');
+    const problems = problemsFor(withOverride(DEPS, doc));
+    expect(problems.some((p) => p.includes('canonical Node'))).toBe(true);
+  });
+
   it('fails when the release checklist drops a required asset', () => {
     const doc = realRead(CHECKLIST)!.replace(/sbom\.json/gi, 'REMOVED');
     const problems = problemsFor(withOverride(CHECKLIST, doc));

@@ -9,8 +9,13 @@
  * lockfile it claims to describe — an SBOM can carry the right version header
  * and a dependency list from three releases ago.
  *
- * This validates the SBOM against package.json and package-lock.json:
- *   1. structural CycloneDX validity (bomFormat / specVersion / components)
+ * This validates SBOM IDENTITY and DEPENDENCY CONSISTENCY against package.json
+ * and package-lock.json. It is not full CycloneDX schema validation; the
+ * structural checks below cover bomFormat, specVersion and the components
+ * array, nothing more. Claiming schema validation without running a schema
+ * validator would be the kind of overstatement the rest of this file exists
+ * to catch:
+ *   1. structural shape (bomFormat / specVersion / components)
  *   2. root identity: name, version, bom-ref, purl
  *   3. every direct PRODUCTION dependency appears as a component
  *   4. each such component's version equals the LOCKED version
@@ -127,8 +132,8 @@ if (isMain()) {
 
   if (problems.length === 0) {
     console.log(
-      `lint:sbom OK — CycloneDX root openlidarviewer@${version}, ${componentCount} components, ` +
-        `every direct production dependency present at its locked version.`,
+      `lint:sbom OK — root openlidarviewer@${version}, ${componentCount} components, every direct ` +
+        `production dependency at its locked version (identity + consistency checks, not full schema validation).`,
     );
     process.exit(0);
   }
