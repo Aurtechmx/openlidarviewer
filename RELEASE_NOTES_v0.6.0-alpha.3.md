@@ -41,7 +41,7 @@ Two shrink-only ratchets now run in the release gate. One holds the world-coordi
 
 ## Runtime validation
 
-The suite is partitioned across 492 test files: 257 unit, 43 export, 107 terrain, 29 UI and 59 slow. The recorded gate run reports 5,888 passing and 16 skipped.
+The suite is partitioned across 492 test files: 257 unit, 43 export, 107 terrain, 29 UI and 59 slow. The recorded gate run reports 5,894 passing and 16 skipped.
 
 That is software-validation coverage, not scientific evidence. The two are kept apart on purpose. A passing runtime suite shows the implementation behaves as specified; it does not validate a scientific result.
 
