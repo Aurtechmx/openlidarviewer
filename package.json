@@ -1,7 +1,7 @@
 {
   "name": "openlidarviewer",
   "version": "0.6.0-alpha.3",
-  "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
+  "description": "Open any 3D scan \u2014 drone LiDAR, terrestrial laser scan, or phone scan \u2014 instantly and privately, in a browser tab. No install, no upload, no conversion.",
   "license": "MIT",
   "author": "A. Urias",
   "homepage": "https://lidar.aurtech.mx/",
@@ -76,11 +76,12 @@
     "evidence": "bash -c 'set -o pipefail; mkdir -p release; npm run test:release:execute > release/gate.log 2>&1; code=$?; node scripts/collect-evidence.mjs release/gate.log \"$code\" && npm run lint:evidence'",
     "lint:evidence": "node scripts/lint-evidence.mjs",
     "package:source": "bash scripts/package.sh --source-only",
-    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:monolith-size && npm run lint:claim-register && npm run lint:release-truth && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:monolith-size && npm run lint:claim-register && npm run lint:release-truth && npm run lint:claims-language && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile",
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
-    "lint:monolith-size": "node scripts/lint-monolith-size.mjs"
+    "lint:monolith-size": "node scripts/lint-monolith-size.mjs",
+    "lint:claims-language": "node scripts/lint-claims-language.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
