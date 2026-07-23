@@ -3317,8 +3317,7 @@ function streamingExportCloud(): PointCloud | null {
  */
 function exportGeoContext(): {
   origin: readonly [number, number, number];
-  crsName: string | undefined;
-  name: string | null;
+  crsName: string | undefined; name: string | null;
 } {
   // The label must come from the RESOLVED CRS — the same one every conversion,
   // unit factor and validation gate uses — not from the raw source metadata.
@@ -3335,7 +3334,8 @@ function exportGeoContext(): {
   };
   if (scans.activeId) {
     const c = viewer.getCloud(scans.activeId);
-    if (c) return { origin: c.origin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
+    // SOURCE frame (float64-transform.md step 2): sessions save + import here.
+    if (c) return { origin: c.sourceOrigin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
   }
   const sc = viewer.streamingCloud;
   if (sc) return { origin: sc.renderOrigin, crsName: effectiveCrsName() ?? sc.crs()?.name ?? undefined, name: sc.name };

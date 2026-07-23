@@ -46,6 +46,9 @@ export interface CrsCoordinator {
   refreshCrsForStaticCloud(cloud: {
     readonly name: string;
     readonly origin?: readonly [number, number, number];
+    /** The file's own frame — preferred over `origin` for the inspector
+     * context (float64-transform.md step 2); the two are equal today. */
+    readonly sourceOrigin?: readonly [number, number, number];
     readonly metadata?: { readonly crs?: CrsInfo | null };
   }): void;
   /** Refresh the Inspector's CRS section after a streaming-cloud open. */
@@ -93,6 +96,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   function refreshCrsForStaticCloud(cloud: {
     readonly name: string;
     readonly origin?: readonly [number, number, number];
+    readonly sourceOrigin?: readonly [number, number, number];
     readonly metadata?: { readonly crs?: CrsInfo | null };
   }): void {
     trackDataset(cloud.name);
@@ -113,7 +117,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     // guard because the viewer chunk may still be loading the very first
     // time this fires.
     if (isViewerReady()) {
-      try { getViewer().setInspectCoordinateContext({ origin: cloud.origin, crs: resolved }); }
+      try { getViewer().setInspectCoordinateContext({ origin: cloud.sourceOrigin ?? cloud.origin, crs: resolved }); }
       catch (err) { if (debug) console.warn('[crs] setInspectCoordinateContext (static) threw', err); }
     }
   }

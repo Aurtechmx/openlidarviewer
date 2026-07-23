@@ -2059,10 +2059,10 @@ export class Viewer {
   private _refreshMeasureDatum(): void {
     const origins: Array<readonly number[] | null> = [];
     if (this._streaming) origins.push(this._streaming.cloud.renderOrigin ?? null);
-    for (const { cloud } of this._clouds.values()) origins.push(cloud.origin ?? null);
-    // Frame-mounted layers literally share one origin after the data rebase
-    // (`rebaseCloudToOrigin`), so unanimity resolves the datum naturally — and
-    // keeps refusing when an unreferenced mesh or foreign-CRS layer is present.
+    // SOURCE origins (float64-transform.md step 2): equal to live origins
+    // today; unanimity still refuses unreferenced/foreign layers. Mounted
+    // layers resolve via sourceOrigin + transform at the contract's step 3.
+    for (const { cloud } of this._clouds.values()) origins.push(cloud.sourceOrigin ?? null);
     const origin = resolveSceneOrigin(origins);
     this._measure.setContext({
       worldUp: [this._worldUp.x, this._worldUp.y, this._worldUp.z],

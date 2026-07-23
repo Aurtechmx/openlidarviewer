@@ -54,7 +54,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Inspect point-cloud datasets directly in a modern web interface, with nothing to install.
 - Local-first by design: files are read and rendered in your browser, with no upload.
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
-- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
+- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates numerically stable.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (Experimental 3D Tiles / `.pnts` parser foundations exist, but user-facing 3D Tiles loading is not enabled yet.)
 - Game-like navigation: Orbit, Walk, Fly, and Pan (hand-tool) modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
@@ -120,7 +120,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - **Measurement chains** — combine placed measurements as sum / difference / ratio
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
 - A Dataset Intelligence card — header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; renders `—` rather than fabricating a bucket when no signal is available
-- A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
+- A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates numerically stable
 - Point inspection — click a point to read its coordinates and attributes (including LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy; or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers — sensor, source software, and date — shown in the Scan Report when the file carries them
 - A "Project ready" summary card on load, with a suggested navigation mode
