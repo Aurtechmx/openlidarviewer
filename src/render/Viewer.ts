@@ -235,6 +235,8 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
+import { mergePlacedBounds } from './layerPlacement';
+import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import {
   aabbCenter,
   clampTargetToExpandedAabb,
@@ -320,6 +322,8 @@ interface CloudEntry {
   compatibility?: LayerCompatibility;
   /** Whether this layer is actually mounted in the shared project frame. */
   mounted?: boolean;
+  /** Float64 placement (float64-transform.md step 3); null/absent = identity. */
+  placement?: LayerSpatialTransform | null;
   /** The instanced-quad mesh that draws this cloud. */
   mesh: THREE.Mesh;
   /** The cloud's point material (one per cloud so colours are independent). */
@@ -5686,24 +5690,28 @@ export class Viewer {
   /** Combined bounding sphere of every visible cloud, or null if none. */
   /** The AABB of every visible cloud (+ the streaming octree extent), or null. */
   private _visibleBoundingBox(): THREE.Box3 | null {
-    const box = new THREE.Box3();
-    let any = false;
-    for (const { mesh, cloud } of this._clouds.values()) {
-      if (!mesh.visible) continue;
-      const b = cloud.bounds();
-      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
-      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
-      any = true;
-    }
     // A streaming COPC contributes its whole octree extent so framing works
     // before any node has finished decoding.
-    if (this._streaming) {
-      const lb = this._streaming.cloud.localBounds();
-      box.expandByPoint(new THREE.Vector3(lb[0], lb[1], lb[2]));
-      box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
-      any = true;
+    const s = this._mergedVisibleBounds();
+    if (!s) return null;
+    return new THREE.Box3(
+      new THREE.Vector3(s[0], s[1], s[2]),
+      new THREE.Vector3(s[3], s[4], s[5]),
+    );
+  }
+
+  /**
+   * The one scene-bounds merge (layerPlacement.mergePlacedBounds): camera
+   * framing and the orbit clamp read the same placed union, so the two can
+   * never disagree on where the visible data sits.
+   */
+  private _mergedVisibleBounds(): [number, number, number, number, number, number] | null {
+    const layers: Array<{ bounds: ReturnType<PointCloud['bounds']>; placement?: LayerSpatialTransform | null }> = [];
+    for (const entry of this._clouds.values()) {
+      if (!entry.mesh.visible) continue;
+      layers.push({ bounds: entry.cloud.bounds(), placement: entry.placement });
     }
-    return any && !box.isEmpty() ? box : null;
+    return mergePlacedBounds(layers, this._streaming ? this._streaming.cloud.localBounds() : null);
   }
 
   private _visibleBoundingSphere(): THREE.Sphere | null {
@@ -5720,23 +5728,7 @@ export class Viewer {
    * attach avoids re-walking the cloud map in the render loop.
    */
   private _visibleCloudAabb(): OrbitAabb | null {
-    const box = new THREE.Box3();
-    let any = false;
-    for (const { mesh, cloud } of this._clouds.values()) {
-      if (!mesh.visible) continue;
-      const b = cloud.bounds();
-      box.expandByPoint(new THREE.Vector3(b.min[0], b.min[1], b.min[2]));
-      box.expandByPoint(new THREE.Vector3(b.max[0], b.max[1], b.max[2]));
-      any = true;
-    }
-    if (this._streaming) {
-      const lb = this._streaming.cloud.localBounds();
-      box.expandByPoint(new THREE.Vector3(lb[0], lb[1], lb[2]));
-      box.expandByPoint(new THREE.Vector3(lb[3], lb[4], lb[5]));
-      any = true;
-    }
-    if (!any || box.isEmpty()) return null;
-    return [box.min.x, box.min.y, box.min.z, box.max.x, box.max.y, box.max.z];
+    return this._mergedVisibleBounds();
   }
 
   /**

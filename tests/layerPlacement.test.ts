@@ -12,6 +12,7 @@ import {
   placePoint,
   rayOriginToLayer,
   accumulatorOffset,
+  mergePlacedBounds,
 } from '../src/render/layerPlacement';
 import {
   createProjectFrame,
@@ -75,5 +76,37 @@ describe('a real translation', () => {
       p[1] + OFFSET.sourceToProject[1],
       p[2] + OFFSET.sourceToProject[2],
     ]);
+  });
+});
+
+describe('mergePlacedBounds', () => {
+  const A = { min: [0, 0, 0] as [number, number, number], max: [10, 10, 5] as [number, number, number] };
+  const B = { min: [-2, 1, 0] as [number, number, number], max: [4, 20, 3] as [number, number, number] };
+
+  it('merges identity layers exactly like a raw min/max merge', () => {
+    const merged = mergePlacedBounds([
+      { bounds: A, placement: IDENTITY },
+      { bounds: B, placement: null },
+    ]);
+    expect(merged).toEqual([-2, 0, 0, 10, 20, 5]);
+  });
+
+  it('folds a placement before merging', () => {
+    const merged = mergePlacedBounds([
+      { bounds: A, placement: IDENTITY },
+      { bounds: A, placement: OFFSET },
+    ]);
+    // The placed copy sits 100/50/1 away, so the union spans both.
+    expect(merged).toEqual([0, 0, 0, 110, 60, 6]);
+  });
+
+  it('takes streaming bounds as a raw sextuple', () => {
+    const merged = mergePlacedBounds([{ bounds: A }], [-5, -5, -5, 1, 1, 1]);
+    expect(merged).toEqual([-5, -5, -5, 10, 10, 5]);
+  });
+
+  it('returns null for nothing visible', () => {
+    expect(mergePlacedBounds([])).toBeNull();
+    expect(mergePlacedBounds([], null)).toBeNull();
   });
 });

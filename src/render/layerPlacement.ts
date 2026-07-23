@@ -88,3 +88,41 @@ export function accumulatorOffset(
 ): Vec3 {
   return isIdentityPlacement(t) ? ZERO : t!.sourceToProject;
 }
+
+/** Sextuple bounds `[minX, minY, minZ, maxX, maxY, maxZ]`. */
+export type BoundsSextuple = [number, number, number, number, number, number];
+
+/**
+ * Merge visible layers' cached AABBs into one bounds sextuple, folding each
+ * layer's placement first. This is THE scene-bounds merge — camera framing
+ * and the orbit clamp both call it, so the two can never disagree on where
+ * the visible data sits. `streamingBounds` is a streaming source's own
+ * sextuple (already in its render frame), merged as-is. Returns null when
+ * nothing contributes.
+ */
+export function mergePlacedBounds(
+  layers: Iterable<{
+    readonly bounds: Aabb;
+    readonly placement?: LayerSpatialTransform | null;
+  }>,
+  streamingBounds?: readonly number[] | null,
+): BoundsSextuple | null {
+  let any = false;
+  const out: BoundsSextuple = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (const layer of layers) {
+    const b = placeAabb(layer.bounds, layer.placement);
+    for (let a = 0; a < 3; a++) {
+      if (b.min[a] < out[a]) out[a] = b.min[a];
+      if (b.max[a] > out[a + 3]) out[a + 3] = b.max[a];
+    }
+    any = true;
+  }
+  if (streamingBounds && streamingBounds.length >= 6) {
+    for (let a = 0; a < 3; a++) {
+      if (streamingBounds[a] < out[a]) out[a] = streamingBounds[a];
+      if (streamingBounds[a + 3] > out[a + 3]) out[a + 3] = streamingBounds[a + 3];
+    }
+    any = true;
+  }
+  return any ? out : null;
+}
