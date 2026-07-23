@@ -90,7 +90,7 @@ overwhelming majority of use — is unaffected.
 
 Two things stand between this and a tag:
 
-1. **The project transform still rewrites Float32 positions** rather than being held in Float64 beside source-local vertices. The gates around it are now unit-correct per axis and refuse past a millimetre, so the loss is bounded, measured and disclosed — but bounded is not absent, and this is the one open correctness item. Scope is measured in the coordinate-integrity roadmap, P1 item 2: 154 direct reads across 42 files, and it must land in all of them together.
+1. **The transform architecture landed: the project transform is a Float64 placement, and source geometry is immutable.** The in-place Float32 rewrite that was the open correctness item is removed (docs/architecture/float64-transform.md, steps 1–5): a layer's placement is data beside the cloud, positions stay byte-identical through mount and unmount (pinned by `tests/sourceGeometryImmutable.test.ts`), and the round trip loses nothing because nothing is re-quantised. What remains is browser verification of two-layer placement (step 6) before mounting can be enabled; until then the mm-precision refusal gates stay in place as conservative admission rules and `MULTI_LAYER_MOUNT_ENABLED` stays false.
 2. **Browser evidence must come from a green GitHub Actions run on the tagged commit.** The local e2e suite passes; that is not the same claim.
 
 When those are closed, publish as a GitHub **pre-release**, with multi-layer placement and advanced datum handling marked experimental. This is not a candidate for stable v0.6.0 or for a definitive Zenodo deposit.

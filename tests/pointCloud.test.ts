@@ -161,19 +161,16 @@ describe('PointCloud — bounds()', () => {
 });
 
 /**
- * Origin rebase — the mechanism that mounts a layer into the shared project
- * frame at the DATA level.
+ * The cloud's own frame is fixed for its life.
  *
- * The first mount implementation translated the MESH instead, which split the
- * scene in two: rendering and camera bounds saw project space while picking
- * (`nearestPointAlongRay` over raw positions), terrain gather, lasso, profiles,
- * volumes and export bounds all still read cloud-local coordinates — layers
- * LOOKED aligned while every calculation used a different frame. Rebasing the
- * positions themselves makes every consumer of `cloud.positions` project-local
- * automatically, and keeps the world invariant exact: local + origin is the
- * same point before and after.
+ * The in-place rebase these blocks used to exercise — the mechanism that
+ * mounted a layer by rewriting every Float32 position and moving `origin` —
+ * is retired (docs/architecture/float64-transform.md, step 5). Mounting is
+ * now a Float64 placement held BESIDE the cloud, so the invariant flips:
+ * nothing may move `origin`, and the world coordinate of a point is a
+ * constant of the object, mounted or not.
  */
-describe('PointCloud.rebaseOrigin', () => {
+describe('PointCloud frame immutability', () => {
   const make = () =>
     new PointCloud({
       positions: Float32Array.from([0, 0, 0, 10, 20, 5]),
@@ -182,119 +179,68 @@ describe('PointCloud.rebaseOrigin', () => {
       name: 'a.las',
     });
 
-  it('keeps every point at the same WORLD position', () => {
-    const c = make();
-    const worldBefore = [c.positions[3] + c.origin[0], c.positions[4] + c.origin[1], c.positions[5] + c.origin[2]];
-    c.rebaseOrigin([499_000, 4_500_000, 80]);
-    const worldAfter = [c.positions[3] + c.origin[0], c.positions[4] + c.origin[1], c.positions[5] + c.origin[2]];
-    expect(worldAfter).toEqual(worldBefore);
+  it('exposes no method that could move the origin', () => {
+    // The retired writers are gone from the class, not merely unused.
+    const proto = Object.getOwnPropertyNames(PointCloud.prototype);
+    expect(proto).not.toContain('rebaseOrigin');
+    expect(proto).not.toContain('restoreSourceFrame');
   });
 
-  it('shifts the local positions by the origin delta', () => {
+  it('origin equals sourceOrigin, always', () => {
     const c = make();
-    c.rebaseOrigin([499_000, 4_500_000, 80]);
-    expect([...c.positions.slice(0, 3)]).toEqual([1000, 0, 20]);
-    expect(c.origin).toEqual([499_000, 4_500_000, 80]);
+    expect([...c.origin]).toEqual([...c.sourceOrigin]);
+    // Exercise the read surface; the two records still agree afterwards.
+    c.bounds();
+    c.worldXYZ(1);
+    c.projectXYZ(1, { sourceToProject: [1000, 0, -20] });
+    c.rebaseQuantum([499_000, 4_500_000, 80]);
+    expect([...c.origin]).toEqual([500_000, 4_500_000, 100]);
+    expect([...c.sourceOrigin]).toEqual([500_000, 4_500_000, 100]);
   });
 
-  it('keeps bounds() consistent with the shifted positions', () => {
+  it('worldXYZ is a constant of the object', () => {
     const c = make();
-    const before = c.bounds(); // prime the cache — the stale-cache case is the trap
-    c.rebaseOrigin([499_000, 4_500_000, 80]);
-    const after = c.bounds();
-    expect(after.min).toEqual([before.min[0] + 1000, before.min[1], before.min[2] + 20]);
-    expect(after.max).toEqual([before.max[0] + 1000, before.max[1], before.max[2] + 20]);
-  });
-
-  it('returns false and touches nothing for an identity rebase', () => {
-    const c = make();
-    expect(c.rebaseOrigin([500_000, 4_500_000, 100])).toBe(false);
-    expect([...c.positions.slice(0, 3)]).toEqual([0, 0, 0]);
-  });
-
-  it('returns true when it moved', () => {
-    expect(make().rebaseOrigin([499_000, 4_500_000, 80])).toBe(true);
-  });
-});
-
-/**
- * The file frame survives project membership.
- *
- * `rebaseOrigin` overwrote `origin` in place, so once a layer joined the
- * project frame there was no record of where its file said it was. A layer
- * whose CRS was later overridden to something incompatible stayed parked on
- * the project origin with no way back, and source-coordinate export,
- * provenance, session restore and audit all had nothing true to read.
- */
-describe('PointCloud source frame', () => {
-  const make = () =>
-    new PointCloud({
-      positions: Float32Array.from([0, 0, 0, 10, 20, 5]),
-      origin: [501_000, 4_500_000, 100],
-      sourceFormat: 'las',
-      name: 'b.las',
-    });
-
-  it('remembers the file origin after a rebase', () => {
-    const c = make();
-    c.rebaseOrigin([500_000, 4_500_000, 80]);
-    expect(c.origin).toEqual([500_000, 4_500_000, 80]);
-    expect(c.sourceOrigin).toEqual([501_000, 4_500_000, 100]);
+    const before = c.worldXYZ(1);
+    // A placement is data ABOUT the layer; deriving project coordinates from
+    // one must leave the world coordinate untouched.
+    c.projectXYZ(1, { sourceToProject: [12_345, -6_789, 42] });
+    expect(c.worldXYZ(1)).toEqual(before);
+    expect(before).toEqual([500_010, 4_500_020, 105]);
   });
 
   it('does not alias the caller’s origin array', () => {
-    // `origin` is mutated in place, so a shared reference would let the
-    // rebase quietly rewrite the source origin too — the exact bug this
-    // field exists to prevent.
+    // The class no longer writes `origin`, but the caller still can — a
+    // shared reference would let it rewrite the source record from outside.
     const origin: [number, number, number] = [501_000, 4_500_000, 100];
     const c = new PointCloud({ positions: Float32Array.from([0, 0, 0]), origin, sourceFormat: 'las', name: 'c.las' });
-    c.rebaseOrigin([500_000, 4_500_000, 80]);
-    expect(c.sourceOrigin).toEqual([501_000, 4_500_000, 100]);
+    origin[0] = 0;
+    expect([...c.sourceOrigin]).toEqual([501_000, 4_500_000, 100]);
   });
 
-  it('reports whether it currently sits in a foreign frame', () => {
+  it('a placement round trip is the identity on everything the cloud stores', () => {
+    // Mount and unmount are exact inverses because neither touches the cloud:
+    // setting a transform, reading through it, and clearing it leaves
+    // positions, bounds and both origins bit-identical.
     const c = make();
-    expect(c.isRebased).toBe(false);
-    c.rebaseOrigin([500_000, 4_500_000, 80]);
-    expect(c.isRebased).toBe(true);
-  });
-
-  it('returns to the file frame on demand', () => {
-    // The reproduction from the audit: a layer rebased into the project and
-    // then found incompatible must be able to go home.
-    const c = make();
-    const before = Array.from(c.positions);
-    c.rebaseOrigin([500_000, 4_500_000, 80]);
-    expect(c.restoreSourceFrame()).toBe(true);
-    expect(c.origin).toEqual([501_000, 4_500_000, 100]);
-    expect(Array.from(c.positions)).toEqual(before);
-    expect(c.isRebased).toBe(false);
-  });
-
-  it('restoring an unrebased cloud is a no-op', () => {
-    expect(make().restoreSourceFrame()).toBe(false);
-  });
-
-  it('keeps world positions identical across a round trip', () => {
-    const c = make();
-    const world = (i: number) => [
-      c.positions[i] + c.origin[0], c.positions[i + 1] + c.origin[1], c.positions[i + 2] + c.origin[2],
-    ];
-    const before = world(3);
-    c.rebaseOrigin([500_000, 4_500_000, 80]);
-    c.restoreSourceFrame();
-    expect(world(3)).toEqual(before);
+    const positionsBefore = c.positions.slice();
+    const boundsBefore = c.bounds();
+    c.projectXYZ(0, { sourceToProject: [1000, 2000, -20] });
+    c.projectXYZ(0, { sourceToProject: [0, 0, 0] });
+    expect(c.positions).toEqual(positionsBefore);
+    expect(c.bounds()).toEqual(boundsBefore);
+    expect([...c.origin]).toEqual([...c.sourceOrigin]);
   });
 });
 
 /**
- * A rebase that would cost real precision is disclosed, not hidden.
+ * A mount that would have cost real precision is disclosed, not hidden.
  *
- * Positions are Float32, so writing a large offset into them consumes
- * mantissa the residual was using: at a 100 km separation a millimetre is
- * simply gone. That is bounded by how far apart the layers are, not by the
- * absolute coordinate — a lone georeferenced scan anchors on its own origin
- * and loses nothing — but the far case must be visible rather than silent.
+ * This models the RETIRED in-place mechanism: writing a large offset into
+ * Float32 positions consumes mantissa the residual was using — at a 100 km
+ * separation a millimetre is simply gone. The placement mechanism never
+ * writes the buffer, but the LayerService mount gates still read this figure
+ * as a conservative admission rule until browser verification (step 6)
+ * revisits them.
  */
 describe('PointCloud.rebaseQuantum', () => {
   const make = (origin: [number, number, number]) =>

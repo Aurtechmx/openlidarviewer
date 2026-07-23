@@ -1,7 +1,17 @@
 # The Float64 transform — removing the destructive rebase
 
-Status: design. This is the contract for the v0.6 stable cycle's defining
-change; no code below is implemented until its section says so.
+Status: steps 1–5 landed. The destructive rebase is gone —
+`PointCloud.rebaseOrigin`, `restoreSourceFrame` and `isRebased` are removed,
+mounting is a Float64 placement (`Viewer.setLayerPlacement`), and the
+immutability test suite proves there is no writer left. Step 6 (browser
+verification of two-layer placement, then revisiting
+`MULTI_LAYER_MOUNT_ENABLED`) remains, and it has an explicit prerequisite:
+the estimator/accumulator fold. The fold toolbox (step 3's shared boundary)
+is written, but terrain gather, lasso, profiles and volumes still iterate
+positions without adding the layer translation into the shared
+grid/accumulator — correct today only because mounting is disabled, so every
+transform is the identity. Those consumers must adopt the fold before
+two-layer placement can be verified, let alone enabled.
 
 ## The problem, stated exactly
 
@@ -64,27 +74,37 @@ each site names which one it means. No site may add a bare `origin` again;
 
 ## The flip sequence (each step gated, in order)
 
-1. **Widen the seams.** Add the project-space accessor next to `worldXYZ`
-   (`projectXYZ(index, transform, out)`), and the per-layer transform lookup
-   on the Viewer entry. Pure additions; no behaviour change.
-2. **Migrate the four deferred sites** (`exportGeoContext`, measurement
-   datum, crsCoordinator descriptor, sessions) to the source frame. Each is
-   a no-op today — same property as every earlier batch.
-3. **Teach the cross-layer consumers the translation** (picking, terrain
-   gather, lasso, profiles, volumes, camera bounds), each behind the
-   existing single-layer identity: with one layer the transform is zero, so
-   every change is provably a no-op in the shipped configuration.
-4. **Flip the renderer** to mesh-level placement with the render-origin
-   fold.
-5. **Remove `rebaseOrigin`.** Mounting sets the transform instead. Flip the
-   "documents the defect" test to expect byte-identity. `isRebased` becomes
-   `hasProjectTransform`.
-6. **Browser verification** of two-layer placement — the step the roadmap
-   has always said cannot be skipped — and only then may
-   `MULTI_LAYER_MOUNT_ENABLED` be revisited.
+1. **DONE — Widen the seams.** Add the project-space accessor next to
+   `worldXYZ` (`projectXYZ(index, transform, out)`), and the per-layer
+   transform lookup on the Viewer entry. Pure additions; no behaviour change.
+2. **DONE — Migrate the four deferred sites** (`exportGeoContext`,
+   measurement datum, crsCoordinator descriptor, sessions) to the source
+   frame. Each was a no-op at the time — same property as every earlier
+   batch.
+3. **DONE (boundary) — Teach the cross-layer consumers the translation**
+   (picking, terrain gather, lasso, profiles, volumes, camera bounds), each
+   behind the existing single-layer identity: with one layer the transform
+   is zero, so every change is provably a no-op in the shipped
+   configuration. The fold toolbox and the scene-bounds/picking adoption
+   landed; the estimator/accumulator consumers still need to adopt it —
+   see the Status note, this is step 6's prerequisite.
+4. **DONE — Flip the renderer** to mesh-level placement with the
+   render-origin fold (`Viewer.setLayerPlacement`).
+5. **DONE — Remove `rebaseOrigin`.** Mounting sets the transform instead;
+   `restoreSourceFrame` and `isRebased` went with it (a cloud no longer
+   knows or cares whether it is placed — placement state lives with the
+   frame, not the data). The "documents the defect" test flipped to a pinned
+   read-only API surface plus byte-identity, and `rebaseQuantum` stays as
+   the admission-gate model of the retired mechanism's cost.
+6. **REMAINING — Browser verification** of two-layer placement — the step
+   the roadmap has always said cannot be skipped — and only then may
+   `MULTI_LAYER_MOUNT_ENABLED` be revisited. Prerequisite: the
+   estimator/accumulator fold (terrain gather, lasso, profiles, volumes),
+   which is correct today only because mounting is disabled.
 
-Steps 1–4 are individually shippable no-ops. Step 5 is the point of no
-return and must land with 6's verification plan already written.
+Steps 1–4 were individually shippable no-ops. Step 5 was the point of no
+return; it has landed, and 6 is what stands between the placement
+architecture and enabling multi-layer mounting.
 
 ## What this does not change
 
