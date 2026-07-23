@@ -7,22 +7,92 @@
 # that no process had produced. A pipe into `tee` was enough to lose the real
 # status, because a pipeline reports its LAST command.
 #
-# So: run the gate, keep the log, print the true exit, and regenerate the
-# evidence from that run. Exit non-zero if any part of it failed.
+# Two modes, selected by OLV_GATE_MODE:
+#
+#   development (default)  Runs the static gate and regenerates the COMMITTED
+#                          development evidence, docs/validation/test-evidence.json.
+#
+#   release                Runs EVERY mandatory release stage into ONE log:
+#                          static gate, deterministic e2e, docs build,
+#                          production audit, fixture checksums, coverage,
+#                          mutation. Writes the authoritative record to
+#                          release/test-evidence-v<version>.json and touches
+#                          no tracked file. That last property is the point:
+#                          the exact-tag workflow packages this same checkout
+#                          immediately afterwards, and packaging refuses a
+#                          dirty tree. A gate that modified the committed
+#                          evidence would fail the very gate it feeds.
+#
+# Each stage appends a machine-readable `GATE STAGE <name> EXIT: <code>`
+# marker. Release evidence is built FROM those markers, so a stage that never
+# ran leaves no marker and the record refuses to exist. `gateExit: 0` can no
+# longer mean "the static gate passed and nothing else was checked".
 set -o pipefail
+
+MODE="${OLV_GATE_MODE:-development}"
 LOG="${OLV_GATE_LOG:-release/gate.log}"
 mkdir -p "$(dirname "$LOG")"
+: > "$LOG"
 
-npm run test:release 2>&1 | tee "$LOG"
-STATUS=${PIPESTATUS[0]}
+VERSION="$(node -p "require('./package.json').version")"
+OVERALL=0
 
-echo ""
-echo "GATE EXIT: ${STATUS}"
+# Run one stage: stream its output to the console AND the log, then append the
+# exit marker. PIPESTATUS[0] is the stage's real status; a bare `$?` after the
+# tee would always read 0.
+run_stage() {
+  stage_name="$1"; shift
+  echo "──── GATE STAGE ${stage_name} ────" | tee -a "$LOG"
+  "$@" 2>&1 | tee -a "$LOG"
+  stage_code=${PIPESTATUS[0]}
+  echo "GATE STAGE ${stage_name} EXIT: ${stage_code}" | tee -a "$LOG"
+  if [ "$stage_code" -ne 0 ]; then OVERALL=$stage_code; fi
+}
 
-if [ "$STATUS" -ne 0 ]; then
-  echo "Gate failed — evidence NOT regenerated; the figures still describe the last passing run." >&2
-  exit "$STATUS"
+fixture_checksums() {
+  (cd tests/fixtures/reference/slope && shasum -a 256 -c SHA256SUMS)
+}
+
+production_audit() {
+  npm audit --omit=dev --audit-level=high
+  audit_code=$?
+  # The JSON report is a release artifact; the human-readable run above is the
+  # pass/fail signal.
+  npm audit --omit=dev --json > release/production-audit.json 2>/dev/null || true
+  return $audit_code
+}
+
+run_stage staticGate npm run test:release
+
+if [ "$MODE" = "release" ]; then
+  if [ "$OVERALL" -eq 0 ]; then
+    run_stage e2e npm run test:e2e
+    run_stage docsBuild npm run docs:build
+    run_stage productionAudit production_audit
+    run_stage fixtureChecksums fixture_checksums
+    run_stage coverage npm run coverage -- --reporter=dot
+    run_stage mutation npm run mutation
+  else
+    echo "staticGate failed; the remaining release stages were not run." | tee -a "$LOG"
+  fi
 fi
 
-node scripts/collect-evidence.mjs "$LOG" 0 || exit 1
-echo "Evidence regenerated from this run."
+echo "" | tee -a "$LOG"
+echo "GATE EXIT: ${OVERALL}" | tee -a "$LOG"
+
+if [ "$OVERALL" -ne 0 ]; then
+  echo "Gate failed — evidence NOT regenerated; the figures still describe the last passing run." >&2
+  exit "$OVERALL"
+fi
+
+if [ "$MODE" = "release" ]; then
+  node scripts/collect-evidence.mjs \
+    --mode release \
+    --gate-log "$LOG" \
+    --gate-exit 0 \
+    --output "release/test-evidence-v${VERSION}.json" || exit 1
+  echo "Release evidence written to release/test-evidence-v${VERSION}.json; tracked files untouched."
+else
+  node scripts/collect-evidence.mjs "$LOG" 0 || exit 1
+  echo "Evidence regenerated from this run."
+fi

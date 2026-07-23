@@ -82,6 +82,9 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
       problems.push('evidence is not release-authoritative — it was not produced by exact-tag CI');
     }
     if (evidence.gateExit !== 0) problems.push(`evidence records gate exit ${evidence.gateExit}`);
+    if (!evidence.stages) {
+      problems.push('evidence carries no stage record; a release run proves every mandatory stage');
+    }
   }
 
   for (const kind of PAYLOAD_KINDS) {
@@ -126,6 +129,7 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
         e4Claims: evidence.science?.e4Claims ?? [],
         referenceTool: 'GDAL',
         referenceVersion: '3.13.1',
+        stages: evidence.stages ?? null,
       },
       bundle: {
         liveEntryKiB: evidence.bundle?.liveEntryKiB ?? null,

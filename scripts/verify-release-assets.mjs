@@ -23,6 +23,8 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// eslint-disable-next-line import/no-relative-packages — same repo, ships in the archive
+import { MANDATORY_RELEASE_STAGES } from './collect-evidence.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -39,18 +41,29 @@ const SINGLETONS = {
   checksums: /^SHA256SUMS$/,
 };
 
-/** A source archive must carry these. */
-const SOURCE_REQUIRED = [
-  'package.json',
-  'package-lock.json',
-  'sbom.json',
-  'CITATION.cff',
-  'DEPENDENCIES.md',
-  'THIRD_PARTY_NOTICES.md',
-  'docs/validation/claim-register.yaml',
-  'docs/release/RELEASE_ASSETS.md',
-  'tests/fixtures/reference/slope/SHA256SUMS',
-];
+/**
+ * What a source archive must carry, for a given release. The four versioned
+ * evidence documents are the ones a reviewer actually opens; a fixed list
+ * missed them entirely, so an archive without its own validation report
+ * passed the contract.
+ */
+function sourceRequiredFor(version) {
+  return [
+    'package.json',
+    'package-lock.json',
+    'sbom.json',
+    'CITATION.cff',
+    'DEPENDENCIES.md',
+    'THIRD_PARTY_NOTICES.md',
+    'docs/validation/claim-register.yaml',
+    'docs/release/RELEASE_ASSETS.md',
+    'tests/fixtures/reference/slope/SHA256SUMS',
+    `RELEASE_NOTES_v${version}.md`,
+    `KNOWN_LIMITATIONS_v${version}.md`,
+    `VALIDATION_REPORT_v${version}.md`,
+    `REPRODUCIBILITY_v${version}.md`,
+  ];
+}
 
 /** ...and must not carry any of these. */
 const SOURCE_FORBIDDEN = [
@@ -86,6 +99,11 @@ export function stripArchivePrefix(entries) {
   if (entries.length === 0) return entries;
   const first = entries[0].split('/')[0];
   if (!first) return entries;
+  // Only a git-archive version prefix qualifies. A hand-rolled zip whose whole
+  // content happens to live under one real directory (say `src/`) must NOT be
+  // silently re-rooted, or every anchored content rule would fire against the
+  // wrong paths.
+  if (!/^openlidarviewer-v/.test(first)) return entries;
   const shared = entries.every((e) => e === first || e.startsWith(`${first}/`));
   if (!shared) return entries;
   return entries
@@ -167,8 +185,22 @@ export function verifyStagedRelease(dir, opts = {}) {
     if (evidence.gateExit !== 0) note(`evidence gate exit is ${evidence.gateExit}`);
     const major = Number(String(evidence.nodeVersion ?? '').replace(/^v/, '').split('.')[0]);
     if (major !== 22) note(`evidence Node major is ${major}, expected 22`);
-    if (evidence.npmVersion && evidence.npmVersion !== '10.9.2') {
-      note(`evidence npm is ${evidence.npmVersion}, expected 10.9.2`);
+    // Fail closed: evidence with NO npm version recorded is evidence that
+    // skipped the toolchain assertion, not evidence that passed it.
+    let expectedNpm = '10.9.2';
+    try {
+      const pm = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).packageManager;
+      expectedNpm = String(pm ?? '').split('@')[1] || expectedNpm;
+    } catch { /* fall back to the last known pin */ }
+    if (evidence.npmVersion !== expectedNpm) {
+      note(`evidence npm is ${evidence.npmVersion ?? 'unknown'}, expected ${expectedNpm}`);
+    }
+    // Every mandatory stage must be recorded as passed. gateExit alone once
+    // meant only that the static gate ran.
+    for (const s of MANDATORY_RELEASE_STAGES) {
+      if (evidence.stages?.[s] !== 'passed') {
+        note(`evidence does not record mandatory stage "${s}" as passed`);
+      }
     }
     if (evidence.science?.e4ClaimCount !== 1) {
       note(`expected exactly one E4 claim, evidence says ${evidence.science?.e4ClaimCount}`);
@@ -247,7 +279,7 @@ export function verifyStagedRelease(dir, opts = {}) {
     try { entries = stripArchivePrefix(zipEntries(resolve(dir, found.sourceZip))); }
     catch { note(`source zip failed to list (corrupt?): ${found.sourceZip}`); }
     if (entries) {
-      for (const req of SOURCE_REQUIRED) {
+      for (const req of sourceRequiredFor(pkgVersion)) {
         if (!entries.some((e) => e === req || e.endsWith(`/${req}`))) {
           note(`source zip is missing ${req}`);
         }

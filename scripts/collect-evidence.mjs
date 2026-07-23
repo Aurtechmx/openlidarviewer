@@ -47,6 +47,14 @@ export function parseGateLog(text) {
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, { passed: 0, skipped: 0, runs: 0 }]));
   let current = null;
   for (const line of text.split('\n')) {
+    // A stage boundary ends bucket attribution. Without this, the coverage
+    // stage — which reruns the whole suite and prints its own `Tests N passed`
+    // summary — would be credited to whichever bucket happened to run LAST,
+    // roughly doubling that bucket's count in the published evidence.
+    if (line.includes('GATE STAGE')) {
+      current = null;
+      continue;
+    }
     const shard = /────\s*(\w+)\s+shard\s+\d+\/\d+\s*────/.exec(line);
     if (shard && BUCKETS.includes(shard[1])) current = shard[1];
     const script = /^>\s*\S+\s+test:(\w+)$/.exec(line.trim());
@@ -61,9 +69,46 @@ export function parseGateLog(text) {
   return buckets;
 }
 
-/** The canonical release toolchain. Evidence made elsewhere is not authoritative. */
+/**
+ * Every stage a release run must prove. `gate.sh` appends a
+ * `GATE STAGE <name> EXIT: <code>` marker after each one; a stage that never
+ * ran leaves no marker, and release evidence refuses to exist without it.
+ * This is what stops `gateExit: 0` from silently meaning "the static gate
+ * passed and nothing else was checked".
+ */
+export const MANDATORY_RELEASE_STAGES = [
+  'staticGate',
+  'e2e',
+  'docsBuild',
+  'productionAudit',
+  'fixtureChecksums',
+  'coverage',
+  'mutation',
+];
+
+/** Parse `GATE STAGE <name> EXIT: <code>` markers into { name: exitCode }. */
+export function parseGateStages(text) {
+  const stages = {};
+  for (const m of text.matchAll(/^GATE STAGE (\w+) EXIT: (\d+)\s*$/gm)) {
+    stages[m[1]] = Number(m[2]);
+  }
+  return stages;
+}
+
+/**
+ * The canonical release toolchain. Evidence made elsewhere is not authoritative.
+ * npm comes from the packageManager pin so there is exactly one place to bump it;
+ * a hardcoded copy here is how the pin and the check drift apart.
+ */
 export const CANONICAL_NODE_MAJOR = 22;
-export const CANONICAL_NPM = '10.9.2';
+export const CANONICAL_NPM = (() => {
+  try {
+    const pm = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).packageManager;
+    const v = String(pm ?? '').split('@')[1];
+    if (v) return v;
+  } catch { /* fall through to the last known pin */ }
+  return '10.9.2';
+})();
 
 /**
  * Assemble the evidence record, and refuse to assemble a misleading one.
@@ -96,6 +141,8 @@ export function buildEvidenceRecord(input) {
     packageLockSha256 = null,
     sbom = null,
     science = null,
+    stages = null,
+    canonicalNode = null,
   } = input;
 
   const problems = [];
@@ -118,16 +165,34 @@ export function buildEvidenceRecord(input) {
       problems.push('bundle measurement missing from the gate log');
     }
     // The pinned toolchain is part of the claim. Evidence produced on another
-    // runtime describes a different build than the one CI reproduces.
-    const major = Number(String(nodeVersion ?? '').replace(/^v/, '').split('.')[0]);
-    if (major !== CANONICAL_NODE_MAJOR) {
-      problems.push(`release evidence requires Node ${CANONICAL_NODE_MAJOR}, got ${nodeVersion}`);
+    // runtime describes a different build than the one CI reproduces. When the
+    // exact canonical version is known (.nvmrc), require it; the major-only
+    // check is the fallback for a tree without one.
+    if (canonicalNode) {
+      if (nodeVersion !== `v${canonicalNode}`) {
+        problems.push(`release evidence requires Node ${canonicalNode}, got ${nodeVersion}`);
+      }
+    } else {
+      const major = Number(String(nodeVersion ?? '').replace(/^v/, '').split('.')[0]);
+      if (major !== CANONICAL_NODE_MAJOR) {
+        problems.push(`release evidence requires Node ${CANONICAL_NODE_MAJOR}, got ${nodeVersion}`);
+      }
     }
-    if (npmVersion && npmVersion !== CANONICAL_NPM) {
-      problems.push(`release evidence requires npm ${CANONICAL_NPM}, got ${npmVersion}`);
+    // Fail CLOSED on a missing npm version. The old `npmVersion &&` guard meant
+    // a machine where `npm --version` failed could mint release evidence with
+    // no npm assertion at all — absence of the check looked like passing it.
+    if (npmVersion !== CANONICAL_NPM) {
+      problems.push(`release evidence requires npm ${CANONICAL_NPM}, got ${npmVersion ?? 'unknown'}`);
     }
     if (science && science.e4ClaimCount !== 1) {
       problems.push(`expected exactly one E4 claim, found ${science.e4ClaimCount}`);
+    }
+    // Every mandatory stage must have RUN and PASSED in the same log this
+    // record is derived from. `gateExit: 0` alone proved only the static gate.
+    for (const s of MANDATORY_RELEASE_STAGES) {
+      const code = stages?.[s];
+      if (code === undefined) problems.push(`mandatory stage "${s}" did not run (no marker in the gate log)`);
+      else if (code !== 0) problems.push(`mandatory stage "${s}" exited ${code}`);
     }
   }
 
@@ -159,6 +224,11 @@ export function buildEvidenceRecord(input) {
       gateExit: 0,
       gateLog: 'release/gate.log',
       gateLogSha256,
+      stages: stages
+        ? Object.fromEntries(
+            Object.entries(stages).map(([k, v]) => [k, v === 0 ? 'passed' : 'failed']),
+          )
+        : null,
       buckets,
       total: { passed: totalPassed, skipped: totalSkipped },
       bundle,
@@ -286,6 +356,14 @@ function main() {
     };
   } catch { /* the claim-register lint reports its absence */ }
 
+  let canonicalNode = null;
+  try {
+    canonicalNode = readFileSync(resolve(ROOT, '.nvmrc'), 'utf8').trim() || null;
+    // A bare major ("22") is a range, not a version — only an exact pin
+    // upgrades the check from major-match to exact-match.
+    if (canonicalNode && !/^\d+\.\d+\.\d+$/.test(canonicalNode)) canonicalNode = null;
+  } catch { /* no .nvmrc: the major-only check applies */ }
+
   const built = buildEvidenceRecord({
     mode,
     version,
@@ -293,6 +371,8 @@ function main() {
     tag,
     buckets,
     gateExit: 0,
+    stages: parseGateStages(text),
+    canonicalNode,
     bundle: { liveEntryKiB, ceilingKiB },
     nodeVersion: process.version,
     npmVersion,
