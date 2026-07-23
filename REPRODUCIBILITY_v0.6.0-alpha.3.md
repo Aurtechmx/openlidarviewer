@@ -79,7 +79,7 @@ full asset set and how the hash chain closes.
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
 | Live entry 713 KiB (within the 720 KiB ceiling, 7 KiB of headroom, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
-| Coverage — lines 90.57 / statements 89.19 / functions 87.75 / branches 82.73 | `npm run coverage` |
+| Coverage — lines 91.04 / statements 89.64 / functions 88.21 / branches 83.37 | `npm run coverage` (also a blocking stage of the release-mode gate; read the current figures from the coverage stage of `release/gate.log` rather than trusting this row) |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |
 | SBOM (CycloneDX, root `0.6.0-alpha.3`, production scope, 59 components) | `npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json` |
