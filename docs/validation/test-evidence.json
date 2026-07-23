@@ -4,10 +4,10 @@
   "version": "0.6.0",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
-  "tag": null,
-  "commit": "3b77efb1b7136baa450790f1fa26d010100eeb02",
+  "tag": "v0.6.0",
+  "commit": "6c94c2d670e77accd923eca22e06268002c1879b",
   "repository": null,
-  "generatedAt": "2026-07-23T16:59:40.730Z",
+  "generatedAt": "2026-07-23T19:18:46.329Z",
   "nodeVersion": "v22.17.1",
   "npmVersion": "10.9.2",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "e484c293441ebac6b5502b0101e3673633b57908e7605ed958d732fe332f571f",
+  "gateLogSha256": "1ca5502c448113efb850333de152a61ee705d6ca0d0ae6b683953c1596834fe7",
   "stages": {
     "staticGate": "passed"
   },

@@ -2,13 +2,13 @@
 
 This report states, soberly, what v0.6.0 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour **algorithms** are inherited from v0.5.9 — the v0.6 cycle did not touch them — but alpha.3 adds independent cross-implementation validation for the Horn slope raster, promoting `SLOPE-RASTER` to E4. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the release-specific surface on top of that.
+The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, the non-destructive Float64 placement architecture, and the self-explaining measurement/layer surfaces. The terrain and contour **algorithms** are inherited from v0.5.9 — the v0.6 cycle did not touch them. The Horn slope raster's independent cross-implementation validation (`SLOPE-RASTER` at E4) was first introduced during alpha.3 and ships unchanged in v0.6.0. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the release-specific surface on top of that.
 
 ## Evidence ceiling
 
 One product is at E4. The slope raster is cross-implementation validated: OpenLiDARViewer's Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient over 11,564 interior cells on the analytic fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree). This is E4 for the slope algorithm on this fixture only — not the point-cloud-to-DTM pipeline, not field accuracy, not survey-grade. Every other terrain product tops out at E3 (synthetic known-truth against our own implementation); no product is field-validated (E5). The release's correctness guards are validated at E2–E3 against constructed inputs.
 
-## What was tested (alpha wave)
+## What was tested for v0.6.0
 
 Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:slow`, plus `npm run test:file <path>` for a single file.
 
@@ -22,7 +22,7 @@ Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:sl
 - **Rebase precision is quantified, not assumed.** `PointCloud.rebaseQuantum` reports the Float32 step a mount would land on. Measured: a lone georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); the cost scales with inter-layer separation, reaching 1 mm at 100 km apart. Positions remain Float32, so widely-separated layers trade residual precision for correct relative placement — see Known Limitations.
 - **Progressive EPT attach.** `tests/eptStreaming.test.ts` verifies first-paint-then-continue parity with the full walk and that a persistently-failing fetch terminates (no allocation loop).
 
-Whole-suite evidence, run locally at the alpha head commit (not yet a Git tag): unit 3,132 passed / 16 skipped, export 618, terrain 1,240, ui 429, slow 531 — 5,950 passed / 16 skipped; build-contract 11; live/obfuscated build passed; production dependency audit 0 vulnerabilities. The full e2e suite passed **locally** here (161 passed / 4 fixture-skipped / 0 failed) — the *gating* browser evidence is a green GitHub Actions run on the tagged commit, which is pending (see "What was NOT tested").
+Whole-suite evidence for this release comes from the release-mode gate run at the tagged commit — seven blocking stages (static gate, deterministic e2e, docs build, production audit, fixture checksums, coverage, mutation), each with its exit marker in the shipped `gate.log`: unit 3,132 passed / 16 skipped, export 618, terrain 1,240, ui 429, slow 531 — 5,950 passed / 16 skipped; deterministic e2e 161 passed / 4 fixture-skipped / 0 failed; production dependency audit 0 vulnerabilities. The authoritative record is the release asset `test-evidence-v0.6.0.json` (its SHA-256 is in `SHA256SUMS`, and `release-manifest-v0.6.0.json` binds the tag to the full 40-character commit and to every artifact hash — `npm run release:verify` walks the chain). A green GitHub Actions run on the pushed tag reproduces the same gate in CI; it comes into existence when the tag is published and is not asserted here.
 
 ## What was NOT tested (and is staged, not claimed)
 

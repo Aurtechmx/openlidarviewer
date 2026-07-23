@@ -32,6 +32,20 @@ const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
 const version = JSON.parse(read('package.json')).version;
 const problems = [];
 
+// The claim register is the source public claims are generated from — a
+// stable release stamped with an alpha softwareVersion is a provenance
+// defect (found by external audit of the first v0.6.0 candidate archive).
+{
+  const reg = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
+  const m = reg.match(/^softwareVersion:\s*(\S+)/m);
+  if (!m) problems.push('claim-register.yaml has no softwareVersion field.');
+  else if (m[1] !== version) {
+    problems.push(
+      `claim-register.yaml softwareVersion is ${m[1]}, expected ${version} — regenerate the registry for this release.`,
+    );
+  }
+}
+
 // 1. package-lock version (both the root and the self-package entry).
 try {
   const lock = JSON.parse(read('package-lock.json'));

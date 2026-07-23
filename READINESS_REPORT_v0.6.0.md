@@ -9,7 +9,7 @@ A sober account of what is ready and what remains before this alpha is published
 
 ## Test and build gate
 
-Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner terminates, verified" for the evidence behind that:
+Run by the release-mode gate at the tagged v0.6.0 commit — a literal `GATE EXIT: 0` with all seven stage markers in the shipped `gate.log`; the authoritative record is the release asset `test-evidence-v0.6.0.json`, hash-bound by `SHA256SUMS` and the release manifest:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
 - unit 3,132 (16 skipped) · export 618 · terrain 1,240 · ui 429 · slow 531.

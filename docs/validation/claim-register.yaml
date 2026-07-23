@@ -43,8 +43,8 @@ schemaVersion: 1
 # alpha.3 changed the EVIDENCE STATE of one claim without changing any algorithm:
 # SLOPE-RASTER is promoted E3→E4 by a committed GDAL 3.13.1 cross-implementation
 # reference. All other terrain and measurement evidence is unchanged.
-softwareVersion: 0.6.0-alpha.3
-generated: 2026-07-19
+softwareVersion: 0.6.0
+generated: 2026-07-23
 validationOwner: A. Urias / Aurtech
 
 claims:

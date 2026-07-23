@@ -115,8 +115,10 @@ had already drifted.
 
 ## Compatibility
 
-Chromium-based browsers (Chrome, Edge) with WebGPU; Firefox and Safari fall
-back to WebGL 2. Reads LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, PCD, PTX,
+Designed for Chromium-based browsers (Chrome, Edge) with WebGPU, falling
+back to WebGL 2 in Firefox and Safari. Automated suites cover the WebGL
+paths; the physical-device browser matrix for this release remains
+unrecorded, as stated above. Reads LAS, LAZ, E57, PLY, OBJ, GLB/GLTF, XYZ, PCD, PTX,
 and PTS, and streams COPC and EPT. Sessions and workflows from the v0.6
 alphas open unchanged.
 

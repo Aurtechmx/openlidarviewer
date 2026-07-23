@@ -118,7 +118,9 @@ export function crossCheck(
   let maxAbsDiff = 0;
   // Compensated so the RMSE over a large grid doesn't drift on the Σd² term.
   const sumSqAcc = new NeumaierSum();
-  let sumDiff = 0;
+  // Compensated, like the RMSE accumulator: signed residuals cancel, and
+  // plain accumulation can lose the small net bias on large grids.
+  const sumDiffAcc = new NeumaierSum();
   let within = 0;
 
   for (let i = 0; i < n; i++) {
@@ -133,14 +135,14 @@ export function crossCheck(
     count++;
     if (ad > maxAbsDiff) maxAbsDiff = ad;
     sumSqAcc.add(d * d);
-    sumDiff += d;
+    sumDiffAcc.add(d);
     if (ad <= tol) within++;
   }
   // Any length mismatch counts as skipped so the report is honest about coverage.
   skipped += Math.abs(ours.length - reference.length);
 
   const rmse = count > 0 ? Math.sqrt(sumSqAcc.total / count) : 0;
-  const meanDiff = count > 0 ? sumDiff / count : 0;
+  const meanDiff = count > 0 ? sumDiffAcc.total / count : 0;
   const withinTolFraction = count > 0 ? within / count : 0;
 
   let verdict: CrossCheckVerdict;
@@ -197,8 +199,9 @@ export interface ReferenceSlot {
   /** Unit label for the tolerance, for docs / reports. */
   readonly unit: string;
   /**
-   * Whether a real reference output has been supplied. `pending` everywhere in
-   * this release — no reference data is bundled or fabricated.
+   * Whether a real reference output has been supplied. SLOPE-RASTER is
+   * `supplied` (the GDAL output is bundled with a checksummed manifest);
+   * every other slot remains `pending`, and none is fabricated.
    */
   readonly status: 'pending' | 'supplied';
 }
@@ -221,6 +224,6 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },
 ] as const;
 
-/** True while any reference slot is still pending — i.e. nothing is at E4 yet. */
+/** True only when EVERY reference slot is still pending — false since SLOPE-RASTER reached E4. */
 export const allReferencesPending = (slots: readonly ReferenceSlot[] = REFERENCE_SLOTS): boolean =>
   slots.every((s) => s.status === 'pending');
