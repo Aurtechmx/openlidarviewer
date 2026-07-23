@@ -326,8 +326,8 @@ export class Stage {
     const sub = el('p', {
       className: 'olv-empty-sub',
       text: mobile
-        ? 'Open, measure, and analyse a scan. Local files stay on this device.'
-        : 'Drag a file onto the page or open one below. Local files stay on this device; remote datasets stream only when you select them.',
+        ? 'Local files stay on this device.'
+        : 'Local files stay on this device; remote datasets stream only when selected.',
     });
 
     // Top-of-empty-state status banner — used for offline (E4) and for the
@@ -382,7 +382,10 @@ export class Stage {
       ? el('button', {
           className: 'olv-try-sample',
           type: 'button',
-          text: `Launch a sample dataset — ${demoSample.label}`,
+          // The provider stays IN the label: naming swisstopo on the button
+          // is the courtesy attribution their open-data terms ask for, and
+          // docs/credits.md records the exact object behind it.
+          text: `Launch a sample — ${demoSample.label}`,
           title: `Open ${demoSample.label.toLowerCase()} — streams over your network, nothing uploaded`,
         })
       : null;
@@ -577,6 +580,17 @@ export class Stage {
 
     // Order is the hierarchy: identity → primary action → workflow shape →
     // trust → compatibility disclosures → alternative data sources.
+    // Sample and tour share one row; Convert lives inside the
+    // compatible-data disclosure with the other file utilities. Both moves
+    // exist to keep the first screen to one column of short lines.
+    const secondary =
+      tryButton || tourChip
+        ? el('div', { className: 'olv-empty-secondary' }, [
+            ...(tryButton ? [tryButton] : []),
+            ...(tourChip ? [tourChip] : []),
+          ])
+        : null;
+    if (options.onBatchConvert) formats.append(convertChip);
     const children: (Node | string)[] = [
       this._statusBanner,
       heroMark,
@@ -585,10 +599,8 @@ export class Stage {
       sub,
       openButton,
     ];
-    if (tryButton) children.push(tryButton);
-    if (tourChip) children.push(tourChip);
+    if (secondary) children.push(secondary);
     children.push(fileInput, getStarted, trustStrip, formats);
-    if (options.onBatchConvert) children.push(convertChip);
     children.push(
       exploreCard,
       // Open-from-URL stays at the bottom as its own distinct entry path.
