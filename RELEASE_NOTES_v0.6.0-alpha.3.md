@@ -21,6 +21,14 @@ Six pieces of logic moved off the render class and the app entry into their own 
 
 Two shrink-only ratchets now run in the release gate. One holds the world-coordinate read surface, the other the two large files: both may fall, never grow. A decomposition step cannot be undone by accident, and no busywork extraction is forced to chase a number.
 
+## Two exports were saying things that were not true
+
+Running a real drone scan through the export paths turned up two statements no reader could have checked.
+
+A point-cloud export wrote whatever the viewer was holding. When a display-sample cap or a load stride has left the viewer holding part of the file, the written file looks exactly like a complete export of a smaller scan: same name, same shape, nothing to contradict it. A 46.8-million-point scan came out as 5.8 million rows with no header at all. XYZ, PLY and OBJ now state how many of how many points were written and what caused the gap, through the comment channel each format already uses for dropped columns. CSV stays pure data, as before.
+
+The report row for classification answered a different question than it appeared to. It tested whether the channel exists, which is right for deciding whether a classification render can be offered, but printed as a bare "Yes" it says the scan carries classes. A file whose every code is 0 got that Yes while the Scan Report panel beside it read "Present, unclassified (0.0 % coverage)". The row now reports coverage, and falls back to presence only for streaming sources, where the loaded nodes are not the scan and any share would be a moving number.
+
 ## The open precision item, measured
 
 The one coordinate-integrity item left is that the project transform rewrites Float32 positions in place. This cut measures exactly what that costs. A mount and unmount moves a point about 0.06 mm at 1 km of separation and 3.9 mm at 100 km, and repeated cycles do not add to it: the error saturates after the first. The defect is exact reversibility, not runaway drift, which is a smaller problem than the roadmap assumed and is what the Float64 transform will close.

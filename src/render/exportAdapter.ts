@@ -33,6 +33,7 @@ import {
   signalsForStaticCloud,
   signalsForStreamingCloud,
 } from '../diagnostics/provenanceSignals';
+import { classificationCoverage } from './class/deriveClassification';
 
 /** The per-cloud slice the adapter reads — a structural subset of the Viewer's entry. */
 export interface ExportAdapterCloud {
@@ -150,6 +151,21 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         if (cloud.classification) return true;
       }
       return false;
+    },
+    classificationAssignedFraction(): number | null {
+      // Streaming holds only the loaded nodes, so any share counted here would
+      // describe the current view rather than the scan — answer "cannot count"
+      // instead of publishing a moving number.
+      if (host.streaming()) return null;
+      let total = 0;
+      let assigned = 0;
+      for (const { cloud } of host.clouds().values()) {
+        if (!cloud.classification) continue;
+        const { producer } = classificationCoverage(cloud.classification, cloud.pointCount);
+        total += cloud.pointCount;
+        assigned += producer;
+      }
+      return total > 0 ? assigned / total : null;
     },
     hasNormals(): boolean {
       // COPC + EPT streaming sources never carry normals in

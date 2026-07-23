@@ -206,7 +206,21 @@ export function baseReportRows(
   // Scan Intelligence panel's RGB/Intensity/Classification rows.
   rows.push({ label: 'RGB',           value: adapter.hasRgb() ? 'Yes' : 'No' });
   rows.push({ label: 'Intensity',     value: adapter.hasIntensity() ? 'Yes' : 'No' });
-  rows.push({ label: 'Classification', value: adapter.hasClassification() ? 'Yes' : 'No' });
+  // Presence gates the classification RENDER; coverage is what a reader of the
+  // report needs. An all-code-0 file has the channel and no classes, and a bare
+  // "Yes" for it contradicted the Scan Report panel on the same scan. Fall back
+  // to presence only when coverage genuinely cannot be counted — never invent a
+  // percentage.
+  const assigned = adapter.classificationAssignedFraction?.() ?? null;
+  rows.push({
+    label: 'Classification',
+    value: !adapter.hasClassification()
+      ? 'No'
+      : assigned === null
+        ? 'Yes'
+        : `Present, ${assigned > 0 ? 'classified' : 'unclassified'} ` +
+          `(${(assigned * 100).toFixed(1)} % coverage)`,
+  });
   // CRS provenance, when the source file declares one. This
   // is the row that makes the export research-grade: an analyst reading the
   // PNG later knows the datum and the linear unit the dimensions are in.
