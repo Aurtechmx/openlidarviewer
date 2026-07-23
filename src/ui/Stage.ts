@@ -1,5 +1,5 @@
 import { el } from './dom';
-import { SOURCE_FORMATS } from '../io/sniffFormat';
+import { SOURCE_FORMATS, XYZ_ALIAS_EXTENSIONS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
@@ -403,13 +403,20 @@ export class Stage {
     // the hand-maintained version said "10 formats" beside an 11-format
     // sniffer and silently omitted .xyz from the list.
     const formats = el('details', { className: 'olv-empty-formats' });
+    // COPC and EPT are capabilities, not extra formats: .copc.laz is a
+    // profile of LAZ and EPT opens through ept.json, so counting either
+    // separately would double-count. They are NAMED because streaming is
+    // the story, while the count stays machine-derived.
     const formatsSummary = el('summary', {
       className: 'olv-empty-formats-summary',
-      text: `Compatible data — ${SOURCE_FORMATS.length} formats including .las, .laz, .e57`,
+      text: `Compatible data — ${SOURCE_FORMATS.length} file formats · COPC & EPT streaming`,
     });
     const formatsFull = el('p', {
       className: 'olv-empty-formats-full',
-      text: SOURCE_FORMATS.map((f) => `.${f}`).join(' · '),
+      text:
+        SOURCE_FORMATS.map((f) => `.${f}`).join(' · ') +
+        ` · ${XYZ_ALIAS_EXTENSIONS.map((e) => `.${e}`).join('/')} (read as .xyz)` +
+        ' · .copc.laz (streamed) · EPT via ept.json (streamed)',
     });
     formats.append(formatsSummary, formatsFull);
     // Three capture-type chips with monoline icons. Visual-hierarchy

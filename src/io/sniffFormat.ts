@@ -50,6 +50,14 @@ const _sourceFormatsExhaustive: _EveryFormatListed = true;
 void _sourceFormatsExhaustive;
 
 /**
+ * Extensions accepted as SPELLINGS of the xyz family — plain ASCII point
+ * lists the xyz loader reads. They are not distinct formats and must never
+ * be counted as such; a unit test asserts each one actually sniffs to
+ * `xyz`, so this list and the extension switch below cannot drift apart.
+ */
+export const XYZ_ALIAS_EXTENSIONS = ['csv', 'asc', 'txt'] as const;
+
+/**
  * Whether a format's native coordinate frame is Z-up. Survey and scanner
  * formats — LAS, LAZ, XYZ, E57, and PCD — are Z-up; phone-scan mesh formats
  * (PLY, OBJ, GLB/GLTF) are Y-up. Shared by the renderer and the session
