@@ -7,7 +7,6 @@ import { test, expect } from '@playwright/test';
 
 test('the empty state offers a Batch convert entry that opens the modal', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   const link = page.locator('.olv-convert-chip');
   await expect(link).toBeVisible({ timeout: 20_000 });
   await link.click();
@@ -19,7 +18,6 @@ test('the empty state offers a Batch convert entry that opens the modal', async 
 
 test('format pills: LAS selectable, LAZ honestly disabled; convert gated until files added', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   // Scope to the modal — the in-project Export panel reuses the same classes.
   const dialog = page.locator('.olv-bc-dialog');
@@ -41,7 +39,6 @@ test('format pills: LAS selectable, LAZ honestly disabled; convert gated until f
 
 test('the modal closes via the backdrop and the ✕ button', async ({ page }) => {
   await page.goto('/');
-  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   await expect(page.locator('.olv-bc-dialog')).toBeVisible();
   await page.locator('.olv-bc-close').click();

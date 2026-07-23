@@ -230,15 +230,13 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       });
     }
     deps.projectFrame.reconcile(layers);
-    // Steps 2 + 4 of the wiring plan, as ONE mechanism: every aligned layer's
-    // DATA is rebased onto the project origin (`rebaseCloudToOrigin`), which
-    // mounts it — rendering, picking, terrain, lasso, volumes and exports all
-    // read the same rebased positions — and gives the scene one literal origin,
-    // so the measurement datum resolves through the existing unanimity rule
-    // with no special case. A layer outside the frame (no declared origin, or a
-    // foreign CRS) keeps its own origin: it stays where it was, and its
-    // presence makes unanimity refuse the datum honestly, exactly as before
-    // the frame existed.
+    // Steps 2 + 4 of the wiring plan, as ONE mechanism — now non-destructive
+    // (float64-transform.md): every aligned layer gets a Float64 PLACEMENT
+    // into the project frame (`setLayerPlacement`), which mounts it. The data
+    // never moves; rendering places the mesh, and bounds/picking fold the
+    // transform at their boundaries. A layer outside the frame (no declared
+    // origin, or a foreign CRS) carries no placement: it stays where it was,
+    // and its presence makes datum unanimity refuse honestly, as before.
     const frame = deps.projectFrame.frame;
     // Layers held out of combined results because nothing is MOUNTED, as
     // distinct from those held out for incompatibility. Two perfectly
@@ -279,30 +277,27 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       viewer.setCloudMounted(info.id, mounted);
       if (!mounted) unmounted.push(info.id);
 
-      if (willMount) {
+      if (willMount && cloud) {
         // A horizontal-only layer is placed in X/Y and keeps its OWN vertical
-        // origin. Rebasing its Z would assert a shared vertical datum nobody
-        // established — the heights would line up on screen and mean nothing.
-        const target: [number, number, number] = alignsVertically(state)
-          ? [frame!.projectOrigin[0], frame!.projectOrigin[1], frame!.projectOrigin[2]]
-          // The FILE's height, never the live one. Reading `cloud.origin[2]`
-          // here meant a layer that had already mounted as verified — and so
-          // had the project's Z written into it — stayed pinned to that datum
-          // when it was later demoted, while the panel declared its vertical
-          // frame unverified. Same live-versus-source trap as the frame seed.
-          : [
-              frame!.projectOrigin[0],
-              frame!.projectOrigin[1],
-              cloud?.sourceOrigin[2] ?? frame!.projectOrigin[2],
-            ];
-        viewer.rebaseCloudToOrigin(info.id, target);
+        // origin: a Z offset would assert a shared vertical datum nobody
+        // established — heights would line up on screen and mean nothing.
+        // The offset derives from the FILE's origin (sourceOrigin), which a
+        // placement cannot move, so demotion can never pin a layer to a datum
+        // its panel disclaims — the trap the old in-place rebase had.
+        const so = cloud.sourceOrigin;
+        const dz = alignsVertically(state) ? so[2] - frame!.projectOrigin[2] : 0;
+        const dx = so[0] - frame!.projectOrigin[0];
+        const dy = so[1] - frame!.projectOrigin[1];
+        viewer.setLayerPlacement(info.id, {
+          sourceOrigin: [so[0], so[1], so[2]],
+          sourceToProject: [dx, dy, dz],
+          projectToSource: [-dx, -dy, -dz],
+        });
       } else {
-        // Membership is reversible. A layer that is not (or is no longer) in
-        // the frame goes back to the origin its FILE declared instead of
-        // staying parked on an origin that describes a different layer —
-        // which is what happened when a CRS override turned an aligned layer
-        // foreign. No-ops for a layer that never moved.
-        viewer.restoreCloudSourceFrame(info.id);
+        // Membership is reversible: clearing the placement IS returning to
+        // the frame the file declared — exactly, because nothing was ever
+        // re-quantised. No-op for a layer that never carried one.
+        viewer.setLayerPlacement(info.id, null);
       }
       // Combined estimators read this and refuse anything unproven. A layer
       // rejected on precision is reported as incompatible rather than

@@ -438,7 +438,7 @@ export class Stage {
 <line x1="4.5" y1="4.5" x2="11.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="11.5" y1="4.5" x2="4.5" y2="11.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>`,
-        label: 'Aerial LiDAR',
+        label: 'Drone LiDAR',
       },
       {
         // iPhone: rounded body, screen rim, speaker slit + home indicator.
@@ -446,7 +446,7 @@ export class Stage {
 <rect x="4" y="1" width="8" height="14" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
 <rect x="6.6" y="2.4" width="2.8" height="0.7" rx="0.35" fill="currentColor"/>
 <rect x="6" y="12.6" width="4" height="0.6" rx="0.3" fill="currentColor" opacity="0.55"/></svg>`,
-        label: 'Mobile LiDAR',
+        label: 'iPhone scans',
       },
       {
         // Terrestrial laser scanner on tripod: scanner body + 3-leg tripod.
@@ -457,13 +457,13 @@ export class Stage {
 <line x1="8" y1="8.6" x2="4" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="8" y1="8.6" x2="12" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
 <line x1="8" y1="8.6" x2="8" y2="14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`,
-        label: 'Terrestrial scanning',
+        label: 'Terrestrial laser',
       },
     ];
     const CHIP_TITLES: Readonly<Record<string, string>> = {
-      'Aerial LiDAR': 'Drone and aircraft LiDAR surveys',
-      'Mobile LiDAR': 'iPhone, iPad and handheld scanner captures',
-      'Terrestrial scanning': 'Tripod-mounted terrestrial laser scanners',
+      'Drone LiDAR': 'Drone and aircraft LiDAR surveys',
+      'iPhone scans': 'iPhone, iPad and handheld scanner captures',
+      'Terrestrial laser': 'Tripod-mounted terrestrial laser scanners',
     };
     for (const k of KINDS) {
       const chip = el('span', {
@@ -476,10 +476,6 @@ export class Stage {
       chip.append(iconWrap, el('span', { text: k.label }));
       captureKinds.append(chip);
     }
-    // The chips live INSIDE the compatible-data disclosure: what capture
-    // kinds this opens is the same question as what formats it opens, and
-    // neither deserves a high-priority row on the launch surface.
-    formats.append(captureKinds);
 
     // ── "Explore public LiDAR" — one bounded card grouping the location
     // dropdown, the location search (inside the catalog panel), and the
@@ -597,7 +593,6 @@ export class Stage {
             ...(tourChip ? [tourChip] : []),
           ])
         : null;
-    if (options.onBatchConvert) formats.append(convertChip);
     const children: (Node | string)[] = [
       this._statusBanner,
       heroMark,
@@ -607,7 +602,8 @@ export class Stage {
       openButton,
     ];
     if (secondary) children.push(secondary);
-    children.push(fileInput, getStarted, trustStrip, formats);
+    children.push(fileInput, getStarted, trustStrip, formats, captureKinds);
+    if (options.onBatchConvert) children.push(convertChip);
     children.push(
       exploreCard,
       // Open-from-URL stays at the bottom as its own distinct entry path.

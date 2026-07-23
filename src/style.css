@@ -672,13 +672,15 @@ body.olv-theme-light .olv-empty::before {
 .olv-getstarted,
 .olv-trust-strip { animation: olv-splash-enter 480ms var(--ease-standard) 360ms backwards; }
 .olv-empty-formats,
+.olv-empty-capture-kinds,
+.olv-convert-chip,
 .olv-explore-card,
 .olv-empty-url { animation: olv-splash-enter 480ms var(--ease-standard) 420ms backwards; }
 @media (prefers-reduced-motion: reduce) {
   .olv-empty-hero, .olv-empty-eyebrow, .olv-empty-title, .olv-empty-sub,
   .olv-open-btn, .olv-empty-secondary, .olv-getstarted,
-  .olv-trust-strip, .olv-empty-formats,
-  .olv-explore-card, .olv-empty-url { animation: none; }
+  .olv-trust-strip, .olv-empty-formats, .olv-empty-capture-kinds,
+  .olv-convert-chip, .olv-explore-card, .olv-empty-url { animation: none; }
 }
 
 /* Sample + tour on one row — two quiet choices beside each other instead
@@ -688,8 +690,7 @@ body.olv-theme-light .olv-empty::before {
   gap: var(--space-md); flex-wrap: wrap;
   max-width: 100%;
 }
-/* Convert lives inside the compatible-data disclosure with the chips. */
-.olv-empty-formats .olv-convert-chip { margin-top: var(--space-sm); }
+
 
 /* Eyebrow — the one-line technical positioning above the headline. */
 .olv-empty-eyebrow {

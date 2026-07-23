@@ -80,6 +80,7 @@ function setup(
 
   const rebaseCalls = new Map<string, readonly [number, number, number]>();
   const restoreCalls: string[] = [];
+  const placements = new Set<string>();
   const compatCalls = new Map<string, string>();
   const mountCalls = new Map<string, boolean>();
   const unmountedCalls: string[][] = [];
@@ -98,24 +99,36 @@ function setup(
     setCloudVisible: (id: string, on: boolean) => {
       visibleCalls.push([id, on]);
     },
-    rebaseCloudToOrigin: (id: string, target: readonly [number, number, number]) => {
-      rebaseCalls.set(id, target);
-      // Mirror the real behaviour so a second refresh sees the moved origin.
-      // `sourceOrigin` deliberately does NOT move: the whole point of the
-      // field is that a rebase cannot reach it.
-      const c = clouds[id];
-      if (c?.origin) c.origin = [target[0], target[1], target[2]];
+    // Mounting is a Float64 placement now (float64-transform.md): the mock
+    // translates each call back into the observable these specs were written
+    // against — the origin the layer EFFECTIVELY sits on (sourceOrigin −
+    // sourceToProject), which the new mechanism genuinely preserves. The live
+    // origin never moves, so there is nothing to mirror; a cleared placement
+    // records a restore only when one existed, matching the real no-op.
+    setLayerPlacement: (
+      id: string,
+      placement: {
+        sourceOrigin: readonly [number, number, number];
+        sourceToProject: readonly [number, number, number];
+      } | null,
+    ) => {
+      if (placement) {
+        placements.add(id);
+        rebaseCalls.set(id, [
+          placement.sourceOrigin[0] - placement.sourceToProject[0],
+          placement.sourceOrigin[1] - placement.sourceToProject[1],
+          placement.sourceOrigin[2] - placement.sourceToProject[2],
+        ]);
+      } else if (placements.has(id)) {
+        placements.delete(id);
+        restoreCalls.push(id);
+      }
     },
     setCloudCompatibility: (id: string, c: string) => {
       compatCalls.set(id, c);
     },
     setCloudMounted: (id: string, m: boolean) => {
       mountCalls.set(id, m);
-    },
-    restoreCloudSourceFrame: (id: string) => {
-      restoreCalls.push(id);
-      const c = clouds[id];
-      if (c?.sourceOrigin) c.origin = [c.sourceOrigin[0], c.sourceOrigin[1], c.sourceOrigin[2]];
     },
   } as unknown as Viewer;
 
@@ -377,7 +390,9 @@ describe('LayerService rebases each aligned layer onto the project origin', () =
     t.service.refreshCrsFlags();
     expect(t.compatCalls.get('mesh')).toBe('unknown');
     expect(t.rebaseCalls.has('mesh')).toBe(false);
-    expect(t.restoreCalls).toContain('mesh');
+    // Placement-era: a layer that never mounted has nothing to clear —
+    // there is no parked state left to defensively reset.
+    expect(t.restoreCalls).toEqual([]);
   });
 
   it('refuses a mount that would cost more than a millimetre of Float32', () => {
@@ -459,20 +474,26 @@ describe('LayerService project-frame reversibility', () => {
     const t = setup(clouds);
     t.service.refreshCrsFlags();
     expect(t.projectFrame.frame?.projectOrigin).toEqual([500_000, 4_500_000, 0]);
-    expect(clouds.b.origin).toEqual([500_000, 4_500_000, 0]);
+    // Both layers anchor on the shared origin THROUGH their placements; the
+    // data and its origin never move (float64-transform.md).
+    expect(t.rebaseCalls.get('a')).toEqual([500_000, 4_500_000, 0]);
+    expect(t.rebaseCalls.get('b')).toEqual([500_000, 4_500_000, 0]);
+    expect(clouds.b.origin).toEqual([501_000, 4_500_000, 0]);
   });
 
   it('restores a layer whose CRS turns out to be incompatible', () => {
     const clouds = alignedPair();
     const t = setup(clouds);
     t.service.refreshCrsFlags();
-    expect(clouds.b.origin).toEqual([500_000, 4_500_000, 0]); // mounted
+    expect(t.rebaseCalls.get('b')).toEqual([500_000, 4_500_000, 0]); // mounted
 
     // The override the audit describes: B is now a different frame entirely.
     clouds.b.metadata = { crs: { epsg: 25832, name: 'ETRS89 / UTM32N' } };
     t.service.refreshCrsFlags();
 
     expect(t.restoreCalls).toContain('b');
+    // The origin was never written, so there is nothing to put back — exact
+    // reversibility is clearing a transform, not undoing a rewrite.
     expect(clouds.b.origin).toEqual([501_000, 4_500_000, 0]);
   });
 
@@ -536,7 +557,9 @@ describe('LayerService frame gate corrections', () => {
     const t = setup(clouds);
     t.service.refreshCrsFlags();
     expect(t.compatCalls.get('b')).toBe('verified');
-    expect(clouds.b.origin![2]).toBe(100); // mounted onto the project Z
+    // Placement-era: the origin never moves; the project Z shows in the
+    // placement's effective anchor instead.
+    expect(t.rebaseCalls.get('b')![2]).toBe(100); // mounted onto the project Z
 
     // Now B declares a different vertical datum → horizontal-only.
     clouds.b.metadata = {

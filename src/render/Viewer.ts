@@ -235,7 +235,13 @@ import { downsampleToBudget } from '../process/voxelDownsample';
 import { makePointInfo } from './pointInfo';
 import type { PointInfo } from './pointInfo';
 import { speedForSize, nearestPointAlongRay } from './navMath';
-import { mergePlacedBounds } from './layerPlacement';
+import {
+  mergePlacedBounds,
+  isIdentityPlacement,
+  accumulatorOffset,
+  rayOriginToLayer,
+  placePoint,
+} from './layerPlacement';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import {
   aabbCenter,
@@ -2120,48 +2126,21 @@ export class Viewer {
    * `_visibleCloudAabb`.
    */
   /**
-   * Mount a cloud into the shared project frame by REBASING ITS DATA onto the
-   * project origin — `PointCloud.rebaseOrigin` shifts the positions and origin
-   * together so every world position is unchanged.
-   *
-   * The first implementation translated the MESH instead, which split the
-   * scene: rendering and camera bounds saw project space while picking
-   * (`nearestPointAlongRay` over raw positions), the terrain gather, lasso,
-   * profiles, volumes and export bounds all still read cloud-local data —
-   * layers LOOKED aligned while every calculation used a different frame.
-   * With the data itself rebased, every one of those consumers is
-   * project-local automatically, and the measurement datum needs no special
-   * case: all mounted layers share one literal origin, so the existing
-   * unanimity rule in `_refreshMeasureDatum` resolves it naturally — and keeps
-   * refusing honestly when an unreferenced mesh or foreign-CRS layer is
-   * present, exactly as before.
+   * Set (or clear) a layer's Float64 placement in the shared project frame —
+   * float64-transform.md steps 3-4. The DATA never moves: the transform is
+   * held on the entry and folded at each consumer's boundary (bounds, pick),
+   * and the mesh is placed by its position, which the GPU applies in Float32
+   * only AFTER the Float64 offset maths happened here on the CPU. Mounting a
+   * layer is now "set a transform"; unmounting is "clear it" — exact inverses,
+   * because nothing is re-quantised. Passing null (or an identity transform)
+   * restores the layer to its own source frame.
    */
-  rebaseCloudToOrigin(id: string, target: readonly [number, number, number]): void {
+  setLayerPlacement(id: string, placement: LayerSpatialTransform | null): void {
     const entry = this._clouds.get(id);
     if (!entry) return;
-    if (!entry.cloud.rebaseOrigin(target)) return;
-    this._afterCloudRebase(entry);
-  }
-
-  /**
-   * Put a cloud back on the origin its file declared, undoing a project-frame
-   * mount. The exit a layer takes when its CRS is overridden to something
-   * incompatible, or when it otherwise leaves the shared frame. No-op for a
-   * cloud that never moved.
-   */
-  restoreCloudSourceFrame(id: string): void {
-    const entry = this._clouds.get(id);
-    if (!entry) return;
-    if (!entry.cloud.restoreSourceFrame()) return;
-    this._afterCloudRebase(entry);
-  }
-
-  /** Re-sync GPU, camera clamp and measurement datum after a cloud moved frame. */
-  private _afterCloudRebase(entry: CloudEntry): void {
-    // The GPU attribute wraps the SAME Float32Array the rebase just shifted —
-    // it only needs the re-upload flag, not a rebuild.
-    const attr = entry.mesh.geometry.getAttribute('aPos');
-    if (attr) attr.needsUpdate = true;
+    entry.placement = placement && !isIdentityPlacement(placement) ? placement : null;
+    const off = accumulatorOffset(entry.placement);
+    entry.mesh.position.set(off[0], off[1], off[2]);
     this._orbitClampAabb = this._visibleCloudAabb();
     this._refreshMeasureDatum();
     this.requestFrame();
@@ -6298,11 +6277,16 @@ export class Viewer {
     let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
     const filterWindow = this._currentFilterWindow();
-    for (const { mesh, cloud, locked } of this._clouds.values()) {
+    for (const entry of this._clouds.values()) {
+      const { mesh, cloud, locked, placement } = entry;
       if (!mesh.visible || locked) continue;
+      // Placement fold (float64-transform.md step 3): the ray drops into the
+      // layer's source frame, the pick runs over the raw positions unchanged,
+      // and the hit lifts back. Identity returns the same tuples — a no-op.
+      const rayO = rayOriginToLayer([o.x, o.y, o.z], placement);
       const hit = nearestPointAlongRay(
         cloud.positions,
-        [o.x, o.y, o.z],
+        [rayO[0], rayO[1], rayO[2]],
         [d.x, d.y, d.z],
         this._pickAccept(cloud.positions, cloud.classification, cloud.intensity, filterWindow),
       );
@@ -6310,10 +6294,11 @@ export class Viewer {
       const score = hit.offset / hit.along; // angular miss
       if (score < 0.07 && score < bestScore) {
         bestScore = score;
+        const p = placePoint(hit.point, placement);
         best = {
           cloud,
           index: hit.index,
-          point: new THREE.Vector3(hit.point[0], hit.point[1], hit.point[2]),
+          point: new THREE.Vector3(p[0], p[1], p[2]),
         };
       }
     }

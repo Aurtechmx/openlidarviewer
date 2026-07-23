@@ -112,7 +112,7 @@ candidates:
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 | `importSession` | 177 | `src/app/sessionIo.ts` *(planned)* |
 
-**`src/render/Viewer.ts` (7,119)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (7,104)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
