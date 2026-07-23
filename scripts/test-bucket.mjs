@@ -38,7 +38,7 @@ const TESTS_DIR = resolve(ROOT, 'tests');
 // get starved (and time out) under the parallel `unit` bucket, so they belong
 // here where the runner caps parallelism and raises the timeout.
 const SLOW =
-  /^(torture|benchmark|parse|loadLas|loadLaz|laszip)|integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload|wasm|decode/i;
+  /^(torture|benchmark|parse|loadLas|loadLaz|laszip)|integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload|wasm|decode|packaging/i;
 // The terrain-analysis pipeline.
 const TERRAIN = /^(analyse|analysis|contour|cell|ground|dem|hillshade|slope|calibrat|confidence|coverage|crs|datum|evidence|interval|civilProfile|profile|surface|quality|terrain|raster|gpuDeriv|scatter|aspect|canopy|dsm|dtm|seam|provenance|metricVersion|score|assessment|readiness|whyNot|recommend)/i;
 // The interface layer.

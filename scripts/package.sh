@@ -42,7 +42,34 @@ OUT_DIR="${1:-$ROOT/release}"
 mkdir -p "$OUT_DIR"
 
 VERSION="$(node -p "require('./package.json').version")"
-TS="$(date +%Y%m%d-%H%M)"
+
+# ── Reproducible timestamps ──────────────────────────────────────────────────
+# Two packaging runs of the SAME commit should produce the same bytes. Using
+# "now" for the archive name and leaving mtimes to the filesystem guaranteed
+# they never would, which makes a hash comparison between a maintainer's cut and
+# a reviewer's rebuild meaningless.
+#
+# SOURCE_DATE_EPOCH (the reproducible-builds convention) is honoured when set;
+# otherwise it defaults to the commit's own timestamp. Both `date` dialects are
+# handled because this runs on macOS locally and GNU/Linux in CI.
+if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+  SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct HEAD 2>/dev/null || date +%s)"
+fi
+export SOURCE_DATE_EPOCH
+epoch_fmt() { # $1 = strftime format
+  date -u -r "$SOURCE_DATE_EPOCH" "$1" 2>/dev/null || date -u -d "@$SOURCE_DATE_EPOCH" "$1"
+}
+TS="$(epoch_fmt +%Y%m%d-%H%M)"
+TOUCH_STAMP="$(epoch_fmt +%Y%m%d%H%M.%S)"
+
+# Zip a directory deterministically: every entry stamped at SOURCE_DATE_EPOCH,
+# entries added in a stable byte-order (LC_ALL=C), and -X to drop the extra
+# platform metadata that otherwise varies per machine.
+zip_deterministic() {
+  src="$1"; out="$2"
+  find "$src" -exec touch -h -t "$TOUCH_STAMP" {} + 2>/dev/null || true
+  ( cd "$src" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 zip -qX "$out" )
+}
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
@@ -90,7 +117,7 @@ if [ "$SOURCE_ONLY" != "1" ]; then
   find "$TMP/deploy" -type f -exec chmod 644 {} +
 
   DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
-  ( cd "$TMP/deploy" && zip -rqX "$TMP/$DEPLOY" . )
+  zip_deterministic "$TMP/deploy" "$TMP/$DEPLOY"
   cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"
   verify_zip "$OUT_DIR/$DEPLOY"
 fi
@@ -156,7 +183,7 @@ fi
 echo "  ✓ archive carries no internal or superseded release material"
 
 SOURCE="openlidarviewer-v${VERSION}-source-${TS}.zip"
-( cd "$TMP/source" && zip -rqX "$TMP/$SOURCE" . )
+zip_deterministic "$TMP/source" "$TMP/$SOURCE"
 cp "$TMP/$SOURCE" "$OUT_DIR/$SOURCE"
 verify_zip "$OUT_DIR/$SOURCE"
 
