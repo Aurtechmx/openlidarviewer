@@ -223,7 +223,7 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors, sourceOrigin } = cloud;
+  const { positions, colors } = cloud;
   const n = cloud.pointCount;
   const omitted = n - finitePointCount(positions, n);
   const lines: string[] = [];
@@ -267,13 +267,11 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
     if (intensity || classification) lines.push(`# columns: ${columns.join(' ')}`);
   }
 
+  const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const row: Array<string | number> = [
-      hcoord(positions[i * 3] + sourceOrigin[0]),
-      hcoord(positions[i * 3 + 1] + sourceOrigin[1]),
-      coord(positions[i * 3 + 2] + sourceOrigin[2]),
-    ];
+    cloud.worldXYZ(i, w);
+    const row: Array<string | number> = [hcoord(w[0]), hcoord(w[1]), coord(w[2])];
     if (colors) row.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
     if (intensity) row.push(intensity[i]);
     if (classification) row.push(classification[i]);
@@ -294,7 +292,7 @@ export function toPly(cloud: PointCloud): string {
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors, sourceOrigin } = cloud;
+  const { positions, colors } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -323,11 +321,13 @@ export function toPly(cloud: PointCloud): string {
   header.push('end_header');
 
   const lines: string[] = [header.join('\n')];
+  const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
-    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
-    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
+    cloud.worldXYZ(i, w);
+    const x = hcoord(w[0]);
+    const y = hcoord(w[1]);
+    const z = coord(w[2]);
     if (colors) {
       lines.push(`${x} ${y} ${z} ${colors[i * 3]} ${colors[i * 3 + 1]} ${colors[i * 3 + 2]}`);
     } else {
@@ -349,7 +349,7 @@ export function toObj(cloud: PointCloud): string {
   // sourceOrigin does not, so an export stays in the file's real-world frame
   // regardless of project membership. (Today the two coincide — mounting is
   // off — so this is a no-op that stays correct once mounting rebases layers.)
-  const { positions, colors, sourceOrigin } = cloud;
+  const { positions, colors } = cloud;
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
@@ -363,11 +363,13 @@ export function toObj(cloud: PointCloud): string {
     ...droppedChannelLines(cloud, {}, ['intensity', 'classification']).map((l) => `# ${l}`),
     ...(omitted > 0 ? [`# ${omittedPointsLine(omitted)}`] : []),
   ];
+  const w: [number, number, number] = [0, 0, 0];
   for (let i = 0; i < n; i++) {
     if (!isFinitePoint(positions, i)) continue;
-    const x = hcoord(positions[i * 3] + sourceOrigin[0]);
-    const y = hcoord(positions[i * 3 + 1] + sourceOrigin[1]);
-    const z = coord(positions[i * 3 + 2] + sourceOrigin[2]);
+    cloud.worldXYZ(i, w);
+    const x = hcoord(w[0]);
+    const y = hcoord(w[1]);
+    const z = coord(w[2]);
     if (colors) {
       const r = (colors[i * 3] / 255).toFixed(4);
       const g = (colors[i * 3 + 1] / 255).toFixed(4);
