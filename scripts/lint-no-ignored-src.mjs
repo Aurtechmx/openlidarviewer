@@ -30,7 +30,11 @@ try {
 let ignored = '';
 try {
   // Files under src/ that exist on disk but are ignored by .gitignore.
-  ignored = execSync('git ls-files --others --ignored --exclude-standard -- src', {
+  // src/ was the original scope, because that is where the first instance
+  // happened. The same unanchored-pattern bug then hid scripts/verify-release-assets.mjs
+  // and docs/release/, so `npm run release:verify` pointed at a script the
+  // repository did not contain. Anything that SHIPS or RUNS is in scope now.
+  ignored = execSync('git ls-files --others --ignored --exclude-standard -- src scripts tests docs .github', {
     encoding: 'utf8',
   }).trim();
 } catch (e) {
@@ -41,7 +45,7 @@ try {
 if (ignored) {
   console.error('lint:no-ignored-src FAILED');
   console.error('');
-  console.error('These files under src/ are git-IGNORED — they compile locally but would be');
+  console.error('These shipped/executed files are git-IGNORED — they compile locally but would be');
   console.error('MISSING from a clean checkout and the source zip (breaking typecheck/build):');
   console.error('');
   for (const f of ignored.split('\n')) console.error(`  • ${f}`);
@@ -51,4 +55,4 @@ if (ignored) {
   process.exit(1);
 }
 
-console.log('lint:no-ignored-src OK — no source files under src/ are git-ignored');
+console.log('lint:no-ignored-src OK — no shipped or executed file is git-ignored');
