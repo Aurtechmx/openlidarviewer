@@ -44,6 +44,7 @@ const SOURCE_FILES: Record<string, string> = {
   'DEPENDENCIES.md': 'deps',
   'THIRD_PARTY_NOTICES.md': 'notices',
   'docs/validation/claim-register.yaml': 'claims',
+  'docs/release/RELEASE_ASSETS.md': 'asset guide',
   'tests/fixtures/reference/slope/SHA256SUMS': 'sums',
 };
 
@@ -257,6 +258,13 @@ describe('release:verify — archive contents', () => {
     delete missing['tests/fixtures/reference/slope/SHA256SUMS'];
     stageRelease({ sourceFiles: missing });
     failsWith('SHA256SUMS');
+  });
+
+  it('rejects generated release/ output at the archive root, but keeps docs/release/', () => {
+    // The rule must reject the packaging OUTPUT tree without also rejecting
+    // documentation that merely lives in a directory of the same name.
+    stageRelease({ sourceFiles: { ...SOURCE_FILES, 'release/SHA256SUMS': 'generated' } });
+    failsWith('forbidden path');
   });
 
   it('rejects a deploy zip wrapped in dist/', () => {

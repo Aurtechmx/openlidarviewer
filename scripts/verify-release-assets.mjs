@@ -57,7 +57,11 @@ const SOURCE_FORBIDDEN = [
   /(^|\/)node_modules\//,
   /(^|\/)dist\//,
   /(^|\/)\.git\//,
-  /(^|\/)release\//,
+  // Anchored with ^ against the path AFTER the archive's top-level prefix is
+  // stripped (see stripArchivePrefix). Matching `release/` at any depth flagged
+  // docs/release/, documentation that must ship. What must not ship is the
+  // generated release/ OUTPUT tree at the root, and only that.
+  /^release\//,
   /(^|\/)coverage\//,
   /(^|\/)playwright-report\//,
   /(^|\/)test-results\//,
@@ -69,6 +73,25 @@ const SOURCE_FORBIDDEN = [
 const DEPLOY_REQUIRED = ['index.html', '.htaccess', '_headers'];
 
 const sha256 = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+
+/**
+ * Strip the single shared top-level directory, if the archive has one.
+ *
+ * `git archive` prefixes every entry with `openlidarviewer-v<version>/`, while a
+ * plain `zip -r . ` archive has no prefix. Anchored content rules only mean
+ * something against a consistent root, so normalise before matching rather than
+ * writing every pattern to tolerate both shapes.
+ */
+export function stripArchivePrefix(entries) {
+  if (entries.length === 0) return entries;
+  const first = entries[0].split('/')[0];
+  if (!first) return entries;
+  const shared = entries.every((e) => e === first || e.startsWith(`${first}/`));
+  if (!shared) return entries;
+  return entries
+    .map((e) => (e === first ? '' : e.slice(first.length + 1)))
+    .filter(Boolean);
+}
 
 function zipEntries(zipPath) {
   // `unzip -Z1` lists entries without extracting — cheap, and it cannot be
@@ -221,7 +244,7 @@ export function verifyStagedRelease(dir, opts = {}) {
   // ── 4. Archive contents ──────────────────────────────────────────────────
   if (found.sourceZip && !opts.skipZipContents) {
     let entries = null;
-    try { entries = zipEntries(resolve(dir, found.sourceZip)); }
+    try { entries = stripArchivePrefix(zipEntries(resolve(dir, found.sourceZip))); }
     catch { note(`source zip failed to list (corrupt?): ${found.sourceZip}`); }
     if (entries) {
       for (const req of SOURCE_REQUIRED) {
