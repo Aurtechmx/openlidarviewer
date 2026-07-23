@@ -7865,3 +7865,88 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 @media (max-width: 768px) {
   .olv-colorbar { right: 14px; }
 }
+
+/* ─── Layer Health card ──────────────────────────────────────────────
+ * Per-layer spatial facts (CRS, units, datum, compatibility, frame
+ * membership, mount precision) plus the cross-layer Spatial
+ * Compatibility report. Same rhythm as the Dataset Intelligence card;
+ * status dots reuse the honest rating scale and are always paired
+ * with the word (WCAG 1.4.1). Monospace is reserved for numeric
+ * values via `.is-mono`; labels stay in the UI face.
+ */
+.olv-layerhealth-card {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.olv-layerhealth-title { margin-bottom: var(--space-sm); }
+.olv-layerhealth-layers { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-layerhealth-layer-name {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  margin-bottom: var(--space-2xs); overflow-wrap: anywhere;
+}
+/* dl/dt/dd rows — neutralise browser defaults, keep the tight layout
+ * (same additive-semantics pattern as .olv-di-rows). */
+.olv-layerhealth-rows { margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-layerhealth-rows dt, .olv-layerhealth-rows dd { margin: 0; padding: 0; }
+.olv-layerhealth-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--space-md);
+  font-size: var(--text-xs); line-height: 1.45;
+}
+.olv-layerhealth-row-name { color: var(--text-dim); flex: none; }
+.olv-layerhealth-row-value {
+  color: var(--text); text-align: right; overflow-wrap: anywhere;
+}
+.olv-layerhealth-row-value.is-mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Quiet status dot before the value: ok = established (green),
+ * warn = doubt gating something (amber), info = neutral fact (grey). */
+.olv-layerhealth-row-value[data-status]::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-right: var(--space-xs);
+  vertical-align: 0.04em;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+.olv-layerhealth-row-value[data-status="ok"]::before   { background: var(--rating-excellent); }
+.olv-layerhealth-row-value[data-status="warn"]::before { background: var(--rating-good); }
+.olv-layerhealth-row-value[data-status="info"]::before { background: color-mix(in srgb, var(--text) 28%, transparent); }
+/* Colourblind-safe mode — same Okabe-Ito swap the Dataset Intelligence
+ * dots make; the word always carries the meaning. */
+body.olv-cvd .olv-layerhealth-row-value[data-status="ok"]::before   { background: #0072b2; }
+body.olv-cvd .olv-layerhealth-row-value[data-status="warn"]::before { background: #e69f00; }
+body.olv-cvd .olv-layerhealth-report-line[data-status="ok"]   { color: #56b4e9; }
+body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; }
+
+/* Spatial Compatibility report block — checklist lines + one-sentence
+ * verdict, separated from the per-layer rows by a hairline. */
+.olv-layerhealth-report {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-layerhealth-report-title {
+  font-size: var(--text-xs); color: var(--text-dim);
+  margin-bottom: var(--space-2xs);
+}
+.olv-layerhealth-report-line {
+  margin: 0 0 var(--space-2xs);
+  font-size: var(--text-xs); line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.olv-layerhealth-report-line[data-status="ok"]   { color: var(--rating-excellent); }
+.olv-layerhealth-report-line[data-status="warn"] { color: var(--rating-good); }
+.olv-layerhealth-verdict {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-xs); line-height: 1.45;
+  color: var(--text-dim);
+}
+.olv-layerhealth-empty {
+  font-size: var(--text-xs); color: var(--text-dim);
+}
