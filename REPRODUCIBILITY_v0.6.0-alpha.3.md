@@ -78,7 +78,7 @@ full asset set and how the hash chain closes.
 | Full gate `GATE EXIT: 0` | `npm run test:release` |
 | Deterministic e2e 161 passed / 4 skipped (blocking project) | `npm run test:e2e` |
 | GPU e2e 1 test (advisory project) | `npm run test:e2e:gpu` |
-| Live entry 713 KiB (within the 720 KiB ceiling, 7 KiB of headroom, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
+| Live entry 714 KiB (within the 720 KiB ceiling, 6 KiB of headroom, above the 680 KiB warning line) | `npm run build:live && npm run check:bundle` |
 | Coverage — lines 91.04 / statements 89.64 / functions 88.21 / branches 83.37 | `npm run coverage` (also a blocking stage of the release-mode gate; read the current figures from the coverage stage of `release/gate.log` rather than trusting this row) |
 | Mutation score 87.23 % over the numeric core | `npm run mutation` |
 | Documentation build | `npm run docs:build` |
