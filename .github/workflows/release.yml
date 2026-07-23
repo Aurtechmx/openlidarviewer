@@ -1,0 +1,243 @@
+name: Release
+
+# The exact-tag release run. This workflow is the ONLY thing that produces
+# authoritative evidence: it checks out the tag, runs the complete gate against
+# that exact commit, generates the evidence FROM that run, packages the same
+# unchanged checkout, and binds all of it in one manifest.
+#
+# That ordering is the point. Evidence collected locally and committed afterwards
+# can only ever describe the commit BEFORE the one it ships in, which is the
+# ambiguity this replaces. Here the tested commit, the packaged commit, the
+# evidence commit and the manifest commit are the same object by construction.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Create a draft prerelease (leave false for a dry run)'
+        type: boolean
+        default: false
+
+# Least privilege by default. Only the publication job is granted write, and
+# only after every blocking job has passed.
+permissions:
+  contents: read
+
+# A release run must never be replaced mid-flight: cancelling one during
+# packaging would leave half a staged asset set behind.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  EXPECTED_NPM: '10.9.2'
+
+jobs:
+  # ── Cheap refusal ─────────────────────────────────────────────────────────
+  # Everything knowable in a second, checked before spending twenty minutes.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # tags, so the ref validator can resolve the target
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - name: Toolchain is the canonical one
+        run: |
+          node --version
+          npm --version
+          test "$(node -p 'process.versions.node.split(".")[0]')" = "${{ env.NODE_VERSION }}"
+      - name: Ref is publishable (tag matches package, HEAD is the tag, tree clean)
+        run: node scripts/validate-release-ref.mjs
+
+  # ── The complete blocking gate ────────────────────────────────────────────
+  gate:
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Lockfile is unchanged by a clean install
+        run: git diff --exit-code -- package-lock.json
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # `npm run gate` prints the literal GATE EXIT line and regenerates the
+      # evidence only from a run that actually passed.
+      - name: Full release gate
+        run: npm run gate
+
+      - name: Deterministic end-to-end suite
+        run: npm run test:e2e
+      - name: Documentation build
+        run: npm run docs:build
+      - name: Production dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Production audit (machine-readable)
+        run: npm audit --omit=dev --json > release/production-audit.json || true
+      - name: Scientific fixture checksums
+        run: cd tests/fixtures/reference/slope && shasum -a 256 -c SHA256SUMS
+
+      # The authoritative record. Release mode refuses to write unless the run
+      # was green, the tag matches, and the toolchain is canonical.
+      - name: Generate exact-tag evidence
+        run: |
+          node scripts/collect-evidence.mjs \
+            --mode release \
+            --gate-log release/gate.log \
+            --gate-exit 0 \
+            --output release/test-evidence-${{ github.ref_name }}.json
+
+      - name: Package from this same checkout
+        env:
+          OLV_RELEASE_GATE: '1'
+        run: npm run package
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-payload
+          retention-days: 14
+          path: |
+            release/*.zip
+            release/gate.log
+            release/gate.log.sha256
+            release/test-evidence-*.json
+            release/production-audit.json
+            sbom.json
+            RELEASE_NOTES_*.md
+
+      - name: Failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-failure-diagnostics
+          retention-days: 7
+          path: |
+            release/gate.log
+            playwright-report/
+            test-results/
+
+  # ── Advisory-but-recorded quality evidence ────────────────────────────────
+  # Split out so a slow mutation run does not serialise the gate, but still
+  # blocking for a tag: a release should not quietly skip them.
+  quality:
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Coverage
+        run: npm run coverage
+      - name: Mutation (numeric core)
+        run: npm run mutation
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quality-reports
+          retention-days: 14
+          path: |
+            coverage/
+            reports/mutation/
+
+  # ── Stage, bind, and verify the closed asset set ──────────────────────────
+  stage:
+    runs-on: ubuntu-latest
+    needs: [gate, quality]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-payload
+          path: incoming
+
+      # Nothing is rebuilt here. The assets that were tested are the assets
+      # that ship; this job only assembles and checks them.
+      - name: Stage the asset set
+        run: |
+          set -euo pipefail
+          STAGE="release/staged-${{ github.ref_name }}"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          cp incoming/*.zip "$STAGE"/
+          cp incoming/sbom.json "$STAGE"/
+          cp incoming/gate.log "$STAGE"/
+          cp incoming/gate.log.sha256 "$STAGE"/
+          cp incoming/test-evidence-*.json "$STAGE"/
+          cp incoming/RELEASE_NOTES_${{ github.ref_name }}.md "$STAGE"/
+          ls -la "$STAGE"
+
+      - name: Bind the manifest
+        run: |
+          set -euo pipefail
+          STAGE="release/staged-${{ github.ref_name }}"
+          node scripts/create-release-manifest.mjs \
+            --asset-dir "$STAGE" \
+            --evidence "$STAGE/test-evidence-${{ github.ref_name }}.json" \
+            --output "$STAGE/release-manifest-${{ github.ref_name }}.json"
+
+      - name: Checksum everything, manifest included
+        run: |
+          set -euo pipefail
+          cd "release/staged-${{ github.ref_name }}"
+          shasum -a 256 * > SHA256SUMS.tmp || true
+          grep -v ' SHA256SUMS' SHA256SUMS.tmp > SHA256SUMS
+          rm SHA256SUMS.tmp
+          shasum -a 256 -c SHA256SUMS
+
+      - name: Verify the closed asset set
+        run: npm run release:verify -- --dir "release/staged-${{ github.ref_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          retention-days: 30
+          path: release/staged-${{ github.ref_name }}/
+
+  # ── The single status to gate publication on ──────────────────────────────
+  release-ready:
+    runs-on: ubuntu-latest
+    needs: [validate, gate, quality, stage]
+    steps:
+      - run: echo "Every blocking job passed for ${{ github.ref_name }}."
+
+  # ── Draft prerelease ──────────────────────────────────────────────────────
+  # Draft, never auto-published: a human reads the body and presses publish.
+  publish:
+    runs-on: ubuntu-latest
+    needs: release-ready
+    if: github.ref_type == 'tag' || inputs.publish
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: assets
+      - name: Create the draft prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: true
+          tag_name: ${{ github.ref_name }}
+          files: assets/*
+          fail_on_unmatched_files: true
