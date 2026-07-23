@@ -2,13 +2,14 @@
  * Source geometry is immutable: the positions a file decoded to must remain
  * byte-identical through everything the app can do with the cloud.
  *
- * This is acceptance criterion #1 of the v0.6 stable cycle, and it is TRUE
- * today by reachability: the one write path (`rebaseOrigin`, the in-place
- * Float32 mount rebase) sits behind `MULTI_LAYER_MOUNT_ENABLED = false`, so
- * no reachable operation touches the buffer. These tests pin that state so
- * the Float64 transform work cannot regress it — when the destructive rebase
- * is finally removed, the explicit rebase cases below flip from "documents
- * the one remaining writer" to "proves there is none".
+ * This is acceptance criterion #1 of the v0.6 stable cycle, and it is now
+ * TRUE by construction, not merely by reachability: the one writer
+ * (`rebaseOrigin`, the in-place Float32 mount rebase) was removed in step 5
+ * of docs/architecture/float64-transform.md. Mounting is a Float64 placement
+ * held beside the cloud, applied at read time. These tests are the complete
+ * immutability proof — every path on the class leaves the buffer
+ * byte-identical, and the API surface is pinned so a writer cannot come back
+ * without failing here.
  */
 import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
@@ -72,28 +73,38 @@ describe('source geometry stays byte-identical', () => {
     expect(hashPositions(c)).toBe(before);
   });
 
-  it('a no-op rebase (target === current origin) touches nothing', () => {
-    const c = cloud();
-    const before = hashPositions(c);
-    expect(c.rebaseOrigin([516_000, 4_644_000, 70])).toBe(false);
-    expect(hashPositions(c)).toBe(before);
-  });
+  it('the API surface contains no method that mutates positions', () => {
+    // This case used to DOCUMENT THE DEFECT: it asserted that `rebaseOrigin`
+    // really did rewrite the buffer, so the defect could not be forgotten.
+    // The writer is gone, so the case flips as its comment always said it
+    // must: pin the whole method surface, call every member on it, and show
+    // the buffer never changes. A future method that writes positions has to
+    // add itself to this list to compile a call here — and then fails the
+    // hash below.
+    const surface = Object.getOwnPropertyNames(PointCloud.prototype)
+      .filter((n) => n !== 'constructor')
+      .sort();
+    expect(surface).toEqual([
+      'attachDerivedClassification',
+      'bounds',
+      'classification',
+      'classificationIsDerived',
+      'pointCount',
+      'projectXYZ',
+      'rebaseQuantum',
+      'worldXYZ',
+    ]);
 
-  it('DOCUMENTS THE DEFECT: a real rebase still rewrites the buffer', () => {
-    // The destructive in-place mount rebase is the ONE writer left, reachable
-    // only through the disabled mount flag. This case asserts the current
-    // (wrong) behaviour on purpose: when the Float64 transform removes the
-    // rewrite, it MUST be updated to expect byte-identity — turning this file
-    // into the complete immutability proof. If it starts failing because the
-    // buffer stopped changing, that is the migration landing, not a bug.
     const c = cloud();
     const before = hashPositions(c);
-    expect(c.rebaseOrigin([516_100, 4_644_000, 70])).toBe(true);
-    expect(hashPositions(c)).not.toBe(before);
-    // The world frame is preserved by the rewrite (that is its contract) —
-    // restore returns to the source frame, but Float32 re-quantisation makes
-    // the round trip inexact. Exactness is what the Float64 transform buys.
-    c.restoreSourceFrame();
-    expect(c.isRebased).toBe(false);
+    c.attachDerivedClassification(new Uint8Array(c.pointCount));
+    c.bounds();
+    void c.classification;
+    void c.classificationIsDerived;
+    void c.pointCount;
+    c.projectXYZ(0, { sourceToProject: [1_000, -2_000, 30] });
+    c.rebaseQuantum([616_000, 4_644_000, 70]);
+    c.worldXYZ(0);
+    expect(hashPositions(c)).toBe(before);
   });
 });

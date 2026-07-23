@@ -10,10 +10,10 @@ This is an alpha for evaluation. The items below are known and deliberate — re
 
 `ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). This release carries **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-**Physical multi-layer mounting is DISABLED in alpha.3** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — layers would rebase their data onto the shared origin so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Active mounting is reserved for the stable cycle, after a non-destructive Float64 transform architecture replaces the in-place Float32 rebase. Still staged for this alpha:
+**Physical multi-layer mounting is DISABLED in alpha.3** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — a layer's placement in the project frame is a per-layer Float64 translation held beside the cloud, applied per mesh by the renderer and per read by the analysis consumers, so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Turning mounting on is reserved for the stable cycle, and waits on browser verification of two-layer placement (docs/architecture/float64-transform.md, step 6). Still staged for this alpha:
 
 - **Two-scan placement is unverified in a browser** — and cannot be verified while mounting is off, because nothing places them. That confirmation belongs to the cycle that turns mounting on.
-- **When mounting is enabled, it spends Float32 precision in proportion to how far apart layers sit.** Positions are Float32, and the mount adds the project offset to them, so the residual precision a layer keeps depends on its distance from the shared anchor — not on its absolute coordinate. Measured via `PointCloud.rebaseQuantum`: a single georeferenced scan anchors on its own origin and loses nothing (~1e-8 m); two tiles 1 km apart cost ~0.02 mm; 100 km apart costs a full millimetre. Millimetre-critical work across widely separated tiles should be done per-layer for this alpha. Keeping vertices source-local behind a Float64 transform is the tracked fix (coordinate-integrity roadmap, P1 item 2).
+- **Mounting no longer rewrites the data.** Earlier alphas mounted by adding the project offset into the Float32 positions in place, which was lossy and made the round trip inexact. That mechanism is removed: source geometry is immutable (byte-identity pinned by `tests/sourceGeometryImmutable.test.ts`), and mount/unmount are exact inverses because setting and clearing a Float64 placement re-quantises nothing. The mm-precision refusal gates REMAIN as conservative admission rules — they model the retired mechanism's measured cost via `PointCloud.rebaseQuantum` (two tiles 1 km apart would have cost ~0.02 mm; 100 km a full millimetre) — until mounting is revisited with browser evidence.
 - Elevation colour ramps are normalised PER LAYER (each layer's own min/max), so a frame offset cancels in the normalisation and per-layer colours are correct — verified empirically. What ramps do NOT do is share one scale across layers, so the same colour on two layers does not mean the same absolute height; that is a pre-frame design choice, and a scene-shared ramp is the open step-5 decision. The measurement datum DOES follow the frame when every loaded layer is in it (step 4), and falls back to the pre-frame unanimity rule otherwise.
 
 For this alpha:
@@ -69,10 +69,14 @@ exclusion would leave a figure computed from fewer inputs than it appears.
 layers; one visible layer is analysed in its own frame, whatever its
 compatibility state, because no combination is taking place.
 
-**Still open:** the transform is applied by rewriting the Float32 positions
-rather than held in Float64 beside source-local vertices. Within the gates
-above that is bounded and disclosed, but it is not the end state; see
-coordinate-integrity roadmap P1 item 2.
+**No longer open: the transform is held in Float64 beside source-local
+vertices**, never written into them. The in-place Float32 rewrite the earlier
+alphas disclosed here is removed (docs/architecture/float64-transform.md,
+steps 1–5); positions stay byte-identical through mount, unmount and every
+read path, pinned by test. The refusal gates above are kept unchanged as
+conservative admission rules — they still quote the retired mechanism's
+measured cost — and multi-layer mounting itself remains disabled and
+browser-unverified (step 6).
 
 ## Contour GeoJSON ships in two frames
 

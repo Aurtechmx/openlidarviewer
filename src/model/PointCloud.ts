@@ -167,12 +167,24 @@ export class PointCloud {
   readonly returnCount?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
+  /**
+   * The world-space origin subtracted from the positions at load time.
+   *
+   * This never moves after construction. The in-place rebase that used to
+   * rewrite it (and the Float32 buffer with it) is retired: mounting into a
+   * shared project frame is now a Float64 placement held BESIDE the cloud
+   * (`LayerSpatialTransform`, applied by the viewer per mesh and by
+   * `projectXYZ` per read — see docs/architecture/float64-transform.md), so
+   * `origin` and {@link sourceOrigin} stay equal for the object's life.
+   * `origin` remains only because legacy call sites read it; new code names
+   * the frame it means and uses `sourceOrigin` (`lint:position-access` holds
+   * that surface).
+   */
   readonly origin: [number, number, number];
   /**
    * The origin this cloud was LOADED with, fixed for the object's life.
    *
-   * `origin` moves when the cloud mounts into a shared project frame; this
-   * does not. Project membership has to be reversible — a layer can have its
+   * Project membership has to be reversible — a layer can have its
    * CRS overridden to something incompatible, be dropped from the frame,
    * moved to another project, exported in source coordinates, restored from a
    * session, or audited against its file — and every one of those needs the
@@ -238,9 +250,10 @@ export class PointCloud {
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
     this.origin = options.origin;
-    // A COPY, deliberately. `origin` is mutated in place by `rebaseOrigin`, so
-    // sharing the caller's array here would let a rebase silently rewrite the
-    // very record that exists to survive it.
+    // A COPY, deliberately. Nothing in this class writes either origin any
+    // more, but the caller still holds a reference to its own array — a copy
+    // keeps the record that exists to outlive the caller from being writable
+    // through it.
     this.sourceOrigin = [options.origin[0], options.origin[1], options.origin[2]];
     this.sourceFormat = options.sourceFormat;
     this.name = options.name;
@@ -287,66 +300,12 @@ export class PointCloud {
   }
 
   /**
-   * The local-coordinate min/max bounds over all positions.
-   *
-   * The scan is computed once and cached; each call returns a fresh copy, so a
-   * caller can never corrupt the cached value.
-   */
-  /**
-   * Move this cloud onto a different world origin, keeping every point at the
-   * SAME world position: `local + origin` is identical before and after.
-   *
-   * This is how a layer mounts into the shared project frame. Translating the
-   * three.js MESH instead (the first implementation) split the scene in two —
-   * rendering saw project space while picking, terrain gather, lasso, profiles,
-   * volumes and export bounds all still read these positions cloud-local, so
-   * layers LOOKED aligned while every calculation used a different frame.
-   * Rebasing the data makes every consumer of `positions` project-local with no
-   * changes of their own. The cached bounds shift rather than invalidate — a
-   * translation moves a box without changing its shape.
-   *
-   * The caller re-uploads the GPU attribute; this class has no three.js.
-   * Returns false (and touches nothing) when the origin already matches.
-   */
-  rebaseOrigin(target: readonly [number, number, number]): boolean {
-    const dx = this.origin[0] - target[0];
-    const dy = this.origin[1] - target[1];
-    const dz = this.origin[2] - target[2];
-    if (dx === 0 && dy === 0 && dz === 0) return false;
-    const p = this.positions;
-    for (let i = 0; i + 2 < p.length; i += 3) {
-      p[i] += dx;
-      p[i + 1] += dy;
-      p[i + 2] += dz;
-    }
-    if (this._bounds !== null) {
-      const b = this._bounds;
-      this._bounds = {
-        min: [b.min[0] + dx, b.min[1] + dy, b.min[2] + dz],
-        max: [b.max[0] + dx, b.max[1] + dy, b.max[2] + dz],
-      };
-    }
-    this.origin[0] = target[0];
-    this.origin[1] = target[1];
-    this.origin[2] = target[2];
-    return true;
-  }
-
-  /**
    * The world coordinate of point `index`, as `positions[index] + sourceOrigin`.
    *
-   * This is the migration seam for holding the project transform in Float64.
-   * World-coordinate consumers today compute `positions[i] + origin`, which is
-   * correct only because `origin === sourceOrigin` for every loaded cloud —
-   * mounting is disabled, so nothing is ever rebased. `sourceOrigin` is fixed
-   * for the object's life, so this accessor stays correct once `rebaseOrigin`
-   * stops rewriting the Float32 buffer and `origin` begins to move. Consumers
-   * migrate onto it in gated batches (tracked by `lint:position-access`)
-   * BEFORE the rebase is made non-destructive; each swap is a no-op today.
-   *
-   * NOTE: while the rebase is still destructive, this is the world coordinate
-   * only for an UNREBASED cloud. That is every cloud in this release. The
-   * mounted case becomes correct in the same change that removes the rewrite.
+   * Both terms are fixed at construction and nothing rewrites either
+   * (float64-transform.md invariant 2), so this holds for the object's life —
+   * mounted or not. Placement into a project frame is data ABOUT the layer
+   * and never enters this sum; the project-frame lift is {@link projectXYZ}.
    *
    * Pass `out` to avoid allocating a tuple per point in a hot loop.
    */
@@ -367,12 +326,12 @@ export class PointCloud {
   /**
    * The project-local coordinate of point `index` under a layer transform:
    * source-local position plus the Float64 `sourceToProject` translation,
-   * computed at read time. Step 1 of the flip sequence
-   * (docs/architecture/float64-transform.md): the buffer is never written,
-   * so with the identity transform — the single-layer case, and every mount
-   * while the destructive rebase remains — this is bit-identical to the raw
-   * source-local position, which is what makes each consumer migration a
-   * provable no-op.
+   * computed at read time. The buffer is never written
+   * (docs/architecture/float64-transform.md), so with the identity transform
+   * — the single-layer case — this is bit-identical to the raw source-local
+   * position, which is what made each consumer migration onto it a provable
+   * no-op, and setting then clearing a transform cannot lose anything:
+   * nothing was re-quantised.
    *
    * Takes the transform as an argument rather than storing it: placement is
    * data ABOUT the layer, owned by the project frame, and a cloud must not
@@ -395,41 +354,24 @@ export class PointCloud {
     return out;
   }
 
-  /** Whether this cloud currently sits on an origin other than its file's. */
-  get isRebased(): boolean {
-    return (
-      this.origin[0] !== this.sourceOrigin[0] ||
-      this.origin[1] !== this.sourceOrigin[1] ||
-      this.origin[2] !== this.sourceOrigin[2]
-    );
-  }
-
-  /**
-   * Return this cloud to the frame its file declared.
-   *
-   * The exit from project membership: a layer whose CRS is overridden to
-   * something incompatible, or that leaves the frame for any other reason,
-   * must go back where it came from rather than stay parked on an origin that
-   * describes a different layer. Returns false when it never left.
-   */
-  restoreSourceFrame(): boolean {
-    return this.rebaseOrigin([
-      this.sourceOrigin[0],
-      this.sourceOrigin[1],
-      this.sourceOrigin[2],
-    ]);
-  }
-
   /**
    * The worst-case Float32 step size this cloud's coordinates would land on
-   * if rebased onto `target`, in source units, split by axis group.
+   * if its positions were rewritten onto `target`, in source units, split by
+   * axis group.
    *
-   * Positions are Float32, so an offset written into them spends mantissa the
-   * residual was using. The cost is set by how far the layer moves plus its
-   * own extent — NOT by the absolute coordinate — so a lone georeferenced
-   * scan anchored on its own origin pays nothing, while layers 100 km apart
-   * give up a millimetre. Callers disclose this rather than let a research
-   * tool quietly round survey data.
+   * The in-place rewrite this models is RETIRED — mounting is a Float64
+   * placement that never touches the buffer (float64-transform.md) — but the
+   * mount-refusal gates in LayerService still read this figure as a
+   * conservative admission rule: a mount that would have cost more than a
+   * millimetre under the old mechanism is still refused, until step 6
+   * (browser verification of two-layer placement) revisits the gates along
+   * with `MULTI_LAYER_MOUNT_ENABLED`.
+   *
+   * The model: positions are Float32, so an offset written into them spends
+   * mantissa the residual was using. The cost is set by how far the layer
+   * moves plus its own extent — NOT by the absolute coordinate — so a lone
+   * georeferenced scan anchored on its own origin pays nothing, while layers
+   * 100 km apart give up a millimetre.
    *
    * Horizontal (worst of X/Y) and vertical (Z) are reported SEPARATELY because
    * a compound CRS measures them in different units — feet across, metres up.
@@ -455,6 +397,12 @@ export class PointCloud {
     };
   }
 
+  /**
+   * The local-coordinate min/max bounds over all positions.
+   *
+   * The scan is computed once and cached; each call returns a fresh copy, so a
+   * caller can never corrupt the cached value.
+   */
   bounds(): { min: [number, number, number]; max: [number, number, number] } {
     if (this._bounds === null) {
       // No points to span. A min/max reduction over zero elements would leave
