@@ -1,15 +1,26 @@
 {
+  "schemaVersion": 2,
+  "project": "openlidarviewer",
   "version": "0.6.0-alpha.3",
-  "commit": "3d9078f9a28da8559cabba770ce0c25975d111e7",
-  "gateExit": 0,
-  "generatedAt": "2026-07-22T19:45:32.173Z",
-  "nodeVersion": "v26.0.0",
+  "releaseChannel": "development",
+  "releaseAuthoritative": false,
+  "tag": "v0.6.0-alpha.3",
+  "commit": "71f5fa37c7ff909d46099c229159cd968facfbe0",
+  "repository": null,
+  "generatedAt": "2026-07-23T00:13:03.895Z",
+  "nodeVersion": "v22.17.1",
+  "npmVersion": "10.9.2",
   "platform": "darwin-arm64",
+  "workflow": null,
+  "workflowRunId": null,
+  "workflowRunAttempt": null,
+  "workflowSha": null,
+  "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "3647ee670cff00967d39f936c2d779792885be7bb02be9ee5df5961c783a9cba",
+  "gateLogSha256": "3a7e0cc3492bb6532a074a272ec85996a5cacb76f313b83f97e77be1bea2accd",
   "buckets": {
     "unit": {
-      "passed": 3026,
+      "passed": 3068,
       "skipped": 16,
       "runs": 3
     },
@@ -19,7 +30,7 @@
       "runs": 1
     },
     "terrain": {
-      "passed": 1222,
+      "passed": 1233,
       "skipped": 0,
       "runs": 2
     },
@@ -29,17 +40,32 @@
       "runs": 1
     },
     "slow": {
-      "passed": 515,
+      "passed": 517,
       "skipped": 0,
       "runs": 2
     }
   },
   "total": {
-    "passed": 5797,
+    "passed": 5852,
     "skipped": 16
   },
   "bundle": {
     "liveEntryKiB": 713,
     "ceilingKiB": 720
+  },
+  "packageLockSha256": "d3729549ec5fb55b7af829994bd46e30f9b23a168efeb2cbb5aba1faf3094700",
+  "sbom": {
+    "sha256": "759c064406048bd62ef720fb13a5cad1346a5028a663269b49a0e73f2fbe8382",
+    "rootName": "openlidarviewer",
+    "rootVersion": "0.6.0-alpha.3",
+    "bomRef": "openlidarviewer@0.6.0-alpha.3",
+    "components": 59
+  },
+  "science": {
+    "e4ClaimCount": 1,
+    "e4Claims": [
+      "SLOPE-RASTER"
+    ],
+    "suppliedReferenceSlots": 1
   }
 }
