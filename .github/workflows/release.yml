@@ -32,7 +32,12 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: '22'
+  # Pinned EXACTLY, not to the 22 line. `node-version: 22` floats to the newest
+  # 22.x, which now ships npm 10.9.8 — while the release evidence asserts npm
+  # 10.9.2, the packageManager pin. A floating minor means the toolchain check
+  # breaks the day upstream cuts a release, which is a poor way to discover that
+  # "canonical" was never actually pinned. 22.17.1 is the build that ships 10.9.2.
+  NODE_VERSION: '22.17.1'
   EXPECTED_NPM: '10.9.2'
 
 jobs:
@@ -51,7 +56,8 @@ jobs:
         run: |
           node --version
           npm --version
-          test "$(node -p 'process.versions.node.split(".")[0]')" = "${{ env.NODE_VERSION }}"
+          test "$(node -p 'process.versions.node')" = "${{ env.NODE_VERSION }}"
+          test "$(npm --version)" = "${{ env.EXPECTED_NPM }}"
       - name: Ref is publishable (tag matches package, HEAD is the tag, tree clean)
         run: node scripts/validate-release-ref.mjs
 
