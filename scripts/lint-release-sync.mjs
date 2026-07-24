@@ -119,6 +119,13 @@ try {
 // past date forever. What cannot be true is a release date EARLIER than the
 // newest commit it contains. Skipped when git is unavailable (building from a
 // source archive), where there is nothing to compare against.
+//
+// This is a RELEASE-TIME rule: the date is set once, at tagging. Enforcing it
+// on every PR blocks any routine change (a dependency bump, a docs edit) that
+// lands on a day after the frozen release date, for no safety gain — the tag
+// isn't moving. So it hard-fails only under OLV_GATE_MODE=release (the exact-
+// tag gate); elsewhere a stale date is a heads-up warning, not a wall. The
+// release path still cannot tag an archive dated before its own code.
 try {
   const cff = read('CITATION.cff');
   const cffDate = cff.match(/^date-released:\s*["']?(\d{4}-\d{2}-\d{2})["']?\s*$/m);
@@ -127,11 +134,11 @@ try {
       .toString()
       .trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(headDate) && cffDate[1] < headDate) {
-      problems.push(
-        `Release date ${cffDate[1]} predates the newest commit (${headDate}) — the archive would claim `
+      const msg = `Release date ${cffDate[1]} predates the newest commit (${headDate}) — the archive would claim `
         + 'to have been released before some of the code in it existed. Set the real publication date '
-        + 'in CITATION.cff and CHANGELOG.md before tagging.',
-      );
+        + 'in CITATION.cff and CHANGELOG.md before tagging.';
+      if (process.env.OLV_GATE_MODE === 'release') problems.push(msg);
+      else console.warn(`lint:release-sync note (release-mode blocker): ${msg}`);
     }
   }
 } catch {
