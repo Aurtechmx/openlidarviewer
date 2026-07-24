@@ -34,6 +34,7 @@ function base(over: Partial<LayerHealthInput> = {}): LayerHealthInput {
     precisionMm: 0.02,
     precisionBasis: 'projected-linear-unit',
     streaming: false,
+    soleLayer: false,
     ...over,
   };
 }
@@ -324,5 +325,65 @@ describe('wording ban — no unearned quality claims anywhere', () => {
       for (const line of rep.lines) strings.push(line.text);
     }
     for (const s of strings) expect(s, `banned claim in: "${s}"`).not.toMatch(BANNED);
+  });
+});
+
+describe('buildLayerHealth — the self-anchored single layer', () => {
+  it('an identity placement (zero offset) spends no mount precision', () => {
+    // The screenshot case: one layer anchors its own frame, offset +0,+0,+0.
+    // "unknown — units not declared" is misleading — there is no mount to cost.
+    const r = row(
+      buildLayerHealth(base({ frameOffset: [0, 0, 0], precisionBasis: 'unknown', precisionMm: null })),
+      'Mount precision',
+    );
+    expect(r.value).toMatch(/not applicable|no offset/i);
+    expect(r.value).not.toMatch(/unknown/i);
+  });
+
+  it('a null placement (never in a shared frame) also spends nothing', () => {
+    const r = row(
+      buildLayerHealth(base({ frameOffset: null, precisionBasis: 'unknown', precisionMm: null })),
+      'Mount precision',
+    );
+    expect(r.value).toMatch(/not applicable|no offset/i);
+  });
+
+  it('a REAL offset still reports its precision, unknown units and all', () => {
+    const r = row(
+      buildLayerHealth(base({ frameOffset: [100, 0, 0], precisionBasis: 'unknown', precisionMm: null })),
+      'Mount precision',
+    );
+    expect(r.value).toMatch(/unknown — units not declared/i);
+  });
+
+  it('a sole verified layer is self-consistent by definition, not sharing a project frame', () => {
+    const r = row(buildLayerHealth(base({ soleLayer: true })), 'Compatibility');
+    expect(r.value).toMatch(/single layer|self-consistent|on its own/i);
+    expect(r.value).not.toMatch(/shares the project/i);
+  });
+
+  it('a verified layer among others still states the shared reference', () => {
+    const r = row(buildLayerHealth(base({ soleLayer: false })), 'Compatibility');
+    expect(r.value).toMatch(/shares the project/i);
+  });
+
+  it('a sole layer is not described as eligible to combine with nothing', () => {
+    const r = row(buildLayerHealth(base({ soleLayer: true })), 'Project frame');
+    expect(r.value).not.toMatch(/eligible for combined/i);
+    expect(r.value).toMatch(/single layer|only layer|nothing to combine|its own frame/i);
+  });
+
+  it('a mounted layer among others IS eligible for combined results', () => {
+    const r = row(buildLayerHealth(base({ soleLayer: false, mounted: true })), 'Project frame');
+    expect(r.value).toMatch(/eligible for combined/i);
+  });
+
+  it('every producible string still avoids quality claims', () => {
+    for (const sole of [true, false]) {
+      for (const off of [[0,0,0], null, [50,0,0]] as const) {
+        const rows = buildLayerHealth(base({ soleLayer: sole, frameOffset: off }));
+        for (const r of rows) expect(r.value).not.toMatch(BANNED);
+      }
+    }
   });
 });

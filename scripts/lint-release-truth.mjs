@@ -2,7 +2,7 @@
 /**
  * lint-release-truth.mjs
  *
- * Catches the class of drift a human review found in v0.6.0-alpha.3: the public
+ * Catches a class of drift where the public
  * TRUTH surfaces contradicting the machine-readable state they describe. None of
  * these break a build, and `lint:release-sync` / `lint:evidence` did not see
  * them, so they shipped:
@@ -55,7 +55,7 @@ export function collectReleaseTruthProblems(read) {
   const EVTEST = 'tests/evidenceRegistry.test.ts';
   const DEPS = 'DEPENDENCIES.md';
   const NOTICES = 'THIRD_PARTY_NOTICES.md';
-  const CHECKLIST = 'RELEASE_CHECKLIST.md';
+  const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
   // ── 1. Monolith line counts, derived from the ratchet baseline ────────────
   const baseText = read('docs/validation/monolith-size-baseline.json');
@@ -90,7 +90,12 @@ export function collectReleaseTruthProblems(read) {
   }
 
   // ── 2. Present-tense prior-release identifiers in current truth docs ───────
-  if (currentPre) {
+  // Runs for STABLE versions too: a stable doc saying "DISABLED in alpha.3"
+  // is a present-tense claim about a superseded release — the exact blind
+  // spot the v0.6.0 promotion exposed (rule was gated on currentPre, so it
+  // switched itself off at the release that needed it most).
+  {
+    const say = currentPre ?? `v${version}`;
     for (const doc of [KNOWN, VALREPORT]) {
       const text = read(doc);
       if (text == null) continue;
@@ -99,7 +104,7 @@ export function collectReleaseTruthProblems(read) {
         if (pre !== currentPre) {
           problems.push(
             `${doc} says "DISABLED in ${pre}" — this is a present-tense claim about ` +
-              `the current release, which is ${currentPre}. Say "${currentPre}".`,
+              `the current release, which is ${say}. Say "${say}".`,
           );
         }
       }
@@ -212,16 +217,20 @@ export function collectReleaseTruthProblems(read) {
     }
   }
 
-  // ── 7. Release checklist requires the full asset set ──────────────────────
+  // ── 7. The shipped asset index documents the full asset set ───────────────
+  // RELEASE_CHECKLIST.md is an internal process aid and is export-ignored, so
+  // the source archive cannot depend on it. The public, shipped index of what a
+  // release attaches is docs/release/RELEASE_ASSETS.md — assert the asset set
+  // there, so this lint passes from inside the extracted archive too.
   {
-    const text = read(CHECKLIST);
-    if (text == null) problems.push(`${CHECKLIST} is missing.`);
+    const text = read(RELEASE_ASSETS);
+    if (text == null) problems.push(`${RELEASE_ASSETS} is missing.`);
     else {
       const required = [
-        ['source ZIP', /source zip/i],
-        ['deploy ZIP', /deploy zip/i],
+        ['source ZIP', /source[- ][^\n]*\.zip/i],
+        ['deploy ZIP', /deploy[- ][^\n]*\.zip/i],
         ['sbom.json', /sbom\.json/i],
-        ['release manifest', /release[- ]manifest|release manifest/i],
+        ['release manifest', /release[- ]manifest/i],
         ['SHA256SUMS', /SHA256SUMS/],
         ['gate.log', /gate\.log/],
         ['gate.log.sha256', /gate\.log\.sha256/],
@@ -229,7 +238,7 @@ export function collectReleaseTruthProblems(read) {
         ['release notes', /RELEASE_NOTES/],
       ];
       for (const [label, re] of required) {
-        if (!re.test(text)) problems.push(`${CHECKLIST} does not require the "${label}" release asset.`);
+        if (!re.test(text)) problems.push(`${RELEASE_ASSETS} does not document the "${label}" release asset.`);
       }
     }
   }

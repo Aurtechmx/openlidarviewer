@@ -4,7 +4,7 @@ All commits to this repository are by **A. Urias** (Aurtech), across two configu
 git identities that belong to the same author:
 
 - Aurtech `<info@aurtech.mx>`
-- Aur Technologies `<aurtechmx@gmail.com>`
+- Aur Technologies `<info@aurtech.mx>`
 
 No external contributors have submitted code, documentation, or tests to the
 repository to date. When that changes, contributors are listed here individually

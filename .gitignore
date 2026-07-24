@@ -122,3 +122,6 @@ docs-site/.vitepress/cache/
 coverage/
 reports/
 .stryker-tmp/
+
+# Local authoring tools, not part of the project.
+_private/

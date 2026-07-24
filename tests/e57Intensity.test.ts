@@ -1,8 +1,8 @@
 /**
  * e57Intensity.test.ts — intensity ingestion in `loadE57`.
  *
- * The defect this pins (found in a user's real export): E57 files commonly
- * carry intensity as a UNIT-RANGE FLOAT — the user's sample declares
+ * The defect this pins (found in a real-world E57 export): E57 files commonly
+ * carry intensity as a UNIT-RANGE FLOAT — the sample declares
  * intensityLimits 0.2800009–0.7380647 — and the loader rounded those floats
  * straight into the Uint16 store (`clampU16(col.intensity[i])`). Math.round
  * of a 0–1 value yields only 0 or 1, so the whole continuous channel
@@ -69,7 +69,7 @@ beforeEach(() => {
 
 describe('loadE57 — unit-range float intensity (the binarization bug)', () => {
   it('preserves the continuous channel: declared-limit 0–1 floats rescale to 0–65535', async () => {
-    // The user's sample file: intensityLimits 0.2800009–0.7380647, values
+    // The regression sample: intensityLimits 0.2800009–0.7380647, values
     // declared as unit-range floats. Hand-computed: Math.round(v × 65535).
     mockedParse.mockReturnValue(
       parseResult([
@@ -106,7 +106,7 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
   });
 
   it('regression: the CSV export of a unit-range-intensity E57 carries the continuous channel', async () => {
-    // End-to-end shape of the user's actual defect: E57 with float intensity
+    // End-to-end shape of the observed defect: E57 with float intensity
     // → CSV whose intensity column held ONLY 0 and 1.
     mockedParse.mockReturnValue(
       parseResult([

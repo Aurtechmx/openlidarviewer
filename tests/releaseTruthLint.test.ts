@@ -25,7 +25,7 @@ const VALREPORT = `VALIDATION_REPORT_v${VERSION}.md`;
 const CLAIMS = 'docs/validation/claim-register.yaml';
 const DEPS = 'DEPENDENCIES.md';
 const NOTICES = 'THIRD_PARTY_NOTICES.md';
-const CHECKLIST = 'RELEASE_CHECKLIST.md';
+const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
 /** A reader over the real tree with a single-file override. */
 function withOverride(path: string, text: string) {
@@ -46,7 +46,9 @@ describe('lint:release-truth', () => {
   });
 
   it('fails on a prior-release present-tense mounting claim', () => {
-    const doc = realRead(KNOWN)!.replace('DISABLED in alpha.3', 'DISABLED in alpha.2');
+    // Version-agnostic: corrupt whatever the CURRENT doc says into a stale
+    // prerelease identifier — the rule must flag it at stable versions too.
+    const doc = realRead(KNOWN)!.replace(/DISABLED in [\w.]+/, 'DISABLED in alpha.2');
     const problems = problemsFor(withOverride(KNOWN, doc));
     expect(problems.some((p) => p.includes('DISABLED in alpha.2'))).toBe(true);
   });
@@ -94,9 +96,9 @@ describe('lint:release-truth', () => {
     expect(problems.some((p) => p.includes('canonical Node'))).toBe(true);
   });
 
-  it('fails when the release checklist drops a required asset', () => {
-    const doc = realRead(CHECKLIST)!.replace(/sbom\.json/gi, 'REMOVED');
-    const problems = problemsFor(withOverride(CHECKLIST, doc));
+  it('fails when the shipped asset index drops a required asset', () => {
+    const doc = realRead(RELEASE_ASSETS)!.replace(/sbom\.json/gi, 'REMOVED');
+    const problems = problemsFor(withOverride(RELEASE_ASSETS, doc));
     expect(problems.some((p) => p.includes('sbom.json'))).toBe(true);
   });
 });

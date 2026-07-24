@@ -6,10 +6,9 @@
  * hand after reading a log. That produced a release whose unit count, export
  * count and terrain count were all wrong while its total happened to be
  * right, because the total came from a script and the components came from a
- * person. An external reviewer caught it by adding them up; nothing in the
- * repository could, because `lint:release-sync` only checks that the
- * documents agree with EACH OTHER — three documents copying one wrong number
- * agree perfectly.
+ * person. Nothing in the repository could catch it, because
+ * `lint:release-sync` only checks that the documents agree with EACH OTHER,
+ * and three documents copying one wrong number agree perfectly.
  *
  * So the counts are read out of the gate's own output here, once, into a file
  * the documents are then checked against. The total is computed, never
@@ -44,6 +43,24 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 
 export function parseGateLog(text) {
+  // Preferred source: the machine-readable `GATE TALLY bucket=X passed=N
+  // skipped=M` line the bucket runner prints from its OWN stdout. The human
+  // `Tests N passed` summary comes from a shard's inherited stdio, which can
+  // race the gate's tee pipe and go missing from the log on a CI runner; the
+  // canonical line cannot, because the parent writes it synchronously. When
+  // any canonical line is present it is authoritative and the human summary is
+  // ignored (older logs without it fall back to the human parse below).
+  const canonical = Object.fromEntries(BUCKETS.map((b) => [b, { passed: 0, skipped: 0, runs: 0 }]));
+  let sawCanonical = false;
+  for (const m of text.matchAll(/^GATE TALLY bucket=(\w+) passed=(\d+) skipped=(\d+)\s*$/gm)) {
+    if (!BUCKETS.includes(m[1])) continue;
+    canonical[m[1]].passed += Number(m[2]);
+    canonical[m[1]].skipped += Number(m[3]);
+    canonical[m[1]].runs += 1;
+    sawCanonical = true;
+  }
+  if (sawCanonical) return canonical;
+
   const buckets = Object.fromEntries(BUCKETS.map((b) => [b, { passed: 0, skipped: 0, runs: 0 }]));
   let current = null;
   for (const line of text.split('\n')) {

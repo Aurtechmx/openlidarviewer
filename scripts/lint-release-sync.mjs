@@ -2,10 +2,10 @@
 /**
  * lint-release-sync.mjs
  *
- * Catches the release-hygiene class that a human review found in v0.5.2: the
- * code was correct but the packaging drifted — package-lock still on the old
- * version, README still naming the previous release, a missing release-notes
- * file. None of those break a build, so only a dedicated guard catches them.
+ * Catches a release-hygiene class where the code is correct but the packaging
+ * drifts: package-lock still on the old version, README still naming the
+ * previous release, a missing release-notes file. None of those break a build,
+ * so only a dedicated guard catches them.
  *
  * Fails (exit 1) unless ALL of these line up with `package.json`'s version:
  *   1. package-lock.json `.version` AND `.packages[""].version`
@@ -31,6 +31,20 @@ const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
 
 const version = JSON.parse(read('package.json')).version;
 const problems = [];
+
+// The claim register is the source public claims are generated from. A
+// stable release stamped with an alpha softwareVersion is a provenance
+// defect, so the two must agree.
+{
+  const reg = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
+  const m = reg.match(/^softwareVersion:\s*(\S+)/m);
+  if (!m) problems.push('claim-register.yaml has no softwareVersion field.');
+  else if (m[1] !== version) {
+    problems.push(
+      `claim-register.yaml softwareVersion is ${m[1]}, expected ${version} — regenerate the registry for this release.`,
+    );
+  }
+}
 
 // 1. package-lock version (both the root and the self-package entry).
 try {
@@ -98,13 +112,20 @@ try {
 // The version and the changelog agreement were already checked, but nothing
 // noticed when `date-released` simply went out of date: a candidate carried
 // 2026-07-19 while HEAD was two days newer, so the archive claimed to have
-// been released before some of the commits inside it existed. A reviewer
-// caught that, not the gate.
+// been released before some of the commits inside it existed, and nothing
+// checked for it.
 //
 // Checking "is it today" would be wrong — a genuinely published release has a
 // past date forever. What cannot be true is a release date EARLIER than the
 // newest commit it contains. Skipped when git is unavailable (building from a
 // source archive), where there is nothing to compare against.
+//
+// This is a RELEASE-TIME rule: the date is set once, at tagging. Enforcing it
+// on every PR blocks any routine change (a dependency bump, a docs edit) that
+// lands on a day after the frozen release date, for no safety gain — the tag
+// isn't moving. So it hard-fails only under OLV_GATE_MODE=release (the exact-
+// tag gate); elsewhere a stale date is a heads-up warning, not a wall. The
+// release path still cannot tag an archive dated before its own code.
 try {
   const cff = read('CITATION.cff');
   const cffDate = cff.match(/^date-released:\s*["']?(\d{4}-\d{2}-\d{2})["']?\s*$/m);
@@ -113,11 +134,11 @@ try {
       .toString()
       .trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(headDate) && cffDate[1] < headDate) {
-      problems.push(
-        `Release date ${cffDate[1]} predates the newest commit (${headDate}) — the archive would claim `
+      const msg = `Release date ${cffDate[1]} predates the newest commit (${headDate}) — the archive would claim `
         + 'to have been released before some of the code in it existed. Set the real publication date '
-        + 'in CITATION.cff and CHANGELOG.md before tagging.',
-      );
+        + 'in CITATION.cff and CHANGELOG.md before tagging.';
+      if (process.env.OLV_GATE_MODE === 'release') problems.push(msg);
+      else console.warn(`lint:release-sync note (release-mode blocker): ${msg}`);
     }
   }
 } catch {

@@ -1,23 +1,24 @@
 /**
  * src/ui/CatalogPanel.ts
  *
- * The curated-public-LiDAR-dataset picker that lives in the empty
- * state. It owns two responsibilities and two only:
- *   1. Surface a curated dropdown of hand-vetted public COPC / EPT URLs.
- *      Each entry is hand-vetted against a known-working stream.
- *   2. On Open click, hand the selected URL to `onPickUrl`. The caller
- *      (main.ts) routes the URL through `handleRemoteUrl`, which
- *      detects the format (COPC file vs. EPT manifest) and dispatches
- *      to the appropriate streaming path.
+ * The public-LiDAR picker that lives in the empty state. It has two
+ * jobs:
+ *   1. Surface a curated dropdown of hand-vetted public COPC / EPT URLs,
+ *      each verified against a known-working stream.
+ *   2. Offer a coordinate-based "search by location" over Microsoft
+ *      Planetary Computer's public STAC 3DEP-COPC catalog, for US points.
+ *   On Open (or on a search hit) it hands the chosen URL to `onPickUrl`.
+ *   The caller (main.ts) routes it through `handleRemoteUrl`, which
+ *   detects COPC vs. EPT and dispatches to the matching streaming path.
  *
  * Everything streamy — opening the COPC, hierarchy descent, point
  * rendering — happens above this component in `main.ts`. The panel is
- * pure DOM + the curated-locations data file. No catalog query, no
- * geocoder, no bbox computation.
+ * DOM plus the curated-locations data file plus the lazy-loaded
+ * Planetary Computer client. It does no street-address geocoding.
  *
  * Why a curated picker instead of an address input
  * ─────────────────────────────────────────────────
- * v0.3.6 deliberately does not ship a "type any address" workflow.
+ * The viewer does not ship a "type any street address" workflow.
  * Two prior attempts hit hard limits:
  *   - USGS TNM Products API only surfaces legacy non-streamable LAZ —
  *     zero `.copc.laz` URLs across the bboxes we tested. The address-
@@ -26,24 +27,24 @@
  *     accuracy + 3DEP's incomplete COPC migration. Most addresses
  *     produced "no coverage" responses.
  *
- * The curated list ships URLs we have verified — first-time users see
- * streaming work on the first click. Power users paste their own COPC
- * URL into the dedicated URL field above the picker. Address-based
- * search remains experimental (see `src/io/catalog/geocode.ts` and
- * `src/io/catalog/Usgs3depProvider.ts`) and is not wired into v0.3.6
- * UI.
+ * So address geocoding was removed. What remains is the curated list
+ * (URLs we have verified, so first-time users see streaming work on the
+ * first click) and a coordinate search against Planetary Computer for
+ * the US case. Power users paste their own COPC URL into the dedicated
+ * field above the picker.
  *
  * Privacy contract
  * ────────────────
- * - No geocoder request fires.
- * - No catalog provider request fires.
- * - The only network activity on Open click is the EPT manifest GET
- *   (for EPT URLs) or COPC HEAD + range read (for COPC URLs) — the
- *   same requests the open-from-URL field has always made.
- * - The `?notelemetry=1` URL flag disables the picker entirely; even
- *   though the picker itself makes no exploratory third-party calls,
- *   the per-tile fetch on Open is a categorical access event the user
- *   may opt out of.
+ * - No street-address geocoder request fires.
+ * - The curated dropdown fires no request until Open; then the only
+ *   network activity is the EPT manifest GET (for EPT URLs) or COPC
+ *   HEAD + range read (for COPC URLs) — the same requests the
+ *   open-from-URL field has always made.
+ * - The location search is the one provider request, and only when the
+ *   user runs it: a bbox query to Planetary Computer's public STAC.
+ * - The `?notelemetry=1` URL flag disables the whole lookup — curated
+ *   dropdown and location search — since a per-tile fetch is a
+ *   categorical access event the user may opt out of.
  */
 
 import { el } from './dom';

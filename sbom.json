@@ -3,15 +3,15 @@
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
   "version": 1,
-  "serialNumber": "urn:uuid:7b4694b5-574f-4807-aada-cbe89199af26",
+  "serialNumber": "urn:uuid:0ac3492d-7092-4c3f-bf77-424d99df8c14",
   "metadata": {
-    "timestamp": "2026-07-22T17:59:38.928Z",
+    "timestamp": "2026-07-23T16:48:50.671Z",
     "tools": {
       "components": [
         {
           "type": "application",
           "name": "npm",
-          "version": "11.12.1"
+          "version": "10.9.2"
         },
         {
           "type": "application",
@@ -82,8 +82,8 @@
     "component": {
       "type": "application",
       "name": "openlidarviewer",
-      "version": "0.6.0-alpha.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3",
+      "version": "0.6.0",
+      "bom-ref": "openlidarviewer@0.6.0",
       "author": "A. Urias",
       "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
       "licenses": [
@@ -94,7 +94,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/openlidarviewer@0.6.0-alpha.3?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer.git",
+      "purl": "pkg:npm/openlidarviewer@0.6.0?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer.git",
       "externalReferences": [
         {
           "url": "git+https://github.com/Aurtechmx/openlidarviewer.git",
@@ -126,7 +126,7 @@
       "name": "inter",
       "group": "@fontsource-variable",
       "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@fontsource-variable/inter@5.2.8",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource-variable/inter@5.2.8",
       "author": "Google Inc.",
       "description": "Self-host the Inter font in a neatly bundled NPM package.",
       "licenses": [
@@ -157,13 +157,7 @@
         {
           "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.2.8.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "90e7cfd83fb291b717fcfdc8167a243a15513684e8ce8e7f27184021560ba5e6bf50198243f6163c17d6203b812265d7ff5e4a1fe78a878c69114c92dac41019"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -178,7 +172,7 @@
       "name": "jetbrains-mono",
       "group": "@fontsource",
       "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@fontsource/jetbrains-mono@5.2.8",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource/jetbrains-mono@5.2.8",
       "author": "Google Inc.",
       "description": "Self-host the JetBrains Mono font in a neatly bundled NPM package.",
       "licenses": [
@@ -209,13 +203,7 @@
         {
           "url": "https://registry.npmjs.org/@fontsource/jetbrains-mono/-/jetbrains-mono-5.2.8.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "eb0f3f486e24aaf20cbbbc5def0b7ac7789d9f542ec77a7d37adace86deb7e574e5181e959c73614aaea7fe568e388d1bea5a3da802d4c7ad95c43f6de848ac1"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -230,7 +218,7 @@
       "name": "manrope",
       "group": "@fontsource",
       "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@fontsource/manrope@5.2.8",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource/manrope@5.2.8",
       "author": "Google Inc.",
       "description": "Self-host the Manrope font in a neatly bundled NPM package.",
       "licenses": [
@@ -261,13 +249,7 @@
         {
           "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.2.8.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "8091c999cb9493ba9670d09f700ae2fc3250b57b4162a8bdc8aadab6be235e14a8d08df152d34d288fa281021cc3973e9bde60d2fa2e9e4f199d7fe46fca344c"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -282,7 +264,7 @@
       "name": "core",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
       "description": "The core API for working with loaders.gl loaders and writers",
       "licenses": [
         {
@@ -312,13 +294,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "0fa91715da54b58c28a92e4e40b2da2c42e41e54b7a8875c4a0cd5bec87f3229d1b5e7952084c9a23a8473f9660f1d73551de3e96343ef23c61788b868ec223a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -333,7 +309,7 @@
       "name": "gltf",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/gltf@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/gltf@4.4.3",
       "description": "Framework-independent loader for the glTF format",
       "licenses": [
         {
@@ -363,13 +339,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/gltf/-/gltf-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "39813fd2718b626df07a209befcf913b074d572b8b4bc219c0df0dbc6a9cb6ab741d2e190f8d1b8aeedbf4bf319056d54d94244195c3a7267ad67e4f490794d4"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -384,7 +354,7 @@
       "name": "obj",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/obj@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/obj@4.4.3",
       "description": "Framework-independent loader for the OBJ format",
       "licenses": [
         {
@@ -414,13 +384,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/obj/-/obj-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "6796be470c343ce1f9c06118bb2f0d5b23aca183d3cd62fe558590c76fded044a78db2c94dc78b2db5fdb4e21fec56b34708068bc93ae8f04581f7418c74a52f"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -435,7 +399,7 @@
       "name": "ply",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/ply@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/ply@4.4.3",
       "description": "Framework-independent loader for the PLY format",
       "licenses": [
         {
@@ -465,13 +429,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/ply/-/ply-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "ab4ec4c74457ad96e0b3cf686c03456fdfeb02f3fe40e1c3ac29268e278a38c7d7d534cb48a535ba48a79f53e2b1424679e950cdace1096ba3983e90c0562eaf"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -485,7 +443,7 @@
       "type": "library",
       "name": "laz-perf",
       "version": "0.0.7",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|laz-perf@0.0.7",
+      "bom-ref": "openlidarviewer@0.6.0|laz-perf@0.0.7",
       "description": "LAZ implementation compiled to WASM via Emscripten for LAZ support in a browser",
       "licenses": [
         {
@@ -505,13 +463,7 @@
         {
           "url": "https://registry.npmjs.org/laz-perf/-/laz-perf-0.0.7.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "db146a9bf7ffd94a834b9aaa9233b20dbeae5488e4570e921a64253284d096255691984f7c86d4253b9b525de64e5a1a5aa29c8e54bfbab98fd42628c5e96c12"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -525,7 +477,7 @@
       "type": "library",
       "name": "pdf-lib",
       "version": "1.17.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1",
+      "bom-ref": "openlidarviewer@0.6.0|pdf-lib@1.17.1",
       "author": "Andrew Dillon",
       "description": "Create and modify PDF files with JavaScript",
       "licenses": [
@@ -556,13 +508,7 @@
         {
           "url": "https://registry.npmjs.org/pdf-lib/-/pdf-lib-1.17.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "57f9a9c890284ec3787273f7d6f734c1f340d7ea76d1ebeaaa76a9d0a2e8454374624fe9df0379d83384b0be2804570b75befa865a4a3edcc9220a3aee3fd72f"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -576,7 +522,7 @@
           "type": "library",
           "name": "tslib",
           "version": "1.14.1",
-          "bom-ref": "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1|tslib@1.14.1",
+          "bom-ref": "openlidarviewer@0.6.0|pdf-lib@1.17.1|tslib@1.14.1",
           "author": "Microsoft Corp.",
           "description": "Runtime library for TypeScript helper functions",
           "licenses": [
@@ -607,13 +553,7 @@
             {
               "url": "https://registry.npmjs.org/tslib/-/tslib-1.14.1.tgz",
               "type": "distribution",
-              "hashes": [
-                {
-                  "alg": "SHA-512",
-                  "content": "5e78b7e4d2b38e032bc1ebf2b074c202bb4b0e93efc9ef3357fd04e04c989f8dcfeffeeabd0c0f87d0469077b06ccba5567b5b8a099c4fbadd5f704da3dc1126"
-                }
-              ],
-              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+              "comment": "as detected from npm-ls property \"resolved\""
             }
           ],
           "properties": [
@@ -629,7 +569,7 @@
       "type": "library",
       "name": "proj4",
       "version": "2.20.9",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|proj4@2.20.9",
+      "bom-ref": "openlidarviewer@0.6.0|proj4@2.20.9",
       "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
       "licenses": [
         {
@@ -659,13 +599,7 @@
         {
           "url": "https://registry.npmjs.org/proj4/-/proj4-2.20.9.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "18b046a9769371d5a7a69adede8d6c326cb80dc306486abf9e0fbd93631335d75aad12ba4af78836a96a6338b7c445eecb4ea58d8d534eb0ba1fd0b87f7eb421"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -679,7 +613,7 @@
       "type": "library",
       "name": "three",
       "version": "0.184.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|three@0.184.0",
+      "bom-ref": "openlidarviewer@0.6.0|three@0.184.0",
       "author": "mrdoob",
       "description": "JavaScript 3D library",
       "licenses": [
@@ -710,13 +644,7 @@
         {
           "url": "https://registry.npmjs.org/three/-/three-0.184.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "c2d4d18c6f76a4ce5e520fcab949c7b2a48094f336f7a6eb4ce70b80c46a11eca561387f09db6f294bc2cb20904f316e4ad89e5b1bd96fc9954ccbdd3f2529c6"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -731,7 +659,7 @@
       "name": "loader-utils",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
       "description": "Framework-independent loaders for 3D graphics formats",
       "licenses": [
         {
@@ -761,13 +689,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/loader-utils/-/loader-utils-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e72b753aa64f611dddfb1140aadcd228edb81ddef4d7d2aa37e88e5a9ed704a3d0052fac0048409e64939ced5ac68e392048b5e09dc584c0e4fa776a06848a11"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -782,7 +704,7 @@
       "name": "schema-utils",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
       "description": "Schema-related utilities for loaders.gl...",
       "licenses": [
         {
@@ -812,13 +734,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/schema-utils/-/schema-utils-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "4e08334169337fda4861b8fc23d4654e4df79305ec96f0e46359e7c3f38bfe18a46baa9396cd46d76eea2b99bdb248808c4964e5992f40b41cc2139ba195d978"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -833,7 +749,7 @@
       "name": "schema",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
       "description": "Table format APIs for JSON, CSV, etc...",
       "licenses": [
         {
@@ -863,13 +779,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/schema/-/schema-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "b436fface9f8e271d6bcc15239a024d7fa5071072eb318ab1823353b904c251d0f43bd54ac21decb9eabb1b71feffc0686fc91c0fb57fa888cce527d4e637cbd"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -884,7 +794,7 @@
       "name": "worker-utils",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
       "description": "Utilities for running tasks on worker threads",
       "licenses": [
         {
@@ -914,13 +824,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/worker-utils/-/worker-utils-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "459b7f3701579ba2b1dc59ffaea896dc096c7bd6745ed064b47fc4140a7c5ba2efb0abb1a5132350ba867f26d3bb6c1a45745850d619eb31acf5a3966ed0d12f"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -935,7 +839,7 @@
       "name": "log",
       "group": "@probe.gl",
       "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/log@4.1.1",
+      "bom-ref": "openlidarviewer@0.6.0|@probe.gl/log@4.1.1",
       "description": "JavaScript debug logging for browser and Node",
       "licenses": [
         {
@@ -965,13 +869,7 @@
         {
           "url": "https://registry.npmjs.org/@probe.gl/log/-/log-4.1.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "91c66cf414f8e292fb852d4e91118a6115c8fd237d29e8d494f0fe058e340e0b912f3742e6d2c6ff6f1618cc9f29d9ffe75193e1ad29fb43fcc6f0e7d44cfe2a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -986,7 +884,7 @@
       "name": "draco",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/draco@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/draco@4.4.3",
       "description": "Framework-independent loader and writer for Draco compressed meshes and point clouds",
       "licenses": [
         {
@@ -1016,13 +914,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/draco/-/draco-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "60d2353140c321bac905a9a05357a62c10b691051b112348399bfd6dc4bcc70c6bf5234c7e700c65681d509918702e71cd5daaeadcb623f6f678685742477d11"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1037,7 +929,7 @@
       "name": "images",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/images@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/images@4.4.3",
       "description": "Framework-independent loaders and writers for images (PNG, JPG, ...)",
       "licenses": [
         {
@@ -1067,13 +959,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/images/-/images-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "6b80bac7ee066547217fe230a5d04ebf219e2c649b18e5686fe59259f1947b3110e20aaed734b5a67de5097dd94cbe4ff82877bfa28ac0f19d3b961d4dde7613"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1088,7 +974,7 @@
       "name": "textures",
       "group": "@loaders.gl",
       "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/textures@4.4.3",
+      "bom-ref": "openlidarviewer@0.6.0|@loaders.gl/textures@4.4.3",
       "description": "Framework-independent loaders for compressed and super compressed (basis) textures ",
       "licenses": [
         {
@@ -1118,13 +1004,7 @@
         {
           "url": "https://registry.npmjs.org/@loaders.gl/textures/-/textures-4.4.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "40d0be6a7c0925c1ec2ec680cd7a3327e214371067a96b192d4324519228ad57b2f9741ca7685c62783988e99442709974847d8187b9dd525ad23d42d095d14a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1139,7 +1019,7 @@
       "name": "core",
       "group": "@math.gl",
       "version": "4.1.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@math.gl/core@4.1.0",
+      "bom-ref": "openlidarviewer@0.6.0|@math.gl/core@4.1.0",
       "description": "Array-based 3D Math Classes optimized for WebGL applications",
       "licenses": [
         {
@@ -1169,13 +1049,7 @@
         {
           "url": "https://registry.npmjs.org/@math.gl/core/-/core-4.1.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "16b747042546dd076bc28af0ad44b35c868afbff4e0912ec731236394cbab0b387c878013327e7106b3df7f9b728dbecfbde41b2740b5a49557e929f4337f028"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1190,7 +1064,7 @@
       "name": "standard-fonts",
       "group": "@pdf-lib",
       "version": "1.0.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@pdf-lib/standard-fonts@1.0.0",
+      "bom-ref": "openlidarviewer@0.6.0|@pdf-lib/standard-fonts@1.0.0",
       "author": "Andrew Dillon",
       "description": "Metrics for the Standard 14 PDF fonts and their encodings",
       "licenses": [
@@ -1221,13 +1095,7 @@
         {
           "url": "https://registry.npmjs.org/@pdf-lib/standard-fonts/-/standard-fonts-1.0.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "854df404af4850dfecbb4327f5576554ab16052e86ca155faa3c25d458d93784f13fa702c348cfdb0ed5dc77f9b97eccd00649d7abdecbdc84d27cbb49ae7d64"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1242,7 +1110,7 @@
       "name": "upng",
       "group": "@pdf-lib",
       "version": "1.0.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@pdf-lib/upng@1.0.1",
+      "bom-ref": "openlidarviewer@0.6.0|@pdf-lib/upng@1.0.1",
       "author": "photopea",
       "description": "Small, fast and advanced PNG / APNG encoder and decoder",
       "licenses": [
@@ -1273,13 +1141,7 @@
         {
           "url": "https://registry.npmjs.org/@pdf-lib/upng/-/upng-1.0.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "7502b6154310b68c153f4d26b4892cae56617455d064f0beb5a8a1d6ae02bcf679bea77147f2ca05a160d2801fcddd469476575d23dd41fcd09edf95886bc421"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1293,7 +1155,7 @@
       "type": "library",
       "name": "pako",
       "version": "1.0.11",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|pako@1.0.11",
+      "bom-ref": "openlidarviewer@0.6.0|pako@1.0.11",
       "description": "zlib port to javascript - fast, modularized, with browser support",
       "licenses": [
         {
@@ -1321,13 +1183,7 @@
         {
           "url": "https://registry.npmjs.org/pako/-/pako-1.0.11.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e212c1f0fcb8cd971ee6ce3277d5f3a29ab056fff218d855d4197c353982ab5efadc778adbe130553bfe95e19e2f5dc39e1db07dbaa8c153d70883b4cf8b5a63"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1341,7 +1197,7 @@
       "type": "library",
       "name": "mgrs",
       "version": "1.0.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|mgrs@1.0.0",
+      "bom-ref": "openlidarviewer@0.6.0|mgrs@1.0.0",
       "author": "proj4 team",
       "description": "Utility for converting between WGS84 lat/lng and MGRS coordinates",
       "licenses": [
@@ -1372,13 +1228,7 @@
         {
           "url": "https://registry.npmjs.org/mgrs/-/mgrs-1.0.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "6b035b4cea82c4ad430468da94adf1a9622cb4166037a7f1b0c4a25cbb3dfeca6a5a4176a4085bdabad80854acaf5fed4fb3e17031a3667746f125989f46f260"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1392,7 +1242,7 @@
       "type": "library",
       "name": "wkt-parser",
       "version": "1.5.5",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|wkt-parser@1.5.5",
+      "bom-ref": "openlidarviewer@0.6.0|wkt-parser@1.5.5",
       "description": "wkt-parser ===",
       "licenses": [
         {
@@ -1422,13 +1272,7 @@
         {
           "url": "https://registry.npmjs.org/wkt-parser/-/wkt-parser-1.5.5.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "ff33188bde3fec3edfc5c3929559969fabe738c8f71aae5dd71bd58da60e4bd9fa874a8e27823b61857105661c1f5beaf7eb2e86acd7927d39631e3bcd035420"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1443,7 +1287,7 @@
       "name": "stats",
       "group": "@probe.gl",
       "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/stats@4.1.1",
+      "bom-ref": "openlidarviewer@0.6.0|@probe.gl/stats@4.1.1",
       "description": "Stats object for reporting performance statistics",
       "licenses": [
         {
@@ -1473,13 +1317,7 @@
         {
           "url": "https://registry.npmjs.org/@probe.gl/stats/-/stats-4.1.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e15a40c8c1ceab2752bcf944c87c17684f80908751d379d7f90865c6c9360ff216e0e5660d9808b2f241d5c0f3c8412d71f29c9da11b7d77a23e07a305c793ea"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1494,7 +1332,7 @@
       "name": "geojson",
       "group": "@types",
       "version": "7946.0.16",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@types/geojson@7946.0.16",
+      "bom-ref": "openlidarviewer@0.6.0|@types/geojson@7946.0.16",
       "description": "TypeScript definitions for geojson",
       "licenses": [
         {
@@ -1524,13 +1362,7 @@
         {
           "url": "https://registry.npmjs.org/@types/geojson/-/geojson-7946.0.16.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e82f27a96babde3f7c53afa55c37d351621f82f654f84ba6be91ca7188ee8ca1fbc286322e3dac5267dfd2d461aea33b068854c3b3f3dd90758e3da05bd16f9a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1544,7 +1376,7 @@
       "type": "library",
       "name": "apache-arrow",
       "version": "21.1.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|apache-arrow@21.1.0",
+      "bom-ref": "openlidarviewer@0.6.0|apache-arrow@21.1.0",
       "author": "Apache Software Foundation",
       "description": "Apache Arrow columnar in-memory format",
       "licenses": [
@@ -1575,13 +1407,7 @@
         {
           "url": "https://registry.npmjs.org/apache-arrow/-/apache-arrow-21.1.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "910ad82f1842f8d4d5559e020b3185e8bfee3d53b32660f54f75e06e25273fba1379514e160114bba20a370083929168055a832908af957e11505aaa9d616510"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1596,7 +1422,7 @@
       "name": "env",
       "group": "@probe.gl",
       "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/env@4.1.1",
+      "bom-ref": "openlidarviewer@0.6.0|@probe.gl/env@4.1.1",
       "description": "JavaScript environment detection for browser and Node",
       "licenses": [
         {
@@ -1626,13 +1452,7 @@
         {
           "url": "https://registry.npmjs.org/@probe.gl/env/-/env-4.1.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "fbaf2c78d0cc56c11e811078ee9140fd6b35163cbc6a0705617c73a2b293a323dc0facddfa0679ba1c282dded3cec4b0e98767b3fff6284b335a7f849cd1d36c"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1646,7 +1466,7 @@
       "type": "library",
       "name": "draco3d",
       "version": "1.5.7",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|draco3d@1.5.7",
+      "bom-ref": "openlidarviewer@0.6.0|draco3d@1.5.7",
       "author": "Google Draco Team",
       "description": "Draco is a library for compressing and decompressing 3D geometric meshes and point clouds. It is intended to improve the storage and transmission of 3D graphics.",
       "licenses": [
@@ -1677,13 +1497,7 @@
         {
           "url": "https://registry.npmjs.org/draco3d/-/draco3d-1.5.7.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "9ba5822adfdeac35dcc3eef42095e71bb3376b0c103c0b19bc9197e7363b6de06aa442f0e910c6918554d16e37005c727b8a436798b62dbc9cfcd346ab08d455"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1698,7 +1512,7 @@
       "name": "types",
       "group": "@math.gl",
       "version": "4.1.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@math.gl/types@4.1.0",
+      "bom-ref": "openlidarviewer@0.6.0|@math.gl/types@4.1.0",
       "description": "TypeScript types for math.gl",
       "licenses": [
         {
@@ -1728,13 +1542,7 @@
         {
           "url": "https://registry.npmjs.org/@math.gl/types/-/types-4.1.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "72561974772646f33354ae5f8de0e44251d4cd741235d67bb38c4ea82de724f833e02fd366451e713a3d612e0faee66ab4375afda8387ab9dd3f43089f8d1d18"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1748,7 +1556,7 @@
       "type": "library",
       "name": "ktx-parse",
       "version": "0.7.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|ktx-parse@0.7.1",
+      "bom-ref": "openlidarviewer@0.6.0|ktx-parse@0.7.1",
       "author": "Don McCurdy",
       "description": "KTX 2.0 (.ktx2) parser and serializer.",
       "licenses": [
@@ -1779,13 +1587,7 @@
         {
           "url": "https://registry.npmjs.org/ktx-parse/-/ktx-parse-0.7.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "15e037839ea4b1d14dc235c926c73508273b728f802580e9ea2a48a7cefccd9d9b53c91644e6ad2d87f7f53404778fd745252f057a2f43c81a54a58f5ec08b11"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1799,7 +1601,7 @@
       "type": "library",
       "name": "texture-compressor",
       "version": "1.0.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|texture-compressor@1.0.2",
+      "bom-ref": "openlidarviewer@0.6.0|texture-compressor@1.0.2",
       "author": "Tim van Scherpenzeel",
       "description": "CLI tool for texture compression using ASTC, ETC, PVRTC and S3TC in a KTX container.",
       "licenses": [
@@ -1815,13 +1617,7 @@
         {
           "url": "https://registry.npmjs.org/texture-compressor/-/texture-compressor-1.0.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "752b55828690d75980e61b49f91cd9e75671219a8d3a058a008bed8cbad6d409624102c29ab0ea373419f0987dd5879a950f790d7b7830476e2f32666ecea58a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1836,7 +1632,7 @@
       "name": "helpers",
       "group": "@swc",
       "version": "0.5.23",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@swc/helpers@0.5.23",
+      "bom-ref": "openlidarviewer@0.6.0|@swc/helpers@0.5.23",
       "author": "강동윤",
       "description": "External helpers for the swc project.",
       "licenses": [
@@ -1867,13 +1663,7 @@
         {
           "url": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.23.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "e654ac30e4d751178f8250dfbee01052a9067a4f47836924b0e61acb69b4f9747ef9bd8d5982ffe2c5b2baf54122cf282a725ac64762f7085a2ffb2a375dda7f"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1888,7 +1678,7 @@
       "name": "command-line-args",
       "group": "@types",
       "version": "5.2.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@types/command-line-args@5.2.3",
+      "bom-ref": "openlidarviewer@0.6.0|@types/command-line-args@5.2.3",
       "description": "TypeScript definitions for command-line-args",
       "licenses": [
         {
@@ -1918,13 +1708,7 @@
         {
           "url": "https://registry.npmjs.org/@types/command-line-args/-/command-line-args-5.2.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "bafd1a1ba47463c58764b4da999c2d7ec0cb5519ce6be9fe9f9ac4bc558be4d6b9819f15d9379a6ff76e0cf173208221b3daa2cc3a5c6af0aeb022c966eeb62b"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1939,7 +1723,7 @@
       "name": "command-line-usage",
       "group": "@types",
       "version": "5.0.4",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@types/command-line-usage@5.0.4",
+      "bom-ref": "openlidarviewer@0.6.0|@types/command-line-usage@5.0.4",
       "description": "TypeScript definitions for command-line-usage",
       "licenses": [
         {
@@ -1969,13 +1753,7 @@
         {
           "url": "https://registry.npmjs.org/@types/command-line-usage/-/command-line-usage-5.0.4.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "07047928fdc4b3f09286dd31a817145d2dea0805155f0a512ac576f9aaf179beb96ad6acb971bd2f2902f406f5d02c37b36ada1fdd99a8e7882da41bb01d800a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -1990,7 +1768,7 @@
       "name": "node",
       "group": "@types",
       "version": "24.13.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|@types/node@24.13.2",
+      "bom-ref": "openlidarviewer@0.6.0|@types/node@24.13.2",
       "description": "TypeScript definitions for node",
       "licenses": [
         {
@@ -2020,13 +1798,7 @@
         {
           "url": "https://registry.npmjs.org/@types/node/-/node-24.13.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "7d16b4f6465382ef28ef52857038d416e73b17e7446d96199a42349a0e5805346cd3230a8d81ecabf734bab0ca7836fe0f9a9581739d15cbaef8364f28e213c0"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2040,7 +1812,7 @@
       "type": "library",
       "name": "command-line-args",
       "version": "6.0.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|command-line-args@6.0.2",
+      "bom-ref": "openlidarviewer@0.6.0|command-line-args@6.0.2",
       "author": "Lloyd Brookes",
       "description": "A mature, feature-complete library to parse command-line options.",
       "licenses": [
@@ -2071,13 +1843,7 @@
         {
           "url": "https://registry.npmjs.org/command-line-args/-/command-line-args-6.0.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "0088d8571ad5f57ef9d8b98f0cb6d562ff1a302b873d22d9257128daaa3fc497eff8d621699e2c312174d6b33e8073da320bcf3349790ff17e431fa2d967d299"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2091,7 +1857,7 @@
       "type": "library",
       "name": "command-line-usage",
       "version": "7.0.4",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|command-line-usage@7.0.4",
+      "bom-ref": "openlidarviewer@0.6.0|command-line-usage@7.0.4",
       "author": "Lloyd Brookes",
       "description": "Generates command-line usage information",
       "licenses": [
@@ -2122,13 +1888,7 @@
         {
           "url": "https://registry.npmjs.org/command-line-usage/-/command-line-usage-7.0.4.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "f3951dbf34cdc7fface429128019bfd21ccff344451c06bb3ec7de0031397b3645dee1f3dff4ea8fd8082864fd3d3b69c9c73751aeb84f4a15ba519f2b1cdfaa"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2142,7 +1902,7 @@
       "type": "library",
       "name": "flatbuffers",
       "version": "25.9.23",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|flatbuffers@25.9.23",
+      "bom-ref": "openlidarviewer@0.6.0|flatbuffers@25.9.23",
       "author": "The FlatBuffers project",
       "description": "Memory Efficient Serialization Library",
       "licenses": [
@@ -2173,13 +1933,7 @@
         {
           "url": "https://registry.npmjs.org/flatbuffers/-/flatbuffers-25.9.23.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "308d6ab3b2e8e12cb0d043b3525d318ecda5b287aa164bb8e0aa6781f21db87058bf39bc876fbb2bc60c421d49b55555ad4be12e9370a958b80c445e8142613d"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2193,7 +1947,7 @@
       "type": "library",
       "name": "json-bignum",
       "version": "0.0.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|json-bignum@0.0.3",
+      "bom-ref": "openlidarviewer@0.6.0|json-bignum@0.0.3",
       "author": "Datalanche, Inc.",
       "description": "Node.js JSON replacement which handles 64-bit integers and arbitrary-precision decimals.",
       "licenses": [
@@ -2225,13 +1979,7 @@
         {
           "url": "https://registry.npmjs.org/json-bignum/-/json-bignum-0.0.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "d961f25e3dce7c74a0372bb30db4b1235c368e0c398245925a14bb420e1b597c759cb9378e76f07d4792d0f49b6b7233a53516747c4189e10b5335d18d0076ce"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2245,7 +1993,7 @@
       "type": "library",
       "name": "tslib",
       "version": "2.8.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|tslib@2.8.1",
+      "bom-ref": "openlidarviewer@0.6.0|tslib@2.8.1",
       "author": "Microsoft Corp.",
       "description": "Runtime library for TypeScript helper functions",
       "licenses": [
@@ -2276,13 +2024,7 @@
         {
           "url": "https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a0916ef781d06fe29576e49440bef09e99aa9df98bb0e03f9c087a6fa107d30084a0ad3f98f79753a737c0a0d5f373243ae1cf447b525ca294f7d2016b34bfdb"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2296,7 +2038,7 @@
       "type": "library",
       "name": "argparse",
       "version": "1.0.10",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|argparse@1.0.10",
+      "bom-ref": "openlidarviewer@0.6.0|argparse@1.0.10",
       "description": "Very powerful CLI arguments parser. Native port of argparse - python's options parsing library",
       "licenses": [
         {
@@ -2326,13 +2068,7 @@
         {
           "url": "https://registry.npmjs.org/argparse/-/argparse-1.0.10.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a39468cbab4d1b848bfc53a408037a4738e26a4652db944b605adc32db49a9b75df015ab9c0f9f1b3e7b88de4f6f4ea9bc11af979810d01e3c74996c957be84e"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2346,7 +2082,7 @@
       "type": "library",
       "name": "image-size",
       "version": "0.7.5",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|image-size@0.7.5",
+      "bom-ref": "openlidarviewer@0.6.0|image-size@0.7.5",
       "author": "netroy",
       "description": "get dimensions of any image file",
       "licenses": [
@@ -2377,13 +2113,7 @@
         {
           "url": "https://registry.npmjs.org/image-size/-/image-size-0.7.5.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "1e2caffa65c77c510fecbcd42ff96583d470171c58fa8f4ddc954b21e1b913b88520501a971bd153d519b6105d6031159f31cc8239ca24f3e96b2e4159fd60f6"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2397,7 +2127,7 @@
       "type": "library",
       "name": "undici-types",
       "version": "7.18.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|undici-types@7.18.2",
+      "bom-ref": "openlidarviewer@0.6.0|undici-types@7.18.2",
       "description": "A stand-alone types package for Undici",
       "licenses": [
         {
@@ -2427,13 +2157,7 @@
         {
           "url": "https://registry.npmjs.org/undici-types/-/undici-types-7.18.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "02cb82cdf7c61c9c9b49a46b9abe5e1ebf359b0254de48f0e8cfaea6b5af09788d78df52386c10dc99fc8dbf26dd9ea2cd58249e7d51d054c21003f642b2d8ff"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2447,7 +2171,7 @@
       "type": "library",
       "name": "array-back",
       "version": "6.2.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|array-back@6.2.3",
+      "bom-ref": "openlidarviewer@0.6.0|array-back@6.2.3",
       "author": "Lloyd Brookes",
       "description": "Guarantees an array back",
       "licenses": [
@@ -2478,13 +2202,7 @@
         {
           "url": "https://registry.npmjs.org/array-back/-/array-back-6.2.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "4860ef9a0e904d8893c4206461599385ca1aebbb8b977e69cb344776908604e72a172e81b709e986814f93b2e126c843f989352addf958659e64f4e0c11e0587"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2498,7 +2216,7 @@
       "type": "library",
       "name": "find-replace",
       "version": "5.0.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|find-replace@5.0.2",
+      "bom-ref": "openlidarviewer@0.6.0|find-replace@5.0.2",
       "author": "Lloyd Brookes",
       "description": "Replace or remove multiple items in an array.",
       "licenses": [
@@ -2529,13 +2247,7 @@
         {
           "url": "https://registry.npmjs.org/find-replace/-/find-replace-5.0.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "638e410221379b3d90b2b3767dbe5012d3b8a9be3835c4bb7a7ff4cbd3c456c837e751ec2de55c94ff103cc1fbf4b7bdb07debb39452c09bbdf56d163d93b8dd"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2549,7 +2261,7 @@
       "type": "library",
       "name": "lodash.camelcase",
       "version": "4.3.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|lodash.camelcase@4.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|lodash.camelcase@4.3.0",
       "author": "John-David Dalton",
       "description": "The lodash method `_.camelCase` exported as a module.",
       "licenses": [
@@ -2580,13 +2292,7 @@
         {
           "url": "https://registry.npmjs.org/lodash.camelcase/-/lodash.camelcase-4.3.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "4f0b849c29f16dcdeb02f85ffcb6c6eed2540f386a5f2167bf776dccb38f8021bf84e0cbed6167b1bc24b640fbc9457446bade3ff9753c02eafd84a0e95be394"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2600,7 +2306,7 @@
       "type": "library",
       "name": "typical",
       "version": "7.3.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|typical@7.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|typical@7.3.0",
       "author": "Lloyd Brookes",
       "description": "Isomorphic, functional type-checking for Javascript",
       "licenses": [
@@ -2631,13 +2337,7 @@
         {
           "url": "https://registry.npmjs.org/typical/-/typical-7.3.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "c9ae2683fdf4be6f833967c183860ade3d960fa4d6b519026dab0e26be340ac79810dcc251bcbfeeb22f5c0f7d246b101de3712db9d77722cbc4a4afded6ae17"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2651,7 +2351,7 @@
       "type": "library",
       "name": "chalk-template",
       "version": "0.4.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|chalk-template@0.4.0",
+      "bom-ref": "openlidarviewer@0.6.0|chalk-template@0.4.0",
       "description": "Terminal string styling with tagged template literals",
       "licenses": [
         {
@@ -2681,13 +2381,7 @@
         {
           "url": "https://registry.npmjs.org/chalk-template/-/chalk-template-0.4.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "fe086b82685f63c45a49d7a8e3784d5f1a681c0b7175bb245078cfa5fa94586b6d160c9c52160f1b1dd86410a7502bce6bb0e88af9f521979cdc31061683202e"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2701,7 +2395,7 @@
       "type": "library",
       "name": "table-layout",
       "version": "4.1.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|table-layout@4.1.1",
+      "bom-ref": "openlidarviewer@0.6.0|table-layout@4.1.1",
       "author": "Lloyd Brookes",
       "description": "Stylable text tables, handling ansi colour. Useful for console output.",
       "licenses": [
@@ -2732,13 +2426,7 @@
         {
           "url": "https://registry.npmjs.org/table-layout/-/table-layout-4.1.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "88ae7f621671ab918ee73f306f46d8d77d7bb83177663a616b440514b03cfedac0a222db403d0751b31eb046b1cb35200f18b642571b33c22fa8e9448e0a1704"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2752,7 +2440,7 @@
       "type": "library",
       "name": "sprintf-js",
       "version": "1.0.3",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|sprintf-js@1.0.3",
+      "bom-ref": "openlidarviewer@0.6.0|sprintf-js@1.0.3",
       "author": "Alexandru Marasteanu",
       "description": "JavaScript sprintf implementation",
       "licenses": [
@@ -2783,13 +2471,7 @@
         {
           "url": "https://registry.npmjs.org/sprintf-js/-/sprintf-js-1.0.3.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "0fd70f824bcb955deddc8ccbd03d182ef180f40864e0f72f57051b3747521abd5a3f436bb780049d351bb86beab840b4980eb81aab757f38ab951b3989b5f1f2"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2803,7 +2485,7 @@
       "type": "library",
       "name": "chalk",
       "version": "4.1.2",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|chalk@4.1.2",
+      "bom-ref": "openlidarviewer@0.6.0|chalk@4.1.2",
       "description": "Terminal string styling done right",
       "licenses": [
         {
@@ -2833,13 +2515,7 @@
         {
           "url": "https://registry.npmjs.org/chalk/-/chalk-4.1.2.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a0a9db845c91217a54b9ecfc881326c846b89db8f820e432ba173fc32f6463bfd654f73020ef5503aebc3eef1190eefed06efa48b44e7b2c3d0a9434eb58b898"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2853,7 +2529,7 @@
       "type": "library",
       "name": "wordwrapjs",
       "version": "5.1.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|wordwrapjs@5.1.1",
+      "bom-ref": "openlidarviewer@0.6.0|wordwrapjs@5.1.1",
       "author": "Lloyd Brookes",
       "description": "Word-wrapping for javascript.",
       "licenses": [
@@ -2884,13 +2560,7 @@
         {
           "url": "https://registry.npmjs.org/wordwrapjs/-/wordwrapjs-5.1.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "d32c1e21b908349a1d936ee05fd2c118ccf241d0436a7decfdd1008b004e8fe31fd0f3f258bebfae291a964bfc11e0f413c8e6e28e515c43ab1533f73576e126"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2904,7 +2574,7 @@
       "type": "library",
       "name": "ansi-styles",
       "version": "4.3.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|ansi-styles@4.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|ansi-styles@4.3.0",
       "author": "Sindre Sorhus",
       "description": "ANSI escape codes for styling strings in the terminal",
       "licenses": [
@@ -2935,13 +2605,7 @@
         {
           "url": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-4.3.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "cdb07dac22404f5adb8e25436f686a2851cd60bc60b64f0d511c59dc86700f717a36dc5b5d94029e74a2d4b931f880e885d3e5169db6db05402c885e64941212"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -2955,7 +2619,7 @@
       "type": "library",
       "name": "supports-color",
       "version": "7.2.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|supports-color@7.2.0",
+      "bom-ref": "openlidarviewer@0.6.0|supports-color@7.2.0",
       "author": "Sindre Sorhus",
       "description": "Detect whether a terminal supports color",
       "licenses": [
@@ -2986,13 +2650,7 @@
         {
           "url": "https://registry.npmjs.org/supports-color/-/supports-color-7.2.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "aa9080bd197db2db8e1ef78ab27ec79dc251befe74d6a21a70acd094effe2f0c5cf7ed2adb02f2bf80dfbedf34fc33e7da9a8e06c25d0e2a205c647df8ebf047"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -3006,7 +2664,7 @@
       "type": "library",
       "name": "color-convert",
       "version": "2.0.1",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|color-convert@2.0.1",
+      "bom-ref": "openlidarviewer@0.6.0|color-convert@2.0.1",
       "author": "Heather Arthur",
       "description": "Plain color conversion functions",
       "licenses": [
@@ -3037,13 +2695,7 @@
         {
           "url": "https://registry.npmjs.org/color-convert/-/color-convert-2.0.1.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "4511023ec8fb8aeff16f9a0a61cb051d2a6914d9ec8ffe763954d129be333f9a275f0545df3566993a0d70e7c60be0910e97cafd4e7ce1f320dfc64709a12529"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -3057,7 +2709,7 @@
       "type": "library",
       "name": "has-flag",
       "version": "4.0.0",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|has-flag@4.0.0",
+      "bom-ref": "openlidarviewer@0.6.0|has-flag@4.0.0",
       "author": "Sindre Sorhus",
       "description": "Check if argv has a specific flag",
       "licenses": [
@@ -3088,13 +2740,7 @@
         {
           "url": "https://registry.npmjs.org/has-flag/-/has-flag-4.0.0.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "1329094ff4352a34d672da698080207d23b4b4a56e6548e180caf5ee4a93ba6325e807efdc421295e53ba99533a170c54c01d30c2e0d3a81bf67153712f94c3d"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -3108,7 +2754,7 @@
       "type": "library",
       "name": "color-name",
       "version": "1.1.4",
-      "bom-ref": "openlidarviewer@0.6.0-alpha.3|color-name@1.1.4",
+      "bom-ref": "openlidarviewer@0.6.0|color-name@1.1.4",
       "author": "DY",
       "description": "A list of color names and its values",
       "licenses": [
@@ -3139,13 +2785,7 @@
         {
           "url": "https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz",
           "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "74ecbedc0b96ddadb035b64722e319a537208c6b8b53fb812ffb9b71917d3976c3a3c7dfe0ef32569e417f479f4bcb84a18a39ab8171edd63d3a04065e002c40"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+          "comment": "as detected from npm-ls property \"resolved\""
         }
       ],
       "properties": [
@@ -3158,347 +2798,347 @@
   ],
   "dependencies": [
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3",
+      "ref": "openlidarviewer@0.6.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@fontsource-variable/inter@5.2.8",
-        "openlidarviewer@0.6.0-alpha.3|@fontsource/jetbrains-mono@5.2.8",
-        "openlidarviewer@0.6.0-alpha.3|@fontsource/manrope@5.2.8",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/gltf@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/obj@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/ply@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|laz-perf@0.0.7",
-        "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1",
-        "openlidarviewer@0.6.0-alpha.3|proj4@2.20.9",
-        "openlidarviewer@0.6.0-alpha.3|three@0.184.0"
+        "openlidarviewer@0.6.0|@fontsource-variable/inter@5.2.8",
+        "openlidarviewer@0.6.0|@fontsource/jetbrains-mono@5.2.8",
+        "openlidarviewer@0.6.0|@fontsource/manrope@5.2.8",
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/gltf@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/obj@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/ply@4.4.3",
+        "openlidarviewer@0.6.0|laz-perf@0.0.7",
+        "openlidarviewer@0.6.0|pdf-lib@1.17.1",
+        "openlidarviewer@0.6.0|proj4@2.20.9",
+        "openlidarviewer@0.6.0|three@0.184.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@fontsource-variable/inter@5.2.8"
+      "ref": "openlidarviewer@0.6.0|@fontsource-variable/inter@5.2.8"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@fontsource/jetbrains-mono@5.2.8"
+      "ref": "openlidarviewer@0.6.0|@fontsource/jetbrains-mono@5.2.8"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@fontsource/manrope@5.2.8"
+      "ref": "openlidarviewer@0.6.0|@fontsource/manrope@5.2.8"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@probe.gl/log@4.1.1"
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.6.0|@probe.gl/log@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/gltf@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/gltf@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/draco@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/images@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/textures@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@math.gl/core@4.1.0"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/draco@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/images@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/textures@4.4.3",
+        "openlidarviewer@0.6.0|@math.gl/core@4.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/obj@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/obj@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/ply@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/ply@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|laz-perf@0.0.7"
+      "ref": "openlidarviewer@0.6.0|laz-perf@0.0.7"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1",
+      "ref": "openlidarviewer@0.6.0|pdf-lib@1.17.1",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@pdf-lib/standard-fonts@1.0.0",
-        "openlidarviewer@0.6.0-alpha.3|@pdf-lib/upng@1.0.1",
-        "openlidarviewer@0.6.0-alpha.3|pako@1.0.11",
-        "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1|tslib@1.14.1"
+        "openlidarviewer@0.6.0|@pdf-lib/standard-fonts@1.0.0",
+        "openlidarviewer@0.6.0|@pdf-lib/upng@1.0.1",
+        "openlidarviewer@0.6.0|pako@1.0.11",
+        "openlidarviewer@0.6.0|pdf-lib@1.17.1|tslib@1.14.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|pdf-lib@1.17.1|tslib@1.14.1"
+      "ref": "openlidarviewer@0.6.0|pdf-lib@1.17.1|tslib@1.14.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|proj4@2.20.9",
+      "ref": "openlidarviewer@0.6.0|proj4@2.20.9",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|mgrs@1.0.0",
-        "openlidarviewer@0.6.0-alpha.3|wkt-parser@1.5.5"
+        "openlidarviewer@0.6.0|mgrs@1.0.0",
+        "openlidarviewer@0.6.0|wkt-parser@1.5.5"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|three@0.184.0"
+      "ref": "openlidarviewer@0.6.0|three@0.184.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@probe.gl/log@4.1.1",
-        "openlidarviewer@0.6.0-alpha.3|@probe.gl/stats@4.1.1"
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.6.0|@probe.gl/log@4.1.1",
+        "openlidarviewer@0.6.0|@probe.gl/stats@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@types/geojson@7946.0.16",
-        "openlidarviewer@0.6.0-alpha.3|apache-arrow@21.1.0"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@types/geojson@7946.0.16",
+        "openlidarviewer@0.6.0|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@types/geojson@7946.0.16",
-        "openlidarviewer@0.6.0-alpha.3|apache-arrow@21.1.0"
+        "openlidarviewer@0.6.0|@types/geojson@7946.0.16",
+        "openlidarviewer@0.6.0|apache-arrow@21.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/log@4.1.1",
+      "ref": "openlidarviewer@0.6.0|@probe.gl/log@4.1.1",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@probe.gl/env@4.1.1"
+        "openlidarviewer@0.6.0|@probe.gl/env@4.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/draco@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/draco@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|draco3d@1.5.7"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.6.0|draco3d@1.5.7"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/images@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/images@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@loaders.gl/textures@4.4.3",
+      "ref": "openlidarviewer@0.6.0|@loaders.gl/textures@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/core@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/images@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/loader-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/schema@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@loaders.gl/worker-utils@4.4.3",
-        "openlidarviewer@0.6.0-alpha.3|@math.gl/types@4.1.0",
-        "openlidarviewer@0.6.0-alpha.3|ktx-parse@0.7.1",
-        "openlidarviewer@0.6.0-alpha.3|texture-compressor@1.0.2"
+        "openlidarviewer@0.6.0|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/images@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/loader-utils@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/schema@4.4.3",
+        "openlidarviewer@0.6.0|@loaders.gl/worker-utils@4.4.3",
+        "openlidarviewer@0.6.0|@math.gl/types@4.1.0",
+        "openlidarviewer@0.6.0|ktx-parse@0.7.1",
+        "openlidarviewer@0.6.0|texture-compressor@1.0.2"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@math.gl/core@4.1.0",
+      "ref": "openlidarviewer@0.6.0|@math.gl/core@4.1.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@math.gl/types@4.1.0"
+        "openlidarviewer@0.6.0|@math.gl/types@4.1.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@pdf-lib/standard-fonts@1.0.0",
+      "ref": "openlidarviewer@0.6.0|@pdf-lib/standard-fonts@1.0.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|pako@1.0.11"
+        "openlidarviewer@0.6.0|pako@1.0.11"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@pdf-lib/upng@1.0.1",
+      "ref": "openlidarviewer@0.6.0|@pdf-lib/upng@1.0.1",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|pako@1.0.11"
+        "openlidarviewer@0.6.0|pako@1.0.11"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|pako@1.0.11"
+      "ref": "openlidarviewer@0.6.0|pako@1.0.11"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|mgrs@1.0.0"
+      "ref": "openlidarviewer@0.6.0|mgrs@1.0.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|wkt-parser@1.5.5"
+      "ref": "openlidarviewer@0.6.0|wkt-parser@1.5.5"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/stats@4.1.1"
+      "ref": "openlidarviewer@0.6.0|@probe.gl/stats@4.1.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@types/geojson@7946.0.16"
+      "ref": "openlidarviewer@0.6.0|@types/geojson@7946.0.16"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|apache-arrow@21.1.0",
+      "ref": "openlidarviewer@0.6.0|apache-arrow@21.1.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|@swc/helpers@0.5.23",
-        "openlidarviewer@0.6.0-alpha.3|@types/command-line-args@5.2.3",
-        "openlidarviewer@0.6.0-alpha.3|@types/command-line-usage@5.0.4",
-        "openlidarviewer@0.6.0-alpha.3|@types/node@24.13.2",
-        "openlidarviewer@0.6.0-alpha.3|command-line-args@6.0.2",
-        "openlidarviewer@0.6.0-alpha.3|command-line-usage@7.0.4",
-        "openlidarviewer@0.6.0-alpha.3|flatbuffers@25.9.23",
-        "openlidarviewer@0.6.0-alpha.3|json-bignum@0.0.3",
-        "openlidarviewer@0.6.0-alpha.3|tslib@2.8.1"
+        "openlidarviewer@0.6.0|@swc/helpers@0.5.23",
+        "openlidarviewer@0.6.0|@types/command-line-args@5.2.3",
+        "openlidarviewer@0.6.0|@types/command-line-usage@5.0.4",
+        "openlidarviewer@0.6.0|@types/node@24.13.2",
+        "openlidarviewer@0.6.0|command-line-args@6.0.2",
+        "openlidarviewer@0.6.0|command-line-usage@7.0.4",
+        "openlidarviewer@0.6.0|flatbuffers@25.9.23",
+        "openlidarviewer@0.6.0|json-bignum@0.0.3",
+        "openlidarviewer@0.6.0|tslib@2.8.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@probe.gl/env@4.1.1"
+      "ref": "openlidarviewer@0.6.0|@probe.gl/env@4.1.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|draco3d@1.5.7"
+      "ref": "openlidarviewer@0.6.0|draco3d@1.5.7"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@math.gl/types@4.1.0"
+      "ref": "openlidarviewer@0.6.0|@math.gl/types@4.1.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|ktx-parse@0.7.1"
+      "ref": "openlidarviewer@0.6.0|ktx-parse@0.7.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|texture-compressor@1.0.2",
+      "ref": "openlidarviewer@0.6.0|texture-compressor@1.0.2",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|argparse@1.0.10",
-        "openlidarviewer@0.6.0-alpha.3|image-size@0.7.5"
+        "openlidarviewer@0.6.0|argparse@1.0.10",
+        "openlidarviewer@0.6.0|image-size@0.7.5"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@swc/helpers@0.5.23",
+      "ref": "openlidarviewer@0.6.0|@swc/helpers@0.5.23",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|tslib@2.8.1"
+        "openlidarviewer@0.6.0|tslib@2.8.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@types/command-line-args@5.2.3"
+      "ref": "openlidarviewer@0.6.0|@types/command-line-args@5.2.3"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@types/command-line-usage@5.0.4"
+      "ref": "openlidarviewer@0.6.0|@types/command-line-usage@5.0.4"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|@types/node@24.13.2",
+      "ref": "openlidarviewer@0.6.0|@types/node@24.13.2",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|undici-types@7.18.2"
+        "openlidarviewer@0.6.0|undici-types@7.18.2"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|command-line-args@6.0.2",
+      "ref": "openlidarviewer@0.6.0|command-line-args@6.0.2",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|array-back@6.2.3",
-        "openlidarviewer@0.6.0-alpha.3|find-replace@5.0.2",
-        "openlidarviewer@0.6.0-alpha.3|lodash.camelcase@4.3.0",
-        "openlidarviewer@0.6.0-alpha.3|typical@7.3.0"
+        "openlidarviewer@0.6.0|array-back@6.2.3",
+        "openlidarviewer@0.6.0|find-replace@5.0.2",
+        "openlidarviewer@0.6.0|lodash.camelcase@4.3.0",
+        "openlidarviewer@0.6.0|typical@7.3.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|command-line-usage@7.0.4",
+      "ref": "openlidarviewer@0.6.0|command-line-usage@7.0.4",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|array-back@6.2.3",
-        "openlidarviewer@0.6.0-alpha.3|chalk-template@0.4.0",
-        "openlidarviewer@0.6.0-alpha.3|table-layout@4.1.1",
-        "openlidarviewer@0.6.0-alpha.3|typical@7.3.0"
+        "openlidarviewer@0.6.0|array-back@6.2.3",
+        "openlidarviewer@0.6.0|chalk-template@0.4.0",
+        "openlidarviewer@0.6.0|table-layout@4.1.1",
+        "openlidarviewer@0.6.0|typical@7.3.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|flatbuffers@25.9.23"
+      "ref": "openlidarviewer@0.6.0|flatbuffers@25.9.23"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|json-bignum@0.0.3"
+      "ref": "openlidarviewer@0.6.0|json-bignum@0.0.3"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|tslib@2.8.1"
+      "ref": "openlidarviewer@0.6.0|tslib@2.8.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|argparse@1.0.10",
+      "ref": "openlidarviewer@0.6.0|argparse@1.0.10",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|sprintf-js@1.0.3"
+        "openlidarviewer@0.6.0|sprintf-js@1.0.3"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|image-size@0.7.5"
+      "ref": "openlidarviewer@0.6.0|image-size@0.7.5"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|undici-types@7.18.2"
+      "ref": "openlidarviewer@0.6.0|undici-types@7.18.2"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|array-back@6.2.3"
+      "ref": "openlidarviewer@0.6.0|array-back@6.2.3"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|find-replace@5.0.2"
+      "ref": "openlidarviewer@0.6.0|find-replace@5.0.2"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|lodash.camelcase@4.3.0"
+      "ref": "openlidarviewer@0.6.0|lodash.camelcase@4.3.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|typical@7.3.0"
+      "ref": "openlidarviewer@0.6.0|typical@7.3.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|chalk-template@0.4.0",
+      "ref": "openlidarviewer@0.6.0|chalk-template@0.4.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|chalk@4.1.2"
+        "openlidarviewer@0.6.0|chalk@4.1.2"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|table-layout@4.1.1",
+      "ref": "openlidarviewer@0.6.0|table-layout@4.1.1",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|array-back@6.2.3",
-        "openlidarviewer@0.6.0-alpha.3|wordwrapjs@5.1.1"
+        "openlidarviewer@0.6.0|array-back@6.2.3",
+        "openlidarviewer@0.6.0|wordwrapjs@5.1.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|sprintf-js@1.0.3"
+      "ref": "openlidarviewer@0.6.0|sprintf-js@1.0.3"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|chalk@4.1.2",
+      "ref": "openlidarviewer@0.6.0|chalk@4.1.2",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|ansi-styles@4.3.0",
-        "openlidarviewer@0.6.0-alpha.3|supports-color@7.2.0"
+        "openlidarviewer@0.6.0|ansi-styles@4.3.0",
+        "openlidarviewer@0.6.0|supports-color@7.2.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|wordwrapjs@5.1.1"
+      "ref": "openlidarviewer@0.6.0|wordwrapjs@5.1.1"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|ansi-styles@4.3.0",
+      "ref": "openlidarviewer@0.6.0|ansi-styles@4.3.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|color-convert@2.0.1"
+        "openlidarviewer@0.6.0|color-convert@2.0.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|supports-color@7.2.0",
+      "ref": "openlidarviewer@0.6.0|supports-color@7.2.0",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|has-flag@4.0.0"
+        "openlidarviewer@0.6.0|has-flag@4.0.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|color-convert@2.0.1",
+      "ref": "openlidarviewer@0.6.0|color-convert@2.0.1",
       "dependsOn": [
-        "openlidarviewer@0.6.0-alpha.3|color-name@1.1.4"
+        "openlidarviewer@0.6.0|color-name@1.1.4"
       ]
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|has-flag@4.0.0"
+      "ref": "openlidarviewer@0.6.0|has-flag@4.0.0"
     },
     {
-      "ref": "openlidarviewer@0.6.0-alpha.3|color-name@1.1.4"
+      "ref": "openlidarviewer@0.6.0|color-name@1.1.4"
     }
   ]
 }

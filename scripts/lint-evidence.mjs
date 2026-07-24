@@ -5,8 +5,8 @@
  * `lint:release-sync` checks that the evidence documents agree with each
  * other, which three documents copying one wrong number do perfectly. A
  * release shipped with its unit, export and terrain counts all wrong and its
- * total right — the total came from a script, the components were typed in —
- * and no check in the repository could see it. A reviewer added them up.
+ * total right, since the total came from a script and the components were
+ * typed in, and no check in the repository could see it.
  *
  * So this compares every published figure against `docs/validation/test-evidence.json`,
  * which is machine-derived from a passing gate run, and separately checks that
@@ -102,12 +102,26 @@ for (const k of ['liveEntryKiB', 'ceilingKiB']) {
  * matches published claims and not incidental prose. A document that mentions
  * no figure at all is fine; one that mentions a WRONG figure is not.
  */
+// Version-DERIVED, never hardcoded: the four truth documents are renamed
+// at each release (…_v0.6.0-alpha.3 → …_v0.6.0), and a hardcoded list silently
+// went stale at the stable promotion — the lint then skipped every renamed
+// file (existsSync → continue) and passed while checking nothing. Reading the
+// version from package.json ties the list to what actually ships, and the
+// zero-documents guard below turns a vacuous pass into a failure.
+const VERSION = JSON.parse(read('package.json')).version;
 const DOCS = [
-  'REPRODUCIBILITY_v0.6.0-alpha.3.md',
-  'VALIDATION_REPORT_v0.6.0-alpha.3.md',
-  'READINESS_REPORT_v0.6.0-alpha.3.md',
-  'KNOWN_LIMITATIONS_v0.6.0-alpha.3.md',
+  `REPRODUCIBILITY_v${VERSION}.md`,
+  `VALIDATION_REPORT_v${VERSION}.md`,
+  `READINESS_REPORT_v${VERSION}.md`,
+  `KNOWN_LIMITATIONS_v${VERSION}.md`,
+  `RELEASE_NOTES_v${VERSION}.md`,
+  'ARTIFACT_EVALUATION.md',
 ];
+if (DOCS.every((d) => !existsSync(resolve(ROOT, d)))) {
+  problems.push(
+    `no release evidence documents exist for v${VERSION} — the figure guard would pass vacuously. Expected at least one of: ${DOCS.join(', ')}.`,
+  );
+}
 
 const parseCount = (s) => Number(s.replace(/,/g, ''));
 
@@ -163,8 +177,8 @@ for (const doc of DOCS) {
 }
 
 // The live entry size, wherever a document states one. Three documents said
-// 699 KiB for a build that produced 715 — the same defect as the test counts,
-// in a different figure, found by the same reviewer.
+// 699 KiB for a build that produced 715: the same defect as the test counts,
+// in a different figure.
 if (evidence.bundle?.liveEntryKiB) {
   const actual = evidence.bundle.liveEntryKiB;
   for (const doc of DOCS) {

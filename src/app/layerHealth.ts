@@ -59,6 +59,8 @@ export interface LayerHealthInput {
   readonly frameOffset: readonly [number, number, number] | null;
   /** Mount-precision estimate in millimetres; null = not applicable/unknown. */
   readonly precisionMm: number | null;
+  /** True when this is the only loaded layer — it anchors its own frame. */
+  readonly soleLayer?: boolean;
   /** What the precision figure is grounded in, or null when none exists. */
   readonly precisionBasis: 'projected-linear-unit' | 'geographic' | 'unknown' | null;
   /** True while the layer streams (partial residency). */
@@ -107,13 +109,22 @@ const CRS_SOURCE_LABELS: Readonly<Record<string, string>> = {
  * user nothing about what the app will DO; the clause after the dash is the
  * behaviour they are watching, so the row explains rather than labels.
  */
-function compatibilityRow(c: LayerHealthCompatibility | null): LayerHealthRow {
+function compatibilityRow(
+  c: LayerHealthCompatibility | null,
+  soleLayer: boolean,
+): LayerHealthRow {
   const label = 'Compatibility';
   switch (c) {
     case 'verified':
+      // A lone layer is verified by construction — it IS the frame, so it
+      // shares nothing with a project it defines. Saying "shares the project
+      // vertical reference" beside an undeclared datum reads as a claim it is
+      // not making. Multi-layer verified genuinely shares a common frame.
       return {
         label,
-        value: 'verified — shares the project horizontal and vertical reference',
+        value: soleLayer
+          ? 'verified — single layer, self-consistent on its own frame'
+          : 'verified — shares the project horizontal and vertical reference',
         status: 'ok',
       };
     case 'horizontal-only':
@@ -156,8 +167,15 @@ function formatMm(mm: number): string {
 function precisionRow(
   mm: number | null,
   basis: LayerHealthInput['precisionBasis'],
+  identityPlacement: boolean,
 ): LayerHealthRow {
   const label = 'Mount precision';
+  // No offset applied, no precision spent — a self-anchored layer sits on its
+  // own origin. This precedes the units check: "unknown — units not declared"
+  // describes the cost of a mount that is not happening.
+  if (identityPlacement) {
+    return { label, value: 'not applicable — no offset applied', status: 'info' };
+  }
   if (basis === 'geographic') {
     return { label, value: 'no linear budget (degrees)', status: 'warn' };
   }
@@ -219,20 +237,29 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
       : { label: 'Vertical datum', value: input.verticalDatum, status: 'ok' },
   );
 
-  rows.push(compatibilityRow(input.compatibility));
+  rows.push(compatibilityRow(input.compatibility, input.soleLayer ?? false));
 
   rows.push(
-    input.mounted
+    (input.soleLayer ?? false)
+      // One layer has nothing to combine WITH, so "eligible for combined
+      // results" overstates — the compatibility report says the same in its
+      // "cross-layer comparison does not apply" line. Keep the two agreeing.
       ? {
           label: 'Project frame',
-          value: 'mounted — eligible for combined results',
-          status: 'ok',
-        }
-      : {
-          label: 'Project frame',
-          value: 'not mounted — kept in its own frame, excluded from combined results',
+          value: 'single layer — analysed on its own frame, nothing to combine',
           status: 'info',
-        },
+        }
+      : input.mounted
+        ? {
+            label: 'Project frame',
+            value: 'mounted — eligible for combined results',
+            status: 'ok',
+          }
+        : {
+            label: 'Project frame',
+            value: 'not mounted — kept in its own frame, excluded from combined results',
+            status: 'info',
+          },
   );
 
   rows.push(
@@ -257,7 +284,10 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
         },
   );
 
-  rows.push(precisionRow(input.precisionMm, input.precisionBasis));
+  const identityPlacement =
+    input.frameOffset === null ||
+    (input.frameOffset[0] === 0 && input.frameOffset[1] === 0 && input.frameOffset[2] === 0);
+  rows.push(precisionRow(input.precisionMm, input.precisionBasis, identityPlacement));
 
   rows.push(
     input.streaming
