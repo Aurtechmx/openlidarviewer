@@ -216,11 +216,15 @@ jobs:
         with:
           name: release-assets
           path: assets
-      - name: Create the draft prerelease
+      - name: Create the draft release
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          prerelease: true
+          # A prerelease tag carries a hyphen (v0.6.0-alpha.3); a stable one
+          # does not (v0.6.0). So the flag follows the tag, and a stable tag
+          # is eligible to be marked the latest release on publish.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ !contains(github.ref_name, '-') }}
           tag_name: ${{ github.ref_name }}
           files: assets/**/*
           fail_on_unmatched_files: true
