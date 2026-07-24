@@ -17,13 +17,13 @@ docs/gate2-per-cloud-filter-plan.md export-ignore
 docs/v0.5.7-plan.md export-ignore
 docs/v0.5.7-object-e57-capture-lens.md export-ignore
 
-# Exclude release-process deliberation from `git archive` source exports.
+# Keep pre-release working notes out of `git archive` source exports.
 #
-# READINESS_REPORT_* is the go/no-go record for a cut: open blockers, what is
-# not ready, what must happen before tagging. That is internal release deliberation about
-# whether to ship, not documentation of what shipped, and nothing public links
-# to it. The public honesty surface is KNOWN_LIMITATIONS + VALIDATION_REPORT,
-# which state what the release does and does not establish.
+# READINESS_REPORT_* lists the open blockers and the steps that must happen
+# before a tag — working notes for cutting a release, not a record of what
+# shipped, and nothing public links to it. The public surface is
+# KNOWN_LIMITATIONS + VALIDATION_REPORT, which state what the release does and
+# does not establish.
 READINESS_REPORT_*.md export-ignore
 
 # Superseded per-release evidence. The archive should carry the reports for the

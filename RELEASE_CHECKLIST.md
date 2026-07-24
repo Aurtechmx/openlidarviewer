@@ -74,7 +74,7 @@ Assertions before publishing:
       prerelease attaches the evidence files (`sbom.json`, manifest,
       `test-evidence.json`, `gate.log`, `gate.log.sha256`, `SHA256SUMS`)
       separately.
-- [ ] No internal audit deliberation or private readiness files are published
+- [ ] No pre-release working notes or private readiness files are published
       (`docs/_audit/`, `*READINESS*`, private notes stay export-ignored).
 
 ## 6. Tag + push
