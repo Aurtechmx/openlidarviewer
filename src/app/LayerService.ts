@@ -367,6 +367,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             precisionMm: p && p.errorMetres !== null ? p.errorMetres * 1000 : null,
             precisionBasis: (p?.basis as 'projected-linear-unit' | 'geographic' | 'unknown' | undefined) ?? null,
             streaming: false,
+            soleLayer: infos.length <= 1,
           }),
           name: info.name,
         };
