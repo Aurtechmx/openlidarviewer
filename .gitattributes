@@ -20,7 +20,7 @@ docs/v0.5.7-object-e57-capture-lens.md export-ignore
 # Exclude release-process deliberation from `git archive` source exports.
 #
 # READINESS_REPORT_* is the go/no-go record for a cut: open blockers, what is
-# not ready, what must happen before tagging. That is internal reasoning about
+# not ready, what must happen before tagging. That is internal release deliberation about
 # whether to ship, not documentation of what shipped, and nothing public links
 # to it. The public honesty surface is KNOWN_LIMITATIONS + VALIDATION_REPORT,
 # which state what the release does and does not establish.
@@ -45,6 +45,9 @@ RELEASE_NOTES_v0.6.0-alpha.*.md export-ignore
 KNOWN_LIMITATIONS_v0.6.0-alpha.*.md export-ignore
 REPRODUCIBILITY_v0.6.0-alpha.*.md export-ignore
 VALIDATION_REPORT_v0.6.0-alpha.*.md export-ignore
+# The docs-site prerelease pages are the same history — one page per release,
+# and the deposit carries only the shipped one.
+docs-site/releases/v0.6.0-alpha.*.md export-ignore
 
 # Release planning: goals, baselines and sequencing for a cut. Same class as
 # a readiness report - what we intend to do and why, not what the release is.
