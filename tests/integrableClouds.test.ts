@@ -265,7 +265,7 @@ describe('merging requires an actual mount', () => {
  * The static path already refuses this: merging needs a layer to be MOUNTED,
  * not merely compatible. Streaming bypassed `integrableClouds` entirely and
  * was judged on compatibility alone, so the check landed on one source type
- * and not the other. Mounting is disabled in this alpha, so nothing is in a
+ * and not the other. Mounting is disabled in v0.6.0, so nothing is in a
  * shared frame and the honest answer is that a stream never joins a static
  * estimator.
  */

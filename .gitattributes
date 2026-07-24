@@ -52,3 +52,11 @@ docs-site/releases/v0.6.0-alpha.*.md export-ignore
 # Release planning: goals, baselines and sequencing for a cut. Same class as
 # a readiness report - what we intend to do and why, not what the release is.
 docs/architecture/stabilization-release-plan.md export-ignore
+
+# Superseded standalone release notes from earlier lines (v0.4.x, v0.5.x) are
+# development history, not part of the v0.6.0 deposit. VALIDATION_REPORT_v0.5.9.md
+# is deliberately kept: this release inherits its terrain/measurement validation.
+RELEASE_NOTES_v0.4.*.md export-ignore
+RELEASE_NOTES_v0.5.*.md export-ignore
+# The release checklist is an internal process aid, not scholarly content.
+RELEASE_CHECKLIST.md export-ignore

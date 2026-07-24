@@ -48,7 +48,7 @@ function setup(
   clouds: Record<string, FakeCloud>,
   locked: Set<string> = new Set(),
   // These specs describe what mounting DOES, so they exercise it explicitly.
-  // The shipped default is off for this alpha; `mount disabled` below pins
+  // The shipped default is off in v0.6.0; `mount disabled` below pins
   // that side, so neither state is left unverified.
   multiLayerMount = true,
 ) {
@@ -687,7 +687,7 @@ describe('LayerService frame gate corrections', () => {
 });
 
 /**
- * The shipped default: multi-layer mounting is OFF for this alpha.
+ * The shipped default: multi-layer mounting is OFF in v0.6.0.
  *
  * The mount writes the project offset into the Float32 position array, so it
  * permanently edits the only copy of the source values — bounded by the

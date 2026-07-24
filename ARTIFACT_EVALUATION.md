@@ -1,10 +1,10 @@
 # Artifact evaluation
 
-This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `VALIDATION_REPORT_v0.6.0.md` (what is and is not validated for this alpha; terrain/measurement claims are inherited from `VALIDATION_REPORT_v0.5.9.md`).
+This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `VALIDATION_REPORT_v0.6.0.md` (what is and is not validated for this release; terrain/measurement claims are inherited from `VALIDATION_REPORT_v0.5.9.md`).
 
 ## What the artifact is
 
-A local-first, browser-native LiDAR and point-cloud viewer with terrain analysis, validation-aware exports, and (as of v0.5.9) a Contour Studio deliverable workflow. Files stay on the reviewer's device; no upload or account is required.
+A local-first, browser-native LiDAR and point-cloud viewer with terrain analysis, validation-aware exports, and (as of v0.5.9) a Contour Studio deliverable workflow. Local files stay on the reviewer's device; no upload or account is required. Remote datasets (COPC and EPT over HTTP) are the exception: the viewer fetches only the tiles it needs from the URL the reviewer supplies, and nothing is uploaded to OpenLiDARViewer.
 
 ## Requirements
 
@@ -28,7 +28,7 @@ npm run build:live && npm run check:bundle
 
 - Every scientific claim is registered in `docs/validation/claim-register.yaml` with its current evidence level, the level required to be called validated, the tests that support it, and the wording that is allowed or prohibited. `scripts/lint-claim-register.mjs` fails the build if the runtime registry drifts from that file or if prohibited wording appears.
 - The evidence ladder (E0–E6) is defined in `docs/validation/EVIDENCE_MODEL.md`. One product is at E4: the slope raster was cross-implementation validated against GDAL 3.13.1 on the analytic fixture (see `tests/slopeCrossCheck.test.ts`). Every other product tops out at E3 (synthetic known-truth checks).
-- `VALIDATION_REPORT_v0.6.0.md` lists exactly what was and was not tested for this alpha (inheriting the terrain/measurement evidence from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
+- `VALIDATION_REPORT_v0.6.0.md` lists exactly what was and was not tested for this release (inheriting the terrain/measurement evidence from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
 
 ## Integrity
 

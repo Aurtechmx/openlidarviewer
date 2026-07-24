@@ -42,7 +42,7 @@ export interface LayerServiceDeps {
   projectFrame: ProjectFrameService;
   /**
    * Override {@link MULTI_LAYER_MOUNT_ENABLED}. Exists so both states stay
-   * under test: the mount is off by default for this alpha, and its behaviour
+   * under test: the mount is disabled by default in v0.6.0, and its behaviour
    * still has to be pinned rather than left to rot behind a false constant.
    */
   multiLayerMount?: boolean;
@@ -75,7 +75,7 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
 /**
  * Whether layers are physically rebased onto a shared project origin.
  *
- * OFF for this alpha. The mount writes the project offset into the Float32
+ * OFF in v0.6.0. The mount writes the project offset into the Float32
  * position array, so the residual a layer keeps depends on how far it moved —
  * bounded by the precision gate above, refused past a millimetre, but a
  * permanent edit to the only copy of the source values. That is the wrong

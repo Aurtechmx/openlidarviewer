@@ -102,12 +102,26 @@ for (const k of ['liveEntryKiB', 'ceilingKiB']) {
  * matches published claims and not incidental prose. A document that mentions
  * no figure at all is fine; one that mentions a WRONG figure is not.
  */
+// Version-DERIVED, never hardcoded: the four truth documents are renamed
+// at each release (…_v0.6.0-alpha.3 → …_v0.6.0), and a hardcoded list silently
+// went stale at the stable promotion — the lint then skipped every renamed
+// file (existsSync → continue) and passed while checking nothing. Reading the
+// version from package.json ties the list to what actually ships, and the
+// zero-documents guard below turns a vacuous pass into a failure.
+const VERSION = JSON.parse(read('package.json')).version;
 const DOCS = [
-  'REPRODUCIBILITY_v0.6.0-alpha.3.md',
-  'VALIDATION_REPORT_v0.6.0-alpha.3.md',
-  'READINESS_REPORT_v0.6.0-alpha.3.md',
-  'KNOWN_LIMITATIONS_v0.6.0-alpha.3.md',
+  `REPRODUCIBILITY_v${VERSION}.md`,
+  `VALIDATION_REPORT_v${VERSION}.md`,
+  `READINESS_REPORT_v${VERSION}.md`,
+  `KNOWN_LIMITATIONS_v${VERSION}.md`,
+  `RELEASE_NOTES_v${VERSION}.md`,
+  'ARTIFACT_EVALUATION.md',
 ];
+if (DOCS.every((d) => !existsSync(resolve(ROOT, d)))) {
+  problems.push(
+    `no release evidence documents exist for v${VERSION} — the figure guard would pass vacuously. Expected at least one of: ${DOCS.join(', ')}.`,
+  );
+}
 
 const parseCount = (s) => Number(s.replace(/,/g, ''));
 

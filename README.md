@@ -499,8 +499,8 @@ Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-per
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md) — install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md) — what this alpha validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md).
-- [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md) — the deliberate limits of this alpha (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
+- [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md) — what this release validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md).
+- [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md) — the documented limits of this release (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md) — the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md) — how to evaluate the software artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md) — where the test fixtures and streamed sample datasets come from, and how they are licensed.
