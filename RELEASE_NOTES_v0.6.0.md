@@ -144,7 +144,7 @@ The author declares no competing interests; development is self-funded by
 Aurtech.
 
 * Version: 0.6.0
-* Release date: 2026-07-23
+* Release date: 2026-07-24
 * License: MIT
 
 Live demo: [lidar.aurtech.mx](https://lidar.aurtech.mx/)  

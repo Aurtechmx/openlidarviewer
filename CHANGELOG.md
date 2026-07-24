@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.0] - 2026-07-23
+## [0.6.0] - 2026-07-24
 
 The stable v0.6 release. Spatial operations are deterministic, explicit and
 non-destructive: the in-place Float32 rebase is removed and source geometry
