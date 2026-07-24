@@ -15,7 +15,7 @@
  * rebuilds nothing, so it can be run on downloaded assets by someone who did
  * not produce them — which is the point.
  *
- * Usage: npm run release:verify -- --dir release/staged-v0.6.0-alpha.3
+ * Usage: npm run release:verify -- --dir release/payload
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';

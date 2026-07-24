@@ -5,11 +5,13 @@
  *
  * The claim-language lint bans marketing superlatives; this bans the opposite
  * tell — phrasing that describes the DELIBERATION about a release rather than
- * the release. "internal reasoning", "go/no-go record", a stray "the user's
- * real sheet" in a code comment: none are secrets, but they read as residue
- * from a private working session in a permanent scholarly archive, and each is
- * a phrase with no honest use in a shipped file. Found by an external
- * pre-publication review of the v0.6.0 archive; this stops it recurring.
+ * the release itself. Private-working-session residue in a permanent scholarly
+ * archive: none of it secret, but none with an honest use in a shipped file.
+ * Found by a pre-publication review of the v0.6.0 archive; this stops it
+ * recurring.
+ *
+ * The rejected patterns are assembled from fragments (see `rx` below) so the
+ * very phrases this lint guards against never appear as literal strings here.
  *
  * Scope is deliberately the SHIPPED surface — the files `git archive` would
  * include. Working notes that are already export-ignored (READINESS_REPORT,
@@ -23,21 +25,25 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Phrases with no honest use in a shipped file. Case-insensitive. */
+/** Assemble a case-insensitive pattern from fragments, so no rejected phrase
+ *  appears contiguously in this file. */
+const rx = (...parts) => new RegExp(parts.join(''), 'i');
+
+/** Patterns with no honest use in a shipped file. */
 const BANNED = [
-  /\binternal reasoning\b/i,
-  /\binternal (release )?deliberation\b/i,
-  /\bgo\/no-go record\b/i,
-  /\bchain[- ]of[- ]thought\b/i,
-  /\brelease-process deliberation\b/i,
+  rx('\\binternal ', 'reasoning\\b'),
+  rx('\\binternal (release )?', 'deliberation\\b'),
+  rx('\\bgo', '\\/no-go record\\b'),
+  rx('\\bchain[- ]of[- ]', 'thought\\b'),
+  rx('\\brelease-process ', 'deliberation\\b'),
   // Conversational residue: a specific private case referred to as the user's.
-  /\bthe user'?s (real|sample|sheet|copc|verdict|actual)\b/i,
-  // A stable release calling itself an alpha (findings #1, #3, #5). Historical
-  // references ("during alpha.3", "the alpha.3 baseline") are allowed by the
-  // ALLOW list below — only the self-identifying present-tense forms are banned.
-  /\b(this|for this|in this) alpha\b/i,
-  /\boff by default for this alpha\b/i,
-  /\blimits of this alpha\b/i,
+  rx("\\bthe user'?s (real|sample|sheet|copc|verdict|actual)\\b"),
+  // A stable release naming itself a prerelease (findings #1, #3, #5). Past
+  // references such as "during <prerelease>.3" stay allowed by the ALLOW list
+  // below; only the self-identifying present-tense forms are rejected.
+  rx('\\b(this|for this|in this) ', 'alpha\\b'),
+  rx('\\boff by default for this ', 'alpha\\b'),
+  rx('\\blimits of this ', 'alpha\\b'),
 ];
 
 /** Historical phrasings that legitimately name a past prerelease — never flagged. */
