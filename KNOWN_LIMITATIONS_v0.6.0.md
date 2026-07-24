@@ -111,7 +111,7 @@ An anti-thrash resident-stickiness option exists in the budget selector and is u
 
 ## Startup bundle above the early-warning line
 
-The live entry chunk measures 717 KiB against a hard 720 KiB ceiling — **3 KiB of headroom**, and above the 680 KiB early-warning threshold. Treat the ceiling as effectively reached: shed weight before adding any, and do not raise it. The figure is machine-derived into `docs/validation/test-evidence.json` and checked by `lint:evidence`, because three documents once quoted a size for a build that produced a different one.
+The live entry chunk measures 718 KiB against a hard 720 KiB ceiling — **2 KiB of headroom**, and above the 680 KiB early-warning threshold. Treat the ceiling as effectively reached: shed weight before adding any, and do not raise it. The figure is machine-derived into `docs/validation/test-evidence.json` and checked by `lint:evidence`, because three documents once quoted a size for a build that produced a different one.
 
 ## Mutation and coverage evidence is advisory, not archived
 
