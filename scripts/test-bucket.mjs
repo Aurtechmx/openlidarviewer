@@ -25,10 +25,11 @@
  * `npm run test:e2e`.
  */
 
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TESTS_DIR = resolve(ROOT, 'tests');
@@ -145,12 +146,47 @@ const VITEST_BIN = resolve(ROOT, 'node_modules/.bin/vitest');
  * why wedged workers kept the pipe open and the parent waited forever.
  * Resolves the same {status, signal, error} shape `resolveExit` expects.
  */
+let tallySeq = 0;
+
+/**
+ * Emit a machine-readable tally the release evidence collector can trust.
+ *
+ * The human `Tests N passed` line is printed by vitest through the shard's
+ * INHERITED stdio. That reaches the terminal, but on a GitHub runner it can
+ * race the gate's `tee` pipe and never land in `release/gate.log` — so the
+ * collector, reading the log, saw zero tallies and failed a green run. The
+ * fix does not depend on that stream at all: vitest also writes a JSON
+ * summary to a file, and THIS parent process reads the file after the shard
+ * exits and prints one `GATE TALLY` line to its own stdout — synchronously,
+ * before the shard result is returned, so it is always inside the pipe.
+ */
+function readTally(file, bucket) {
+  try {
+    const r = JSON.parse(readFileSync(file, 'utf8'));
+    const passed = Number(r.numPassedTests ?? 0);
+    const skipped = Number(r.numPendingTests ?? 0) + Number(r.numTodoTests ?? 0);
+    console.log(`GATE TALLY bucket=${bucket} passed=${passed} skipped=${skipped}`);
+  } catch {
+    // No file (a start failure, or a vitest that never wrote one): stay silent
+    // and let the collector fall back to the human summary. A wrong number is
+    // worse than an absent one, so never guess here.
+  } finally {
+    try { rmSync(file, { force: true }); } catch { /* best effort */ }
+  }
+}
+
 function runVitest(extra, label) {
   return new Promise((res) => {
     const started = Date.now();
+    const tallyFile = join(tmpdir(), `olv-tally-${arg}-${process.pid}-${tallySeq++}.json`);
     const child = spawn(
       VITEST_BIN,
-      ['run', ...files, ...bucketArgs, ...extra, ...passthrough],
+      [
+        'run', ...files, ...bucketArgs, ...extra, ...passthrough,
+        // default keeps the human console output; json feeds the file the
+        // parent reads for the GATE TALLY line.
+        '--reporter=default', '--reporter=json', `--outputFile.json=${tallyFile}`,
+      ],
       { cwd: ROOT, stdio: 'inherit', detached: true },
     );
 
@@ -193,6 +229,11 @@ function runVitest(extra, label) {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      // On a clean pass, publish the tally the collector reads. Only on success:
+      // a failed or killed shard reddens the gate before evidence is collected,
+      // and its partial JSON would misreport the run.
+      if (!r.error && !r.signal && r.status === 0) readTally(tallyFile, arg);
+      else { try { rmSync(tallyFile, { force: true }); } catch { /* best effort */ } }
       const secs = ((Date.now() - started) / 1000).toFixed(1);
       console.log(
         `[${label}] pid=${child.pid} elapsed=${secs}s code=${r.status ?? '-'} signal=${r.signal ?? '-'}`,
