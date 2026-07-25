@@ -82,21 +82,29 @@ export function parseXml(source: string): XmlNode {
         continue;
       }
       if (source.startsWith('</', i)) {
-        i = source.indexOf('>', i) + 1;
+        const gt = source.indexOf('>', i);
+        // A missing '>' used to leave the cursor at 0 and re-parse forever.
+        if (gt === -1) throw new Error('Invalid XML: unterminated end tag.');
+        i = gt + 1;
         return;
       }
       if (source.startsWith('<![CDATA[', i)) {
         const end = source.indexOf(']]>', i);
+        if (end === -1) throw new Error('Invalid XML: unterminated CDATA section.');
         node.text += source.slice(i + 9, end);
         i = end + 3;
         continue;
       }
       if (source.startsWith('<!--', i)) {
-        i = source.indexOf('-->', i) + 3;
+        const end = source.indexOf('-->', i);
+        if (end === -1) throw new Error('Invalid XML: unterminated comment.');
+        i = end + 3;
         continue;
       }
       if (source.startsWith('<?', i)) {
-        i = source.indexOf('?>', i) + 2;
+        const end = source.indexOf('?>', i);
+        if (end === -1) throw new Error('Invalid XML: unterminated processing instruction.');
+        i = end + 2;
         continue;
       }
       node.children.push(parseElement());
@@ -107,11 +115,15 @@ export function parseXml(source: string): XmlNode {
   for (;;) {
     skipSpace();
     if (source.startsWith('<?', i)) {
-      i = source.indexOf('?>', i) + 2;
+      const end = source.indexOf('?>', i);
+      if (end === -1) throw new Error('Invalid XML: unterminated processing instruction.');
+      i = end + 2;
       continue;
     }
     if (source.startsWith('<!--', i)) {
-      i = source.indexOf('-->', i) + 3;
+      const end = source.indexOf('-->', i);
+      if (end === -1) throw new Error('Invalid XML: unterminated comment.');
+      i = end + 3;
       continue;
     }
     break;
