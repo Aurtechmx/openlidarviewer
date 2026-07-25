@@ -14,6 +14,13 @@ date-released: "2026-07-24"
 license: MIT
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://lidar.aurtech.mx/"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21544620"
+    description: "Archived v0.6.0 release"
+  - type: doi
+    value: "10.5281/zenodo.21544619"
+    description: "Concept DOI (all versions)"
 
 abstract: >-
   OpenLiDARViewer is an open-source, local-first, browser-native platform

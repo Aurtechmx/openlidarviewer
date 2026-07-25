@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/aurtechmx/openlidarviewer/releases/latest)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21544619.svg)](https://doi.org/10.5281/zenodo.21544619)
 [![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
 ![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
 ![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
