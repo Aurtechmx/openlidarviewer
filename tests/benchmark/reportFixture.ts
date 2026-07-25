@@ -13,6 +13,7 @@ import {
   unavailable,
   type RunReport,
 } from '../../benchmarks/framework/types';
+import { RAW_BYTES_NO_STRIP_REASON } from '../../benchmarks/framework/artifacts';
 
 /** A fully-populated report: one clean stage, one failed stage, both metric statuses. */
 export function fixtureReport(): RunReport {
@@ -56,6 +57,21 @@ export function fixtureReport(): RunReport {
         fingerprint: 'deadbeef',
         byteLength: 42,
         strippedFields: ['generatedAt'],
+        volatilityStripped: true,
+      },
+      // A byte artifact too: it is the case where the strip CANNOT be applied,
+      // and every reporter has to say so rather than print an empty exclusion
+      // list that reads as "nothing volatile in here".
+      {
+        name: 'hillshade',
+        kind: 'bytes',
+        algorithm: 'sha256',
+        hash: 'b'.repeat(64),
+        fingerprint: 'feedface',
+        byteLength: 4096,
+        strippedFields: [],
+        volatilityStripped: false,
+        unstrippedReason: RAW_BYTES_NO_STRIP_REASON,
       },
     ],
     metrics: {

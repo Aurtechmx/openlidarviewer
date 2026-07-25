@@ -49,8 +49,14 @@ const UI = /(panel|mobile|dock|toolbar|nav|button|sheet|inspector|theme|onboardi
 // Vitest process in CI. Checked AFTER UI, so an export *panel* stays in `ui`.
 const EXPORT = /(^export|exporter|^measurement|^report|^verify|^audit|^stockpile|^sessionFindings|^kml|^gzip|^zip|^scanReport|^spaceReport|^floorPlanExport|^download)/i;
 
-/** Bucket a single test-file basename. `unit` is the catch-all. */
+/** Bucket a single test-file name. `unit` is the catch-all. */
 function bucketOf(name) {
+  // A nested directory routes explicitly, before any regex gets a look in.
+  const slash = name.indexOf('/');
+  if (slash > 0) {
+    const routed = NESTED_TEST_DIRS[name.slice(0, slash)];
+    if (routed) return routed;
+  }
   if (SLOW.test(name)) return 'slow';
   if (TERRAIN.test(name)) return 'terrain';
   if (UI.test(name)) return 'ui';
@@ -60,15 +66,22 @@ function bucketOf(name) {
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 
-// Test subdirectories that hold UNIT tests and must therefore be bucketed.
-// tests/e2e/ is deliberately absent — those are Playwright specs. Without this
-// list a file added under tests/benchmark/ would belong to no bucket, so the
-// release gate would run every bucket green while never executing it.
-const NESTED_TEST_DIRS = ['benchmark'];
+// Test subdirectories that hold UNIT tests, and the bucket each one routes to.
+// tests/e2e/ is deliberately absent — those are Playwright specs. Two reasons
+// this map exists rather than letting the regexes above classify a nested path:
+//   - without the enumeration, a file added under tests/benchmark/ would belong
+//     to no bucket at all, so the release gate would run every bucket green
+//     while never executing it;
+//   - without the explicit bucket, `tests/benchmark/*` matched `slow` only
+//     because the SLOW regex starts with `^benchmark` (written for the old
+//     top-level benchmark.test.ts). Those files run in ~50 ms and belong in
+//     `unit`; routing them by accident would also change silently the next time
+//     a bucket regex is edited.
+const NESTED_TEST_DIRS = { benchmark: 'unit' };
 
 function allTestFiles() {
   const top = readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));
-  const nested = NESTED_TEST_DIRS.flatMap((dir) => {
+  const nested = Object.keys(NESTED_TEST_DIRS).flatMap((dir) => {
     let entries;
     try {
       entries = readdirSync(join(TESTS_DIR, dir));
@@ -93,6 +106,11 @@ if (arg === '--verify') {
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   const ok = total === files.length;
   for (const b of BUCKETS) console.log(`${b}: ${counts[b]}`);
+  // Print the nested routing so the gate log shows WHERE those files ran, not
+  // just that the partition adds up.
+  for (const [dir, bucket] of Object.entries(NESTED_TEST_DIRS)) {
+    console.log(`tests/${dir}/ → ${bucket} (explicit)`);
+  }
   console.log(`total: ${total} / ${files.length} — partition ${ok ? 'OK' : 'BROKEN'}`);
   process.exit(ok ? 0 : 1);
 }

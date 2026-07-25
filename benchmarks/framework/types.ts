@@ -159,6 +159,18 @@ export interface ArtifactRecord {
   readonly byteLength: number;
   /** Dotted paths excluded from the hash, sorted. Empty for byte artifacts. */
   readonly strippedFields: readonly string[];
+  /**
+   * Whether the volatile-field strip could be applied at all.
+   *
+   * False for byte artifacts, whose contents are opaque. The distinction is on
+   * the record rather than in a source comment because `strippedFields: []` is
+   * ambiguous on its own: it reads as "nothing volatile in here" when the truth
+   * may be "nothing could be inspected". A reader comparing two hashes needs to
+   * know which of those they are looking at.
+   */
+  readonly volatilityStripped: boolean;
+  /** Why no strip was applied. Present exactly when `volatilityStripped` is false. */
+  readonly unstrippedReason?: string;
 }
 
 /** The whole result of one suite run against one dataset. */

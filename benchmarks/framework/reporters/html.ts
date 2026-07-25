@@ -17,7 +17,7 @@
  */
 
 import { isMeasured, type EnvValue, type Metric, type RunReport } from '../types';
-import { UNAVAILABLE_LABEL } from './metricText';
+import { describeHashExclusions, UNAVAILABLE_LABEL } from './metricText';
 
 /** Escape the five characters that can break out of text or an attribute. */
 function esc(value: string): string {
@@ -119,7 +119,11 @@ export function toHtml(report: RunReport): string {
     .map(
       (a) =>
         `<tr>${textCell(a.name)}${textCell(a.algorithm)}<td class="hash">${esc(a.hash)}</td>` +
-        `${textCell(String(a.byteLength))}${textCell(a.strippedFields.length === 0 ? '(none)' : a.strippedFields.join(', '))}</tr>`,
+        `${textCell(String(a.byteLength))}` +
+        // The "no strip could run" case is a caveat on the hash, so it is
+        // marked the same way an unavailable metric is rather than sitting in a
+        // plain cell that reads like a field list.
+        `<td${a.volatilityStripped ? '' : ' class="unavailable"'}>${esc(describeHashExclusions(a))}</td></tr>`,
     )
     .join('');
 

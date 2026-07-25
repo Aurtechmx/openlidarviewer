@@ -48,6 +48,17 @@ export interface VolatileRule {
 export const VOLATILE_PLACEHOLDER = '<stripped:absolute-path>';
 
 /**
+ * An ISO-8601 date-TIME, with or without seconds, milliseconds or an offset.
+ *
+ * A time component is REQUIRED. A bare `2026-07-25` is as likely to be a dataset
+ * epoch label or a survey date — part of the artifact's identity — as it is a
+ * run timestamp, and stripping it would make two different datasets hash the
+ * same. A field that really does hold a wall-clock date should be named one
+ * (`date`, `buildDate`), which the key rule then catches.
+ */
+const ISO_8601_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:?\d{2})?$/;
+
+/**
  * The complete strip list. Deliberately narrow and name-anchored: each key
  * pattern is anchored at both ends so a field like `durationMs` or `datasetId`
  * can never be swept up by a substring match.
@@ -57,8 +68,14 @@ export const VOLATILE_RULES: readonly VolatileRule[] = [
     kind: 'timestamp',
     appliesTo: 'key',
     pattern:
-      /^(timestamps?|generated_?at|created_?at|updated_?at|modified_?at|started_?at|finished_?at|completed_?at|captured_?at|built_?at|ran_?at|run_?at|wall_?clock(_?(ms|time))?|date_?time|iso_?date|epoch_?ms)$/i,
-    why: 'A wall-clock reading differs on every run, so leaving it in guarantees two identical artifacts hash differently and the reproducibility check never passes.',
+      /^(timestamps?|generated_?at|created_?at|updated_?at|modified_?at|started_?at|finished_?at|completed_?at|captured_?at|built_?at|ran_?at|run_?at|wall_?clock(_?(ms|time))?|dates?|date_?stamp|date_?time|iso_?date|build_?date|run_?date|create_?date|time|now|when|start_?time|end_?time|stop_?time|finish_?time|create_?time|modify_?time|[acm]time|birth_?time|epoch_?(ms|s)|unix_?time|utc|local_?time|clock_?time)$/i,
+    why: 'A wall-clock reading differs on every run, so leaving it in guarantees two identical artifacts hash differently and the reproducibility check never passes. Held deliberately wide, including bare `time`, `date` and `now`: a stripped field costs one column, a missed one costs a hash nobody can ever reproduce. Two names are pointedly NOT here — bare `epoch` (a survey campaign in this codebase, not a clock) and plural `times` (most often an array of durations). A duration must be named with its unit — `durationMs`, `elapsedMs` — never `time`.',
+  },
+  {
+    kind: 'timestamp',
+    appliesTo: 'value',
+    pattern: ISO_8601_DATETIME,
+    why: 'Symmetric with the absolute-path rule: an ISO-8601 date-time is a wall-clock reading because of what it IS, not because of the name it was given, so it is caught under any key. Bare calendar dates are excluded — see ISO_8601_DATETIME.',
   },
   {
     kind: 'machine-id',
@@ -104,7 +121,12 @@ export function stripVolatile(input: unknown): StripResult {
       return value;
     }
     if (value === null || typeof value !== 'object') return value;
-    if (Array.isArray(value)) return value.map((v, i) => walk(v, `${path}[${i}]`));
+    // `undefined` in an array becomes null, exactly as JSON.stringify does —
+    // canonicalJson would otherwise emit the bare token `undefined` and the
+    // canonical form would not be parseable JSON at all.
+    if (Array.isArray(value)) {
+      return value.map((v, i) => (v === undefined ? null : walk(v, `${path}[${i}]`)));
+    }
 
     const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
@@ -113,6 +135,12 @@ export function stripVolatile(input: unknown): StripResult {
         stripped.add(child);
         continue;
       }
+      // An undefined property is dropped rather than emitted, again matching
+      // JSON.stringify: `{ error: undefined }` is what spreading an optional
+      // field produces, so it must not be an error, and it must not corrupt the
+      // canonical form. Not recorded as a stripped field — nothing was excluded
+      // that JSON would have carried.
+      if (v === undefined) continue;
       out[key] = walk(v, child);
     }
     return out;
@@ -126,6 +154,70 @@ function asBytes(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) return value;
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
   return null;
+}
+
+/**
+ * Recorded on every byte artifact, because the strip genuinely cannot run there
+ * and an empty exclusion list would otherwise read as "nothing volatile here".
+ */
+export const RAW_BYTES_NO_STRIP_REASON =
+  'hashed raw: a byte artifact is opaque, so embedded timestamps (PNG tEXt, GeoTIFF tags, zip entry mtimes) cannot be detected or removed and may change the hash between otherwise identical runs';
+
+/** Name the type of a value in an error a suite author can act on. */
+function describeType(value: unknown): string {
+  if (value === null) return 'null';
+  if (typeof value !== 'object') return typeof value;
+  const ctor = (value as { constructor?: { name?: string } }).constructor;
+  return ctor?.name ?? 'object with an unexpected prototype';
+}
+
+/** A plain `{}` or an `Object.create(null)` bag — the only objects JSON preserves. */
+function isPlainObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value) as object | null;
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Reject anything `canonicalJson` cannot represent faithfully, naming the path.
+ *
+ * Without this the hash silently stops discriminating: `canonicalJson` walks own
+ * enumerable keys, so `new Date(0)` and `new Date(999)` both canonicalise to
+ * `{}`, `new Map([['a',1]])` and `new Map([['a',2]])` likewise, and `NaN`,
+ * `Infinity` and `-Infinity` all become `null`. Each of those is a real value
+ * change that leaves the digest untouched — the exact failure the sensitivity
+ * requirement exists to catch, and one that is invisible at the call site.
+ *
+ * Throwing beats coercing: a suite author who wrote a Date meant something by
+ * it, and the framework does not get to decide which of its fields survived.
+ */
+export function assertHashable(artifactName: string, value: unknown, path = ''): void {
+  const where = path === '' ? 'the artifact root' : path;
+  const fail = (problem: string): never => {
+    throw new TypeError(
+      `benchmark artifact "${artifactName}": ${where} ${problem}. ` +
+        'Convert it to a JSON primitive (a number, a string, or a plain object) before hashing.',
+    );
+  };
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) fail(`is ${String(value)}, which is not finite and canonicalises to null`);
+    return;
+  }
+  if (typeof value === 'bigint' || typeof value === 'function' || typeof value === 'symbol') {
+    fail(`is a ${typeof value}, which canonicalJson cannot represent`);
+  }
+  if (value === null || typeof value !== 'object') return;
+
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => assertHashable(artifactName, v, `${path}[${i}]`));
+    return;
+  }
+  if (!isPlainObject(value)) {
+    fail(`is a ${describeType(value)}, which canonicalises to {} and would hide any change inside it`);
+  }
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    assertHashable(artifactName, v, path === '' ? key : `${path}.${key}`);
+  }
 }
 
 /**
@@ -149,9 +241,16 @@ export function hashArtifact(name: string, value: unknown): ArtifactRecord {
       fingerprint: fnv1a(hash),
       byteLength: bytes.length,
       strippedFields: [],
+      // Stated on the RECORD, not just in a comment: a reader comparing two
+      // byte-artifact hashes has to know the strip never ran on them.
+      volatilityStripped: false,
+      unstrippedReason: RAW_BYTES_NO_STRIP_REASON,
     };
   }
 
+  // Before the strip, not after: a Date survives `stripVolatile` as an empty
+  // object, so a guard on the stripped copy would never see it.
+  assertHashable(name, value);
   const { value: clean, stripped } = stripVolatile(value);
   const json = canonicalJson(clean);
   const encoded = new TextEncoder().encode(json);
@@ -164,5 +263,6 @@ export function hashArtifact(name: string, value: unknown): ArtifactRecord {
     fingerprint: fnv1a(json),
     byteLength: encoded.length,
     strippedFields: stripped,
+    volatilityStripped: true,
   };
 }

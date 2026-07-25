@@ -16,7 +16,7 @@
  */
 
 import type { RunReport } from '../types';
-import { formatEnvValue, formatMetric } from './metricText';
+import { describeHashExclusions, formatEnvValue, formatMetric } from './metricText';
 
 /** Escape the only character that can restructure a Markdown table. */
 function md(value: string): string {
@@ -100,7 +100,7 @@ export function toMarkdown(report: RunReport): string {
             a.algorithm,
             a.hash,
             String(a.byteLength),
-            a.strippedFields.length === 0 ? '(none)' : a.strippedFields.join(', '),
+            describeHashExclusions(a),
           ]),
         ),
   );

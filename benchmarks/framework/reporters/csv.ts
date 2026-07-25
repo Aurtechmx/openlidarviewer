@@ -19,6 +19,7 @@
 import type { Metric, RunReport, StageResult } from '../types';
 import {
   UNAVAILABLE_LABEL,
+  describeHashExclusions,
   metricReasonCell,
   metricUnitCell,
   metricValueCell,
@@ -86,16 +87,12 @@ export function toCsv(report: RunReport): string {
     rows.push(factRow('artifact', `${artifact.name}.algorithm`, artifact.algorithm));
     rows.push(factRow('artifact', `${artifact.name}.fingerprint`, artifact.fingerprint));
     rows.push(factRow('artifact', `${artifact.name}.byteLength`, String(artifact.byteLength)));
-    // Semicolon-joined so the excluded-field list never introduces a comma of
-    // its own — the list is prose for a reviewer, not a nested table. `(none)`
-    // rather than an empty cell: "nothing was excluded" is a real answer here.
-    rows.push(
-      factRow(
-        'artifact',
-        `${artifact.name}.strippedFields`,
-        artifact.strippedFields.length === 0 ? '(none)' : artifact.strippedFields.join('; '),
-      ),
-    );
+    // Never an empty cell: "nothing was excluded" and "no strip could run" are
+    // different answers, and the second is a caveat on the hash itself. The
+    // boolean is emitted alongside the prose so a script can branch on it
+    // without parsing the sentence.
+    rows.push(factRow('artifact', `${artifact.name}.volatilityStripped`, String(artifact.volatilityStripped)));
+    rows.push(factRow('artifact', `${artifact.name}.strippedFields`, describeHashExclusions(artifact)));
   }
 
   return `${rows.join('\n')}\n`;

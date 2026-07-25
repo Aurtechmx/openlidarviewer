@@ -12,6 +12,7 @@ import { toCsv } from '../../benchmarks/framework/reporters/csv';
 import { toMarkdown } from '../../benchmarks/framework/reporters/markdown';
 import { toHtml } from '../../benchmarks/framework/reporters/html';
 import type { RunReport } from '../../benchmarks/framework/types';
+import { RAW_BYTES_NO_STRIP_REASON } from '../../benchmarks/framework/artifacts';
 import { fixtureReport } from './reportFixture';
 
 const REPORTERS: ReadonlyArray<readonly [string, (r: RunReport) => string]> = [
@@ -59,6 +60,13 @@ describe.each(REPORTERS)('the %s reporter', (name, render) => {
   test('names the artifact and its hash', () => {
     expect(out).toContain('metrics');
     expect(out).toContain('a'.repeat(64));
+  });
+
+  test('discloses that the byte artifact was hashed with no strip applied', () => {
+    // An empty exclusion list on a raw-bytes artifact reads as "nothing
+    // volatile in here", when the truth is that nothing COULD be inspected.
+    expect(out).toContain('hillshade');
+    expect(out).toContain(RAW_BYTES_NO_STRIP_REASON);
   });
 
   test('never prints a bare dash or an empty cell where a metric belongs', () => {

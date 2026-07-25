@@ -38,11 +38,23 @@ export { runStage, runStageAsync } from './stage';
 export type { RunStageOptions, StageOutcome } from './stage';
 export { captureEnvironment } from './env';
 export type { CaptureEnvironmentOptions } from './env';
-export { hashArtifact, stripVolatile, VOLATILE_RULES, VOLATILE_PLACEHOLDER } from './artifacts';
+export {
+  assertHashable,
+  hashArtifact,
+  stripVolatile,
+  VOLATILE_RULES,
+  VOLATILE_PLACEHOLDER,
+  RAW_BYTES_NO_STRIP_REASON,
+} from './artifacts';
 export type { StripResult, VolatileKind, VolatileRule } from './artifacts';
 
 export { toJson } from './reporters/json';
 export { toCsv } from './reporters/csv';
 export { toMarkdown } from './reporters/markdown';
 export { toHtml } from './reporters/html';
-export { formatMetric, formatEnvValue, UNAVAILABLE_LABEL } from './reporters/metricText';
+export {
+  formatMetric,
+  formatEnvValue,
+  describeHashExclusions,
+  UNAVAILABLE_LABEL,
+} from './reporters/metricText';

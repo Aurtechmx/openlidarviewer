@@ -14,7 +14,7 @@
  * measurement was, which is the measurer's call, not the formatter's.
  */
 
-import { isMeasured, type EnvValue, type Metric } from '../types';
+import { isMeasured, type ArtifactRecord, type EnvValue, type Metric } from '../types';
 
 /** The literal that must appear wherever a metric was not measured. */
 export const UNAVAILABLE_LABEL = 'unavailable';
@@ -42,4 +42,19 @@ export function metricReasonCell(m: Metric): string {
 /** An environment field: the captured string, or the word plus its reason. */
 export function formatEnvValue(e: EnvValue): string {
   return e.status === 'captured' ? e.value : `${UNAVAILABLE_LABEL} — ${e.reason}`;
+}
+
+/**
+ * What a hash comparison of this artifact deliberately ignores.
+ *
+ * The three cases are genuinely different and must not collapse into one blank
+ * cell: fields were excluded, nothing needed excluding, or no strip could run
+ * at all. Only the last carries a caveat about the hash itself, so it is the
+ * one that must never render as an empty list.
+ */
+export function describeHashExclusions(a: ArtifactRecord): string {
+  if (!a.volatilityStripped) {
+    return `not stripped — ${a.unstrippedReason ?? 'no reason recorded'}`;
+  }
+  return a.strippedFields.length === 0 ? '(none)' : a.strippedFields.join(', ');
 }
