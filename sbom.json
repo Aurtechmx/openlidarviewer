@@ -125,8 +125,8 @@
       "type": "library",
       "name": "inter",
       "group": "@fontsource-variable",
-      "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0|@fontsource-variable/inter@5.2.8",
+      "version": "5.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource-variable/inter@5.3.0",
       "author": "Google Inc.",
       "description": "Self-host the Inter font in a neatly bundled NPM package.",
       "licenses": [
@@ -137,7 +137,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40fontsource-variable/inter@5.2.8",
+      "purl": "pkg:npm/%40fontsource-variable/inter@5.3.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/fontsource/font-files.git#fonts/variable/inter",
@@ -155,7 +155,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.2.8.tgz",
+          "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -171,8 +171,8 @@
       "type": "library",
       "name": "jetbrains-mono",
       "group": "@fontsource",
-      "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0|@fontsource/jetbrains-mono@5.2.8",
+      "version": "5.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource/jetbrains-mono@5.3.0",
       "author": "Google Inc.",
       "description": "Self-host the JetBrains Mono font in a neatly bundled NPM package.",
       "licenses": [
@@ -183,7 +183,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40fontsource/jetbrains-mono@5.2.8",
+      "purl": "pkg:npm/%40fontsource/jetbrains-mono@5.3.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/fontsource/font-files.git#fonts/google/jetbrains-mono",
@@ -201,7 +201,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@fontsource/jetbrains-mono/-/jetbrains-mono-5.2.8.tgz",
+          "url": "https://registry.npmjs.org/@fontsource/jetbrains-mono/-/jetbrains-mono-5.3.0.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
@@ -217,8 +217,8 @@
       "type": "library",
       "name": "manrope",
       "group": "@fontsource",
-      "version": "5.2.8",
-      "bom-ref": "openlidarviewer@0.6.0|@fontsource/manrope@5.2.8",
+      "version": "5.3.0",
+      "bom-ref": "openlidarviewer@0.6.0|@fontsource/manrope@5.3.0",
       "author": "Google Inc.",
       "description": "Self-host the Manrope font in a neatly bundled NPM package.",
       "licenses": [
@@ -229,7 +229,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40fontsource/manrope@5.2.8",
+      "purl": "pkg:npm/%40fontsource/manrope@5.3.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/fontsource/font-files.git#fonts/google/manrope",
@@ -247,7 +247,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.2.8.tgz",
+          "url": "https://registry.npmjs.org/@fontsource/manrope/-/manrope-5.3.0.tgz",
           "type": "distribution",
           "comment": "as detected from npm-ls property \"resolved\""
         }
