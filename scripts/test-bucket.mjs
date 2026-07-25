@@ -60,8 +60,24 @@ function bucketOf(name) {
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 
+// Test subdirectories that hold UNIT tests and must therefore be bucketed.
+// tests/e2e/ is deliberately absent — those are Playwright specs. Without this
+// list a file added under tests/benchmark/ would belong to no bucket, so the
+// release gate would run every bucket green while never executing it.
+const NESTED_TEST_DIRS = ['benchmark'];
+
 function allTestFiles() {
-  return readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));
+  const top = readdirSync(TESTS_DIR).filter((f) => /\.(test|spec)\.ts$/.test(f));
+  const nested = NESTED_TEST_DIRS.flatMap((dir) => {
+    let entries;
+    try {
+      entries = readdirSync(join(TESTS_DIR, dir));
+    } catch {
+      return []; // the directory may legitimately not exist yet
+    }
+    return entries.filter((f) => /\.(test|spec)\.ts$/.test(f)).map((f) => `${dir}/${f}`);
+  });
+  return [...top, ...nested];
 }
 
 function filesFor(bucket) {

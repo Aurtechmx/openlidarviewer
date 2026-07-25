@@ -1,0 +1,102 @@
+/**
+ * csv.ts
+ *
+ * The long-format CSV: one row per fact, eight fixed columns.
+ *
+ *   section,name,value,unit,status,reason,runtime,deterministic
+ *
+ * Long format rather than one wide row per run, because a run mixes stages,
+ * suite-level metrics, environment fields and artifact hashes — shapes that do
+ * not share a column set. Forcing them into one wide table means either a
+ * ragged row count or empty cells that a spreadsheet renders identically to a
+ * measured zero.
+ *
+ * The `status` and `reason` columns are what make the file honest: an
+ * unmeasured metric writes the WORD `unavailable` in the value column and its
+ * reason alongside, so no downstream `sum()` or plot can pick it up as a number.
+ */
+
+import type { Metric, RunReport, StageResult } from '../types';
+import {
+  UNAVAILABLE_LABEL,
+  metricReasonCell,
+  metricUnitCell,
+  metricValueCell,
+} from './metricText';
+
+const HEADER = 'section,name,value,unit,status,reason,runtime,deterministic';
+
+/** RFC-4180 quoting. Without it a reason containing a comma shifts every column. */
+function cell(value: string): string {
+  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function row(cells: readonly string[]): string {
+  return cells.map(cell).join(',');
+}
+
+/** A metric row carries all eight columns; everything else leaves them empty. */
+function metricRow(section: string, name: string, m: Metric): string {
+  return row([
+    section,
+    name,
+    metricValueCell(m),
+    metricUnitCell(m),
+    m.status,
+    metricReasonCell(m),
+    m.runtime,
+    String(m.deterministic),
+  ]);
+}
+
+/** A plain fact (dataset id, OS, hash): a value with no unit and no reason. */
+function factRow(section: string, name: string, value: string, reason = ''): string {
+  return row([section, name, value, '', reason === '' ? 'captured' : UNAVAILABLE_LABEL, reason, '', '']);
+}
+
+function stageRows(stage: StageResult): string[] {
+  return [
+    factRow('stage', `${stage.name}.status`, stage.status, ''),
+    ...(stage.error === undefined ? [] : [factRow('stage', `${stage.name}.error`, stage.error, '')]),
+    metricRow('stage', `${stage.name}.duration`, stage.duration),
+    metricRow('stage', `${stage.name}.peakMemory`, stage.peakMemory),
+  ];
+}
+
+export function toCsv(report: RunReport): string {
+  const rows: string[] = [HEADER];
+
+  rows.push(factRow('run', 'schemaVersion', String(report.schemaVersion)));
+  rows.push(factRow('run', 'suiteId', report.suiteId));
+  rows.push(factRow('run', 'datasetId', report.datasetId));
+
+  for (const [name, field] of Object.entries(report.environment)) {
+    rows.push(
+      field.status === 'captured'
+        ? factRow('environment', name, field.value)
+        : factRow('environment', name, UNAVAILABLE_LABEL, field.reason),
+    );
+  }
+
+  for (const stage of report.stages) rows.push(...stageRows(stage));
+  for (const [name, metric] of Object.entries(report.metrics)) rows.push(metricRow('metric', name, metric));
+
+  for (const artifact of report.artifacts) {
+    rows.push(factRow('artifact', `${artifact.name}.hash`, artifact.hash));
+    rows.push(factRow('artifact', `${artifact.name}.algorithm`, artifact.algorithm));
+    rows.push(factRow('artifact', `${artifact.name}.fingerprint`, artifact.fingerprint));
+    rows.push(factRow('artifact', `${artifact.name}.byteLength`, String(artifact.byteLength)));
+    // Semicolon-joined so the excluded-field list never introduces a comma of
+    // its own — the list is prose for a reviewer, not a nested table. `(none)`
+    // rather than an empty cell: "nothing was excluded" is a real answer here.
+    rows.push(
+      factRow(
+        'artifact',
+        `${artifact.name}.strippedFields`,
+        artifact.strippedFields.length === 0 ? '(none)' : artifact.strippedFields.join('; '),
+      ),
+    );
+  }
+
+  return `${rows.join('\n')}\n`;
+}
