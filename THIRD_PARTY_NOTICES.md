@@ -18,9 +18,9 @@ end of the file.
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
 | proj4 | ^2.20.8 | 2.20.9 | MIT | https://github.com/proj4js/proj4js |
-| @fontsource-variable/inter | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/rsms/inter |
-| @fontsource/manrope | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/sharanda/manrope |
-| @fontsource/jetbrains-mono | ^5.2.8 | 5.2.8 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
+| @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/rsms/inter |
+| @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/sharanda/manrope |
+| @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
 
 ## Development-only dependencies (not bundled into the shipped build)
 
