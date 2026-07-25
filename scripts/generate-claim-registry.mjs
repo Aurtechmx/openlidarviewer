@@ -4,7 +4,7 @@
  *
  * The claim register lives in ONE place — `docs/validation/claim-register.yaml`
  * — and this script derives the runtime TypeScript map from it, so nobody has to
- * hand-mirror the two (the drift risk the reviewer flagged). Edit the YAML, run
+ * hand-mirror the two (a real drift risk). Edit the YAML, run
  * `npm run gen:claim-registry`, commit. `lint:claim-register` fails if the
  * generated file ever drifts from the YAML, so a forgotten regen is caught in CI.
  *

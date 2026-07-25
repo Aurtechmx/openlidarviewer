@@ -30,8 +30,8 @@ import {
 } from './ui/themes';
 import type { CommandPalette } from './ui/CommandPalette';
 import type { ShortcutSheet } from './ui/ShortcutSheet';
-import { TourOverlay } from './ui/onboarding/TourOverlay';
-import { TourSession } from './ui/onboarding/tourSteps';
+import { bootTour, type TourHandle } from './ui/onboarding/bootTour';
+import { buildMeasureConfidenceContext } from './app/measureConfidenceContext';
 import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
@@ -463,11 +463,15 @@ const catalogPanel = new CatalogPanel({
   },
 });
 
+// Assigned when the tour boots (below); the splash chip calls through it.
+let tour: TourHandle | null = null;
+
 const stage = new Stage(app, {
   embed,
   samples: SAMPLES,
   demoSample: DEMO_SAMPLE,
   onSample: loadFromUrl,
+  onStartTour: () => tour?.start(),
   onOpenFile: (file) => void handleFile(file),
   // Return the promise so Stage's inline error handler can show a
   // contextual, plain-English message under the URL input + offer a Retry
@@ -1691,20 +1695,9 @@ function ensureShortcutSheet(): Promise<ShortcutSheet> {
   return shortcutSheetLoading;
 }
 
-// v0.3.9 — onboarding tour. Mounts the overlay immediately so the
-// SVG / card DOM exists; auto-starts on the first session per
-// browser. "Replay tour" is added to the command palette below.
-const tourSession = new TourSession();
-const tourOverlay = new TourOverlay(tourSession);
-tourOverlay.mount();
-// Kick off the tour after the next animation frame so the layout has
-// settled — otherwise the spotlight bounding boxes can be measured
-// against a still-positioning page and land off-target.
-if (!tourSession.hasSeen()) {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => tourSession.start());
-  });
-}
+// v0.3.9 — onboarding tour; offered from the splash chip and the command
+// palette, imposed never. Boot logic lives in ui/onboarding/bootTour.ts.
+tour = bootTour();
 
 /**
  * Replay-time dispatcher — routes a recorded event back through the
@@ -2297,10 +2290,7 @@ function buildActionRegistry(): Action[] {
     section: 'Help',
     hint: 'Walks through the main tools — about 30 seconds.',
     keywords: ['onboarding', 'tour', 'help', 'tutorial', 'guide', 'walkthrough'],
-    run: () => {
-      tourSession.reset();
-      tourSession.start();
-    },
+    run: () => tour?.replay(),
   });
 
   // v0.3.9 — Keyboard shortcut sheet. Surfaces the sheet from the
@@ -3328,8 +3318,7 @@ function streamingExportCloud(): PointCloud | null {
  */
 function exportGeoContext(): {
   origin: readonly [number, number, number];
-  crsName: string | undefined;
-  name: string | null;
+  crsName: string | undefined; name: string | null;
 } {
   // The label must come from the RESOLVED CRS — the same one every conversion,
   // unit factor and validation gate uses — not from the raw source metadata.
@@ -3346,7 +3335,8 @@ function exportGeoContext(): {
   };
   if (scans.activeId) {
     const c = viewer.getCloud(scans.activeId);
-    if (c) return { origin: c.origin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
+    // SOURCE frame (float64-transform.md step 2): sessions save + import here.
+    if (c) return { origin: c.sourceOrigin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
   }
   const sc = viewer.streamingCloud;
   if (sc) return { origin: sc.renderOrigin, crsName: effectiveCrsName() ?? sc.crs()?.name ?? undefined, name: sc.name };
@@ -5476,18 +5466,17 @@ let _lastMeasurementCount = 0;
 /** Refresh the Measurements panel's contents and visibility. */
 function refreshMeasurePanel(): void {
   measurePanel.update(viewer.measure.getSummaries());
+  measurePanel.setConfidenceContext(buildMeasureConfidenceContext(viewer, crsService.current()));
   const measurements = viewer.measure.getMeasurements();
   const hasMeasurements = measurements.length > 0;
   measurePanel.setVisible(viewer.measureMode || hasMeasurements);
-  // Local-first counter — fires only when a new measurement is placed.
-  // Categorical (the kind) only; never the coordinates, never the name.
+  // Local-first counter, categorical (the kind) only — never coordinates or names.
   if (measurements.length > _lastMeasurementCount) {
     const newest = measurements[measurements.length - 1];
     if (newest) recordUsage('measurement', newest.kind);
   }
   _lastMeasurementCount = measurements.length;
-  // Keep the Export panel's Products lane (measurement GeoJSON/CSV) in sync with
-  // the live measurement count.
+  // Keep the Export panel's Products lane in sync with the measurement count.
   exportPanel.refresh();
 }
 

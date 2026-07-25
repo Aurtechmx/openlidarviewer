@@ -23,9 +23,9 @@
  *
  * Usage:
  *   node scripts/create-release-manifest.mjs \
- *     --asset-dir release/staged-v0.6.0-alpha.3 \
- *     --evidence  release/staged-v0.6.0-alpha.3/test-evidence-v0.6.0-alpha.3.json \
- *     --output    release/staged-v0.6.0-alpha.3/release-manifest-v0.6.0-alpha.3.json
+ *     --asset-dir release/payload \
+ *     --evidence  release/payload/test-evidence-v0.6.0.json \
+ *     --output    release/payload/release-manifest-v0.6.0.json
  */
 
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from 'node:fs';

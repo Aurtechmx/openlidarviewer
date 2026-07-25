@@ -4,7 +4,7 @@
  * The RUNTIME evidence registry: the machine-readable claim register
  * (`docs/validation/claim-register.yaml`) mirrored as typed code so the export
  * paths can actually consult it, rather than the register being documentation
- * the running app never reads (the gap the external audit flagged).
+ * the running app never reads.
  *
  * Every entry carries its current and required evidence level and whether it may
  * be exported at all. `exportGate(claimId)` turns that into an

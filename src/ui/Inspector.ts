@@ -5,6 +5,8 @@ import {
 } from '../model/layerCompatibility';
 import { openConfirm } from './Modal';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
+import { loadLayerHealthCard } from '../lazyChunks';
+import type { LayerHealthCard } from './LayerHealthCard';
 import type {
   DatasetIntelligence,
   DatasetIntelligenceInput,
@@ -653,6 +655,11 @@ export class Inspector {
   private readonly _sessionStatsBody: HTMLElement;
   /** Dataset Intelligence card — surfaced under the title, above Layers. */
   private readonly _datasetIntelligence: DatasetIntelligenceCard;
+  /** Layer health card — per-layer spatial facts, under the Layers list.
+   * Lazy (lazyChunks): the class and its wording load on first data. */
+  private _layerHealth: LayerHealthCard | null = null;
+  private readonly _layerHealthSlot: HTMLElement;
+  private _layerHealthPending: Parameters<LayerHealthCard['update']> | null = null;
   /** Provenance fingerprint body — populated by setProvenance(). */
   private readonly _provenanceBody: HTMLElement;
   /**
@@ -1220,11 +1227,15 @@ export class Inspector {
     // title and above the Visuals Studio preset rail. Empty-state by
     // default so the panel never lies on first paint.
     this._datasetIntelligence = new DatasetIntelligenceCard();
+    // Empty slot; the card class loads on first data (never lies on first
+    // paint — it simply is not there yet).
+    this._layerHealthSlot = el('div');
 
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
       this._datasetIntelligence.element,
       this._layersSection,
+      this._layerHealthSlot,
       this._colorBySection,
       this._elevFilter.section,
       this._intenFilter.section,
@@ -1380,6 +1391,28 @@ export class Inspector {
    * Flag layers whose CRS doesn't match the others and show a one-line note.
    * Honest overlay guard: a silently mismatched frame is called out, not trusted.
    */
+  /** Feed the layer health card — same cadence as setLayerCrsFlags. */
+  setLayerHealth(
+    layers: Parameters<LayerHealthCard['update']>[0],
+    report: Parameters<LayerHealthCard['update']>[1],
+  ): void {
+    if (this._layerHealth) {
+      if (layers.length === 0) this._layerHealth.clear();
+      else this._layerHealth.update(layers, report);
+      return;
+    }
+    // Remember only the newest state; mount the card when its chunk lands.
+    this._layerHealthPending = [layers, report];
+    void loadLayerHealthCard().then(({ LayerHealthCard }) => {
+      if (this._layerHealth) return;
+      this._layerHealth = new LayerHealthCard();
+      this._layerHealthSlot.append(this._layerHealth.root);
+      const pending = this._layerHealthPending;
+      this._layerHealthPending = null;
+      if (pending && pending[0].length > 0) this._layerHealth.update(pending[0], pending[1]);
+    });
+  }
+
   setLayerCrsFlags(
     mismatched: ReadonlySet<string>,
     summary: string,

@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types
-import { buildEvidenceRecord, parseGateStages, CANONICAL_NPM, MANDATORY_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
+import { buildEvidenceRecord, parseGateStages, parseGateLog, CANONICAL_NPM, MANDATORY_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 const fullBuckets = () =>
@@ -149,6 +149,46 @@ describe('parseGateStages', () => {
 
   it('returns an empty object for a log without markers', () => {
     expect(parseGateStages('Tests 5 passed\nGATE EXIT: 0')).toEqual({});
+  });
+});
+
+describe('parseGateLog — bucket tallies', () => {
+  it('sums the canonical GATE TALLY lines across shards, per bucket', () => {
+    const log = [
+      'GATE TALLY bucket=unit passed=1010 skipped=4',
+      'GATE TALLY bucket=unit passed=1080 skipped=0',
+      'GATE TALLY bucket=unit passed=987 skipped=12',
+      'GATE TALLY bucket=export passed=616 skipped=0',
+      'GATE TALLY bucket=terrain passed=532 skipped=0',
+      'GATE TALLY bucket=terrain passed=708 skipped=0',
+      'GATE TALLY bucket=ui passed=429 skipped=0',
+      'GATE TALLY bucket=slow passed=295 skipped=0',
+      'GATE TALLY bucket=slow passed=222 skipped=0',
+    ].join('\n');
+    const b = parseGateLog(log);
+    expect(b.unit).toEqual({ passed: 3077, skipped: 16, runs: 3 });
+    expect(b.export).toEqual({ passed: 616, skipped: 0, runs: 1 });
+    expect(b.terrain).toEqual({ passed: 1240, skipped: 0, runs: 2 });
+    expect(b.slow).toEqual({ passed: 517, skipped: 0, runs: 2 });
+  });
+
+  it('prefers the canonical line and ignores the human summary — no double count', () => {
+    // This is the CI failure inverted: even with both present, the count is the
+    // canonical one exactly once, never canonical + human.
+    const log = [
+      '──── unit shard 1/1 ────',
+      '      Tests  5 passed (5)',
+      'GATE TALLY bucket=unit passed=5 skipped=0',
+    ].join('\n');
+    expect(parseGateLog(log).unit).toEqual({ passed: 5, skipped: 0, runs: 1 });
+  });
+
+  it('falls back to the human summary for an older log with no canonical line', () => {
+    const log = [
+      '> openlidarviewer@0.6.0 test:export',
+      '      Tests  616 passed (616)',
+    ].join('\n');
+    expect(parseGateLog(log).export).toEqual({ passed: 616, skipped: 0, runs: 1 });
   });
 });
 

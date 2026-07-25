@@ -31,6 +31,7 @@ import {
 } from '../src/model/layerCompatibility';
 import { integrableClouds, streamingMayCombine } from '../src/render/integrableClouds';
 import { PointCloud } from '../src/model/PointCloud';
+import { createProjectFrame, layerTransform } from '../src/geo/ProjectSpatialFrame';
 
 // ── a tiny reproducible generator ──────────────────────────────────────────
 /** mulberry32 — small, fast, and deterministic from a 32-bit seed. */
@@ -275,44 +276,43 @@ describe('PointCloud frame transitions — invariants', () => {
   const make = (positions: Float32Array, origin: [number, number, number]) =>
     new PointCloud({ positions, origin: [...origin], sourceFormat: 'las', name: 'p.las' });
 
-  it('a rebase never moves a point in the world', () => {
+  it('a placement never moves a point in the world', () => {
+    // The property the destructive rebase could only hold to within a Float32
+    // step now holds to Float64 addition: lifting a project-local coordinate
+    // back through the project origin gives the world coordinate, for every
+    // cloud and every placement. `target` plays the project origin.
     forAll('world invariance', genCloud, ({ positions, origin, target }) => {
       const c = make(Float32Array.from(positions), origin);
-      const worldBefore = Array.from(c.positions).map((v, i) => v + c.origin[i % 3]);
-      const q = c.rebaseQuantum(target);
-      // World invariance is per-axis now; the bound a point must respect is the
-      // step on the axis it moved along, so take the worse of the two.
-      const quantum = Math.max(q.horizontal, q.vertical);
-      c.rebaseOrigin(target);
-      const worldAfter = Array.from(c.positions).map((v, i) => v + c.origin[i % 3]);
-      for (let i = 0; i < worldBefore.length; i++) {
-        // Equal to within the Float32 step the mount itself reports — which is
-        // the whole justification for the precision gate quoting that number.
-        expect(Math.abs(worldAfter[i] - worldBefore[i])).toBeLessThanOrEqual(quantum + 1e-9);
+      const t = layerTransform(createProjectFrame(target), [...c.sourceOrigin]);
+      const w: [number, number, number] = [0, 0, 0];
+      const p: [number, number, number] = [0, 0, 0];
+      for (let i = 0; i < c.pointCount; i++) {
+        c.worldXYZ(i, w);
+        c.projectXYZ(i, t, p);
+        for (let a = 0; a < 3; a++) {
+          expect(p[a] + target[a]).toBeCloseTo(w[a], 9);
+        }
       }
     });
   });
 
-  it('the source origin survives any sequence of rebases', () => {
+  it('the source origin and positions survive any sequence of placements', () => {
+    // Placement is set, cleared and re-set as data ABOUT the layer; the cloud
+    // itself must come through any such cycle untouched — that is what makes
+    // mount and unmount exact inverses.
     forAll('source origin immutability', genCloud, ({ positions, origin, target }) => {
       const c = make(Float32Array.from(positions), origin);
-      const before = [...c.sourceOrigin];
-      c.rebaseOrigin(target);
-      c.rebaseOrigin([0, 0, 0]);
-      c.rebaseOrigin(target);
-      expect([...c.sourceOrigin]).toEqual(before);
-      expect(before).toEqual(origin);
-    });
-  });
-
-  it('restoring always returns to the file frame, from any state', () => {
-    forAll('restore round-trip', genCloud, ({ positions, origin, target }) => {
-      const c = make(Float32Array.from(positions), origin);
-      c.rebaseOrigin(target);
-      c.rebaseOrigin([target[0] - 5, target[1] + 7, target[2] - 2]);
-      c.restoreSourceFrame();
-      expect([...c.origin]).toEqual(origin);
-      expect(c.isRebased).toBe(false);
+      const originBefore = [...c.sourceOrigin];
+      const positionsBefore = c.positions.slice();
+      const mounted = layerTransform(createProjectFrame(target), [...c.sourceOrigin]);
+      const identity = layerTransform(createProjectFrame([...c.sourceOrigin]), [...c.sourceOrigin]);
+      for (const t of [mounted, identity, mounted]) {
+        for (let i = 0; i < c.pointCount; i++) c.projectXYZ(i, t);
+      }
+      expect([...c.sourceOrigin]).toEqual(originBefore);
+      expect([...c.origin]).toEqual(originBefore);
+      expect(originBefore).toEqual(origin);
+      expect(c.positions).toEqual(positionsBefore);
     });
   });
 

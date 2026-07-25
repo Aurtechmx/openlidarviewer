@@ -31,6 +31,13 @@ export interface ResidentSnapshotOptions {
   sourceFormat: SourceFormat;
   /** Provenance metadata (CRS, sensor, …) when the source carries it. */
   metadata?: CloudMetadata;
+  /**
+   * The SOURCE file's declared total, when the streaming metadata carries it.
+   * Rides `PointCloud.sourceDeclaredPointCount` so the exporters can state
+   * resident-of-source; `declaredPointCount` stays the resident total so the
+   * Health Check keeps reading the snapshot as internally consistent.
+   */
+  sourcePointCount?: number;
 }
 
 /**
@@ -92,6 +99,9 @@ export function buildResidentSnapshot(
     // read it as a lossy decode of a larger file.
     declaredPointCount: total,
     decodedPointCount: total,
+    ...(opts.sourcePointCount !== undefined && opts.sourcePointCount > total
+      ? { sourceDeclaredPointCount: opts.sourcePointCount }
+      : {}),
     ...(opts.metadata ? { metadata: opts.metadata } : {}),
   });
 }

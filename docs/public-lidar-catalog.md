@@ -1,133 +1,108 @@
-# Public LiDAR — verified-dataset picker
+# Public LiDAR: verified-dataset picker
 
-OpenLiDARViewer v0.3.6 ships a curated picker for verified-working public
-LiDAR datasets. The empty-state UI presents a dropdown of hand-vetted
-COPC / EPT URLs hosted on public S3 buckets (USGS public LiDAR bucket
-+ Hobu's open-data bucket). Each entry was probed at build time and
-returns a valid stream.
+OpenLiDARViewer's empty state offers two ways to load public LiDAR without
+supplying a URL by hand: a curated dropdown of hand-vetted COPC / EPT datasets,
+and a coordinate-based search that queries Microsoft Planetary Computer for US
+3DEP COPC tiles near a point. Both feed the same streaming pipeline the manual
+URL field uses. Local files stay on the device, and no account is required.
 
 ## What the picker does
 
-The empty-state screen carries a labelled section: **"or pick a verified
-public LiDAR dataset"**. The dropdown's options are the entries in
-`src/io/catalog/curatedLocations.ts`, each with:
+The empty-state screen carries a labelled section, "or pick a verified public
+LiDAR dataset". Its options are the entries in
+`src/io/catalog/curatedLocations.ts`, sorted smallest-first. Each carries a place
+or dataset name, an inline size tag (file size for COPC, point count for EPT) so
+a user can pick by network budget, and a short hint that appears below the
+dropdown when the option is focused.
 
-- a clean place / dataset name
-- an inline size tag (`77 MB` for COPC files, `22.4B pts` for EPT
-  datasets) so users can pick by network budget
-- a short hint that updates below the dropdown when the option is
-  focused
+Clicking Open hands the selected URL to `handleRemoteUrl()`, which detects
+whether it is an EPT manifest or a COPC file and dispatches to the matching
+streaming path. That is the same code the open-from-URL field runs.
 
-Clicking **Open** routes the selected URL into `handleRemoteUrl()`,
-which detects whether the URL is an EPT manifest or a COPC file and
-dispatches to the matching streaming path. The streaming pipeline is
-exactly the same one the open-from-URL field uses.
+## Search by location
 
-There is no address input. There is no geocoder request. The picker
-ships verified URLs — nothing about an arbitrary location is sent to
-any third party.
+Below the dropdown, a "search by location" control (US only, backed by Planetary
+Computer) takes coordinates of a US point, or a city pick that auto-fills them,
+and asks Microsoft Planetary Computer's public STAC `3dep-lidar-copc` catalog for
+COPC tiles near that point. Matching tiles open through the same COPC path.
 
-## Why curated, not address-driven
+This is a coordinate search, not an address search. There is no street-address
+box and no geocoder. The client sends a small bounding box around the chosen
+point to a public STAC endpoint and reads back the tiles that intersect it. The
+request is one the user initiates, and it goes to Microsoft's public catalog, not
+to any OpenLiDARViewer-operated server. The lazy-loaded client lives in
+`src/io/catalog/planetaryComputer.ts`.
 
-We previously shipped an address-search interface that geocoded a
-free-text query via Nominatim and looked up matching tiles via USGS's
-TNM Products API. Both halves were unreliable in different ways:
+## Datasets in the curated list
 
-- **The TNM API doesn't surface COPC URLs**. Every public LiDAR tile
-  it indexes for the bbox we test against is a legacy `.laz` file, not
-  `.copc.laz`. The browser can't range-read legacy LAZ — the address
-  workflow returned tiles that wouldn't open.
-- **Address coverage was inconsistent**. Even when TNM had relevant
-  tiles for a region, mapping an arbitrary street address to those
-  tiles relied on Nominatim's geocoder accuracy (variable across
-  countries) plus a coarse bbox heuristic. Most addresses returned
-  "0 COPC tiles" not because the viewer was broken but because 3DEP's
-  COPC migration is incomplete.
+The shipped list currently holds 14 entries. European national programmes come
+from FLAI's Open LiDAR Data (Luxembourg, Switzerland's swissSURFACE3D, Slovenia's
+GURS, the Netherlands' AHN4) on a public EU S3 bucket. The US datasets (San
+Francisco, Los Angeles, Denver Metro, Grand Canyon) sit on the USGS and Hobu
+west-coast buckets. Sizes run from an 84 MB single COPC file up to
+multi-billion-point EPT scans.
 
-The curated picker sidesteps both problems by shipping pre-verified
-URLs. Users wanting to load arbitrary data have two paths:
-- Paste any `.copc.laz` or `ept.json` URL into the dedicated URL field
-  above the picker.
-- Use the **"Open scan from device"** button with a local LAS / LAZ /
-  PLY / E57 / PTX / PCD / GLB / OBJ file.
+Every entry was probed before shipping, with a CORS preflight, a HEAD for size,
+and a ranged read of the LAS header, and it ships only if it still returns a
+parseable stream. `tests/curatedLocations.test.ts` asserts the shape of each
+entry, and the FLAI re-probe script is `tools/verify-flai.sh`. The list itself is
+the source of truth: `src/io/catalog/curatedLocations.ts`.
 
 ## Privacy contract
 
-- **No address input → no geocoder request**. Where the previous
-  workflow hit `nominatim.openstreetmap.org/search`, the curated picker
-  fires zero third-party requests until the user clicks Open.
-- The `?notelemetry=1` URL flag still suppresses the picker — it shows
-  a one-line "Public-LiDAR lookup is disabled" notice instead. Even
-  though the picker doesn't make exploratory third-party calls, the
-  per-tile fetch itself is a categorical access event we let the user
-  opt out of.
-- A dataset selection records exactly one categorical event in
-  `localStorage` (`scan-open: curated:usgs-ept`). The counter never
-  leaves the device. The selected URL itself never leaves the device
-  beyond the HTTP GET to the bucket.
-- The S3 buckets we link to (USGS public LiDAR, Hobu Inc.'s public
-  data bucket, Entwine's public bucket) log standard CDN access
-  events. The bytes streamed are public-domain LiDAR; the request
-  reveals only "someone fetched this public tile".
+- No street-address input, and no geocoder. Earlier builds shipped a Nominatim
+  address search; that is gone. The only location affordance is the coordinate
+  search above.
+- The location search is a third-party request the user starts. Picking a point
+  and running the search sends a bounding box to Microsoft Planetary Computer.
+  Nothing is sent until the user runs it. The curated dropdown fires no request
+  until Open, and then only a direct GET to the public bucket.
+- `?notelemetry=1` disables the whole public-LiDAR lookup. With the flag set, the
+  panel shows a one-line "lookup is disabled" notice in place of the dropdown and
+  search. A per-tile fetch is a categorical access event, so the flag lets a user
+  opt out of it.
+- A dataset selection records one categorical event in `localStorage`. The
+  counter never leaves the device, and the selected URL never leaves it beyond
+  the HTTP GET to the bucket.
+- The buckets we link to log standard CDN access. The bytes streamed are public
+  LiDAR, so the request reveals only that someone fetched a public tile.
 
-## Supported datasets (current list)
+## What the picker does not do
 
-The shipped picker covers 18 entries spanning ~77 MB to 75 billion
-points. The mix favours metropolitan EPT scans (San Francisco, Los
-Angeles, Denver Metro, Grand Canyon NP) plus standalone COPC files
-(Autzen Stadium, Sofia, Cahokia Mounds, Key Bridge Baltimore, Puerto
-Rico FEMA). The `tests/curatedLocations.test.ts` suite asserts the
-shape of every entry; a live re-probe runs at release time to confirm
-each URL still returns a parseable manifest.
+- No street-address LiDAR search. Coordinates only, US only, and only for 3DEP
+  COPC through Planetary Computer.
+- No claim to global coverage. The curated list is what we verified, and the
+  coordinate search covers US 3DEP. For anything else, paste a `.copc.laz` or
+  `ept.json` URL into the field above the picker.
+- No OpenLiDARViewer backend. The viewer never talks to a server we operate.
+  Every request goes to a public data source.
+- No proxy. A CORS proxy would reach catalogs that block browser requests, at the
+  cost of routing user data through third-party infrastructure. We decline.
+- No API keys. Every supported source is reachable without authentication.
+- No tile caching beyond the browser. Standard HTTP caching applies to the COPC
+  bytes through `HttpRangeSource`, as before.
 
-For the current set, see `src/io/catalog/curatedLocations.ts`.
+## Removed experimental modules
 
-## Experimental modules retained for future work
-
-The following modules exist in the repo but are NOT wired into the
-v0.3.6 user flow. They survive as scaffolding for possible future
-address-based catalog work, marked **experimental** at the top of each
-file:
-
-- `src/io/catalog/geocode.ts` — Nominatim client
-- `src/io/catalog/Usgs3depProvider.ts` — USGS TNM Products API client
-- `src/io/catalog/SourceRegistry.ts` — generic provider registry
-
-Nothing in the v0.3.6 UI imports them; tree-shaking drops them from the
-shell bundle. A future provider that can reliably return COPC tiles
-(OpenTopography, AHN, IGN LiDAR HD) could land via the `SourceRegistry`
-pattern without breaking the curated-picker UI.
-
-## What the code does NOT do (v0.3.6)
-
-- **No address-based LiDAR search.** Address input + geocoder is not
-  exposed to users in v0.3.6.
-- **No claim to global coverage.** The picker lists what works; users
-  can paste their own URLs for anything else.
-- **No cloud backend.** The viewer never talks to an OpenLiDARViewer-
-  operated server. Every request goes to a public data source.
-- **No proxy.** A CORS proxy would let the viewer reach catalogs that
-  block browser requests, at the cost of routing user data through
-  third-party infrastructure. We decline.
-- **No API keys.** Every supported source is reachable without
-  authentication.
-- **No tile caching.** Browser HTTP caching applies to the underlying
-  COPC bytes via `HttpRangeSource` as it did before.
+Earlier versions carried a Nominatim geocoder, a USGS TNM Products API client,
+and a generic provider registry (`geocode.ts`, `Usgs3depProvider.ts`,
+`SourceRegistry.ts`). The TNM path returned mostly legacy non-streamable LAZ, and
+address dispatch depended on geocoder accuracy against 3DEP's incomplete COPC
+migration, so most addresses produced no usable coverage. Those modules were
+removed in v0.6.0. The coordinate search against Planetary Computer replaces them
+for the US case.
 
 ## Preparing your own COPC
 
-Users who want to host their own scan publicly typically run a small
-PDAL pipeline first to normalise, reproject, and convert to COPC:
+To host a scan publicly, a small PDAL pipeline is usually enough:
 
-1. **Crop** with `filters.crop` to the area of interest.
-2. **Merge** sibling tiles with `pdal merge` so the final COPC is a
-   single file.
-3. **Reproject** with `filters.reprojection` if downstream consumers
-   expect a different CRS.
-4. **Convert** with `writers.copc` to emit a `.copc.laz` ready for
-   range-served streaming.
+1. Crop with `filters.crop` to the area of interest.
+2. Merge sibling tiles with `pdal merge` so the result is one file.
+3. Reproject with `filters.reprojection` if downstream consumers expect a
+   different CRS.
+4. Convert with `writers.copc` to emit a `.copc.laz` ready for range-served
+   streaming.
 
-PDAL ships these stages out of the box; full docs at
-<https://pdal.io/>. The viewer treats the resulting file the same way
-it treats the curated entries — paste the URL into the URL field above
-the picker.
+PDAL ships these stages; full docs are at <https://pdal.io/>. The viewer treats
+the result the same way it treats a curated entry: paste the URL into the field
+above the picker.

@@ -10,6 +10,33 @@ not touched between releases keeps its original measurement; the version pin
 is when the figures were captured, not a claim that they have been re-run on
 every release.
 
+## The frozen stable benchmark
+
+One protocol, frozen for the stable line, chased for reproducibility rather
+than speed. The point is a number a reviewer can regenerate, not a number
+that flatters.
+
+Protocol, fixed:
+
+- Dataset: the start-screen sample object — swissSURFACE3D tile
+  `2485_1109.copc.laz` (~84 MB COPC; exact object and provider terms in
+  `docs/credits.md`) — streamed remotely, cold cache.
+- Browser: current stable Chrome with WebGPU, one machine whose hardware is
+  stated beside the results.
+- Procedure: open the sample from the splash, no input until refinement
+  settles; then one full orbit; then a Scan Report export.
+- Metrics recorded: time to first rendered points; time to settled
+  refinement; resident point count at settle; peak JS heap during the run;
+  Scan Report export time.
+
+Results are recorded per stable release from a real run on the stated
+hardware, appended below with their date. No row exists until a run
+produced it.
+
+| Release | Hardware | First points | Settled | Resident points | Peak heap | Report export |
+|---|---|---|---|---|---|---|
+| v0.6.0 | (to be recorded at tag time) | — | — | — | — | — |
+
 ## Bundle shell — v0.3.5
 
 The first-paint payload — what the browser must fetch before the empty viewer

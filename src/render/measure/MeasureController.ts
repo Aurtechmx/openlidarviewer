@@ -665,6 +665,16 @@ export class MeasureController {
   }
 
   /**
+   * Whether the scene asserted a shared datum — false when `setContext`
+   * received a null origin (clouds recentred on conflicting origins share no
+   * frame). Read by the host to feed the Measurements panel's per-value
+   * context line (`MeasurePanel.setConfidenceContext`).
+   */
+  get datumResolved(): boolean {
+    return this._originUp !== null;
+  }
+
+  /**
    * Inject the scan CRS's linear-unit → metres factor — the SAME seam the
    * terrain/space paths read (`crsService.current().linearUnitToMetres`).
    * Applying it here, at the controller boundary, keeps headline labels,

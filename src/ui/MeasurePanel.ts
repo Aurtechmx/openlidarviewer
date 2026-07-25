@@ -45,6 +45,16 @@ import {
   formatLength,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
 } from '../render/measure/format';
+// Measurement context state — every displayed value states what kind of
+// number it is (viewer measurement with a resolved datum / approximate
+// scene-local figure / no shared basis), so a screenshot of the panel can
+// never imply a certified survey figure. Pure policy module; the panel is
+// the dumb view that renders the state it derives.
+import {
+  confidenceForKind,
+  UNRESOLVED_SCENE_CONTEXT,
+  type MeasureSceneContext,
+} from '../render/measure/measureConfidence';
 // B7/B8 (v0.4.5) — sampler-control defaults + bounds, read from the sampler
 // module so the inputs, the controller clamp and the tests share one rule.
 import {
@@ -303,6 +313,13 @@ export class MeasurePanel {
    * stale timer can never fire against torn-down inputs.
    */
   private _samplerTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Scene-level measurement-context facts, fed by the host via
+   * {@link setConfidenceContext}. Null until the host speaks; the panel then
+   * renders the FAIL-CLOSED default (approximate — shared datum unresolved),
+   * so a value can never read as more than the scene has proven.
+   */
+  private _confidenceScene: MeasureSceneContext | null = null;
 
   constructor(callbacks: MeasurePanelCallbacks) {
     this._cb = callbacks;
@@ -965,6 +982,27 @@ export class MeasurePanel {
     ]);
   }
 
+  /**
+   * Feed the scene-level measurement-context facts (datum resolved? layer set
+   * proven? vertical reference known?). Until this is called the panel stays
+   * on the fail-closed default — approximate, shared datum unresolved — so
+   * silence can never look like verification. No-op on identical facts so the
+   * host may call it on every refresh without churning the list DOM.
+   */
+  setConfidenceContext(scene: MeasureSceneContext): void {
+    const prev = this._confidenceScene;
+    if (
+      prev &&
+      prev.datumResolved === scene.datumResolved &&
+      prev.layers === scene.layers &&
+      prev.verticalReferenceKnown === scene.verticalReferenceKnown
+    ) {
+      return;
+    }
+    this._confidenceScene = scene;
+    this._renderList();
+  }
+
   /** Rebuild the measurement list from the controller's summaries. */
   update(summaries: MeasurementSummary[]): void {
     this._summaries = summaries;
@@ -1068,6 +1106,18 @@ export class MeasurePanel {
     }
 
     const headRow = el('div', { className: 'olv-mp-row' }, children);
+
+    // Measurement-context line: what kind of number the value above it is.
+    // Complements the per-endpoint trust dot (which grades the DATA under the
+    // endpoints) with the SCENE's frame facts — datum resolved, layer set
+    // proven, vertical reference known — derived by the pure policy module.
+    // The label is always visible; the reason rides on the tooltip.
+    const conf = confidenceForKind(s.kind, this._confidenceScene ?? UNRESOLVED_SCENE_CONTEXT);
+    const confLine = el('div', {
+      className: `olv-mp-confidence olv-mp-confidence-${conf.level}`,
+      text: conf.label,
+      title: conf.level === 'verified' ? conf.label : `${conf.label} — ${conf.reason}`,
+    });
 
     // Profile-only: render a compact height-vs-distance chart strip
     // beneath the headline row. The chart is a single inline SVG, no
@@ -1303,6 +1353,7 @@ export class MeasurePanel {
 
       const children: HTMLElement[] = [
         headRow,
+        confLine,
         chartWrap,
         vexStrip,
         ...(samplerBlock ? [samplerBlock] : []),
@@ -1397,10 +1448,10 @@ export class MeasurePanel {
         className: 'olv-mp-chart-caveat',
         text: 'Resident-node analysis only — cut / fill may refine as streaming loads.',
       });
-      return el('div', { className: 'olv-mp-row-stack' }, [headRow, caveat]);
+      return el('div', { className: 'olv-mp-row-stack' }, [headRow, confLine, caveat]);
     }
 
-    return headRow;
+    return el('div', { className: 'olv-mp-row-stack' }, [headRow, confLine]);
   }
 }
 

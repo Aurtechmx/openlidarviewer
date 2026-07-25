@@ -5,7 +5,7 @@
  * rewrite of the old density-silhouette sketch. The old generator traced a
  * single blob around a coarse (≤48-cell) full-cloud occupancy grid and drew
  * fabricated bbox-edge "wall" lines; on real scans it produced an
- * unrecognisable blob (the user's verdict: "totally not realistic"). The
+ * unrecognisable blob (an unrecognizable floor-plan geometry). The
  * pipeline replacing it:
  *
  *   1. {@link wallSlice}    — clip to the dense footprint (360 noise arms /

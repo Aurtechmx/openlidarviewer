@@ -1,30 +1,30 @@
-# v0.6.0-alpha.3 publication-readiness report
+# v0.6.0 publication-readiness report
 
 A sober account of what is ready and what remains before this alpha is published on GitHub.
 
 ## Release identity
 
-- Version `0.6.0-alpha.3` across `package.json`, lockfile, README, CHANGELOG, `RELEASE_NOTES_v0.6.0-alpha.3.md`, `CITATION.cff`, and the service-worker cache (`lint:release-sync` enforces this).
+- Version `0.6.0` across `package.json`, lockfile, README, CHANGELOG, `RELEASE_NOTES_v0.6.0.md`, `CITATION.cff`, and the service-worker cache (`lint:release-sync` enforces this).
 - This is a **pre-release / alpha** for evaluation; interfaces and internals may change before v0.6.0.
 
 ## Test and build gate
 
-Run locally at the alpha head commit (**not yet a Git tag** — the published tag is cut from the merged commit). The figures below come from a run that reached a literal `GATE EXIT: 0`; see "The gate runner terminates, verified" for the evidence behind that:
+Run by the release-mode gate at the tagged v0.6.0 commit — a literal `GATE EXIT: 0` with all seven stage markers in the shipped `gate.log`; the authoritative record is the release asset `test-evidence-v0.6.0.json`, hash-bound by `SHA256SUMS` and the release manifest:
 
 - Static: `tsc --noEmit` clean; main-deferral, inline-imports, unsafe-html, layer-boundaries, claim-register, no-ignored-src, release-sync all pass.
-- unit 3,077 (16 skipped) · export 616 · terrain 1,240 · ui 429 · slow 517.
-- Build-contract 11; plain build and live/obfuscated build pass. Live entry 713 KiB against the 720 KiB hard ceiling, above the 680 KiB warning line, reproduced byte-identically across two clean builds. The margin is 7 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
+- unit 3,140 (16 skipped) · export 618 · terrain 1,240 · ui 429 · slow 531.
+- Build-contract 11; plain build and live/obfuscated build pass. Live entry 718 KiB against the 720 KiB hard ceiling, above the 680 KiB warning line, reproduced byte-identically across two clean builds. The margin is 2 KiB: treat the ceiling as effectively reached and shed weight before adding any, rather than raising it.
 - Full e2e (`npm run test:e2e`): 161 passed, 4 fixture-skipped (autzen COPC not on disk), 0 failed — **locally**. The gating browser evidence is the green GitHub Actions run required below, not this local run.
 - Documentation build (`npm run docs:build`) passes.
 
 ## Dependency and license
 
 - Production dependency audit: **0 vulnerabilities**. (Dev-only tooling may carry advisories in nested VitePress/Vite/esbuild that are not in the deployed runtime.)
-- License: MIT (`LICENSE`, `package.json`). SBOM (`sbom.json`, CycloneDX) regenerated from the current lockfile at root component `openlidarviewer 0.6.0-alpha.3`.
+- License: MIT (`LICENSE`, `package.json`). SBOM (`sbom.json`, CycloneDX) regenerated from the current lockfile at root component `openlidarviewer 0.6.0`.
 
 ## Authorship and citation
 
-- `CITATION.cff` declares `0.6.0-alpha.3`. Its `date-released` must be set to the **actual GitHub publication date** immediately before tagging.
+- `CITATION.cff` declares `0.6.0`. Its `date-released` must be set to the **actual GitHub publication date** immediately before tagging.
 - `AI_ASSISTANCE.md` updated for the alpha and linked to this release's validation report.
 
 ## Where the figures come from
@@ -44,8 +44,8 @@ it by adding them up.
 
 ## Claims and evidence
 
-- Evidence package: [VALIDATION_REPORT_v0.6.0-alpha.3.md](VALIDATION_REPORT_v0.6.0-alpha.3.md), [KNOWN_LIMITATIONS_v0.6.0-alpha.3.md](KNOWN_LIMITATIONS_v0.6.0-alpha.3.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
-- Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0-alpha.3` with the inheritance noted; `lint:claim-register` passes.
+- Evidence package: [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
+- Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0` with the inheritance noted; `lint:claim-register` passes.
 
 ## The gate runner terminates, verified
 
@@ -90,7 +90,7 @@ overwhelming majority of use — is unaffected.
 
 Two things stand between this and a tag:
 
-1. **The project transform still rewrites Float32 positions** rather than being held in Float64 beside source-local vertices. The gates around it are now unit-correct per axis and refuse past a millimetre, so the loss is bounded, measured and disclosed — but bounded is not absent, and this is the one open correctness item. Scope is measured in the coordinate-integrity roadmap, P1 item 2: 154 direct reads across 42 files, and it must land in all of them together.
+1. **The transform architecture landed: the project transform is a Float64 placement, and source geometry is immutable.** The in-place Float32 rewrite that was the open correctness item is removed (docs/architecture/float64-transform.md, steps 1–5): a layer's placement is data beside the cloud, positions stay byte-identical through mount and unmount (pinned by `tests/sourceGeometryImmutable.test.ts`), and the round trip loses nothing because nothing is re-quantised. What remains is browser verification of two-layer placement (step 6) before mounting can be enabled; until then the mm-precision refusal gates stay in place as conservative admission rules and `MULTI_LAYER_MOUNT_ENABLED` stays false.
 2. **Browser evidence must come from a green GitHub Actions run on the tagged commit.** The local e2e suite passes; that is not the same claim.
 
 When those are closed, publish as a GitHub **pre-release**, with multi-layer placement and advanced datum handling marked experimental. This is not a candidate for stable v0.6.0 or for a definitive Zenodo deposit.

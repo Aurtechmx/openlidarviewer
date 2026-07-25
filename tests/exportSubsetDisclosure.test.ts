@@ -88,3 +88,39 @@ describe('subset disclosure in text exports', () => {
     expect(csv).not.toMatch(/subset|sample/i);
   });
 });
+
+describe('a streaming resident snapshot discloses its scope', () => {
+  it('states resident-of-source through the comment channel', () => {
+    // A streaming export IS the resident set — the snapshot is internally
+    // consistent (declared == held, so the Health Check stays quiet), and the
+    // source's own declared total rides a dedicated field so the written file
+    // still says what fraction of the SCAN it carries.
+    const positions = new Float32Array(300 * 3);
+    const c = new PointCloud({
+      positions,
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 'stream-snap',
+      declaredPointCount: 300,
+      decodedPointCount: 300,
+      sourceDeclaredPointCount: 46_000_000,
+    });
+    const notes = toXyz(c).split('\n').filter((l) => l.startsWith('#'));
+    const subset = notes.find((l) => /resident|streamed/i.test(l));
+    expect(subset).toBeDefined();
+    expect(subset).toContain('300');
+    expect(subset).toContain('46,000,000');
+    expect(subset).not.toMatch(/load stride/);
+  });
+
+  it('stays silent when the source total is unknown', () => {
+    const c = new PointCloud({
+      positions: new Float32Array(9),
+      origin: [0, 0, 0],
+      sourceFormat: 'laz',
+      name: 's',
+      declaredPointCount: 3,
+    });
+    expect(toXyz(c)).not.toMatch(/resident|streamed/i);
+  });
+});

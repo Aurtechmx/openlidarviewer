@@ -54,7 +54,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Inspect point-cloud datasets directly in a modern web interface, with nothing to install.
 - Local-first by design: files are read and rendered in your browser, with no upload.
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
-- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates precise.
+- Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates numerically stable.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
 - Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (Experimental 3D Tiles / `.pnts` parser foundations exist, but user-facing 3D Tiles loading is not enabled yet.)
 - Game-like navigation: Orbit, Walk, Fly, and Pan (hand-tool) modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
@@ -120,7 +120,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - **Measurement chains** — combine placed measurements as sum / difference / ratio
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
 - A Dataset Intelligence card — header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence; renders `—` rather than fabricating a bucket when no signal is available
-- A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates precise
+- A coordinate bridge that keeps large georeferenced (UTM-scale) coordinates numerically stable
 - Point inspection — click a point to read its coordinates and attributes (including LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy; or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers — sensor, source software, and date — shown in the Scan Report when the file carries them
 - A "Project ready" summary card on load, with a suggested navigation mode
@@ -319,7 +319,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 - Firefox
 - Safari (WebGL fallback may apply)
 
-Very large LiDAR datasets are best handled as COPC or EPT, which stream progressively with bounded memory; other very large formats may need downsampling or preprocessing. Full detail is in [`docs/performance.md`](docs/performance.md).
+Very large LiDAR datasets are best handled as COPC or EPT, which stream progressively with bounded memory; other very large formats may need downsampling or preprocessing. The complete guide — how the streaming works, server requirements, and what a streamed export contains — is [`docs/copc.md`](docs/copc.md); performance detail is in [`docs/performance.md`](docs/performance.md).
 
 ## Mobile Browser Support
 
@@ -437,7 +437,7 @@ COPC streaming — local and remote — ships in v0.3.0 and is hardened across v
 
 ## What's in this release
 
-The current release is **v0.6.0-alpha.3**. The full, dated history is in
+The current release is **v0.6.0**. The full, dated history is in
 [CHANGELOG.md](CHANGELOG.md), and the per-release highlights live in the
 [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/)
 (source: the `RELEASE_NOTES_v*.md` files in this repository).
@@ -499,8 +499,8 @@ Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-per
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md) — install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.0-alpha.3.md](VALIDATION_REPORT_v0.6.0-alpha.3.md) — what this alpha validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md).
-- [KNOWN_LIMITATIONS_v0.6.0-alpha.3.md](KNOWN_LIMITATIONS_v0.6.0-alpha.3.md) — the deliberate limits of this alpha (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
+- [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md) — what this release validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md).
+- [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md) — the documented limits of this release (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md) — the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md) — how to evaluate the software artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md) — where the test fixtures and streamed sample datasets come from, and how they are licensed.

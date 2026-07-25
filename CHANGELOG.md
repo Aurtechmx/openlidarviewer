@@ -2,7 +2,19 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.0-alpha.3] - 2026-07-22
+## [0.6.0] - 2026-07-24
+
+The stable v0.6 release. Spatial operations are deterministic, explicit and
+non-destructive: the in-place Float32 rebase is removed and source geometry
+is immutable by proof; mounting is a Float64 placement. Measurements carry
+context lines and every layer gets a health card; streamed exports state
+their resident-of-source scope in the file; corrupt COPC input fails with
+structured errors (two real fixes: clamped past-EOF hierarchy ranges, raw
+decompressor aborts crossing the worker boundary). Claims, stability and
+language are governed by CLAIMS_AND_LIMITATIONS.md, STABILITY_POLICY.md and
+lint:claims-language. Full detail in RELEASE_NOTES_v0.6.0.md.
+
+## [0.6.0-alpha.3] - 2026-07-23
 
 A decomposition and precision-groundwork cut, on the same footing as alpha.2:
 almost nothing changes in the viewer. It continues pulling testable logic out
@@ -604,7 +616,7 @@ Fixed (Engineering Inspection PDF):
 
 ### Point-cloud export correctness and provenance (verified against real user exports)
 
-A user's actual CSV/OBJ exports of a metadata-rich E57 exposed one
+Real-world CSV/OBJ exports of a metadata-rich E57 exposed one
 data-destroying defect and two disclosure gaps, all fixed here:
 
 Data correctness:
@@ -1985,7 +1997,7 @@ onboarding tour.
   A realism pass (`floorplan/regularize.ts`) then makes the honest trace
   READ like a floor plan: compact off-wall islands in the wall mask —
   furniture, shelving, plants caught by the wall-height band (43 of the 70
-  poché subpaths on the user's real 360 sheet) — are lifted out of the wall
+  poché subpaths on a real 360 sheet) — are lifted out of the wall
   poché and drawn as light grey room-contents hints (the architectural
   convention; toggleable, and the sheet says so), with near-wall fragments
   kept as walls so a jamb return severed by a door gap is never erased;

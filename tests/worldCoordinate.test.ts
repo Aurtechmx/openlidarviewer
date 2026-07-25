@@ -2,25 +2,13 @@
  * worldCoordinate.test.ts — the world-coordinate accessor, step one of the
  * Float64 transform migration.
  *
- * Consumers that want a point's world position today write `positions[i] +
- * origin`. That works only because `origin === sourceOrigin` for every loaded
- * cloud: multi-layer mounting is disabled, so no cloud is ever rebased, so the
- * live origin still equals the file's origin. When the migration makes
- * `rebaseOrigin` stop rewriting the Float32 buffer, `origin` will move while
- * `positions` stay source-local, and `positions + origin` will be wrong.
- *
  * `worldXYZ` reads `positions[i] + sourceOrigin`, the world coordinate by
- * construction — `sourceOrigin` is fixed for the object's life. Today that
- * equals `positions + origin` (the two origins agree), so migrating a consumer
- * onto it changes nothing observable now and makes it correct once the rebase
- * is non-destructive. This is the seam every world-coordinate consumer will
- * move onto, in gated batches, before the rebase itself is flipped.
- *
- * The rebase-invariance property — that a mounted cloud's world coordinate does
- * not move with its project origin — is the POINT of the migration and is
- * proved with the flip, not here: against today's destructive rebase, which
- * rewrites `positions`, it does not yet hold. So these tests assert only what
- * is true now: the accessor equals the world coordinate for an unrebased cloud.
+ * construction — `sourceOrigin` is fixed for the object's life. When this
+ * seam was cut, the destructive rebase could still move `origin`; step 5 of
+ * the migration (docs/architecture/float64-transform.md) then removed the
+ * rebase entirely, so neither term of the sum can ever change and the
+ * accessor holds for every cloud, mounted or not. Placement into a project
+ * frame is data beside the cloud (`projectXYZ`) and never enters this sum.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -44,10 +32,10 @@ describe('PointCloud.worldXYZ', () => {
     expect(cloud.worldXYZ(1)).toEqual([500004, 4100005, 1506]);
   });
 
-  it('agrees with the current positions-plus-origin formula on an unrebased cloud', () => {
+  it('agrees with the legacy positions-plus-origin formula', () => {
     // The migration invariant made explicit: swapping a consumer from
-    // `positions + origin` to this accessor is a no-op today, because the two
-    // origins coincide until a (disabled) rebase moves them apart.
+    // `positions + origin` to this accessor is a no-op, because the two
+    // origins coincide for the object's life now that nothing moves `origin`.
     const cloud = cloudAt(ORIGIN, [7, 11, 13, -2, -4, -6]);
     for (const i of [0, 1]) {
       const viaOrigin: [number, number, number] = [
