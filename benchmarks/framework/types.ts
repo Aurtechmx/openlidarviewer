@@ -148,7 +148,7 @@ export interface StageResult {
  * were removed before hashing, so a reviewer comparing two hashes can see what
  * the comparison deliberately ignores without reading the framework source.
  */
-export interface ArtifactRecord {
+interface ArtifactRecordBase {
   readonly name: string;
   readonly kind: 'json' | 'bytes';
   readonly algorithm: 'sha256';
@@ -159,19 +159,31 @@ export interface ArtifactRecord {
   readonly byteLength: number;
   /** Dotted paths excluded from the hash, sorted. Empty for byte artifacts. */
   readonly strippedFields: readonly string[];
-  /**
-   * Whether the volatile-field strip could be applied at all.
-   *
-   * False for byte artifacts, whose contents are opaque. The distinction is on
-   * the record rather than in a source comment because `strippedFields: []` is
-   * ambiguous on its own: it reads as "nothing volatile in here" when the truth
-   * may be "nothing could be inspected". A reader comparing two hashes needs to
-   * know which of those they are looking at.
-   */
-  readonly volatilityStripped: boolean;
-  /** Why no strip was applied. Present exactly when `volatilityStripped` is false. */
-  readonly unstrippedReason?: string;
 }
+
+/** An artifact whose contents could be inspected, so the strip actually ran. */
+export interface StrippedArtifactRecord extends ArtifactRecordBase {
+  readonly volatilityStripped: true;
+  /** Nothing to explain when the strip ran — structurally unsayable. */
+  readonly unstrippedReason?: never;
+}
+
+/** An artifact hashed raw, which is a caveat on the hash and must be explained. */
+export interface UnstrippedArtifactRecord extends ArtifactRecordBase {
+  readonly volatilityStripped: false;
+  readonly unstrippedReason: string;
+}
+
+/**
+ * Split on `volatilityStripped` for the same reason `Metric` is split on
+ * `status`: `strippedFields: []` is ambiguous on its own — it reads as "nothing
+ * volatile in here" when the truth may be "nothing could be inspected" — and a
+ * disclosure that a gap exists WITHOUT saying why is the one thing this
+ * framework must never emit. `hashArtifact` is not the only constructor (suites
+ * and fixtures hand-build records), so the guarantee has to be structural: an
+ * unexplained gap and a contradictory explanation are both compile errors.
+ */
+export type ArtifactRecord = StrippedArtifactRecord | UnstrippedArtifactRecord;
 
 /** The whole result of one suite run against one dataset. */
 export interface RunReport {

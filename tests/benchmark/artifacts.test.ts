@@ -12,10 +12,12 @@ import {
   assertHashable,
   hashArtifact,
   stripVolatile,
+  AMBIGUOUS_CLOCK_KEYS,
   VOLATILE_RULES,
   VOLATILE_PLACEHOLDER,
   RAW_BYTES_NO_STRIP_REASON,
 } from '../../benchmarks/framework/artifacts';
+import type { ArtifactRecord } from '../../benchmarks/framework/types';
 
 const base = {
   suiteId: 'decode',
@@ -59,6 +61,9 @@ describe('hash stability', () => {
    * The values here are EPOCH NUMBERS on purpose: a number cannot be caught by
    * the value-side ISO detector, so this isolates the key rule.
    */
+  // `time`, `now`, `when` and `utc` are absent on purpose: those four are
+  // ambiguous enough that the framework refuses them outright rather than
+  // deciding silently. See "ambiguous clock names are rejected" below.
   const TIMESTAMP_KEYS = [
     'timestamp',
     'generatedAt',
@@ -68,8 +73,6 @@ describe('hash stability', () => {
     'finishedAt',
     'builtAt',
     'date',
-    'time',
-    'now',
     'startTime',
     'endTime',
     'buildDate',
@@ -77,6 +80,8 @@ describe('hash stability', () => {
     'datestamp',
     'mtime',
     'epochMs',
+    'epoch_ms',
+    'epochSec',
     'unixTime',
   ];
 
@@ -165,6 +170,32 @@ describe('hash sensitivity — the strip is not over-broad', () => {
       const a = { ...base, [key]: 10 };
       const b = { ...base, [key]: 11 };
       expect(hashArtifact('metrics', a).hash, key).not.toBe(hashArtifact('metrics', b).hash);
+    }
+  });
+
+  test('the domain vocabulary survives: `epoch`, `epochs` and `times` are not clocks here', () => {
+    // An epoch in this codebase is a survey campaign (alignEpochs, EpochCloud),
+    // and `times` is most often an array of durations. `epoch_?(ms|s)` used to
+    // swallow the plural, so an array of survey epochs vanished from the hash
+    // inside the very domain this carve-out exists to protect.
+    const cases: ReadonlyArray<readonly [string, unknown, unknown]> = [
+      ['epoch', 1, 2],
+      ['epochs', ['2019', '2021'], ['2019', '2022']],
+      ['times', [1, 2], [1, 3]],
+    ];
+    for (const [key, left, right] of cases) {
+      const a = { ...base, [key]: left };
+      const b = { ...base, [key]: right };
+      expect(hashArtifact('metrics', a).hash, key).not.toBe(hashArtifact('metrics', b).hash);
+    }
+  });
+
+  test('the unit-suffixed epoch forms ARE still stripped', () => {
+    // The tightening must not cost the forms the rule was written for.
+    for (const key of ['epochMs', 'epoch_ms', 'epochSec', 'epoch_seconds']) {
+      const a = { ...base, [key]: 1_753_459_200_000 };
+      const b = { ...base, [key]: 946_684_800_000 };
+      expect(hashArtifact('metrics', a).hash, key).toBe(hashArtifact('metrics', b).hash);
     }
   });
 
@@ -266,6 +297,96 @@ describe('byte artifacts', () => {
     expect(rec.volatilityStripped).toBe(true);
     expect(rec.unstrippedReason).toBeUndefined();
   });
+
+  /**
+   * The disclosure must not be able to be wrong-but-valid.
+   *
+   * `hashArtifact` is not the only constructor — the fixture hand-builds
+   * records and the suites will too — so an unexplained gap has to be a
+   * COMPILE error, exactly as an unavailable metric without a reason already
+   * is. These assertions fail the typecheck if the union stops enforcing it:
+   * an unused `@ts-expect-error` is itself an error.
+   */
+  test('an unexplained or contradictory disclosure does not typecheck', () => {
+    const common = {
+      name: 'raster',
+      kind: 'bytes',
+      algorithm: 'sha256',
+      hash: 'c'.repeat(64),
+      fingerprint: '0badcafe',
+      byteLength: 8,
+      strippedFields: [],
+    } as const;
+
+    // @ts-expect-error volatilityStripped:false REQUIRES a reason
+    const unexplained: ArtifactRecord = { ...common, volatilityStripped: false };
+
+    // @ts-expect-error volatilityStripped:true forbids a reason — nothing to explain
+    const contradictory: ArtifactRecord = {
+      ...common,
+      kind: 'json',
+      volatilityStripped: true,
+      unstrippedReason: 'should not be sayable',
+    };
+
+    const valid: ArtifactRecord = {
+      ...common,
+      volatilityStripped: false,
+      unstrippedReason: RAW_BYTES_NO_STRIP_REASON,
+    };
+
+    expect(unexplained.name).toBe('raster');
+    expect(contradictory.name).toBe('raster');
+    expect(valid.unstrippedReason).toBe(RAW_BYTES_NO_STRIP_REASON);
+  });
+});
+
+describe('ambiguous clock names are rejected instead of decided silently', () => {
+  // `time`, `now`, `when` and `utc` are the four names that could equally hold a
+  // measurement or a clock reading. Stripping them silently loses a duration
+  // from the hash; keeping them silently defeats reproducibility. Both are the
+  // framework guessing, so it refuses and asks the author to say which it is.
+  test.each(AMBIGUOUS_CLOCK_KEYS)('`%s` is rejected, naming both rename targets', (key) => {
+    const value = { ...base, [key]: 1 };
+    expect(() => hashArtifact('metrics', value)).toThrow(new RegExp(`\\b${key}\\b`));
+    expect(() => hashArtifact('metrics', value)).toThrow(/durationMs/);
+    expect(() => hashArtifact('metrics', value)).toThrow(/capturedAt/);
+  });
+
+  test('the rejection reaches nested objects and array elements', () => {
+    expect(() => hashArtifact('metrics', { run: { time: 1 } })).toThrow(/run\.time/);
+    expect(() => hashArtifact('metrics', { runs: [{ ok: true }, { now: 1 }] })).toThrow(
+      /runs\[1\]\.now/,
+    );
+  });
+
+  test('a rejected name is refused whatever its value type', () => {
+    // The key rule alone could not do this: the ISO detector only tests
+    // strings, so a numeric epoch under `time` is invisible to it.
+    for (const v of [1_753_459_200_000, '2026-07-25T10:00:00.000Z', null, [1, 2]]) {
+      expect(() => hashArtifact('metrics', { time: v })).toThrow(/rename/i);
+    }
+  });
+
+  test('the unambiguous neighbours are still accepted', () => {
+    expect(() =>
+      hashArtifact('metrics', {
+        ...base,
+        startTime: 1,
+        endTime: 2,
+        timestamp: 3,
+        generatedAt: '2026-07-25T10:00:00.000Z',
+        durationMs: 12.5,
+        capturedAt: 4,
+      }),
+    ).not.toThrow();
+  });
+
+  test('a rejected name still cannot reach the hash if the guard is bypassed', () => {
+    // Defence in depth: the key rule keeps these names on the strip list, so
+    // `stripVolatile` used on its own still removes them.
+    expect(stripVolatile({ time: 1, keep: 2 }).stripped).toEqual(['time']);
+  });
 });
 
 describe('values canonicalJson cannot represent are rejected, not silently collapsed', () => {
@@ -273,14 +394,22 @@ describe('values canonicalJson cannot represent are rejected, not silently colla
   // walks own enumerable keys, so a Date and a Map both canonicalise to `{}`
   // and every non-finite number to `null`. A real value change that leaves the
   // digest untouched is the exact failure the sensitivity requirement forbids.
+  // A neutral key name, so this exercises the VALUE guard rather than the
+  // ambiguous-name rule that would reject `when` before the type is examined.
   test('a Date is rejected, naming its dotted path and its type', () => {
-    expect(() => hashArtifact('metrics', { run: { when: new Date(0) } })).toThrow(/run\.when/);
-    expect(() => hashArtifact('metrics', { run: { when: new Date(0) } })).toThrow(/Date/);
+    expect(() => hashArtifact('metrics', { run: { stamp: new Date(0) } })).toThrow(/run\.stamp/);
+    expect(() => hashArtifact('metrics', { run: { stamp: new Date(0) } })).toThrow(/Date/);
   });
 
   test('two Dates that differ would otherwise have collided', () => {
-    expect(() => hashArtifact('metrics', { when: new Date(0) })).toThrow();
-    expect(() => hashArtifact('metrics', { when: new Date(999) })).toThrow();
+    expect(() => hashArtifact('metrics', { stamp: new Date(0) })).toThrow(/Date/);
+    expect(() => hashArtifact('metrics', { stamp: new Date(999) })).toThrow(/Date/);
+  });
+
+  test('a Date under a name the strip would have removed anyway is still rejected', () => {
+    // The guard runs BEFORE the strip, so the author is told to convert it
+    // rather than having the field silently disappear.
+    expect(() => hashArtifact('metrics', { capturedAt: new Date(0) })).toThrow(/Date/);
   });
 
   test('a Map and a Set are rejected', () => {
@@ -322,6 +451,15 @@ describe('values canonicalJson cannot represent are rejected, not silently colla
     expect(() =>
       assertHashable('metrics', { a: [1, 'x', true, null, { b: Object.create(null) }] }),
     ).not.toThrow();
+  });
+
+  test('a root-level undefined is rejected by the guard, not left to crash the hasher', () => {
+    // It used to reach fnv1a and die with "Cannot read properties of undefined
+    // (reading 'length')" — a stack trace instead of the one message that tells
+    // the author what to do.
+    expect(() => hashArtifact('metrics', undefined)).toThrow(/artifact root/);
+    expect(() => hashArtifact('metrics', undefined)).toThrow(/undefined/);
+    expect(() => hashArtifact('metrics', undefined)).not.toThrow(/reading 'length'/);
   });
 
   test('an undefined property is omitted, exactly as JSON.stringify would treat it', () => {

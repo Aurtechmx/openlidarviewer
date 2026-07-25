@@ -62,20 +62,29 @@ const ISO_8601_DATETIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)
  * The complete strip list. Deliberately narrow and name-anchored: each key
  * pattern is anchored at both ends so a field like `durationMs` or `datasetId`
  * can never be swept up by a substring match.
+ *
+ * The principle that governs every edit to this list: the two mistakes are not
+ * symmetric. An UNDER-strip fails safely — two honest runs hash differently, the
+ * check goes red, a human looks. An OVER-strip fails dangerously — two genuinely
+ * different artifacts hash the same, the framework asserts a reproducibility
+ * that does not hold, and once that number is a figure in a paper it cannot be
+ * taken back. So when a name is ambiguous, prefer to keep it in the hash; and
+ * when it is ambiguous enough that neither choice is defensible, refuse it
+ * outright (see AMBIGUOUS_CLOCK_KEYS) rather than decide silently.
  */
 export const VOLATILE_RULES: readonly VolatileRule[] = [
   {
     kind: 'timestamp',
     appliesTo: 'key',
     pattern:
-      /^(timestamps?|generated_?at|created_?at|updated_?at|modified_?at|started_?at|finished_?at|completed_?at|captured_?at|built_?at|ran_?at|run_?at|wall_?clock(_?(ms|time))?|dates?|date_?stamp|date_?time|iso_?date|build_?date|run_?date|create_?date|time|now|when|start_?time|end_?time|stop_?time|finish_?time|create_?time|modify_?time|[acm]time|birth_?time|epoch_?(ms|s)|unix_?time|utc|local_?time|clock_?time)$/i,
-    why: 'A wall-clock reading differs on every run, so leaving it in guarantees two identical artifacts hash differently and the reproducibility check never passes. Held deliberately wide, including bare `time`, `date` and `now`: a stripped field costs one column, a missed one costs a hash nobody can ever reproduce. Two names are pointedly NOT here — bare `epoch` (a survey campaign in this codebase, not a clock) and plural `times` (most often an array of durations). A duration must be named with its unit — `durationMs`, `elapsedMs` — never `time`.',
+      /^(timestamps?|generated_?at|created_?at|updated_?at|modified_?at|started_?at|finished_?at|completed_?at|captured_?at|built_?at|ran_?at|run_?at|wall_?clock(_?(ms|time))?|dates?|date_?stamp|date_?time|iso_?date|build_?date|run_?date|create_?date|time|now|when|start_?time|end_?time|stop_?time|finish_?time|create_?time|modify_?time|[acm]time|birth_?time|epoch_?ms|epoch_(s|sec|secs|seconds)|epoch_?sec(onds)?|unix_?time|utc|local_?time|clock_?time)$/i,
+    why: 'A wall-clock reading differs on every run, so leaving it in guarantees two identical artifacts hash differently and the reproducibility check never passes. Three names are pointedly NOT here: bare `epoch` and plural `epochs` (a survey campaign in this codebase — see alignEpochs/EpochCloud — not a clock), and plural `times` (most often an array of durations). The unit-suffixed forms `epochMs`/`epoch_seconds` ARE matched, which is why the alternation spells them out instead of writing `epoch_?(ms|s)` — that shorthand also swallowed `epochs`. A duration must be named with its unit: `durationMs`, `elapsedMs`.',
   },
   {
     kind: 'timestamp',
     appliesTo: 'value',
     pattern: ISO_8601_DATETIME,
-    why: 'Symmetric with the absolute-path rule: an ISO-8601 date-time is a wall-clock reading because of what it IS, not because of the name it was given, so it is caught under any key. Bare calendar dates are excluded — see ISO_8601_DATETIME.',
+    why: 'Symmetric with the absolute-path rule: an ISO-8601 date-time is a wall-clock reading because of what it IS, not because of the name it was given, so it is caught under any key. Bare calendar dates are excluded (see ISO_8601_DATETIME), on the asymmetry above: missing one costs a loud, investigable hash mismatch, while stripping a survey date would make two different datasets hash the same.',
   },
   {
     kind: 'machine-id',
@@ -163,6 +172,21 @@ function asBytes(value: unknown): Uint8Array | null {
 export const RAW_BYTES_NO_STRIP_REASON =
   'hashed raw: a byte artifact is opaque, so embedded timestamps (PNG tEXt, GeoTIFF tags, zip entry mtimes) cannot be detected or removed and may change the hash between otherwise identical runs';
 
+/**
+ * Field names that could equally hold a measurement or a clock reading.
+ *
+ * Both possible answers are wrong in a way the author cannot see: strip them and
+ * a duration named `time` silently leaves the hash; keep them and a wall-clock
+ * reading silently defeats reproducibility. The framework does not get to pick,
+ * so `assertHashable` refuses the name and asks for one that says which it is.
+ *
+ * They stay on the strip list above as well, so `stripVolatile` used on its own
+ * still removes them — the guard is the loud path, the rule is the backstop.
+ */
+export const AMBIGUOUS_CLOCK_KEYS = ['time', 'now', 'when', 'utc'] as const;
+
+const AMBIGUOUS_KEY_SET: ReadonlySet<string> = new Set(AMBIGUOUS_CLOCK_KEYS);
+
 /** Name the type of a value in an error a suite author can act on. */
 function describeType(value: unknown): string {
   if (value === null) return 'null';
@@ -199,6 +223,14 @@ export function assertHashable(artifactName: string, value: unknown, path = ''):
     );
   };
 
+  if (value === undefined) {
+    // Only at the root. A nested `{ error: undefined }` is what spreading an
+    // optional field produces and is dropped later, exactly as JSON does — but
+    // an undefined ROOT has no JSON form at all, and used to reach fnv1a and
+    // die there on `s.length` instead of saying anything useful.
+    if (path === '') fail('is undefined, which has no JSON representation');
+    return;
+  }
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) fail(`is ${String(value)}, which is not finite and canonicalises to null`);
     return;
@@ -216,7 +248,16 @@ export function assertHashable(artifactName: string, value: unknown, path = ''):
     fail(`is a ${describeType(value)}, which canonicalises to {} and would hide any change inside it`);
   }
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-    assertHashable(artifactName, v, path === '' ? key : `${path}.${key}`);
+    const child = path === '' ? key : `${path}.${key}`;
+    if (AMBIGUOUS_KEY_SET.has(key.toLowerCase())) {
+      throw new TypeError(
+        `benchmark artifact "${artifactName}": ${child} is named "${key}", which could be a ` +
+          'measurement or a clock reading, and the framework will not guess. Rename it: ' +
+          '`durationMs` (or another unit-suffixed name) if it is a measurement that must ' +
+          'affect the hash, `capturedAt` if it is a wall-clock reading that must not.',
+      );
+    }
+    assertHashable(artifactName, v, child);
   }
 }
 

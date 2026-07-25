@@ -27,8 +27,10 @@ export type {
   MetricRuntime,
   RunReport,
   StageResult,
+  StrippedArtifactRecord,
   UnavailableEnvValue,
   UnavailableMetric,
+  UnstrippedArtifactRecord,
 } from './types';
 
 export { startStageClock, elapsedMs, readMonotonicNs, CLOCK_UNAVAILABLE_REASON } from './clock';
@@ -42,6 +44,7 @@ export {
   assertHashable,
   hashArtifact,
   stripVolatile,
+  AMBIGUOUS_CLOCK_KEYS,
   VOLATILE_RULES,
   VOLATILE_PLACEHOLDER,
   RAW_BYTES_NO_STRIP_REASON,

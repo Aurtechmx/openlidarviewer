@@ -53,8 +53,8 @@ export function formatEnvValue(e: EnvValue): string {
  * one that must never render as an empty list.
  */
 export function describeHashExclusions(a: ArtifactRecord): string {
-  if (!a.volatilityStripped) {
-    return `not stripped — ${a.unstrippedReason ?? 'no reason recorded'}`;
-  }
+  // No fallback for a missing reason: `ArtifactRecord` makes an unexplained gap
+  // a compile error, so there is no unexplained case left to invent text for.
+  if (!a.volatilityStripped) return `not stripped — ${a.unstrippedReason}`;
   return a.strippedFields.length === 0 ? '(none)' : a.strippedFields.join(', ');
 }

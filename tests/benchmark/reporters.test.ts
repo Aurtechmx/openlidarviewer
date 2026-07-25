@@ -13,6 +13,7 @@ import { toMarkdown } from '../../benchmarks/framework/reporters/markdown';
 import { toHtml } from '../../benchmarks/framework/reporters/html';
 import type { RunReport } from '../../benchmarks/framework/types';
 import { RAW_BYTES_NO_STRIP_REASON } from '../../benchmarks/framework/artifacts';
+import { describeHashExclusions } from '../../benchmarks/framework/reporters/metricText';
 import { fixtureReport } from './reportFixture';
 
 const REPORTERS: ReadonlyArray<readonly [string, (r: RunReport) => string]> = [
@@ -76,6 +77,28 @@ describe.each(REPORTERS)('the %s reporter', (name, render) => {
     const lines = out.split('\n').filter((l) => l.includes(MEMORY_REASON));
     expect(lines.length).toBeGreaterThan(0);
     expect(name.length).toBeGreaterThan(0);
+  });
+});
+
+describe('describeHashExclusions', () => {
+  const [stripped, raw] = fixtureReport().artifacts;
+
+  test('names the excluded fields when the strip ran', () => {
+    expect(describeHashExclusions(stripped)).toBe('generatedAt');
+  });
+
+  test('says (none) when the strip ran and found nothing', () => {
+    expect(describeHashExclusions({ ...stripped, strippedFields: [] })).toBe('(none)');
+  });
+
+  test('always has a reason to give when no strip ran', () => {
+    // There is no "unexplained" case left to fall back to: the record type
+    // makes `volatilityStripped: false` without a reason a compile error, so
+    // the old 'no reason recorded' string is unreachable by construction.
+    const out = describeHashExclusions(raw);
+    expect(out).toContain('not stripped');
+    expect(out).toContain(RAW_BYTES_NO_STRIP_REASON);
+    expect(out).not.toContain('no reason recorded');
   });
 });
 
