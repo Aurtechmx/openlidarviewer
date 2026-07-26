@@ -126,6 +126,24 @@ function zipEntries(zipPath) {
   return out.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
+/**
+ * The claim ids currently at E4, read from the machine-readable register in
+ * document order — the same parse `collect-evidence.mjs` uses to WRITE the
+ * evidence record, so the two cannot disagree about what the register says.
+ * Returns null if the register is unreadable; `lint:claim-register` reports
+ * that, and duplicating the complaint here would be noise.
+ */
+function readRegisterE4Claims() {
+  try {
+    const reg = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
+    return [...reg.matchAll(/claimId:\s*([A-Z0-9-]+)[\s\S]*?currentEvidence:\s*(E\d)_/g)]
+      .filter((m) => m[2] === 'E4')
+      .map((m) => m[1]);
+  } catch {
+    return null;
+  }
+}
+
 export function verifyStagedRelease(dir, opts = {}) {
   const problems = [];
   const note = (m) => problems.push(m);
@@ -202,11 +220,23 @@ export function verifyStagedRelease(dir, opts = {}) {
         note(`evidence does not record mandatory stage "${s}" as passed`);
       }
     }
-    if (evidence.science?.e4ClaimCount !== 1) {
-      note(`expected exactly one E4 claim, evidence says ${evidence.science?.e4ClaimCount}`);
-    }
-    if (evidence.science && evidence.science.e4Claims?.[0] !== 'SLOPE-RASTER') {
-      note(`E4 claim is ${evidence.science.e4Claims?.[0]}, expected SLOPE-RASTER`);
+    // The expected E4 set is DERIVED from the claim register, not typed in
+    // here. It was hard-coded to a single SLOPE-RASTER, which meant the second
+    // product to reach E4 (ASPECT-RASTER) read as a release-asset defect
+    // instead of as the promotion it was. Reading the register keeps this a
+    // check that the evidence record matches the tree it was collected from.
+    const expectedE4 = opts.expectedE4Claims ?? readRegisterE4Claims();
+    if (evidence.science && expectedE4 !== null) {
+      const got = evidence.science.e4Claims ?? [];
+      if (evidence.science.e4ClaimCount !== expectedE4.length) {
+        note(
+          `expected ${expectedE4.length} E4 claim(s) per the claim register, ` +
+            `evidence says ${evidence.science.e4ClaimCount}`,
+        );
+      }
+      if (got.join(',') !== expectedE4.join(',')) {
+        note(`E4 claims are [${got.join(', ')}], expected [${expectedE4.join(', ')}]`);
+      }
     }
   }
   if (manifest && evidence) {

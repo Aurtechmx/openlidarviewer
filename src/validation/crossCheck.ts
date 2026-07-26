@@ -199,31 +199,37 @@ export interface ReferenceSlot {
   /** Unit label for the tolerance, for docs / reports. */
   readonly unit: string;
   /**
-   * Whether a real reference output has been supplied. SLOPE-RASTER is
-   * `supplied` (the GDAL output is bundled with a checksummed manifest);
-   * every other slot remains `pending`, and none is fabricated.
+   * Whether a real reference output has been supplied. SLOPE-RASTER and
+   * ASPECT-RASTER are `supplied` (each GDAL output is bundled with a
+   * checksummed manifest); the remaining slots are `pending`, and none is
+   * fabricated.
    */
   readonly status: 'pending' | 'supplied';
 }
 
 /**
- * The reference-fixture manifest. SLOPE-RASTER is `supplied` (compared against
- * GDAL 3.13.1 on the analytic fixture); every other slot is `pending`: the harness is in
- * place and the procedure is documented, but no external reference output has
- * been generated and committed for those, so only slope has reached E4. When a
- * reference is produced per `docs/validation/cross-implementation.md`, flip its
- * `status` to `supplied` and wire the loaded grids into `crossCheck`.
+ * The reference-fixture manifest. SLOPE-RASTER and ASPECT-RASTER are `supplied`
+ * (both compared against GDAL 3.13.1 on the same analytic fixture); the
+ * remaining slots are `pending`: the harness is in place and the procedure is
+ * documented, but no external reference output has been generated and committed
+ * for those, so only slope and aspect have reached E4. When a reference is
+ * produced per `docs/validation/cross-implementation.md`, flip its `status` to
+ * `supplied` and wire the loaded grids into `crossCheck`.
  */
 export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' },
   { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
+  // Aspect is a BEARING, so its tolerance is read as a circular separation
+  // (0..180), never a plain subtraction — see tests/aspectCrossCheck.test.ts.
+  // 0.5° matches slope deliberately: same estimator, same fixture, same unit.
+  { claimId: 'ASPECT-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'pending' },
   { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },
 ] as const;
 
-/** True only when EVERY reference slot is still pending — false since SLOPE-RASTER reached E4. */
+/** True only when EVERY reference slot is still pending — false since SLOPE-RASTER and ASPECT-RASTER reached E4. */
 export const allReferencesPending = (slots: readonly ReferenceSlot[] = REFERENCE_SLOTS): boolean =>
   slots.every((s) => s.status === 'pending');

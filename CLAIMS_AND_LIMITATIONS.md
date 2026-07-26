@@ -64,10 +64,12 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- One product is at E4: `SLOPE-RASTER` agrees with GDAL 3.13.1 and the
-  closed-form gradient on the frozen analytic fixture within the
-  preregistered 0.5° tolerance. This validates one algorithm on one fixture;
-  it does not validate the point-cloud-to-DTM pipeline.
+- Two products are at E4: `SLOPE-RASTER` and `ASPECT-RASTER` each agree with
+  GDAL 3.13.1 and with the closed-form gradient on the frozen analytic fixture
+  within the preregistered 0.5° tolerance. This validates two algorithms on one
+  fixture; it does not validate the point-cloud-to-DTM pipeline. Aspect is
+  compared as a circular quantity, and only where the surface is steeper than
+  2° — a level cell has no aspect to compare.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

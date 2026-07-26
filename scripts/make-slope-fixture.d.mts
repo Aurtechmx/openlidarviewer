@@ -36,3 +36,10 @@ export declare function heightAt(row: number, col: number): number;
 
 /** Closed-form slope at a cell centre, in DEGREES. */
 export declare function analyticSlopeDegrees(row: number, col: number): number;
+
+/**
+ * Closed-form aspect at a cell centre, in COMPASS DEGREES clockwise from north.
+ * NaN on an exactly flat cell, where the downslope direction is undefined —
+ * 0 would read as due north.
+ */
+export declare function analyticAspectDegrees(row: number, col: number): number;

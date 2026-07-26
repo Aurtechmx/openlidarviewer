@@ -4,7 +4,7 @@ This page aggregates, in one place, the limitations that qualify every scientifi
 
 ## Evidence ceiling
 
-One product reached **E4**: the slope raster was cross-implemented against GDAL 3.13.1 on the analytic fixture and agreed with GDAL and the closed-form gradient within the preregistered 0.5 degree tolerance. That is cross-implementation independence for the slope ALGORITHM on this fixture — not field-grade validation (E5) and not the point-cloud-to-DTM pipeline. Every other product tops out at E3 (self-consistency against a known analytic surface), and every reference slot other than `SLOPE-RASTER` is still `pending`, awaiting external reference outputs that are not bundled.
+Two products reached **E4**: the slope raster and the aspect raster were each cross-implemented against GDAL 3.13.1 on the same analytic fixture and agreed with GDAL and with the closed-form gradient within the preregistered 0.5 degree tolerance. That is cross-implementation independence for those two ALGORITHMS on this fixture — not field-grade validation (E5) and not the point-cloud-to-DTM pipeline. The aspect result carries two further limits of its own: it is a circular agreement, and it covers only cells whose closed-form slope exceeds 2 degrees, because aspect is undefined on level ground and the two implementations do not even represent it the same way there (GDAL writes NODATA, ours returns 0). Every other product tops out at E3 (self-consistency against a known analytic surface), and every reference slot other than `SLOPE-RASTER` and `ASPECT-RASTER` is still `pending`, awaiting external reference outputs that are not bundled.
 
 ## Construct threats (are we measuring the right thing?)
 

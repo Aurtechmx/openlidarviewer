@@ -31,7 +31,7 @@ const base = (over: Record<string, unknown> = {}) => ({
   platform: 'linux-x64',
   generatedAt: '2026-07-22T00:00:00.000Z',
   gateLogSha256: 'b'.repeat(64),
-  science: { e4ClaimCount: 1, e4Claims: ['SLOPE-RASTER'], suppliedReferenceSlots: 1 },
+  science: { e4ClaimCount: 2, e4Claims: ['SLOPE-RASTER', 'ASPECT-RASTER'], suppliedReferenceSlots: 2 },
   stages: allStages(),
   ...over,
 });
@@ -85,15 +85,23 @@ describe('buildEvidenceRecord — release mode', () => {
     ).toBe(true);
   });
 
-  it('refuses a scientific scope that is not exactly one E4 claim', () => {
-    expect(
-      problems({ science: { e4ClaimCount: 2, e4Claims: ['A', 'B'], suppliedReferenceSlots: 2 } })
-        .some((p) => p.includes('exactly one E4')),
-    ).toBe(true);
+  it('refuses an empty or self-contradictory scientific scope', () => {
+    // A record that names no E4 claim at all is not a release record; and a
+    // count that disagrees with the list it summarises means the register was
+    // parsed into two different answers. Neither is a fixed number of claims:
+    // pinning that to one made the second E4 promotion look like a defect.
     expect(
       problems({ science: { e4ClaimCount: 0, e4Claims: [], suppliedReferenceSlots: 0 } })
-        .some((p) => p.includes('exactly one E4')),
+        .some((p) => p.includes('at least one E4')),
     ).toBe(true);
+    expect(
+      problems({ science: { e4ClaimCount: 3, e4Claims: ['A', 'B'], suppliedReferenceSlots: 2 } })
+        .some((p) => p.includes('disagrees with the listed claims')),
+    ).toBe(true);
+    expect(
+      problems({ science: { e4ClaimCount: 2, e4Claims: ['A', 'B'], suppliedReferenceSlots: 2 } })
+        .some((p) => p.includes('E4')),
+    ).toBe(false);
   });
 
   it('reports every problem at once rather than stopping at the first', () => {

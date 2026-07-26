@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 /**
- * make-slope-fixture.mjs — the input DEM for the slope cross-implementation check.
+ * make-slope-fixture.mjs — the input DEM for the slope and aspect
+ * cross-implementation checks.
  *
  * Writes `tests/fixtures/reference/slope/input-dem.asc`: an ESRI ASCII Grid
- * carrying an analytic surface whose slope is known in closed form.
+ * carrying an analytic surface whose slope AND aspect are known in closed form.
+ * The aspect reference (`tests/fixtures/reference/aspect/`) reuses this same
+ * DEM rather than copying it, so the two products cannot end up validated
+ * against two different surfaces.
  *
  * WHY A SYNTHETIC SURFACE. Comparing our Horn slope against GDAL's Horn slope
  * is two implementations of ONE algorithm, so they can agree while both being
@@ -92,6 +96,37 @@ export function analyticSlopeDegrees(row, col) {
   return (Math.atan(Math.hypot(dzdx, dzdy)) * 180) / Math.PI;
 }
 
+/**
+ * Closed-form ASPECT at a cell centre, in COMPASS DEGREES clockwise from north
+ * (0 = north, 90 = east), which is what `gdaldem aspect` emits.
+ *
+ * Same `SURFACE` coefficients and same `cellOffset` as the slope above, so the
+ * surface has exactly ONE definition and slope and aspect cannot drift apart.
+ *
+ * Aspect is the DOWNSLOPE direction, so both gradient components are negated
+ * (`-dzdy` is the northing component because `cellOffset` returns y increasing
+ * NORTHWARD). `atan2(-dzdy, -dzdx)` is the math-frame angle — CCW from east,
+ * 90 = north — which is exactly what `hornSlopeAspect` returns in radians. The
+ * conversion to compass is `(90 - mathDeg) mod 360`: it both rotates the zero
+ * from east to north and reverses the sense from CCW to CW. Getting only one
+ * of those two right yields a plausible-looking grid that is mirrored, which is
+ * the same class of defect as the v0.4.3 aspect bug recorded in
+ * terrainDerivatives.ts.
+ *
+ * Undefined on a flat cell: an exactly zero gradient has no downslope
+ * direction. Returns NaN there rather than 0 (which is a real direction,
+ * north) so a caller cannot mistake "no aspect" for "points north".
+ */
+export function analyticAspectDegrees(row, col) {
+  const { x, y } = cellOffset(row, col);
+  const { a, b, c, d, e } = SURFACE;
+  const dzdx = 2 * a * x + c * y + d;
+  const dzdy = 2 * b * y + c * x + e;
+  if (dzdx === 0 && dzdy === 0) return Number.NaN;
+  const mathDeg = (Math.atan2(-dzdy, -dzdx) * 180) / Math.PI;
+  return ((90 - mathDeg) % 360 + 360) % 360;
+}
+
 function writeAsciiGrid(path, valueAt) {
   const head = [
     `ncols ${GRID.ncols}`,
@@ -115,8 +150,9 @@ function writeAsciiGrid(path, valueAt) {
 /**
  * Writing happens only when this file is RUN, never when it is imported.
  *
- * The test imports `GRID` and `analyticSlopeDegrees` from here so the surface
- * has exactly one definition. Without this guard that import rewrote the
+ * The tests import `GRID`, `analyticSlopeDegrees` and `analyticAspectDegrees`
+ * from here so the surface has exactly one definition. Without this guard that
+ * import rewrote the
  * fixture as a side effect, which would let the test regenerate a corrupted or
  * hand-edited input and then pass against its own fresh copy — the committed
  * file would no longer be what was tested.
@@ -128,16 +164,24 @@ function main() {
 
   let min = Infinity;
   let max = -Infinity;
+  let aMin = Infinity;
+  let aMax = -Infinity;
   for (let r = 0; r < GRID.nrows; r++) {
     for (let c = 0; c < GRID.ncols; c++) {
       const s = analyticSlopeDegrees(r, c);
       if (s < min) min = s;
       if (s > max) max = s;
+      const a = analyticAspectDegrees(r, c);
+      if (Number.isFinite(a)) {
+        if (a < aMin) aMin = a;
+        if (a > aMax) aMax = a;
+      }
     }
   }
   console.log(`wrote ${demPath}`);
   console.log(`  ${GRID.ncols} x ${GRID.nrows} cells @ ${GRID.cellsize} m`);
   console.log(`  analytic slope range: ${min.toFixed(3)}deg .. ${max.toFixed(3)}deg`);
+  console.log(`  analytic aspect range: ${aMin.toFixed(3)}deg .. ${aMax.toFixed(3)}deg (compass)`);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

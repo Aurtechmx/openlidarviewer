@@ -77,7 +77,7 @@ function evidenceRecord(over: Record<string, unknown> = {}) {
     npmVersion: '10.9.2',
     total: { passed: 5797, skipped: 16 },
     bundle: { liveEntryKiB: 713, ceilingKiB: 720 },
-    science: { e4ClaimCount: 1, e4Claims: ['SLOPE-RASTER'], suppliedReferenceSlots: 1 },
+    science: { e4ClaimCount: 2, e4Claims: [...EXPECTED_E4], suppliedReferenceSlots: 2 },
     stages: passedStages(),
     gateLogSha256: '',
     ...over,
@@ -134,7 +134,19 @@ function stageRelease(opts: {
   writeFileSync(join(dir, 'SHA256SUMS'), `${sums}\n`);
 }
 
-const verify = () => verifyStagedRelease(dir, { version: VERSION }) as { ok: boolean; problems: string[] };
+/**
+ * The E4 set is passed in rather than read from the real claim register, so
+ * these cases stay hermetic: promoting a product must not turn every
+ * release-asset test red, and a test that reads the register would agree with
+ * the verifier for the trivial reason that both read the same file.
+ */
+const EXPECTED_E4 = ['SLOPE-RASTER', 'ASPECT-RASTER'];
+
+const verify = () =>
+  verifyStagedRelease(dir, { version: VERSION, expectedE4Claims: EXPECTED_E4 }) as {
+    ok: boolean;
+    problems: string[];
+  };
 const failsWith = (needle: string) => {
   const r = verify();
   expect(r.ok).toBe(false);
@@ -245,14 +257,16 @@ describe('release:verify — mandatory stage record', () => {
 });
 
 describe('release:verify — scientific scope', () => {
-  it('rejects more than one E4 claim', () => {
-    stageRelease({ evidence: { science: { e4ClaimCount: 2, e4Claims: ['SLOPE-RASTER', 'DTM'] } } });
-    failsWith('exactly one E4');
+  it('rejects an E4 claim count that disagrees with the register', () => {
+    stageRelease({
+      evidence: { science: { e4ClaimCount: 3, e4Claims: [...EXPECTED_E4, 'DTM'] } },
+    });
+    failsWith('E4 claim(s) per the claim register');
   });
 
   it('rejects a different E4 claim identity', () => {
-    stageRelease({ evidence: { science: { e4ClaimCount: 1, e4Claims: ['DTM'] } } });
-    failsWith('expected SLOPE-RASTER');
+    stageRelease({ evidence: { science: { e4ClaimCount: 2, e4Claims: ['SLOPE-RASTER', 'DTM'] } } });
+    failsWith('expected [SLOPE-RASTER, ASPECT-RASTER]');
   });
 });
 
