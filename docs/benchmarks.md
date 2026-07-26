@@ -19,6 +19,8 @@ write a result tree anyone can re-derive every published figure from.
 npm run benchmark:repro             # benchmark 1 only
 npm run benchmark:scaling           # benchmark 2 only
 npm run benchmark:quick             # both, then verify
+npm run benchmark:scaling:gc        # benchmark 2 with forced GC available
+npm run benchmark:quick:gc          # both with forced GC, then verify
 npm run benchmark:verify            # re-check latest/ without re-measuring
 npm run benchmark:verify:archives   # the same checks over every archive
 ```
@@ -69,8 +71,9 @@ earlier single-process run with one warm-up showed a larger rise, and that
 version of the curve was an artefact of warm-up state advancing alongside the
 tier. **The falling limb is larger than the noise:** 1M runs 20 % below the 250k
 figure with a within-tier CV of 0.02, and peak RSS climbs from about 310 MiB at
-250k to 870 MiB at 1M with forced garbage collection unavailable, so allocator
-pressure is the obvious candidate and is not something these runs isolate.
+250k to 870 MiB at 1M, so allocator pressure was the obvious candidate. It has
+since been tested directly; see *Garbage collection is not the explanation*
+below.
 
 Process-per-tier isolation removed most, not all, of the memory confound. The
 identical 250k workload reports peak RSS around 310 MiB in a tier child and
@@ -81,6 +84,76 @@ rather than compared between suites.
 
 The curve is reported as a measured artefact of this configuration on this
 machine, not as a scaling law.
+
+### Garbage collection is not the explanation
+
+The suites can now be run with `global.gc` available, so the falling limb can be
+measured with collection forced between runs instead of left to the runtime.
+`npm run benchmark:scaling:gc` and `npm run benchmark:quick:gc` set
+`BENCHMARK_FORCE_GC=1`, which `vitest.config.ts` turns into an `--expose-gc` on
+every pool worker — including the workers of the child `vitest run` the ladder
+spawns per tier. Forced GC is still never a pass condition: without the flag the
+suites record `forcedGcAvailable: false` and carry on exactly as before. The
+mode reaches `manifest.json` as `forcedGc`, with what was requested and what the
+runs actually observed kept apart, so two result sets can never be confused and
+a flag that failed to arrive shows up as a mismatch on the summary page rather
+than as a quietly mislabelled table.
+
+Eight ladders were run on one machine, alternating the two modes so drifting
+background load fell on both: four with GC uncontrolled, four with it forced,
+load average 5.91 to 9.10 on 14 cores throughout. Every figure below is read out
+of the archived `scaling/raw.json` files by `scripts/benchmark-compare-gc.mjs`.
+Medians pool a mode's four ladders; the CV column does not pool, because a
+within-tier CV is a statement about the five runs inside one process.
+
+| tier | analysis ms, default | analysis ms, GC forced | points/s, default | points/s, GC forced | peak RSS median MiB, default | peak RSS median MiB, GC forced | peak RSS max MiB, default | peak RSS max MiB, GC forced | CV per ladder, default | CV per ladder, GC forced |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 50k | 220 | 263 | 227,495 | 190,021 | 232 | 144 | 237 | 147 | 0.040–0.104 | 0.036–0.060 |
+| 100k | 377 | 451 | 265,381 | 221,897 | 278 | 183 | 295 | 185 | 0.035–0.161 | 0.016–0.027 |
+| 250k | 871 | 927 | 286,941 | 269,670 | 372 | 266 | 423 | 271 | 0.018–0.081 | 0.029–0.048 |
+| 500k | 1865 | 1858 | 268,068 | 269,125 | 559 | 366 | 608 | 371 | 0.005–0.024 | 0.018–0.025 |
+| 1M | 4684 | 4687 | 213,480 | 213,336 | 812 | 757 | 946 | 777 | 0.007–0.034 | 0.008–0.018 |
+
+Forcing collection did what it was supposed to do to the memory column. Peak RSS
+falls by 30 to 38 % at every tier from 50k to 500k, and the run-to-run spread at
+those tiers nearly disappears: the 500k tier's high-water mark drops from 608 to
+371 MiB. So the runs are genuinely measuring a different allocator regime, not
+the same one with a flag set.
+
+**The falling limb survives it.** It is present in all eight ladders without
+exception: 1M throughput sits 24.3, 29.8, 30.1 and 30.9 % below the 250k tier
+with GC uncontrolled, and 18.6, 21.9, 22.4 and 23.8 % below it with GC forced.
+The evidence supports the second of the three readings that were open — the
+shape persists and is therefore not explained by garbage collection.
+
+Two details carry most of that conclusion, and both cut against the GC
+hypothesis rather than for it. The 1M tier is **unchanged** by forced
+collection: 4684 ms against 4687 ms, 213,480 points/s against 213,336. Removing
+the ladder's retained garbage everywhere below 1M moved the bottom of the curve
+by nothing at all. And the 1M tier's own footprint barely moves either, 812 MiB
+down to 757 — a full collection before every run reclaims about 7 % there
+against 38 % at 500k, which says the memory growth along the ladder is mostly
+live working set rather than garbage. The original caveat named the RSS climb as
+the reason to suspect allocator pressure; that climb is largely not garbage, and
+the tier it peaks at is the one tier forced GC cannot relieve.
+
+What forced GC does move is the **peak** of the curve, not the trough. The 50k,
+100k and 250k tiers get slower under it (220 to 263 ms, 377 to 451, 871 to 927),
+which is the cost of re-growing a freshly compacted heap, and lowering the
+reference point is the whole of why the measured drop shrinks from about 30 % to
+about 21 %. That is an effect on what the limb is measured against, not evidence
+about the limb.
+
+Stated limits, because this is one experiment on one machine. Four ladders per
+mode, five recorded runs per tier. The host was not idle — load average 5.91 to
+9.10 on 14 cores — and the within-tier CVs reflect it, reaching 0.161 at 100k
+default against the 0.02 quoted from an idle run elsewhere in this document. The
+two modes' limb ranges (24.3–30.9 % and 18.6–23.8 %) do not overlap, but they
+are separated by half a percentage point at the nearest edge, so the size of the
+shrinkage is not something four ladders at this load resolve. The claim made
+here is only the one the data carries: at every tier, in both modes, the 1M
+throughput is well below the 250k throughput, and controlling collection does
+not remove it.
 
 Contour count is **not** comparable across tiers. The fixture holds point
 density constant and scales tile extent as the square root of the point count,
@@ -164,7 +237,8 @@ stages with no number — never as zero, and never as an estimate.
 ### Why there is no `benchmark:browser`
 
 The scripts are `benchmark:repro`, `benchmark:scaling`, `benchmark:quick`,
-`benchmark:verify` and `benchmark:verify:archives`. There is no browser script,
+their `:gc` variants, `benchmark:verify` and `benchmark:verify:archives`. There
+is no browser script,
 and `benchmark:quick` records `browser` under `notRun` with the reason. That
 gap is a decision, not a task someone forgot.
 

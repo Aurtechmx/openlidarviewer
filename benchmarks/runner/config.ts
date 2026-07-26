@@ -26,15 +26,21 @@
 /** The single documented seed both suites generate every cloud from. */
 export const BENCHMARK_SEED = 20260726;
 
-/** Bumped when a raw or summary file changes meaning. */
-export const BENCHMARK_SCHEMA_VERSION = 1;
+/**
+ * Bumped when a raw, summary or manifest file changes meaning.
+ *
+ * 2 — the manifest gained `forcedGc`. A version-1 manifest is silent about the
+ * garbage-collection regime, which is not the same claim as "GC was not
+ * controlled", and a reader must not be able to mistake one for the other.
+ */
+export const BENCHMARK_SCHEMA_VERSION = 2;
 
 /**
  * The version of the benchmark package itself, independent of the OLV release.
  * A reader comparing two result sets needs to know whether the harness changed
  * as well as whether the application did.
  */
-export const BENCHMARK_PACKAGE_VERSION = '1.0.0';
+export const BENCHMARK_PACKAGE_VERSION = '1.1.0';
 
 /** Terrain parameters both suites hold fixed, so only the input size varies. */
 export interface TerrainConfig {

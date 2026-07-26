@@ -20,6 +20,7 @@
  */
 
 import { UNAVAILABLE_LABEL, type EnvValue } from '../framework';
+import type { ForcedGcObservation } from './gcMode';
 import type { FirstRunCheck, SeriesSummary } from './stats';
 import type { SummarisedSeries } from './summarise';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
@@ -511,6 +512,38 @@ export interface OverviewInput {
   readonly scaling: ScalingSummary | null;
   /** Suites that were deliberately not run here, with the reason. */
   readonly notRun: readonly { readonly suiteId: string; readonly reason: string }[];
+  /**
+   * Whether this result set was measured with forced GC, as asked for and as
+   * actually observed.
+   *
+   * On the front page rather than buried in `raw.json` because it is the one
+   * fact that decides whether two result trees may be compared at all. Two
+   * ladders differing only in this were the whole reason the field exists, and
+   * a reader who copies a table out of `summary.md` never opens `raw.json`.
+   */
+  readonly forcedGc: ForcedGcReport;
+}
+
+/** Requested is what someone typed; observed is what the runs actually got. */
+export interface ForcedGcReport {
+  readonly requested: boolean;
+  readonly observedInRuns: ForcedGcObservation;
+}
+
+/**
+ * The GC line, phrased so the interesting case cannot be skimmed past.
+ *
+ * "requested but not observed" means the flag did not arrive and the numbers
+ * are default-GC numbers wearing the wrong label; it gets the word MISMATCH,
+ * because a reader scanning a page of green needs one token to catch on.
+ */
+function forcedGcLine(report: ForcedGcReport): string {
+  const asked = report.requested ? 'requested' : 'not requested';
+  const got = report.observedInRuns;
+  const mismatch =
+    (report.requested && (got === 'none' || got === 'mixed')) ||
+    (!report.requested && (got === 'all' || got === 'mixed'));
+  return `- forced GC: ${asked}; observed in runs: ${got}${mismatch ? ' — MISMATCH, the recorded runs do not match the mode asked for' : ''}`;
 }
 
 export function overviewMarkdown(input: OverviewInput): string {
@@ -524,6 +557,7 @@ export function overviewMarkdown(input: OverviewInput): string {
   lines.push(
     `- working tree: ${input.workingTreeClean === null ? UNAVAILABLE_LABEL : input.workingTreeClean ? 'clean' : 'dirty'}`,
   );
+  lines.push(forcedGcLine(input.forcedGc));
   lines.push(`- started (UTC): ${cell(input.startedAt)}`);
   lines.push(`- completed (UTC): ${cell(input.completedAt)}`);
   lines.push('');
@@ -583,6 +617,7 @@ export interface OverviewHeader {
   readonly completedAtUtc: string;
   readonly command: string;
   readonly notRun: readonly { readonly suiteId: string; readonly reason: string }[];
+  readonly forcedGc: ForcedGcReport;
 }
 
 /**
@@ -613,6 +648,7 @@ export function overviewInputFrom(
     reproducibility,
     scaling,
     notRun: header.notRun,
+    forcedGc: header.forcedGc,
   };
 }
 
