@@ -43,8 +43,14 @@ schemaVersion: 1
 # alpha.3 changed the EVIDENCE STATE of one claim without changing any algorithm:
 # SLOPE-RASTER is promoted E3→E4 by a committed GDAL 3.13.1 cross-implementation
 # reference. All other terrain and measurement evidence is unchanged.
-softwareVersion: 0.6.0
-generated: 2026-07-23
+# 0.6.1 corrects two vertical-unit defects at the reporting boundary — LAS 1.4
+# conversion keeps the vertical datum and unit GeoKeys beside the WKT, and
+# contour GeoJSON labels each elevation with the resolved vertical unit instead
+# of always saying metre — and adds a finite-position refusal to the EPT laszip
+# decoder. None of the three changes what an algorithm computes, so every
+# evidence level is inherited unchanged.
+softwareVersion: 0.6.1
+generated: 2026-07-25
 validationOwner: A. Urias / Aurtech
 
 claims:

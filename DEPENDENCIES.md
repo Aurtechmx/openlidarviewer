@@ -1,23 +1,23 @@
-# Dependency audit — v0.6.0
+# Dependency audit — v0.6.1
 
-This is the committed dependency baseline for OpenLiDARViewer v0.6.0, recorded
-2026-07-23 (UTC) from the committed `package-lock.json`. It is a baseline, not
+This is the committed dependency baseline for OpenLiDARViewer v0.6.1, recorded
+2026-07-25 (UTC) from the committed `package-lock.json`. It is a baseline, not
 the per-release record: the exact commit, toolchain, and lockfile hash for a
 published release live in the release manifest and the exact-tag evidence
 attached to that release. A committed document cannot name the commit it ships
 in; those generated records can.
 
-The dependency graph did not change between the final alpha.3 baseline and the stable v0.6.0 release.
-No package was added, removed, or upgraded.
+Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
+package was added or removed, and no other package changed.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.0 |
-| Baseline date (UTC) | 2026-07-23 |
+| Release line | v0.6.1 |
+| Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.0`, 59 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.1`, 59 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](sbom.json). Licences are credited in
@@ -29,9 +29,9 @@ These ship in the deploy archive.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @fontsource-variable/inter | ^5.2.8 | 5.2.8 | OFL-1.1 |
-| @fontsource/jetbrains-mono | ^5.2.8 | 5.2.8 | OFL-1.1 |
-| @fontsource/manrope | ^5.2.8 | 5.2.8 | OFL-1.1 |
+| @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
+| @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
+| @fontsource/manrope | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @loaders.gl/core | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/gltf | ^4.4.2 | 4.4.3 | MIT |
 | @loaders.gl/obj | ^4.4.2 | 4.4.3 | MIT |
