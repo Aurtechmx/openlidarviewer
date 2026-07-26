@@ -28,7 +28,7 @@ import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfMode
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
 import { verticalUnitLabel } from '../../units/units';
-import { writeGeoTiff } from './demGeoTiff';
+import { writeGeoTiff, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
 import {
   buildContourPackageManifest,
@@ -214,6 +214,10 @@ function gatherDeliverable(
         epsg: dtm.horizontalEpsg ?? parseEpsg(dtm.crs),
         isGeographic: opts.isGeographic ?? false,
         verticalEpsg: dtm.verticalEpsg ?? parseEpsg(dtm.verticalDatum),
+        // Same grid, same vertical unit key as the standalone DEM package
+        // writes: without 4099 a foot-height raster read as ambiguous between
+        // metres and feet depending only on which product emitted it.
+        verticalUnitCode: verticalUnitGeoKeyCode(dtm.verticalUnitToMetres),
       }),
     );
   }
