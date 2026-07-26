@@ -175,6 +175,10 @@ export interface TerrainRasterBackend {
    * square cells (`cellSizeM` both axes) — the historical isotropic call.
    * A backend MUST honour it: the per-session probe exercises anisotropic
    * cells, so a kernel that silently ignores `cellSizeYM` fails the gate.
+   *
+   * `zScale` is `verticalUnitToMetres` — the factor that converts the rise of a
+   * native-unit grid (e.g. a foot-vertical DTM) so rise and run share a unit.
+   * Omitted means 1. A backend MUST honour it too; the probe runs a zScale pass.
    */
   derivatives(
     z: Float32Array,
@@ -182,6 +186,7 @@ export interface TerrainRasterBackend {
     rows: number,
     cellSizeM: number,
     cellSizeYM?: number,
+    zScale?: number,
   ): Promise<TerrainDerivatives>;
   hillshade(
     slope: ArrayLike<number>,
@@ -219,6 +224,14 @@ export const EQUIVALENCE_SHADE_TOLERANCE = 1;
  */
 export const PROBE_ANISO_CELL_X = 0.5;
 export const PROBE_ANISO_CELL_Y = 1;
+/**
+ * Probe vertical unit factor: the international foot. The probe runs the
+ * derivative kernels a THIRD time with it, so a backend that ignores `zScale`
+ * (computing a correct metric estimate) cannot pass the gate — on a
+ * foot-vertical DTM it would overstate slope by 1/0.3048 ≈ 3.28x. Both earlier
+ * passes ran at zScale 1 on both sides and were blind to that.
+ */
+export const PROBE_Z_SCALE = 0.3048;
 
 const TWO_PI = 2 * Math.PI;
 
@@ -384,12 +397,19 @@ export async function runEquivalenceProbe(
     PROBE_ANISO_CELL_Y,
   );
   const dAniso = compareDerivativeGrids(refAniso, gotAniso);
-  // Fold the two passes: the gate is the WORST per-cell disagreement across
-  // both geometries, and the aspect-compared tally covers both.
+  // Vertical-unit pass — a foot-vertical grid. Run on the SAME surface so a
+  // backend that drops `zScale` diverges here even though it matched the two
+  // metric passes bit-for-bit.
+  const refZ = hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeM, PROBE_Z_SCALE);
+  const gotZ = await backend.derivatives(z, cols, rows, cellSizeM, cellSizeM, PROBE_Z_SCALE);
+  const dZ = compareDerivativeGrids(refZ, gotZ);
+  // Fold the passes: the gate is the WORST per-cell disagreement across every
+  // geometry, and the aspect-compared tally covers them all.
   const d = {
-    maxSlopeErr: Math.max(dIso.maxSlopeErr, dAniso.maxSlopeErr),
-    maxAspectErr: Math.max(dIso.maxAspectErr, dAniso.maxAspectErr),
-    comparedAspectCells: dIso.comparedAspectCells + dAniso.comparedAspectCells,
+    maxSlopeErr: Math.max(dIso.maxSlopeErr, dAniso.maxSlopeErr, dZ.maxSlopeErr),
+    maxAspectErr: Math.max(dIso.maxAspectErr, dAniso.maxAspectErr, dZ.maxAspectErr),
+    comparedAspectCells:
+      dIso.comparedAspectCells + dAniso.comparedAspectCells + dZ.comparedAspectCells,
   };
 
   const n = cols * rows;
@@ -622,12 +642,13 @@ export class TerrainRasterEngine {
     rows: number,
     cellSizeM: number,
     cellSizeYM?: number,
+    zScale = 1,
   ): Promise<TerrainDerivatives> {
     await this.init();
     const gpu = this.gpu;
     if (gpu) {
       try {
-        const out = await gpu.derivatives(z, cols, rows, cellSizeM, cellSizeYM);
+        const out = await gpu.derivatives(z, cols, rows, cellSizeM, cellSizeYM, zScale);
         this.lastCall = 'gpu';
         return out;
       } catch (err) {
@@ -635,7 +656,7 @@ export class TerrainRasterEngine {
       }
     }
     this.lastCall = 'cpu';
-    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM);
+    return hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeYM, zScale);
   }
 
   /** Async hillshade — same routing/fallback contract as {@link derivatives}. */

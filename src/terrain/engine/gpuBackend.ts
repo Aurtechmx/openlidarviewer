@@ -174,6 +174,7 @@ struct Params {
   rows : u32,
   cellX : f32,
   cellY : f32,
+  zScale : f32,
 };
 
 @group(0) @binding(0) var<storage, read> zin : array<f32>;
@@ -217,7 +218,10 @@ fn horn_main(@builtin(global_invocation_id) gid : vec3<u32>) {
   // cos φ × the N–S (row) spacing, so each gradient divides by ITS axis.
   let dzdx = (c + 2.0 * f + i2 - (a + 2.0 * d + g)) / (8.0 * p.cellX);
   let dzdy = (g + 2.0 * h + i2 - (a + 2.0 * b + c)) / (8.0 * p.cellY);
-  slopeOut[idx] = sqrt(dzdx * dzdx + dzdy * dzdy);
+  // Rise/run must share a unit: zScale (= verticalUnitToMetres) converts the
+  // rise of a native-unit grid. Slope is linear in the rise, so scaling the
+  // final tangent is exact; aspect is a direction and is left untouched.
+  slopeOut[idx] = sqrt(dzdx * dzdx + dzdy * dzdy) * p.zScale;
   if (dzdx == 0.0 && dzdy == 0.0) {
     aspectOut[idx] = 0.0;
   } else {
@@ -390,6 +394,7 @@ export function hornDerivativesF32Reference(
   rows: number,
   cellSizeM: number,
   cellSizeYM: number = cellSizeM,
+  zScale = 1,
 ): TerrainDerivatives {
   const n = cols * rows;
   const slope = new Float32Array(n);
@@ -397,6 +402,9 @@ export function hornDerivativesF32Reference(
   if (n === 0 || !(cellSizeM > 0) || !(cellSizeYM > 0)) return { slope, aspect };
   const { zClean, valid } = buildValidityMask(z);
   const fr = Math.fround;
+  // Same guard the CPU reference applies: a non-finite or non-positive factor
+  // is no factor at all, never a silent zero slope.
+  const zs = fr(Number.isFinite(zScale) && zScale > 0 ? zScale : 1);
   // Per-axis denominators, mirroring the kernel's cellX / cellY uniforms.
   const denomX = fr(8 * fr(cellSizeM));
   const denomY = fr(8 * fr(cellSizeYM));
@@ -422,7 +430,7 @@ export function hornDerivativesF32Reference(
       // (c + 2f + i2 − (a + 2d + g)) / (8·cell), f32 at every step, per axis.
       const dzdx = fr(fr(fr(fr(zC + fr(2 * zF)) + zI) - fr(fr(zA + fr(2 * zD)) + zG)) / denomX);
       const dzdy = fr(fr(fr(fr(zG + fr(2 * zH)) + zI) - fr(fr(zA + fr(2 * zB)) + zC)) / denomY);
-      slope[idx] = fr(Math.sqrt(fr(fr(dzdx * dzdx) + fr(dzdy * dzdy))));
+      slope[idx] = fr(fr(Math.sqrt(fr(fr(dzdx * dzdx) + fr(dzdy * dzdy)))) * zs);
       aspect[idx] = dzdx === 0 && dzdy === 0 ? 0 : fr(Math.atan2(-dzdy, -dzdx));
     }
   }
@@ -641,10 +649,12 @@ export function createGpuBackend(device: GpuDeviceLike): TerrainRasterBackend {
       return { z, counts };
     },
 
-    async derivatives(z, cols, rows, cellSizeM, cellSizeYM): Promise<TerrainDerivatives> {
+    async derivatives(z, cols, rows, cellSizeM, cellSizeYM, zScale): Promise<TerrainDerivatives> {
       const n = cols * rows;
       // Omitted Y cell = square cells (identical to the historical call).
       const cellY = cellSizeYM ?? cellSizeM;
+      // Mirror the CPU guard: an absent/invalid vertical factor is 1, not 0.
+      const zs = zScale != null && Number.isFinite(zScale) && zScale > 0 ? zScale : 1;
       // Mirror the CPU guards exactly: empty / non-positive cell → zeros.
       if (n === 0 || !(cellSizeM > 0) || !(cellY > 0)) {
         return { slope: new Float32Array(n), aspect: new Float32Array(n) };
@@ -668,17 +678,19 @@ export function createGpuBackend(device: GpuDeviceLike): TerrainRasterBackend {
         usage: GPU_USAGE.STORAGE | GPU_USAGE.COPY_SRC,
       });
       const uniBuf = device.createBuffer({
-        size: 16,
+        size: 32,
         usage: GPU_USAGE.UNIFORM | GPU_USAGE.COPY_DST,
       });
       device.queue.writeBuffer(zBuf, 0, zClean);
       device.queue.writeBuffer(validBuf, 0, valid);
-      const uni = new ArrayBuffer(16);
+      // 32 bytes: the 20-byte Params struct rounded up to a 16-byte multiple.
+      const uni = new ArrayBuffer(32);
       new Uint32Array(uni, 0, 2).set([cols, rows]);
-      // Per-axis cell sizes (cellX at byte 8, cellY at byte 12) — the WGSL
-      // Params struct; the probe's anisotropic pass verifies the kernel
-      // actually divides each gradient by its own axis.
-      new Float32Array(uni, 8, 2).set([cellSizeM, cellY]);
+      // Per-axis cell sizes (cellX at byte 8, cellY at byte 12) and the
+      // vertical unit factor (zScale at byte 16) — the WGSL Params struct. The
+      // probe's anisotropic pass verifies the kernel divides each gradient by
+      // its own axis; its zScale pass verifies it converts the rise.
+      new Float32Array(uni, 8, 3).set([cellSizeM, cellY, zs]);
       device.queue.writeBuffer(uniBuf, 0, new Uint8Array(uni));
 
       const pipeline = horn();
