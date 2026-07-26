@@ -1,13 +1,13 @@
 {
   "schemaVersion": 2,
   "project": "openlidarviewer",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
-  "tag": "v0.6.0",
-  "commit": "0140b538df1a6a4ee00f65a18a0bfa9139d2cdb4",
+  "tag": null,
+  "commit": "92622cd375e7bd8a9ace1744eccb76964115aa19",
   "repository": null,
-  "generatedAt": "2026-07-24T02:45:29.845Z",
+  "generatedAt": "2026-07-26T02:14:22.600Z",
   "nodeVersion": "v22.17.1",
   "npmVersion": "10.9.2",
   "platform": "darwin-arm64",
@@ -17,19 +17,11 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "aa8dd8c71313a937af8eead02b085edaaeaefc5ac2da1aa39fb98f206040a7c2",
-  "stages": {
-    "staticGate": "passed",
-    "e2e": "passed",
-    "docsBuild": "passed",
-    "productionAudit": "passed",
-    "fixtureChecksums": "passed",
-    "coverage": "passed",
-    "mutation": "passed"
-  },
+  "gateLogSha256": "6b8cdf4071f8aea6a9b4cc82976215634283251c78b6f24120c77b17fe41acbb",
+  "stages": {},
   "buckets": {
     "unit": {
-      "passed": 3140,
+      "passed": 3357,
       "skipped": 16,
       "runs": 3
     },
@@ -39,7 +31,7 @@
       "runs": 1
     },
     "terrain": {
-      "passed": 1240,
+      "passed": 1245,
       "skipped": 0,
       "runs": 2
     },
@@ -49,25 +41,25 @@
       "runs": 1
     },
     "slow": {
-      "passed": 531,
+      "passed": 533,
       "skipped": 0,
       "runs": 2
     }
   },
   "total": {
-    "passed": 5958,
+    "passed": 6182,
     "skipped": 16
   },
   "bundle": {
     "liveEntryKiB": 718,
     "ceilingKiB": 720
   },
-  "packageLockSha256": "44a0d4073c0b89e53b4d5263cc4468f0169a967ae2b1698fb1a07075945b94bb",
+  "packageLockSha256": "046cbc1abbe5b3a62351b8ebf36027225f41c1b8a3c2661ad0b4b85784525af3",
   "sbom": {
-    "sha256": "947e75f7fb8773fdf5e481ef9f1a39319d485053f55f41dcc18a1f8382a93082",
+    "sha256": "4a4db341baab2a3d4fa112029858ccb94084ed67d556576f68829d97ad418ebc",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.6.0",
-    "bomRef": "openlidarviewer@0.6.0",
+    "rootVersion": "0.6.1",
+    "bomRef": "openlidarviewer@0.6.1",
     "components": 59
   },
   "science": {
