@@ -256,6 +256,96 @@ runner has no way to establish or to prove it established. Until those two
 pieces exist, browser figures are recorded by hand under the protocol below,
 where the conditions are stated and a reader can see what was controlled.
 
+## Cross-platform scientific reproducibility
+
+A third suite asks a question the two above cannot: does the same commit,
+over the same seeded fixture, produce the same science on a different machine
+and a different operating system.
+
+```
+npm run benchmark:repro:portable    # record this platform's leg
+npm run benchmark:compare-platforms # compare two or more recorded legs
+```
+
+The name is narrower than platform independence and stays that way. What the
+suite can establish is a statement about the platforms whose legs it was
+handed, on one Node major version, at one commit. Nothing in it generalises to
+an untested platform. The workflow `.github/workflows/benchmark-portability.yml`
+runs a matrix over `ubuntu-latest` and `macos-latest` on Node 22, uploads each
+leg, then downloads both and compares them. Windows is out of scope for this
+workflow. It is little-endian and would be a legitimate third leg, but it has
+not been run.
+
+### What must be identical
+
+The seeded source-cloud hash, the canonical DTM
+bytes, the DTM dimensions and cell size, the terrain scientific summary,
+elevation min and max, the contour artifact and contour count, terrain
+complexity, the build-stripped scientific record, the application's own
+science-content hash, the processing manifest's scientific content, and every
+scalar scientific value. Tolerance is exactly zero, the same tolerance
+benchmark 1 uses and for the same reason.
+
+### What is allowed to differ
+
+Every difference below is reported, never dropped. Execution time, memory observations, CPU model, operating system, architecture, Node and
+V8 metadata, timestamps, build identity, everything derived from build
+identity, and archive paths. `comparison.json` lists each observed difference
+with the value every platform reported, and names the categories excluded by
+construction.
+
+### The fixture is compared first
+
+Every downstream artifact is a function of
+the seeded source cloud, so a generator that produced different points on two
+hosts makes every later hash differ too. Sorted by hash that reads as "the
+science diverged", which would be the wrong conclusion: the pipeline may be
+perfectly reproducible over an input that is not. The source-cloud hash is
+therefore checked before anything else, a mismatch carries its own status
+(`generator-not-portable`), and the downstream comparison is reported as
+suppressed rather than run and blamed.
+
+The generator's PRNG is integer arithmetic and exact on any engine. Its surface
+uses `Math.sin`, `Math.cos` and `Math.exp`, which ECMAScript leaves
+implementation-defined, and `syntheticCloud.ts` flags that in its own header as
+the one place byte-identity rests on the engine. If this suite ever fails, that
+is the first thing to check. It would be a real portability finding about
+transcendental functions, not a defect to normalise away, and it is not grounds
+for widening the comparison.
+
+### Byte order is a precondition
+
+Several science-scoped artifacts are raw
+typed-array bytes, which serialise in host order. Every leg records its byte
+order, and a leg from an unsupported architecture halts the comparison by name
+instead of producing a mismatch that names the wrong cause. The claim covers
+little-endian platforms only.
+
+### Runtime is per platform
+
+Runtimes are never pooled. A median over two machines
+describes neither of them. `summary.md` carries one row per platform with
+median analysis time, the coefficient of variation, and peak RSS. The result
+this suite reports is output identity, not which host is faster.
+
+### Output
+
+`benchmark-results/portability/` holds `manifest.json`,
+`environments.json`, `comparison.json`, `comparison.csv`, `summary.md`, and one
+subdirectory per platform. Every human-readable file is rendered from
+`comparison.json`, and the verifier re-derives the comparison from the platform
+records in the subdirectories before re-rendering both and comparing byte for
+byte. That is what makes an edited verdict fail even when every digest in the
+manifest has been refreshed to match the edit.
+
+### A single leg reports itself as one
+
+Run on one machine the command
+writes a `single-platform` result and states that the cross-platform claim
+remains unestablished. CI sets `BENCHMARK_REQUIRE_PLATFORMS`, so a missing leg
+fails the job rather than publishing a one-platform result that reads like a
+comparison.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather

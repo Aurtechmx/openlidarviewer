@@ -192,6 +192,7 @@ export const PIPELINE_ARTIFACTS = [
   'contours',
   'contourFeatures',
   'scientificRecordContent',
+  'processingManifestContent',
   'scientificRecord',
   'processingManifest',
 ] as const;
@@ -218,6 +219,7 @@ export const ARTIFACT_SCOPE: Readonly<Record<PipelineArtifactName, 'science' | '
   contours: 'science',
   contourFeatures: 'science',
   scientificRecordContent: 'science',
+  processingManifestContent: 'science',
   scientificRecord: 'build',
   processingManifest: 'build',
 };
@@ -637,7 +639,27 @@ export function runOlvPipeline(options: PipelineRunOptions): PipelineRun {
         );
       }
       artifactFault('manifest');
-      return { processingManifest: toHashable(manifest) };
+      // The chain hashes are seeded by the build identity, so `head` and every
+      // `ops[i].hash` track the commit and the Node version rather than the
+      // processing. What is left once those and `build` are dropped is the
+      // ordered list of methods and bound parameters — the processing itself,
+      // which two machines running the same commit must describe identically.
+      // Kept as a separate artifact rather than a looser comparison of the
+      // full manifest: an exclusion a reader can see beats one they cannot.
+      const manifestContent = {
+        schemaVersion: manifest.schemaVersion,
+        source: manifest.source,
+        ops: manifest.ops.map((op) => ({
+          seq: op.seq,
+          method: op.method,
+          params: op.params,
+          ...(op.note !== undefined ? { note: op.note } : {}),
+        })),
+      };
+      return {
+        processingManifest: toHashable(manifest),
+        processingManifestContent: toHashable(manifestContent),
+      };
     }),
   );
 

@@ -42,20 +42,20 @@ const HEADER = 'section,name,value,unit,status,reason,runtime,deterministic';
  * same carve-out the measurement export makes. `-1+1` is not a number and is
  * still neutralised.
  */
-function cell(value: string): string {
+export function csvCell(value: string): string {
   const numeric = value.trim() !== '' && Number.isFinite(Number(value));
   const neutralise = !numeric && /^[=+\-@\t\r]/.test(value);
   const out = neutralise ? `'${value}` : value;
   return neutralise || /[",\n\r]/.test(out) ? `"${out.replace(/"/g, '""')}"` : out;
 }
 
-function row(cells: readonly string[]): string {
-  return cells.map(cell).join(',');
+export function csvRow(cells: readonly string[]): string {
+  return cells.map(csvCell).join(',');
 }
 
 /** A metric row carries all eight columns; everything else leaves them empty. */
 function metricRow(section: string, name: string, m: Metric): string {
-  return row([
+  return csvRow([
     section,
     name,
     metricValueCell(m),
@@ -69,7 +69,7 @@ function metricRow(section: string, name: string, m: Metric): string {
 
 /** A plain fact (dataset id, OS, hash): a value with no unit and no reason. */
 function factRow(section: string, name: string, value: string, reason = ''): string {
-  return row([section, name, value, '', reason === '' ? 'captured' : UNAVAILABLE_LABEL, reason, '', '']);
+  return csvRow([section, name, value, '', reason === '' ? 'captured' : UNAVAILABLE_LABEL, reason, '', '']);
 }
 
 function stageRows(stage: StageResult): string[] {

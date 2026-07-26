@@ -1,0 +1,103 @@
+name: Benchmark portability
+
+# Cross-Platform Scientific Reproducibility. Each leg runs the seeded
+# reproducibility suite on its own runner and uploads its record; the compare
+# job downloads both and checks that the science-scoped outputs are identical.
+#
+# Not on every push. The suite is ten recorded runs over 250,000 points per
+# platform, which is minutes of real terrain work, and a result set is only
+# meaningful next to the commit that produced it.
+#
+# Windows is deliberately out of scope for this workflow. It is a little-endian
+# platform and would be a legitimate third leg, but it has not been run, and the
+# claim covers only the platforms listed in the matrix below.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  leg:
+    name: Record ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      # Both legs always run. Failing fast would leave the compare job with one
+      # platform, which reports as single-platform and establishes nothing —
+      # a green-looking result for a leg that never happened.
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, platform: linux-x64 }
+          - { os: macos-latest, platform: darwin-arm64 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Every leg must install from the committed lockfile. The comparison
+      # records the lockfile digest and refuses two legs that disagree, so a
+      # rewrite here would fail the compare job later rather than silently
+      # comparing two different dependency trees.
+      - name: Lockfile is unchanged by a clean install
+        run: git diff --exit-code -- package-lock.json
+      - name: Record this platform's leg
+        run: npm run benchmark:repro:portable
+      - name: Verify the result tree
+        run: npm run benchmark:verify
+      - name: Upload the platform leg
+        uses: actions/upload-artifact@v4
+        with:
+          name: portability-leg-${{ matrix.platform }}
+          path: benchmark-results/portability/${{ matrix.platform }}
+          if-no-files-found: error
+          retention-days: 30
+      # The full result tree, so the ten runs behind the leg can be inspected
+      # rather than taken on trust.
+      - name: Upload the full result tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: portability-results-${{ matrix.platform }}
+          path: benchmark-results/latest
+          if-no-files-found: error
+          retention-days: 30
+
+  compare:
+    name: Compare platforms
+    runs-on: ubuntu-latest
+    needs: leg
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download every platform leg
+        uses: actions/download-artifact@v4
+        with:
+          pattern: portability-leg-*
+          path: legs
+      - name: Compare the science-scoped outputs
+        # BENCHMARK_REQUIRE_PLATFORMS is what makes a missing leg a failure. Without
+        # it a job that lost one platform would publish a single-platform result,
+        # which is honest on its own terms and wrong as the outcome of a workflow
+        # whose whole purpose is the comparison.
+        env:
+          BENCHMARK_PORTABILITY_DIRS: legs/portability-leg-linux-x64,legs/portability-leg-darwin-arm64
+          BENCHMARK_REQUIRE_PLATFORMS: linux-x64,darwin-arm64
+        run: npm run benchmark:compare-platforms
+      - name: Upload the comparison
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portability-comparison
+          path: benchmark-results/portability
+          if-no-files-found: warn
+          retention-days: 90
