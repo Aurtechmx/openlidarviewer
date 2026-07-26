@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import { readFileSync } from 'node:fs';
 import os from 'node:os';
+import { forcedGcRequested } from './benchmarks/runner/gcMode';
 
 // Mirror the `__APP_VERSION__` define the Vite build stamps in, so test files
 // (and modules they import — like `BaseExportMode.ts`) can read the version
@@ -27,6 +28,28 @@ const TEST_BUILD_IDENTITY = {
 // to an absolute 8 rather than trusting a bare percentage.
 const cores = os.availableParallelism ? os.availableParallelism() : os.cpus().length;
 const maxWorkers = Math.max(1, Math.min(8, Math.floor(cores * 0.75)));
+
+/**
+ * `--expose-gc` for the benchmark suites, on request only.
+ *
+ * WHY IT HAS TO BE SET HERE. Tests do not run in the process that reads this
+ * file; they run in pool workers, and a node flag on the vitest command line
+ * never reaches them. `poolOptions.forks.execArgv` is the argument vector those
+ * workers are actually launched with, so this is the only place the flag can be
+ * added such that `global.gc` exists where a pipeline run can call it.
+ *
+ * WHY THE ENV VAR AND NOT A CONSTANT. The scaling ladder spawns a child
+ * `vitest run` per tier (see `scalingIsolated.ts`), which re-reads this file in
+ * a fresh process and inherits nothing but the environment. Keying off an env
+ * var is what makes the parent, the tier children and their workers agree; a
+ * value hard-coded per invocation would apply to the parent alone and the tiers
+ * would silently be measured in the other mode.
+ *
+ * Off by default, deliberately. Forced GC is never a pass condition — the
+ * suites record whether it was available and carry on without it, so a default
+ * checkout keeps working and a GC-controlled run is an explicit, labelled act.
+ */
+const benchmarkExecArgv = forcedGcRequested() ? ['--expose-gc'] : [];
 
 export default defineConfig({
   define: {
@@ -56,6 +79,17 @@ export default defineConfig({
     // (Vitest 4 dropped the top-level `minWorkers` option; a floor of 1 is
     // already guaranteed by the Math.max(1, …) clamp on `maxWorkers` above.)
     maxWorkers,
+    // The default pool, stated rather than assumed: `--expose-gc` is not
+    // accepted on a worker_thread's execArgv at all, so the flag below only
+    // works on a child-process pool. If the pool ever moves to threads the flag
+    // stops arriving — `tests/benchmark/forcedGc.test.ts` fails loudly at that
+    // point rather than letting a mislabelled result tree get published.
+    pool: 'forks',
+    // Vitest 4 flattened the old `poolOptions.forks.execArgv` to this top-level
+    // option. Written with the flat name because the nested one is not merely
+    // deprecated, it is IGNORED: the run stays green and the workers simply
+    // never get the flag.
+    execArgv: benchmarkExecArgv,
     /**
      * Coverage is scoped to the PURE modules — the numeric, geometric and
      * model code whose behaviour a unit test can actually pin. Deliberately

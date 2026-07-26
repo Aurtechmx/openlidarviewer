@@ -78,6 +78,12 @@ function runTierInChildProcess(config: ScalingConfig, tier: ScalingTier): Scalin
       timeout: CHILD_TIMEOUT_MS,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
+      // The whole parent environment, deliberately. The child re-reads
+      // `vitest.config.ts` in a fresh process, and that is where
+      // `BENCHMARK_FORCE_GC` becomes an `--expose-gc` on the worker — so
+      // narrowing this to an allowlist of BENCHMARK_TIER_* would leave the
+      // parent GC-controlled and every tier measured in the other mode, in one
+      // result tree, with nothing to show for it but a shifted curve.
       env: {
         ...process.env,
         BENCHMARK_TIER: tier.id,

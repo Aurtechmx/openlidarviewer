@@ -389,6 +389,11 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
       completedAtUtc: manifest.completedAtUtc,
       command: manifest.command,
       notRun: manifest.notRun,
+      // From the manifest, never re-read from this verifier's environment: the
+      // point of re-rendering is to check the published page against the
+      // published record, and consulting BENCHMARK_FORCE_GC here would make a
+      // verification of an archive depend on how the verification was launched.
+      forcedGc: manifest.forcedGc,
     },
     manifest.benchmarkPackageVersion,
     reproSummary,

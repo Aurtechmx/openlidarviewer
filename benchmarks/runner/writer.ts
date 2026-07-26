@@ -39,12 +39,14 @@ import { fileURLToPath } from 'node:url';
 import { capturedEnv, unavailableEnv, type BenchmarkEnvironment, type EnvValue } from '../framework';
 import { captureEnvironment, nodeSha256Hex } from '../framework/node';
 import { BENCHMARK_PACKAGE_VERSION, BENCHMARK_SCHEMA_VERSION } from './config';
+import { forcedGcRequested, summariseForcedGc } from './gcMode';
 import type { ReproducibilityResult } from './reproducibility';
 import type { ScalingResult } from './scaling';
 import {
   overviewHtml,
   overviewInputFrom,
   overviewMarkdown,
+  type ForcedGcReport,
   reproducibilityCsv,
   reproducibilityMarkdown,
   scalingCsv,
@@ -141,6 +143,22 @@ export interface BenchmarkManifest {
   readonly nodeVersion: EnvValue;
   readonly npmVersion: EnvValue;
   readonly command: string;
+  /**
+   * The garbage-collection regime this result set was measured under.
+   *
+   * WHY IT IS A MANIFEST FIELD. Two ladders that differ only in whether
+   * `global.gc` was called between runs are two different experiments, and
+   * nothing else in the tree distinguishes them at a glance — the numbers look
+   * alike and the file names are identical. A reader holding an archive
+   * directory has to be able to answer "was GC controlled here?" from the
+   * artifacts alone, and this is the field that answers it.
+   *
+   * Both halves are published. `requested` is what the operator asked for;
+   * `observedInRuns` is what the recorded runs actually had. They can disagree
+   * — a flag that fails to reach a worker is exactly the silent failure this
+   * pair exists to expose — and `summary.md` calls that out as a MISMATCH.
+   */
+  readonly forcedGc: ForcedGcReport;
   readonly configuration: Readonly<Record<string, unknown>>;
   readonly datasetIds: readonly string[];
   readonly suites: readonly { readonly suiteId: string; readonly pass: boolean }[];
@@ -161,6 +179,15 @@ export interface WriteResultsOptions {
   readonly resultsDir?: string;
   readonly environment?: BenchmarkEnvironment;
   readonly hostExtras?: HostExtras;
+  /**
+   * Whether forced GC was ASKED FOR. Defaults to the documented env var.
+   *
+   * An option rather than a bare env read so a test can pin it: a writer that
+   * consulted the ambient environment directly would make its own output depend
+   * on how the test runner happened to be launched, which is the one thing this
+   * field must not do.
+   */
+  readonly forcedGcRequested?: boolean;
 }
 
 export interface WriteResultsOutcome {
@@ -203,6 +230,23 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
   const latestDir = join(resultsDir, 'latest');
   const environment = options.environment ?? captureEnvironment({ repoRoot: REPO_ROOT });
   const hostExtras = options.hostExtras ?? captureHostExtras();
+
+  // Observed, not assumed: read back off every recorded run in both suites, so
+  // the manifest reports what the pipeline actually had rather than what the
+  // command line claimed. The scaling ladder runs each tier in its own child
+  // process, so this is also what catches a flag that reached some children and
+  // not others — that lands as 'mixed' rather than being averaged into a yes.
+  const observedForcedGc: boolean[] = [];
+  for (const run of options.reproducibility?.raw.runs ?? []) {
+    observedForcedGc.push(run.observation.memory.forcedGcAvailable);
+  }
+  for (const tier of options.scaling?.raw.tiers ?? []) {
+    for (const run of tier.runs) observedForcedGc.push(run.observation.memory.forcedGcAvailable);
+  }
+  const forcedGc: ForcedGcReport = {
+    requested: options.forcedGcRequested ?? forcedGcRequested(),
+    observedInRuns: summariseForcedGc(observedForcedGc),
+  };
 
   const shortCommit =
     environment.gitCommitShort.status === 'captured' ? environment.gitCommitShort.value : 'nocommit';
@@ -302,6 +346,7 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     completedAtUtc: options.completedAtUtc,
     command: options.command,
     notRun: options.notRun ?? [],
+    forcedGc,
   };
   const overview: OverviewInput = overviewInputFrom(
     header,
@@ -330,6 +375,7 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     nodeVersion: environment.nodeVersion,
     npmVersion: hostExtras.npmVersion,
     command: options.command,
+    forcedGc,
     configuration,
     datasetIds,
     suites,

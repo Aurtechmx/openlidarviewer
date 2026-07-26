@@ -22,12 +22,15 @@ import { runScalingSuite } from '../../benchmarks/runner/scaling';
 import { archiveStamp, writeResults } from '../../benchmarks/runner/writer';
 import { verifyArchives, verifyResultsDir } from '../../benchmarks/runner/verify';
 import {
+  overviewMarkdown,
   reproducibilityCsv,
   reproducibilityMarkdown,
   scalingCsv,
   scalingMarkdown,
   scalingTable,
+  type OverviewInput,
 } from '../../benchmarks/runner/render';
+import { summariseForcedGc, type ForcedGcObservation } from '../../benchmarks/runner/gcMode';
 
 const TERRAIN = { cellSizeM: 2, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', holdoutSeed: 1 };
 
@@ -86,6 +89,10 @@ function publish(overrides: Partial<Parameters<typeof writeResults>[0]> = {}): {
     reproducibility: repro,
     scaling,
     resultsDir: root,
+    // Pinned, never inherited from the ambient environment: left to default,
+    // this whole file would assert something different depending on whether the
+    // unit suite happened to be launched with BENCHMARK_FORCE_GC set.
+    forcedGcRequested: false,
     ...overrides,
   });
   return { root, latest: outcome.latestDir, archive: outcome.archiveDir };
@@ -208,8 +215,8 @@ describe('the written tree', () => {
     const { latest } = publish();
     const manifest = JSON.parse(readFileSync(join(latest, 'manifest.json'), 'utf8'));
 
-    expect(manifest.schemaVersion).toBe(1);
-    expect(manifest.benchmarkPackageVersion).toBe('1.0.0');
+    expect(manifest.schemaVersion).toBe(2);
+    expect(manifest.benchmarkPackageVersion).toBe('1.1.0');
     expect(manifest.startedAtUtc).toBe(START);
     expect(manifest.completedAtUtc).toBe(END);
     expect(manifest.command).toBe('test');
@@ -236,6 +243,65 @@ describe('the written tree', () => {
     // The manifest cannot list itself: its own hash would be over bytes that do
     // not exist while it is being written.
     expect(manifest.files.some((f: { path: string }) => f.path === 'manifest.json')).toBe(false);
+  });
+
+  test('records the garbage-collection regime, asked-for and observed', () => {
+    const { latest } = publish();
+    const manifest = JSON.parse(readFileSync(join(latest, 'manifest.json'), 'utf8'));
+
+    // Both halves present. The pair is the point: `requested` alone would let a
+    // flag that never reached a worker publish itself as a GC-controlled run.
+    expect(manifest.forcedGc.requested).toBe(false);
+    expect(['all', 'none', 'mixed', 'no-runs']).toContain(manifest.forcedGc.observedInRuns);
+
+    // The observed half is DERIVED FROM THE RUNS, not from the environment, so
+    // it has to agree with what the raw file says every run had.
+    const raw = JSON.parse(readFileSync(join(latest, 'scaling', 'raw.json'), 'utf8'));
+    const observed: boolean[] = [];
+    for (const r of JSON.parse(readFileSync(join(latest, 'reproducibility', 'raw.json'), 'utf8')).runs) {
+      observed.push(r.observation.memory.forcedGcAvailable);
+    }
+    for (const tier of raw.tiers) {
+      for (const r of tier.runs) observed.push(r.observation.memory.forcedGcAvailable);
+    }
+    expect(manifest.forcedGc.observedInRuns).toBe(summariseForcedGc(observed));
+
+    // And it reaches the page a reader actually opens.
+    expect(readFileSync(join(latest, 'summary.md'), 'utf8')).toContain('- forced GC: not requested;');
+  });
+
+  test('the overview calls out a GC mode that was asked for and did not arrive', () => {
+    // The pure renderer rather than a published tree: whether THIS worker has
+    // `global.gc` depends on how the unit suite was launched, and a test whose
+    // expectation moves with that would be asserting the environment.
+    const base: OverviewInput = {
+      startedAt: START,
+      completedAt: END,
+      command: 'test',
+      olvVersion: '0.0.0',
+      benchmarkPackageVersion: '1.1.0',
+      commit: 'f'.repeat(40),
+      workingTreeClean: true,
+      reproducibility: null,
+      scaling: null,
+      notRun: [],
+      forcedGc: { requested: true, observedInRuns: 'all' },
+    };
+    const line = (requested: boolean, observedInRuns: ForcedGcObservation): string =>
+      overviewMarkdown({ ...base, forcedGc: { requested, observedInRuns } })
+        .split('\n')
+        .find((l) => l.startsWith('- forced GC:')) ?? '';
+
+    // Agreement, either way round, is quiet.
+    expect(line(true, 'all')).not.toContain('MISMATCH');
+    expect(line(false, 'none')).not.toContain('MISMATCH');
+    // Disagreement is not. These are the two shapes of a broken flag: it
+    // reached nothing, or it reached some of the tier children and not others.
+    expect(line(true, 'none')).toContain('MISMATCH');
+    expect(line(true, 'mixed')).toContain('MISMATCH');
+    // And GC that turned up unasked matters too — it means the numbers are not
+    // the default-mode numbers the label promises.
+    expect(line(false, 'all')).toContain('MISMATCH');
   });
 
   test('names the browser suite as not run rather than reporting zeros for it', () => {
