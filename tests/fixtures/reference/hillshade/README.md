@@ -51,10 +51,9 @@ expressed in. Our implementation is `shadeFromSlopeAspect` in
 **The one place they differ is the 8-bit encoding, not the shading.** We write
 `round(255·h)`. GDAL writes `round(1 + 254·h)`, reserving level 0 for nodata.
 The two encodings of one intensity differ by exactly `(1 − h)` levels, which is
-strictly below one level for any lit cell. That difference is deliberately left
-**visible** in the reported figures rather than divided out — see "What this does
-and does not establish" below, because it is what makes the headline number sit
-where it does.
+strictly below one level for any lit cell. The reported figures include that
+difference rather than subtracting it, which is why the headline number sits
+where it does — see "What this does and does not establish" below.
 
 ## Producing the reference
 
