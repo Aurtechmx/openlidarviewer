@@ -1,18 +1,18 @@
 /**
- * unitIntegrity.test.ts — every reported quantity carries the unit it claims.
+ * unitIntegrity.test.ts: every reported quantity carries the unit it claims.
  *
  * WHY THIS SUITE EXISTS. One defect shape has recurred in this codebase: the
  * same physical quantity derived by two code paths, diverging because one path
  * applied a unit or axis conversion the other did not. The slope zScale for
  * foot CRS data, Y-up versus Z-up in the scan report, the streaming and
  * intelligence unit conversions, the density formatter, the export count and
- * bounds basis, the contour third ordinate, the despike floor's vertical unit —
- * all the same bug wearing different clothes. A test that exercises one path
+ * bounds basis, the contour third ordinate, the despike floor's vertical unit.
+ * All the same bug wearing different clothes. A test that exercises one path
  * cannot catch it. Only a test that runs both paths over the same physical
  * scene and compares can.
  *
  * WHAT A CASE LOOKS LIKE. Take a synthetic terrain whose true geometry is known
- * in metres. Express it a second time in a different CRS — international feet
+ * in metres. Express it a second time in a different CRS. International feet
  * horizontally, or a compound frame with metre eastings over foot heights, or a
  * Y-up axis order. Feed both through the production functions with the unit
  * factors those functions declare, and assert the physical result matches.
@@ -32,7 +32,7 @@
  * range these fixtures use (tens of metres) that is a sub-micrometre absolute
  * error, and the Horn stencil divides it by the cell size rather than
  * amplifying it. Tolerances are set an order of magnitude above that bound and
- * are still far below any surveying significance — see each constant.
+ * are still far below any surveying significance. See each constant.
  *
  * NOT COVERED HERE. Anything whose unit only exists on the GPU or in the DOM.
  * See UNCOVERED at the bottom of this file for the explicit list; those are
@@ -78,7 +78,7 @@ import { createInspectorCardRefreshers } from '../../src/app/inspectorCardRefres
  * ~40 m elevation range is ~2.4e-6 m of storage error, and the Horn stencil
  * divides that by the cell size (1 m here) rather than amplifying it. 1e-5 on
  * the tangent is four times that bound and corresponds to 6e-4 degrees of
- * slope — three orders below the ~0.1° at which a slope map is read.
+ * slope, three orders below the ~0.1° at which a slope map is read.
  */
 const SLOPE_TANGENT_TOL = 1e-5;
 
@@ -86,7 +86,7 @@ const SLOPE_TANGENT_TOL = 1e-5;
  * Slope reported in degrees. atan is contractive for the tangents these
  * fixtures produce, so the degree error is bounded by
  * SLOPE_TANGENT_TOL * 180/pi ≈ 5.7e-4. Rounded up to 1e-3 degrees, which is
- * 3.6 arc-seconds — below the angular resolution any terrain product claims.
+ * 3.6 arc-seconds, below the angular resolution any terrain product claims.
  */
 const SLOPE_DEGREE_TOL = 1e-3;
 
@@ -95,7 +95,7 @@ const SLOPE_DEGREE_TOL = 1e-3;
  * Doubles carry ~1e-16 relative error and the conversion is a single multiply
  * by an exact factor (0.3048 is exact in decimal but not in binary, costing one
  * rounding). Over the ~100 m extents here that is ~1e-14 m. 1e-9 m is a
- * nanometre — five orders below the millimetre at which any survey instrument
+ * nanometre, five orders below the millimetre at which any survey instrument
  * reports, and still six orders above the arithmetic bound.
  */
 const LENGTH_METRES_TOL = 1e-9;
@@ -112,7 +112,7 @@ const DENSITY_RELATIVE_TOL = 1e-9;
 /**
  * A volume in cubic metres, compared across source units. Three multiplies by
  * the conversion factor rather than one, so three roundings; still ~1e-15
- * relative. Expressed as relative, at 1e-9 — nine orders below the few-percent
+ * relative. Expressed as relative, at 1e-9, nine orders below the few-percent
  * uncertainty a stockpile volume is actually quoted with.
  */
 const VOLUME_RELATIVE_TOL = 1e-9;
@@ -123,7 +123,7 @@ const VOLUME_RELATIVE_TOL = 1e-9;
  * and the difference of two nearly equal stored heights amplifies it: heights
  * near 33 (feet) carry ~2e-6 of storage error each, and the change being
  * integrated is ~4.9 units, so the relative error on the difference is
- * ~8e-7. Set at 1e-5 relative, an order above that bound — and a hundredth of
+ * ~8e-7. Set at 1e-5 relative, an order above that bound, and a hundredth of
  * one percent on a volume, against the few percent such a figure is quoted
  * with.
  *
@@ -140,7 +140,7 @@ const M_PER_US_FT = UNIT_FACTORS.M_PER_US_FT;
 
 /**
  * The reference surface. A tilted plane carrying a smooth Gaussian rise, so the
- * scene has both a constant regional gradient and a locally varying one — a
+ * scene has both a constant regional gradient and a locally varying one. A
  * plane alone would let an axis error hide, because its slope is the same in
  * every direction.
  *
@@ -206,7 +206,7 @@ function relDiff(a: number, b: number): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unit integrity — horizontal-unit invariance', () => {
+describe('unit integrity: horizontal-unit invariance', () => {
   /**
    * Slope is a ratio of two lengths, so it is dimensionless: the same hillside
    * measured in a metre CRS and a foot CRS must produce the SAME number, not a
@@ -249,7 +249,7 @@ describe('unit integrity — horizontal-unit invariance', () => {
   });
 
   /**
-   * Aspect is a compass direction — a dimensionless angle. A unit change must
+   * Aspect is a compass direction, so a dimensionless angle. A unit change must
    * not rotate it at all.
    */
   test('aspect is unchanged by the horizontal unit', () => {
@@ -321,7 +321,7 @@ describe('unit integrity — horizontal-unit invariance', () => {
 
   /**
    * Ground density is points per square METRE. A foot grid holds the same
-   * points over the same ground, so the density must be the same number — the
+   * points over the same ground, so the density must be the same number. The
    * area conversion is the square of the linear one, and getting that wrong is
    * a 10.76x error that still looks like a plausible density.
    */
@@ -391,7 +391,7 @@ describe('unit integrity — horizontal-unit invariance', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unit integrity — vertical-unit independence', () => {
+describe('unit integrity: vertical-unit independence', () => {
   /**
    * The classic compound-CRS case: metre eastings and northings over foot
    * heights. Slope must come out the same as the all-metre expression, which
@@ -413,7 +413,7 @@ describe('unit integrity — vertical-unit independence', () => {
 
   /**
    * The negative control for the check above. Omitting the vertical factor on a
-   * foot-height grid must NOT accidentally agree — if it did, the test above
+   * foot-height grid must NOT accidentally agree. If it did, the test above
    * would be passing vacuously and could not detect a regression.
    */
   test('omitting the vertical factor on a foot-height grid changes the slope', () => {
@@ -427,7 +427,7 @@ describe('unit integrity — vertical-unit independence', () => {
   /**
    * The despike floor is declared in METRES (`minDeviationM`). A deviation of
    * 0.1 foot is 0.0305 m and sits below the 0.05 m floor, so a foot-height grid
-   * must NOT flag it — the same numeric deviation on a metre grid must.
+   * must NOT flag it, while the same numeric deviation on a metre grid must.
    */
   test('the despike floor is honoured in metres, not in source vertical units', () => {
     const n = 11;
@@ -435,7 +435,7 @@ describe('unit integrity — vertical-unit independence', () => {
     const centre = Math.floor((n * n) / 2);
 
     const footZ = new Float32Array(n * n).fill(10);
-    footZ[centre] = 10.1; // 0.1 ft = 0.0305 m — below the 0.05 m floor
+    footZ[centre] = 10.1; // 0.1 ft = 0.0305 m, below the 0.05 m floor
     const flaggedAsFeet = findSpikes(footZ, had, n, n, {
       verticalUnitToMetres: M_PER_FT,
       minDeviationM: 0.05,
@@ -444,7 +444,7 @@ describe('unit integrity — vertical-unit independence', () => {
     expect(flaggedAsFeet[centre]).toBe(0);
 
     const metreZ = new Float32Array(n * n).fill(10);
-    metreZ[centre] = 10.1; // 0.1 m — above the 0.05 m floor
+    metreZ[centre] = 10.1; // 0.1 m, above the 0.05 m floor
     const flaggedAsMetres = findSpikes(metreZ, had, n, n, {
       verticalUnitToMetres: 1,
       minDeviationM: 0.05,
@@ -523,7 +523,7 @@ describe('unit integrity — vertical-unit independence', () => {
     expect(maxAbsDiff(shadeM.shade, shadeC.shade)).toBe(0);
 
     // Applying the vertical factor at the shade instead of at the derivative
-    // reaches the same bytes — the two arguments are the same multiply.
+    // reaches the same bytes, because the two arguments are the same multiply.
     const unscaled = hornSlopeAspect(elevationGrid(M_PER_FT), GRID_N, GRID_N, CELL_M, CELL_M, 1);
     const shadeViaZFactor = shadeFromSlopeAspect(
       unscaled.slope,
@@ -583,7 +583,7 @@ describe('unit integrity — vertical-unit independence', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unit integrity — axis convention', () => {
+describe('unit integrity: axis convention', () => {
   /**
    * A Y-up cloud (PLY, OBJ, glTF) stores height in Y and ground depth in Z.
    * Reading the extents as if they were Z-up puts the building height into
@@ -627,7 +627,7 @@ describe('unit integrity — axis convention', () => {
   /**
    * The vertical unit factor must land on the vertical axis, whichever axis
    * that is. On a Y-up cloud in a compound frame, applying it to Z scales the
-   * ground depth and leaves the height in feet — both wrong, and the density is
+   * ground depth and leaves the height in feet. Both are wrong, and the density is
    * wrong with them.
    */
   test('the vertical unit factor follows the up axis, not the Z slot', () => {
@@ -648,7 +648,7 @@ describe('unit integrity — axis convention', () => {
   });
 
   /**
-   * A Z-up source must be byte-identical to the historical behaviour — the axis
+   * A Z-up source must be byte-identical to the historical behaviour, so the axis
    * awareness above must not have moved the common case.
    */
   test('a Z-up cloud is unaffected by the axis handling', () => {
@@ -700,7 +700,7 @@ describe('unit integrity — axis convention', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unit integrity — cross-path agreement', () => {
+describe('unit integrity: cross-path agreement', () => {
   /**
    * Volumetric density feeds the dataset-intelligence tier, and the tier is
    * bucketed against thresholds in points per CUBIC METRE. A foot-CRS bounding
@@ -729,7 +729,7 @@ describe('unit integrity — cross-path agreement', () => {
    * The same tier, computed by the two refreshers that actually build it: one
    * from a static cloud's bounds, one from a streaming cloud's header. Both
    * describe the same physical box in the same foot CRS, so both must reach the
-   * same bucket. This is the cross-path form of the check above — the pure
+   * same bucket. This is the cross-path form of the check above. The pure
    * classifier agreeing proves nothing if one caller feeds it raw feet.
    */
   test('the static and streaming refreshers agree on the density tier for one foot-CRS box', () => {
@@ -831,7 +831,7 @@ describe('unit integrity — cross-path agreement', () => {
   /**
    * The 2 ppm gap between the international and US survey foot must survive the
    * conversion rather than being flattened by a shared constant. Over a 10 km
-   * traverse it is 2 cm — small, but real, and a silent collapse to one factor
+   * traverse it is 2 cm: small, but real, and a silent collapse to one factor
    * would be undetectable at any single point.
    */
   test('the international and US survey foot stay distinguishable', () => {
@@ -844,7 +844,7 @@ describe('unit integrity — cross-path agreement', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('unit integrity — declared-unit contract', () => {
+describe('unit integrity: declared-unit contract', () => {
   /**
    * A unit label must describe the value's actual basis. An unknown scale is
    * the dangerous case: labelling it as metres asserts a conversion nobody
@@ -930,7 +930,7 @@ describe('unit integrity — declared-unit contract', () => {
 });
 
 /**
- * UNCOVERED — quantities whose unit cannot be checked from Node.
+ * UNCOVERED. Quantities whose unit cannot be checked from Node.
  *
  * Named rather than tested, because a check that runs in an environment where
  * the quantity does not exist would pass without evidence.
