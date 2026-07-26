@@ -36,8 +36,10 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    // Unit tests only — Playwright specs under tests/e2e/ are excluded.
-    include: ['tests/*.{test,spec}.ts'],
+    // Unit tests only — Playwright specs under tests/e2e/ are excluded. The
+    // benchmark-framework suites live one level down, so they are listed
+    // explicitly rather than by a `tests/**` glob that would sweep e2e back in.
+    include: ['tests/*.{test,spec}.ts', 'tests/benchmark/*.{test,spec}.ts'],
     // Headroom over the 5 s default so the heavier DOM-building / LAS-decoding
     // suites don't time out (and flake) under parallel load on a busy machine —
     // 15 s is still unambiguously "broken" if a unit test ever hits it.
