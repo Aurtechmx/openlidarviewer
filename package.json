@@ -59,6 +59,7 @@
     "benchmark:compare-platforms": "BENCHMARK_COMPARE=1 vitest run tests/benchmark/comparePlatforms.test.ts --testTimeout=600000",
     "benchmark:backends": "BENCHMARK_BACKENDS=1 vitest run tests/benchmark/runBackends.test.ts --testTimeout=600000",
     "benchmark:backends:gpu": "playwright test tests/e2e/backendGpuLeg.spec.ts --project=gpu --headed",
+    "benchmark:archive-portability": "node scripts/verify-archive-portability.mjs",
     "benchmark:verify": "BENCHMARK_VERIFY=1 vitest run tests/benchmark/verifyResults.test.ts --testTimeout=600000",
     "benchmark:verify:archives": "BENCHMARK_VERIFY_ARCHIVES=1 vitest run tests/benchmark/verifyResults.test.ts --testTimeout=1800000",
     "test:smoke": "playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
