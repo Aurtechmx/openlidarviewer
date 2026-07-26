@@ -327,6 +327,36 @@ describe('GeoKeys — the vertical unit comes from the source, not the horizonta
     expect(key(bytes, 4099)).toBeUndefined();
   });
 
+  it('keeps the vertical GeoKeys alongside a WKT VLR', () => {
+    // A horizontal-only WKT (what wktForEpsg produces, and what most source
+    // WKTs are) says nothing about the vertical axis. Making the two VLRs
+    // mutually exclusive dropped VerticalCSType and VerticalUnits entirely,
+    // so foot heights on NAVD88 shipped as undeclared — read as metres, 3.28×
+    // wrong, with the datum gone.
+    const wkt = 'PROJCS["WGS 84 / UTM zone 13N",GEOGCS["WGS 84"],UNIT["metre",1],AUTHORITY["EPSG","32613"]]';
+    const bytes = writeLas14(g(), {
+      epsg: 32613, isGeographic: false, linearUnitCode: 9001, wkt,
+      verticalEpsg: 5703, verticalUnitCode: 9003,
+    });
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getUint16(6, true) & 0x10).toBe(0x10); // WKT still the horizontal authority
+    expect(view.getUint32(100, true)).toBe(2); // WKT VLR + GeoKey VLR
+    expect(key(bytes, 4096)).toBe(5703);
+    expect(key(bytes, 4099)).toBe(9003);
+    // The horizontal frame has exactly ONE authority: no horizontal keys that
+    // could contradict the WKT.
+    expect(key(bytes, 3072)).toBeUndefined();
+    expect(key(bytes, 3076)).toBeUndefined();
+    expect(key(bytes, 1024)).toBeUndefined();
+  });
+
+  it('writes no GeoKey VLR beside a WKT when there is no vertical to add', () => {
+    const wkt = 'PROJCS["WGS 84 / UTM zone 13N",GEOGCS["WGS 84"],UNIT["metre",1],AUTHORITY["EPSG","32613"]]';
+    const bytes = writeLas14(g(), { epsg: 32613, isGeographic: false, linearUnitCode: 9001, wkt });
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getUint32(100, true)).toBe(1);
+  });
+
   it('no longer copies a foot horizontal into the vertical slot', () => {
     // The old derivation: foot horizontal ⇒ foot vertical, even for metre Z.
     const bytes = writeLas14(g(), {
