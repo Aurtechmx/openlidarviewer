@@ -52,6 +52,36 @@ machine cannot separate one from another. The 1M tier is not optional: if it
 cannot complete, the failed tier is preserved with its exact reason and the
 suite fails until the limitation is written into `acceptedTierFailures`.
 
+### The throughput curve
+
+Median analysis throughput over the seeded synthetic ladder is non-monotonic:
+239k points/s at 50k, rising to 257k at 250k, then falling to 207k at 1M. The
+tiers are comparable workloads — the fixture holds point density constant at
+4 pts/m² and scales tile extent as sqrt(N), so grid cells scale with point count
+and points-per-cell stays invariant at about 16 across the whole ladder — and
+the work lives almost entirely in the `dtm` stage.
+
+We do not attribute the shape to input size, and the two limbs are not equally
+solid. **The rising limb is not resolvable.** The 50k→250k gain is about 7 %
+against within-tier coefficients of variation of 0.09 and 0.13 on those two
+tiers, so it sits inside the noise of the machine these numbers came from. An
+earlier single-process run with one warm-up showed a larger rise, and that
+version of the curve was an artefact of warm-up state advancing alongside the
+tier. **The falling limb is larger than the noise:** 1M runs 20 % below the 250k
+figure with a within-tier CV of 0.02, and peak RSS climbs from about 310 MiB at
+250k to 870 MiB at 1M with forced garbage collection unavailable, so allocator
+pressure is the obvious candidate and is not something these runs isolate.
+
+Process-per-tier isolation removed most, not all, of the memory confound. The
+identical 250k workload reports peak RSS around 310 MiB in a tier child and
+around 390 MiB inside the reproducibility suite, which runs sixteen 250k
+analyses in one process rather than eleven. The remaining gap is process
+history within a single tier, and it is the reason peak RSS is quoted per tier
+rather than compared between suites.
+
+The curve is reported as a measured artefact of this configuration on this
+machine, not as a scaling law.
+
 Contour count is **not** comparable across tiers. The fixture holds point
 density constant and scales tile extent as the square root of the point count,
 and its landform amplitudes are fractions of that extent, so vertical relief
