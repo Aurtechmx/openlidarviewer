@@ -103,15 +103,15 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "^1.62.0",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/proj4": "^2.19.0",
     "@types/three": "^0.184.1",
     "@vitest/coverage-v8": "^4.1.10",
     "rollup-plugin-visualizer": "^7.0.1",
-    "typescript": "~6.0.2",
-    "vite": "^8.0.12",
+    "typescript": "~7.0.2",
+    "vite": "^8.1.5",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
     "vitest": "^4.1.7"
