@@ -161,6 +161,27 @@ GPU upload, first rendered frame, frame rate and time-to-interaction are
 browser measurements. This runner is Node-only and reports them as declared
 stages with no number — never as zero, and never as an estimate.
 
+### Why there is no `benchmark:browser`
+
+The scripts are `benchmark:repro`, `benchmark:scaling`, `benchmark:quick`,
+`benchmark:verify` and `benchmark:verify:archives`. There is no browser script,
+and `benchmark:quick` records `browser` under `notRun` with the reason. That
+gap is a decision, not a task someone forgot.
+
+Measuring the real COPC workflow means measuring the running application, so it
+needs an instrumentation bridge inside the app that reports GPU upload, first
+rendered frame, frame rate and time to interaction. The live entry chunk is
+718 KiB against a hard ceiling of 720 KiB (`scripts/check-bundle-budget.mjs`),
+so a bridge cannot be linked into the shell. It has to be dynamic-import only
+and gated so it cannot load during normal use, which is a design problem before
+it is a measurement one.
+
+The measurement conditions are the other half. A COPC number is only meaningful
+from a verified cold cache against a real remote dataset, both of which the Node
+runner has no way to establish or to prove it established. Until those two
+pieces exist, browser figures are recorded by hand under the protocol below,
+where the conditions are stated and a reader can see what was controlled.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather
