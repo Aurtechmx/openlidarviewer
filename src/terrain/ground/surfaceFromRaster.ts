@@ -98,7 +98,13 @@ export function buildSurfaceFromRaster(
   for (let i = 0; i < hadData0.length; i++) {
     if (raster.counts[i] > 0) { hadData0[i] = 1; measuredCellCount++; }
   }
-  const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, LIVE_DESPIKE);
+  // `raster.z` is in native source vertical units and LIVE_DESPIKE's floor is
+  // metres, so the factor has to travel with it — otherwise 30 cm reads as
+  // 30 source units and a foot-vertical scan loses real sub-30 cm features.
+  const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
+    ...LIVE_DESPIKE,
+    verticalUnitToMetres: params.verticalUnitToMetres,
+  });
   // Safety cap: if "outliers" exceed 2% of measured cells the data is noisy,
   // not spiky — removing that much would distort the surface, so leave it.
   const removalCap = Math.max(4, Math.ceil(measuredCellCount * 0.02));

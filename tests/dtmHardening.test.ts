@@ -52,6 +52,43 @@ describe('despike — robust local outlier rejection', () => {
     blunder[12] = 15;
     expect(findSpikes(blunder, had, cols, rows, { minDeviationM: 0.3 })[12]).toBe(1);
   });
+
+  it('measures the floor in METRES against native-unit heights', () => {
+    // `minDeviationM` is a metres constant, but the heights it is compared with
+    // are in SOURCE vertical units. One physical surface — a 15 cm bump in flat
+    // terrain, comfortably inside the 30 cm blunder floor — must survive in
+    // BOTH frames. Without the conversion the effective floor on foot data is
+    // 0.3 ft = 9.1 cm, 3.28x too aggressive: a real feature is deleted and
+    // silently re-interpolated, and `despikedCellCount` reaches provenance, so
+    // two deliverables of the same scan disagree about how much data was cut.
+    const cols = 5, rows = 5;
+    const had = new Uint8Array(cols * rows).fill(1);
+
+    const metres = new Float32Array(cols * rows).fill(10);
+    metres[12] = 10.15; // +15 cm
+    const inMetres = findSpikes(metres, had, cols, rows, { minDeviationM: 0.3 });
+
+    const feet = new Float32Array(cols * rows).fill(10 / 0.3048);
+    feet[12] = 10.15 / 0.3048; // the SAME surface, expressed in feet
+    const inFeet = findSpikes(feet, had, cols, rows, {
+      minDeviationM: 0.3,
+      verticalUnitToMetres: 0.3048,
+    });
+
+    expect(inMetres[12]).toBe(0); // 15 cm < the 30 cm floor
+    expect(inFeet[12]).toBe(inMetres[12]); // …and the same in feet
+    expect(Array.from(inFeet).reduce((a, b) => a + b, 0)).toBe(0);
+
+    // The floor still bites on a genuine blunder in the foot frame: 5 m up.
+    const blunderFt = new Float32Array(cols * rows).fill(10 / 0.3048);
+    blunderFt[12] = 15 / 0.3048;
+    expect(
+      findSpikes(blunderFt, had, cols, rows, {
+        minDeviationM: 0.3,
+        verticalUnitToMetres: 0.3048,
+      })[12],
+    ).toBe(1);
+  });
 });
 
 function raster(z: number[], counts: number[], cols: number, rows: number): DemRaster {
