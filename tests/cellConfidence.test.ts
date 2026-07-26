@@ -82,6 +82,59 @@ describe('buildDtmGrid', () => {
     expect(geographic.confidence[1]).toBeGreaterThan(projected.confidence[1]);
   });
 
+  it('geodesic fill walks in metres: a degree grid fills like its metric twin', () => {
+    // The geodesic step cost is sqrt(stepXY² + Δz²). The caller used to hand it
+    // the RAW cell size, so on a geographic grid stepXY was ~1e-2 degrees while
+    // Δz was metres: the cost collapsed to vertical-only and the "walk over the
+    // ridge" down-weighting degenerated. The same terrain in degrees and in
+    // metres must produce the same interpolated heights.
+    const DEG = 0.01;
+    const mk = (cellSizeM: number): DemRaster => ({
+      // Ridge row at 100, valley rows at 0, with a void in the valley.
+      z: Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]),
+      counts: Uint32Array.from([8, 8, 8, 8, 0, 8, 8, 8, 8]),
+      cols: 3,
+      rows: 3,
+      cellSizeM,
+      originH1: 0,
+      originH2: 0,
+      coverage: 'full',
+      sourcePointCount: 64,
+      analyzedPointCount: 64,
+      filledCellCount: 8,
+      warnings: [],
+    });
+    const metric = buildDtmGrid(mk(DEG * 111_320), {
+      crs: 'EPSG:32610', interpolation: 'geodesic',
+    });
+    const geographic = buildDtmGrid(mk(DEG), {
+      crs: 'EPSG:4326', isGeographic: true, latitudeDeg: 0, interpolation: 'geodesic',
+    });
+    expect(geographic.z[4]).toBeCloseTo(metric.z[4], 4);
+  });
+
+  it('the DEFAULT (Euclidean IDW) fill is untouched by the horizontal frame', () => {
+    // Only the non-default geodesic mode reads the metre-converted cell size.
+    // The default fill works in grid space and must stay byte-identical whether
+    // the frame is projected metres, degrees, or feet.
+    const mk = (cellSizeM: number): DemRaster => ({
+      z: Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]),
+      counts: Uint32Array.from([8, 8, 8, 8, 0, 8, 8, 8, 8]),
+      cols: 3, rows: 3, cellSizeM, originH1: 0, originH2: 0,
+      coverage: 'full', sourcePointCount: 64, analyzedPointCount: 64,
+      filledCellCount: 8, warnings: [],
+    });
+    const projected = buildDtmGrid(mk(1), { crs: 'EPSG:32610' });
+    const geographic = buildDtmGrid(mk(0.01), {
+      crs: 'EPSG:4326', isGeographic: true, latitudeDeg: 45,
+    });
+    const feet = buildDtmGrid(mk(1), {
+      crs: 'EPSG:2225', horizontalUnitToMetres: 0.3048, verticalUnitToMetres: 0.3048,
+    });
+    expect(Array.from(geographic.z)).toEqual(Array.from(projected.z));
+    expect(Array.from(feet.z)).toEqual(Array.from(projected.z));
+  });
+
   it('absolute-density floor: a thinly-sampled measured cell is not fully trusted', () => {
     // Two measured cells, one with a single return and one densely
     // sampled, in a scene whose median is dragged down by the sparse
