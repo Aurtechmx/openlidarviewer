@@ -41,11 +41,20 @@ export function nodeSha256Hex(bytes: Uint8Array): string {
   }
 }
 
-/** `hashArtifact` with the fast digest already wired in. */
+/**
+ * `hashArtifact` with the fast digest already wired in.
+ *
+ * The default is applied with `??`, not by spreading `options` over it. Spread
+ * lets an explicitly-undefined field CLOBBER the default, so ordinary code —
+ * `hashArtifactNode(name, value, { digest: opts.digest })` with an optional
+ * field, or a partly-populated options bag — silently fell back to the portable
+ * implementation at twenty times the cost, producing the identical hash with
+ * nothing anywhere to show the downgrade happened.
+ */
 export function hashArtifactNode(
   name: string,
   value: unknown,
   options: HashArtifactOptions = {},
 ): ArtifactRecord {
-  return hashArtifact(name, value, { digest: nodeSha256Hex, ...options });
+  return hashArtifact(name, value, { ...options, digest: options.digest ?? nodeSha256Hex });
 }

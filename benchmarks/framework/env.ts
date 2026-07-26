@@ -106,6 +106,11 @@ export function captureEnvironment(options: CaptureEnvironmentOptions = {}): Ben
      * regenerated this at that commit" then means nothing. For the
      * reproducibility suite this is the field that decides whether the rest of
      * the block can be trusted.
+     *
+     * Shares GIT_TIMEOUT_MS with the others, and `git status` is the one that
+     * can genuinely approach it — it stats the whole tree, so a very large or
+     * cold checkout reports this field as unavailable rather than stalling the
+     * run. That is the right trade: an unavailable flag says so out loud.
      */
     gitDirty: capture('git working tree', () =>
       git(repoRoot, ['status', '--porcelain']).trim() === '' ? 'clean' : 'dirty',

@@ -9,10 +9,23 @@
  */
 import { describe, test, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const FRAMEWORK = fileURLToPath(new URL('../../benchmarks/framework', import.meta.url));
+const REPO = fileURLToPath(new URL('../..', import.meta.url));
+
+/**
+ * Every form an import specifier can take.
+ *
+ * `from 'x'` alone missed four of them, and this repo has no ESLint to enforce
+ * a quote style, so the double-quoted case is the likeliest to appear:
+ *   import { x } from "node:crypto"    — double quotes
+ *   import 'node:crypto'               — side-effect only, no `from`
+ *   await import('node:fs')            — dynamic
+ *   export { x } from "node:os"        — re-export, also `from`
+ */
+const SPECS = /(?:from|import)\s*\(?\s*['"]([^'"]+)['"]/g;
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -51,6 +64,12 @@ describe('the framework source', () => {
     // browser branches, so a browser-side suite has to be able to bundle the
     // barrel. Re-exporting captureEnvironment made node:child_process a static
     // dependency of the WHOLE surface and Vite could not resolve it at all.
+    //
+    // The walk follows anything that resolves INSIDE THE REPO, not just inside
+    // benchmarks/framework: `artifacts.ts` deliberately depends on
+    // src/canonicalHash.ts and src/terrain/export/sha256.ts, both shared with
+    // the app, and someone speeding up that hand-rolled sha256 with node:crypto
+    // would break the browser barrel while a framework-only walk stayed green.
     const seen = new Set<string>();
     const offenders: string[] = [];
 
@@ -58,28 +77,28 @@ describe('the framework source', () => {
       if (seen.has(file)) return;
       seen.add(file);
       const src = readFileSync(file, 'utf8');
-      for (const m of src.matchAll(/from\s+'([^']+)'/g)) {
+      for (const m of src.matchAll(SPECS)) {
         const spec = m[1];
         if (spec.startsWith('node:')) {
-          offenders.push(`${file.slice(FRAMEWORK.length + 1)} imports ${spec}`);
+          offenders.push(`${relative(REPO, file)} imports ${spec}`);
           continue;
         }
         if (!spec.startsWith('.')) continue;
         const target = join(dirname(file), spec.endsWith('.ts') ? spec : `${spec}.ts`);
-        if (target.startsWith(FRAMEWORK)) visit(target);
+        if (target.startsWith(REPO)) visit(target);
       }
     };
 
     visit(join(FRAMEWORK, 'index.ts'));
     expect(offenders).toEqual([]);
     // Sanity: the walk actually reached the modules, rather than passing by
-    // never opening anything.
-    expect(seen.size).toBeGreaterThan(5);
+    // never opening anything. Eleven framework files plus the two src helpers.
+    expect(seen.size).toBeGreaterThanOrEqual(13);
   });
 
   test('the Node-only entry point is where the node: imports live', () => {
     const node = readFileSync(join(FRAMEWORK, 'node.ts'), 'utf8');
-    expect(node).toMatch(/from 'node:crypto'/);
+    expect(node).toMatch(/from ['"]node:crypto['"]/);
     expect(node).toMatch(/captureEnvironment/);
   });
 
@@ -98,7 +117,7 @@ describe('the framework source', () => {
   test('declares no runtime dependency outside node: builtins and the reused src helpers', () => {
     for (const file of FILES) {
       const src = readFileSync(file, 'utf8');
-      for (const m of src.matchAll(/from\s+'([^']+)'/g)) {
+      for (const m of src.matchAll(SPECS)) {
         const spec = m[1];
         const ok = spec.startsWith('node:') || spec.startsWith('./') || spec.startsWith('../');
         expect(ok, `${file} imports ${spec}`).toBe(true);
