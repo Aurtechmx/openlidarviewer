@@ -2,6 +2,55 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.1] - 2026-07-25
+
+A defect-fix release. Three vertical-reference and input-guard defects found by
+an audit of the v0.6.0 archive, each with a regression test that fails on the
+v0.6.0 code. Nothing in the viewer's behaviour changes otherwise, and no
+dependency was added.
+
+### Fixed
+
+- **LAS 1.4 conversion kept the vertical CRS and the vertical unit.** The
+  writer treated the WKT record and the GeoKey record as alternatives, but the
+  WKT it emits is horizontal-only and the vertical datum (GeoKey 4096) and
+  vertical unit (4099) live only in the GeoKeys. A NAVD88 height in US survey
+  feet came out of the conversion declaring no vertical datum and no vertical
+  unit, so a reader takes feet for metres, a factor of 3.28. LAS 1.4 permits
+  both records, so the vertical GeoKeys are now written alongside the WKT,
+  which remains the sole horizontal authority. No GeoKey record is written when
+  there is no vertical to add.
+- **Contour GeoJSON states the elevation's real unit.** Every contour was
+  labelled `metre` while the value is in the source vertical unit, so a
+  compound CRS with feet over a metre grid shipped 100 ft labelled 100 m. The
+  label is derived from the resolved vertical factor, and an unresolved factor
+  reads unknown rather than defaulting to metre. The factor is carried on the
+  terrain core so the contour model can state its own unit.
+- **EPT laszip tiles refuse non-finite positions.** The laszip tile decoder
+  skipped the finite-position backstop that the COPC chunk and EPT binary
+  decoders both apply, so a header with an extreme but valid scale could
+  overflow to infinite coordinates and reach the renderer as a blank cloud with
+  no error. It now refuses with the same structured error its siblings raise.
+- **A truncated `.e57` no longer hangs the session.** The XML parser could run
+  without terminating on truncated input, and because the shared parse worker's
+  gate was never released, every later file load in the same session hung with
+  it.
+
+### Changed
+
+- The three bundled font packages move to 5.3.0, and the CI actions
+  (`actions/checkout`, `actions/setup-node`) to their current majors.
+- `CITATION.cff` carries the Zenodo DOIs for the archived release and for all
+  versions.
+
+### Added
+
+- Benchmark framework scaffolding under `benchmarks/framework/`,
+  `benchmarks/fixtures/` and `benchmarks/pipeline/`. This is internal
+  scaffolding with its own tests and no runnable entry point: there is no npm
+  script, no benchmark suite, and nothing in the application changes. It is
+  recorded here because it is in the tree, not because it does anything yet.
+
 ## [0.6.0] - 2026-07-24
 
 The stable v0.6 release. Spatial operations are deterministic, explicit and
