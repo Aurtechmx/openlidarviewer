@@ -8,7 +8,12 @@ attached to that release. A committed document cannot name the commit it ships
 in; those generated records can.
 
 Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
-package was added or removed, and no other package changed.
+package was added or removed, and no other bundled package changed.
+
+The development toolchain moved after that baseline was taken: TypeScript to
+7.0.2, Vite to 8.1.5, and Playwright to 1.62.0. All three are development-only
+and none reaches the deployed app, so the runtime dependency set above is
+unaffected.
 
 | Field | Value |
 |---|---|
@@ -47,15 +52,15 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @playwright/test | ^1.60.0 | 1.61.1 | Apache-2.0 |
+| @playwright/test | ^1.60.0 | 1.62.0 | Apache-2.0 |
 | @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.184.1 | 0.184.1 | MIT |
 | @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT |
 | rollup-plugin-visualizer | ^7.0.1 | 7.0.1 | MIT |
-| typescript | ~6.0.2 | 6.0.3 | Apache-2.0 |
-| vite | ^8.0.12 | 8.1.3 | MIT |
+| typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
+| vite | ^8.1.5 | 8.1.5 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^4.1.7 | 4.1.10 | MIT |
@@ -94,20 +99,22 @@ exposed to any of them.
 
 ## Deferred upgrades
 
-Clearing the dev-tooling advisories and the open Dependabot bumps means
-major-version toolchain migrations: `vitepress` and its bundled `vite`, the
-`actions/*` bumps, TypeScript 7, Three.js 0.185. Each would invalidate the
-build and test contract this release line was validated against, so they wait
-for a dedicated toolchain update. Deferred, with their tracking PRs:
+Clearing the remaining dev-tooling advisories and open Dependabot bumps means
+major-version migrations: `vitepress` and its bundled `vite`, the `actions/*`
+bumps, Three.js 0.185. Each would invalidate the build and test contract this
+release line was validated against, so they wait for a dedicated update.
+Deferred, with their tracking PRs:
 
 - `vitepress` / bundled `vite` / `esbuild`: the docs-tooling advisory chain.
 - `brace-expansion`, `fast-uri`, `qs` (via `typed-rest-client`): dev tree only.
-- Dependabot #10, #27, #28, #29, #30 (GitHub Actions), #33 (Three.js 0.185.x),
-  #40 (dev-tooling group: TypeScript ~6 to ~7, a Vite patch, Playwright 1.61 to
-  1.62): not merged into this release line. #40 supersedes the earlier #34,
-  which is closed.
+- Dependabot #10, #27, #28, #29, #30 (GitHub Actions), #33 (Three.js 0.185.x):
+  not merged into this release line.
 
-No dependency version was changed to produce this document.
+The TypeScript 7 / Vite 8.1.5 toolchain bump is no longer deferred. Dependabot
+#40 landed as a dedicated toolchain update: TypeScript 7.0.2, Vite 8.1.5, and
+Playwright 1.62.0, with no application source change. It was taken on its own
+rather than alongside the migrations above so the build and test contract could
+be re-validated against one variable.
 
 ## How to reproduce
 

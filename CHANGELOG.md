@@ -68,6 +68,14 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   returns 0, which is a real direction. No algorithm changed; this is a change
   in what the evidence supports, and `HILLSHADE`, which consumes aspect, keeps
   its own lower level.
+- **The development toolchain moves to TypeScript 7.0.2, Vite 8.1.5 and
+  Playwright 1.62.0.** TypeScript 7 is the native compiler and a major version,
+  so the whole gate was re-run against it: the typecheck, all five test buckets
+  and both builds pass with no change to application source. All three packages
+  are development-only, so the shipped runtime dependency set and the SBOM are
+  untouched. Vite 8.1.5 splits the output into 153 chunks where 8.0.12 produced
+  140, which moves about 62 KiB out of the entry chunk; the total emitted
+  JavaScript and the obfuscation coverage of the live build are unchanged.
 
 ## [0.6.1] - 2026-07-25
 
