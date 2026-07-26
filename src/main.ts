@@ -5198,6 +5198,8 @@ async function generateReportPdf(templateId: string): Promise<void> {
       pointCount: streamingCloud.sourcePointCount,
       linearUnitToMetres: crs?.linearUnitToMetres,
       verticalUnitToMetres: crs?.verticalUnitToMetres,
+      // COPC and EPT are Z-up by spec.
+      zUp: true,
     });
     const modes = streamingCloud.availableColorModes();
     // Streaming-preview accounting — how much of the cloud is resident at
@@ -5243,6 +5245,9 @@ async function generateReportPdf(templateId: string): Promise<void> {
       pointCount: fileN,
       linearUnitToMetres: crs?.linearUnitToMetres,
       verticalUnitToMetres: crs?.verticalUnitToMetres,
+      // Mesh formats load Y-up, so the PDF reads the same axes as the
+      // on-screen Scan Report rather than assuming Z.
+      zUp: isZUpFormat(staticCloud.sourceFormat),
     });
     metadata = {
       fileName: staticCloud.name,

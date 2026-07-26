@@ -24,6 +24,20 @@ export interface FootprintInput {
   readonly linearUnitToMetres?: number;
   /** Vertical unit → metres, when the source declares one distinct from horizontal. */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Whether the source frame is Z-up. LAS-family, COPC and EPT are Z-up by
+   * spec; PLY, OBJ and glTF load in their native Y-up frame, where Y carries
+   * height and Z carries ground depth. Defaults to `true`, so a caller that
+   * does not know the axis keeps the historical behaviour.
+   *
+   * Reading a Y-up cloud's extents as Z-up puts the building height into
+   * "Depth", divides the point count by a vertical cross-section instead of the
+   * ground footprint, and applies the vertical unit factor to a horizontal
+   * span. The on-screen Scan Report has been axis-aware since it was written
+   * (see `isZUpFormat` in io/sniffFormat); the PDF path was not, and the two
+   * disagreed on every mesh-format scan.
+   */
+  readonly zUp?: boolean;
 }
 
 export interface FootprintMetres {
@@ -45,9 +59,13 @@ export interface FootprintMetres {
 export function footprintMetres(input: FootprintInput): FootprintMetres {
   const uH = Number.isFinite(input.linearUnitToMetres) ? (input.linearUnitToMetres as number) : 1;
   const uV = Number.isFinite(input.verticalUnitToMetres) ? (input.verticalUnitToMetres as number) : uH;
+  // Width is X in both conventions. The other two swap: Z-up puts depth in Y
+  // and height in Z, Y-up puts height in Y and depth in Z. The vertical factor
+  // follows the height, never the slot.
+  const zUp = input.zUp ?? true;
   const width = input.extentX * uH;
-  const depth = input.extentY * uH;
-  const height = input.extentZ * uV;
+  const depth = (zUp ? input.extentY : input.extentZ) * uH;
+  const height = (zUp ? input.extentZ : input.extentY) * uV;
   const density = width > 0 && depth > 0 ? input.pointCount / (width * depth) : Number.NaN;
   return { width, depth, height, density };
 }
