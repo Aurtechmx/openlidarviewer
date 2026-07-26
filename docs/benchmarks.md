@@ -10,6 +10,65 @@ not touched between releases keeps its original measurement; the version pin
 is when the figures were captured, not a claim that they have been re-run on
 every release.
 
+## The runnable Node suites
+
+Two suites drive the real terrain pipeline over seeded synthetic clouds and
+write a result tree anyone can re-derive every published figure from.
+
+```
+npm run benchmark:repro     # benchmark 1 only
+npm run benchmark:scaling   # benchmark 2 only
+npm run benchmark:quick     # both, then verify
+npm run benchmark:verify    # re-check a published tree without re-measuring
+```
+
+**Benchmark 1 — deterministic reproducibility.** One seed (`20260726`),
+250,000 points, one warm-up, ten recorded runs, fixed terrain parameters. It
+passes only when every science-scoped artifact hash, every scalar output, the
+terrain-complexity summary, the scientific record with build identity and
+timestamps removed, and the application's own content hash are identical
+across all ten runs, the processing manifest verifies every time, and no stage
+is missing or failed. The comparison tolerance is exactly zero: on one machine
+over one seed this is deterministic arithmetic, so any difference at all is the
+finding, not noise to absorb.
+
+**Benchmark 2 — synthetic scaling.** 50k / 100k / 250k / 500k / 1M points, one
+warm-up and five recorded runs per tier, strictly sequential. It reports a
+measured curve and claims no complexity class — five points on one machine
+cannot separate one from another. The 1M tier is not optional: if it cannot
+complete, the failed tier is preserved with its exact reason and the suite
+fails until the limitation is written into `acceptedTierFailures`.
+
+Two things the tables will not do. They never sum the stage column — the
+isolated `rasterize` and `descriptors` timings re-run work the `dtm` stage
+already does, so the total comes from the driver's `pipelineDurationMs()` and
+the leaves are labelled and kept apart. And they never report a number that was
+not measured: an unavailable value says `unavailable` and carries its reason,
+including peak heap, which no sampler can observe between synchronous stages.
+
+Build-scoped hashes (the scientific record and the processing manifest) track
+the git commit and the Node version of the machine that ran the suite. They are
+reported separately and are not part of any pass condition; two machines are
+expected to differ there, and that difference says nothing about whether the
+science reproduced.
+
+Quantiles throughout — median, quartiles, IQR — use the **type-7** definition,
+R's and NumPy's default. The convention is written into every summary file, so
+a reader recomputing an IQR from `raw.json` in either tool lands on the
+published number.
+
+Output lands in `benchmark-results/`: `latest/` is replaced on every run,
+`archive/<UTC timestamp>-<short commit>/` is immutable and a second write to an
+existing archive is refused. `manifest.json` carries the commit, working-tree
+cleanliness, host and toolchain versions, the configuration, and a SHA-256 for
+every file; `benchmark:verify` recomputes all of them, re-derives every summary
+statistic from the raw values and re-renders the Markdown and CSV from the
+published JSON, so a hand-edited figure fails.
+
+GPU upload, first rendered frame, frame rate and time-to-interaction are
+browser measurements. This runner is Node-only and reports them as declared
+stages with no number — never as zero, and never as an estimate.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather

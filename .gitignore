@@ -110,6 +110,11 @@ ELITE_*.md
 # Generated reproducibility artifacts (regenerate with npm run repro)
 benchmarks/out/
 
+# Benchmark suite output (regenerate with npm run benchmark:quick). The archive
+# subtree grows one immutable directory per run, so it is kept out of the repo;
+# a result set that needs publishing is attached to a release, not committed.
+/benchmark-results/
+
 # ── Docs-site build output (regenerate with npm run docs:build) ──────────────
 # The rendered claim-register partial (docs-site/validation/
 # claim-register.generated.md) IS committed — same convention as
