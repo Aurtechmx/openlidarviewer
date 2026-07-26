@@ -26,6 +26,7 @@
 import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
+import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
 import { crsUrn as sharedCrsUrn } from '../../export/crsIdentifier';
 import { verticalUnitLabel } from '../../units/units';
 
@@ -96,18 +97,31 @@ export function toGeoJSON(
         ? Math.round(model.interpolatedFraction * 1000) / 1000
         : null,
       warnings: model.warnings,
-      notSurveyGrade: 'Not survey-grade unless validated against ground-truth control.',
+      // The one canonical wording, shared with the text stamp every DXF / SVG /
+      // README / PDF carries. A single claim in two strings, split by artifact
+      // format, is a claim a reader cannot match across the deliverable set.
+      notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
   };
 
   // Merge the unified provenance as the metadata superset. Existing model-derived
-  // keys win (so nothing regresses — contourStyle, warnings, verticalDatum stay
-  // exactly as before); the provenance only ADDS the fields the file lacked
-  // (software + version, CRS, export readiness, accuracy, generation date …).
+  // keys win (so nothing regresses — contourStyle, verticalDatum stay exactly as
+  // before); the provenance only ADDS the fields the file lacked (software +
+  // version, CRS, export readiness, accuracy, generation date …).
+  //
+  // `warnings` is the exception, and it has to be. Model-derived keys winning
+  // meant a run whose provenance carried a warning shipped a GeoJSON declaring
+  // an empty warning list, while every text stamp of the same run printed it —
+  // a caveat lost at the file boundary. The file carries the UNION instead: no
+  // warning present in either source is absent from the artifact. Order is
+  // model-first then provenance-first-seen, de-duplicated, which is stable for
+  // a given run — these artifacts are hashed, so an unstable order would make
+  // one run fingerprint two ways.
   if (provenance) {
     const pj = provenanceJson(provenance);
     for (const [k, v] of Object.entries(pj)) {
       if (!(k in metadata)) metadata[k] = v;
     }
+    metadata.warnings = [...new Set([...(model.warnings ?? []), ...provenance.warnings])];
   }
 
   const obj: Record<string, unknown> = {
