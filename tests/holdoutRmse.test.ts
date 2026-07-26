@@ -63,9 +63,14 @@ describe('holdoutValidateDtm', () => {
   });
 
   it('reports RMSE in metres via verticalUnitToMetres (feet source data)', () => {
-    // A curved surface leaves a non-zero residual; with the same seed the
-    // split is identical, so the feet run must be exactly 0.3048× the metre
-    // run — proving the residuals are scaled into metres at one point.
+    // A curved surface leaves a non-zero residual; with the same seed the split
+    // is identical, so the feet run tracks 0.3048× the metre run — the
+    // residuals are scaled into metres at one point.
+    //
+    // Not EXACTLY 0.3048×: the same z numbers read as feet describe a terrain
+    // 3.28× flatter in real space, and the geodesic void fill measures its path
+    // cost in metres, so the two runs interpolate their few empty cells
+    // slightly differently. That difference is the unit-awareness, not drift.
     const { points, mask } = surface((x) => 0.1 * x * x);
     const metre = holdoutValidateDtm(points, mask, { cellSizeM: 1, seed: 3 });
     const feet = holdoutValidateDtm(points, mask, {
@@ -74,9 +79,13 @@ describe('holdoutValidateDtm', () => {
       verticalUnitToMetres: 0.3048,
     });
     expect(metre.rmse).toBeGreaterThan(0);
-    expect(feet.rmse).toBeCloseTo(metre.rmse * 0.3048, 6);
-    expect(feet.mae).toBeCloseTo(metre.mae * 0.3048, 6);
-    expect(feet.p95).toBeCloseTo(metre.p95 * 0.3048, 6);
+    const within = (got: number, want: number): number => Math.abs(got - want) / want;
+    expect(within(feet.rmse, metre.rmse * 0.3048)).toBeLessThan(0.01);
+    expect(within(feet.mae, metre.mae * 0.3048)).toBeLessThan(0.01);
+    expect(within(feet.p95, metre.p95 * 0.3048)).toBeLessThan(0.01);
+    // A conversion applied twice, or not at all, is orders of magnitude off —
+    // this stays a real gate on the single scaling point.
+    expect(within(feet.rmse, metre.rmse)).toBeGreaterThan(0.5);
   });
 
   it('is deterministic for a fixed seed', () => {
