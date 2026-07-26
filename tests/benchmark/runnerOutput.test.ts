@@ -20,7 +20,7 @@ import type { ReproducibilityConfig, ScalingConfig } from '../../benchmarks/runn
 import { runReproducibilitySuite } from '../../benchmarks/runner/reproducibility';
 import { runScalingSuite } from '../../benchmarks/runner/scaling';
 import { archiveStamp, writeResults } from '../../benchmarks/runner/writer';
-import { verifyResultsDir } from '../../benchmarks/runner/verify';
+import { verifyArchives, verifyResultsDir } from '../../benchmarks/runner/verify';
 import {
   reproducibilityCsv,
   reproducibilityMarkdown,
@@ -34,9 +34,13 @@ const TERRAIN = { cellSizeM: 2, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', h
 const TINY_REPRO: ReproducibilityConfig = {
   suiteId: 'reproducibility',
   seed: 4242,
-  pointCount: 3_000,
-  warmupRuns: 0,
-  recordedRuns: 3,
+  // Small, but not as small as it could be. At 3k points a run takes ~22 ms and
+  // the residual JIT transient is a genuine 6 % of that, so the first-run band
+  // check fires for a real reason and the fixture becomes a FAILED result set.
+  // 25k runs in under 100 ms and puts ordinary noise well inside the band.
+  pointCount: 25_000,
+  warmupRuns: 3,
+  recordedRuns: 5,
   terrain: TERRAIN,
   scalarTolerance: 0,
 };
@@ -45,13 +49,16 @@ const TINY_SCALING: ScalingConfig = {
   suiteId: 'scaling',
   seed: 4242,
   tiers: [
-    { id: 'tiny', pointCount: 3_000 },
-    { id: 'small', pointCount: 6_000 },
+    { id: 'tiny', pointCount: 25_000 },
+    { id: 'small', pointCount: 50_000 },
   ],
-  warmupRuns: 0,
-  recordedRuns: 2,
+  warmupRuns: 3,
+  recordedRuns: 4,
   terrain: TERRAIN,
   acceptedTierFailures: [],
+  // Spawning five vitest processes to check that a table renders is not a unit
+  // test. The isolated path has its own case below.
+  isolation: 'single-process',
 };
 
 const START = '2026-07-26T09:30:00.000Z';
@@ -96,6 +103,23 @@ describe('the suites themselves', () => {
     expect(repro.summary.identity.divergences).toEqual([]);
   });
 
+  test('records where run 1 sat relative to the rest', () => {
+    const warmup = repro.summary.warmup;
+    expect(warmup, 'a five-run suite must produce a first-run check').not.toBeNull();
+    expect(warmup?.restCount).toBe(TINY_REPRO.recordedRuns - 1);
+    // Four comparison runs is below the threshold for a meaningful band, so it
+    // is withheld with a reason rather than computed from too little.
+    expect(warmup?.withinRobustBand).toBeNull();
+    expect(warmup?.bandUnavailableReason).toMatch(/comparison runs/);
+    // The dispersion pair is published regardless: it is what a stability claim
+    // has to be quoted from.
+    expect(warmup?.cvAllRuns).not.toBeNull();
+    expect(warmup?.cvExcludingFirstRun).not.toBeNull();
+    // The order statistics are recorded but must not be what decides the run.
+    expect(typeof warmup?.withinRestRange).toBe('boolean');
+    expect(typeof warmup?.withinRestIqr).toBe('boolean');
+  });
+
   test('the scaling suite runs every tier the configuration lists', () => {
     expect(scaling.summary.failures).toEqual([]);
     expect(scaling.raw.tiers.map((t) => t.tier.id)).toEqual(['tiny', 'small']);
@@ -112,13 +136,44 @@ describe('the suites themselves', () => {
 });
 
 describe('the compact scaling table', () => {
-  test('has one row per tier plus a header and a rule', () => {
-    const rows = scalingTable(scaling.summary);
-    expect(rows).toHaveLength(2 + scaling.summary.tiers.length);
-    expect(rows[0]).toContain('median analysis (ms)');
-    expect(rows[0]).toContain('median pipeline total (ms)');
-    expect(rows[0]).toContain('median points/s');
-    expect(rows[2]).toContain('| tiny |');
+  const rows = (): string[] => scalingTable(scaling.summary);
+  const dataRows = (): string[] => rows().filter((l) => l.startsWith('| ') && !l.startsWith('| ---') && !l.startsWith('| tier |'));
+
+  test('has one data row per tier and names its estimators', () => {
+    expect(dataRows()).toHaveLength(scaling.summary.tiers.length);
+    const header = rows().find((l) => l.startsWith('| tier |')) as string;
+    expect(header).toContain('median analysis (ms)');
+    expect(header).toContain('median pipeline total (ms)');
+    expect(header).toContain('median points/s');
+    // The memory column used to be a max sitting silently among medians.
+    expect(header).toContain('peak RSS median (MiB)');
+    expect(header).toContain('peak RSS max (MiB)');
+    expect(dataRows()[0]).toContain('| tiny |');
+  });
+
+  test('carries the interval and relief that explain the contour count', () => {
+    const header = rows().find((l) => l.startsWith('| tier |')) as string;
+    expect(header).toContain('contour interval (m)');
+    expect(header).toContain('elevation range (m)');
+  });
+
+  test('carries its caveats with it, so they survive being copied elsewhere', () => {
+    const text = rows().join('\n');
+    expect(text).toContain('No complexity class is claimed');
+    expect(text).toContain('not a mid-stage high-water mark');
+    expect(text).toContain('double-count');
+    expect(text).toContain('NOT comparable across tiers');
+    // And the isolation regime, because it decides whether the curve is
+    // attributable to input size at all.
+    expect(text).toContain('ONE process');
+  });
+
+  test('the overview embeds the same table, caveats included', () => {
+    const { latest } = publish();
+    const overview = readFileSync(join(latest, 'summary.md'), 'utf8');
+    for (const line of dataRows()) expect(overview).toContain(line);
+    expect(overview).toContain('No complexity class is claimed');
+    expect(overview).toContain('NOT comparable across tiers');
   });
 });
 
@@ -160,7 +215,7 @@ describe('the written tree', () => {
     expect(manifest.command).toBe('test');
     expect(Object.keys(manifest.configuration).sort()).toEqual(['reproducibility', 'scaling']);
     expect(manifest.datasetIds.length).toBeGreaterThan(0);
-    for (const field of ['os', 'arch', 'cpuModel', 'logicalCpuCount', 'totalMemoryBytes', 'nodeVersion', 'npmVersion', 'olvVersion', 'commit', 'workingTree']) {
+    for (const field of ['os', 'arch', 'cpuModel', 'logicalCpuCount', 'totalMemoryBytes', 'loadAverage', 'nodeVersion', 'npmVersion', 'olvVersion', 'commit', 'workingTree']) {
       expect(manifest[field], field).toBeDefined();
       expect(['captured', 'unavailable']).toContain(manifest[field].status);
     }
@@ -194,7 +249,10 @@ describe('the written tree', () => {
       notRun: [{ suiteId: 'browser', reason: 'needs a browser' }],
     });
     expect(readFileSync(join(withSeam.latest, 'summary.md'), 'utf8')).toContain('| browser | not run |');
-    expect(summary).toContain('Every number here is derived from the raw result files');
+    // The closing note is deliberately narrow: it claims derivation, not
+    // completeness, and points at the per-suite files for what it leaves out.
+    expect(summary).toContain('none is hand-entered');
+    expect(summary).toContain('This page is a summary, not the full record');
   });
 
   test('refuses to overwrite an archive', () => {
@@ -354,6 +412,79 @@ describe('the verifier', () => {
     const outcome = verifyResultsDir(latest);
     expect(outcome.ok).toBe(false);
     expect(outcome.problems.join('\n')).toMatch(/scaling\/summary\.md/);
+  });
+
+  test('catches an edited number in the top-level summary.md', () => {
+    // The file a figure is copied out of. It was hashed and listed as required
+    // but never re-rendered, so this exact edit — with the digest refreshed —
+    // used to pass.
+    const { latest } = publish();
+    const path = join(latest, 'summary.md');
+    const original = readFileSync(path, 'utf8');
+    const median = /\| (\d+\.\d{3}) \|/.exec(original);
+    expect(median, 'the overview must contain a median to tamper with').not.toBeNull();
+    const contents = original.replace(median![1], '999.999');
+    expect(contents).not.toBe(original);
+    writeFileSync(path, contents, 'utf8');
+    rehash(latest, 'summary.md', contents);
+
+    const outcome = verifyResultsDir(latest);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems.join('\n')).toMatch(/summary\.md: does not match what the published JSON renders to/);
+  });
+
+  test('catches an edited number in the top-level summary.html', () => {
+    const { latest } = publish();
+    const path = join(latest, 'summary.html');
+    const original = readFileSync(path, 'utf8');
+    const rate = /(\d+\.\d) \|/.exec(original);
+    expect(rate).not.toBeNull();
+    const contents = original.replace(rate![1], '999999.9');
+    writeFileSync(path, contents, 'utf8');
+    rehash(latest, 'summary.html', contents);
+
+    const outcome = verifyResultsDir(latest);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems.join('\n')).toMatch(/summary\.html: does not match what the published JSON renders to/);
+  });
+
+  test('names the field that was tampered with, not always the median', () => {
+    const { latest } = publish();
+    const path = join(latest, 'reproducibility', 'summary.json');
+    const summary = JSON.parse(readFileSync(path, 'utf8'));
+    const block = summary.timing.available.find((b: { key: string }) => b.key === 'analysisMs');
+    block.summary.min = 1;
+    const contents = `${JSON.stringify(summary, null, 2)}\n`;
+    writeFileSync(path, contents, 'utf8');
+    rehash(latest, 'reproducibility/summary.json', contents);
+
+    const outcome = verifyResultsDir(latest);
+    const message = outcome.problems.join('\n');
+    expect(message).toMatch(/min is published as 1, recomputes to/);
+    expect(message).not.toMatch(/median is published/);
+  });
+
+  test('scans every published file for private paths, not just the manifest', () => {
+    const { latest } = publish();
+    const path = join(latest, 'environment.json');
+    const contents = JSON.stringify({ leaked: `${homedir()}/scratch` }, null, 2);
+    writeFileSync(path, contents, 'utf8');
+    rehash(latest, 'environment.json', contents);
+
+    const outcome = verifyResultsDir(latest);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems.join('\n')).toMatch(/home-directory path or an IP address.*environment\.json/s);
+  });
+
+  test('verifies every archive, not only latest/', () => {
+    const { root, archive } = publish();
+    expect(verifyArchives(root).problems).toEqual([]);
+
+    const path = join(archive, 'scaling', 'summary.md');
+    writeFileSync(path, `${readFileSync(path, 'utf8')}tampered\n`, 'utf8');
+    const outcome = verifyArchives(root);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems.join('\n')).toMatch(/archive\/.*scaling\/summary\.md/);
   });
 
   test('fails on a bad schema version', () => {

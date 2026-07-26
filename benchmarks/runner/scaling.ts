@@ -43,7 +43,7 @@ import {
   seriesOf,
   type RunSeries,
 } from './series';
-import { QUANTILE_CONVENTION } from './stats';
+import { QUANTILE_CONVENTION, checkFirstRun, type FirstRunCheck } from './stats';
 import { summariseRuns, type SummarisedSeries } from './summarise';
 
 /**
@@ -82,10 +82,23 @@ export interface ScalingTierResult {
   readonly gridRows: number | null;
   readonly gridCellCount: number | null;
   readonly contourCount: number | null;
+  /**
+   * The interval the pipeline CHOSE for this tier, and the relief it chose it
+   * from. Both are published because the contour count is not comparable
+   * across tiers without them: the fixture's landform amplitudes are fractions
+   * of the tile extent and the extent grows as sqrt(N), so vertical relief
+   * grows with the tier and the interval selector steps up partway along the
+   * ladder. Without these two columns the resulting drop in contour count reads
+   * as a pipeline property, which it is not.
+   */
+  readonly contourIntervalM: number | null;
+  readonly elevationRangeM: number | null;
   readonly qualityScore: number | null;
   readonly meanConfidence: number | null;
   readonly generatedPointCount: number | null;
   readonly forcedGcAvailable: boolean;
+  /** Where run 1 sat relative to runs 2..n — the residual warm-up check. */
+  readonly firstRunAnalysisMs: FirstRunCheck | null;
 }
 
 export interface ScalingRaw {
@@ -121,10 +134,13 @@ export interface ScalingTierSummary {
   readonly gridRows: number | null;
   readonly gridCellCount: number | null;
   readonly contourCount: number | null;
+  readonly contourIntervalM: number | null;
+  readonly elevationRangeM: number | null;
   readonly qualityScore: number | null;
   readonly meanConfidence: number | null;
   readonly scienceHashesStableWithinTier: boolean;
   readonly forcedGcAvailable: boolean;
+  readonly firstRunAnalysisMs: FirstRunCheck | null;
 }
 
 export interface ScalingResult {
@@ -132,7 +148,16 @@ export interface ScalingResult {
   readonly summary: ScalingSummary;
 }
 
-function runTier(config: ScalingConfig, tier: ScalingTier): ScalingTierResult {
+/**
+ * Run one tier to completion.
+ *
+ * Exported so a child process can run exactly one rung and hand the result
+ * back — see `scalingIsolated.ts`. Everything a tier's verdict depends on is
+ * decided here, so an isolated tier and an in-process tier are judged
+ * identically and a result set cannot mean two different things depending on
+ * which mode produced it.
+ */
+export function runTier(config: ScalingConfig, tier: ScalingTier): ScalingTierResult {
   let warmupRunsCompleted = 0;
   let fatal: string | null = null;
 
@@ -200,6 +225,13 @@ function runTier(config: ScalingConfig, tier: ScalingTier): ScalingTierResult {
     if (missing) reasons.push(`principal metric ${key} has no summary — ${missing.reason}`);
   }
 
+  const analysisBlock = series.available.find((b) => b.key === SERIES_ANALYSIS_MS);
+  const firstRunAnalysisMs = analysisBlock ? checkFirstRun(analysisBlock.summary.values) : null;
+  // Measured and published, never a tier failure — see the note in
+  // `reproducibility.ts` and the header of `checkFirstRun`. What a tier's
+  // freedom from CROSS-tier carry-over rests on is process isolation, which is
+  // structural; this is about the within-process transient, which is not.
+
   const status = reasons.length === 0 ? 'ok' : 'failed';
   return {
     tier,
@@ -216,15 +248,31 @@ function runTier(config: ScalingConfig, tier: ScalingTier): ScalingTierResult {
     gridRows: reference?.scalars.gridRows ?? null,
     gridCellCount: reference?.scalars.gridCellCount ?? null,
     contourCount: reference?.scalars.contourPolylineCount ?? null,
+    contourIntervalM: reference?.scalars.contourIntervalM ?? null,
+    elevationRangeM: reference?.scalars.elevationRangeM ?? null,
     qualityScore: reference?.scalars.qualityScore ?? null,
     meanConfidence: reference?.scalars.meanConfidence ?? null,
     generatedPointCount: reference?.generatedPointCount ?? null,
     forcedGcAvailable: reference?.memory.forcedGcAvailable ?? false,
+    firstRunAnalysisMs,
   };
 }
 
-export function runScalingSuite(config: ScalingConfig): ScalingResult {
-  const tiers = config.tiers.map((tier) => runTier(config, tier));
+export interface ScalingSuiteOptions {
+  /**
+   * How a tier is executed. Injected so `scalingIsolated.ts` can run each tier
+   * in its own child process without this module knowing anything about
+   * processes — and so the in-process path stays testable at a size a unit test
+   * can afford.
+   */
+  readonly executeTier?: (config: ScalingConfig, tier: ScalingTier) => ScalingTierResult;
+}
+
+export function runScalingSuite(config: ScalingConfig, options: ScalingSuiteOptions = {}): ScalingResult {
+  const execute = options.executeTier ?? runTier;
+  // Sequential by construction. Two tiers in flight would share a CPU and an
+  // allocator, and every duration would become a measurement of the scheduler.
+  const tiers = config.tiers.map((tier) => execute(config, tier));
 
   const failures: string[] = [];
   for (const tier of tiers) {
@@ -258,10 +306,13 @@ export function runScalingSuite(config: ScalingConfig): ScalingResult {
       gridRows: tier.gridRows,
       gridCellCount: tier.gridCellCount,
       contourCount: tier.contourCount,
+      contourIntervalM: tier.contourIntervalM,
+      elevationRangeM: tier.elevationRangeM,
       qualityScore: tier.qualityScore,
       meanConfidence: tier.meanConfidence,
       scienceHashesStableWithinTier: tier.scienceHashesStableWithinTier,
       forcedGcAvailable: tier.forcedGcAvailable,
+      firstRunAnalysisMs: tier.firstRunAnalysisMs,
     })),
   };
 

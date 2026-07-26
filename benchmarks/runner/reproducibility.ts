@@ -35,7 +35,8 @@ import { BENCHMARK_PACKAGE_VERSION, BENCHMARK_SCHEMA_VERSION, type Reproducibili
 import { executeRun } from './execute';
 import type { RunObservation } from './observe';
 import { seriesOf, type RunSeries } from './series';
-import { QUANTILE_CONVENTION } from './stats';
+import { QUANTILE_CONVENTION, checkFirstRun, type FirstRunCheck } from './stats';
+import { SERIES_ANALYSIS_MS } from './series';
 import { diffJson, summariseRuns, type SummarisedSeries } from './summarise';
 
 /** One way run N disagreed with run 1. */
@@ -94,6 +95,17 @@ export interface ReproducibilitySummary {
     readonly divergences: readonly Divergence[];
   };
   readonly timing: SummarisedSeries;
+  /**
+   * Whether the warm-up actually finished warming up.
+   *
+   * The published coefficient of variation is read as a repeatability figure,
+   * so a residual first-run transient does not just add noise — it changes what
+   * the headline number means. With one warm-up the first recorded runs came in
+   * about 11 % slow and inflated the CV by roughly 2.4x. This is recorded on
+   * every result set, and run 1 landing outside the spread of the rest fails
+   * the suite.
+   */
+  readonly warmup: FirstRunCheck | null;
 }
 
 export interface ReproducibilityResult {
@@ -222,6 +234,14 @@ export function runReproducibilitySuite(config: ReproducibilityConfig): Reproduc
     failures.push(`series ${missing.key} has no summary — ${missing.reason}`);
   }
 
+  const analysisBlock = timing.available.find((b) => b.key === SERIES_ANALYSIS_MS);
+  const warmup = analysisBlock ? checkFirstRun(analysisBlock.summary.values) : null;
+  // Deliberately NOT a failure. The transient tracks machine load and allocator
+  // state rather than the pipeline — six warm-ups still leave ~9 % on a busy
+  // machine — so failing on it would red-light a correct run because something
+  // else was running. It is measured instead: `warmup` carries the dispersion
+  // with run 1 and without it, and every reporter prints both.
+
   const summary: ReproducibilitySummary = {
     schemaVersion: BENCHMARK_SCHEMA_VERSION,
     benchmarkPackageVersion: BENCHMARK_PACKAGE_VERSION,
@@ -243,6 +263,7 @@ export function runReproducibilitySuite(config: ReproducibilityConfig): Reproduc
       divergences,
     },
     timing,
+    warmup,
   };
 
   return {

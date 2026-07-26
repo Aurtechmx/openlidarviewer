@@ -43,11 +43,13 @@ import type { ReproducibilityResult } from './reproducibility';
 import type { ScalingResult } from './scaling';
 import {
   overviewHtml,
+  overviewInputFrom,
   overviewMarkdown,
   reproducibilityCsv,
   reproducibilityMarkdown,
   scalingCsv,
   scalingMarkdown,
+  type OverviewHeader,
   type OverviewInput,
 } from './render';
 
@@ -62,6 +64,18 @@ export interface HostExtras {
   readonly logicalCpuCount: EnvValue;
   readonly totalMemoryBytes: EnvValue;
   readonly npmVersion: EnvValue;
+  /**
+   * 1/5/15-minute load average at the moment the results were written.
+   *
+   * Recorded because it is the single most useful thing for deciding whether a
+   * timing column is worth comparing against another run. The same suite on the
+   * same commit produced a coefficient of variation near 0.02 on an idle
+   * machine and near 0.10 with a load average of 7 on 14 cores — a difference
+   * entirely outside the software. Without this field a reader has no way to
+   * tell those two result sets apart. Zero on platforms that do not report it,
+   * which is why the raw string is kept rather than a derived verdict.
+   */
+  readonly loadAverage: EnvValue;
 }
 
 function captureOne(what: string, read: () => string | null): EnvValue {
@@ -83,6 +97,14 @@ export function captureHostExtras(): HostExtras {
       String(os.availableParallelism ? os.availableParallelism() : os.cpus().length),
     ),
     totalMemoryBytes: captureOne('total memory', () => String(os.totalmem())),
+    loadAverage: captureOne('load average', () => {
+      const [one, five, fifteen] = os.loadavg();
+      // Windows reports [0, 0, 0]; that is "not supported", not "idle", and
+      // publishing three zeros as a measurement is the substitution this whole
+      // framework refuses to make.
+      if (one === 0 && five === 0 && fifteen === 0) return null;
+      return `${one.toFixed(2)} ${five.toFixed(2)} ${fifteen.toFixed(2)}`;
+    }),
     npmVersion: captureOne('npm version', () =>
       execFileSync('npm', ['--version'], {
         encoding: 'utf8',
@@ -114,6 +136,8 @@ export interface BenchmarkManifest {
   readonly cpuModel: EnvValue;
   readonly logicalCpuCount: EnvValue;
   readonly totalMemoryBytes: EnvValue;
+  /** Host load when the results were written. See {@link HostExtras}. */
+  readonly loadAverage: EnvValue;
   readonly nodeVersion: EnvValue;
   readonly npmVersion: EnvValue;
   readonly command: string;
@@ -266,20 +290,25 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     files,
   );
 
-  const overview: OverviewInput = {
-    startedAt: options.startedAtUtc,
-    completedAt: options.completedAtUtc,
+  // The header is built ONCE and used for both the overview and the manifest,
+  // so the verifier can rebuild the overview from the manifest alone and get
+  // the identical string. Two independent derivations is how the top-level
+  // summary ended up outside every check the per-suite files were inside.
+  const header: OverviewHeader = {
+    olvVersion: environment.releaseVersion,
+    commit: environment.gitCommitFull,
+    workingTree: environment.gitDirty,
+    startedAtUtc: options.startedAtUtc,
+    completedAtUtc: options.completedAtUtc,
     command: options.command,
-    olvVersion:
-      environment.releaseVersion.status === 'captured' ? environment.releaseVersion.value : 'unavailable',
-    benchmarkPackageVersion: BENCHMARK_PACKAGE_VERSION,
-    commit: environment.gitCommitFull.status === 'captured' ? environment.gitCommitFull.value : 'unavailable',
-    workingTreeClean:
-      environment.gitDirty.status === 'captured' ? environment.gitDirty.value === 'clean' : null,
-    reproducibility: options.reproducibility?.summary ?? null,
-    scaling: options.scaling?.summary ?? null,
     notRun: options.notRun ?? [],
   };
+  const overview: OverviewInput = overviewInputFrom(
+    header,
+    BENCHMARK_PACKAGE_VERSION,
+    options.reproducibility?.summary ?? null,
+    options.scaling?.summary ?? null,
+  );
   writeFile(latestDir, 'summary.md', overviewMarkdown(overview), files);
   writeFile(latestDir, 'summary.html', overviewHtml(overview), files);
 
@@ -297,6 +326,7 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     cpuModel: environment.cpuModel,
     logicalCpuCount: hostExtras.logicalCpuCount,
     totalMemoryBytes: hostExtras.totalMemoryBytes,
+    loadAverage: hostExtras.loadAverage,
     nodeVersion: environment.nodeVersion,
     npmVersion: hostExtras.npmVersion,
     command: options.command,

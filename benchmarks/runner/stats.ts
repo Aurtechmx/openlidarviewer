@@ -133,20 +133,167 @@ export function summariseSeries(values: readonly number[]): SeriesSummary {
   };
 }
 
+/** The first field on which two summaries disagree, with both sides' values. */
+export interface SummaryDifference {
+  readonly key: string;
+  readonly published: number | null;
+  readonly recomputed: number | null;
+}
+
 /**
- * Whether two summaries are bit-identical.
+ * The first way two summaries differ, or null when they are bit-identical.
  *
- * Used by `benchmark:verify`, which recomputes a published summary from the
- * published raw values and compares. Exact equality on purpose: both sides run
- * the same code over the same doubles, so any difference means the summary was
- * edited or the raw values were, and either is a reason to fail rather than to
- * tolerate.
+ * Returns the FIELD, not a boolean. `benchmark:verify` prints this straight
+ * into its failure message, and a message that always names the median is
+ * actively misleading when the median is the one field that did not change: an
+ * operator reading "published median 830.206, recomputed 830.206" concludes the
+ * verifier is broken rather than that `min` was edited.
+ *
+ * Exact equality on purpose: both sides run the same code over the same
+ * doubles, so any difference at all means the summary was edited or the raw
+ * values were, and either is a reason to fail rather than to tolerate.
  */
-export function summariesMatch(a: SeriesSummary, b: SeriesSummary): boolean {
+export function firstSummaryDifference(
+  a: SeriesSummary,
+  b: SeriesSummary,
+): SummaryDifference | null {
   const keys = ['count', 'min', 'max', 'mean', 'median', 'q1', 'q3', 'iqr', 'stdDev', 'cv'] as const;
   for (const key of keys) {
-    if (a[key] !== b[key]) return false;
+    if (a[key] !== b[key]) return { key, published: a[key], recomputed: b[key] };
   }
-  if (a.values.length !== b.values.length) return false;
-  return a.values.every((v, i) => v === b.values[i]);
+  if (a.values.length !== b.values.length) {
+    return { key: 'values.length', published: a.values.length, recomputed: b.values.length };
+  }
+  for (const [i, v] of a.values.entries()) {
+    if (v !== b.values[i]) return { key: `values[${i}]`, published: v, recomputed: b.values[i] };
+  }
+  return null;
+}
+
+/** Whether two summaries are bit-identical. See {@link firstSummaryDifference}. */
+export function summariesMatch(a: SeriesSummary, b: SeriesSummary): boolean {
+  return firstSummaryDifference(a, b) === null;
+}
+
+/** Half-widths of the robust band, in IQRs and as a fraction. See {@link checkFirstRun}. */
+export const FIRST_RUN_BAND_IQRS = 3;
+export const FIRST_RUN_BAND_FRACTION = 0.05;
+
+/** Below this many comparison runs the band is too wide to mean anything. */
+export const FIRST_RUN_MIN_COMPARISON_RUNS = 5;
+
+/**
+ * Where the FIRST recorded run sits relative to the rest.
+ *
+ * The question is whether the warm-up finished warming up. A residual JIT or
+ * first-touch transient shows up as run 1 sitting systematically above
+ * everything that follows, and it does not read as noise — it inflates the
+ * published coefficient of variation while the pipeline itself is steady. With
+ * one warm-up the first recorded runs came in about 11 % slow and the CV
+ * overstated instability by roughly 2.4x.
+ *
+ * WHY THE CONDITION IS A ROBUST BAND AND NOT AN ORDER STATISTIC. The obvious
+ * checks are order statistics — "run 1 is inside the rest's IQR", "inside their
+ * min-max range" — and both are unusable as gates, because under a perfectly
+ * stationary process they fail on a coin flip. IQR membership holds about half
+ * the time by construction; range membership fails with probability 2/n, which
+ * is a 20 % false-failure rate over ten runs. A gate that red-lights one run in
+ * five teaches everyone to ignore it.
+ *
+ * So the condition is a distribution-free band around the rest's MEDIAN:
+ *
+ *     |run₁ − median(rest)| ≤ max(3 · IQR(rest), 0.05 · |median(rest)|)
+ *
+ * Both terms earn their place. The IQR term is what makes it a statistical
+ * statement — three interquartile ranges from the median is far outside
+ * ordinary run-to-run spread, so a real transient trips it (the 11 % case sits
+ * about four IQRs out). The fractional floor is what stops it firing on a
+ * workload so steady that its IQR is near zero, where three IQRs would be a
+ * band of microseconds and every run would look anomalous. Together they fire
+ * only when run 1 is both statistically far out AND materially different.
+ *
+ * WHY NOTHING GATES ON THIS, INCLUDING THE BAND. The transient does not go away
+ * with more warm-ups, and it is not a property of the code. Measured on one
+ * machine: one warm-up left the first two recorded runs ~11 % slow; three left
+ * ~8 %; six left ~9 % on a loaded machine and a fresh child process still spiked
+ * 28 % on its first recorded run. It tracks machine load and allocator state, so
+ * a hard failure would red-light a correct pipeline because something else was
+ * running — the same objection that rules out the order statistics above, and
+ * the fastest way to teach everyone to ignore a red benchmark.
+ *
+ * What replaces the gate is measurement. {@link FirstRunCheck} carries the
+ * dispersion of the series WITH run 1 and WITHOUT it, both are published side
+ * by side, and the difference between them IS the contamination. A reader
+ * quoting a repeatability figure can then quote the one that excludes the
+ * transient and say so, instead of quoting a number that silently contains it.
+ *
+ * Both order statistics are also REPORTED, as diagnostics, because a reader
+ * comparing two result sets wants them.
+ */
+export interface FirstRunCheck {
+  readonly firstValue: number;
+  readonly restCount: number;
+  readonly restMin: number;
+  readonly restMax: number;
+  readonly restMedian: number;
+  readonly restQ1: number;
+  readonly restQ3: number;
+  readonly restIqr: number;
+  /** Half-width of the band, after the fractional floor. Null below the minimum. */
+  readonly bandHalfWidth: number | null;
+  /** Whether run 1 sits inside that band. Null when the band is not meaningful. */
+  readonly withinRobustBand: boolean | null;
+  /** Why there is no band, or null when there is one. */
+  readonly bandUnavailableReason: string | null;
+  /**
+   * The dispersion of the series INCLUDING run 1 and EXCLUDING it.
+   *
+   * The pair is the point. Published together, the difference between them is
+   * the size of the residual transient, stated in the same units as the
+   * headline figure — so a reader can quote the repeatability of the pipeline
+   * rather than the repeatability of the pipeline plus one cold start, and can
+   * see exactly how much the choice was worth.
+   */
+  readonly cvAllRuns: number | null;
+  readonly cvExcludingFirstRun: number | null;
+  /** Diagnostic only — fails on a coin flip under a stationary process. */
+  readonly withinRestRange: boolean;
+  /** Diagnostic only — holds about half the time under a stationary process. */
+  readonly withinRestIqr: boolean;
+  /** > 1 means run 1 was slower than the typical later run. */
+  readonly ratioToRestMedian: number | null;
+}
+
+export function checkFirstRun(values: readonly number[]): FirstRunCheck | null {
+  // Needs a first run plus at least two others: with one comparison value there
+  // is no spread to place run 1 against, and any verdict would be arbitrary.
+  if (values.length < 3) return null;
+  const [first, ...rest] = values;
+  const s = summariseSeries(rest);
+  const all = summariseSeries(values);
+  const enough = rest.length >= FIRST_RUN_MIN_COMPARISON_RUNS;
+  const bandHalfWidth = enough
+    ? Math.max(FIRST_RUN_BAND_IQRS * s.iqr, FIRST_RUN_BAND_FRACTION * Math.abs(s.median))
+    : null;
+  return {
+    firstValue: first,
+    restCount: rest.length,
+    restMin: s.min,
+    restMax: s.max,
+    restMedian: s.median,
+    restQ1: s.q1,
+    restQ3: s.q3,
+    restIqr: s.iqr,
+    bandHalfWidth,
+    withinRobustBand: bandHalfWidth === null ? null : Math.abs(first - s.median) <= bandHalfWidth,
+    bandUnavailableReason: enough
+      ? null
+      : `only ${rest.length} comparison runs; the band's width comes from their IQR, which needs at least ` +
+        `${FIRST_RUN_MIN_COMPARISON_RUNS} points before a single slow run can be told apart from a transient`,
+    cvAllRuns: all.cv,
+    cvExcludingFirstRun: s.cv,
+    withinRestRange: first >= s.min && first <= s.max,
+    withinRestIqr: first >= s.q1 && first <= s.q3,
+    ratioToRestMedian: s.median === 0 ? null : first / s.median,
+  };
 }

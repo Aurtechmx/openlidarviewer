@@ -70,11 +70,40 @@ export interface ReproducibilityConfig {
   readonly scalarTolerance: 0;
 }
 
+/**
+ * Warm-up runs before anything is recorded.
+ *
+ * SIX, and the number comes from a measured trace rather than a guess. With a
+ * single warm-up the first two recorded runs came in about 11 % slower than the
+ * rest — a transient, not noise — which inflated the published coefficient of
+ * variation by roughly 2.4x and made a steady pipeline look unstable.
+ *
+ * The obvious fix, "use three", does not work, and that is worth writing down
+ * because it is the number anyone would reach for next. A 24-run trace of the
+ * 250k analysis on this machine decays gradually rather than falling off a
+ * cliff (ms, in order):
+ *
+ *   1181 983 995 919 976 898 | 856 899 857 886 896 889 875 894 901 859 …
+ *
+ * Run 1 is 37 % above the asymptote and runs 2-6 are still 5-15 % above it, so
+ * three warm-ups leaves the first recorded runs sitting on the tail — exactly
+ * the ~8 % first-run offset the three-warm-up configuration still showed. From
+ * run 7 the series is flat to within ordinary noise, and recording there gives
+ * a coefficient of variation near 0.02 instead of near 0.05.
+ *
+ * The cost is real and bounded: six extra runs per tier, a couple of minutes
+ * across the whole ladder. That buys a repeatability figure that means what a
+ * reader takes it to mean, which is the entire point of publishing one. Both
+ * suites still record where run 1 sits relative to the rest, so a transient
+ * that returns is visible rather than absorbed into the spread.
+ */
+export const WARMUP_RUNS = 6;
+
 export const REPRODUCIBILITY_CONFIG: ReproducibilityConfig = {
   suiteId: 'reproducibility',
   seed: BENCHMARK_SEED,
   pointCount: 250_000,
-  warmupRuns: 1,
+  warmupRuns: WARMUP_RUNS,
   recordedRuns: 10,
   terrain: TERRAIN_CONFIG,
   scalarTolerance: 0,
@@ -85,6 +114,24 @@ export interface ScalingTier {
   readonly id: string;
   readonly pointCount: number;
 }
+
+/**
+ * How the tiers are separated from one another.
+ *
+ * `'process-per-tier'` — every tier runs in a fresh child process.
+ * `'single-process'`   — every tier runs in one process, in ladder order.
+ *
+ * WHY THIS IS A RECORDED FIELD AND NOT A DETAIL. Run in one process, tier order
+ * is perfectly confounded with process history: JIT state, heap growth and
+ * whatever the previous tier left behind all advance monotonically alongside the
+ * point count, so the memory column measures the process rather than the
+ * workload. Measured both ways on the same machine, the IDENTICAL 250k
+ * workload reported peak RSS about 50 % apart depending only on what had run
+ * before it. A reader has to be able to see which regime produced a curve, so
+ * the mode is written into `raw.json` and into the manifest's configuration
+ * block rather than being implied by the code that happened to run.
+ */
+export type TierIsolation = 'process-per-tier' | 'single-process';
 
 export interface ScalingConfig {
   readonly suiteId: 'scaling';
@@ -105,6 +152,8 @@ export interface ScalingConfig {
    * of in a machine nobody can inspect later.
    */
   readonly acceptedTierFailures: readonly string[];
+  /** See {@link TierIsolation}. Recorded on every result set. */
+  readonly isolation: TierIsolation;
 }
 
 export const SCALING_CONFIG: ScalingConfig = {
@@ -117,10 +166,11 @@ export const SCALING_CONFIG: ScalingConfig = {
     { id: '500k', pointCount: 500_000 },
     { id: '1m', pointCount: 1_000_000 },
   ],
-  warmupRuns: 1,
+  warmupRuns: WARMUP_RUNS,
   recordedRuns: 5,
   terrain: TERRAIN_CONFIG,
   acceptedTierFailures: [],
+  isolation: 'process-per-tier',
 };
 
 // ── validation ──────────────────────────────────────────────────────────────
@@ -226,6 +276,10 @@ export function parseScalingConfig(input: unknown): ScalingConfig {
     return { id, pointCount };
   });
 
+  if (c.isolation !== 'process-per-tier' && c.isolation !== 'single-process') {
+    fail(`isolation must be 'process-per-tier' or 'single-process', got ${JSON.stringify(c.isolation)}`);
+  }
+
   const acceptedRaw = c.acceptedTierFailures ?? [];
   if (!Array.isArray(acceptedRaw)) fail('acceptedTierFailures must be an array');
   const acceptedTierFailures = acceptedRaw.map((v, i) => {
@@ -242,5 +296,6 @@ export function parseScalingConfig(input: unknown): ScalingConfig {
     recordedRuns: positiveInt(c.recordedRuns, 'recordedRuns'),
     terrain: parseTerrain(c.terrain),
     acceptedTierFailures,
+    isolation: c.isolation,
   };
 }

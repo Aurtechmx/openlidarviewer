@@ -19,8 +19,8 @@
  * carried in the JSON the table points at.
  */
 
-import { UNAVAILABLE_LABEL } from '../framework';
-import type { SeriesSummary } from './stats';
+import { UNAVAILABLE_LABEL, type EnvValue } from '../framework';
+import type { FirstRunCheck, SeriesSummary } from './stats';
 import type { SummarisedSeries } from './summarise';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
 import type { ScalingRaw, ScalingSummary, ScalingTierSummary } from './scaling';
@@ -83,6 +83,40 @@ function statsRow(label: string, s: SeriesSummary, decimals: number): string {
   return `| ${cell(label)} | ${s.count} | ${formatFixed(s.min, decimals)} | ${formatFixed(s.median, decimals)} | ${formatFixed(s.max, decimals)} | ${formatFixed(s.mean, decimals)} | ${formatFixed(s.stdDev, decimals)} | ${formatFixed(s.iqr, decimals)} | ${formatFixed(s.cv, RATIO_DECIMALS)} |`;
 }
 
+/**
+ * Where run 1 sat relative to the rest — the residual warm-up statement.
+ *
+ * Reported wherever a CV is reported, because the two are inseparable: a
+ * coefficient of variation computed over a series that still contains a warm-up
+ * transient is not a repeatability figure, and a reader has no way to tell from
+ * the number itself.
+ */
+function firstRunLines(check: FirstRunCheck | null): string[] {
+  if (check === null) return ['- first-run warm-up check: unavailable (needs at least three recorded runs)'];
+  const ratio = check.ratioToRestMedian;
+  const band =
+    check.withinRobustBand === null
+      ? `no robust band: ${check.bandUnavailableReason ?? 'sample too small'}`
+      : `${check.withinRobustBand ? 'inside' : 'OUTSIDE'} the +/-${formatFixed(check.bandHalfWidth, MS_DECIMALS)} ms ` +
+        'robust band (max of 3 IQRs and 5 % of the median)';
+  return [
+    `- first-run warm-up check: run 1 was ${formatFixed(check.firstValue, MS_DECIMALS)} ms against a median of ` +
+      `${formatFixed(check.restMedian, MS_DECIMALS)} ms over the remaining ${check.restCount} runs ` +
+      `${ratio === null ? '' : `(${formatFixed(ratio, 4)}x) `}— ${band}`,
+    // The pair a stability claim has to be quoted from. Printed together so
+    // nobody has to compute the difference to notice there is one.
+    `- analysis-duration CV including run 1: ${formatFixed(check.cvAllRuns, RATIO_DECIMALS)}; ` +
+      `excluding run 1: ${formatFixed(check.cvExcludingFirstRun, RATIO_DECIMALS)}. ` +
+      'Quote the second as the repeatability figure and say so; the difference between them is the residual ' +
+      'first-run transient, which tracks machine load rather than the pipeline and is therefore reported ' +
+      'rather than failed on.',
+    `- diagnostics: run 1 within the rest's min-max ${formatFixed(check.restMin, MS_DECIMALS)}-${formatFixed(check.restMax, MS_DECIMALS)} ms: ` +
+      `${check.withinRestRange ? 'yes' : 'no'}; within their interquartile range: ${check.withinRestIqr ? 'yes' : 'no'}. ` +
+      'Neither is a pass condition: under a stationary process the first is expected to fail about 2/n of the time ' +
+      'and the second about half the time, so both would red-light healthy runs.',
+  ];
+}
+
 const STATS_HEADER = [
   '| series | n | min | median | max | mean | sd | IQR | CV |',
   '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
@@ -110,7 +144,7 @@ export function reproducibilityMarkdown(summary: ReproducibilitySummary): string
   lines.push(`- recorded runs: ${summary.runCount} of ${summary.config.recordedRuns} configured`);
   lines.push(`- cell size: ${summary.config.terrain.cellSizeM} m, CRS ${cell(summary.config.terrain.crs)}, vertical datum ${cell(summary.config.terrain.verticalDatum)}`);
   lines.push(`- scalar comparison tolerance: ${summary.config.scalarTolerance} (exact equality)`);
-  lines.push(`- quantile convention: ${cell(summary.quantileConvention)}`);
+  lines.push(`- quantile convention: ${cell(summary.quantileConvention)}, CV is sd/mean`);
   lines.push('');
 
   lines.push('## Scientific identity');
@@ -141,7 +175,9 @@ export function reproducibilityMarkdown(summary: ReproducibilitySummary): string
 
   lines.push('## Timing');
   lines.push('');
-  lines.push('Durations in milliseconds, peak RSS in bytes, throughput in points/s. CV is dimensionless.');
+  lines.push('Durations in milliseconds, peak RSS in bytes, throughput in points/s. CV is sd/mean, dimensionless.');
+  lines.push('');
+  lines.push(...firstRunLines(summary.warmup));
   lines.push('');
   lines.push(...STATS_HEADER);
   for (const block of summary.timing.available) {
@@ -195,6 +231,9 @@ export function reproducibilityCsv(raw: ReproducibilityRaw): string {
     'endHeapUsedBytes',
     'peakRssBytes',
     'peakHeapBytes',
+    // The reason travels with the blank: a CSV cell reading 'unavailable' with
+    // no explanation is the gap this framework refuses to emit elsewhere.
+    'peakHeapUnavailableReason',
     'forcedGcAvailable',
     'gridCols',
     'gridRows',
@@ -231,6 +270,7 @@ export function reproducibilityCsv(raw: ReproducibilityRaw): string {
       formatInteger(o.memory.endHeapUsedBytes),
       formatInteger(o.memory.peakRssBytes),
       formatInteger(o.memory.peakHeapBytes),
+      o.memory.peakHeapUnavailableReason,
       String(o.memory.forcedGcAvailable),
       formatInteger(o.scalars.gridCols),
       formatInteger(o.scalars.gridRows),
@@ -248,11 +288,49 @@ export function reproducibilityCsv(raw: ReproducibilityRaw): string {
 
 // ── scaling ─────────────────────────────────────────────────────────────────
 
+/**
+ * The caveats that make the table below readable, carried WITH the table.
+ *
+ * They live here rather than in `scalingMarkdown` because the same table is
+ * emitted into the top-level overview, and the version a reader is most likely
+ * to copy into a document was the one with none of this attached — a table
+ * whose memory column is a max among medians, whose contour count is not
+ * comparable across tiers, and which says nothing about the double-counting
+ * trap, reads as a scaling law. Hoisting the paragraph means the caveats travel
+ * wherever the table is published.
+ */
+function scalingCaveats(summary: ScalingSummary): string[] {
+  const isolation = summary.config.isolation;
+  return [
+    'Peak RSS is the largest stage-boundary reading of a run, not a mid-stage high-water mark; both the ' +
+      'median across runs and the max are given, because they are different estimators and a single ' +
+      'column silently switching between them is worse than either. Pipeline total excludes the isolated ' +
+      'rasterize and descriptor leaves, which re-run work the DTM stage already does; adding them would ' +
+      'double-count. No complexity class is claimed — this is a measured curve.',
+    '',
+    'Contour count is NOT comparable across tiers and is not a pipeline property. The fixture holds point ' +
+      'density constant and scales tile extent as the square root of the point count, and its landform ' +
+      'amplitudes are fractions of that extent, so vertical relief grows with the tier. The interval ' +
+      'selector therefore chooses a larger interval on the upper rungs, which reduces the number of levels ' +
+      'and with it the polyline count. The interval and the relief it was chosen from are both columns ' +
+      'here so the effect is visible rather than mysterious.',
+    '',
+    isolation === 'process-per-tier'
+      ? 'Each tier ran in its own process, so runtime warm-up state and heap growth are not confounded with ' +
+        'the tier.'
+      : 'All tiers ran sequentially in ONE process in ascending order, so runtime warm-up state and heap ' +
+        'growth are confounded with the tier; the curve is an artefact of this configuration on this ' +
+        'machine and is not attributable to input size.',
+  ];
+}
+
 /** The compact table: one row per tier, principal metrics only. */
 export function scalingTable(summary: ScalingSummary): string[] {
   const lines = [
-    '| tier | points | median analysis (ms) | median pipeline total (ms) | median points/s | peak RSS (MiB) | grid cells | contours | CV analysis |',
-    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
+    ...scalingCaveats(summary),
+    '',
+    '| tier | points | median analysis (ms) | median pipeline total (ms) | median points/s | peak RSS median (MiB) | peak RSS max (MiB) | grid cells | contour interval (m) | elevation range (m) | contours | CV analysis |',
+    '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |',
   ];
   for (const tier of summary.tiers) {
     const analysis = findSeries(tier.series, SERIES_ANALYSIS_MS);
@@ -264,8 +342,12 @@ export function scalingTable(summary: ScalingSummary): string[] {
         `${analysis ? formatFixed(analysis.median, MS_DECIMALS) : UNAVAILABLE_LABEL} | ` +
         `${total ? formatFixed(total.median, MS_DECIMALS) : UNAVAILABLE_LABEL} | ` +
         `${rate ? formatFixed(rate.median, RATE_DECIMALS) : UNAVAILABLE_LABEL} | ` +
+        `${rss ? formatMib(rss.median) : UNAVAILABLE_LABEL} | ` +
         `${rss ? formatMib(rss.max) : UNAVAILABLE_LABEL} | ` +
-        `${formatInteger(tier.gridCellCount)} | ${formatInteger(tier.contourCount)} | ` +
+        `${formatInteger(tier.gridCellCount)} | ` +
+        `${formatFixed(tier.contourIntervalM, 2)} | ` +
+        `${formatFixed(tier.elevationRangeM, 2)} | ` +
+        `${formatInteger(tier.contourCount)} | ` +
         `${analysis ? formatFixed(analysis.cv, RATIO_DECIMALS) : UNAVAILABLE_LABEL} |`,
     );
   }
@@ -284,11 +366,12 @@ function tierDetail(tier: ScalingTierSummary): string[] {
   lines.push(`- recorded runs: ${tier.runCount}`);
   lines.push(`- generated points: ${formatInteger(tier.generatedPointCount)}`);
   lines.push(`- grid: ${formatInteger(tier.gridCols)} x ${formatInteger(tier.gridRows)} = ${formatInteger(tier.gridCellCount)} cells`);
-  lines.push(`- contours: ${formatInteger(tier.contourCount)}`);
+  lines.push(`- contours: ${formatInteger(tier.contourCount)} polylines at a ${formatFixed(tier.contourIntervalM, 2)} m interval over ${formatFixed(tier.elevationRangeM, 2)} m of relief`);
   lines.push(`- quality score: ${formatFixed(tier.qualityScore, RATE_DECIMALS)}`);
   lines.push(`- mean confidence: ${formatFixed(tier.meanConfidence, RATIO_DECIMALS)}`);
   lines.push(`- science hashes stable within tier: ${tier.scienceHashesStableWithinTier ? 'yes' : 'no'}`);
   lines.push(`- forced GC available: ${tier.forcedGcAvailable ? 'yes' : 'no'}`);
+  lines.push(...firstRunLines(tier.firstRunAnalysisMs));
   lines.push('');
   if (tier.series.available.length > 0) {
     lines.push(...STATS_HEADER);
@@ -316,13 +399,8 @@ export function scalingMarkdown(summary: ScalingSummary): string {
   lines.push(`- warm-up runs per tier: ${summary.config.warmupRuns}`);
   lines.push(`- recorded runs per tier: ${summary.config.recordedRuns}`);
   lines.push(`- cell size: ${summary.config.terrain.cellSizeM} m, CRS ${cell(summary.config.terrain.crs)}`);
-  lines.push(`- quantile convention: ${cell(summary.quantileConvention)}`);
-  lines.push('');
-  lines.push(
-    'Peak RSS is the largest stage-boundary reading observed in the tier, not a mid-stage high-water mark. ' +
-      'Pipeline total excludes the isolated rasterize and descriptor leaves, which re-run work the DTM stage ' +
-      'already does; adding them would double-count. No complexity class is claimed — this is a measured curve.',
-  );
+  lines.push(`- tier isolation: ${cell(summary.config.isolation)}`);
+  lines.push(`- quantile convention: ${cell(summary.quantileConvention)}, CV is sd/mean`);
   lines.push('');
   lines.push(...scalingTable(summary));
   lines.push('');
@@ -361,6 +439,9 @@ export function scalingCsv(raw: ScalingRaw): string {
     'endHeapUsedBytes',
     'peakRssBytes',
     'peakHeapBytes',
+    // The reason travels with the blank: a CSV cell reading 'unavailable' with
+    // no explanation is the gap this framework refuses to emit elsewhere.
+    'peakHeapUnavailableReason',
     'forcedGcAvailable',
     'gridCols',
     'gridRows',
@@ -399,6 +480,7 @@ export function scalingCsv(raw: ScalingRaw): string {
           formatInteger(o.memory.endHeapUsedBytes),
           formatInteger(o.memory.peakRssBytes),
           formatInteger(o.memory.peakHeapBytes),
+          o.memory.peakHeapUnavailableReason,
           String(o.memory.forcedGcAvailable),
           formatInteger(o.scalars.gridCols),
           formatInteger(o.scalars.gridRows),
@@ -474,11 +556,64 @@ export function overviewMarkdown(input: OverviewInput): string {
     lines.push(`- science-scoped hashes identical across all runs: ${input.reproducibility.identity.scienceHashesStable ? 'yes' : 'no'}`);
     lines.push(`- scalar outputs identical across all runs: ${input.reproducibility.identity.scalarsStable ? 'yes' : 'no'}`);
     lines.push(`- manifest verified on every run: ${input.reproducibility.identity.manifestVerifiedOnEveryRun ? 'yes' : 'no'}`);
+    lines.push(...firstRunLines(input.reproducibility.warmup));
     lines.push('');
   }
-  lines.push('Every number here is derived from the raw result files in this directory. Nothing is hand-entered.');
+  // Deliberately narrow. The earlier wording — "every number here is derived
+  // from the raw result files" — was true and still read as a completeness
+  // guarantee, which this page is not: it is a summary, the caveats that make
+  // each table readable travel with that table, and the per-suite files carry
+  // what this one leaves out.
+  lines.push(
+    'Every number on this page is derived from the raw result files in this directory; none is hand-entered, ' +
+      'and `npm run benchmark:verify` re-derives all of them. This page is a summary, not the full record — ' +
+      'the per-suite `summary.md` and `raw.json` carry the per-stage statistics, the artifact hashes and the ' +
+      'reasons behind every value reported as unavailable.',
+  );
   lines.push('');
   return lines.join('\n');
+}
+
+/** The manifest fields the overview is rendered from. See {@link overviewInputFrom}. */
+export interface OverviewHeader {
+  readonly olvVersion: EnvValue;
+  readonly commit: EnvValue;
+  readonly workingTree: EnvValue;
+  readonly startedAtUtc: string;
+  readonly completedAtUtc: string;
+  readonly command: string;
+  readonly notRun: readonly { readonly suiteId: string; readonly reason: string }[];
+}
+
+/**
+ * Build the overview's input from the manifest header and the two summaries.
+ *
+ * ONE derivation, used by the writer when it publishes and by the verifier when
+ * it re-renders. Written as a separate function because the two used to derive
+ * it independently — and the verifier simply did not re-render the top-level
+ * page at all, so an edit to the headline table passed. Those are the files a
+ * figure is copied out of; they now go through exactly the same path as
+ * everything else.
+ */
+export function overviewInputFrom(
+  header: OverviewHeader,
+  benchmarkPackageVersion: string,
+  reproducibility: ReproducibilitySummary | null,
+  scaling: ScalingSummary | null,
+): OverviewInput {
+  return {
+    startedAt: header.startedAtUtc,
+    completedAt: header.completedAtUtc,
+    command: header.command,
+    olvVersion: header.olvVersion.status === 'captured' ? header.olvVersion.value : UNAVAILABLE_LABEL,
+    benchmarkPackageVersion,
+    commit: header.commit.status === 'captured' ? header.commit.value : UNAVAILABLE_LABEL,
+    workingTreeClean:
+      header.workingTree.status === 'captured' ? header.workingTree.value === 'clean' : null,
+    reproducibility,
+    scaling,
+    notRun: header.notRun,
+  };
 }
 
 /** Escape for HTML text content, including quotes for attribute safety. */

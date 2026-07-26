@@ -16,14 +16,20 @@ Two suites drive the real terrain pipeline over seeded synthetic clouds and
 write a result tree anyone can re-derive every published figure from.
 
 ```
-npm run benchmark:repro     # benchmark 1 only
-npm run benchmark:scaling   # benchmark 2 only
-npm run benchmark:quick     # both, then verify
-npm run benchmark:verify    # re-check a published tree without re-measuring
+npm run benchmark:repro             # benchmark 1 only
+npm run benchmark:scaling           # benchmark 2 only
+npm run benchmark:quick             # both, then verify
+npm run benchmark:verify            # re-check latest/ without re-measuring
+npm run benchmark:verify:archives   # the same checks over every archive
 ```
 
+The published figures come from `benchmark:quick`, which runs benchmark 1
+first. Benchmark 2's tiers each run in their own child process, so they do not
+inherit that warm state — but the parent process does, which is why the timings
+that matter are taken in the children.
+
 **Benchmark 1 — deterministic reproducibility.** One seed (`20260726`),
-250,000 points, one warm-up, ten recorded runs, fixed terrain parameters. It
+250,000 points, six warm-ups, ten recorded runs, fixed terrain parameters. It
 passes only when every science-scoped artifact hash, every scalar output, the
 terrain-complexity summary, the scientific record with build identity and
 timestamps removed, and the application's own content hash are identical
@@ -32,12 +38,61 @@ is missing or failed. The comparison tolerance is exactly zero: on one machine
 over one seed this is deterministic arithmetic, so any difference at all is the
 finding, not noise to absorb.
 
-**Benchmark 2 — synthetic scaling.** 50k / 100k / 250k / 500k / 1M points, one
-warm-up and five recorded runs per tier, strictly sequential. It reports a
-measured curve and claims no complexity class — five points on one machine
-cannot separate one from another. The 1M tier is not optional: if it cannot
-complete, the failed tier is preserved with its exact reason and the suite
-fails until the limitation is written into `acceptedTierFailures`.
+**Benchmark 2 — synthetic scaling.** 50k / 100k / 250k / 500k / 1M points,
+six warm-ups and five recorded runs per tier, strictly sequential, **each
+tier in its own child process**. Run in one process the ladder order is
+perfectly confounded with process history — JIT state and heap growth advance
+alongside the point count — and measured both ways on one machine, the
+identical 250k workload reported peak RSS about 50 % apart depending only on
+what had run before it. The isolation mode is recorded in `raw.json` and in the
+manifest, so a reader can always see which regime produced a curve.
+
+It reports a measured curve and claims no complexity class — five points on one
+machine cannot separate one from another. The 1M tier is not optional: if it
+cannot complete, the failed tier is preserved with its exact reason and the
+suite fails until the limitation is written into `acceptedTierFailures`.
+
+Contour count is **not** comparable across tiers. The fixture holds point
+density constant and scales tile extent as the square root of the point count,
+and its landform amplitudes are fractions of that extent, so vertical relief
+grows with the tier and the interval selector steps up part-way along the
+ladder. The chosen interval and the relief it was chosen from are both columns
+in the table for exactly this reason.
+
+### Quoting a stability figure
+
+Six warm-ups, not one. A 24-run trace of the 250k analysis decays gradually
+rather than falling off a cliff — run 1 about 37 % above the asymptote, runs
+2-6 still 5-15 % above it, flat from run 7 — so one warm-up left the first two
+recorded runs about 11 % slow and three still left about 8 %.
+
+Six does not fully remove it either, and the suite says so rather than
+pretending otherwise. On a loaded machine the first recorded run still comes in
+several per cent high, and a freshly spawned tier process has been seen to spike
+28 % on its first recorded run. The transient tracks machine load and allocator
+state, not the pipeline, so **nothing fails on it** — a benchmark that goes red
+because something else was running is a benchmark everyone learns to ignore.
+
+It is measured instead. Every result set publishes the coefficient of variation
+**including** run 1 and **excluding** it, side by side. Quote the second as the
+repeatability figure and say that is what you quoted; the gap between the two is
+the size of the residual transient. For reference, on the machine these numbers
+were captured on, including run 1 gave a CV near 0.04 where excluding it gave
+near 0.02 — so the difference is not decorative.
+
+`manifest.json` records the host's 1/5/15-minute load average, and it is the
+first field to check before comparing two result sets. The same suite at the
+same commit gave a CV near 0.02 on an idle machine and near 0.10 at a load
+average of 7 on 14 cores. That difference is entirely outside the software.
+
+Alongside that, both suites report where run 1 sat relative to the later runs:
+a robust band (within three interquartile ranges, or 5 % of the median) plus two
+order statistics as diagnostics. The order statistics are diagnostics on
+purpose — under a stationary process, "run 1 is inside the rest's min-max range"
+fails about 2/n of the time and "inside their IQR" about half the time, so
+neither could ever have been a pass condition. The band is withheld entirely
+below five comparison runs, where its width would come from an IQR estimated on
+too few points.
 
 Two things the tables will not do. They never sum the stage column — the
 isolated `rasterize` and `descriptors` timings re-run work the `dtm` stage
@@ -55,15 +110,22 @@ science reproduced.
 Quantiles throughout — median, quartiles, IQR — use the **type-7** definition,
 R's and NumPy's default. The convention is written into every summary file, so
 a reader recomputing an IQR from `raw.json` in either tool lands on the
-published number.
+published number. `sd` is the sample (n − 1) standard deviation and `CV` is
+sd/mean; with fewer than two runs both are reported as unavailable with a
+reason rather than as zero. Where a table gives a peak-memory figure it names
+its estimator in the column header — median across runs and max are given
+separately, never one silently standing in for the other.
 
 Output lands in `benchmark-results/`: `latest/` is replaced on every run,
 `archive/<UTC timestamp>-<short commit>/` is immutable and a second write to an
 existing archive is refused. `manifest.json` carries the commit, working-tree
 cleanliness, host and toolchain versions, the configuration, and a SHA-256 for
 every file; `benchmark:verify` recomputes all of them, re-derives every summary
-statistic from the raw values and re-renders the Markdown and CSV from the
-published JSON, so a hand-edited figure fails.
+statistic from the raw values and re-renders **every** Markdown, HTML and CSV
+file — the top-level `summary.md` and `summary.html` included — from the
+published JSON, so a hand-edited figure fails even when the digest is refreshed
+to match. `benchmark:verify:archives` applies the same checks to every archived
+result set.
 
 GPU upload, first rendered frame, frame rate and time-to-interaction are
 browser measurements. This runner is Node-only and reports them as declared

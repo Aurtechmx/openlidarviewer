@@ -54,6 +54,7 @@
     "benchmark:scaling": "BENCHMARK_SUITES=scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:quick": "BENCHMARK_SUITES=reproducibility,scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
     "benchmark:verify": "BENCHMARK_VERIFY=1 vitest run tests/benchmark/verifyResults.test.ts --testTimeout=600000",
+    "benchmark:verify:archives": "BENCHMARK_VERIFY_ARCHIVES=1 vitest run tests/benchmark/verifyResults.test.ts --testTimeout=1800000",
     "test:smoke": "playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:live": "SMOKE_LIVE=1 playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:mobile": "playwright test --project=deterministic tests/e2e/visualsStudioMobile.spec.ts",

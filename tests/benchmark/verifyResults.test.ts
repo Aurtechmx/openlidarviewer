@@ -14,10 +14,11 @@
  */
 import { describe, test, expect } from 'vitest';
 import { existsSync } from 'node:fs';
-import { LATEST_DIR } from '../../benchmarks/runner/writer';
-import { verifyResultsDir } from '../../benchmarks/runner/verify';
+import { LATEST_DIR, RESULTS_DIR } from '../../benchmarks/runner/writer';
+import { verifyArchives, verifyResultsDir } from '../../benchmarks/runner/verify';
 
 const enabled = process.env.BENCHMARK_VERIFY === '1';
+const archives = process.env.BENCHMARK_VERIFY_ARCHIVES === '1';
 const dir = process.env.BENCHMARK_RESULTS_DIR ?? LATEST_DIR;
 
 describe('benchmark:verify', () => {
@@ -35,7 +36,20 @@ describe('benchmark:verify', () => {
     expect(outcome.problems).toEqual([]);
   }, 600_000);
 
-  test.runIf(!enabled)('is inert until BENCHMARK_VERIFY=1', () => {
+  test.runIf(archives)(
+    'every archived result set is internally consistent',
+    () => {
+      // Archives are the citable artifacts, so verifying only `latest/` makes
+      // the weaker of the two available claims.
+      const outcome = verifyArchives(RESULTS_DIR);
+      for (const line of outcome.checked) console.log(`ok: ${line}`);
+      for (const line of outcome.problems) console.error(`FAIL: ${line}`);
+      expect(outcome.problems).toEqual([]);
+    },
+    1_800_000,
+  );
+
+  test.runIf(!enabled && !archives)('is inert until BENCHMARK_VERIFY=1', () => {
     expect(typeof verifyResultsDir).toBe('function');
   });
 });

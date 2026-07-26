@@ -28,11 +28,19 @@ describe('the shipped configurations', () => {
   });
 
   test('state the repetition counts the suites promise', () => {
-    expect(REPRODUCIBILITY_CONFIG.warmupRuns).toBe(1);
+    // Six, from a measured 24-run decay trace — see the WARMUP_RUNS comment.
+    // One left the first two recorded runs ~11 % slow; three still left ~8 %.
+    expect(REPRODUCIBILITY_CONFIG.warmupRuns).toBe(6);
     expect(REPRODUCIBILITY_CONFIG.recordedRuns).toBe(10);
     expect(REPRODUCIBILITY_CONFIG.pointCount).toBe(250_000);
-    expect(SCALING_CONFIG.warmupRuns).toBe(1);
+    expect(SCALING_CONFIG.warmupRuns).toBe(6);
     expect(SCALING_CONFIG.recordedRuns).toBe(5);
+  });
+
+  test('isolate each scaling tier in its own process', () => {
+    // Run in one process, ladder order is confounded with heap growth and JIT
+    // state, and the memory column describes the process rather than the input.
+    expect(SCALING_CONFIG.isolation).toBe('process-per-tier');
   });
 
   test('ship the full ladder including the 1M tier', () => {

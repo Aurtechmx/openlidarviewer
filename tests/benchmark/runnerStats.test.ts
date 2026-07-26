@@ -10,6 +10,8 @@ import { describe, test, expect } from 'vitest';
 import {
   QUANTILE_CONVENTION,
   ascending,
+  checkFirstRun,
+  firstSummaryDifference,
   quantileSorted,
   summariesMatch,
   summariseSeries,
@@ -103,5 +105,97 @@ describe('summary comparison', () => {
     expect(summariesMatch(a, summariseSeries([1, 2, 4]))).toBe(false);
     // Same statistics, different raw values would be a doctored summary.
     expect(summariesMatch(a, summariseSeries([3, 2, 1]))).toBe(false);
+  });
+
+  test('names the field that differs, not always the median', () => {
+    const published = summariseSeries([10, 20, 30]);
+    // A summary whose `min` was edited: the median is untouched, so a message
+    // that always names the median prints two identical numbers and reads as a
+    // broken verifier rather than as a caught tamper.
+    const doctored = { ...published, min: 1 };
+    const diff = firstSummaryDifference(doctored, published);
+    expect(diff).toEqual({ key: 'min', published: 1, recomputed: 10 });
+  });
+
+  test('reports a changed raw value by index', () => {
+    const a = summariseSeries([1, 2, 3]);
+    const b = { ...a, values: [1, 9, 3] };
+    expect(firstSummaryDifference(b, a)).toEqual({ key: 'values[1]', published: 9, recomputed: 2 });
+  });
+
+  test('reports null for identical summaries', () => {
+    expect(firstSummaryDifference(summariseSeries([1, 2]), summariseSeries([1, 2]))).toBeNull();
+  });
+});
+
+describe('the first-run warm-up check', () => {
+  /** A steady series: run 1 sits with the rest. */
+  const steady = [100, 101, 99, 100.5, 99.5, 100.2, 99.8, 100.1, 99.9, 100.3];
+
+  test('passes a steady series', () => {
+    const check = checkFirstRun(steady);
+    expect(check?.withinRobustBand).toBe(true);
+  });
+
+  test('catches the transient that actually occurred: run 1 about 11 % slow', () => {
+    const check = checkFirstRun([111, ...steady.slice(1)]);
+    expect(check?.withinRobustBand).toBe(false);
+    expect(check?.ratioToRestMedian).toBeGreaterThan(1.1);
+  });
+
+  test('does NOT gate on the rest\'s min-max range, which a healthy run fails 2/n of the time', () => {
+    // Run 1 is the largest value here — outside [min, max] of the rest — but
+    // only 0.4 % above their median. Gating on range membership would fail this.
+    const check = checkFirstRun([101.5, ...steady.slice(1)]);
+    expect(check?.withinRestRange).toBe(false);
+    expect(check?.withinRobustBand).toBe(true);
+  });
+
+  test('does NOT gate on interquartile membership, which is a coin flip', () => {
+    const check = checkFirstRun([99.6, ...steady.slice(1)]);
+    expect(check?.withinRestIqr).toBe(false);
+    expect(check?.withinRobustBand).toBe(true);
+  });
+
+  test('the fractional floor keeps a near-zero IQR from making every run anomalous', () => {
+    // Eight identical values: IQR is 0, so a pure 3-IQR band would be a point
+    // and any difference at all would fail.
+    const check = checkFirstRun([100.5, 100, 100, 100, 100, 100, 100, 100, 100]);
+    expect(check?.restIqr).toBe(0);
+    expect(check?.bandHalfWidth).toBeCloseTo(5, 12);
+    expect(check?.withinRobustBand).toBe(true);
+    // A materially different first run still fails, floor or no floor.
+    expect(checkFirstRun([120, 100, 100, 100, 100, 100, 100, 100, 100])?.withinRobustBand).toBe(false);
+  });
+
+  test('needs at least three runs to say anything', () => {
+    expect(checkFirstRun([1, 2])).toBeNull();
+    expect(checkFirstRun([1, 2, 3])).not.toBeNull();
+  });
+
+  test('withholds the band on a sample too small to estimate a spread', () => {
+    // Four comparison runs: the band's width would come from a four-point IQR,
+    // where one GC pause is indistinguishable from a warm-up transient. Null,
+    // with a reason — not a verdict computed from too little.
+    const small = checkFirstRun([200, 100, 100, 101, 99]);
+    expect(small?.withinRobustBand).toBeNull();
+    expect(small?.bandHalfWidth).toBeNull();
+    expect(small?.bandUnavailableReason).toMatch(/comparison runs/);
+
+    const enough = checkFirstRun([200, 100, 100, 101, 99, 100]);
+    expect(enough?.withinRobustBand).toBe(false);
+  });
+
+  test('publishes the dispersion with and without run 1, so the contamination is visible', () => {
+    // A steady series with one cold start. The CV including run 1 is several
+    // times the CV without it, and that gap is the whole finding.
+    const check = checkFirstRun([111, ...steady.slice(1)]);
+    expect(check?.cvAllRuns).not.toBeNull();
+    expect(check?.cvExcludingFirstRun).not.toBeNull();
+    expect(check?.cvAllRuns as number).toBeGreaterThan((check?.cvExcludingFirstRun as number) * 2);
+    // On a clean series the two are close, so the pair is not alarming by
+    // construction — it only separates when there is something to see.
+    const clean = checkFirstRun(steady);
+    expect(clean?.cvAllRuns as number).toBeLessThan((clean?.cvExcludingFirstRun as number) * 2);
   });
 });

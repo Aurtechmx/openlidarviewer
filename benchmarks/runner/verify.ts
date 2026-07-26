@@ -31,7 +31,7 @@
  * in the tree instead of the first.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { nodeSha256Hex } from '../framework/node';
 import {
@@ -39,10 +39,18 @@ import {
   parseReproducibilityConfig,
   parseScalingConfig,
 } from './config';
-import { reproducibilityCsv, reproducibilityMarkdown, scalingCsv, scalingMarkdown } from './render';
+import {
+  overviewHtml,
+  overviewInputFrom,
+  overviewMarkdown,
+  reproducibilityCsv,
+  reproducibilityMarkdown,
+  scalingCsv,
+  scalingMarkdown,
+} from './render';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
 import { PRINCIPAL_SERIES, type ScalingRaw, type ScalingSummary } from './scaling';
-import { summariesMatch } from './stats';
+import { firstSummaryDifference } from './stats';
 import { summariseRuns, type SummarisedSeries } from './summarise';
 import type { BenchmarkManifest } from './writer';
 
@@ -82,20 +90,28 @@ function checkSeriesBlock(
       problems.push(`${label}: series ${block.key} is published but does not recompute from raw`);
       continue;
     }
-    if (!summariesMatch(block.summary, mine.summary)) {
+    // Name the FIELD that differs. Reporting the median unconditionally printed
+    // two identical numbers when `min` was the field that had been edited, and
+    // an operator reading that concludes the verifier is broken.
+    const diff = firstSummaryDifference(block.summary, mine.summary);
+    if (diff !== null) {
       problems.push(
-        `${label}: series ${block.key} does not recompute from raw — published median ${String(block.summary.median)}, recomputed ${String(mine.summary.median)}`,
+        `${label}: series ${block.key} does not recompute from raw — ${diff.key} is published as ${String(diff.published)}, recomputes to ${String(diff.recomputed)}`,
       );
     }
   }
 }
 
-function verifyReproducibility(dir: string, checked: string[], problems: string[]): void {
+function verifyReproducibility(
+  dir: string,
+  checked: string[],
+  problems: string[],
+): ReproducibilitySummary | null {
   const rawPath = join(dir, 'raw.json');
   const summaryPath = join(dir, 'summary.json');
   const raw = readJson(rawPath, problems) as ReproducibilityRaw | null;
   const summary = readJson(summaryPath, problems) as ReproducibilitySummary | null;
-  if (raw === null || summary === null) return;
+  if (raw === null || summary === null) return null;
 
   checked.push('reproducibility/raw.json + summary.json parsed');
 
@@ -149,12 +165,13 @@ function verifyReproducibility(dir: string, checked: string[], problems: string[
   const csv = reproducibilityCsv(raw);
   checkText(join(dir, 'runs.csv'), csv, 'reproducibility/runs.csv', problems, checked);
   checkCsvRows(join(dir, 'runs.csv'), raw.runs.length, 'reproducibility/runs.csv', problems, checked);
+  return summary;
 }
 
-function verifyScaling(dir: string, checked: string[], problems: string[]): void {
+function verifyScaling(dir: string, checked: string[], problems: string[]): ScalingSummary | null {
   const raw = readJson(join(dir, 'raw.json'), problems) as ScalingRaw | null;
   const summary = readJson(join(dir, 'summary.json'), problems) as ScalingSummary | null;
-  if (raw === null || summary === null) return;
+  if (raw === null || summary === null) return null;
 
   checked.push('scaling/raw.json + summary.json parsed');
 
@@ -218,6 +235,7 @@ function verifyScaling(dir: string, checked: string[], problems: string[]): void
   checkText(join(dir, 'summary.md'), scalingMarkdown(summary), 'scaling/summary.md', problems, checked);
   checkText(join(dir, 'runs.csv'), scalingCsv(raw), 'scaling/runs.csv', problems, checked);
   checkCsvRows(join(dir, 'runs.csv'), totalRuns, 'scaling/runs.csv', problems, checked);
+  return summary;
 }
 
 /** A rendered file must equal what the JSON re-renders to, byte for byte. */
@@ -309,11 +327,22 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
   }
   checked.push('manifest header fields are present');
 
-  const serialised = JSON.stringify(manifest);
-  if (PRIVACY_FORBIDDEN.test(serialised)) {
-    problems.push('manifest: contains a home-directory path or an IP address');
+  // Scanned across every published file, not just the manifest. The manifest is
+  // where a path was most likely to appear, but `environment.json` carries host
+  // capture, `raw.json` carries error messages, and a stage error is exactly
+  // the kind of string that arrives with a path embedded in it.
+  const scanned = ['manifest.json', ...manifest.files.map((f) => f.path)];
+  const leaking: string[] = [];
+  for (const relPath of scanned) {
+    const full = join(dir, relPath);
+    if (!existsSync(full)) continue;
+    const match = PRIVACY_FORBIDDEN.exec(readFileSync(full, 'utf8'));
+    if (match) leaking.push(`${relPath} (matched ${JSON.stringify(match[0])})`);
+  }
+  if (leaking.length > 0) {
+    problems.push(`published files carry a home-directory path or an IP address: ${leaking.join(', ')}`);
   } else {
-    checked.push('manifest carries no home-directory path or IP address');
+    checked.push(`no home-directory path or IP address in any of the ${scanned.length} published files`);
   }
 
   for (const relPath of requiredFiles(manifest)) {
@@ -337,12 +366,63 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
   }
   checked.push(`manifest hashes match all ${manifest.files.length} listed files`);
 
-  if (manifest.suites.some((s) => s.suiteId === 'reproducibility')) {
-    verifyReproducibility(join(dir, 'reproducibility'), checked, problems);
-  }
-  if (manifest.suites.some((s) => s.suiteId === 'scaling')) {
-    verifyScaling(join(dir, 'scaling'), checked, problems);
-  }
+  const reproSummary = manifest.suites.some((s) => s.suiteId === 'reproducibility')
+    ? verifyReproducibility(join(dir, 'reproducibility'), checked, problems)
+    : null;
+  const scalingSummary = manifest.suites.some((s) => s.suiteId === 'scaling')
+    ? verifyScaling(join(dir, 'scaling'), checked, problems)
+    : null;
 
+  // The TOP-LEVEL page, re-rendered from the manifest header and the two
+  // summaries it points at.
+  //
+  // This is the file a figure gets copied out of, and it was the one file
+  // outside every check: hashed, listed as required, and never re-derived, so
+  // an edited headline number with a refreshed digest passed. It goes through
+  // the identical path the per-suite Markdown does now.
+  const overview = overviewInputFrom(
+    {
+      olvVersion: manifest.olvVersion,
+      commit: manifest.commit,
+      workingTree: manifest.workingTree,
+      startedAtUtc: manifest.startedAtUtc,
+      completedAtUtc: manifest.completedAtUtc,
+      command: manifest.command,
+      notRun: manifest.notRun,
+    },
+    manifest.benchmarkPackageVersion,
+    reproSummary,
+    scalingSummary,
+  );
+  checkText(join(dir, 'summary.md'), overviewMarkdown(overview), 'summary.md', problems, checked);
+  checkText(join(dir, 'summary.html'), overviewHtml(overview), 'summary.html', problems, checked);
+
+  return { ok: problems.length === 0, checked, problems };
+}
+
+/**
+ * Verify every archived result set under `root/archive/`.
+ *
+ * Archives are the citable artifacts, so "the latest run verifies" is the
+ * weaker of the two claims worth making. Each archive is a complete tree and
+ * goes through the identical checks.
+ */
+export function verifyArchives(root: string): VerifyOutcome {
+  const archiveRoot = join(root, 'archive');
+  if (!existsSync(archiveRoot)) {
+    return { ok: true, checked: ['no archive directory to verify'], problems: [] };
+  }
+  const checked: string[] = [];
+  const problems: string[] = [];
+  const entries = readdirSync(archiveRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+    .sort();
+  for (const name of entries) {
+    const outcome = verifyResultsDir(join(archiveRoot, name));
+    checked.push(`archive/${name}: ${outcome.ok ? 'verified' : `${outcome.problems.length} problems`}`);
+    for (const p of outcome.problems) problems.push(`archive/${name}: ${p}`);
+  }
+  if (entries.length === 0) checked.push('archive directory is empty');
   return { ok: problems.length === 0, checked, problems };
 }

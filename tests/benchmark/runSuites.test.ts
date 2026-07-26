@@ -27,7 +27,7 @@ import {
   parseScalingConfig,
 } from '../../benchmarks/runner/config';
 import { runReproducibilitySuite } from '../../benchmarks/runner/reproducibility';
-import { runScalingSuite } from '../../benchmarks/runner/scaling';
+import { runScalingSuiteForConfig } from '../../benchmarks/runner/scalingIsolated';
 import { writeResults } from '../../benchmarks/runner/writer';
 
 /** Comma-separated suite ids, e.g. `reproducibility,scaling`. */
@@ -68,7 +68,12 @@ describe('benchmark suites', () => {
       const reproducibility = wants('reproducibility')
         ? runReproducibilitySuite(parseReproducibilityConfig(REPRODUCIBILITY_CONFIG))
         : null;
-      const scaling = wants('scaling') ? runScalingSuite(parseScalingConfig(SCALING_CONFIG)) : null;
+      // Honours `config.isolation`: the shipped configuration runs each tier in
+      // its own child process, so ladder order is not confounded with the
+      // parent's heap growth and JIT state.
+      const scaling = wants('scaling')
+        ? runScalingSuiteForConfig(parseScalingConfig(SCALING_CONFIG))
+        : null;
 
       const completedAtUtc = new Date().toISOString();
       const outcome = writeResults({
