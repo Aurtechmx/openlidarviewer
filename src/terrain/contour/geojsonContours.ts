@@ -80,6 +80,11 @@ export function toGeoJSON(
   // Foreign members carry honest provenance into the file itself.
   const metadata: Record<string, unknown> = {
       intervalM: model.intervalM,
+      // Present only when the emitted levels were thinned off the requested
+      // interval; `intervalM` above always describes the levels in this file.
+      ...(model.requestedIntervalM != null && model.requestedIntervalM !== model.intervalM
+        ? { requestedIntervalM: model.requestedIntervalM }
+        : {}),
       verticalDatum: model.verticalDatum,
       coverageMode: model.coverageMode,
       // Honest record of the shape transform applied to the geometry. When the

@@ -55,7 +55,17 @@ export interface ContourLevel {
 /** The full contour result for a DTM at one interval. */
 export interface ContourSet {
   readonly levels: ContourLevel[];
+  /**
+   * The interval of the levels ACTUALLY emitted, in source linear units. When
+   * the level count exceeds the cap the list is thinned and this becomes the
+   * thinned spacing, not the value that was asked for — a consumer reading it
+   * off the set (or off any artifact derived from it) gets the spacing of the
+   * levels in front of it. The requested value is kept in
+   * {@link requestedIntervalM}.
+   */
   readonly intervalM: number;
+  /** The interval the caller asked for, before any thinning. */
+  readonly requestedIntervalM: number;
   /** Echoes the grid CRS so exporters never lose georeferencing. */
   readonly crs: string | null;
   readonly verticalDatum: string | null;
@@ -180,6 +190,7 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     return {
       levels: [],
       intervalM: params.intervalM,
+      requestedIntervalM: params.intervalM,
       crs: dtm.crs,
       verticalDatum: dtm.verticalDatum,
       minZ: Number.NaN,
@@ -200,6 +211,7 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
       return {
         levels: [],
         intervalM: interval,
+        requestedIntervalM: interval,
         crs: dtm.crs,
         verticalDatum: dtm.verticalDatum,
         minZ,
@@ -214,6 +226,10 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     const count = Math.floor((maxZ - first) / interval + 1e-9) + 1;
     for (let k = 0; k < count; k++) levelValues.push(first + k * interval);
   }
+  // The spacing of the levels that end up emitted. Starts as the requested
+  // interval and is rewritten by the thinning branch below, so every field
+  // derived from it describes the level list that actually ships.
+  let effectiveIntervalM = params.intervalM;
   if (levelValues.length > maxLevels) {
     // THIN evenly rather than truncate from the top: the old slice kept only
     // the LOWEST maxLevels levels, so an over-fine interval silently deleted
@@ -235,6 +251,7 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
         `interval is ${k}× the requested one)`,
     );
     levelValues = thinned;
+    effectiveIntervalM = k * params.intervalM;
   }
 
   const levels: ContourLevel[] = levelValues.map((value) => ({ value, segments: [] }));
@@ -326,9 +343,31 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     }
   }
 
+  // Say WHY the set is empty. A caller that gets zero segments cannot tell a
+  // flat surface from a computed contour set without counting geometry, so the
+  // reason is stated here in the same shape the all-gap path uses. No tolerance
+  // is invented: "flat" is an exact min == max over the same samples the levels
+  // were derived from, and "effectively flat" is the weaker, equally decidable
+  // condition that no level lies strictly inside the observed range — the whole
+  // z-range sits between two adjacent levels, so there is nothing to cross.
+  if (levels.every((l) => l.segments.length === 0)) {
+    if (levelValues.length === 0) {
+      warnings.push('no levels to trace — no contours');
+    } else if (minZ === maxZ) {
+      warnings.push(`flat surface (z = ${minZ}) — no contours`);
+    } else if (!levelValues.some((v) => v > minZ && v < maxZ)) {
+      warnings.push(
+        `elevation range ${minZ}…${maxZ} falls between adjacent levels — no contours`,
+      );
+    } else {
+      warnings.push('no cell crosses any level — no contours');
+    }
+  }
+
   return {
     levels,
-    intervalM: params.intervalM,
+    intervalM: effectiveIntervalM,
+    requestedIntervalM: params.intervalM,
     crs: dtm.crs,
     verticalDatum: dtm.verticalDatum,
     minZ,

@@ -6,6 +6,21 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- **A contour set declares the interval it emitted.** An over-fine request is
+  thinned against the 200-level cap, but `intervalM` kept reporting the value
+  that was asked for, so the GeoJSON `metadata.intervalM`, every feature's
+  `interval` property and the index-contour classification all described a
+  spacing the file did not have. `intervalM` is now the emitted spacing
+  everywhere it appears, and the request survives beside it as
+  `requestedIntervalM` — in the set, the export model, the GeoJSON metadata and
+  the provenance op. Regeneration paths (the map-sheet interval picker, the
+  Studio re-export) read the requested value, since they re-run the pipeline.
+- **A flat surface says it is flat.** A constant grid returned one level with
+  zero segments and no warning, so nothing downstream could tell a flat surface
+  from a computed contour set without counting geometry. A set that produces no
+  segments now states the reason, in the same shape the all-gap path uses:
+  flat, an elevation range that falls between two adjacent levels, or no
+  crossing cells.
 - **The contour deliverable's GeoTIFF states its vertical unit.** The
   deliverable wrote `VerticalCSType` (GeoKey 4096) without `VerticalUnits`
   (4099), so the same DTM raster was ambiguous between metres and feet when it

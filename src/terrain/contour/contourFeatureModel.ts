@@ -81,7 +81,14 @@ export interface ContourFeatureModel {
    * not "metre".
    */
   readonly verticalUnitToMetres?: number | null;
+  /**
+   * Spacing of the levels this model's features were built from — the emitted
+   * interval, not necessarily the one that was asked for (see
+   * {@link requestedIntervalM}).
+   */
   readonly intervalM: number;
+  /** The interval originally requested, when it differs from what was emitted. */
+  readonly requestedIntervalM?: number | null;
   /** The contour shape style this model's geometry was produced with. */
   readonly contourStyle: ContourShapeStyle;
   readonly bbox: ContourBBox | null;
@@ -145,6 +152,8 @@ export interface FeatureModelParams {
   /** Metres per unit of the source vertical axis; null when unresolved. */
   readonly verticalUnitToMetres?: number | null;
   readonly intervalM: number;
+  /** The interval originally requested, before any level thinning. */
+  readonly requestedIntervalM?: number | null;
   /** Coverage provenance from the analysis (default 'full'). */
   readonly coverageMode?: TerrainCoverageMode;
   /** Shape style the geometry was produced with (default 'smooth'). */
@@ -258,6 +267,7 @@ export function buildFeatureModel(
     verticalDatum: params.verticalDatum ?? null,
     verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     intervalM: params.intervalM,
+    requestedIntervalM: params.requestedIntervalM ?? null,
     contourStyle: params.contourStyle ?? defaultContourShapeStyle,
     bbox,
     interpolatedFraction,

@@ -150,6 +150,7 @@ function modelFor(dtm: ReturnType<typeof surfaceGrid>, set: ContourSet): Contour
     verticalDatum: dtm.verticalDatum,
     verticalUnitToMetres: dtm.verticalUnitToMetres ?? 1,
     intervalM: set.intervalM,
+    requestedIntervalM: set.requestedIntervalM,
     contourStyle: 'crisp',
   });
 }
@@ -531,32 +532,38 @@ describe('contour correctness — declared properties match the geometry', () =>
     }
   });
 
-  it('an over-fine interval thins the levels and the declared interval no longer matches', () => {
-    // PINNED DEFECT. Input: a cone spanning ~0…14 with intervalM = 0.01 and the
-    // default 200-level cap. Property: ContourSet.intervalM is the interval of
-    // the emitted levels. Expected: the declared value equals the actual
-    // spacing. Actual: the thinning keeps every k-th level, so the spacing
-    // becomes k × 0.01 while `intervalM` still reads 0.01 — and that value is
-    // what reaches the GeoJSON `interval` property and `metadata.intervalM`.
-    // The warning names the effective interval in prose; the field does not.
+  it('an over-fine interval thins the levels and the declared interval follows', () => {
+    // Input: a cone spanning ~0…14 with intervalM = 0.01 and the default
+    // 200-level cap. Property: ContourSet.intervalM is the interval of the
+    // levels that were EMITTED, and the requested value survives beside it.
     const dtm = coneGrid(41, 41, 20.5, 20.5);
     const requested = 0.01;
     const set = contoursAt(dtm, { intervalM: requested });
     expect(set.warnings.join(' ')).toContain('exceeds cap');
-    expect(set.intervalM).toBe(requested);
+    expect(set.requestedIntervalM).toBe(requested);
     const values = set.levels.map((l) => l.value);
     expect(values.length).toBeLessThanOrEqual(200);
     const spacing = values[1] - values[0];
     expect(spacing).toBeGreaterThan(requested * 5);
-    // The mismatch propagates into the export unchanged.
+    // The declared interval IS the emitted spacing.
+    expect(set.intervalM).toBeCloseTo(spacing, 9);
+    expect(set.intervalM).not.toBe(requested);
+    // Both values reach the export: the emitted one under the name every
+    // consumer reads, the requested one under its own name.
     const model = modelFor(dtm, set);
-    expect(model.intervalM).toBe(requested);
+    expect(model.intervalM).toBe(set.intervalM);
+    expect(model.requestedIntervalM).toBe(requested);
     const geo = toGeoJSON(model);
-    expect((geo.metadata as Record<string, unknown>).intervalM).toBe(requested);
-    // The style pass does notice the inconsistency, so the information exists
-    // one layer away from the field that is wrong.
+    const metadata = geo.metadata as Record<string, unknown>;
+    expect(metadata.intervalM).toBe(set.intervalM);
+    expect(metadata.requestedIntervalM).toBe(requested);
+    for (const f of geo.features as Array<{ properties: Record<string, unknown> }>) {
+      expect(f.properties.interval).toBe(set.intervalM);
+    }
+    // Index classification is anchored to the emitted interval, so the kept
+    // levels land on the round elevations a reader expects.
     const styled = styleLevels(values, { intervalM: set.intervalM });
-    expect(styled.warnings.join(' ')).toContain('not a consistent interval');
+    expect(styled.levels.filter((l) => l.isIndex).length).toBeGreaterThan(0);
   });
 
   it('the emitted level set covers the data range and nothing beyond it', () => {
@@ -782,12 +789,25 @@ describe('contour correctness — degenerate inputs', () => {
     const model = modelFor(dtm, set);
     expect(model.features).toEqual([]);
     expect(model.bbox).toBeNull();
-    // PINNED: a single empty level is emitted at z = 10 and the set carries no
-    // warning saying the surface is flat. Nothing downstream can distinguish
-    // "flat" from "contours computed" without inspecting segment counts.
     expect(set.levels.length).toBe(1);
     expect(set.levels[0].value).toBe(10);
-    expect(set.warnings).toEqual([]);
+    // The set says WHY it is empty, in the same shape the all-gap path uses,
+    // so a consumer never has to count segments to learn the surface is flat.
+    expect(set.warnings.join(' ')).toContain('flat surface');
+  });
+
+  it('a range that falls between adjacent levels says so', () => {
+    // z spans 10.2 … 10.8 with a 5 m interval: no level lies inside the range,
+    // so the surface is effectively flat at this interval and produces nothing.
+    const dtm = surfaceGrid((col) => 10.2 + (col % 4) * 0.2, {
+      cols: 20,
+      rows: 20,
+      cellSizeM: CELL,
+    });
+    const set = contoursAt(dtm, { intervalM: 5 });
+    expect(allSegments(set)).toEqual([]);
+    expect(set.warnings.join(' ')).toContain('no contours');
+    expect(set.warnings.join(' ')).not.toContain('flat surface');
   });
 
   it('a surface entirely below the requested levels emits nothing', () => {
