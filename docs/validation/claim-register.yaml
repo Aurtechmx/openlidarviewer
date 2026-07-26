@@ -356,28 +356,28 @@ claims:
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
     approvedClaim: "Horn aspect agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree circular tolerance (max separation under 0.001 degree over 10,932 cells with slope above 2 degrees)."
-    prohibitedClaim: ["field-validated aspect accuracy", "aspect defined on flat ground", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated", "hillshade cross-implementation validated"]
+    prohibitedClaim: ["field-validated aspect accuracy", "aspect defined on flat ground", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated"]
 
   - claimId: HILLSHADE
     product: Hillshade
     algorithm: ESRI illumination model (Lambert)
     algorithmVersion: v0.4.x
-    claim: "Analytic hillshade from slope + aspect under a fixed sun azimuth/altitude."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    claim: "Single-direction hillshade from slope + aspect under a fixed sun azimuth/altitude."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainTruth.hillshade.test.ts, tests/relief*.test.ts]
-    supportingDatasets: [analytic flat-plane Lambert]
-    units: [dimensionless]
+    supportingTests: [tests/terrainTruth.hillshade.test.ts, tests/relief*.test.ts, tests/hillshadeCrossCheck.test.ts]
+    supportingDatasets: [analytic flat-plane Lambert, frozen quadratic DEM with GDAL Horn hillshade reference]
+    units: [level on 0-255]
     crsDatum: metric-or-geographic
-    assumptions: ["light azimuth/altitude as configured"]
-    failureModes: ["edge/NoData"]
+    assumptions: ["light azimuth/altitude as configured", "single-direction model only, not multidirectional", "our 8-bit encoding is 255*h where GDAL uses 1 + 254*h"]
+    failureModes: ["edge/NoData", "encoding offset consumes most of the one-level tolerance"]
     exportAllowed: true
-    userLabel: "Analytically verified hillshade"
+    userLabel: "Cross-implementation validated hillshade"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
-    externalValidationStatus: pending
-    approvedClaim: "Exact flat-plane Lambert value + correct N/E/S/W ordering, verified analytically."
-    prohibitedClaim: ["cross-implementation agreement with GDAL/ESRI (pending)"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Single-direction hillshade agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 1.0-level tolerance on the 0-255 scale (ours vs closed form max 0.0000643; ours vs GDAL max 1.00 over all 11,564 interior cells). Our intensity re-encoded in GDAL's 1 + 254*h scale reproduces the reference exactly."
+    prohibitedClaim: ["field-validated hillshade accuracy", "multidirectional hillshade cross-implementation validated", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated", "byte-identical agreement with GDAL under our own encoding"]
 
   - claimId: VRM-TPI
     product: VRM / TPI terrain descriptors

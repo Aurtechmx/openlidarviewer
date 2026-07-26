@@ -1,0 +1,9 @@
+{
+  "referenceTool": "GDAL",
+  "gdalVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "projVersion": "PROJ 9.8.1",
+  "command": "gdaldem hillshade (Horn, azimuth 315 clockwise from north, altitude 45 above horizon, z-factor 1, scale 1, single-direction, Byte band encoded 1 + 254*h with 0 reserved for nodata, edges excluded, AAIGrid)",
+  "inputDem": "../slope/input-dem.asc (shared with the SLOPE-RASTER and ASPECT-RASTER references)",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64"
+}

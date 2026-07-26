@@ -43,3 +43,23 @@ export declare function analyticSlopeDegrees(row: number, col: number): number;
  * 0 would read as due north.
  */
 export declare function analyticAspectDegrees(row: number, col: number): number;
+
+/** Sun the hillshade reference is lit by, pinned rather than left to defaults. */
+export interface SlopeFixtureSun {
+  readonly azimuthDeg: number;
+  readonly altitudeDeg: number;
+  readonly zFactor: number;
+}
+
+export declare const SUN: SlopeFixtureSun;
+
+/**
+ * Closed-form hillshade at a cell centre on the 0–255 scale, UNROUNDED and
+ * UNCLAMPED, in OUR encoding (255·h). `gdaldem hillshade` encodes the same
+ * intensity as 1 + 254·h; the difference is left visible rather than divided
+ * out — see `tests/hillshadeCrossCheck.test.ts`.
+ *
+ * Total, unlike `analyticAspectDegrees`: hillshade is defined at zero gradient,
+ * where it reduces to 255·cos(zenith).
+ */
+export declare function analyticHillshade255(row: number, col: number): number;

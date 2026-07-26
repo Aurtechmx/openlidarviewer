@@ -112,14 +112,15 @@ describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', ()
 });
 
 describe('reference manifest honesty', () => {
-  it('supplies only SLOPE-RASTER and ASPECT-RASTER, and ships every other slot as pending', () => {
-    // Each of those two reached E4 once a GDAL Horn reference was committed
-    // beside the fixture; both cross-checks agreed with GDAL and with the
+  it('supplies only SLOPE-RASTER, ASPECT-RASTER and HILLSHADE, and ships every other slot as pending', () => {
+    // Each of those three reached E4 once a GDAL reference was committed beside
+    // the fixture; all three cross-checks agreed with GDAL and with the
     // closed-form gradient inside the preregistered tolerance. No other slot
     // has a real reference yet, so the rest must still ship pending — a slot
     // cannot read `supplied` without a committed reference file (that coupling
-    // is enforced in slopeCrossCheck.test.ts and aspectCrossCheck.test.ts).
-    const E4 = ['SLOPE-RASTER', 'ASPECT-RASTER'];
+    // is enforced in slopeCrossCheck.test.ts, aspectCrossCheck.test.ts and
+    // hillshadeCrossCheck.test.ts).
+    const E4 = ['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

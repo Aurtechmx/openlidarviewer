@@ -199,20 +199,21 @@ export interface ReferenceSlot {
   /** Unit label for the tolerance, for docs / reports. */
   readonly unit: string;
   /**
-   * Whether a real reference output has been supplied. SLOPE-RASTER and
-   * ASPECT-RASTER are `supplied` (each GDAL output is bundled with a
-   * checksummed manifest); the remaining slots are `pending`, and none is
-   * fabricated.
+   * Whether a real reference output has been supplied. SLOPE-RASTER,
+   * ASPECT-RASTER and HILLSHADE are `supplied` (each GDAL output is bundled
+   * with a checksummed manifest); the remaining slots are `pending`, and none
+   * is fabricated.
    */
   readonly status: 'pending' | 'supplied';
 }
 
 /**
- * The reference-fixture manifest. SLOPE-RASTER and ASPECT-RASTER are `supplied`
- * (both compared against GDAL 3.13.1 on the same analytic fixture); the
- * remaining slots are `pending`: the harness is in place and the procedure is
- * documented, but no external reference output has been generated and committed
- * for those, so only slope and aspect have reached E4. When a reference is
+ * The reference-fixture manifest. SLOPE-RASTER, ASPECT-RASTER and HILLSHADE are
+ * `supplied` (all three compared against GDAL 3.13.1 on the SAME analytic
+ * fixture — one DEM, pinned by hash in each reference directory); the remaining
+ * slots are `pending`: the harness is in place and the procedure is documented,
+ * but no external reference output has been generated and committed for those,
+ * so only slope, aspect and hillshade have reached E4. When a reference is
  * produced per `docs/validation/cross-implementation.md`, flip its `status` to
  * `supplied` and wire the loaded grids into `crossCheck`.
  */
@@ -225,11 +226,17 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // (0..180), never a plain subtraction — see tests/aspectCrossCheck.test.ts.
   // 0.5° matches slope deliberately: same estimator, same fixture, same unit.
   { claimId: 'ASPECT-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
-  { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'pending' },
+  // Hillshade is an 8-BIT LEVEL, so 1.0 is one quantisation step of the product
+  // — proportionally far tighter than the 0.5° on slope and aspect. Note that
+  // GDAL encodes the shared intensity as 1 + 254·h where we write 255·h, a
+  // fixed (1 − h) offset that consumes most of this budget on its own; the
+  // measured agreement and that limitation are both recorded in
+  // tests/hillshadeCrossCheck.test.ts and docs/validation/cross-implementation.md.
+  { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'supplied' },
   { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },
 ] as const;
 
-/** True only when EVERY reference slot is still pending — false since SLOPE-RASTER and ASPECT-RASTER reached E4. */
+/** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */
 export const allReferencesPending = (slots: readonly ReferenceSlot[] = REFERENCE_SLOTS): boolean =>
   slots.every((s) => s.status === 'pending');
