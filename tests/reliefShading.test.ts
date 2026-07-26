@@ -1,9 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import {
-  shadeFromSlopeAspect,
-  computeMultiHillshade,
-  computeHillshade,
-} from '../src/terrain/surface/hillshade';
+import { shadeFromSlopeAspect, computeMultiHillshade } from '../src/terrain/surface/hillshade';
+import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
 
 const COLS = 4;
 const ROWS = 4;
@@ -33,12 +30,16 @@ describe('shadeFromSlopeAspect', () => {
     expect(r.shade[5]).toBe(0);
   });
 
-  it('matches computeHillshade for a derived surface (delegation is faithful)', () => {
+  it('shades a Horn-derived surface in range (the live two-step path)', () => {
     // A simple tilted plane: z increases with x.
     const z = new Float32Array(N);
     for (let row = 0; row < ROWS; row++) for (let c = 0; c < COLS; c++) z[row * COLS + c] = c * 2;
     const cov = new Uint8Array(N).fill(1);
-    const direct = computeHillshade(z, COLS, ROWS, 1, cov, { azimuthDeg: 315, altitudeDeg: 45 });
+    const { slope, aspect } = hornSlopeAspect(z, COLS, ROWS, 1);
+    const direct = shadeFromSlopeAspect(slope, aspect, cov, COLS, ROWS, {
+      azimuthDeg: 315,
+      altitudeDeg: 45,
+    });
     expect(direct.shade.length).toBe(N);
     // Interior cells should carry a finite, in-range shade.
     expect(direct.shade[5]).toBeGreaterThanOrEqual(0);

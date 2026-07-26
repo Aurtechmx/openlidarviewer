@@ -1,39 +1,27 @@
 /**
  * hillshade.ts
  *
- * Slope (degrees) and hillshade (shaded relief) rasters from an elevation
- * surface, using the Horn slope/aspect already used elsewhere. Hillshade is
- * the standard ESRI illumination model; aspect from `hornSlopeAspect` is the
- * downslope direction in the math frame (atan2(−dz/dy, −dz/dx) on our
- * northing-up grids — see terrainDerivatives.ts), which is the same frame
- * `azimuthToMathRad` converts the sun azimuth into, so the cos(az − aspect)
- * alignment term below compares like with like. This module computes no
- * derivatives of its own.
+ * Hillshade (shaded relief) and slope statistics from PRECOMPUTED slope/aspect
+ * grids. Hillshade is the standard ESRI illumination model; aspect from
+ * `hornSlopeAspect` is the downslope direction in the math frame
+ * (atan2(−dz/dy, −dz/dx) on our northing-up grids — see terrainDerivatives.ts),
+ * which is the same frame `azimuthToMathRad` converts the sun azimuth into, so
+ * the cos(az − aspect) alignment term below compares like with like.
  *
- * Pure data — no DOM. Deterministic. Assumes Z is in the same linear unit as
- * X/Y (true for metric projected data); `zFactor` lets a caller correct it.
+ * This module computes no derivatives of its own — deliberately. It used to
+ * carry `computeSlopeDegrees` and `computeHillshade`, elevation-grid wrappers
+ * that ran the Horn pass with hard-coded square cells and no vertical scaling.
+ * Nothing called them; they were a trap for a future caller on a geographic or
+ * foot-vertical grid, so they are gone. Callers run `hornSlopeAspect` (which
+ * takes per-axis cell metres and `zScale`) and pass the result in here.
+ *
+ * Pure data — no DOM. Deterministic. Slope arriving here is a tangent in a
+ * consistent unit; `zFactor` is vertical EXAGGERATION for looks, not a unit fix.
  */
 
-import { hornSlopeAspect, hornSlope } from '../ground/terrainDerivatives';
 import { quantileSorted } from '../quantile';
 
 const DEG = Math.PI / 180;
-
-/** Slope in DEGREES per cell (0 on flat / non-finite cells). */
-export function computeSlopeDegrees(
-  z: Float32Array,
-  cols: number,
-  rows: number,
-  cellSizeM: number,
-  zScale = 1,
-): Float32Array {
-  // `zScale` = verticalUnitToMetres, so a native-unit (e.g. feet) elevation
-  // grid produces a true slope angle against the metres cell size. Default 1.
-  const slope = hornSlope(z, cols, rows, cellSizeM, cellSizeM, zScale);
-  const out = new Float32Array(slope.length);
-  for (let i = 0; i < slope.length; i++) out[i] = (Math.atan(slope[i]) * 180) / Math.PI;
-  return out;
-}
 
 export interface HillshadeParams {
   /** Sun azimuth in degrees clockwise from north. Default 315 (NW). */
@@ -101,19 +89,6 @@ export function shadeFromSlopeAspect(
     shade[i] = Math.max(0, Math.min(255, Math.round(255 * hs)));
   }
   return { shade, coverage: cov, cols, rows };
-}
-
-/** Compute a hillshade raster (ESRI illumination model). */
-export function computeHillshade(
-  z: Float32Array,
-  cols: number,
-  rows: number,
-  cellSizeM: number,
-  coverage: Uint8Array | ReadonlyArray<number>,
-  params: HillshadeParams = {},
-): HillshadeResult {
-  const { slope, aspect } = hornSlopeAspect(z, cols, rows, cellSizeM);
-  return shadeFromSlopeAspect(slope, aspect, coverage, cols, rows, params);
 }
 
 /**

@@ -9,11 +9,38 @@ import {
   surfaceStats,
   heightAboveGround,
 } from '../src/terrain/surface/buildDsm';
-import {
-  computeSlopeDegrees,
-  computeHillshade,
-  slopeStats,
-} from '../src/terrain/surface/hillshade';
+import { shadeFromSlopeAspect, slopeStats } from '../src/terrain/surface/hillshade';
+import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
+
+/**
+ * Slope in DEGREES and a shaded raster from an elevation grid — the live
+ * pipeline's own two steps (Horn pass, then the tangent→angle conversion or the
+ * ESRI shading). Local scaffolding, so the app carries no wrapper whose only
+ * caller is a test.
+ */
+function computeSlopeDegrees(
+  z: Float32Array,
+  cols: number,
+  rows: number,
+  cellM: number,
+): Float32Array {
+  const { slope } = hornSlopeAspect(z, cols, rows, cellM, cellM);
+  const out = new Float32Array(slope.length);
+  for (let i = 0; i < slope.length; i++) out[i] = (Math.atan(slope[i]) * 180) / Math.PI;
+  return out;
+}
+
+function computeHillshade(
+  z: Float32Array,
+  cols: number,
+  rows: number,
+  cellM: number,
+  coverage: Uint8Array,
+  params?: Parameters<typeof shadeFromSlopeAspect>[5],
+) {
+  const { slope, aspect } = hornSlopeAspect(z, cols, rows, cellM, cellM);
+  return shadeFromSlopeAspect(slope, aspect, coverage, cols, rows, params);
+}
 
 describe('buildDsm — top surface (max return per cell)', () => {
   const grid = { originH1: 0, originH2: 0, cols: 2, rows: 2, cellSizeM: 1 };

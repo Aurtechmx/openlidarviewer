@@ -9,7 +9,8 @@
 
 import { describe, it, expect } from 'vitest';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
-import { computeHillshade } from '../src/terrain/surface/hillshade';
+import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
+import { shadeFromSlopeAspect } from '../src/terrain/surface/hillshade';
 import { flatPlane, uniformSlope, allGround, gridFor } from './fixtures/terrainScenes';
 
 const EXTENT = { nx: 16, ny: 16, spacing: 1 } as const;
@@ -21,7 +22,9 @@ function shadeOf(pts: ReadonlyArray<{ x: number; y: number; z: number }>, params
   altitudeDeg: number;
 }): Uint8Array {
   const r = rasterizeDtm(pts, allGround(pts), { grid });
-  return computeHillshade(r.z, grid.cols, grid.rows, grid.cellSizeM, fullCov, params).shade;
+  // Derivatives then shading — the live pipeline's two steps, not a wrapper.
+  const { slope, aspect } = hornSlopeAspect(r.z, grid.cols, grid.rows, grid.cellSizeM);
+  return shadeFromSlopeAspect(slope, aspect, fullCov, grid.cols, grid.rows, params).shade;
 }
 
 const centre = 8 * grid.cols + 8; // interior cell
