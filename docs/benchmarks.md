@@ -346,6 +346,101 @@ remains unestablished. CI sets `BENCHMARK_REQUIRE_PLATFORMS`, so a missing leg
 fails the job rather than publishing a one-platform result that reads like a
 comparison.
 
+## Backend equivalence: GPU against the CPU reference
+
+Slope, aspect, hillshade and the DTM min/count scatter have two
+implementations. The CPU one delegates to `hornSlopeAspect`,
+`shadeFromSlopeAspect` and `scatterMinCountReference`, computes in f64 and is
+the reference by contract. The GPU one is WGSL compute, f32 throughout. This
+suite asks whether the second agrees with the first, and to what precision.
+
+```
+npm run benchmark:backends       # the CPU control, and what this host could run
+npm run benchmark:backends:gpu   # the GPU leg, in a browser with a real adapter
+```
+
+Output lands in `benchmark-results/backends/`: one JSON per leg, the comparison,
+and `comparison.md`.
+
+### The GPU leg has to prove a GPU ran
+
+Node exposes no WebGPU adapter. The engine detects that and returns the CPU
+reference, silently, which is what a user on a WebGL2-only device should get. A
+suite that asked for the GPU and compared whatever came back would therefore
+compare the CPU against itself on every Node host and report flawless agreement.
+
+Each leg records two separate fields: what it requested, and what the engine's
+own `getComputePath()` said executed. The comparator reads the second. A GPU
+claim is believed only from a browser leg carrying an adapter descriptor read
+from `navigator.gpu`. Nothing in Node can produce one, so an injected backend
+factory cannot dress the CPU implementation up as a GPU.
+
+When the requested backend did not execute, the status is `backend-unavailable`
+and the comparison is suppressed. No tolerance is evaluated and no agreement is
+claimed. Three negative controls in `tests/benchmark/backendEquivalence.test.ts`
+force that situation: a factory reporting no WebGPU, a factory whose device
+request fails, and a factory handing back the CPU backend under a GPU label,
+and they assert the suite refuses to call any of them agreement.
+
+### The thresholds are fixed before the comparison
+
+`benchmarks/backends/tolerances.ts` carries each threshold with the magnitude it
+was derived from, and the derivation is a computed constant rather than a
+rounded figure.
+
+| quantity | gate | what f32 alone accounts for |
+| --- | --- | --- |
+| slope | 1e-4 rise/run | 6.1e-5, from 32 f32 operations at 2⁻²³ quoted at a 16:1 rise/run cap |
+| aspect | 1e-4 rad | 5.3e-6, the gradient relative error through `atan2` plus 4 ulp |
+| hillshade | 1 grey level | the 1/255 quantisation step, not a floating-point figure |
+| scatter min/count | exact | order-independent integer-stable reductions have no floor |
+
+An observation above the floor and below the gate passes and is printed as an
+observation, because it is a difference f32 arithmetic does not fully explain.
+An observation above a gate is a finding: the report names the quantity, the
+magnitude and the backend, and no threshold moves.
+
+### Three ways to not be a disagreement
+
+`backend-unavailable`, `record-not-credible` and `parameters-diverged` all
+suppress the comparison rather than run it. The last one covers legs taken at
+different commits, different probe geometries or edited engine constants: the
+workload descriptor is hashed and checked before any measurement is read, so a
+parameter difference is never attributed to a backend.
+
+### The control on the instrument
+
+Before the GPU is measured, the CPU backend is put through the same workload and
+must disagree with the CPU reference nowhere at all. Both sides are the same f64
+code, so anything but zero means the harness is measuring itself.
+
+### What this suite does not establish
+
+The comparison covers a 64×64 derivative grid over three geometries and a 24×24
+scatter grid, so it bounds nothing about a tiling error that only appears past
+one dispatch tile. The ground filter and all four `rasterizeDtm` reduction modes have no GPU
+implementation and run the CPU functions under both backends. The surfaces are
+the engine probe fixtures rather than real scan data.
+WGSL leaves `atan2`, `sqrt` and operation fusion at implementation precision, so
+a result covers the adapter its leg ran on and no other. Nothing here is a
+timing measurement.
+
+### Recorded runs
+
+Headless Chromium exposes `navigator.gpu` but returns no adapter, so
+`benchmark:backends:gpu` runs headed. On an Apple Metal-3 adapter, with the CPU
+control at zero on every quantity:
+
+| quantity | max observed | gate | cells |
+| --- | --- | --- | --- |
+| slope | 9.54e-7 rise/run | 1e-4 | 4096 |
+| aspect | 2.26e-6 rad | 1e-4 | 11949 |
+| hillshade | 0 levels | 1 | 4096 |
+| scatter min/count | 0 cells differing | 0 | 576 |
+
+Every quantity sits inside the f32 representation floor. Nothing was found above
+it, and no threshold was adjusted.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather
