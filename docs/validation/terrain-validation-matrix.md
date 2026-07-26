@@ -26,8 +26,8 @@ The **Status** column has been replaced by an **evidence level** per
 [`EVIDENCE_MODEL.md`](./EVIDENCE_MODEL.md) and the machine-readable
 [`claim-register.yaml`](./claim-register.yaml). "Production" is no longer used as
 a scientific-validation status — it conflated "the code works" with "the science
-is validated". **Only slope is E4+** (independently cross-implemented against GDAL 3.13.1 on
-the analytic fixture); every other product tops out at E3 synthetic known-truth,
+is validated". **Slope and aspect are the only products at E4+** (each independently
+cross-implemented against GDAL 3.13.1 on the same analytic fixture); every other product tops out at E3 synthetic known-truth,
 with analytic checks E2 and interop/unit checks E1. Held-out RMSE is an INTERNAL diagnostic (points withheld from the same
 scan), not independent checkpoint accuracy — optimistic relative to a
 spatially-blocked or field checkpoint (research-hardening Phases 4–5).
@@ -41,6 +41,7 @@ spatially-blocked or field checkpoint (research-hardening Phases 4–5).
 | DSM (top surface) | Known-truth fixture: DSM equals the top surface (roof over building, canopy top over trees) on classified overlay scenes | `tests/terrainTruth.surface.test.ts` | E3 Synthetically validated |
 | CHM (canopy height, DSM − DTM) | Known-truth fixture for the height-above-ground field; reconstruction logic (DSM = DTM + canopy, nodata preserved) checked directly | `tests/terrainTruth.surface.test.ts`, `tests/dsmChm.test.ts` | E3 Synthetically validated |
 | Slope (Horn) | Analytic check (flat ≈ 0°, uniform slope = atan(gradient)) PLUS cross-implementation against GDAL 3.13.1 on the frozen analytic DEM: OLV, GDAL and the closed form agree over 11,564 interior cells within the preregistered 0.5° tolerance (max Δ < 0.001°) | `tests/terrainTruth.surface.test.ts`, `tests/slopeCrossCheck.test.ts` | **E4 Cross-implementation validated (GDAL) — algorithm on this fixture only** |
+| Aspect (Horn) | Cross-implementation against GDAL 3.13.1 on the same frozen analytic DEM, compared as a bearing (circular difference) and only where the closed-form slope exceeds 2°, because level ground has no aspect: OLV, GDAL and the closed form agree over 10,932 cells within the preregistered 0.5° circular tolerance (max separation about 0.0002°) | `tests/aspectCrossCheck.test.ts` | **E4 Cross-implementation validated (GDAL), algorithm on this fixture only** |
 | Hillshade (ESRI illumination) | Analytic check: exact flat-plane Lambert value at a known sun altitude, and the brighter/darker ordering for N/E/S/W-facing slopes under a fixed azimuth | `tests/terrainTruth.hillshade.test.ts` | E2 Analytically verified |
 | Hold-out RMSE / vertical accuracy (NVA/VVA-style) | Held-out RMSE against analytic surfaces where the true error is known; NVA/VVA-STYLE derivation (1.96 × RMSEz) on internal holdout — **not** independent checkpoint accuracy and not ASPRS NVA/VVA compliance | `tests/holdoutRmse.test.ts`, `tests/verticalAccuracy.test.ts` | E3 Synthetically validated · external pending |
 | Confidence calibration | Fit + apply a monotonic calibration map; the check guards pass, fail, and not-assessable. Measured-cell empirical reliability and interpolated-cell model-based support are distinct concepts (Phase 5) | `tests/calibrateConfidence.test.ts`, `tests/calibrationCheck.test.ts` | E2 Analytically verified |
