@@ -586,7 +586,16 @@ export function crsFromGeoTiff(
   );
 
   const mappedUnit = linearUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[linearUnitCode] : undefined;
-  const linearUnit: CrsLinearUnit = mappedUnit ?? (isGeographic ? 'unknown' : 'metre');
+  // Declaring nothing and declaring something we cannot resolve are different
+  // facts and must not resolve alike. With no ProjLinearUnitsGeoKey the
+  // GeoTIFF default applies and a projected CRS is metres. With a key present
+  // whose code is outside our table — 9095 British foot, say — the file has
+  // stated a unit we cannot honour, and answering 'metre' presented every
+  // length from it as metres and was wrong by the unit's own factor. 'unknown'
+  // is what the downstream `linearUnit !== 'unknown'` gates read to refuse.
+  const declaredButUnresolved = linearUnitCode !== undefined && mappedUnit === undefined;
+  const linearUnit: CrsLinearUnit =
+    mappedUnit ?? (isGeographic || declaredButUnresolved ? 'unknown' : 'metre');
   const linearUnitToMetres = unitScaleForCode(linearUnit);
 
   // A citation only names THIS CRS when it is the projected one. GeoTIFF
