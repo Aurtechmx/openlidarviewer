@@ -31,6 +31,7 @@ function model(): ContourFeatureModel {
     features,
     crs: 'EPSG:32610',
     verticalDatum: 'EPSG:5703',
+    verticalUnitToMetres: 1,
     intervalM: 1,
     contourStyle: 'smooth',
     bbox: { minX: 0, minY: 0, maxX: 1, maxY: 1 },
@@ -237,6 +238,28 @@ describe('RFC 7946 third ordinate', () => {
     expect(p.elevation).toBeCloseTo(65.5, 6);
     expect(p.elevationDatum).toBe('EPSG:5703');
     expect(p.elevationUnit).toBe('metre');
+  });
+
+  /**
+   * The elevation property is in the DTM's SOURCE vertical units, and the
+   * label was the constant 'metre'. A NAVD88-in-US-survey-feet source over a
+   * metre horizontal takes the WGS 84 path and shipped feet labelled metres —
+   * 100 read as 100 m instead of 30.48 m.
+   */
+  it('labels the elevation unit from the source vertical factor, not a constant', () => {
+    const feet = { ...utmModel(), verticalDatum: 'EPSG:6360', verticalUnitToMetres: 1200 / 3937 };
+    const gj = JSON.parse(
+      serializeContours(feet, 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].properties.elevationUnit).toBe('foot');
+  });
+
+  it('says the unit is unknown rather than claiming metre for an unresolved factor', () => {
+    const unknown = { ...utmModel(), verticalDatum: 'EPSG:5703', verticalUnitToMetres: null };
+    const gj = JSON.parse(
+      serializeContours(unknown, 'geojson', { toLonLat, worldOrigin: WORLD }).content,
+    );
+    expect(gj.features[0].properties.elevationUnit).toBe('unknown');
   });
 
   it('writes the Z ordinate for a proven WGS 84 ellipsoidal height', () => {

@@ -72,6 +72,15 @@ export interface ContourFeatureModel {
   readonly features: ContourFeature[];
   readonly crs: string | null;
   readonly verticalDatum: string | null;
+  /**
+   * Metres per unit of the SOURCE vertical axis. Feature `value`s are in that
+   * axis's own units, never metres, so a writer that wants to name the unit
+   * reads this instead of assuming — the RFC 7946 writer stamped a constant
+   * 'metre' and shipped US-survey-foot elevations under it. Null/absent means
+   * the factor was never resolved, and the honest label is then "unknown",
+   * not "metre".
+   */
+  readonly verticalUnitToMetres?: number | null;
   readonly intervalM: number;
   /** The contour shape style this model's geometry was produced with. */
   readonly contourStyle: ContourShapeStyle;
@@ -133,6 +142,8 @@ export function shiftFeatureModelToWorld(
 export interface FeatureModelParams {
   readonly crs: string | null;
   readonly verticalDatum?: string | null;
+  /** Metres per unit of the source vertical axis; null when unresolved. */
+  readonly verticalUnitToMetres?: number | null;
   readonly intervalM: number;
   /** Coverage provenance from the analysis (default 'full'). */
   readonly coverageMode?: TerrainCoverageMode;
@@ -245,6 +256,7 @@ export function buildFeatureModel(
     features,
     crs: params.crs,
     verticalDatum: params.verticalDatum ?? null,
+    verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     intervalM: params.intervalM,
     contourStyle: params.contourStyle ?? defaultContourShapeStyle,
     bbox,

@@ -150,6 +150,25 @@ function deriveQuantisation(
  * larger code (e.g. some ESRI codes) would corrupt to a wrong CRS, so we omit
  * the VLR rather than write a lie. The caller surfaces a warning.
  */
+/**
+ * The vertical GeoKeys alone (VerticalCSType + VerticalUnits). A horizontal-only
+ * WKT — what `wktForEpsg` produces, and what most source WKTs are — carries no
+ * vertical axis, so LAS 1.4 pairs it with these rather than dropping them: a
+ * file that declared neither datum nor unit left foot heights on NAVD88 to be
+ * read as metres, 3.28× wrong with the provenance gone. No horizontal key is
+ * emitted here, so the WKT stays the sole authority on the horizontal frame.
+ */
+function buildVerticalGeoKeys(opts: WriteLasOptions): Array<[number, number]> {
+  const geoKeys: Array<[number, number]> = [];
+  if (opts.verticalEpsg != null && opts.verticalEpsg > 0 && opts.verticalEpsg <= 65535) {
+    geoKeys.push([4096, opts.verticalEpsg]); // VerticalCSType
+    if (opts.verticalUnitCode != null && opts.verticalUnitCode > 0) {
+      geoKeys.push([4099, opts.verticalUnitCode]); // VerticalUnits
+    }
+  }
+  return geoKeys;
+}
+
 function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, number]> {
   const hasCrs = opts.epsg != null && Number.isFinite(opts.epsg) && opts.epsg > 0 && opts.epsg <= 65535;
   const geoKeys: Array<[number, number]> = [];
@@ -159,17 +178,12 @@ function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, numbe
     if (!geo && opts.linearUnitCode != null && opts.linearUnitCode > 0) {
       geoKeys.push([3076, opts.linearUnitCode]); // ProjLinearUnits (metre/foot/US ft)
     }
-    if (opts.verticalEpsg != null && opts.verticalEpsg > 0 && opts.verticalEpsg <= 65535) {
-      geoKeys.push([4096, opts.verticalEpsg]); // VerticalCSType
-      // VerticalUnits is the SOURCE's vertical unit, never derived from the
-      // horizontal: no convert mode moves Z, so after a horizontal reprojection
-      // to metres a foot-height source still carries foot Z values — the old
-      // "match the horizontal, else metres" rule stamped those as metres.
-      // Unknown ⇒ omit the key rather than guess.
-      if (opts.verticalUnitCode != null && opts.verticalUnitCode > 0) {
-        geoKeys.push([4099, opts.verticalUnitCode]); // VerticalUnits
-      }
-    }
+    // VerticalUnits is the SOURCE's vertical unit, never derived from the
+    // horizontal: no convert mode moves Z, so after a horizontal reprojection
+    // to metres a foot-height source still carries foot Z values — the old
+    // "match the horizontal, else metres" rule stamped those as metres.
+    // Unknown ⇒ omit the key rather than guess.
+    geoKeys.push(...buildVerticalGeoKeys(opts));
   }
   return geoKeys;
 }
@@ -371,7 +385,10 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const wkt = opts.wkt != null && opts.wkt.trim().length > 0 && opts.wkt.length + 1 <= 0xffff
     ? opts.wkt
     : null;
-  const geoKeys = wkt == null ? buildGeoKeys(opts, geo) : [];
+  // With a WKT, the GeoKey VLR carries ONLY the vertical keys: LAS 1.4 permits
+  // both VLRs to coexist, and a horizontal-only WKT would otherwise take the
+  // vertical datum and unit down with it (see buildVerticalGeoKeys).
+  const geoKeys = wkt == null ? buildGeoKeys(opts, geo) : buildVerticalGeoKeys(opts);
   const geoKeyDataBytes = geoKeys.length > 0 ? 8 + geoKeys.length * 8 : 0;
   const wktDataBytes = wkt != null ? wkt.length + 1 : 0;
   const vlrCount = (wkt != null ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0);
@@ -435,8 +452,15 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
     for (let i = 0; i < wkt.length; i++) {
       bytes[p + VLR_HEADER_SIZE + i] = wkt.charCodeAt(i) & 0x7f;
     }
-  } else if (geoKeys.length > 0) {
-    writeGeoKeyVlr(view, bytes, HEADER_SIZE_14, geoKeys);
+  }
+  if (geoKeys.length > 0) {
+    // Placed after the WKT VLR when both are present.
+    writeGeoKeyVlr(
+      view,
+      bytes,
+      HEADER_SIZE_14 + (wkt != null ? VLR_HEADER_SIZE + wktDataBytes : 0),
+      geoKeys,
+    );
   }
 
   // ── Point records (extended layout, 30/36 bytes) ───────────────────────

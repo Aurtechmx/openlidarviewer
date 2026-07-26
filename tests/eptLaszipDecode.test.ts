@@ -89,3 +89,32 @@ test('decodeEptLaszipTile rejects an unsupported PDRF', async () => {
   buf[104] = 9;
   await expect(decodeEptLaszipTile(buf.buffer, [0, 0, 0])).rejects.toThrow(/format 9|unsupported/i);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Finite-coordinate guard
+//
+// The COPC chunk decoder and the EPT binary decoder both refuse a node whose
+// transform or decoded positions are non-finite. This path called neither, so a
+// corrupt or hostile remote tile delivered Infinity straight into three.js: NaN
+// bounding sphere, broken culling, blank cloud, and no structured error for the
+// scheduler to back off from.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('decodeEptLaszipTile refuses a non-finite render origin', async () => {
+  await expect(decodeEptLaszipTile(TINY_LAZ_BUF, [Number.NaN, 0, 0])).rejects.toThrow(
+    /non-finite value.*node is refused/s,
+  );
+});
+
+test('decodeEptLaszipTile refuses a tile whose scale overflows a coordinate', async () => {
+  // parseLasHeader accepts this scale — it is finite and positive — but
+  // int32 · 1e300 overflows to ±Infinity in the coordinate loop, which is
+  // exactly what the up-front transform check cannot catch.
+  const buf = new Uint8Array(TINY_LAZ_BUF.byteLength);
+  buf.set(new Uint8Array(TINY_LAZ_BUF));
+  const v = new DataView(buf.buffer);
+  for (let a = 0; a < 3; a++) v.setFloat64(131 + a * 8, 1e300, true);
+  await expect(decodeEptLaszipTile(buf.buffer, [0, 0, 0])).rejects.toThrow(
+    /non-finite coordinate at point/,
+  );
+});

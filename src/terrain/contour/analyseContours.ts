@@ -361,6 +361,12 @@ export interface TerrainCore {
   readonly crs: string | null;
   /** Resolved vertical datum (echoed for the contour stage + result). */
   readonly verticalDatum: string | null;
+  /**
+   * Metres per source vertical unit, echoed for the contour stage: DTM
+   * elevations (and therefore contour values) are in source units, so an
+   * exporter naming that unit needs the factor. Null when unresolved.
+   */
+  readonly verticalUnitToMetres: number | null;
   /** Resolved grid cell size (source units). */
   readonly cellSizeM: number;
   /** Grid-recommendation geometry inputs (the contour stage adds the
@@ -952,6 +958,7 @@ export function computeTerrainCore(
     despikeApplied,
     crs,
     verticalDatum,
+    verticalUnitToMetres: params.verticalUnitToMetres ?? null,
     cellSizeM: params.cellSizeM,
     gridGeometry: {
       pointCount: gf.analyzedPointCount,
@@ -977,7 +984,7 @@ export function contoursFromCore(
   core: TerrainCore,
   intervalParams: IntervalContourParams = {},
 ): AnalyseContoursResult {
-  const { crs, verticalDatum, cellSizeM, dtm, gate, minZ, maxZ } = core;
+  const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, gate, minZ, maxZ } = core;
   // The contour shape style for this run. Default 'smooth' reproduces the
   // historical Chaikin ×2 default exactly, so the live on-screen contours are
   // byte-identical. `shapeStyle` wins; otherwise the legacy `smooth:false`
@@ -1062,6 +1069,7 @@ export function contoursFromCore(
       model: buildFeatureModel([], [], {
         crs,
         verticalDatum,
+        verticalUnitToMetres,
         intervalM: 0,
         coverageMode: dtm.coverageMode,
         contourStyle: shapeStyle,
@@ -1102,6 +1110,7 @@ export function contoursFromCore(
   const model = buildFeatureModel(stitched, style.levels, {
     crs,
     verticalDatum,
+    verticalUnitToMetres,
     intervalM,
     coverageMode: dtm.coverageMode,
     contourStyle: shapeStyle,
