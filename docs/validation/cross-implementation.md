@@ -6,23 +6,53 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-One product is at E4: **`SLOPE-RASTER`**. Our Horn slope was compared against
-GDAL 3.13.1's Horn slope on the frozen analytic fixture in
-`tests/fixtures/reference/slope/`, and against the surface's closed-form
-gradient, in the same run (`tests/slopeCrossCheck.test.ts`). All three agreed
-to within a maximum of 0.001 degree over 11,564 interior cells, well inside the
-0.5 degree tolerance registered before the reference was generated. The GDAL
-raster, the exact command, the tool version and the checksums are committed
-beside the input DEM.
+Two products are at E4: **`SLOPE-RASTER`** and **`ASPECT-RASTER`**. Both were
+compared against GDAL 3.13.1 on the same frozen analytic fixture, and against
+the surface's closed-form gradient, in the same run.
 
-This validates the slope *algorithm* against an independent implementation on a
-known surface. It does not validate the point-cloud-to-DTM pipeline, does not
-establish field or survey-grade accuracy, and says nothing about the other
-terrain products — each carries its own claim and its own evidence level.
+| Product | Reference | Test | Cells | Max difference | Tolerance |
+|---|---|---|---|---|---|
+| `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
+| `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
 
-Every other entry in `REFERENCE_SLOTS` still ships `pending`. No reference
+Both tolerances were registered in `REFERENCE_SLOTS` before the references were
+generated. Each GDAL raster, the exact command, the tool version and the
+checksums are committed beside the input DEM — the aspect reference reuses the
+slope fixture's DEM rather than copying it, so one surface backs both products.
+
+This validates the slope and aspect *algorithms* against an independent
+implementation on a known surface. It does not validate the point-cloud-to-DTM
+pipeline, does not establish field or survey-grade accuracy, and says nothing
+about the other terrain products — each carries its own claim and its own
+evidence level. `HILLSHADE` consumes aspect but is unchanged by this and stays
+at E2.
+
+Every remaining entry in `REFERENCE_SLOTS` still ships `pending`. No reference
 output is bundled or fabricated; a product moves to E4 only after someone runs
 the steps below and commits the real reference file.
+
+## Aspect is a direction, and that changes the comparison
+
+Slope is a magnitude; aspect is a bearing on a circle, undefined where the
+ground is level. Three things must be handled or the comparison quietly
+measures the wrong thing, and all three are handled in
+`tests/aspectCrossCheck.test.ts`:
+
+- **Circular difference.** 359° and 1° are 2° apart, not 358°. Every pair is
+  folded to its shortest angular separation before any tolerance is applied.
+- **Flat cells.** `gdaldem aspect` writes NODATA where it detects a flat; our
+  kernel returns 0, which is a real direction (due north). Comparing those two
+  would compare a value against a placeholder, so cells whose *closed-form*
+  slope is at or below 2° are excluded on all three legs — and the test fails
+  if GDAL wrote NODATA anywhere inside the surviving set.
+- **Frame and row order.** Ours is radians in the math frame (CCW from east,
+  π/2 = north) on a northing-up grid; GDAL is degrees clockwise from north;
+  ASCII Grid writes the northern row first while our kernel treats row+1 as
+  north. `(90 − mathDeg) mod 360` converts the frame, and the rows are flipped
+  in and back out. Getting only half of either conversion right yields a
+  mirrored grid that still looks like a plausible aspect raster — which is how
+  the v0.4.3 north–south aspect mirror shipped (see
+  `src/terrain/ground/terrainDerivatives.ts`).
 
 ## Why this is not automated in CI
 
@@ -60,17 +90,23 @@ size, extent, and row order), so the two can be compared cell for cell.
 3. Read both grids in row order, align NODATA, and pass them to `crossCheck`
    with the tolerance from the product's `ReferenceSlot` (0.05 m for DTM/DSM).
 
-### Slope / hillshade (GDAL)
+### Slope / aspect / hillshade (GDAL)
 
 1. Run GDAL against the **same** reference or source DEM:
 
    ```
    gdaldem slope reference_dtm.tif reference_slope.tif -compute_edges
+   gdaldem aspect reference_dtm.tif reference_aspect.tif -alg Horn
    gdaldem hillshade reference_dtm.tif reference_hillshade.tif -az 315 -alt 45
    ```
 
 2. Match GDAL's azimuth/altitude to ours (315° / 45° by default), read both, and
-   compare with the slot tolerance (0.5° for slope, 1 DN for hillshade on 0–255).
+   compare with the slot tolerance (0.5° for slope, 0.5° circular for aspect,
+   1 DN for hillshade on 0–255).
+3. For aspect, do not pass `-trigonometric` (it switches GDAL into our own
+   frame and removes the conversion the check exists to test) and do not pass
+   `-zero_for_flat` (it turns "no aspect" into "points north"). The full
+   reasoning is in `tests/fixtures/reference/aspect/README.md`.
 
 ### Ground filter (CloudCompare or PDAL SMRF)
 

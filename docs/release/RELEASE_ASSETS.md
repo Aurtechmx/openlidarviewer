@@ -53,8 +53,8 @@ npm run release:verify -- --dir <downloaded-assets>
 
 `release:verify` checks far more than hashes: that the manifest and the evidence
 name the same commit as the tag, that the evidence is authoritative and was
-produced on the canonical toolchain, that exactly one claim sits at E4 and it is
-`SLOPE-RASTER`, that the bundle is under its ceiling, that the source archive
+produced on the canonical toolchain, that the E4 claims recorded in the evidence are
+exactly the ones the claim register lists, that the bundle is under its ceiling, that the source archive
 carries its required files and none of the forbidden ones, and that the deploy
 archive is the site root.
 

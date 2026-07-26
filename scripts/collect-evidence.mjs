@@ -201,8 +201,23 @@ export function buildEvidenceRecord(input) {
     if (npmVersion !== CANONICAL_NPM) {
       problems.push(`release evidence requires npm ${CANONICAL_NPM}, got ${npmVersion ?? 'unknown'}`);
     }
-    if (science && science.e4ClaimCount !== 1) {
-      problems.push(`expected exactly one E4 claim, found ${science.e4ClaimCount}`);
+    // The E4 scope must be present and internally consistent. This was pinned
+    // to "exactly one", which was a snapshot of the day SLOPE-RASTER was the
+    // only E4 product, not a rule — the second promotion (ASPECT-RASTER) would
+    // have failed release evidence for being correct. The count and the list
+    // both come from the claim register, so the useful assertion is that they
+    // agree with each other and that the scope is not empty; whether a given
+    // claim DESERVES E4 is enforced by its cross-check test and by
+    // lint:claim-register, not by a magic number here.
+    if (science) {
+      if (!(science.e4ClaimCount >= 1)) {
+        problems.push(`expected at least one E4 claim, found ${science.e4ClaimCount}`);
+      } else if (science.e4ClaimCount !== (science.e4Claims?.length ?? -1)) {
+        problems.push(
+          `E4 claim count ${science.e4ClaimCount} disagrees with the listed claims ` +
+            `[${(science.e4Claims ?? []).join(', ')}]`,
+        );
+      }
     }
     // Every mandatory stage must have RUN and PASSED in the same log this
     // record is derived from. `gateExit: 0` alone proved only the static gate.
@@ -357,8 +372,8 @@ function main() {
     };
   } catch { /* the SBOM lint reports its absence */ }
 
-  // The scientific scope, read from the register rather than restated: exactly
-  // one claim may sit at E4, and the record says which.
+  // The scientific scope, read from the register rather than restated: which
+  // claims sit at E4, and how many reference slots are actually supplied.
   let science = null;
   try {
     const reg = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');

@@ -2,6 +2,23 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Changed
+
+- **The aspect raster is cross-implementation validated (E3 → E4).** Our Horn
+  aspect was compared against GDAL 3.13.1's Horn aspect on the same frozen
+  analytic DEM the slope reference uses, and against the surface's closed-form
+  gradient. All three agreed to within 0.0002 degree over 10,932 interior cells,
+  inside the 0.5 degree tolerance registered before the reference was generated.
+  The GDAL raster, the command, the tool version and the checksums are committed
+  under `tests/fixtures/reference/aspect/`. Aspect is compared as a bearing
+  (circular difference) and only where the closed-form slope exceeds 2 degrees,
+  because a level cell has no aspect: GDAL writes NODATA there and our kernel
+  returns 0, which is a real direction. No algorithm changed; this is a change
+  in what the evidence supports, and `HILLSHADE`, which consumes aspect, keeps
+  its own lower level.
+
 ## [0.6.1] - 2026-07-25
 
 A defect-fix release. Three vertical-reference and input-guard defects found by
