@@ -31,8 +31,7 @@ and its own evidence level.
 
 ## Hillshade agrees, but read its tolerance carefully
 
-The hillshade figures deserve a caveat the slope and aspect ones do not, and it
-is recorded here rather than smoothed over.
+The hillshade figures carry a caveat the slope and aspect ones do not.
 
 Both implementations compute the same illumination model,
 `h = cos(zenith)·cos(slope) + sin(zenith)·sin(slope)·cos(azimuth − aspect)`,
@@ -56,11 +55,10 @@ sharp:
   `round(1 + 254·h)`, reproduces the committed `hillshade-gdal.asc` **exactly**
   at every one of those cells.
 
-The encoding difference is deliberately left in the reported figures instead of
-being divided out, and our `255·h` encoding was deliberately not changed to
-match GDAL's: the product ships that encoding, and adjusting the implementation
-to flatter the comparison would invert what the comparison is for. Full detail
-in `tests/fixtures/reference/hillshade/README.md`.
+The reported figures include the encoding difference rather than subtracting it,
+so the headline number describes the two products as they ship. The application
+writes `round(255·h)`; that is the encoding its rasters carry. Full detail in
+`tests/fixtures/reference/hillshade/README.md`.
 
 The check covers the single-direction model only. `computeMultiHillshade` is a
 different illumination model with its own claim, unchanged by this.
