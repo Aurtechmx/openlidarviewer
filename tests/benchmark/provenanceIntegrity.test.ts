@@ -57,6 +57,15 @@ import { buildReportManifest } from '../../src/render/measure/reportManifest';
 import { canonicalize, fnv1a, sha256 } from '../../src/render/measure/auditLog';
 import { verifyReportFile } from '../../src/export/verifyReport';
 import { toGeoJSON } from '../../src/terrain/contour/geojsonContours';
+import {
+  writeLas,
+  writeLas14,
+  composeGeneratingSoftware,
+  lasGeneratingSoftware,
+} from '../../src/convert/writeLas';
+import type { GlobalPoints } from '../../src/convert/globalPoints';
+import { parseLasHeader } from '../../src/io/lasHeader';
+import { BUILD_IDENTITY } from '../../src/build/buildIdentity';
 import type { AnalyseContoursResult } from '../../src/terrain/contour/analyseContours';
 import type { ContourFeatureModel } from '../../src/terrain/contour/contourFeatureModel';
 
@@ -183,6 +192,16 @@ function contourModel(): ContourFeatureModel {
   } as unknown as ContourFeatureModel;
 }
 
+/** Three georeferenced points — enough for a real LAS header and body. */
+function lasPoints(): GlobalPoints {
+  return {
+    count: 3,
+    x: Float64Array.from([500000.123, 500001.5, 500002]),
+    y: Float64Array.from([4100000, 4100000.25, 4100001]),
+    z: Float64Array.from([12.34, 13, 14.5]),
+  };
+}
+
 /** The GeoJSON a receiver actually holds: serialized, then parsed back. */
 function geojsonArtifact(p: ExportProvenance): Record<string, unknown> {
   return JSON.parse(JSON.stringify(toGeoJSON(contourModel(), p))) as Record<string, unknown>;
@@ -230,16 +249,11 @@ describe('completeness — what the artifact declares on its own', () => {
     expect(meta.evidence).toBe(EVIDENCE_GATE_NOTE);
   });
 
-  test('GAP (pinned): the GeoJSON words the standing limitation differently from every other artifact', () => {
-    // The writer carries its own copy of the not-survey-grade sentence, and the
-    // merge rule "model-derived keys win" keeps it, so the same limitation
-    // reaches a GeoJSON reader in one wording and a DXF/SVG/README reader in
-    // another. Same claim, two strings, one of them not the canonical constant.
+  test('the GeoJSON words the standing limitation exactly as every other artifact does', () => {
+    // One claim, one string. The GeoJSON reader and the DXF/SVG/README reader
+    // get the same sentence, from the same constant.
     const meta = metadataOf(geojsonArtifact(readyProvenance()));
-    expect(meta.notSurveyGrade).toBe(
-      'Not survey-grade unless validated against ground-truth control.',
-    );
-    expect(meta.notSurveyGrade).not.toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(meta.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
     expect(provenanceLines(readyProvenance()).join('\n')).toContain(NOT_SURVEY_GRADE_NOTE);
   });
 
@@ -289,14 +303,63 @@ describe('completeness — what the artifact declares on its own', () => {
     ).toThrow(/not a registered scientific exporter/);
   });
 
-  test('GAP (pinned): a LAS/LAZ export names the software but not its version or commit', () => {
-    // The LAS header's 32-byte generating-software field is written as a fixed
-    // literal, so a LAS file cannot answer "which build produced you" the way
-    // every other export can. Pinned, not fixed: the field is byte-positioned
-    // and covered by round-trip goldens.
-    const source = readFileSync('src/convert/writeLas.ts', 'utf8');
-    expect(source).toContain("'OpenLiDARViewer converter'");
-    expect(source).not.toMatch(/writeFixedString\(bytes, 58, 32, `OpenLiDARViewer/);
+  test('a LAS/LAZ export names the build that produced it, in 32 bytes', () => {
+    // Read back through the real header parser, so this is what a receiver
+    // holding the file gets — not what the writer meant to write.
+    for (const bytes of [writeLas(lasPoints()), writeLas14(lasPoints())]) {
+      const header = parseLasHeader(
+        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+      );
+      expect(header.systemIdentifier).toBe('OpenLiDARViewer');
+      // Version at minimum; the commit too when it fits.
+      expect(header.generatingSoftware).toContain('OpenLiDARViewer');
+      expect(header.generatingSoftware).toContain(BUILD_IDENTITY.version);
+      expect(header.generatingSoftware).toBe(lasGeneratingSoftware());
+
+      // Exactly 32 bytes, and nothing truncated into a half-truth: whatever is
+      // in the field is a whole field of the identity, never a prefix of one.
+      const field = new Uint8Array(
+        bytes.buffer,
+        bytes.byteOffset + 58,
+        32,
+      );
+      expect(field.length).toBe(32);
+      expect(lasGeneratingSoftware().length).toBeLessThanOrEqual(32);
+      for (const part of lasGeneratingSoftware().split(' ').slice(1)) {
+        expect([BUILD_IDENTITY.version, BUILD_IDENTITY.commit, `${BUILD_IDENTITY.commit}+dirty`])
+          .toContain(part);
+      }
+    }
+  });
+
+  test('a commit that cannot fit drops whole, leaving the product and version', () => {
+    // Degrading has to stay honest: half a commit hash names a build that does
+    // not exist. The composer drops the commit outright instead.
+    expect(composeGeneratingSoftware({ version: '0.6.2', commit: 'a1b2c3d', dirty: false }))
+      .toBe('OpenLiDARViewer 0.6.2 a1b2c3d');
+    // 35 bytes with the marker. The commit leaves with it — keeping the hash
+    // alone would assert a clean build of that commit, which is not what ran.
+    expect('OpenLiDARViewer 0.6.2 a1b2c3d+dirty'.length).toBeGreaterThan(32);
+    expect(composeGeneratingSoftware({ version: '0.6.2', commit: 'a1b2c3d', dirty: true }))
+      .toBe('OpenLiDARViewer 0.6.2');
+    // A long release string pushes the commit out entirely, never in part.
+    const long = composeGeneratingSoftware({
+      version: '0.6.2-rc.1234',
+      commit: 'a1b2c3d',
+      dirty: false,
+    });
+    expect(long).toBe('OpenLiDARViewer 0.6.2-rc.1234');
+    expect(long.length).toBeLessThanOrEqual(32);
+    // And a version that alone will not fit leaves the product name standing.
+    const huge = composeGeneratingSoftware({
+      version: '1.2.3-an-absurdly-long-prerelease',
+      commit: 'a1b2c3d',
+      dirty: false,
+    });
+    expect(huge).toBe('OpenLiDARViewer');
+    // An unresolved commit is never fabricated into the field.
+    expect(composeGeneratingSoftware({ version: '0.6.2', commit: 'unknown', dirty: false }))
+      .toBe('OpenLiDARViewer 0.6.2');
   });
 });
 
@@ -807,16 +870,38 @@ describe('limitation propagation — a downgraded product says so in the file', 
     );
   });
 
-  test('GAP (pinned): the GeoJSON drops the run warnings when the contour model carries none', () => {
-    // `warnings` is a model-derived key, and model-derived keys win the merge,
-    // so the run's own warnings — carried by the provenance and printed on
-    // every text stamp — never reach the GeoJSON. A reader of the file sees an
-    // empty warning list for a run that produced one.
+  test('the GeoJSON carries every warning the run produced, model and provenance alike', () => {
+    // No warning present in the provenance may be absent from the file. The
+    // model's own warnings come first, in model order; the provenance warnings
+    // the model did not already state follow, in provenance order. Stable,
+    // because these artifacts are hashed.
     const p = readyProvenance();
     expect(p.warnings).toEqual(readyResult().warnings);
     expect(provenanceJson(p).warnings).toEqual(readyResult().warnings);
 
     const meta = metadataOf(geojsonArtifact(p));
-    expect(meta.warnings).toEqual([]);
+    expect(meta.warnings).toEqual(readyResult().warnings);
+    for (const w of p.warnings) expect(meta.warnings).toContain(w);
+  });
+
+  test('the GeoJSON warning list is the de-duplicated union in a stable order', () => {
+    const model = contourModel() as unknown as { warnings: string[] };
+    model.warnings = ['Model-only caveat.', 'Shared caveat.'];
+    const p = readyProvenance();
+    (p as unknown as { warnings: string[] }).warnings = [
+      'Shared caveat.',
+      'Provenance-only caveat.',
+    ];
+
+    const meta = metadataOf(
+      JSON.parse(
+        JSON.stringify(toGeoJSON(model as unknown as ContourFeatureModel, p)),
+      ) as Record<string, unknown>,
+    );
+    expect(meta.warnings).toEqual([
+      'Model-only caveat.',
+      'Shared caveat.',
+      'Provenance-only caveat.',
+    ]);
   });
 });
