@@ -10,6 +10,10 @@
  * `findSpikes` only reports; `removeSpikes` returns arrays with the spikes
  * demoted to "no data" so the DTM builder re-fills them by interpolation. Both
  * are pure and deterministic.
+ *
+ * `z` arrives in NATIVE source vertical units; `minDeviationM` is metres. The
+ * caller must pass `verticalUnitToMetres` for anything but metric data, or the
+ * absolute floor silently means source units.
  */
 
 export interface DespikeParams {
@@ -21,6 +25,18 @@ export interface DespikeParams {
   readonly minDeviationM?: number;
   /** Minimum measured neighbours required to judge a cell. Default 4. */
   readonly minNeighbours?: number;
+  /**
+   * Metres per source vertical unit (~0.3048 for feet). Default 1.
+   *
+   * `minDeviationM` is a METRES constant while `z` is in native source units,
+   * so the deviation must be converted before the two are compared. Without it
+   * the 0.3 m blunder floor acted as 0.3 ft = 9.1 cm on foot data — 3.28x too
+   * aggressive — and real sub-30 cm features were deleted and re-interpolated,
+   * with the removal count reaching provenance. The MAD term needs no
+   * conversion of its own (it is a ratio of like units) but is scaled here too
+   * so the whole comparison happens in one unit.
+   */
+  readonly verticalUnitToMetres?: number;
 }
 
 const MAD_TO_SIGMA = 1.4826;
@@ -48,6 +64,13 @@ export function findSpikes(
   const madThreshold = params.madThreshold ?? 5;
   const minDev = Math.max(0, params.minDeviationM ?? 0.05);
   const minNeighbours = Math.max(1, params.minNeighbours ?? 4);
+  // Scale the deviation and the MAD sigma into metres so `minDeviationM` means
+  // metres on every source. A non-finite/non-positive factor is no factor (1),
+  // never a silent 0 that would flag every cell.
+  const vUnit =
+    Number.isFinite(params.verticalUnitToMetres) && (params.verticalUnitToMetres as number) > 0
+      ? (params.verticalUnitToMetres as number)
+      : 1;
 
   const neigh: number[] = [];
   const dev: number[] = [];
@@ -73,8 +96,8 @@ export function findSpikes(
       dev.length = 0;
       for (const v of neigh) dev.push(Math.abs(v - med));
       dev.sort((a, b) => a - b);
-      const sigma = MAD_TO_SIGMA * median(dev);
-      const d = Math.abs((z[i] as number) - med);
+      const sigma = MAD_TO_SIGMA * median(dev) * vUnit;
+      const d = Math.abs((z[i] as number) - med) * vUnit;
       const threshold = Math.max(madThreshold * sigma, minDev);
       if (d > threshold && d > minDev) out[i] = 1;
     }

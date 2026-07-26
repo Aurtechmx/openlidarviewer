@@ -42,6 +42,24 @@ export interface DemGeoTiffInput {
   readonly verticalUnitCode?: number | null;
 }
 
+/**
+ * GeoTIFF VerticalUnitsGeoKey (4099) code for a metres-per-vertical-unit factor.
+ * Matched by value (1e-9 tolerance separates the two foot definitions); an
+ * unrecognised or absent factor yields null, so the writer omits the key rather
+ * than asserting a wrong unit.
+ *
+ * Shared so every product that writes the same DTM raster derives the code the
+ * same way: the contour deliverable used to stamp 4096 without 4099, leaving a
+ * foot-height raster ambiguous while the DEM package's copy of it was not.
+ */
+export function verticalUnitGeoKeyCode(metresPerUnit: number | null | undefined): number | null {
+  if (metresPerUnit == null || !Number.isFinite(metresPerUnit)) return null;
+  if (Math.abs(metresPerUnit - 1) < 1e-9) return 9001;
+  if (Math.abs(metresPerUnit - 0.3048) < 1e-9) return 9002;
+  if (Math.abs(metresPerUnit - 1200 / 3937) < 1e-9) return 9003;
+  return null;
+}
+
 // TIFF field types.
 const T_SHORT = 3;
 const T_LONG = 4;

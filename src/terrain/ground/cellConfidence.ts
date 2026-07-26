@@ -250,10 +250,37 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   // radius, so every reachable cell still gets a finite height and the
   // coverage semantics below are unchanged. Measured cells keep their
   // own value verbatim. (v0.4.0 — was nearest-neighbour everywhere.)
+  // Per-axis cell size in METRES — one derivation shared by the geodesic step
+  // cost below and the Horn slope further down, so the two stages can never
+  // disagree about how long a cell is. For a geographic frame the cell is in
+  // degrees, so convert per axis — longitude shrinks by cos(latitude) — or the
+  // E–W run is overstated off-equator and every cell reads as near-vertical.
+  const cellM = horizontalCellMetresXY(
+    cellSizeM,
+    params.isGeographic,
+    // Prefer the caller's WORLD latitude: the raster origin is render-
+    // recentred for viewer-fed grids (≈ 0 → cos φ silently 1). The origin
+    // fallback stays correct for grids built in absolute coordinates.
+    //
+    // Sign checked: rasterizeDtm sets originH2 = minH2 (the SOUTH edge) and
+    // bins with row = floor((y − originH2)/cell), so rows run NORTHWARD and
+    // origin + half the rows is the grid centre, not its mirror. This now
+    // steers interpolated heights as well as slope, so it is worth pinning.
+    params.latitudeDeg ?? originH2 + (rows / 2) * cellSizeM,
+    params.horizontalUnitToMetres,
+  );
+
   const nearest = inpaintNearest(raster.z, hadData, cols, rows);
   const idw =
     params.interpolation === 'geodesic'
-      ? geodesicFill(raster.z, hadData, cols, rows, { cellSizeM })
+      ? geodesicFill(raster.z, hadData, cols, rows, {
+          // The geodesic cost adds a horizontal step to a vertical rise, so
+          // both must be metres. Passing the raw cell size collapsed the cost
+          // to vertical-only on a degree grid (~1e-5 beside metre heights).
+          cellMetresX: cellM.x,
+          cellMetresY: cellM.y,
+          verticalUnitToMetres: params.verticalUnitToMetres,
+        })
       : idwFill(raster.z, hadData, cols, rows, {});
   const z = new Float32Array(nCells);
   for (let i = 0; i < nCells; i++) {
@@ -278,18 +305,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
 
   // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
-  // max-neighbour difference.) For a geographic frame the cell is in degrees,
-  // so convert to metres per axis — longitude shrinks by cos(latitude) — or
-  // every cell reads as near-vertical and the E–W run is overstated off-equator.
-  const cellM = horizontalCellMetresXY(
-    cellSizeM,
-    params.isGeographic,
-    // Prefer the caller's WORLD latitude: the raster origin is render-
-    // recentred for viewer-fed grids (≈ 0 → cos φ silently 1). The origin
-    // fallback stays correct for grids built in absolute coordinates.
-    params.latitudeDeg ?? originH2 + (rows / 2) * cellSizeM,
-    params.horizontalUnitToMetres,
-  );
+  // max-neighbour difference.) Reuses the `cellM` derived above the fill.
   const slope = hornSlope(z, cols, rows, cellM.x, cellM.y, params.verticalUnitToMetres ?? 1);
 
   const confidence = new Float32Array(nCells);

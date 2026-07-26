@@ -178,14 +178,14 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     // Bind group covers bindings 0..4 (z, valid, slope, aspect, params).
     expect(log.bindings[0]).toEqual([0, 1, 2, 3, 4]);
 
-    // Buffer inventory: 4 storage (n·4 bytes) + 1 uniform (16) + 2 staging.
+    // Buffer inventory: 4 storage (n·4 bytes) + 1 uniform (32) + 2 staging.
     const bytes = cols * rows * 4;
     const storage = log.buffers.filter((b) => (b.usage & GPU_USAGE.STORAGE) !== 0);
     expect(storage).toHaveLength(4);
     for (const b of storage) expect(b.size).toBe(bytes);
     const uniform = log.buffers.filter((b) => (b.usage & GPU_USAGE.UNIFORM) !== 0);
     expect(uniform).toHaveLength(1);
-    expect(uniform[0].size).toBe(16);
+    expect(uniform[0].size).toBe(32);
     const staging = log.buffers.filter((b) => (b.usage & GPU_USAGE.MAP_READ) !== 0);
     expect(staging).toHaveLength(2);
     expect(log.copies.map((c) => c.size)).toEqual([bytes, bytes]);
@@ -198,6 +198,19 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     const cellsXY = new Float32Array(uniData.buffer, 8, 2);
     expect(cellsXY[0]).toBeCloseTo(0.5, 6);
     expect(cellsXY[1]).toBeCloseTo(0.5, 6);
+    // …and the vertical unit factor at byte 16. An omitted zScale is 1 — the
+    // kernel must never receive 0 and flatten every slope.
+    expect(new Float32Array(uniData.buffer, 16, 1)[0]).toBe(1);
+
+    // The mock never EXECUTES WGSL, so a kernel that accepts the uniform and
+    // ignores it would pass everything above. Assert the shader source itself
+    // declares the field and applies it — crude, but it turns a dropped
+    // `* p.zScale` from a silent green into a red gate. The device probe is the
+    // real equivalence check; this is the part CI can run.
+    const horn = log.shaderCodes.find((c) => c.includes('fn horn_main'));
+    expect(horn).toBeDefined();
+    expect(horn).toMatch(/zScale\s*:\s*f32/); // declared in Params
+    expect(horn).toMatch(/\*\s*p\.zScale/); // and actually multiplied in
 
     // The uploaded grid is the NaN-FREE copy plus the validity mask.
     const zUpload = storage[0].written as Float32Array;

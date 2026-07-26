@@ -8,7 +8,6 @@
 import { describe, it, expect } from 'vitest';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
 import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
-import { computeSlopeDegrees } from '../src/terrain/surface/hillshade';
 import { buildDsm, heightAboveGround } from '../src/terrain/surface/buildDsm';
 import { excludeNonGroundClasses } from '../src/terrain/ground/classificationFilter';
 import {
@@ -26,6 +25,19 @@ const EXTENT = { nx: 24, ny: 24, spacing: 1 } as const;
 const grid = gridFor(EXTENT);
 const RAD = 180 / Math.PI;
 
+/**
+ * Slope in DEGREES from the live Horn pass — the same tangent→angle step
+ * analyseContours does inline. Local scaffolding: the app has no
+ * degrees-returning entry point, and a wrapper that only tests owned would be
+ * dead code pretending to be covered.
+ */
+function slopeDegrees(z: Float32Array, cols: number, rows: number, cellM: number): Float32Array {
+  const { slope } = hornSlopeAspect(z, cols, rows, cellM, cellM);
+  const out = new Float32Array(slope.length);
+  for (let i = 0; i < slope.length; i++) out[i] = Math.atan(slope[i]) * RAD;
+  return out;
+}
+
 function rasterZ(pts: ReadonlyArray<{ x: number; y: number; z: number }>): Float32Array {
   const r = rasterizeDtm(pts, allGround(pts), { grid });
   return r.z;
@@ -41,7 +53,7 @@ function wrap360(deg: number): number {
 describe('Slope truth (Horn)', () => {
   it('flat plane -> slope ~ 0 deg everywhere', () => {
     const z = rasterZ(flatPlane(50, EXTENT));
-    const slopeDeg = computeSlopeDegrees(z, grid.cols, grid.rows, grid.cellSizeM);
+    const slopeDeg = slopeDegrees(z, grid.cols, grid.rows, grid.cellSizeM);
     for (let r = 1; r < grid.rows - 1; r++) {
       for (let c = 1; c < grid.cols - 1; c++) {
         expect(slopeDeg[r * grid.cols + c]).toBeCloseTo(0, 4);
@@ -52,7 +64,7 @@ describe('Slope truth (Horn)', () => {
   it('uniform slope -> slope angle = atan(gradient) (interior, tol 0.5 deg)', () => {
     for (const gradient of [0.1, 0.5, 1.0]) {
       const z = rasterZ(uniformSlope({ ...EXTENT, gradient, axis: 'x' }));
-      const slopeDeg = computeSlopeDegrees(z, grid.cols, grid.rows, grid.cellSizeM);
+      const slopeDeg = slopeDegrees(z, grid.cols, grid.rows, grid.cellSizeM);
       const expected = Math.atan(gradient) * RAD;
       // interior cell, away from clamped borders
       const i = 12 * grid.cols + 12;

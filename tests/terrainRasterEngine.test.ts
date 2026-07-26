@@ -94,11 +94,12 @@ function faithfulFakeGpu(calls?: {
       if (calls && calls.scatter != null) calls.scatter++;
       return Promise.resolve(scatterMinCountReference(points, grid));
     },
-    derivatives: (z, cols, rows, cell, cellY) => {
+    derivatives: (z, cols, rows, cell, cellY, zScale) => {
       if (calls) calls.derivatives++;
-      // A faithful backend honours the per-axis cell size — the probe's
-      // anisotropic pass rejects one that ignores it (tested below).
-      return Promise.resolve(hornSlopeAspect(z, cols, rows, cell, cellY));
+      // A faithful backend honours the per-axis cell size AND the vertical unit
+      // factor — the probe's anisotropic and zScale passes reject one that
+      // ignores either (both tested below).
+      return Promise.resolve(hornSlopeAspect(z, cols, rows, cell, cellY, zScale));
     },
     hillshade: (s, a, cov, cols, rows, params) => {
       if (calls) calls.hillshade++;
@@ -263,6 +264,19 @@ describe('equivalence harness — f32 kernel arithmetic vs the f64 CPU reference
     expect(d.comparedAspectCells).toBeGreaterThan(0);
   });
 
+  it('f32 transcription applies the vertical unit factor like the CPU reference', () => {
+    // A foot-vertical grid: slope is rise/run, so the rise must be converted
+    // before the ratio. A transcription that ignores zScale reports slope
+    // 1/0.3048 ≈ 3.28x too steep.
+    const { z, cols, rows, cellSizeM } = buildProbeGrid();
+    const ref = hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    const got = hornDerivativesF32Reference(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    const d = compareDerivativeGrids(ref, got);
+    expect(d.maxSlopeErr).toBeLessThanOrEqual(EQUIVALENCE_SLOPE_TOLERANCE);
+    expect(d.maxAspectErr).toBeLessThanOrEqual(EQUIVALENCE_ASPECT_TOLERANCE_RAD);
+    expect(d.comparedAspectCells).toBeGreaterThan(0);
+  });
+
   it('flat cells keep the EXACT slope-0/aspect-0 convention in both', () => {
     const { z, cols, rows, cellSizeM } = buildProbeGrid();
     const ref = hornSlopeAspect(z, cols, rows, cellSizeM);
@@ -381,6 +395,42 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
     expect(engine.getComputePath().lastCall).toBe('cpu');
   });
 
+  it('a backend that IGNORES the vertical unit factor FAILS the probe', async () => {
+    // The async entries carried no zScale at all, so a foot-vertical grid came
+    // back ~3.28x too steep — and the probe could not see it, because every
+    // probe pass ran at zScale 1 on both sides.
+    const noZScale: TerrainRasterBackend = {
+      ...faithfulFakeGpu(),
+      derivatives: async (z, cols, rows, cell, cellY) => hornSlopeAspect(z, cols, rows, cell, cellY),
+    };
+    const engine = new TerrainRasterEngine({ gpuFactory: okFactory(noZScale) });
+    const info = await engine.init();
+    expect(info.path).toBe('cpu');
+    expect(info.reason).toBe('probe-mismatch');
+    expect(info.probe!.maxSlopeErr).toBeGreaterThan(EQUIVALENCE_SLOPE_TOLERANCE);
+  });
+
+  it('async derivatives convert the rise with the vertical unit factor, like derivativesSync', async () => {
+    // The live pipeline uses derivativesSync(..., verticalUnitToMetres); the
+    // async entries dropped the factor entirely, so adopting them would have
+    // silently overstated slope on every foot-vertical scan.
+    const engine = new TerrainRasterEngine();
+    const { z, cols, rows, cellSizeM } = buildProbeGrid(16, 16);
+    const got = await engine.derivatives(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    const ref = engine.derivativesSync(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    expect(bytesEqual(got.slope, ref.slope)).toBe(true);
+    expect(bytesEqual(got.aspect, ref.aspect)).toBe(true);
+  });
+
+  it('a faithful gpu backend serves the vertical unit factor through the async path', async () => {
+    const engine = new TerrainRasterEngine({ gpuFactory: okFactory(faithfulFakeGpu()) });
+    await engine.init();
+    const { z, cols, rows, cellSizeM } = buildProbeGrid(16, 16);
+    const got = await engine.derivatives(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    const ref = hornSlopeAspect(z, cols, rows, cellSizeM, cellSizeM, 0.3048);
+    expect(bytesEqual(got.slope, ref.slope)).toBe(true);
+  });
+
   it('a hillshade-diverging backend also fails the probe (shade gate ±1)', async () => {
     const badShade: TerrainRasterBackend = {
       ...faithfulFakeGpu(),
@@ -435,10 +485,10 @@ describe('the equivalence gate + auto-fallback (probe at init)', () => {
     let disposed = false;
     const flaky: TerrainRasterBackend = {
       ...faithfulFakeGpu(),
-      derivatives: async (z, cols, rows, cell, cellY) => {
-        // Pass the 64×64 probe (both its passes), then blow up on real work.
+      derivatives: async (z, cols, rows, cell, cellY, zScale) => {
+        // Pass the 64×64 probe (all of its passes), then blow up on real work.
         if (cols === PROBE_GRID_SIZE && rows === PROBE_GRID_SIZE) {
-          return hornSlopeAspect(z, cols, rows, cell, cellY);
+          return hornSlopeAspect(z, cols, rows, cell, cellY, zScale);
         }
         throw new Error('device lost');
       },

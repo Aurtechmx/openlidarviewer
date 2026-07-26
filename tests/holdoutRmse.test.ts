@@ -63,20 +63,39 @@ describe('holdoutValidateDtm', () => {
   });
 
   it('reports RMSE in metres via verticalUnitToMetres (feet source data)', () => {
-    // A curved surface leaves a non-zero residual; with the same seed the
-    // split is identical, so the feet run must be exactly 0.3048× the metre
-    // run — proving the residuals are scaled into metres at one point.
-    const { points, mask } = surface((x) => 0.1 * x * x);
-    const metre = holdoutValidateDtm(points, mask, { cellSizeM: 1, seed: 3 });
-    const feet = holdoutValidateDtm(points, mask, {
+    // PHYSICAL INVARIANCE, not a scaling identity. Describe ONE terrain twice —
+    // once with heights in metres, once with the same heights in feet plus
+    // `verticalUnitToMetres` — and the metric RMSE must come out the same. The
+    // whole chain (despike floor, geodesic path cost, slope bands, residual
+    // conversion) has to be unit-aware for that to hold; a unit bug anywhere in
+    // it moves the ratio off 1.
+    //
+    // The earlier form fed the SAME NUMBERS to both runs and expected exactly
+    // 0.3048x. That is two different terrains, one 3.28x flatter, so the
+    // now-unit-aware void fill legitimately parts them by ~1e-3 and the
+    // assertion had to be a tolerance band fitted to the fixture.
+    const zfn = (x: number): number => 0.1 * x * x;
+    const metric = surface(zfn);
+    const imperial = surface((x) => zfn(x) / 0.3048);
+
+    const metre = holdoutValidateDtm(metric.points, metric.mask, { cellSizeM: 1, seed: 3 });
+    const feet = holdoutValidateDtm(imperial.points, imperial.mask, {
       cellSizeM: 1,
       seed: 3,
       verticalUnitToMetres: 0.3048,
     });
     expect(metre.rmse).toBeGreaterThan(0);
-    expect(feet.rmse).toBeCloseTo(metre.rmse * 0.3048, 6);
-    expect(feet.mae).toBeCloseTo(metre.mae * 0.3048, 6);
-    expect(feet.p95).toBeCloseTo(metre.p95 * 0.3048, 6);
+    // Both are already in metres, so they are equal up to f32 grid storage.
+    expect(feet.rmse / metre.rmse).toBeCloseTo(1, 6);
+    expect(feet.mae / metre.mae).toBeCloseTo(1, 6);
+    expect(feet.p95 / metre.p95).toBeCloseTo(1, 6);
+    // Drop the conversion entirely and the feet run reports ~3.28x — this is
+    // still a hard gate on the residuals reaching metres.
+    const unconverted = holdoutValidateDtm(imperial.points, imperial.mask, {
+      cellSizeM: 1,
+      seed: 3,
+    });
+    expect(unconverted.rmse / metre.rmse).toBeGreaterThan(3);
   });
 
   it('is deterministic for a fixed seed', () => {

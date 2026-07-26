@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
-import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
+import { writeGeoTiff, verticalUnitGeoKeyCode } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { buildDtmGrid } from '../src/terrain/ground/cellConfidence';
 import { sha256Hex } from '../src/terrain/export/sha256';
@@ -517,6 +517,58 @@ describe('buildDemPackage', () => {
     (r as { dtm: unknown }).dtm = grid;
     const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
     expect(readTiffGeoKey(extractEntry(zip, 'site-dtm.tif')!, 4099)).toBe(9002);
+  });
+
+  it('maps a metres-per-unit factor to its GeoTIFF unit code, or to none', () => {
+    // The shared derivation both products now go through. An unrecognised
+    // factor must yield null so the writer omits key 4099 rather than
+    // asserting a unit the data never declared.
+    expect(verticalUnitGeoKeyCode(1)).toBe(9001); // metre
+    expect(verticalUnitGeoKeyCode(0.3048)).toBe(9002); // international foot
+    expect(verticalUnitGeoKeyCode(1200 / 3937)).toBe(9003); // US survey foot
+    // The two foot definitions differ by ~2 ppm and must not collapse together.
+    expect(verticalUnitGeoKeyCode(0.3048)).not.toBe(verticalUnitGeoKeyCode(1200 / 3937));
+    for (const unknown of [null, undefined, 0, -1, 0.9144, Number.NaN, Infinity]) {
+      expect(verticalUnitGeoKeyCode(unknown)).toBeNull();
+    }
+  });
+
+  it('writes the same vertical unit key from the contour deliverable as from the DEM package', () => {
+    // The same DTM raster leaves the app through two products. The deliverable
+    // stamped the vertical CRS (4096) but not its unit (4099), so a foot-height
+    // raster from Contour Studio was ambiguous between metres and feet while the
+    // byte-identical grid from the DEM package was not.
+    const grid = buildDtmGrid(
+      {
+        z: Float32Array.from([10, 20, 30, 40]),
+        counts: Uint32Array.from([6, 6, 6, 6]),
+        cols: 2, rows: 2, cellSizeM: 1, originH1: 10, originH2: 20,
+        coverage: 'full', sourcePointCount: 24, analyzedPointCount: 24,
+        filledCellCount: 4, warnings: [],
+      },
+      { crs: 'EPSG:32610', verticalEpsg: 5703, verticalUnitToMetres: 0.3048 },
+    );
+    const r = fixtureResult();
+    (r as { dtm: unknown }).dtm = grid;
+    const opts = { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' };
+    const fromPackage = readTiffGeoKey(
+      extractEntry(buildDemPackage(r, opts), 'site-dtm.tif')!, 4099,
+    );
+    const deliverable = buildContourDeliverableFromResult(r, {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      verticalUnitToMetres: 0.3048,
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-26T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    const fromDeliverable = readTiffGeoKey(extractEntry(deliverable, 'site_DTM.tif')!, 4099);
+    expect(fromPackage).toBe(9002);
+    expect(fromDeliverable).toBe(9002);
+    expect(fromDeliverable).toBe(fromPackage);
   });
 
   it('stamps the DTM and DSM with the vertical CRS but leaves the CHM unstamped', () => {

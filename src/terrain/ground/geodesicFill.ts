@@ -14,9 +14,23 @@
  *            surface to walk on (voids have no height of their own yet).
  *   Pass 2 — for each void cell, a Dijkstra over an 8-connected window (capped
  *            at `maxRadiusCells` from the source) accumulates path cost
- *            = Σ sqrt(stepXY² + Δz²) using the prefilled heights, collecting the
+ *            = Σ sqrt(stepXY² + Δz²) — both terms in METRES — using the
+ *            prefilled heights, collecting the
  *            nearest `kNearest` MEASURED cells by geodesic cost; the void is the
  *            inverse-distance blend of those (weight 1/cost^power).
+ *
+ * KNOWN LIMIT — pass 1 is frame-blind. `idwFill` weights by distance in CELLS,
+ * isotropically, so on an anisotropic grid (a geographic raster away from the
+ * equator, where the E–W cell is cos φ × the N–S cell) the provisional surface
+ * is built by an interpolant that does not know the cells are not square. Pass
+ * 2's step cost is metre-correct, but every Δz it differences comes from that
+ * surface. Because IDW weights are normalised (1/d^power over the collected
+ * samples), a UNIFORM scale cancels exactly — so projected frames, metre or
+ * foot, are unaffected and this is a geographic-only residual. Fixing it means
+ * metric distances in `idwFill`, which also changes the DEFAULT (non-geodesic)
+ * fill and needs its expanding Chebyshev ring search reworked, since "the k
+ * nearest" would no longer follow cell-ring order. Deliberately out of scope
+ * here; the pass-2 unit bug it sat behind is the one being fixed.
  *
  * Honesty is unchanged: this only produces better interpolated HEIGHTS. Which
  * cells count as measured / interpolated / gap, and their confidence, is still
@@ -32,8 +46,26 @@ export interface GeodesicParams {
   readonly kNearest?: number;
   /** Max search radius in cells from each void (bounds the Dijkstra). Default 24. */
   readonly maxRadiusCells?: number;
-  /** Horizontal cell size in metres (sets the geodesic step length). Default 1. */
-  readonly cellSizeM?: number;
+  /**
+   * East–west (column) cell size in METRES — the horizontal half of the step
+   * cost. Callers derive it with `horizontalCellMetresXY`, the same helper the
+   * slope stage uses, so a geographic (degree) or foot grid converts once and
+   * identically. Default 1.
+   */
+  readonly cellMetresX?: number;
+  /** North–south (row) cell size in metres. Defaults to `cellMetresX`. */
+  readonly cellMetresY?: number;
+  /**
+   * Metres per vertical unit (`verticalUnitToMetres`), applied to Δz. Default 1.
+   * The step cost is sqrt(stepXY² + Δz²), so the two terms must be in the same
+   * unit; a foot-vertical grid measured against metre steps overstates the climb.
+   */
+  readonly verticalUnitToMetres?: number;
+}
+
+/** Positive-and-finite guard, or the fallback. Never a silent 0 step. */
+function positiveOr(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) && (value as number) > 0 ? (value as number) : fallback;
 }
 
 // 8-connected neighbour offsets.
@@ -60,7 +92,12 @@ export function geodesicFill(
   const power = Number.isFinite(params.power) && (params.power as number) > 0 ? (params.power as number) : 2;
   const kNearest = Math.max(1, Math.floor(params.kNearest ?? 12));
   const maxRadius = Math.max(1, Math.floor(params.maxRadiusCells ?? 24));
-  const cell = Number.isFinite(params.cellSizeM) && (params.cellSizeM as number) > 0 ? (params.cellSizeM as number) : 1;
+  const cellX = positiveOr(params.cellMetresX, 1);
+  const cellY = positiveOr(params.cellMetresY, cellX);
+  const zScale = positiveOr(params.verticalUnitToMetres, 1);
+  // Diagonal step length in metres — the hypotenuse of the two axes, which
+  // reduces to cell·√2 on a square grid (the historical isotropic step).
+  const cellDiag = Math.hypot(cellX, cellY);
 
   // Pass 1 — Euclidean prefill gives a walkable provisional surface.
   const surface = idwFill(z, hadData, cols, rows, { power, kNearest, maxRadiusCells: maxRadius });
@@ -149,8 +186,9 @@ export function geodesicFill(
           if (Math.abs(nr - srow) > maxRadius || Math.abs(nc - scol) > maxRadius) continue;
           const nb = nr * cols + nc;
           if (!Number.isFinite(surface[nb])) continue; // can't walk over unknown ground
-          const stepXY = cell * (DR[k] !== 0 && DC[k] !== 0 ? Math.SQRT2 : 1);
-          const dz = surface[nb] - surface[c];
+          const stepXY =
+            DR[k] !== 0 && DC[k] !== 0 ? cellDiag : DC[k] !== 0 ? cellX : cellY;
+          const dz = (surface[nb] - surface[c]) * zScale;
           const nd = cost + Math.sqrt(stepXY * stepXY + dz * dz);
           if (seen[nb] !== iter || nd < dist[nb]) {
             dist[nb] = nd; seen[nb] = iter;
