@@ -27,6 +27,18 @@ import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
 import { crsUrn as sharedCrsUrn } from '../../export/crsIdentifier';
+import { verticalUnitLabel } from '../../units/units';
+
+/**
+ * The short unit labels spelled out for a GeoJSON property, where the name is
+ * read by a person or a downstream schema rather than squeezed into a UI. The
+ * 'units' case keeps its unknown meaning: an unresolved factor is not metre.
+ */
+const ELEVATION_UNIT_NAME = {
+  m: 'metre',
+  ft: 'foot',
+  units: 'unknown',
+} as const;
 
 
 
@@ -208,6 +220,15 @@ export function toGeoJSONWgs84(
       + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.';
   }
 
+  // The elevation is in the DTM's SOURCE vertical units, so its label comes
+  // from the resolved vertical factor. A constant 'metre' here shipped US
+  // survey feet as metres — 100 read as 100 m instead of 30.48 m — for the
+  // compound CRSs (metre horizontal over a foot height) that take this WGS 84
+  // path. An unresolved factor says so; it does not fall back to metre.
+  const vScale = model.verticalUnitToMetres;
+  const elevationUnit =
+    vScale == null ? 'unknown' : ELEVATION_UNIT_NAME[verticalUnitLabel(vScale)];
+
   obj.features = (obj.features as Array<Record<string, unknown>>).map((f) => {
     const geom = f.geometry as { type: string; coordinates: number[][] };
     return {
@@ -216,7 +237,7 @@ export function toGeoJSONWgs84(
         ...(f.properties as Record<string, unknown>),
         // Stated on every feature, so the height cannot be read without its
         // reference — including when a reader keeps only the properties.
-        elevationUnit: 'metre',
+        elevationUnit,
         elevationDatum: model.verticalDatum ?? null,
       },
       geometry: {
