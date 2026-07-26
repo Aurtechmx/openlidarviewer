@@ -583,7 +583,7 @@ describe('input with no geometry left to measure', () => {
     expect(tooFew.reasons.length).toBeGreaterThan(0);
   });
 
-  test('DEFECT: a zero-extent cloud is reported as 1 m² of floor at 40 points per m²', () => {
+  test('a zero-extent cloud is given no floor area, and no density derived from one', () => {
     // 40 points, all at exactly the same coordinate. There is no space here:
     // no length, no width, no height, and no spacing between any two points.
     const collapsed = spaceMetrics(new Float32Array(120).fill(2), {
@@ -596,21 +596,20 @@ describe('input with no geometry left to measure', () => {
     expect(collapsed.ceilingHeightM).toBeNull();
     expect(collapsed.enclosedVolumeM3).toBeNull();
 
-    // These three are the defect. The occupancy grid falls back to a 1-metre
-    // cell when an axis has no extent, and that placeholder is then multiplied
-    // out as if it were a measured cell size. One occupied cell becomes one
-    // square metre of floor, and the density and spacing are derived from it.
-    expect(collapsed.floorAreaM2).toBe(1); // should be 0
-    expect(collapsed.quality.densityPerM2).toBe(40); // should be 0
-    expect(collapsed.quality.meanSpacingM).toBeCloseTo(0.158, 3); // should be 0
-
-    // Nothing in the reasons mentions the degeneracy, so the three numbers
-    // above reach a reader with no caveat attached to them. The reasons that
-    // are present are the module's standing caveats, which every scan gets.
-    expect(collapsed.reasons.join(' ')).not.toMatch(/degenerate|no extent|zero/i);
+    // And so do these three. The occupancy grid uses a 1-metre placeholder cell
+    // when an axis has no extent, to keep the binning from dividing by zero;
+    // the placeholder is excluded from the area, so it cannot be read as a
+    // measured cell size. Before the fix this cloud reported 1 m² of floor,
+    // 40 points per m², and a mean spacing of 0.158 m.
+    expect(collapsed.floorAreaM2).toBe(0);
+    expect(collapsed.quality.densityPerM2).toBe(0);
+    expect(collapsed.quality.meanSpacingM).toBe(0);
+    // The point count itself is still reported, because it WAS measured — the
+    // refusal is scoped to the quantities that depend on an extent.
+    expect(collapsed.quality.sampledPointCount).toBe(40);
   });
 
-  test('DEFECT: a collinear cloud is reported as having floor area, from a zero-width footprint', () => {
+  test('a collinear cloud is given no floor area, because a line encloses none', () => {
     // 60 points along a single line: extent in one horizontal axis, none in the
     // other. A line encloses no area.
     const line: number[] = [];
@@ -620,13 +619,15 @@ describe('input with no geometry left to measure', () => {
       spaceKind: 'interior',
     });
 
+    // The length along the line is real and is still reported.
+    expect(collinear.dims.lengthM).toBeGreaterThan(5);
     expect(collinear.dims.widthM).toBe(0);
     expect(collinear.enclosedVolumeM3).toBeNull();
 
-    // The same 1-metre placeholder cell, applied to the axis with no extent:
-    // the reported floor area is the LENGTH of the line multiplied by a metre.
-    expect(collinear.floorAreaM2).toBeCloseTo(collinear.dims.lengthM, 5);
-    expect(collinear.floorAreaM2).toBeGreaterThan(5); // should be 0
+    // The area is not. Before the fix it was the length of the line multiplied
+    // by the 1-metre placeholder — about 5.9 m² of floor under a line.
+    expect(collinear.floorAreaM2).toBe(0);
+    expect(collinear.quality.densityPerM2).toBe(0);
   });
 });
 
@@ -732,7 +733,7 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
     expect(unmappedVertical.verticalUnitToMetres).toBeUndefined();
   });
 
-  test('DEFECT: a projected CRS that declares a unit code we cannot resolve is reported as metres', () => {
+  test('a projected CRS declaring a unit code we cannot resolve is tagged unknown, not metres', () => {
     // The file states ProjLinearUnitsGeoKey = 9095, EPSG's British foot (1936),
     // 0.3048007 m. It is a real, valid declaration; our table maps only
     // 9001/9002/9003. The unmapped code falls through to the projected default.
@@ -751,21 +752,38 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
       null,
     );
 
-    // Pinned defect. `linearUnit` should be 'unknown' so downstream gates
-    // (`linearUnit !== 'unknown'`) refuse to label the result; instead every
-    // length from this file is presented in metres and is wrong by 3.28×.
-    expect(declaredUnknownUnit.linearUnit).toBe('metre');
+    // 'unknown' is what the downstream `linearUnit !== 'unknown'` gates read to
+    // withhold a unit label. This used to resolve to 'metre', so every length
+    // from such a file was presented in metres and was wrong by 3.28×.
+    expect(declaredUnknownUnit.linearUnit).toBe('unknown');
+    // The factor stays a pass-through: there is no scale to apply, because the
+    // code is one we have no metre-per-unit value for. The tag is what carries
+    // the refusal, exactly as in the unresolvable-WKT case above.
     expect(declaredUnknownUnit.linearUnitToMetres).toBe(1);
-    expect(toMetres(100, declaredUnknownUnit)).toBe(100); // truth: ~30.48 m
 
-    // A file that declares NO unit at all resolves identically, which is what
-    // makes the defect invisible to a caller: the two cases are indistinguishable.
+    // A file that declares NO unit at all is a different fact — the GeoTIFF
+    // default applies — and must stay distinguishable from the case above.
     const noUnitDeclared = crsFromGeoTiff(
       geoKeyDirectory([[GEOKEY_MODEL_TYPE, 1], [GEOKEY_PROJECTED_CRS, 27700]]),
       null,
       null,
     );
-    expect(noUnitDeclared.linearUnit).toBe(declaredUnknownUnit.linearUnit);
+    expect(noUnitDeclared.linearUnit).toBe('metre');
+    expect(noUnitDeclared.linearUnit).not.toBe(declaredUnknownUnit.linearUnit);
+
+    // The three codes we do resolve are unaffected.
+    for (const [code, unit] of [[9001, 'metre'], [9002, 'foot'], [9003, 'us-survey-foot']] as const) {
+      const crs = crsFromGeoTiff(
+        geoKeyDirectory([
+          [GEOKEY_MODEL_TYPE, 1],
+          [GEOKEY_PROJECTED_CRS, 27700],
+          [GEOKEY_PROJ_LINEAR_UNITS, code],
+        ]),
+        null,
+        null,
+      );
+      expect(crs.linearUnit).toBe(unit);
+    }
   });
 });
 
@@ -959,7 +977,7 @@ describe('what the measurement report prints when the geometry is degenerate', (
     expect(rows.map((r) => r.value)).toEqual(['—', '—', '—', '—', '—']);
   });
 
-  test('DEFECT: a vertical slope prints 0.00% in the report while the live tool says "vertical"', () => {
+  test('a vertical slope reads "vertical" in the report, the same word the live tool uses', () => {
     const a: Vec3 = [0, 0, 0];
     const b: Vec3 = [0, 0, 10];
 
@@ -968,16 +986,36 @@ describe('what the measurement report prints when the geometry is degenerate', (
     expect(slopeBetween(a, b, [0, 0, 1]).gradePercent).toBe(Number.POSITIVE_INFINITY);
     expect(formatGrade(slopeBetween(a, b, [0, 0, 1]).gradePercent)).toBe('vertical');
 
-    // The report path, for the same two points. `slopePercent` returns 0 for a
-    // zero run, so the PDF states a level grade for a vertical face — a number
+    // The report path, for the same two points. It used to return 0 for a zero
+    // run, so the PDF stated a level grade for a vertical face — a number
     // presented as measured, contradicting the tool that produced it, in the
-    // artifact a reader keeps. `ReportMeasurementSection`'s own header says the
-    // numbers track the live overlay's headline formula; here they do not.
+    // artifact a reader keeps.
     const rows = buildMeasurementRows([measurement('slope', [a, b])], 'metric');
-    expect(rows[0].value).toBe('0.00%'); // should be 'vertical'
+    expect(rows[0].value).toBe('vertical');
+
+    // Downward is the same refusal, not a signed one.
+    expect(
+      buildMeasurementRows([measurement('slope', [b, a])], 'metric')[0].value,
+    ).toBe('vertical');
+
+    // A genuinely level pair is still a measured 0.00%, so the refusal has not
+    // swallowed a real reading.
+    expect(
+      buildMeasurementRows(
+        [measurement('slope', [[0, 0, 4], [3, 0, 4]])],
+        'metric',
+      )[0].value,
+    ).toBe('0.00%');
+    // And an ordinary grade is unchanged.
+    expect(
+      buildMeasurementRows(
+        [measurement('slope', [[0, 0, 0], [4, 0, 1]])],
+        'metric',
+      )[0].value,
+    ).toBe('25.00%');
   });
 
-  test('DEFECT: a non-finite length prints "NaN cm" and "Infinity km" instead of refusing', () => {
+  test('a non-finite length refuses, matching the volume formatter beside it', () => {
     const rows = buildMeasurementRows(
       [
         measurement('distance', [[0, 0, 0], [Number.NaN, 0, 0]]),
@@ -987,17 +1025,31 @@ describe('what the measurement report prints when the geometry is degenerate', (
       ],
       'metric',
     );
-    // `formatLinear` in this module has no finiteness guard, unlike its
-    // neighbour `formatVolume` and unlike `format.ts`'s `formatLength`, both of
-    // which return '—'. Every row below should be '—'.
-    expect(rows.map((r) => r.value)).toEqual(['NaN cm', 'Infinity km', 'NaN cm', 'NaN cm']);
+    // `formatLinear` used to fall through to its centimetre and kilometre
+    // branches on a non-finite input, printing "NaN cm" and "Infinity km" into
+    // the PDF, while its neighbour `formatVolume` and `format.ts`'s
+    // `formatLength` both returned an em dash for the same value.
+    expect(rows.map((r) => r.value)).toEqual(['—', '—', '—', '—']);
 
-    // The volume formatter in the same file is the counter-example that shows
-    // the fix is a one-line consistency correction, not a design change.
-    const volumeRow = buildMeasurementRows(
-      [measurement('box', [[0, 0, 0], [Number.NaN, 1, 1]])],
-      'metric',
-    );
-    expect(volumeRow[0].value).toBe('—');
+    // The volume formatter in the same file, unchanged — the reference the fix
+    // was matched to.
+    expect(
+      buildMeasurementRows(
+        [measurement('box', [[0, 0, 0], [Number.NaN, 1, 1]])],
+        'metric',
+      )[0].value,
+    ).toBe('—');
+
+    // Finite lengths across all three branches are untouched.
+    expect(
+      buildMeasurementRows(
+        [
+          measurement('distance', [[0, 0, 0], [0, 0, 0.5]]),
+          measurement('distance', [[0, 0, 0], [0, 0, 5]]),
+          measurement('distance', [[0, 0, 0], [0, 0, 5000]]),
+        ],
+        'metric',
+      ).map((r) => r.value),
+    ).toEqual(['50.0 cm', '5.00 m', '5.00 km']);
   });
 });
