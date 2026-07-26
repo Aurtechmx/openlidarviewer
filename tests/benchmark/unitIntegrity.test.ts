@@ -65,6 +65,7 @@ import {
   raw,
 } from '../../src/units/units';
 import { linearUnitOf, linearUnitLabel } from '../../src/export/ScanReportRenderer';
+import { createInspectorCardRefreshers } from '../../src/app/inspectorCardRefreshers';
 
 // ── Pre-registered tolerances ────────────────────────────────────────────────
 // Written before any comparison was run. Each states the physical magnitude
@@ -722,6 +723,46 @@ describe('unit integrity — cross-path agreement', () => {
     expect(classifyDensity({ pointCount: points, bboxVolume: footVolume })).toBe(
       classifyDensity({ pointCount: points, bboxVolume: metreVolume }),
     );
+  });
+
+  /**
+   * The same tier, computed by the two refreshers that actually build it: one
+   * from a static cloud's bounds, one from a streaming cloud's header. Both
+   * describe the same physical box in the same foot CRS, so both must reach the
+   * same bucket. This is the cross-path form of the check above — the pure
+   * classifier agreeing proves nothing if one caller feeds it raw feet.
+   */
+  test('the static and streaming refreshers agree on the density tier for one foot-CRS box', () => {
+    const crs = { linearUnitToMetres: M_PER_FT, verticalUnitToMetres: M_PER_FT };
+    // A 100 x 100 x 20 m box, expressed in feet.
+    const minFt: [number, number, number] = [0, 0, 0];
+    const maxFt: [number, number, number] = [100 / M_PER_FT, 100 / M_PER_FT, 20 / M_PER_FT];
+    const points = 5_000_000;
+
+    const seen: unknown[] = [];
+    const inspector = {
+      setDatasetIntelligence: (s: unknown) => seen.push(s),
+      clearDatasetIntelligence: () => {},
+    };
+    const cards = createInspectorCardRefreshers(inspector as never);
+
+    cards.refreshDatasetIntelligenceFromStaticCloud({
+      pointCount: points,
+      metadata: { crs },
+      bounds: () => ({ min: minFt, max: maxFt }),
+    });
+    cards.refreshDatasetIntelligenceFromStreamingCloud({
+      sourcePointCount: points,
+      metadata: { header: { min: minFt, max: maxFt } },
+      crs: () => crs,
+    });
+
+    expect(seen).toHaveLength(2);
+    const tier = (s: unknown): string =>
+      classifyDensity(s as { pointCount?: number; bboxVolume?: number });
+    expect(tier(seen[1])).toBe(tier(seen[0]));
+    // And both must be the tier the physical box actually warrants.
+    expect(tier(seen[0])).toBe(classifyDensity({ pointCount: points, bboxVolume: 100 * 100 * 20 }));
   });
 
   /**
