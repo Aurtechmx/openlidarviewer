@@ -42,6 +42,7 @@
 import { parseLasHeader } from '../lasHeader';
 import { getLazPerf } from '../loadLas';
 import { validateDeclaredPointCount } from '../validateCount';
+import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +201,13 @@ export function decodeEptLaszipTileWith(
     1,
     'EPT laszip tile',
   );
+  // Fail before decoding a whole tile when its transform is outright non-finite
+  // (a bad scale/offset in the header, or a non-finite render origin). Cheap and
+  // O(1); it does NOT catch a finite-but-extreme scale overflowing
+  // `int32 · scale + offset`, so the finished positions are scanned below.
+  // The COPC and EPT-binary decoders refuse such a node the same way — this one
+  // drew it, sending Infinity to three.js with no structured error.
+  assertFiniteNodeTransform(ctx.scale, ctx.offset, renderOrigin);
   const fileBytes = new Uint8Array(buffer);
 
   const positions = new Float32Array(n * 3);
@@ -294,6 +302,10 @@ export function decodeEptLaszipTileWith(
       rgb[i] = usedEightBit ? rgb16[i] & 0xff : rgb16[i] >> 8;
     }
   }
+
+  // Backstop the up-front transform check: a finite-but-extreme scale/offset can
+  // still overflow a coordinate to ±Infinity, so refuse the tile if any did.
+  assertFinitePositions(positions);
 
   return {
     pointCount: n,
