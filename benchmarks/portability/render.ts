@@ -183,10 +183,16 @@ export function comparisonMarkdown(comparison: PortabilityComparison): string {
 
   out.push('## The seeded fixture, compared first');
   out.push('');
+  // Worded off the platform COUNT, not only off the verdict. With one leg
+  // "identical on every platform" is true and empty at the same time, and a
+  // sentence a reader can take for a cross-platform result is the one thing a
+  // single-platform report must not contain.
   out.push(
-    comparison.fixture.identical
-      ? 'The seeded source cloud is byte-identical on every platform, so any downstream difference would be a property of the analysis rather than of its input.'
-      : 'The seeded source cloud is not byte-identical across platforms. Every downstream artifact differs as a consequence, so the downstream comparison is suppressed and no conclusion is drawn about the analysis pipeline.',
+    comparison.platforms.length < 2
+      ? 'One platform was recorded, so the source cloud below has nothing to be compared against. It is published as the reference a second platform will be checked against.'
+      : comparison.fixture.identical
+        ? 'The seeded source cloud is byte-identical on every platform, so any downstream difference would be a property of the analysis rather than of its input.'
+        : 'The seeded source cloud differs between platforms. Every downstream artifact differs as a consequence, so the downstream comparison is suppressed and the finding stands against the generator rather than against the analysis pipeline.',
   );
   out.push('');
   out.push('| Platform | Source cloud sha256 | Fixture descriptor sha256 |');
@@ -214,8 +220,14 @@ export function comparisonMarkdown(comparison: PortabilityComparison): string {
     out.push(`Not evaluated: ${comparison.science.suppressedReason ?? 'no reason recorded'}`);
     out.push('');
   } else {
+    // With one leg there is no second value for anything to be compared
+    // against, and a sentence saying N hashes "were compared" would read as a
+    // comparison that happened. The counts are still worth publishing: they are
+    // what a second platform will be checked against.
     out.push(
-      `${comparison.science.hashesCompared} artifact hashes and ${comparison.science.scalarsCompared} scalar values were compared at a tolerance of exactly zero. ${comparison.science.hashesMismatched} hashes and ${comparison.science.scalarsMismatched} scalars differ.`,
+      comparison.platforms.length < 2
+        ? `${comparison.science.hashesCompared} artifact hashes and ${comparison.science.scalarsCompared} scalar values are recorded on the single platform above. Nothing was compared against them.`
+        : `${comparison.science.hashesCompared} artifact hashes and ${comparison.science.scalarsCompared} scalar values were compared at a tolerance of exactly zero. ${comparison.science.hashesMismatched} hashes and ${comparison.science.scalarsMismatched} scalars differ.`,
     );
     out.push('');
     if (comparison.science.mismatches.length > 0) {
@@ -232,7 +244,7 @@ export function comparisonMarkdown(comparison: PortabilityComparison): string {
 
   out.push('## Differences that are expected');
   out.push('');
-  out.push('These are reported, not discarded. None of them gates the result.');
+  out.push('Each one is published with the value every platform reported. None of them gates the result.');
   out.push('');
   if (comparison.expectedDifferences.length === 0) {
     out.push('No expected difference was observed between these platforms.');

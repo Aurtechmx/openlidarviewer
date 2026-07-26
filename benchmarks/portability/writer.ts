@@ -406,8 +406,19 @@ export interface VerifyPortabilityOutcome {
   readonly problems: readonly string[];
 }
 
-/** Fields that must never carry private machine information. */
-const PRIVACY_FORBIDDEN = /(?:\/Users\/|\/home\/|C:\\Users\\|\b(?:\d{1,3}\.){3}\d{1,3}\b)/;
+/**
+ * Text that must never appear in a published file.
+ *
+ * The dotted-quad half is bounded more tightly than the suite verifier's copy,
+ * and the reason is a real false positive rather than a preference: V8 reports
+ * its version as `12.4.254.21-node.22`, which the plain `\b…\b` form reads as
+ * an IP address. That version is recorded on every leg precisely because V8
+ * supplies the transcendental functions the generator depends on, so dropping
+ * the field to satisfy the scan would remove the first thing anyone would check
+ * if the fixture ever stopped matching. Requiring no adjacent version character
+ * keeps a bare address caught and lets a version through.
+ */
+const PRIVACY_FORBIDDEN = /(?:\/Users\/|\/home\/|C:\\Users\\|(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?![\w.-]))/;
 
 /**
  * Re-derive a published comparison tree from the platform legs inside it.
