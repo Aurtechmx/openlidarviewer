@@ -16,6 +16,7 @@ import {
   type DtmGrid,
 } from '../src/terrain/ground/cellConfidence';
 import type { DemRaster } from '../src/terrain/ground/rasterizeDtm';
+import { geodesicFill } from '../src/terrain/ground/geodesicFill';
 
 function raster(opts: {
   z: number[];
@@ -113,10 +114,52 @@ describe('buildDtmGrid', () => {
     expect(geographic.z[4]).toBeCloseTo(metric.z[4], 4);
   });
 
+  it('applies cos(latitude) to the geodesic step away from the equator', () => {
+    // The case above sits at latitude 0, where cos φ = 1 and the anisotropy the
+    // per-axis step exists for is absent — a build that passed one scalar to
+    // both axes would still pass it. At 60° N a degree of longitude is HALF a
+    // degree of latitude in metres, so the E–W and N–S steps must differ.
+    const DEG = 0.01;
+    const LAT = 60;
+    const raster: DemRaster = {
+      // Ridge along the north row, valley below it, void in the valley: the
+      // walk north costs differently from the walk east/west.
+      z: Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]),
+      counts: Uint32Array.from([8, 8, 8, 8, 0, 8, 8, 8, 8]),
+      cols: 3, rows: 3, cellSizeM: DEG, originH1: 0, originH2: 0,
+      coverage: 'full', sourcePointCount: 64, analyzedPointCount: 64,
+      filledCellCount: 8, warnings: [],
+    };
+    const grid = buildDtmGrid(raster, {
+      crs: 'EPSG:4326', isGeographic: true, latitudeDeg: LAT, interpolation: 'geodesic',
+    });
+
+    // What the stage must have handed the fill: the N–S cell in metres, and the
+    // E–W cell shrunk by cos(60°) = 0.5.
+    const nsMetres = DEG * 111_320;
+    const expected = geodesicFill(raster.z, Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]), 3, 3, {
+      cellMetresX: nsMetres * Math.cos((LAT * Math.PI) / 180),
+      cellMetresY: nsMetres,
+    });
+    expect(grid.z[4]).toBeCloseTo(expected[4], 6);
+
+    // …and that is genuinely not the isotropic answer, so the assertion above
+    // is not satisfied by a stage that ignored the latitude.
+    const isotropic = geodesicFill(raster.z, Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]), 3, 3, {
+      cellMetresX: nsMetres,
+      cellMetresY: nsMetres,
+    });
+    expect(Math.abs(expected[4] - isotropic[4])).toBeGreaterThan(1e-3);
+  });
+
   it('the DEFAULT (Euclidean IDW) fill is untouched by the horizontal frame', () => {
-    // Only the non-default geodesic mode reads the metre-converted cell size.
-    // The default fill works in grid space and must stay byte-identical whether
-    // the frame is projected metres, degrees, or feet.
+    // A TRIPWIRE, not a proof. The default branch calls `idwFill(…, {})` with
+    // no options at all, so today no frame-derived value can reach it and this
+    // cannot fail — it is structurally unfalsifiable as written. Its job is to
+    // go red the day someone threads the cell size into that call without
+    // meaning to, which is exactly the change the geodesic branch just made
+    // next door. (Making the default fill metric-aware is a real improvement,
+    // but a deliberate one that must arrive with its own expectations.)
     const mk = (cellSizeM: number): DemRaster => ({
       z: Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]),
       counts: Uint32Array.from([8, 8, 8, 8, 0, 8, 8, 8, 8]),

@@ -19,6 +19,19 @@
  *            nearest `kNearest` MEASURED cells by geodesic cost; the void is the
  *            inverse-distance blend of those (weight 1/cost^power).
  *
+ * KNOWN LIMIT — pass 1 is frame-blind. `idwFill` weights by distance in CELLS,
+ * isotropically, so on an anisotropic grid (a geographic raster away from the
+ * equator, where the E–W cell is cos φ × the N–S cell) the provisional surface
+ * is built by an interpolant that does not know the cells are not square. Pass
+ * 2's step cost is metre-correct, but every Δz it differences comes from that
+ * surface. Because IDW weights are normalised (1/d^power over the collected
+ * samples), a UNIFORM scale cancels exactly — so projected frames, metre or
+ * foot, are unaffected and this is a geographic-only residual. Fixing it means
+ * metric distances in `idwFill`, which also changes the DEFAULT (non-geodesic)
+ * fill and needs its expanding Chebyshev ring search reworked, since "the k
+ * nearest" would no longer follow cell-ring order. Deliberately out of scope
+ * here; the pass-2 unit bug it sat behind is the one being fixed.
+ *
  * Honesty is unchanged: this only produces better interpolated HEIGHTS. Which
  * cells count as measured / interpolated / gap, and their confidence, is still
  * decided in cellConfidence.ts. No DOM, no I/O.

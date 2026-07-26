@@ -261,6 +261,11 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     // Prefer the caller's WORLD latitude: the raster origin is render-
     // recentred for viewer-fed grids (≈ 0 → cos φ silently 1). The origin
     // fallback stays correct for grids built in absolute coordinates.
+    //
+    // Sign checked: rasterizeDtm sets originH2 = minH2 (the SOUTH edge) and
+    // bins with row = floor((y − originH2)/cell), so rows run NORTHWARD and
+    // origin + half the rows is the grid centre, not its mirror. This now
+    // steers interpolated heights as well as slope, so it is worth pinning.
     params.latitudeDeg ?? originH2 + (rows / 2) * cellSizeM,
     params.horizontalUnitToMetres,
   );

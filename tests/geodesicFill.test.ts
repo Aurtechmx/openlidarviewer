@@ -39,10 +39,6 @@ describe('geodesicFill', () => {
     const z = Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]);
     const had = Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]);
     const metres = geodesicFill(z, had, 3, 3, { cellMetresX: 1113.2, cellMetresY: 1113.2 });
-    // Per-axis steps: a grid whose N–S cell is 100x its E–W cell (the cos φ
-    // geometry near the poles) cannot fill like a square one.
-    const anisotropic = geodesicFill(z, had, 3, 3, { cellMetresX: 1113.2, cellMetresY: 11.132 });
-    expect(anisotropic[4]).not.toBeCloseTo(metres[4], 5);
 
     // And a foot-vertical grid: the rise is converted before it is compared
     // with the metre step, so the same surface in feet fills equivalently.
@@ -51,6 +47,33 @@ describe('geodesicFill', () => {
       cellMetresX: 1113.2, cellMetresY: 1113.2, verticalUnitToMetres: 0.3048,
     });
     expect(inFeet[4] * 0.3048).toBeCloseTo(metres[4], 5);
+  });
+
+  it('costs a diagonal step as the metric hypotenuse of the two axes', () => {
+    // The single load-bearing line of the per-axis step: `hypot(cellX, cellY)`.
+    // A diagonal move crosses one cell on EACH axis, so on a grid whose N–S
+    // cell is 100x its E–W cell it must cost at least the longer axis (100.005),
+    // never a blend of the two — the plausible-looking mean (50.5) makes every
+    // diagonal ~half price, reroutes Dijkstra and shifts every filled height on
+    // every production surface.
+    //
+    // Dijkstra's route choice is discrete, so the resulting height is pinned by
+    // value rather than by an inequality: an ordering assertion is satisfied by
+    // the wrong cost too. The mean-diagonal mutant yields 12.7307786942 here
+    // and 13.0511302948 on the square grid below.
+    const z = Float32Array.from([100, 100, 100, 0, NaN, 0, 0, 0, 0]);
+    const had = Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]);
+
+    const anisotropic = geodesicFill(z, had, 3, 3, { cellMetresX: 1, cellMetresY: 100 });
+    expect(anisotropic[4]).toBeCloseTo(9.12470722198, 8);
+
+    // The square-cell case production runs on: the diagonal is cell·√2, not cell.
+    const square = geodesicFill(z, had, 3, 3, { cellMetresX: 1, cellMetresY: 1 });
+    expect(square[4]).toBeCloseTo(13.0535078049, 8);
+
+    // Anisotropy must actually change the answer — a kernel that quietly used
+    // one axis for both would otherwise satisfy the square-grid pin alone.
+    expect(Math.abs(anisotropic[4] - square[4])).toBeGreaterThan(1);
   });
 
   it('keeps measured cells verbatim and leaves an all-empty grid NaN', () => {

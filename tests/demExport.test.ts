@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { writeAsciiGrid } from '../src/terrain/export/demAsciiGrid';
-import { writeGeoTiff } from '../src/terrain/export/demGeoTiff';
+import { writeGeoTiff, verticalUnitGeoKeyCode } from '../src/terrain/export/demGeoTiff';
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { buildDtmGrid } from '../src/terrain/ground/cellConfidence';
 import { sha256Hex } from '../src/terrain/export/sha256';
@@ -517,6 +517,20 @@ describe('buildDemPackage', () => {
     (r as { dtm: unknown }).dtm = grid;
     const zip = buildDemPackage(r, { worldOrigin: { x: 600000, y: 4000000 }, basename: 'site' });
     expect(readTiffGeoKey(extractEntry(zip, 'site-dtm.tif')!, 4099)).toBe(9002);
+  });
+
+  it('maps a metres-per-unit factor to its GeoTIFF unit code, or to none', () => {
+    // The shared derivation both products now go through. An unrecognised
+    // factor must yield null so the writer omits key 4099 rather than
+    // asserting a unit the data never declared.
+    expect(verticalUnitGeoKeyCode(1)).toBe(9001); // metre
+    expect(verticalUnitGeoKeyCode(0.3048)).toBe(9002); // international foot
+    expect(verticalUnitGeoKeyCode(1200 / 3937)).toBe(9003); // US survey foot
+    // The two foot definitions differ by ~2 ppm and must not collapse together.
+    expect(verticalUnitGeoKeyCode(0.3048)).not.toBe(verticalUnitGeoKeyCode(1200 / 3937));
+    for (const unknown of [null, undefined, 0, -1, 0.9144, Number.NaN, Infinity]) {
+      expect(verticalUnitGeoKeyCode(unknown)).toBeNull();
+    }
   });
 
   it('writes the same vertical unit key from the contour deliverable as from the DEM package', () => {

@@ -202,6 +202,16 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     // kernel must never receive 0 and flatten every slope.
     expect(new Float32Array(uniData.buffer, 16, 1)[0]).toBe(1);
 
+    // The mock never EXECUTES WGSL, so a kernel that accepts the uniform and
+    // ignores it would pass everything above. Assert the shader source itself
+    // declares the field and applies it — crude, but it turns a dropped
+    // `* p.zScale` from a silent green into a red gate. The device probe is the
+    // real equivalence check; this is the part CI can run.
+    const horn = log.shaderCodes.find((c) => c.includes('fn horn_main'));
+    expect(horn).toBeDefined();
+    expect(horn).toMatch(/zScale\s*:\s*f32/); // declared in Params
+    expect(horn).toMatch(/\*\s*p\.zScale/); // and actually multiplied in
+
     // The uploaded grid is the NaN-FREE copy plus the validity mask.
     const zUpload = storage[0].written as Float32Array;
     expect(zUpload[5]).toBe(0);
