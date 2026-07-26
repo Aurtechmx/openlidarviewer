@@ -17,8 +17,11 @@
 
 import { measured, unavailable, type Metric } from './types';
 
+// Names the specific API, not "no monotonic clock": a browser has
+// `performance.now()`, so the broad claim would have been untrue there. What is
+// actually missing is the nanosecond-resolution Node one this module uses.
 export const CLOCK_UNAVAILABLE_REASON =
-  'no monotonic clock: process.hrtime.bigint() is not available in this runtime';
+  'process.hrtime.bigint() is not available in this runtime, so no monotonic nanosecond reading could be taken';
 
 /** Read the monotonic clock, or null where the runtime has none (e.g. a browser). */
 export function readMonotonicNs(): bigint | null {

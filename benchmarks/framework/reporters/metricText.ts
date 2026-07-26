@@ -14,7 +14,13 @@
  * measurement was, which is the measurer's call, not the formatter's.
  */
 
-import { isMeasured, type ArtifactRecord, type EnvValue, type Metric } from '../types';
+import {
+  isMeasured,
+  type ArtifactRecord,
+  type BenchmarkEnvironment,
+  type EnvValue,
+  type Metric,
+} from '../types';
 
 /** The literal that must appear wherever a metric was not measured. */
 export const UNAVAILABLE_LABEL = 'unavailable';
@@ -37,6 +43,36 @@ export function metricUnitCell(m: Metric): string {
 /** The reason column. Empty for a measured metric, which needs no excuse. */
 export function metricReasonCell(m: Metric): string {
   return isMeasured(m) ? '' : m.reason;
+}
+
+/**
+ * Every environment field, in report order, with its human label.
+ *
+ * The typed `Record<keyof BenchmarkEnvironment, string>` is the point: the HTML
+ * and Markdown reporters used to hard-code their own arrays, so adding a
+ * provenance field put it in the JSON and the CSV and silently dropped it from
+ * the other two — with no test failing. A provenance field that is present in
+ * the machine-readable output and missing from the HTML attached to a paper is
+ * the worst version of that. Now a new field fails the typecheck here until it
+ * is labelled, and both reporters pick it up from this one list.
+ */
+export const ENVIRONMENT_LABELS: Record<keyof BenchmarkEnvironment, string> = {
+  releaseVersion: 'release version',
+  gitCommitShort: 'git commit',
+  gitCommitFull: 'git commit (full)',
+  gitDirty: 'working tree',
+  os: 'OS',
+  cpuModel: 'CPU',
+  arch: 'arch',
+  nodeVersion: 'Node',
+};
+
+/** The label map as ordered pairs, ready for a reporter to render. */
+export function environmentRows(
+  env: BenchmarkEnvironment,
+): ReadonlyArray<readonly [string, EnvValue]> {
+  const keys = Object.keys(ENVIRONMENT_LABELS) as (keyof BenchmarkEnvironment)[];
+  return keys.map((k) => [ENVIRONMENT_LABELS[k], env[k]] as const);
 }
 
 /** An environment field: the captured string, or the word plus its reason. */

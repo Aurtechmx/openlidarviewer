@@ -11,22 +11,42 @@ import { toJson } from '../../benchmarks/framework/reporters/json';
 import { toCsv } from '../../benchmarks/framework/reporters/csv';
 import { toMarkdown } from '../../benchmarks/framework/reporters/markdown';
 import { toHtml } from '../../benchmarks/framework/reporters/html';
-import type { RunReport } from '../../benchmarks/framework/types';
+import {
+  capturedEnv,
+  measured,
+  unavailable,
+  type BenchmarkEnvironment,
+  type RunReport,
+} from '../../benchmarks/framework/types';
 import { RAW_BYTES_NO_STRIP_REASON } from '../../benchmarks/framework/artifacts';
-import { describeHashExclusions } from '../../benchmarks/framework/reporters/metricText';
+import {
+  describeHashExclusions,
+  ENVIRONMENT_LABELS,
+} from '../../benchmarks/framework/reporters/metricText';
 import { fixtureReport } from './reportFixture';
 
-const REPORTERS: ReadonlyArray<readonly [string, (r: RunReport) => string]> = [
-  ['json', toJson],
-  ['csv', toCsv],
-  ['markdown', toMarkdown],
-  ['html', toHtml],
+/**
+ * Each reporter with the EXACT rendering of two facts that a `toContain` check
+ * cannot pin: the schema version (`toContain('1')` also matches `1024`) and the
+ * dataset id in a labelled position. Asserting the real shape is what makes
+ * these tests able to fail.
+ */
+const REPORTERS: ReadonlyArray<readonly [string, (r: RunReport) => string, RegExp, RegExp]> = [
+  ['json', toJson, /"schemaVersion": 1,/, /"datasetId": "synthetic-grid-1m"/],
+  ['csv', toCsv, /^run,schemaVersion,1,/m, /^run,datasetId,synthetic-grid-1m,/m],
+  ['markdown', toMarkdown, /\| schema version \| 1 \|/, /\| dataset \| synthetic-grid-1m \|/],
+  [
+    'html',
+    toHtml,
+    /<th>schema version<\/th><td>1<\/td>/,
+    /<th>dataset<\/th><td>synthetic-grid-1m<\/td>/,
+  ],
 ];
 
 const MEMORY_REASON = 'process.memoryUsage is not exposed in this runtime';
 const GPU_REASON = 'WebGPU timestamp queries need a browser runtime';
 
-describe.each(REPORTERS)('the %s reporter', (name, render) => {
+describe.each(REPORTERS)('the %s reporter', (name, render, schemaRe, datasetRe) => {
   const out = render(fixtureReport());
 
   test('renders both unavailable metrics as unavailable, with their reason', () => {
@@ -36,14 +56,29 @@ describe.each(REPORTERS)('the %s reporter', (name, render) => {
   });
 
   test('carries the environment, dataset, commit, release and schema version', () => {
-    expect(out).toContain('synthetic-grid-1m'); // dataset id
+    expect(out).toMatch(datasetRe);
+    expect(out).toMatch(schemaRe);
     expect(out).toContain('darwin 24.0.0'); // OS
     expect(out).toContain('Apple M2 Pro'); // CPU model
     expect(out).toContain('arm64'); // arch
     expect(out).toContain('v22.17.1'); // Node version
     expect(out).toContain('5f452c7'); // git commit
     expect(out).toContain('0.6.0'); // release version
-    expect(out).toContain('1'); // schema version
+  });
+
+  test('carries EVERY environment field the schema declares', () => {
+    // Two reporters used to hard-code their own field lists, so a provenance
+    // field could land in the JSON and vanish from the page a reader opens.
+    for (const key of Object.keys(ENVIRONMENT_LABELS) as (keyof BenchmarkEnvironment)[]) {
+      const field = fixtureReport().environment[key];
+      if (field.status !== 'captured') continue;
+      expect(out, key).toContain(field.value);
+    }
+  });
+
+  test('discloses whether the working tree matched the commit', () => {
+    // A commit hash with no dirty flag asserts a provenance the run may not have.
+    expect(out).toContain('clean');
   });
 
   test('carries every stage name, its duration and its peak memory', () => {
@@ -75,8 +110,23 @@ describe.each(REPORTERS)('the %s reporter', (name, render) => {
     // a reader. Wherever this reporter mentions the unavailable memory metric,
     // the reason has to be on the same line.
     const lines = out.split('\n').filter((l) => l.includes(MEMORY_REASON));
-    expect(lines.length).toBeGreaterThan(0);
-    expect(name.length).toBeGreaterThan(0);
+    expect(lines.length, name).toBeGreaterThan(0);
+  });
+
+  test('a newline in an error does not split the row it belongs to', () => {
+    // Error.message is routinely multi-line, and a raw newline ends a Markdown
+    // row mid-table. Every format has to survive it.
+    const report = fixtureReport();
+    const stages = report.stages.map((s) =>
+      s.status === 'failed' ? { ...s, error: 'line one\nline two' } : s,
+    );
+    const rendered = render({ ...report, stages });
+    expect(rendered).toContain('line one');
+    expect(rendered).toContain('line two');
+    if (name === 'markdown') {
+      expect(rendered).not.toMatch(/\| line two/);
+      expect(rendered).toContain('line one; line two');
+    }
   });
 });
 
@@ -141,6 +191,27 @@ describe('the CSV reporter', () => {
     expect(toCsv(withComma)).toContain('"grid,1m"');
   });
 
+  test('neutralises a cell a spreadsheet would run as a formula', () => {
+    const report = fixtureReport();
+    for (const payload of ['=HYPERLINK(x)', '+1+1', '@SUM(A1)', '-1+1', '\tcmd']) {
+      const rendered = toCsv({ ...report, datasetId: payload });
+      expect(rendered, payload).toContain(`"'${payload}"`);
+    }
+  });
+
+  test('a negative NUMBER is left alone, so it stays a number in the sheet', () => {
+    const report = fixtureReport();
+    const negative: RunReport = {
+      ...report,
+      metrics: {
+        drift: measured(-1.5, 'm', { runtime: 'node', deterministic: false }),
+      },
+    };
+    const row = toCsv(negative).split('\n').find((r) => r.startsWith('metric,drift,'));
+    expect(row).toContain(',-1.5,');
+    expect(row).not.toContain("'-1.5");
+  });
+
   test('every data row has the same column count as the header', () => {
     const cols = (line: string): number => {
       let n = 1;
@@ -165,8 +236,34 @@ describe('the Markdown reporter', () => {
   });
 
   test('escapes a pipe in a reason so the table does not gain a column', () => {
-    expect(toMarkdown(fixtureReport()).split('\n').filter((l) => l.startsWith('|')).length).
-      toBeGreaterThan(3);
+    // The previous version of this test rendered the unmodified fixture, which
+    // contains no pipe at all — it passed with the escaper deleted.
+    const report = fixtureReport();
+    const withPipe: RunReport = {
+      ...report,
+      metrics: {
+        ...report.metrics,
+        gpuFrameTime: unavailable('needs a | b support', {
+          runtime: 'browser',
+          deterministic: false,
+        }),
+      },
+    };
+    const rendered = toMarkdown(withPipe);
+    expect(rendered).toContain('needs a \\| b support');
+    expect(rendered).not.toContain('needs a | b support');
+  });
+
+  test('escapes a pipe in a stage name and in the dataset id too', () => {
+    const report = fixtureReport();
+    const hostile: RunReport = {
+      ...report,
+      datasetId: 'grid | v2',
+      stages: report.stages.map((s) => ({ ...s, name: `${s.name} | retry` })),
+    };
+    const rendered = toMarkdown(hostile);
+    expect(rendered).toContain('grid \\| v2');
+    expect(rendered).toContain('decode \\| retry');
   });
 });
 
@@ -187,10 +284,46 @@ describe('the HTML reporter', () => {
     expect(html).toContain(GPU_REASON);
   });
 
-  test('escapes report content so a hostile dataset id cannot inject markup', () => {
-    const report: RunReport = { ...fixtureReport(), datasetId: '<img src=x onerror=alert(1)>' };
-    const out = toHtml(report);
-    expect(out).not.toContain('<img');
-    expect(out).toContain('&lt;img');
+  test('escapes report content wherever suite-supplied text reaches the page', () => {
+    const PAYLOAD = '<img src=x onerror=alert(1)>';
+    const report = fixtureReport();
+    const [artifact, rawArtifact] = report.artifacts;
+    if (rawArtifact.volatilityStripped) throw new Error('fixture: expected a raw byte artifact');
+    const variants: ReadonlyArray<readonly [string, RunReport]> = [
+      ['datasetId', { ...report, datasetId: PAYLOAD }],
+      ['suiteId', { ...report, suiteId: PAYLOAD }],
+      ['stage name', { ...report, stages: report.stages.map((s) => ({ ...s, name: PAYLOAD })) }],
+      [
+        'stage error',
+        {
+          ...report,
+          stages: report.stages.map((s) => (s.status === 'failed' ? { ...s, error: PAYLOAD } : s)),
+        },
+      ],
+      ['artifact name', { ...report, artifacts: [{ ...artifact, name: PAYLOAD }, rawArtifact] }],
+      [
+        'unstrippedReason',
+        { ...report, artifacts: [artifact, { ...rawArtifact, unstrippedReason: PAYLOAD }] },
+      ],
+      ['metric key', { ...report, metrics: { [PAYLOAD]: report.metrics.pointsPerSecond } }],
+      [
+        'metric reason',
+        {
+          ...report,
+          metrics: {
+            gpuFrameTime: unavailable(PAYLOAD, { runtime: 'browser', deterministic: false }),
+          },
+        },
+      ],
+      [
+        'environment value',
+        { ...report, environment: { ...report.environment, cpuModel: capturedEnv(PAYLOAD) } },
+      ],
+    ];
+    for (const [where, variant] of variants) {
+      const rendered = toHtml(variant);
+      expect(rendered, where).not.toContain('<img');
+      expect(rendered, where).toContain('&lt;img');
+    }
   });
 });

@@ -13,6 +13,7 @@ import {
   hashArtifact,
   stripVolatile,
   AMBIGUOUS_CLOCK_KEYS,
+  MAX_ARTIFACT_DEPTH,
   VOLATILE_RULES,
   VOLATILE_PLACEHOLDER,
   RAW_BYTES_NO_STRIP_REASON,
@@ -120,8 +121,26 @@ describe('hash stability', () => {
 
   test('an absolute path nested in an array is stripped too', () => {
     const a = { ...base, inputs: ['/Users/alice/a.las', '/Users/alice/b.las'] };
-    const b = { ...base, inputs: ['/srv/ci/x.las', '/srv/ci/y.las'] };
+    const b = { ...base, inputs: ['/srv/ci/a.las', '/srv/ci/b.las'] };
     expect(hashArtifact('metrics', a).hash).toBe(hashArtifact('metrics', b).hash);
+  });
+
+  test('the redaction keeps the BASENAME, so two different files still differ', () => {
+    // Machine-specificity lives in the directory prefix, never the filename.
+    // Collapsing every absolute path to one placeholder made a run over tileA
+    // and a run over tileB hash identically — two different artifacts, one
+    // hash, reported by the reproducibility suite as agreement.
+    const a = { ...base, input: '/data/tileA.laz' };
+    const b = { ...base, input: '/data/tileB.laz' };
+    expect(hashArtifact('metrics', a).hash).not.toBe(hashArtifact('metrics', b).hash);
+  });
+
+  test('the same basename under different roots still hashes the same', () => {
+    const a = { ...base, input: '/Users/alice/checkout/data/scan.las' };
+    const b = { ...base, input: 'C:\\Users\\carol\\data\\scan.las' };
+    const c = { ...base, input: 'file:///srv/ci/workspace/data/scan.las' };
+    expect(hashArtifact('metrics', a).hash).toBe(hashArtifact('metrics', b).hash);
+    expect(hashArtifact('metrics', a).hash).toBe(hashArtifact('metrics', c).hash);
   });
 
   test('two artifacts differing only in machine identity hash the same', () => {
@@ -208,6 +227,50 @@ describe('hash sensitivity — the strip is not over-broad', () => {
     expect(hashArtifact('metrics', a).hash).not.toBe(hashArtifact('metrics', b).hash);
   });
 
+  test('a __proto__ key is a real own property in the canonical form', () => {
+    // `out['__proto__'] = v` on a `{}` literal hits Object.prototype's setter
+    // and RE-PARENTS the object instead of creating an own property, so the key
+    // vanished: two different payloads and an empty object all hashed the same,
+    // while the record asserted `volatilityStripped: true` with an empty
+    // exclusion list. Any artifact built by JSON.parse of a sidecar, an
+    // ept.json or a GeoJSON can carry this key.
+    // JSON.parse is the realistic entry point and the only one that makes
+    // `__proto__` a genuine own key — an object LITERAL with that key sets the
+    // prototype instead, which the type guard rejects separately.
+    const a = hashArtifact('metrics', JSON.parse('{"__proto__":{"secret":1}}')).hash;
+    const b = hashArtifact('metrics', JSON.parse('{"__proto__":{"secret":999}}')).hash;
+    const empty = hashArtifact('metrics', JSON.parse('{}')).hash;
+    expect(a).not.toBe(b);
+    expect(a).not.toBe(empty);
+    expect(b).not.toBe(empty);
+  });
+
+  test('a __proto__ key is reported in strippedFields terms, not silently absent', () => {
+    // The record must not claim a clean strip over a key that never made it in.
+    const rec = hashArtifact('metrics', JSON.parse('{"__proto__":{"secret":1},"n":1}'));
+    expect(rec.volatilityStripped).toBe(true);
+    expect(rec.strippedFields).toEqual([]);
+    // ...and the key really is in the hashed form, which is the whole point.
+    expect(rec.hash).not.toBe(hashArtifact('metrics', JSON.parse('{"n":1}')).hash);
+  });
+
+  test('a hole in a sparse array normalises to null, as JSON does', () => {
+    // Array.prototype.map SKIPS holes, so the undefined-to-null normalisation
+    // never ran: the canonical form was `{"arr":[,,1]}`, which JSON.parse
+    // rejects, and it differed from the identical document [null,null,1].
+    const sparse = { arr: [, , 1] };
+    const dense = { arr: [undefined, undefined, 1] };
+    const explicit = { arr: [null, null, 1] };
+    expect(hashArtifact('m', sparse).hash).toBe(hashArtifact('m', dense).hash);
+    expect(hashArtifact('m', sparse).hash).toBe(hashArtifact('m', explicit).hash);
+  });
+
+  test('the canonical form of a sparse array is parseable JSON', () => {
+    const clean = stripVolatile({ arr: [, , 1] }).value;
+    expect(() => JSON.parse(JSON.stringify(clean))).not.toThrow();
+    expect(clean).toEqual({ arr: [null, null, 1] });
+  });
+
   test('array order still matters', () => {
     const a = { ...base, nested: { ...base.nested, classes: [1, 2, 6] } };
     const b = { ...base, nested: { ...base.nested, classes: [6, 2, 1] } };
@@ -249,7 +312,12 @@ describe('the strip list is auditable', () => {
     >;
     expect(out.keep).toBe(1);
     expect('generatedAt' in out).toBe(false);
-    expect(out.p).toBe(VOLATILE_PLACEHOLDER);
+    expect(out.p).toBe(`${VOLATILE_PLACEHOLDER}/a.bin`);
+  });
+
+  test('a directory-only path redacts to the placeholder with an empty basename', () => {
+    const out = stripVolatile({ p: '/var/tmp/' }).value as Record<string, unknown>;
+    expect(out.p).toBe(`${VOLATILE_PLACEHOLDER}/`);
   });
 
   test('stripVolatile does not mutate its input', () => {
@@ -290,6 +358,13 @@ describe('byte artifacts', () => {
     const rec = hashArtifact('raster', new Uint8Array([1, 2, 3]).buffer);
     expect(rec.kind).toBe('bytes');
     expect(rec.volatilityStripped).toBe(false);
+  });
+
+  test('an unnamed artifact is rejected, as an unnamed metric already is', () => {
+    // A record with no name cannot be found again in a report, and the three
+    // other constructors (measured, unavailable, capturedEnv) all refuse it.
+    expect(() => hashArtifact('', { n: 1 })).toThrow(/name/i);
+    expect(() => hashArtifact('   ', new Uint8Array([1]))).toThrow(/name/i);
   });
 
   test('a JSON artifact claims the strip, with no reason to give', () => {
@@ -435,6 +510,42 @@ describe('values canonicalJson cannot represent are rejected, not silently colla
 
   test('a typed array NESTED in a JSON artifact is rejected rather than hashed as an object', () => {
     expect(() => hashArtifact('metrics', { bytes: new Uint8Array([1, 2]) })).toThrow(/Uint8Array/);
+  });
+
+  test('a reference cycle fails with the path, not a bare stack overflow', () => {
+    // `report.parent = report` is a realistic accident. It used to surface as
+    // `RangeError: Maximum call stack size exceeded` — no artifact, no path, in
+    // a module whose other errors name `runs[1].now`.
+    const report: Record<string, unknown> = { suiteId: 'decode' };
+    report.parent = report;
+    expect(() => hashArtifact('metrics', report)).toThrow(/reference cycle/);
+    expect(() => hashArtifact('metrics', report)).toThrow(/parent/);
+    expect(() => hashArtifact('metrics', report)).not.toThrow(/call stack/);
+  });
+
+  test('a cycle through an array is caught too', () => {
+    const runs: unknown[] = [{ ok: true }];
+    runs.push({ runs });
+    expect(() => hashArtifact('metrics', { runs })).toThrow(/reference cycle/);
+  });
+
+  test('the same object appearing twice WITHOUT a cycle is not a cycle', () => {
+    // A shared sub-object is legal JSON input; only an ancestor repeat is a cycle.
+    const shared = { a: 1 };
+    expect(() => hashArtifact('metrics', { x: shared, y: shared })).not.toThrow();
+  });
+
+  test('nesting deeper than the stated limit fails with a message, not a crash', () => {
+    let deep: Record<string, unknown> = { leaf: 1 };
+    for (let i = 0; i < MAX_ARTIFACT_DEPTH + 5; i++) deep = { n: deep };
+    expect(() => hashArtifact('metrics', deep)).toThrow(/nested deeper than/);
+    expect(() => hashArtifact('metrics', deep)).toThrow(String(MAX_ARTIFACT_DEPTH));
+  });
+
+  test('stripVolatile used on its own is guarded the same way', () => {
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => stripVolatile(cyclic)).toThrow(/reference cycle/);
   });
 
   test('the error names the artifact, so a suite with ten artifacts says which one', () => {

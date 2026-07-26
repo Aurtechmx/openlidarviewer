@@ -1,10 +1,17 @@
 /**
  * index.ts
  *
- * The framework's public surface. A benchmark suite imports from here and
- * nowhere else, so the modules underneath can be reorganised without touching
- * three suites — and so the honesty contract has exactly one front door: there
- * is no exported way to build a metric that carries a number it did not measure.
+ * The framework's runtime-neutral public surface. A benchmark suite imports the
+ * schema, the instruments and the reporters from here, so the modules underneath
+ * can be reorganised without touching three suites — and so the honesty contract
+ * has exactly one front door: there is no exported way to build a metric that
+ * carries a number it did not measure.
+ *
+ * NOTHING reachable from this file may import a `node:` builtin. The schema
+ * advertises browser-taken metrics and `clock.ts`/`memory.ts` both have browser
+ * branches, so a browser-side suite has to be able to bundle this. Anything that
+ * needs a filesystem, a subprocess or `node:crypto` lives in `./node.ts`, and a
+ * source guard in the test suite keeps it that way.
  */
 
 export {
@@ -25,6 +32,8 @@ export type {
   Metric,
   MetricProvenance,
   MetricRuntime,
+  FailedStageResult,
+  OkStageResult,
   RunReport,
   StageResult,
   StrippedArtifactRecord,
@@ -38,18 +47,26 @@ export { startMemorySampler, readProcessRss, MEMORY_UNAVAILABLE_REASON } from '.
 export type { MemorySampler, MemorySamplerOptions } from './memory';
 export { runStage, runStageAsync } from './stage';
 export type { RunStageOptions, StageOutcome } from './stage';
-export { captureEnvironment } from './env';
-export type { CaptureEnvironmentOptions } from './env';
+// `captureEnvironment` is deliberately NOT here — see the header. Import it from
+// `./node.ts`, together with the fast `node:crypto` digest.
 export {
   assertHashable,
   hashArtifact,
   stripVolatile,
   AMBIGUOUS_CLOCK_KEYS,
+  MAX_ARTIFACT_DEPTH,
+  PORTABLE_DIGEST_MIB_PER_SEC,
   VOLATILE_RULES,
   VOLATILE_PLACEHOLDER,
   RAW_BYTES_NO_STRIP_REASON,
 } from './artifacts';
-export type { StripResult, VolatileKind, VolatileRule } from './artifacts';
+export type {
+  DigestFn,
+  HashArtifactOptions,
+  StripResult,
+  VolatileKind,
+  VolatileRule,
+} from './artifacts';
 
 export { toJson } from './reporters/json';
 export { toCsv } from './reporters/csv';

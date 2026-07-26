@@ -17,7 +17,7 @@
  */
 
 import { isMeasured, type EnvValue, type Metric, type RunReport } from '../types';
-import { describeHashExclusions, UNAVAILABLE_LABEL } from './metricText';
+import { describeHashExclusions, environmentRows, UNAVAILABLE_LABEL } from './metricText';
 
 /** Escape the five characters that can break out of text or an attribute. */
 function esc(value: string): string {
@@ -86,17 +86,10 @@ export function toHtml(report: RunReport): string {
     .map(([k, v]) => `<tr><th>${esc(k)}</th>${textCell(v)}</tr>`)
     .join('');
 
-  const envRows = (
-    [
-      ['release version', env.releaseVersion],
-      ['git commit', env.gitCommitShort],
-      ['git commit (full)', env.gitCommitFull],
-      ['OS', env.os],
-      ['CPU', env.cpuModel],
-      ['arch', env.arch],
-      ['Node', env.nodeVersion],
-    ] as ReadonlyArray<readonly [string, EnvValue]>
-  )
+  // From the shared label map, never a local array: this reporter is the one a
+  // reader opens, so a provenance field must not be able to reach the JSON and
+  // quietly skip the page.
+  const envRows = environmentRows(env)
     .map(([k, v]) => `<tr><th>${esc(k)}</th>${envCell(v)}</tr>`)
     .join('');
 
@@ -139,9 +132,17 @@ export function toHtml(report: RunReport): string {
 <h2>Stages</h2>
 <table>${headerRow(['stage', 'status', 'duration', 'peak RSS', 'error'])}${stageRows}</table>
 <h2>Metrics</h2>
-<table>${headerRow(['metric', 'value', 'runtime', 'deterministic'])}${metricRows}</table>
+${
+  metricRows === ''
+    ? '<p class="note">This run reported no suite-level metrics.</p>'
+    : `<table>${headerRow(['metric', 'value', 'runtime', 'deterministic'])}${metricRows}</table>`
+}
 <h2>Artifacts</h2>
-<table>${headerRow(['artifact', 'algorithm', 'hash', 'bytes', 'excluded from hash'])}${artifactRows}</table>
+${
+  artifactRows === ''
+    ? '<p class="note">This run produced no hashed artifacts.</p>'
+    : `<table>${headerRow(['artifact', 'algorithm', 'hash', 'bytes', 'excluded from hash'])}${artifactRows}</table>`
+}
 <p class="note">A cell marked ${UNAVAILABLE_LABEL} was not measured in this run. It is not zero,
 and it is not an estimate — the stated reason is why no number exists.</p>
 `;

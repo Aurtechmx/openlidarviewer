@@ -97,9 +97,18 @@ export const VOLATILE_RULES: readonly VolatileRule[] = [
     kind: 'absolute-path',
     appliesTo: 'value',
     pattern: /^(\/[^/]|\/$|[A-Za-z]:[\\/]|\\\\|file:\/\/)/,
-    why: 'An absolute path encodes the reviewer’s checkout location, so the same dataset hashes differently on every machine. Matched on the VALUE, not the key, so a repo-relative path stays part of the artifact identity.',
+    why: 'An absolute path encodes the reviewer’s checkout location, so the same dataset hashes differently on every machine. Matched on the VALUE, not the key, so a repo-relative path stays part of the artifact identity. Only the DIRECTORY PREFIX is redacted: the basename is retained, because machine-specificity never lives in the filename and collapsing every path to one placeholder made a run over tileA.laz and a run over tileB.laz hash identically.',
   },
 ];
+
+/**
+ * How deep an artifact may nest before the guard gives up.
+ *
+ * A stated limit beats a stack overflow: 512 is far past any real metrics
+ * document, and a structure deeper than that is a bug the author needs told
+ * about in words rather than a `RangeError` with no path in it.
+ */
+export const MAX_ARTIFACT_DEPTH = 512;
 
 const KEY_RULES = VOLATILE_RULES.filter((r) => r.appliesTo === 'key');
 const VALUE_RULES = VOLATILE_RULES.filter((r) => r.appliesTo === 'value');
@@ -118,44 +127,89 @@ export interface StripResult {
  * an artifact that never had the field and one where it was stripped — which is
  * the point: both describe the same science.
  */
+/**
+ * Redact the machine-specific part of an absolute path, keeping the filename.
+ *
+ * The directory prefix is the reviewer's disk; the basename is the artifact's
+ * identity. Retaining it is what keeps two runs over different tiles in the same
+ * folder from collapsing onto one hash.
+ */
+function redactPath(value: string): string {
+  const cut = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'));
+  return `${VOLATILE_PLACEHOLDER}/${cut < 0 ? value : value.slice(cut + 1)}`;
+}
+
+/** Shared by both traversals so a cycle reads the same wherever it is found. */
+function cycleError(path: string, seenAt: string): TypeError {
+  const where = path === '' ? 'the artifact root' : path;
+  return new TypeError(
+    `benchmark artifact: ${where} is part of a reference cycle (already seen at ${seenAt}). ` +
+      'A hash needs a finite document; break the cycle or omit the back-reference.',
+  );
+}
+
+function depthError(path: string): TypeError {
+  return new TypeError(
+    `benchmark artifact: ${path} is nested deeper than ${MAX_ARTIFACT_DEPTH} levels, ` +
+      'which is past anything a metrics document should need.',
+  );
+}
+
 export function stripVolatile(input: unknown): StripResult {
   const stripped = new Set<string>();
+  // Ancestors only, not everything seen: a sub-object referenced twice in
+  // different branches is legal JSON input, and only a repeat on the path from
+  // the root is an actual cycle.
+  const ancestors = new Map<object, string>();
 
-  const walk = (value: unknown, path: string): unknown => {
+  const walk = (value: unknown, path: string, depth: number): unknown => {
     if (typeof value === 'string') {
-      if (VALUE_RULES.some((r) => r.pattern.test(value))) {
-        stripped.add(path === '' ? '(root)' : path);
-        return VOLATILE_PLACEHOLDER;
-      }
-      return value;
+      const rule = VALUE_RULES.find((r) => r.pattern.test(value));
+      if (rule === undefined) return value;
+      stripped.add(path === '' ? '(root)' : path);
+      return rule.kind === 'absolute-path' ? redactPath(value) : VOLATILE_PLACEHOLDER;
     }
     if (value === null || typeof value !== 'object') return value;
-    // `undefined` in an array becomes null, exactly as JSON.stringify does —
-    // canonicalJson would otherwise emit the bare token `undefined` and the
-    // canonical form would not be parseable JSON at all.
+    if (depth > MAX_ARTIFACT_DEPTH) throw depthError(path === '' ? 'the artifact root' : path);
+    const seenAt = ancestors.get(value);
+    if (seenAt !== undefined) throw cycleError(path, seenAt === '' ? 'the artifact root' : seenAt);
+    ancestors.set(value, path);
+
+    let out: unknown;
     if (Array.isArray(value)) {
-      return value.map((v, i) => (v === undefined ? null : walk(v, `${path}[${i}]`)));
+      // `Array.from`, not `.map`: map SKIPS holes, so a sparse array kept its
+      // holes and canonicalised to `[,,1]` — not parseable JSON, and a
+      // different hash from the identical document `[null,null,1]`.
+      out = Array.from(value, (v, i) => (v === undefined ? null : walk(v, `${path}[${i}]`, depth + 1)));
+    } else {
+      // `Object.create(null)`, not `{}`: assigning to `out['__proto__']` on a
+      // plain literal hits Object.prototype's setter and RE-PARENTS the object
+      // instead of creating an own property, so the key silently vanished from
+      // the hash. canonicalJson reads own keys only, so a null-prototype bag
+      // flows through it unchanged.
+      const bag = Object.create(null) as Record<string, unknown>;
+      for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+        const child = path === '' ? key : `${path}.${key}`;
+        if (KEY_RULES.some((r) => r.pattern.test(key))) {
+          stripped.add(child);
+          continue;
+        }
+        // An undefined property is dropped rather than emitted, again matching
+        // JSON.stringify: `{ error: undefined }` is what spreading an optional
+        // field produces, so it must not be an error, and it must not corrupt
+        // the canonical form. Not recorded as a stripped field — nothing was
+        // excluded that JSON would have carried.
+        if (v === undefined) continue;
+        bag[key] = walk(v, child, depth + 1);
+      }
+      out = bag;
     }
 
-    const out: Record<string, unknown> = {};
-    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-      const child = path === '' ? key : `${path}.${key}`;
-      if (KEY_RULES.some((r) => r.pattern.test(key))) {
-        stripped.add(child);
-        continue;
-      }
-      // An undefined property is dropped rather than emitted, again matching
-      // JSON.stringify: `{ error: undefined }` is what spreading an optional
-      // field produces, so it must not be an error, and it must not corrupt the
-      // canonical form. Not recorded as a stripped field — nothing was excluded
-      // that JSON would have carried.
-      if (v === undefined) continue;
-      out[key] = walk(v, child);
-    }
+    ancestors.delete(value);
     return out;
   };
 
-  return { value: walk(input, ''), stripped: [...stripped].sort() };
+  return { value: walk(input, '', 0), stripped: [...stripped].sort() };
 }
 
 /** Byte artifacts are opaque: nothing inside them can be inspected or stripped. */
@@ -171,6 +225,15 @@ function asBytes(value: unknown): Uint8Array | null {
  */
 export const RAW_BYTES_NO_STRIP_REASON =
   'hashed raw: a byte artifact is opaque, so embedded timestamps (PNG tEXt, GeoTIFF tags, zip entry mtimes) cannot be detected or removed and may change the hash between otherwise identical runs';
+
+/**
+ * Measured throughput of the bundled portable digest: ~40 MiB/s (8 MiB in
+ * ~184 ms), plus one full padded copy of the payload. That is fine for the
+ * KB-to-MB documents this framework was written for and a cliff for a 500 MB
+ * raster, which is why `hashArtifact` takes an injectable digest and the Node
+ * entry point supplies `node:crypto`. See `HashArtifactOptions.digest`.
+ */
+export const PORTABLE_DIGEST_MIB_PER_SEC = 40;
 
 /**
  * Field names that could equally hold a measurement or a clock reading.
@@ -214,7 +277,13 @@ function isPlainObject(value: object): boolean {
  * Throwing beats coercing: a suite author who wrote a Date meant something by
  * it, and the framework does not get to decide which of its fields survived.
  */
-export function assertHashable(artifactName: string, value: unknown, path = ''): void {
+export function assertHashable(
+  artifactName: string,
+  value: unknown,
+  path = '',
+  ancestors: Map<object, string> = new Map(),
+  depth = 0,
+): void {
   const where = path === '' ? 'the artifact root' : path;
   const fail = (problem: string): never => {
     throw new TypeError(
@@ -240,12 +309,26 @@ export function assertHashable(artifactName: string, value: unknown, path = ''):
   }
   if (value === null || typeof value !== 'object') return;
 
+  if (depth > MAX_ARTIFACT_DEPTH) throw depthError(where);
+  const seenAt = ancestors.get(value);
+  if (seenAt !== undefined) throw cycleError(path, seenAt === '' ? 'the artifact root' : seenAt);
+  ancestors.set(value, path);
+
   if (Array.isArray(value)) {
-    value.forEach((v, i) => assertHashable(artifactName, v, `${path}[${i}]`));
+    // An index loop, not `forEach`: forEach skips holes, so a sparse array's
+    // elements were never checked at all.
+    for (let i = 0; i < value.length; i++) {
+      assertHashable(artifactName, value[i], `${path}[${i}]`, ancestors, depth + 1);
+    }
+    ancestors.delete(value);
     return;
   }
   if (!isPlainObject(value)) {
-    fail(`is a ${describeType(value)}, which canonicalises to {} and would hide any change inside it`);
+    fail(
+      `is a ${describeType(value)}: canonicalJson keeps own enumerable keys only, so a Date or ` +
+        'a Map becomes {} while a typed array becomes an index-keyed object — use Array.from(…) ' +
+        'for a typed array, or pass the bytes themselves as a Uint8Array artifact',
+    );
   }
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
     const child = path === '' ? key : `${path}.${key}`;
@@ -254,11 +337,30 @@ export function assertHashable(artifactName: string, value: unknown, path = ''):
         `benchmark artifact "${artifactName}": ${child} is named "${key}", which could be a ` +
           'measurement or a clock reading, and the framework will not guess. Rename it: ' +
           '`durationMs` (or another unit-suffixed name) if it is a measurement that must ' +
-          'affect the hash, `capturedAt` if it is a wall-clock reading that must not.',
+          'affect the hash, `capturedAt` if it is a wall-clock reading that must not. ' +
+          'If the key comes from data you do not control, map it before hashing.',
       );
     }
-    assertHashable(artifactName, v, child);
+    assertHashable(artifactName, v, child, ancestors, depth + 1);
   }
+  ancestors.delete(value);
+}
+
+/** A SHA-256 implementation, injectable so the fast Node one stays optional. */
+export type DigestFn = (bytes: Uint8Array) => string;
+
+export interface HashArtifactOptions {
+  /**
+   * SHA-256 over raw bytes. Defaults to the project's portable implementation.
+   *
+   * The bundled `sha256Hex` runs at roughly 40 MiB/s and copies the payload into
+   * a padded buffer, so a 500 MB raster costs about twelve seconds and half a
+   * gigabyte of transient memory — and inside a stage, that copy lands in the
+   * stage's own `peakMemory`. Node callers should pass `nodeSha256Hex` from the
+   * Node entry point; the digest is bit-identical, so nothing about
+   * reproducibility depends on which one ran.
+   */
+  readonly digest?: DigestFn;
 }
 
 /**
@@ -268,10 +370,19 @@ export function assertHashable(artifactName: string, value: unknown, path = ''):
  * stripped, canonicalised with sorted keys — so a re-ordered but identical
  * object hashes the same — and hashed as UTF-8.
  */
-export function hashArtifact(name: string, value: unknown): ArtifactRecord {
+export function hashArtifact(
+  name: string,
+  value: unknown,
+  options: HashArtifactOptions = {},
+): ArtifactRecord {
+  // An unnamed artifact cannot be found again in a report, matching the same
+  // refusal `measured`, `unavailable` and `capturedEnv` already make.
+  if (name.trim() === '') throw new Error('benchmark artifact: name must not be empty');
+  const digest = options.digest ?? sha256Hex;
+
   const bytes = asBytes(value);
   if (bytes !== null) {
-    const hash = sha256Hex(bytes);
+    const hash = digest(bytes);
     return {
       name,
       kind: 'bytes',
@@ -299,7 +410,7 @@ export function hashArtifact(name: string, value: unknown): ArtifactRecord {
     name,
     kind: 'json',
     algorithm: 'sha256',
-    hash: sha256Hex(encoded),
+    hash: digest(encoded),
     // Equivalent to `canonicalHash(clean)`, without canonicalising twice.
     fingerprint: fnv1a(json),
     byteLength: encoded.length,

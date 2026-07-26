@@ -28,6 +28,7 @@ export function fixtureReport(): RunReport {
       nodeVersion: capturedEnv('v22.17.1'),
       gitCommitShort: capturedEnv('5f452c7'),
       gitCommitFull: capturedEnv('5f452c7000000000000000000000000000000000'),
+      gitDirty: capturedEnv('clean'),
       releaseVersion: capturedEnv('0.6.0'),
     },
     stages: [

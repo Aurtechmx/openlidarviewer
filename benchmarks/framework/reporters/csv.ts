@@ -27,9 +27,26 @@ import {
 
 const HEADER = 'section,name,value,unit,status,reason,runtime,deterministic';
 
-/** RFC-4180 quoting. Without it a reason containing a comma shifts every column. */
+/**
+ * RFC-4180 quoting, plus the formula-injection neutraliser this repo already
+ * applies in its measurement CSV export.
+ *
+ * Without the quoting, a reason containing a comma shifts every later column.
+ * Without the neutraliser, a cell beginning `= + - @` or a tab/CR is executed as
+ * a formula by Excel and Sheets — and these cells carry suite-supplied text
+ * (dataset ids, stage names, error messages) that nobody vetted. A leading
+ * apostrophe is the conventional fix; force-quoting keeps it.
+ *
+ * A cell that IS a number is left alone, so a negative measurement stays `-1.5`
+ * rather than becoming the text `'-1.5` and dropping out of every chart — the
+ * same carve-out the measurement export makes. `-1+1` is not a number and is
+ * still neutralised.
+ */
 function cell(value: string): string {
-  return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+  const numeric = value.trim() !== '' && Number.isFinite(Number(value));
+  const neutralise = !numeric && /^[=+\-@\t\r]/.test(value);
+  const out = neutralise ? `'${value}` : value;
+  return neutralise || /[",\n\r]/.test(out) ? `"${out.replace(/"/g, '""')}"` : out;
 }
 
 function row(cells: readonly string[]): string {

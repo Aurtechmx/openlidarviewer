@@ -21,7 +21,13 @@ import type { StageResult } from './types';
 
 export interface StageOutcome<T> {
   readonly stage: StageResult;
-  /** The body's return value; undefined exactly when the stage failed. */
+  /**
+   * The body's return value, absent when the stage failed.
+   *
+   * Do not read `value === undefined` as "it failed" — a body that legitimately
+   * returns undefined is indistinguishable that way. `stage.status` is the
+   * discriminant, and it narrows `stage.error` with it.
+   */
   readonly value?: T;
 }
 
@@ -30,10 +36,18 @@ export interface RunStageOptions {
   readonly memory?: MemorySamplerOptions;
 }
 
-/** Normalise a thrown value to a single line a report can carry. */
+/**
+ * Normalise a thrown value to a single line a report can carry.
+ *
+ * `Error.message` is routinely multi-line (a parser quoting its input, an
+ * aggregate error listing causes), and a raw newline breaks the Markdown table
+ * apart mid-row: the remainder of the message becomes a paragraph and the
+ * following stages shift into a second, headerless table. Collapsing the runs
+ * to `; ` keeps every word and costs only the line breaks.
+ */
 function messageOf(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
+  const raw = err instanceof Error ? err.message : String(err);
+  return raw.replace(/\s*[\r\n]+\s*/g, '; ').trim();
 }
 
 /** Time and measure a synchronous stage. Never rethrows. */

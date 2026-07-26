@@ -9,7 +9,7 @@
  */
 import { describe, test, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const FRAMEWORK = fileURLToPath(new URL('../../benchmarks/framework', import.meta.url));
@@ -35,6 +35,7 @@ describe('the framework source', () => {
       'env.ts',
       'index.ts',
       'memory.ts',
+      'node.ts',
       'reporters/csv.ts',
       'reporters/html.ts',
       'reporters/json.ts',
@@ -43,6 +44,43 @@ describe('the framework source', () => {
       'stage.ts',
       'types.ts',
     ]);
+  });
+
+  test('nothing reachable from index.ts imports a node: builtin', () => {
+    // The schema advertises browser-taken metrics and clock/memory both have
+    // browser branches, so a browser-side suite has to be able to bundle the
+    // barrel. Re-exporting captureEnvironment made node:child_process a static
+    // dependency of the WHOLE surface and Vite could not resolve it at all.
+    const seen = new Set<string>();
+    const offenders: string[] = [];
+
+    const visit = (file: string): void => {
+      if (seen.has(file)) return;
+      seen.add(file);
+      const src = readFileSync(file, 'utf8');
+      for (const m of src.matchAll(/from\s+'([^']+)'/g)) {
+        const spec = m[1];
+        if (spec.startsWith('node:')) {
+          offenders.push(`${file.slice(FRAMEWORK.length + 1)} imports ${spec}`);
+          continue;
+        }
+        if (!spec.startsWith('.')) continue;
+        const target = join(dirname(file), spec.endsWith('.ts') ? spec : `${spec}.ts`);
+        if (target.startsWith(FRAMEWORK)) visit(target);
+      }
+    };
+
+    visit(join(FRAMEWORK, 'index.ts'));
+    expect(offenders).toEqual([]);
+    // Sanity: the walk actually reached the modules, rather than passing by
+    // never opening anything.
+    expect(seen.size).toBeGreaterThan(5);
+  });
+
+  test('the Node-only entry point is where the node: imports live', () => {
+    const node = readFileSync(join(FRAMEWORK, 'node.ts'), 'utf8');
+    expect(node).toMatch(/from 'node:crypto'/);
+    expect(node).toMatch(/captureEnvironment/);
   });
 
   test('never calls Date.now() or Math.random() — both would poison an artifact hash', () => {

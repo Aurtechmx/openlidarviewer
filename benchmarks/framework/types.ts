@@ -127,19 +127,39 @@ export interface BenchmarkEnvironment {
   readonly nodeVersion: EnvValue;
   readonly gitCommitShort: EnvValue;
   readonly gitCommitFull: EnvValue;
+  /** 'clean' or 'dirty' — whether the tree actually matches that commit. */
+  readonly gitDirty: EnvValue;
   /** The `version` field of package.json — the release the run belongs to. */
   readonly releaseVersion: EnvValue;
 }
 
 /** One timed stage of a suite. Duration is ms, peak memory is bytes. */
-export interface StageResult {
+interface StageResultBase {
   readonly name: string;
   readonly duration: Metric;
   readonly peakMemory: Metric;
-  readonly status: 'ok' | 'failed';
-  /** Present only when `status` is 'failed'; the message, never a stack. */
-  readonly error?: string;
 }
+
+export interface OkStageResult extends StageResultBase {
+  readonly status: 'ok';
+  /** A stage that succeeded has nothing to report — structurally unsayable. */
+  readonly error?: never;
+}
+
+export interface FailedStageResult extends StageResultBase {
+  readonly status: 'failed';
+  /** The message, never a stack: a stack embeds absolute machine paths. */
+  readonly error: string;
+}
+
+/**
+ * Split on `status` for the same reason `Metric` and `ArtifactRecord` are split:
+ * a failure with no explanation and a success carrying an error message are both
+ * things a report must not be able to state. Every reporter prints the error
+ * column, so an unexplained 'failed' would render as a blank a reader takes for
+ * "it failed for no reason".
+ */
+export type StageResult = OkStageResult | FailedStageResult;
 
 /**
  * The hash record of one scientific artifact.

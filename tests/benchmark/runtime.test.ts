@@ -11,7 +11,9 @@ import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { startStageClock, elapsedMs, CLOCK_UNAVAILABLE_REASON } from '../../benchmarks/framework/clock';
 import { startMemorySampler, MEMORY_UNAVAILABLE_REASON } from '../../benchmarks/framework/memory';
-import { captureEnvironment } from '../../benchmarks/framework/env';
+import { captureEnvironment, hashArtifactNode, nodeSha256Hex } from '../../benchmarks/framework/node';
+import { hashArtifact } from '../../benchmarks/framework/artifacts';
+import { sha256Hex } from '../../src/terrain/export/sha256';
 import { isMeasured, isUnavailable, type EnvValue } from '../../benchmarks/framework/types';
 
 describe('the stage clock', () => {
@@ -101,15 +103,7 @@ function fakeReader(series: readonly number[]): () => number {
 
 describe('the environment capture', () => {
   const env = captureEnvironment();
-  const fields: ReadonlyArray<readonly [string, EnvValue]> = [
-    ['os', env.os],
-    ['cpuModel', env.cpuModel],
-    ['arch', env.arch],
-    ['nodeVersion', env.nodeVersion],
-    ['gitCommitShort', env.gitCommitShort],
-    ['gitCommitFull', env.gitCommitFull],
-    ['releaseVersion', env.releaseVersion],
-  ];
+  const fields: ReadonlyArray<readonly [string, EnvValue]> = Object.entries(env);
 
   test('every field is either captured with a non-empty value or unavailable with a reason', () => {
     for (const [name, field] of fields) {
@@ -140,6 +134,40 @@ describe('the environment capture', () => {
     expect(env.gitCommitFull.value.startsWith(env.gitCommitShort.value)).toBe(true);
   });
 
+  test('every field the schema declares is actually captured or refused', () => {
+    // Object.entries above only sees what the capture returned, so this pins
+    // that a field added to BenchmarkEnvironment is not quietly skipped here.
+    const declared: (keyof typeof env)[] = [
+      'os',
+      'cpuModel',
+      'arch',
+      'nodeVersion',
+      'gitCommitShort',
+      'gitCommitFull',
+      'gitDirty',
+      'releaseVersion',
+    ];
+    for (const key of declared) expect(env[key], key).toBeDefined();
+    expect(fields.length).toBe(declared.length);
+  });
+
+  test('says whether the working tree matched the commit it reports', () => {
+    // A commit hash with no dirty flag asserts a provenance the run may not
+    // have: a benchmark from a modified checkout would report a clean hash.
+    // Coupled to the commit deliberately — both come from the same `git`, so a
+    // captured commit beside an unavailable tree state means this field was
+    // dropped rather than genuinely undeterminable. (A source tarball with no
+    // .git makes BOTH unavailable, which stays honest.)
+    if (env.gitCommitFull.status === 'captured') {
+      expect(env.gitDirty.status).toBe('captured');
+    }
+    if (env.gitDirty.status !== 'captured') {
+      expect(env.gitDirty.reason.length).toBeGreaterThan(0);
+      return;
+    }
+    expect(['clean', 'dirty']).toContain(env.gitDirty.value);
+  });
+
   test('never throws, even when pointed at a directory that is not a repo', () => {
     expect(() => captureEnvironment({ repoRoot: '/nonexistent-path-for-benchmark-test' })).not.toThrow();
     const broken = captureEnvironment({ repoRoot: '/nonexistent-path-for-benchmark-test' });
@@ -147,5 +175,40 @@ describe('the environment capture', () => {
     expect(broken.releaseVersion.status).toBe('unavailable');
     if (broken.releaseVersion.status !== 'unavailable') throw new Error('expected unavailable');
     expect(broken.releaseVersion.reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the Node digest', () => {
+  test('agrees with the portable implementation on the published test vector', () => {
+    // Same digest bit for bit, so a hash produced on either path is comparable
+    // with the other — this is a throughput fix, not a correctness one.
+    const abc = new Uint8Array([0x61, 0x62, 0x63]);
+    expect(nodeSha256Hex(abc)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+    expect(nodeSha256Hex(abc)).toBe(sha256Hex(abc));
+  });
+
+  test('agrees over a larger deterministic payload', () => {
+    const bytes = new Uint8Array(64 * 1024);
+    for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 31 + 7) & 0xff;
+    expect(nodeSha256Hex(bytes)).toBe(sha256Hex(bytes));
+  });
+
+  test('hashArtifactNode produces the identical record to the portable path', () => {
+    const payload = { suiteId: 'decode', n: 3 };
+    expect(hashArtifactNode('metrics', payload)).toEqual(hashArtifact('metrics', payload));
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    expect(hashArtifactNode('raster', bytes)).toEqual(hashArtifact('raster', bytes));
+  });
+
+  test('an injected digest is actually used', () => {
+    const rec = hashArtifact('metrics', { n: 1 }, { digest: () => 'f'.repeat(64) });
+    expect(rec.hash).toBe('f'.repeat(64));
+  });
+
+  test('an explicit digest still wins over the Node default', () => {
+    // The two real digests are bit-identical, so nothing else can prove which
+    // one hashArtifactNode wired in. This pins the composition instead.
+    const rec = hashArtifactNode('metrics', { n: 1 }, { digest: () => 'e'.repeat(64) });
+    expect(rec.hash).toBe('e'.repeat(64));
   });
 });

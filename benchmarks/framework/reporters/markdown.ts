@@ -16,11 +16,23 @@
  */
 
 import type { RunReport } from '../types';
-import { describeHashExclusions, formatEnvValue, formatMetric } from './metricText';
+import {
+  describeHashExclusions,
+  environmentRows,
+  formatEnvValue,
+  formatMetric,
+} from './metricText';
 
-/** Escape the only character that can restructure a Markdown table. */
+/**
+ * Neutralise the two things that can restructure a Markdown table.
+ *
+ * A `|` adds a column and shifts every later cell one to the left; a newline
+ * ends the row outright and turns the rest of the table into a paragraph. Both
+ * arrive from suite-supplied text — stage names, dataset ids, error messages,
+ * unavailability reasons — so neither can be assumed away.
+ */
 function md(value: string): string {
-  return value.replace(/\|/g, '\\|');
+  return value.replace(/\|/g, '\\|').replace(/\s*[\r\n]+\s*/g, '; ');
 }
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {
@@ -42,13 +54,12 @@ export function toMarkdown(report: RunReport): string {
         ['suite', report.suiteId],
         ['dataset', report.datasetId],
         ['schema version', String(report.schemaVersion)],
-        ['release version', formatEnvValue(report.environment.releaseVersion)],
-        ['git commit', formatEnvValue(report.environment.gitCommitShort)],
-        ['git commit (full)', formatEnvValue(report.environment.gitCommitFull)],
-        ['OS', formatEnvValue(report.environment.os)],
-        ['CPU', formatEnvValue(report.environment.cpuModel)],
-        ['arch', formatEnvValue(report.environment.arch)],
-        ['Node', formatEnvValue(report.environment.nodeVersion)],
+        // Driven by the shared label map, never a local list: a provenance
+        // field added to the schema must not be able to reach the JSON and skip
+        // the document a reader actually looks at.
+        ...environmentRows(report.environment).map(
+          ([label, field]) => [label, formatEnvValue(field)] as const,
+        ),
       ],
     ),
   );

@@ -54,16 +54,21 @@ function capture(what: string, read: () => string | null): EnvValue {
   }
 }
 
-/** Read HEAD's full commit hash, or null when this is not a usable checkout. */
-function readGitCommit(repoRoot: string): string | null {
-  const out = execFileSync('git', ['rev-parse', 'HEAD'], {
+/** Run a git command in `repoRoot`, letting the caller's try/catch see failures. */
+function git(repoRoot: string, args: readonly string[]): string {
+  return execFileSync('git', [...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     timeout: GIT_TIMEOUT_MS,
     // stderr silenced: "not a git repository" is an expected outcome in a source
     // tarball, and printing it would look like a benchmark failure.
     stdio: ['ignore', 'pipe', 'ignore'],
-  }).trim();
+  });
+}
+
+/** Read HEAD's full commit hash, or null when this is not a usable checkout. */
+function readGitCommit(repoRoot: string): string | null {
+  const out = git(repoRoot, ['rev-parse', 'HEAD']).trim();
   return /^[0-9a-f]{40}$/.test(out) ? out : null;
 }
 
@@ -93,6 +98,18 @@ export function captureEnvironment(options: CaptureEnvironmentOptions = {}): Ben
     nodeVersion: capture('node version', () => process.version),
     gitCommitFull,
     gitCommitShort,
+    /**
+     * Whether the working tree matches the commit above.
+     *
+     * A commit hash on its own is a provenance claim the run may not be entitled
+     * to: a benchmark run from a modified checkout reports a clean hash, and "I
+     * regenerated this at that commit" then means nothing. For the
+     * reproducibility suite this is the field that decides whether the rest of
+     * the block can be trusted.
+     */
+    gitDirty: capture('git working tree', () =>
+      git(repoRoot, ['status', '--porcelain']).trim() === '' ? 'clean' : 'dirty',
+    ),
     releaseVersion: capture('release version', () => {
       const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as {
         version?: unknown;
