@@ -103,7 +103,9 @@ for a dedicated toolchain update. Deferred, with their tracking PRs:
 - `vitepress` / bundled `vite` / `esbuild`: the docs-tooling advisory chain.
 - `brace-expansion`, `fast-uri`, `qs` (via `typed-rest-client`): dev tree only.
 - Dependabot #10, #27, #28, #29, #30 (GitHub Actions), #33 (Three.js 0.185.x),
-  #34 (TypeScript 7 / Vite 8.1.5): not merged into this release line.
+  #40 (dev-tooling group: TypeScript ~6 to ~7, a Vite patch, Playwright 1.61 to
+  1.62): not merged into this release line. #40 supersedes the earlier #34,
+  which is closed.
 
 No dependency version was changed to produce this document.
 
