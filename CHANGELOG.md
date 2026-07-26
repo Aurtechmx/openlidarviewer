@@ -4,6 +4,56 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **The contour deliverable's GeoTIFF states its vertical unit.** The
+  deliverable wrote `VerticalCSType` (GeoKey 4096) without `VerticalUnits`
+  (4099), so the same DTM raster was ambiguous between metres and feet when it
+  came from Contour Studio and unambiguous when it came from the DEM package.
+  Both paths now derive the key through one shared helper. This closes the
+  limitation recorded for v0.6.1.
+- **The asynchronous and GPU derivative path carries the vertical-unit
+  factor.** The async derivatives entry, the GPU kernel and the f32 reference
+  took no `zScale`, so a foot-vertical grid came back about 3.28x too steep on
+  every path except the synchronous one the pipeline uses today. The
+  equivalence probe ran both sides at `zScale` 1 and could not see it; it now
+  runs a foot-vertical pass as well. This closes the limitation recorded for
+  v0.6.1.
+- **`geodesicFill` walks in metres.** The step cost added a horizontal step in
+  raw source units to a rise in vertical units. On a degree grid the step was
+  about 1e-5 beside metre heights, so the cost went essentially vertical-only
+  and the down-weighting of a walk over a ridge degenerated. The step now comes
+  from the same per-axis metre conversion the slope stage uses, and the rise is
+  converted too. This closes the limitation recorded for v0.6.1; see the
+  correction below for its real scope.
+- **The unused elevation-grid hillshade wrappers are deleted.**
+  `computeSlopeDegrees` and `computeHillshade` hard-coded square cells, skipped
+  the cos(latitude) correction and defaulted the vertical scale to 1. No
+  production code called them. The live pipeline runs `hornSlopeAspect` with
+  per-axis metres and a vertical factor and shades from the result; the truth
+  tests now exercise that live two-step path. This closes the limitation
+  recorded for v0.6.1.
+- **The despike blunder floor is measured in metres.** `minDeviationM` is a
+  metres constant, but the heights it was compared against are in native source
+  units, so the 30 cm floor acted as 30 cm only on metric data. On a
+  foot-vertical scan it meant 0.3 ft, about 9 cm, so the floor was about 3.28x
+  too aggressive: real sub-30 cm terrain features were removed and silently
+  re-interpolated. The removal count reached provenance, so two deliverables of
+  one scan could disagree about how much data was cut.
+
+### Corrected
+
+- **Correction to `KNOWN_LIMITATIONS_v0.6.1.md`: the `geodesicFill` unit-mixing
+  defect affected production surfaces.** That document states the defect
+  "affects the non-default geodesic interpolation mode only; the default fill is
+  unaffected". That is wrong, and it understated the defect.
+  `src/terrain/ground/surfaceFromRaster.ts` sets `LIVE_INTERPOLATION` to
+  `'geodesic'`, so geodesic is the mode every production surface used. On
+  geographic (degree) and foot-vertical data, interpolated void heights in
+  v0.6.1 and earlier came from a step cost that mixed horizontal source units
+  with vertical metres. The scope statement should have read: this affected every
+  surface the application produced, not an optional mode.
+
 ### Changed
 
 - **The aspect raster is cross-implementation validated (E3 → E4).** Our Horn
