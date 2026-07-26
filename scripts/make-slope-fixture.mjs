@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * make-slope-fixture.mjs — the input DEM for the slope and aspect
+ * make-slope-fixture.mjs — the input DEM for the slope, aspect and hillshade
  * cross-implementation checks.
  *
  * Writes `tests/fixtures/reference/slope/input-dem.asc`: an ESRI ASCII Grid
- * carrying an analytic surface whose slope AND aspect are known in closed form.
- * The aspect reference (`tests/fixtures/reference/aspect/`) reuses this same
- * DEM rather than copying it, so the two products cannot end up validated
- * against two different surfaces.
+ * carrying an analytic surface whose slope, aspect AND hillshade are known in
+ * closed form. The aspect reference (`tests/fixtures/reference/aspect/`) and
+ * the hillshade reference (`tests/fixtures/reference/hillshade/`) reuse this
+ * same DEM rather than copying it, so the three products cannot end up
+ * validated against three different surfaces.
  *
  * WHY A SYNTHETIC SURFACE. Comparing our Horn slope against GDAL's Horn slope
  * is two implementations of ONE algorithm, so they can agree while both being
@@ -101,7 +102,8 @@ export function analyticSlopeDegrees(row, col) {
  * (0 = north, 90 = east), which is what `gdaldem aspect` emits.
  *
  * Same `SURFACE` coefficients and same `cellOffset` as the slope above, so the
- * surface has exactly ONE definition and slope and aspect cannot drift apart.
+ * surface has exactly ONE definition and slope, aspect and hillshade cannot
+ * drift apart.
  *
  * Aspect is the DOWNSLOPE direction, so both gradient components are negated
  * (`-dzdy` is the northing component because `cellOffset` returns y increasing
@@ -127,6 +129,76 @@ export function analyticAspectDegrees(row, col) {
   return ((90 - mathDeg) % 360 + 360) % 360;
 }
 
+/**
+ * Default sun for the hillshade reference: azimuth 315° clockwise from north,
+ * altitude 45° above the horizon, vertical exaggeration 1.
+ *
+ * Pinned here rather than left to each caller's defaults. `shadeFromSlopeAspect`
+ * defaults to these and so does `gdaldem hillshade`, but a default that agrees
+ * today is not a comparison basis: if either side changed its default, the two
+ * grids would be lit by different suns and the cross-check would report a
+ * shading disagreement that is really a parameter disagreement. Both the test
+ * and `tests/fixtures/reference/hillshade/command.txt` pass these explicitly.
+ */
+export const SUN = { azimuthDeg: 315, altitudeDeg: 45, zFactor: 1 };
+
+/**
+ * Closed-form HILLSHADE at a cell centre, on the 0–255 scale, UNROUNDED.
+ *
+ * Same `SURFACE` coefficients and same `cellOffset` as the slope and aspect
+ * above, so one surface backs all three products and none can drift.
+ *
+ * The illumination model is the standard ESRI/Horn one, written here directly
+ * from the closed-form gradient rather than from either implementation:
+ *
+ *   slopeRad = atan(zFactor · |∇z|)
+ *   aspect   = atan2(−∂z/∂y, −∂z/∂x)          math frame, CCW from east
+ *   azimuth  = ((360 − azimuthDeg + 90) mod 360)·π/180
+ *   zenith   = (90 − altitudeDeg)·π/180
+ *   h        = cos(zenith)·cos(slopeRad) + sin(zenith)·sin(slopeRad)·cos(azimuth − aspect)
+ *
+ * `h` is a cosine of the angle between the surface normal and the sun, so it is
+ * an intensity in [−1, 1] (negative = self-shadowed).
+ *
+ * ENCODING. This returns 255·h — OUR encoding, the one `shadeFromSlopeAspect`
+ * applies. That choice is deliberate and it is the whole reason the GDAL leg of
+ * the hillshade cross-check does not read as an exact match: `gdaldem hillshade`
+ * encodes the SAME intensity as 1 + 254·h, reserving level 0 for nodata. The
+ * two encodings differ by exactly (1 − h) levels. Encoding the analytic in
+ * GDAL's scale instead would make the GDAL leg look perfect and push the whole
+ * discrepancy onto our own kernel, which is backwards: the encoding difference
+ * belongs to GDAL's output format, not to our shading. Keeping the analytic in
+ * our scale leaves that difference visible and attributable in the reported
+ * figures. See `tests/hillshadeCrossCheck.test.ts`.
+ *
+ * Not clamped and not rounded: clamping would hide a sign error in the
+ * alignment term (a self-shadowed cell and a level-0 cell would read alike),
+ * and rounding is a property of the 8-bit product, not of the surface.
+ *
+ * Unlike `analyticAspectDegrees` this is TOTAL — it returns a number on a flat
+ * cell rather than NaN. Aspect is genuinely undefined at zero gradient, but
+ * hillshade is not: sin(slopeRad) is 0 there, so the aspect term drops out and
+ * h reduces to cos(zenith) whatever direction the undefined aspect names. That
+ * is why the hillshade test compares every interior cell while the aspect test
+ * has to exclude the near-flat ones.
+ */
+export function analyticHillshade255(row, col) {
+  const { x, y } = cellOffset(row, col);
+  const { a, b, c, d, e } = SURFACE;
+  const dzdx = 2 * a * x + c * y + d;
+  const dzdy = 2 * b * y + c * x + e;
+  const DEG = Math.PI / 180;
+  const slopeRad = Math.atan(SUN.zFactor * Math.hypot(dzdx, dzdy));
+  const aspectRad = dzdx === 0 && dzdy === 0 ? 0 : Math.atan2(-dzdy, -dzdx);
+  const zenith = (90 - SUN.altitudeDeg) * DEG;
+  let azMath = (360 - SUN.azimuthDeg + 90) % 360;
+  if (azMath < 0) azMath += 360;
+  const h =
+    Math.cos(zenith) * Math.cos(slopeRad) +
+    Math.sin(zenith) * Math.sin(slopeRad) * Math.cos(azMath * DEG - aspectRad);
+  return 255 * h;
+}
+
 function writeAsciiGrid(path, valueAt) {
   const head = [
     `ncols ${GRID.ncols}`,
@@ -150,8 +222,9 @@ function writeAsciiGrid(path, valueAt) {
 /**
  * Writing happens only when this file is RUN, never when it is imported.
  *
- * The tests import `GRID`, `analyticSlopeDegrees` and `analyticAspectDegrees`
- * from here so the surface has exactly one definition. Without this guard that
+ * The tests import `GRID`, `analyticSlopeDegrees`, `analyticAspectDegrees` and
+ * `analyticHillshade255` from here so the surface has exactly one definition.
+ * Without this guard that
  * import rewrote the
  * fixture as a side effect, which would let the test regenerate a corrupted or
  * hand-edited input and then pass against its own fresh copy — the committed
@@ -166,6 +239,8 @@ function main() {
   let max = -Infinity;
   let aMin = Infinity;
   let aMax = -Infinity;
+  let hMin = Infinity;
+  let hMax = -Infinity;
   for (let r = 0; r < GRID.nrows; r++) {
     for (let c = 0; c < GRID.ncols; c++) {
       const s = analyticSlopeDegrees(r, c);
@@ -176,12 +251,19 @@ function main() {
         if (a < aMin) aMin = a;
         if (a > aMax) aMax = a;
       }
+      const h = analyticHillshade255(r, c);
+      if (h < hMin) hMin = h;
+      if (h > hMax) hMax = h;
     }
   }
   console.log(`wrote ${demPath}`);
   console.log(`  ${GRID.ncols} x ${GRID.nrows} cells @ ${GRID.cellsize} m`);
   console.log(`  analytic slope range: ${min.toFixed(3)}deg .. ${max.toFixed(3)}deg`);
   console.log(`  analytic aspect range: ${aMin.toFixed(3)}deg .. ${aMax.toFixed(3)}deg (compass)`);
+  console.log(
+    `  analytic hillshade range: ${hMin.toFixed(3)} .. ${hMax.toFixed(3)} ` +
+      `(0-255, az ${SUN.azimuthDeg} alt ${SUN.altitudeDeg} z ${SUN.zFactor})`,
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

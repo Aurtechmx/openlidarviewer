@@ -64,12 +64,19 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Two products are at E4: `SLOPE-RASTER` and `ASPECT-RASTER` each agree with
-  GDAL 3.13.1 and with the closed-form gradient on the frozen analytic fixture
-  within the preregistered 0.5° tolerance. This validates two algorithms on one
-  fixture; it does not validate the point-cloud-to-DTM pipeline. Aspect is
-  compared as a circular quantity, and only where the surface is steeper than
-  2° — a level cell has no aspect to compare.
+- Three products are at E4: `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE`
+  each agree with GDAL 3.13.1 and with the closed-form gradient on the same
+  frozen analytic fixture within their preregistered tolerances (0.5° for slope
+  and aspect, 1.0 level on the 0–255 scale for hillshade). This validates three
+  algorithms on one fixture; it does not validate the point-cloud-to-DTM
+  pipeline. Aspect is compared as a circular quantity, and only where the
+  surface is steeper than 2° — a level cell has no aspect to compare. The
+  hillshade tolerance is weaker than it looks: GDAL encodes the shared
+  intensity as `1 + 254·h` where we write `255·h`, and that fixed offset
+  consumes most of the one-level budget on its own, so the hillshade claim
+  rests on the closed-form agreement (6×10⁻⁵ of a level) and on our intensity
+  reproducing GDAL's raster exactly under GDAL's own encoding, rather than on
+  the tolerance test alone.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

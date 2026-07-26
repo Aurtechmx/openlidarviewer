@@ -6,26 +6,64 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Two products are at E4: **`SLOPE-RASTER`** and **`ASPECT-RASTER`**. Both were
-compared against GDAL 3.13.1 on the same frozen analytic fixture, and against
-the surface's closed-form gradient, in the same run.
+Three products are at E4: **`SLOPE-RASTER`**, **`ASPECT-RASTER`** and
+**`HILLSHADE`**. All three were compared against GDAL 3.13.1 on the same frozen
+analytic fixture, and against the surface's closed-form gradient, in the same
+run.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
 | `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
+| `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0–255 |
 
-Both tolerances were registered in `REFERENCE_SLOTS` before the references were
-generated. Each GDAL raster, the exact command, the tool version and the
-checksums are committed beside the input DEM — the aspect reference reuses the
-slope fixture's DEM rather than copying it, so one surface backs both products.
+All three tolerances were registered in `REFERENCE_SLOTS` before the references
+were generated. Each GDAL raster, the exact command, the tool version and the
+checksums are committed beside the input DEM — the aspect and hillshade
+references reuse the slope fixture's DEM rather than copying it, and each pins
+it by hash, so one surface backs all three products.
 
-This validates the slope and aspect *algorithms* against an independent
-implementation on a known surface. It does not validate the point-cloud-to-DTM
-pipeline, does not establish field or survey-grade accuracy, and says nothing
-about the other terrain products — each carries its own claim and its own
-evidence level. `HILLSHADE` consumes aspect but is unchanged by this and stays
-at E2.
+This validates the slope, aspect and hillshade *algorithms* against an
+independent implementation on a known surface. It does not validate the
+point-cloud-to-DTM pipeline, does not establish field or survey-grade accuracy,
+and says nothing about the other terrain products — each carries its own claim
+and its own evidence level.
+
+## Hillshade agrees, but read its tolerance carefully
+
+The hillshade figures deserve a caveat the slope and aspect ones do not, and it
+is recorded here rather than smoothed over.
+
+Both implementations compute the same illumination model,
+`h = cos(zenith)·cos(slope) + sin(zenith)·sin(slope)·cos(azimuth − aspect)`,
+over a Horn gradient, with the same compass-azimuth and altitude-above-horizon
+conventions. They differ only in how they pack that intensity into a byte: we
+write `round(255·h)`, GDAL writes `round(1 + 254·h)` and reserves level 0 for
+nodata.
+
+That difference is exactly `(1 − h)` levels. It is always under one level, for
+any surface — which means it consumes most of a one-level tolerance budget by
+itself. On this fixture it spends 0.900 of the 1.0, leaving about 0.1 of
+headroom. **The ours-versus-GDAL leg on its own is therefore a weak instrument:
+it would not catch a small shading error.**
+
+What actually carries the hillshade claim is the other two results, which are
+sharp:
+
+- ours versus the closed form: max separation 0.0000643 of a level, RMSE
+  0.0000072, over all 11,564 interior cells;
+- and a zero-tolerance identity — re-encoding our intensity in GDAL's own scale,
+  `round(1 + 254·h)`, reproduces the committed `hillshade-gdal.asc` **exactly**
+  at every one of those cells.
+
+The encoding difference is deliberately left in the reported figures instead of
+being divided out, and our `255·h` encoding was deliberately not changed to
+match GDAL's: the product ships that encoding, and adjusting the implementation
+to flatter the comparison would invert what the comparison is for. Full detail
+in `tests/fixtures/reference/hillshade/README.md`.
+
+The check covers the single-direction model only. `computeMultiHillshade` is a
+different illumination model with its own claim, unchanged by this.
 
 Every remaining entry in `REFERENCE_SLOTS` still ships `pending`. No reference
 output is bundled or fabricated; a product moves to E4 only after someone runs
@@ -97,16 +135,26 @@ size, extent, and row order), so the two can be compared cell for cell.
    ```
    gdaldem slope reference_dtm.tif reference_slope.tif -compute_edges
    gdaldem aspect reference_dtm.tif reference_aspect.tif -alg Horn
-   gdaldem hillshade reference_dtm.tif reference_hillshade.tif -az 315 -alt 45
+   gdaldem hillshade reference_dtm.tif reference_hillshade.tif \
+     -az 315 -alt 45 -z 1 -s 1 -alg Horn
    ```
 
-2. Match GDAL's azimuth/altitude to ours (315° / 45° by default), read both, and
+2. Pass the sun parameters explicitly rather than relying on GDAL's defaults
+   matching ours. They do today (315° / 45° / z 1), but a default that agrees
+   today is not a comparison basis — if either side changed one, the two grids
+   would be lit by different suns and the check would report a shading
+   disagreement that is really a parameter disagreement. Then read both and
    compare with the slot tolerance (0.5° for slope, 0.5° circular for aspect,
-   1 DN for hillshade on 0–255).
+   1 level for hillshade on 0–255).
 3. For aspect, do not pass `-trigonometric` (it switches GDAL into our own
    frame and removes the conversion the check exists to test) and do not pass
    `-zero_for_flat` (it turns "no aspect" into "points north"). The full
    reasoning is in `tests/fixtures/reference/aspect/README.md`.
+4. For hillshade, do not pass `-multidirectional`, `-combined` or `-igor`: each
+   is a different illumination model. Note that GDAL's Byte band encodes the
+   intensity as `1 + 254·h` with 0 reserved for nodata, while ours is `255·h` —
+   compare the levels as they are and report the offset rather than removing
+   it. See `tests/fixtures/reference/hillshade/README.md`.
 
 ### Ground filter (CloudCompare or PDAL SMRF)
 
