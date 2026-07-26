@@ -2,10 +2,11 @@
  * slopeCrossCheck.test.ts — SLOPE-RASTER against an independent implementation.
  *
  * Slope reached E4 here: this file compares our Horn slope against a committed
- * GDAL reference AND the closed-form gradient. Every OTHER entry in
- * `REFERENCE_SLOTS` still ships `pending`, so for those, nothing in
- * this project has been compared against an implementation we did not write.
- * This is the first slot that can move.
+ * GDAL reference AND the closed-form gradient. It was the first slot to move;
+ * `tests/aspectCrossCheck.test.ts` is its sibling and moved second. The
+ * remaining entries in `REFERENCE_SLOTS` still ship `pending`, so for those,
+ * nothing in this project has been compared against an implementation we did
+ * not write.
  *
  * THREE-WAY, NOT PAIRWISE. Our Horn slope against GDAL's Horn slope is two
  * implementations of one algorithm; they can agree while both being wrong the
