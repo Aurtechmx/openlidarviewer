@@ -27,6 +27,7 @@
 
 import type { GlobalPoints } from './globalPoints';
 import { globalBounds } from './globalPoints';
+import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 
 const HEADER_SIZE = 227; // LAS 1.2 public header block
 const HEADER_SIZE_14 = 375; // LAS 1.4 public header block (R15)
@@ -97,6 +98,55 @@ function writeFixedString(bytes: Uint8Array, offset: number, len: number, text: 
   for (let i = 0; i < len; i++) {
     bytes[offset + i] = i < text.length ? text.charCodeAt(i) & 0x7f : 0;
   }
+}
+
+/** Generating Software is a 32-byte char field (LAS 1.2 §2.1, 1.4 §2.2). */
+const GENERATING_SOFTWARE_BYTES = 32;
+
+/** The product half of the field, kept whatever else has to go. */
+const PRODUCT_NAME = 'OpenLiDARViewer';
+
+/**
+ * Compose the Generating Software string for the 32-byte header field.
+ *
+ * A LAS file that says only `'OpenLiDARViewer converter'` cannot answer which
+ * build produced it, while every other export can. The field is fixed-width, so
+ * the identity is composed longest-first and each candidate is accepted only if
+ * it fits whole:
+ *
+ *   `OpenLiDARViewer 0.6.2 a1b2c3d`        → release and commit
+ *   `OpenLiDARViewer 0.6.2`                → release only
+ *   `OpenLiDARViewer`                      → product only
+ *
+ * A prefix of a commit hash names a build that does not exist, so the commit is
+ * dropped entire rather than truncated — and an unresolved commit (the literal
+ * `'unknown'`, see buildIdentity.ts) is never written at all. `writeFixedString`
+ * would happily cut mid-token; nothing reaches it that has not already fit.
+ *
+ * A dirty tree is carried as `+dirty` (the same marker `buildIdentityLabel`
+ * uses) and, when that does not fit, the COMMIT goes with it. Trimming the
+ * marker alone would leave `… 0.6.2 a1b2c3d`, which asserts the file came from
+ * that commit when it came from an edited tree — a shorter lie, still a lie.
+ */
+export function composeGeneratingSoftware(
+  id: Pick<BuildIdentity, 'version' | 'commit' | 'dirty'> = BUILD_IDENTITY,
+): string {
+  const hasCommit = id.commit.length > 0 && id.commit !== 'unknown';
+  const commit = hasCommit ? `${id.commit}${id.dirty ? '+dirty' : ''}` : null;
+  const candidates = [
+    commit ? `${PRODUCT_NAME} ${id.version} ${commit}` : null,
+    `${PRODUCT_NAME} ${id.version}`,
+    PRODUCT_NAME,
+  ];
+  for (const c of candidates) {
+    if (c != null && c.length <= GENERATING_SOFTWARE_BYTES) return c;
+  }
+  return PRODUCT_NAME;
+}
+
+/** The Generating Software string THIS build writes into every LAS it emits. */
+export function lasGeneratingSoftware(): string {
+  return composeGeneratingSoftware();
 }
 
 // ── helpers shared by the 1.2 and 1.4 writers ───────────────────────────────
@@ -309,7 +359,7 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   view.setUint8(24, 1); // version major
   view.setUint8(25, 2); // version minor (LAS 1.2)
   writeFixedString(bytes, 26, 32, 'OpenLiDARViewer');
-  writeFixedString(bytes, 58, 32, 'OpenLiDARViewer converter');
+  writeFixedString(bytes, 58, GENERATING_SOFTWARE_BYTES, lasGeneratingSoftware());
   view.setUint16(90, 0, true); // file creation day of year (deterministic)
   view.setUint16(92, 0, true); // file creation year
   view.setUint16(94, HEADER_SIZE, true); // header size
@@ -417,7 +467,7 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   view.setUint8(24, 1); // version major
   view.setUint8(25, 4); // version minor (LAS 1.4)
   writeFixedString(bytes, 26, 32, 'OpenLiDARViewer');
-  writeFixedString(bytes, 58, 32, 'OpenLiDARViewer converter');
+  writeFixedString(bytes, 58, GENERATING_SOFTWARE_BYTES, lasGeneratingSoftware());
   view.setUint16(90, 0, true); // file creation day of year (deterministic)
   view.setUint16(92, 0, true); // file creation year
   view.setUint16(94, HEADER_SIZE_14, true); // header size
