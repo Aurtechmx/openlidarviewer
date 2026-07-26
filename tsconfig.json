@@ -18,5 +18,13 @@
     "noFallthroughCasesInSwitch": true,
     "erasableSyntaxOnly": true
   },
-  "include": ["src", "tests", "vite.config.ts", "vitest.config.ts", "benchmarks/framework"]
+  "include": [
+    "src",
+    "tests",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "benchmarks/framework",
+    "benchmarks/fixtures",
+    "benchmarks/pipeline"
+  ]
 }

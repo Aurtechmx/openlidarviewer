@@ -2,29 +2,37 @@
  * pipelineDriver.test.ts — the driver that runs OLV's real science pipeline.
  *
  * The point of the driver is that a benchmark measures the APPLICATION. So the
- * load-bearing test here is the last one: the surface and contours the driver
- * produces must be identical to what `analyseContours` — the entry point the
- * AnalysePanel and the contour worker call — produces from the same points. If
- * someone ever reimplements a stage inside the benchmark, that equality is what
+ * load-bearing test here is the drift guard: the raster grid, surface, contours
+ * and complexity the driver produces must be identical to what
+ * `analyseContours` — the entry point the AnalysePanel and the contour worker
+ * call — produces from the same points. If someone ever reimplements a stage
+ * inside the benchmark, or drifts one of its parameters, that equality is what
  * breaks, and it breaks loudly instead of drifting quietly for a release.
  *
  * The rest pin the reporting contract the three suites key off: one result per
- * named stage, a failing stage recorded rather than fatal, browser-only stages
- * present and honestly unmeasurable, and artifacts that hash.
+ * named stage, a failing stage recorded rather than fatal (including a failure
+ * while converting an artifact), browser-only stages present and honestly
+ * unmeasurable, a total that cannot double-count, and artifacts that hash.
+ *
+ * Clock/random/runtime-neutrality guards for this module live in
+ * `sourceGuards.test.ts`, which walks all of `benchmarks/`.
  */
 import { describe, test, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import {
   runOlvPipeline,
-  toHashable,
+  pipelineDurationMs,
+  scienceScopedArtifacts,
+  ARTIFACT_SCOPE,
   BENCHMARK_AGGREGATION,
-  NODE_STAGES,
   BROWSER_ONLY_STAGES,
+  NODE_STAGES,
+  PIPELINE_ARTIFACTS,
   PIPELINE_STAGES,
+  STAGE_ROLE,
+  type PipelineArtifactName,
 } from '../../benchmarks/pipeline/runPipeline';
 import { generateSyntheticCloud } from '../../benchmarks/fixtures/syntheticCloud';
-import { isMeasured, isUnavailable, type StageResult } from '../../benchmarks/framework';
+import { isMeasured, isUnavailable, toHashable, type StageResult } from '../../benchmarks/framework';
 import { hashArtifactNode } from '../../benchmarks/framework/node';
 import { analyseContours, computeTerrainCore } from '../../src/terrain/contour/analyseContours';
 
@@ -39,11 +47,15 @@ const stageNamed = (stages: readonly StageResult[], name: string): StageResult =
   if (!found) throw new Error(`no stage named ${name}`);
   return found;
 };
+const artifactEntries = (r: typeof run): Array<[PipelineArtifactName, unknown]> =>
+  Object.entries(r.artifacts) as Array<[PipelineArtifactName, unknown]>;
 
 describe('the OLV pipeline driver', () => {
   test('records one StageResult per named stage, in the declared order', () => {
     expect(run.stages.map((s) => s.name)).toEqual([...PIPELINE_STAGES]);
-    expect(PIPELINE_STAGES).toEqual([...NODE_STAGES, ...BROWSER_ONLY_STAGES]);
+    // The Node stages are the ones a report can put a number against, and the
+    // suites hard-code these names; the browser ones come last so the measured
+    // rows read as a sequence.
     expect(NODE_STAGES).toEqual([
       'generate',
       'rasterize',
@@ -53,6 +65,8 @@ describe('the OLV pipeline driver', () => {
       'scientificRecord',
       'manifest',
     ]);
+    expect(BROWSER_ONLY_STAGES).toEqual(['gpuUpload', 'renderReady', 'fps', 'timeToInteraction']);
+    expect(new Set(PIPELINE_STAGES).size).toBe(PIPELINE_STAGES.length);
   });
 
   test('every Node stage completes and carries a measured duration and peak memory', () => {
@@ -85,7 +99,52 @@ describe('the OLV pipeline driver', () => {
         expect(stage.duration.reason.length).toBeGreaterThan(20);
         expect(stage.duration.reason).toMatch(/node|browser|gpu|renderer|frame|paint/i);
       }
+      expect(STAGE_ROLE[name]).toBe('declared');
     }
+  });
+
+  test('the run total sums the disjoint stages only, never the whole column', () => {
+    // `rasterize` and `descriptors` are leaves `dtm` runs again internally, so
+    // adding the column overstates the run. The correct answer has to be a
+    // function, because a comment does not survive a reporter author.
+    expect(Object.keys(STAGE_ROLE).sort()).toEqual([...PIPELINE_STAGES].sort());
+    expect(STAGE_ROLE.rasterize).toBe('isolated');
+    expect(STAGE_ROLE.descriptors).toBe('isolated');
+
+    const total = pipelineDurationMs(run.stages);
+    expect(total).not.toBeNull();
+    const wholeColumn = run.stages.reduce(
+      (n, s) => n + (s.duration.status === 'measured' ? s.duration.value : 0),
+      0,
+    );
+    const isolated = (['rasterize', 'descriptors'] as const).reduce((n, name) => {
+      const d = stageNamed(run.stages, name).duration;
+      return n + (d.status === 'measured' ? d.value : 0);
+    }, 0);
+    expect(isolated).toBeGreaterThan(0);
+    expect(total).toBeCloseTo(wholeColumn - isolated, 6);
+    expect(run.metrics.runDurationMs).toMatchObject({ status: 'measured', value: total });
+  });
+
+  test('a run can opt out of the isolated leaves without losing their rows', () => {
+    const lean = runOlvPipeline({ seed: SEED, pointCount: POINTS, isolateLeaves: false });
+    // The rows survive — a silently shorter stage list is exactly what the
+    // browser-stage rule exists to forbid — but they carry no number and say
+    // why, and the leaf artifacts are simply absent.
+    expect(lean.stages.map((s) => s.name)).toEqual([...PIPELINE_STAGES]);
+    for (const name of ['rasterize', 'descriptors'] as const) {
+      const stage = stageNamed(lean.stages, name);
+      expect(stage.status, name).toBe('ok');
+      expect(isUnavailable(stage.duration), name).toBe(true);
+      if (isUnavailable(stage.duration)) {
+        expect(stage.duration.reason).toMatch(/isolateLeaves/);
+      }
+    }
+    expect(lean.artifacts.rasterSummary).toBeUndefined();
+    expect(lean.artifacts.descriptors).toBeUndefined();
+    // The pipeline half is untouched, so the surface is still produced.
+    expect(lean.artifacts.dtmSummary).toBeDefined();
+    expect(pipelineDurationMs(lean.stages)).not.toBeNull();
   });
 
   test('an injected stage failure is recorded and the later stages still run', () => {
@@ -115,6 +174,34 @@ describe('the OLV pipeline driver', () => {
     expect(faulted.artifacts.contours).toBeDefined();
   });
 
+  test('a failure while converting an artifact costs that stage only', () => {
+    // The conversion runs INSIDE the stage body, and the stage's product is
+    // captured before it. Built the other way round — convert after the stage
+    // returns — one unconvertible application field (a Date, a Map) would throw
+    // outside every try/catch and take the whole run down, which is precisely
+    // what a per-stage failure contract exists to prevent.
+    const faulted = runOlvPipeline({
+      seed: SEED,
+      pointCount: POINTS,
+      artifactFaults: { contours: 'injected conversion explosion' },
+    });
+    expect(faulted.stages.map((s) => s.name)).toEqual([...PIPELINE_STAGES]);
+
+    const contours = stageNamed(faulted.stages, 'contours');
+    expect(contours.status).toBe('failed');
+    if (contours.status === 'failed') {
+      expect(contours.error).toContain('injected conversion explosion');
+    }
+    expect(faulted.artifacts.contours).toBeUndefined();
+    expect(faulted.artifacts.contourFeatures).toBeUndefined();
+    // …and the stages that consume the PRODUCT, not the artifact, are fine.
+    for (const later of ['scientificRecord', 'manifest'] as const) {
+      expect(stageNamed(faulted.stages, later).status, later).toBe('ok');
+    }
+    expect(faulted.artifacts.processingManifest).toBeDefined();
+    expect(faulted.result).not.toBeNull();
+  });
+
   test('a failure upstream leaves the dependent stages failed, not missing', () => {
     const faulted = runOlvPipeline({
       seed: SEED,
@@ -136,51 +223,106 @@ describe('the OLV pipeline driver', () => {
     }
     // The stages that DID complete are still reported as such.
     expect(stageNamed(faulted.stages, 'rasterize').status).toBe('ok');
+    // …and the run has no total, rather than a total missing a term.
+    expect(pipelineDurationMs(faulted.stages)).toBeNull();
   });
 
-  test('every artifact hashes without throwing, and re-hashing the same run agrees', () => {
-    const names = Object.keys(run.artifacts);
-    // The pipeline produced real science, so the artifact set is not empty.
-    expect(names).toEqual(
-      expect.arrayContaining([
-        'fixture',
-        'rasterSummary',
-        'dtmSummary',
-        'dtmSurface',
-        'descriptors',
-        'contours',
-        'contourFeatures',
-        'scientificRecord',
-        'processingManifest',
-      ]),
-    );
-    for (const name of names) {
-      const first = hashArtifactNode(name, run.artifacts[name]);
-      const second = hashArtifactNode(name, run.artifacts[name]);
+  test('every artifact is declared, scoped, hashes without throwing, and re-hashes the same', () => {
+    const produced = artifactEntries(run).map(([name]) => name);
+    // A complete run produces every declared artifact — so the name list is a
+    // contract a suite can compile against, not a hopeful superset.
+    expect([...produced].sort()).toEqual([...PIPELINE_ARTIFACTS].sort());
+
+    for (const [name, value] of artifactEntries(run)) {
+      expect(ARTIFACT_SCOPE[name], name).toBeDefined();
+      const first = hashArtifactNode(name, value);
+      const second = hashArtifactNode(name, value);
       expect(first.hash, name).toBe(second.hash);
       expect(first.hash, name).toMatch(/^[0-9a-f]{64}$/);
     }
+    // The grids travel as bytes: converting them cost three full copies each,
+    // and the top of the size ladder would have been gigabytes of transient.
+    for (const name of ['pointBytes', 'dtmZBytes', 'dtmCoverageBytes'] as const) {
+      expect(hashArtifactNode(name, run.artifacts[name]).kind, name).toBe('bytes');
+    }
+  });
+
+  test('the build-scoped artifacts are the only ones a cross-machine run must skip', () => {
+    // The record embeds the build identity and the manifest chains from it, so
+    // both track the git commit and the runner's Node version. Marking them is
+    // what stops a cross-machine reproducibility check going red on a green
+    // pipeline; the science inside the record stays comparable through
+    // `scientificRecordContent`, which drops build and timestamp.
+    const buildScoped = PIPELINE_ARTIFACTS.filter((n) => ARTIFACT_SCOPE[n] === 'build');
+    expect([...buildScoped]).toEqual(['scientificRecord', 'processingManifest']);
+    expect(scienceScopedArtifacts()).not.toContain('scientificRecord');
+    expect(scienceScopedArtifacts()).toContain('scientificRecordContent');
+
+    const content = run.artifacts.scientificRecordContent as Record<string, unknown>;
+    expect(content.build).toBeUndefined();
+    expect(content.generatedAt).toBeUndefined();
+    // The app's own science-only fingerprint survives, which is what makes the
+    // record's identity checkable at all across machines.
+    expect(typeof content.contentHash).toBe('string');
+    expect(content.summary).toBeDefined();
+    expect(content.methods).toBeDefined();
   });
 
   test('two runs of the same seed produce the same artifact hashes', () => {
     const again = runOlvPipeline({ seed: SEED, pointCount: POINTS });
-    for (const name of Object.keys(run.artifacts)) {
+    for (const [name, value] of artifactEntries(run)) {
       expect(hashArtifactNode(name, again.artifacts[name]).hash, name).toBe(
-        hashArtifactNode(name, run.artifacts[name]).hash,
+        hashArtifactNode(name, value).hash,
       );
     }
   });
 
-  test('drives the real application cores — the surface matches analyseContours', () => {
+  test('drives the real application cores — raster, surface and contours match analyseContours', () => {
     // The drift guard. The driver stages the app's own two halves
     // (computeTerrainCore → contoursFromCore); `analyseContours` is defined as
     // the composition of exactly those two. If a future edit reimplements any
-    // of it inside the benchmark, these arrays stop matching.
+    // of it inside the benchmark, these stop matching.
     const cloud = generateSyntheticCloud({ seed: SEED, pointCount: POINTS });
     const expected = analyseContours(cloud.positions, run.analysisParams);
 
     expect(run.result).not.toBeNull();
     const actual = run.result!;
+
+    // The isolated rasterize stage runs the same two leaves with the same
+    // resolved parameters, so its grid must be the grid the core built. Without
+    // this the stage was free to drift its origin, its aggregation or its input
+    // and nothing would have noticed.
+    const rs = run.artifacts.rasterSummary as Record<string, number>;
+    expect(rs.cols).toBe(expected.dtm.cols);
+    expect(rs.rows).toBe(expected.dtm.rows);
+    expect(rs.originH1).toBe(expected.dtm.originH1);
+    expect(rs.originH2).toBe(expected.dtm.originH2);
+    expect(rs.cellSizeM).toBe(expected.dtm.cellSizeM);
+    expect(rs.sourcePointCount).toBe(expected.dtm.sourcePointCount);
+    expect(rs.analyzedPointCount).toBe(expected.dtm.analyzedPointCount);
+
+    // Geometry alone cannot catch a leaf that aggregated its cells differently
+    // from the core — every field above is identical under 'mean'. The values
+    // can: `buildDtmGrid` keeps a measured cell's height verbatim, so on this
+    // fixture, where the despike pass removes nothing (asserted, so a future
+    // fixture that does trip it says why rather than failing mysteriously),
+    // every filled cell must carry the identical height in the delivered DTM.
+    expect(expected.warnings.filter((w) => /outlier ground cell/.test(w))).toEqual([]);
+    // Reinterpret the bytes, not copy them element-wise: `new Float32Array(u8)`
+    // would read each BYTE as a float and compare nonsense that happens to be
+    // stable across runs.
+    const rzb = run.artifacts.rasterZBytes as Uint8Array;
+    const rasterZ = new Float32Array(rzb.buffer, rzb.byteOffset, rzb.byteLength / 4);
+    const mismatched: number[] = [];
+    let filled = 0;
+    for (let i = 0; i < expected.dtm.counts.length; i++) {
+      if (expected.dtm.counts[i] === 0) continue;
+      filled++;
+      if (rasterZ[i] !== expected.dtm.z[i]) mismatched.push(i);
+    }
+    expect(filled).toBeGreaterThan(100);
+    expect(mismatched).toEqual([]);
+
     expect(Array.from(actual.dtm.z)).toEqual(Array.from(expected.dtm.z));
     expect(Array.from(actual.dtm.confidence)).toEqual(Array.from(expected.dtm.confidence));
     expect(Array.from(actual.dtm.coverage)).toEqual(Array.from(expected.dtm.coverage));
@@ -205,27 +347,10 @@ describe('the OLV pipeline driver', () => {
       pointCount: POINTS,
       faults: { dtm: 'injected core explosion' },
     });
-    expect(faulted.metrics.analysisDurationMs.status).toBe('unavailable');
-    expect(faulted.metrics.pointsPerSecond.status).toBe('unavailable');
-    expect(faulted.metrics.pointsPerSecond.value).toBeNull();
-  });
-
-  test('the driver never reaches for Math.random or the wall clock', () => {
-    // Both would poison an artifact hash, and neither would fail loudly: the
-    // run would look fine and the reproducibility check would simply never
-    // match again. Same guard the framework holds itself to.
-    const file = fileURLToPath(
-      new URL('../../benchmarks/pipeline/runPipeline.ts', import.meta.url),
-    );
-    const code = readFileSync(file, 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|\s)\/\/[^\n]*/g, '$1');
-    expect(code).not.toMatch(/Math\.random\s*\(/);
-    expect(code).not.toMatch(/Date\.now\s*\(/);
-    expect(code).not.toMatch(/new Date\s*\(/);
-    // …and it stays runtime-neutral, so a browser suite can reuse it to fill
-    // in the four stages Node cannot measure.
-    expect(code).not.toMatch(/['"]node:/);
+    for (const name of ['analysisDurationMs', 'runDurationMs', 'pointsPerSecond'] as const) {
+      expect(faulted.metrics[name].status, name).toBe('unavailable');
+      expect(faulted.metrics[name].value, name).toBeNull();
+    }
   });
 
   test('the declared aggregation is still the one the live pipeline picks', () => {

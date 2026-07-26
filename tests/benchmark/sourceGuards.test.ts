@@ -13,6 +13,7 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const FRAMEWORK = fileURLToPath(new URL('../../benchmarks/framework', import.meta.url));
+const BENCHMARKS = fileURLToPath(new URL('../../benchmarks', import.meta.url));
 const REPO = fileURLToPath(new URL('../..', import.meta.url));
 
 /**
@@ -37,11 +38,24 @@ function sourceFiles(dir: string): string[] {
   return out.sort();
 }
 
-const FILES = sourceFiles(FRAMEWORK);
+const FRAMEWORK_FILES = sourceFiles(FRAMEWORK);
+/**
+ * EVERY benchmark module, not just the framework's.
+ *
+ * The clock/random and dependency guards below are properties of anything that
+ * feeds a hashed artifact, and the fixtures and the pipeline driver do exactly
+ * that. Scoping them to `benchmarks/framework` left the generator that produces
+ * the data and the driver that produces the artifacts entirely unguarded — and
+ * the suites landing next would have been unguarded too, by default and
+ * silently. Only the module manifest below stays framework-scoped: it pins a
+ * fixed file list, which is right for a stable core and wrong for a directory
+ * suites keep adding to.
+ */
+const FILES = sourceFiles(BENCHMARKS);
 
 describe('the framework source', () => {
   test('ships every module the suites are built on', () => {
-    const names = FILES.map((f) => f.slice(FRAMEWORK.length + 1));
+    const names = FRAMEWORK_FILES.map((f) => f.slice(FRAMEWORK.length + 1));
     expect(names).toEqual([
       'artifacts.ts',
       'clock.ts',
@@ -100,6 +114,21 @@ describe('the framework source', () => {
     const node = readFileSync(join(FRAMEWORK, 'node.ts'), 'utf8');
     expect(node).toMatch(/from ['"]node:crypto['"]/);
     expect(node).toMatch(/captureEnvironment/);
+  });
+
+  test('the fixtures and the driver stay runtime-neutral', () => {
+    // Both are reachable from a browser-side suite: the generator so a browser
+    // run measures the identical cloud, the driver so it can fill in the four
+    // stages Node cannot measure. One `node:` import in either makes that
+    // impossible, and the bundler is where you find out.
+    for (const dir of [join(BENCHMARKS, 'fixtures'), join(BENCHMARKS, 'pipeline')]) {
+      for (const file of sourceFiles(dir)) {
+        const src = readFileSync(file, 'utf8');
+        for (const m of src.matchAll(SPECS)) {
+          expect(m[1].startsWith('node:'), `${relative(REPO, file)} imports ${m[1]}`).toBe(false);
+        }
+      }
+    }
   });
 
   test('never calls Date.now() or Math.random() — both would poison an artifact hash', () => {

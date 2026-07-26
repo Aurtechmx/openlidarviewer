@@ -9,10 +9,10 @@
  * re-implemented the pipeline would measure the benchmark. Worse, it would keep
  * reporting healthy numbers after the application changed, because nothing
  * would connect the two any more. So every stage below is a call into `src/`,
- * and `tests/benchmark/pipelineDriver.test.ts` pins the driver's DTM, contours
- * and complexity output against `analyseContours` — the entry point the
- * AnalysePanel and the contour worker use — on the same input. Reimplement any
- * stage and that equality breaks immediately.
+ * and `tests/benchmark/pipelineDriver.test.ts` pins the driver's raster grid,
+ * DTM, contours and complexity output against `analyseContours` — the entry
+ * point the AnalysePanel and the contour worker use — on the same input.
+ * Reimplement any stage and that equality breaks immediately.
  *
  * THE CALL CHAIN, stage by stage:
  *
@@ -34,29 +34,56 @@
  * is defined as `contoursFromCore ∘ computeTerrainCore` — so together they are
  * exactly one full analysis with no work done twice and no sequencing invented
  * here. `rasterize` and `descriptors` are the two leaves timed in isolation, so
- * a scaling suite can see how each core scales on its own; they are therefore
- * NOT disjoint from `dtm`, which runs both again internally. Summing all seven
- * stages double-counts them; read `dtm` + `contours` as the pipeline's cost.
+ * a scaling suite can see how each core scales on its own; they therefore
+ * OVERLAP `dtm`, which runs both again internally.
+ *
+ * That overlap is a trap for a reporter — summing the stage column overstates a
+ * 500k run by about 25 %. So the correct total is a function, not a convention:
+ * see {@link STAGE_ROLE} and {@link pipelineDurationMs}. Getting it wrong now
+ * takes ignoring an exported answer rather than missing a comment. A run that
+ * does not want to pay for the isolated leaves at all passes
+ * `isolateLeaves: false`.
  *
  * BROWSER-ONLY WORK IS DECLARED, NOT DROPPED. GPU upload, first rendered frame,
  * frame rate and time-to-interaction are real stages of the user's workflow and
  * Node can measure none of them. They are reported as stages whose metrics are
  * `unavailable` with a reason naming the limitation, never as 0 and never as an
  * estimate, so a workflow report shows the whole pipeline with honest gaps
- * instead of a partial one that looks complete.
+ * instead of a partial one that looks complete. {@link STAGE_ROLE} marks them
+ * `'declared'` so a reporter can render them as their own kind of row.
  *
- * Runtime-neutral by construction: nothing here imports a `node:` builtin, so a
- * browser-side suite can reuse the driver and fill in the four stages Node
- * cannot. It does need the `__BUILD_IDENTITY__` define that Vite and Vitest
- * supply (the export-provenance path stamps the build into the record), so it
- * runs under those, not under a bare `node` process.
+ * WHAT IS COMPARABLE ACROSS MACHINES, AND WHAT IS NOT. Most artifacts here are
+ * pure science and hash identically anywhere. Two are not: the scientific
+ * record embeds the build identity, and the processing manifest seeds its hash
+ * chain from that identity, so both track the git commit and the Node version
+ * of whatever ran them (`vitest.config.ts` sets the test build's `node` from
+ * `process.version`). The framework's strip list removes `builtAt` and
+ * `generatedAt` but cannot remove a commit — that IS provenance, and stripping
+ * it would be a lie. {@link ARTIFACT_SCOPE} marks those two `'build'`, and a
+ * cross-machine reproducibility comparison must exclude them or it goes red on
+ * a perfectly green pipeline. The science inside the record stays checkable:
+ * `scientificRecordContent` carries the same record with build and timestamp
+ * dropped, including the app's own `contentHash`, which
+ * `scientificAnalysisRecord.ts` deliberately computes over the science alone.
+ *
+ * Runtime-neutral by construction: nothing here imports a `node:` builtin (a
+ * source guard enforces it), so a browser-side suite can reuse the driver and
+ * fill in the four stages Node cannot. It does need the `__BUILD_IDENTITY__`
+ * define that Vite and Vitest supply, because the export-provenance path stamps
+ * the build into the record. That dependency resolves at MODULE LOAD, so a bare
+ * `node` process dies with a `ReferenceError` before any stage exists — it
+ * cannot be reported as a failed stage, and CI invoking this outside vitest or a
+ * vite build sees the process die rather than a red row.
  */
 
 import {
   measured,
   runStage,
+  toHashable,
   unavailable,
   type Metric,
+  type MetricRuntime,
+  type StageOutcome,
   type StageResult,
 } from '../framework';
 import { generateSyntheticCloud, type SyntheticCloud } from '../fixtures/syntheticCloud';
@@ -72,14 +99,12 @@ import {
   type AnalyseContoursResult,
   type TerrainCore,
 } from '../../src/terrain/contour/analyseContours';
-import {
-  summariseTerrainComplexity,
-  type TerrainComplexitySummary,
-} from '../../src/terrain/complexity/complexitySummary';
+import { summariseTerrainComplexity } from '../../src/terrain/complexity/complexitySummary';
 import {
   analysisRecordFromProvenance,
   buildExportProvenance,
   processingManifestFromProvenance,
+  type ExportProvenance,
 } from '../../src/terrain/export/exportProvenance';
 import { verifyProcessingManifest } from '../../src/science/processingManifest';
 
@@ -109,6 +134,102 @@ export type NodeStageName = (typeof NODE_STAGES)[number];
 export type BrowserStageName = (typeof BROWSER_ONLY_STAGES)[number];
 export type PipelineStageName = (typeof PIPELINE_STAGES)[number];
 
+/** What a stage's timing means for a total. See {@link STAGE_ROLE}. */
+export type StageRole = 'pipeline' | 'isolated' | 'declared';
+
+/**
+ * What each stage's timing means, so a reporter can add up the right ones.
+ *
+ *   'pipeline' — disjoint work. These and only these sum to the run's cost.
+ *   'isolated' — a leaf that `dtm` also runs internally, timed on its own for a
+ *                per-core scaling curve. Adding it to a total double-counts.
+ *   'declared' — a stage that exists but cannot be measured in this runtime.
+ */
+export const STAGE_ROLE: Readonly<Record<PipelineStageName, StageRole>> = {
+  generate: 'pipeline',
+  rasterize: 'isolated',
+  dtm: 'pipeline',
+  descriptors: 'isolated',
+  contours: 'pipeline',
+  scientificRecord: 'pipeline',
+  manifest: 'pipeline',
+  gpuUpload: 'declared',
+  renderReady: 'declared',
+  fps: 'declared',
+  timeToInteraction: 'declared',
+};
+
+/**
+ * The run's total duration: the `'pipeline'` stages only, never the whole
+ * column. Includes `generate`, because a run cannot happen without producing
+ * its input; subtract that stage if you want application time alone.
+ *
+ * Null — not a partial sum — when any pipeline stage failed or was not
+ * measured. A total missing one of its terms is not a smaller total, it is a
+ * different number, and reporting the second as if it were the first is exactly
+ * the class of quiet wrongness this framework exists to prevent.
+ */
+export function pipelineDurationMs(stages: readonly StageResult[]): number | null {
+  return sumStages(
+    stages,
+    PIPELINE_STAGES.filter((name) => STAGE_ROLE[name] === 'pipeline'),
+  );
+}
+
+/** Every artifact a complete run can produce. */
+export const PIPELINE_ARTIFACTS = [
+  'fixture',
+  'pointBytes',
+  'rasterSummary',
+  'rasterZBytes',
+  'dtmSummary',
+  'dtmZBytes',
+  'dtmConfidenceBytes',
+  'dtmCoverageBytes',
+  'dtmCountsBytes',
+  'heightAboveGroundBytes',
+  'descriptors',
+  'contours',
+  'contourFeatures',
+  'scientificRecordContent',
+  'scientificRecord',
+  'processingManifest',
+] as const;
+
+export type PipelineArtifactName = (typeof PIPELINE_ARTIFACTS)[number];
+
+/**
+ * Whether an artifact's hash is a statement about the science or about the
+ * build that ran it. See the header: comparing a `'build'` artifact between two
+ * machines is expected to differ and says nothing about reproducibility.
+ */
+export const ARTIFACT_SCOPE: Readonly<Record<PipelineArtifactName, 'science' | 'build'>> = {
+  fixture: 'science',
+  pointBytes: 'science',
+  rasterSummary: 'science',
+  rasterZBytes: 'science',
+  dtmSummary: 'science',
+  dtmZBytes: 'science',
+  dtmConfidenceBytes: 'science',
+  dtmCoverageBytes: 'science',
+  dtmCountsBytes: 'science',
+  heightAboveGroundBytes: 'science',
+  descriptors: 'science',
+  contours: 'science',
+  contourFeatures: 'science',
+  scientificRecordContent: 'science',
+  scientificRecord: 'build',
+  processingManifest: 'build',
+};
+
+/** The artifacts a cross-machine reproducibility comparison may use. */
+export function scienceScopedArtifacts(): readonly PipelineArtifactName[] {
+  return PIPELINE_ARTIFACTS.filter((name) => ARTIFACT_SCOPE[name] === 'science');
+}
+
+/** A stage's contribution to the artifact set. */
+export type ArtifactBag = Partial<Record<PipelineArtifactName, unknown>>;
+
 /**
  * Why each browser stage has no number here. Each names the specific runtime
  * facility Node lacks: "unavailable" on its own tells a reviewer nothing about
@@ -123,6 +244,10 @@ const BROWSER_STAGE_REASONS: Readonly<Record<BrowserStageName, string>> = {
   timeToInteraction:
     'Time-to-interaction runs from a user input event to the painted response; Node has neither input events nor paint.',
 };
+
+/** Stated when a run opts out of the isolated leaf timings. */
+const LEAVES_NOT_REQUESTED =
+  'isolated leaf timings were not requested for this run (isolateLeaves: false); the work still happened inside the dtm stage, it was simply not timed on its own';
 
 /** Default DTM/contour grid, source units. Around 16 returns per cell at QL2. */
 export const DEFAULT_CELL_SIZE_M = 2;
@@ -167,6 +292,15 @@ export interface PipelineRunOptions {
   /** ISO generation timestamp. Default {@link FIXED_GENERATED_AT}. */
   readonly generatedAt?: string;
   /**
+   * Time the two leaves (`rasterize`, `descriptors`) separately. Default true.
+   *
+   * They re-run work `dtm` already does — mostly a second SMRF pass, which is
+   * the expensive part and grows with the tier. A run that only wants the
+   * pipeline's cost turns them off; the stages still appear, marked unavailable
+   * with the reason, so no row silently disappears from a report.
+   */
+  readonly isolateLeaves?: boolean;
+  /**
    * Make a named stage throw with this message.
    *
    * A deliberate injection seam: the "a failed stage is recorded and the run
@@ -176,6 +310,19 @@ export interface PipelineRunOptions {
    * run.
    */
   readonly faults?: Readonly<Partial<Record<PipelineStageName, string>>>;
+  /**
+   * Make a named stage throw AFTER its product exists, while its artifact is
+   * being converted.
+   *
+   * A separate seam from {@link faults} because it exercises a different
+   * contract: a conversion failure must cost that one stage's artifact and
+   * nothing else, because the science already succeeded and the stages
+   * downstream have the product they need. Building the artifacts outside
+   * `runStage` — where an unconvertible application field once would have
+   * landed — killed the entire run instead, which is why this is pinned by a
+   * test rather than left to inspection.
+   */
+  readonly artifactFaults?: Readonly<Partial<Record<PipelineStageName, string>>>;
 }
 
 export interface PipelineRun {
@@ -186,12 +333,13 @@ export interface PipelineRun {
   readonly analysisParams: AnalyseContoursParams;
   readonly stages: readonly StageResult[];
   /**
-   * Named scientific artifacts, every one JSON-representable (or raw bytes),
+   * Named scientific artifacts, every one JSON-representable or raw bytes,
    * ready for `hashArtifact` without further conversion. A stage that failed
    * contributes NO entry — an absent artifact says "not produced", which a
-   * placeholder would not.
+   * placeholder would not. Keyed by {@link PipelineArtifactName}, so a suite's
+   * typo is a compile error rather than an `undefined` that reaches the hasher.
    */
-  readonly artifacts: Readonly<Record<string, unknown>>;
+  readonly artifacts: Readonly<ArtifactBag>;
   /** Suite-level headline numbers, in the framework's metric shape. */
   readonly metrics: Readonly<Record<string, Metric>>;
   /** The generated cloud, for a suite that wants to hash the input bytes. */
@@ -201,13 +349,15 @@ export interface PipelineRun {
 }
 
 /**
- * Run the whole pipeline. Never throws: a stage that fails is recorded as
- * failed and the remaining stages still run, so a report shows which parts of
- * the pipeline did complete instead of stopping at the first problem.
+ * Run the whole pipeline. Never throws: a stage that fails — including one that
+ * fails while converting its own artifact — is recorded as failed and the
+ * remaining stages still run, so a report shows which parts of the pipeline did
+ * complete instead of stopping at the first problem.
  */
 export function runOlvPipeline(options: PipelineRunOptions): PipelineRun {
   const seed = options.seed ?? 1;
   const { pointCount } = options;
+  const isolateLeaves = options.isolateLeaves ?? true;
   const analysisParams: AnalyseContoursParams = {
     cellSizeM: options.cellSizeM ?? DEFAULT_CELL_SIZE_M,
     crs: options.crs ?? DEFAULT_CRS,
@@ -222,243 +372,307 @@ export function runOlvPipeline(options: PipelineRunOptions): PipelineRun {
   };
 
   const stages: StageResult[] = [];
-  const artifacts: Record<string, unknown> = {};
+  const artifacts: ArtifactBag = {};
+  /**
+   * What each stage hands to the next.
+   *
+   * Held OUTSIDE the stage body and assigned BEFORE the artifact conversion, so
+   * a conversion that throws costs one stage's artifact and nothing else. Built
+   * the other way round — convert, then return the product alongside it — a
+   * single unconvertible field on an application type would take out every
+   * stage downstream of it as well.
+   */
+  const products: {
+    cloud: SyntheticCloud | null;
+    core: TerrainCore | null;
+    result: AnalyseContoursResult | null;
+    provenance: ExportProvenance | null;
+  } = { cloud: null, core: null, result: null, provenance: null };
+
   const fault = (name: PipelineStageName): void => {
     const message = options.faults?.[name];
     if (message !== undefined) throw new Error(message);
   };
+  /** Fired once the stage's product is captured, standing in for a conversion. */
+  const artifactFault = (name: PipelineStageName): void => {
+    const message = options.artifactFaults?.[name];
+    if (message !== undefined) throw new Error(message);
+  };
+  const emit = (outcome: StageOutcome<ArtifactBag>): void => {
+    stages.push(outcome.stage);
+    if (outcome.value) Object.assign(artifacts, outcome.value);
+  };
 
   // ── generate ──────────────────────────────────────────────────────────────
-  const generated = runStage('generate', () => {
-    fault('generate');
-    return generateSyntheticCloud({ seed, pointCount });
-  });
-  stages.push(generated.stage);
-  const cloud = generated.value ?? null;
-  if (cloud) {
-    artifacts.fixture = toHashable({
-      datasetId: cloud.datasetId,
-      seed: cloud.seed,
-      pointCount: cloud.pointCount,
-      densityPerM2: cloud.densityPerM2,
-      extentM: cloud.extentM,
-      noiseHalfWidthM: cloud.noiseHalfWidthM,
-      groundPointCount: cloud.groundPointCount,
-      aboveGroundPointCount: cloud.aboveGroundPointCount,
-      bounds: cloud.bounds,
-      surface: cloud.surface,
-    });
-    // The input itself, as bytes. `hashArtifact` digests a Uint8Array directly,
-    // so a reproducibility suite can state "the same seed produced these exact
-    // points" without trusting the descriptor above to be complete. A view, not
-    // a copy — the buffer is already there.
-    artifacts.pointBytes = new Uint8Array(
-      cloud.positions.buffer,
-      cloud.positions.byteOffset,
-      cloud.positions.byteLength,
-    );
-  }
+  emit(
+    runStage('generate', (): ArtifactBag => {
+      fault('generate');
+      const cloud = generateSyntheticCloud({ seed, pointCount });
+      products.cloud = cloud;
+      artifactFault('generate');
+      return {
+        fixture: toHashable({
+          datasetId: cloud.datasetId,
+          seed: cloud.seed,
+          pointCount: cloud.pointCount,
+          densityPerM2: cloud.densityPerM2,
+          extentM: cloud.extentM,
+          noiseHalfWidthM: cloud.noiseHalfWidthM,
+          groundPointCount: cloud.groundPointCount,
+          aboveGroundPointCount: cloud.aboveGroundPointCount,
+          bounds: cloud.bounds,
+          surface: cloud.surface,
+        }),
+        // The input itself, as bytes, so a reproducibility suite can state "the
+        // same seed produced these exact points" without trusting the
+        // descriptor above to be complete.
+        pointBytes: bytesOf(cloud.positions),
+      };
+    }),
+  );
 
   // ── rasterize ─────────────────────────────────────────────────────────────
-  const rasterized = runStage('rasterize', () => {
-    fault('rasterize');
-    const c = require_(cloud, 'generate', 'the point cloud');
-    const points = boxPoints(c.positions);
-    // The app's own resolver, not a copy of its defaults: it is exported as
-    // "the SINGLE source of truth" precisely so a second caller cannot drift
-    // from the parameters the delivered surface was filtered with.
-    const groundParams = resolveGroundFilterParams(analysisParams, 'z');
-    const gf = classifyGroundSmrf(points, groundParams);
-    const raster = rasterizeDtm(points, gf.isGround, {
-      grid: {
-        originH1: gf.originH1,
-        originH2: gf.originH2,
-        cols: gf.cols,
-        rows: gf.rows,
-        cellSizeM: analysisParams.cellSizeM,
-      },
-      aggregation: BENCHMARK_AGGREGATION,
-      verticalAxis: 'z',
-    });
-    return { gf, raster };
-  });
-  stages.push(rasterized.stage);
-  if (rasterized.value) {
-    const { gf, raster } = rasterized.value;
-    artifacts.rasterSummary = toHashable({
-      cols: raster.cols,
-      rows: raster.rows,
-      cellSizeM: raster.cellSizeM,
-      originH1: raster.originH1,
-      originH2: raster.originH2,
-      coverage: raster.coverage,
-      sourcePointCount: raster.sourcePointCount,
-      analyzedPointCount: raster.analyzedPointCount,
-      filledCellCount: raster.filledCellCount,
-      groundPointCount: gf.groundPointCount,
-      nonGroundPointCount: gf.sourcePointCount - gf.groundPointCount,
-      warnings: raster.warnings,
-    });
+  if (!isolateLeaves) {
+    stages.push(declaredStage('rasterize', LEAVES_NOT_REQUESTED, 'node'));
+  } else {
+    emit(
+      runStage('rasterize', (): ArtifactBag => {
+        fault('rasterize');
+        const cloud = require_(products.cloud, 'generate', 'the point cloud');
+        const points = boxPoints(cloud.positions);
+        // The app's own resolver, not a copy of its defaults: it is exported as
+        // "the SINGLE source of truth" precisely so a second caller cannot
+        // drift from the parameters the delivered surface was filtered with.
+        const groundParams = resolveGroundFilterParams(analysisParams, 'z');
+        const gf = classifyGroundSmrf(points, groundParams);
+        const raster = rasterizeDtm(points, gf.isGround, {
+          grid: {
+            originH1: gf.originH1,
+            originH2: gf.originH2,
+            cols: gf.cols,
+            rows: gf.rows,
+            cellSizeM: analysisParams.cellSizeM,
+          },
+          // Read off the SAME params object handed to the core below, never a
+          // second copy of the constant: two values that must agree is a drift
+          // waiting to happen, and a leaf silently aggregating differently from
+          // the surface it is supposed to mirror is invisible in every summary
+          // field. One value, so there is nothing to disagree with.
+          aggregation: analysisParams.aggregation,
+          verticalAxis: analysisParams.verticalAxis,
+        });
+        artifactFault('rasterize');
+        return {
+          // The raw cell values, as bytes. The only value-sensitive evidence
+          // this stage produces: every geometry field below is identical under
+          // a wrong aggregation, so without these the leaf could rasterise the
+          // scene differently from the core and no artifact would show it.
+          rasterZBytes: bytesOf(raster.z),
+          rasterSummary: toHashable({
+            cols: raster.cols,
+            rows: raster.rows,
+            cellSizeM: raster.cellSizeM,
+            originH1: raster.originH1,
+            originH2: raster.originH2,
+            coverage: raster.coverage,
+            sourcePointCount: raster.sourcePointCount,
+            analyzedPointCount: raster.analyzedPointCount,
+            filledCellCount: raster.filledCellCount,
+            groundPointCount: gf.groundPointCount,
+            nonGroundPointCount: gf.sourcePointCount - gf.groundPointCount,
+            warnings: raster.warnings,
+          }),
+        };
+      }),
+    );
   }
 
   // ── dtm ───────────────────────────────────────────────────────────────────
-  const cored = runStage('dtm', () => {
-    fault('dtm');
-    const c = require_(cloud, 'generate', 'the point cloud');
-    return computeTerrainCore(c.positions, analysisParams);
-  });
-  stages.push(cored.stage);
-  const core = cored.value ?? null;
-  if (core) {
-    artifacts.dtmSummary = toHashable(summariseCore(core));
-    // The grids themselves. Converted from Float32Array/Uint8Array to plain
-    // arrays because `assertHashable` rejects typed arrays outright: canonical
-    // JSON turns them into index-keyed objects, which hash but stop
-    // discriminating in ways nobody notices. See `toHashable` for how a NaN
-    // cell — the raster's honest "no data" — is carried across.
-    artifacts.dtmSurface = toHashable({
-      cols: core.dtm.cols,
-      rows: core.dtm.rows,
-      z: core.dtm.z,
-      confidence: core.dtm.confidence,
-      coverage: core.dtm.coverage,
-      counts: core.dtm.counts,
-      // Height above bare earth is a per-cell product, not a statistic, so it
-      // lives with the grids — leaving it on the summary made a "summary"
-      // artifact that was 95 % raster and grew with the tier.
-      heightAboveGroundM: core.surface.canopy.heightM,
-    });
-  }
+  emit(
+    runStage('dtm', (): ArtifactBag => {
+      fault('dtm');
+      const cloud = require_(products.cloud, 'generate', 'the point cloud');
+      const core = computeTerrainCore(cloud.positions, analysisParams);
+      products.core = core;
+      artifactFault('dtm');
+      return {
+        dtmSummary: toHashable(summariseCore(core)),
+        // The grids go out as RAW BYTES, not as converted arrays. `toHashable`
+        // → `assertHashable` → `stripVolatile` → `canonicalJson` is three full
+        // copies of every cell plus a template-literal path string per element,
+        // which measured ~300 MB of transient heap for ONE 500k run; cell count
+        // scales with the tile AREA, so the top of the ladder would have been
+        // multiple gigabytes. Bytes also carry a NaN cell across exactly,
+        // rather than through the `'NaN'` spelling the JSON path needs.
+        dtmZBytes: bytesOf(core.dtm.z),
+        dtmConfidenceBytes: bytesOf(core.dtm.confidence),
+        dtmCoverageBytes: bytesOf(core.dtm.coverage),
+        dtmCountsBytes: bytesOf(core.dtm.counts),
+        // Height above bare earth is a per-cell product, not a statistic, so it
+        // travels with the grids rather than on the summary.
+        heightAboveGroundBytes: bytesOf(core.surface.canopy.heightM),
+      };
+    }),
+  );
 
   // ── descriptors ───────────────────────────────────────────────────────────
-  const descriptors = runStage('descriptors', () => {
-    fault('descriptors');
-    const k = require_(core, 'dtm', 'the terrain core');
-    // The same conversion the core applies before its own complexity pass, via
-    // the app's function rather than a hard-coded "cells are metres" — a
-    // foot-based or geographic frame would make that assumption wrong and the
-    // window/radius statements would report ground sizes that never existed.
-    const cell = horizontalCellMetresXY(
-      k.dtm.cellSizeM,
-      analysisParams.isGeographic,
-      analysisParams.latitudeDeg,
-      analysisParams.horizontalUnitToMetres,
+  if (!isolateLeaves) {
+    stages.push(declaredStage('descriptors', LEAVES_NOT_REQUESTED, 'node'));
+  } else {
+    emit(
+      runStage('descriptors', (): ArtifactBag => {
+        fault('descriptors');
+        const core = require_(products.core, 'dtm', 'the terrain core');
+        // The same guard the core applies: on a grid with no covered cells the
+        // summary is null rather than figures computed over nothing. Without
+        // mirroring it, a degenerate cloud makes the driver and the application
+        // disagree and the drift guard goes red for the wrong reason.
+        if (!core.dtm.coverage.some((c) => c !== 0)) return {};
+        // The same conversion the core applies before its own complexity pass,
+        // via the app's function rather than a hard-coded "cells are metres" —
+        // a foot-based or geographic frame would make that assumption wrong and
+        // the window/radius statements would report ground sizes that never
+        // existed.
+        const cell = horizontalCellMetresXY(
+          core.dtm.cellSizeM,
+          analysisParams.isGeographic,
+          analysisParams.latitudeDeg,
+          analysisParams.horizontalUnitToMetres,
+        );
+        const complexity = summariseTerrainComplexity({
+          z: core.dtm.z,
+          coverage: core.dtm.coverage,
+          cols: core.dtm.cols,
+          rows: core.dtm.rows,
+          // The Horn slope/aspect grids the core already computed and exposes
+          // for reuse — recomputing them here would time a derivative pass
+          // twice and risk measuring a differently-parameterised one.
+          slope: core.surface.relief.slope,
+          aspect: core.surface.relief.aspect,
+          cellMetresX: cell.x,
+          cellMetresY: cell.y,
+          verticalUnitToMetres: analysisParams.verticalUnitToMetres,
+          meta: {
+            coverage: core.dtm.coverageMode,
+            sourcePointCount: core.dtm.sourcePointCount,
+            analyzedPointCount: core.dtm.analyzedPointCount,
+          },
+          groundDensityPerM2: core.cellMetrics.meanDensity,
+        });
+        artifactFault('descriptors');
+        return complexity === null ? {} : { descriptors: toHashable(complexity) };
+      }),
     );
-    return summariseTerrainComplexity({
-      z: k.dtm.z,
-      coverage: k.dtm.coverage,
-      cols: k.dtm.cols,
-      rows: k.dtm.rows,
-      // The Horn slope/aspect grids the core already computed and exposes for
-      // reuse — recomputing them here would time a derivative pass twice and
-      // risk measuring a differently-parameterised one.
-      slope: k.surface.relief.slope,
-      aspect: k.surface.relief.aspect,
-      cellMetresX: cell.x,
-      cellMetresY: cell.y,
-      verticalUnitToMetres: analysisParams.verticalUnitToMetres,
-      meta: {
-        coverage: k.dtm.coverageMode,
-        sourcePointCount: k.dtm.sourcePointCount,
-        analyzedPointCount: k.dtm.analyzedPointCount,
-      },
-      groundDensityPerM2: k.cellMetrics.meanDensity,
-    });
-  });
-  stages.push(descriptors.stage);
-  const complexity: TerrainComplexitySummary | null = descriptors.value ?? null;
-  if (complexity) artifacts.descriptors = toHashable(complexity);
+  }
 
   // ── contours ──────────────────────────────────────────────────────────────
-  const contoured = runStage('contours', () => {
-    fault('contours');
-    const k = require_(core, 'dtm', 'the terrain core');
-    return contoursFromCore(k, analysisParams);
-  });
-  stages.push(contoured.stage);
-  const result = contoured.value ?? null;
-  if (result) {
-    artifacts.contours = toHashable({
-      intervalM: result.intervalM,
-      gate: result.gate,
-      tally: result.tally,
-      levels: result.contours.levels.map((level) => ({
-        value: level.value,
-        segmentCount: level.segments.length,
-      })),
-      stitchedPolylineCount: result.stitched.reduce((n, l) => n + l.polylines.length, 0),
-      labelCount: result.labels.length,
-      generationParams: result.generationParams,
-      warnings: result.warnings,
-    });
-    // The exported geometry itself — what a GIS would receive — so the
-    // reproducibility suite compares the deliverable, not a summary of it.
-    artifacts.contourFeatures = toHashable(result.model);
-  }
+  emit(
+    runStage('contours', (): ArtifactBag => {
+      fault('contours');
+      const core = require_(products.core, 'dtm', 'the terrain core');
+      const result = contoursFromCore(core, analysisParams);
+      products.result = result;
+      artifactFault('contours');
+      return {
+        contours: toHashable({
+          intervalM: result.intervalM,
+          gate: result.gate,
+          tally: result.tally,
+          levels: result.contours.levels.map((level) => ({
+            value: level.value,
+            segmentCount: level.segments.length,
+          })),
+          stitchedPolylineCount: result.stitched.reduce((n, l) => n + l.polylines.length, 0),
+          labelCount: result.labels.length,
+          generationParams: result.generationParams,
+          warnings: result.warnings,
+        }),
+        // The exported geometry itself — what a GIS would receive — so the
+        // reproducibility suite compares the deliverable, not a summary of it.
+        contourFeatures: toHashable(result.model),
+      };
+    }),
+  );
 
   // ── scientificRecord ──────────────────────────────────────────────────────
   const generatedAt = options.generatedAt ?? FIXED_GENERATED_AT;
-  const recorded = runStage('scientificRecord', () => {
-    fault('scientificRecord');
-    const r = require_(result, 'contours', 'the analysis result');
-    // buildExportProvenance is the app's one derivation of provenance from a
-    // run; the record and the manifest are both derived from it, exactly as
-    // every exporter does, so the benchmark stamps what a real export stamps.
-    const provenance = buildExportProvenance(r, {
-      basename: options.basename ?? null,
-      generatedAt,
-      verticalUnitToMetres: analysisParams.verticalUnitToMetres,
-    });
-    return { provenance, record: analysisRecordFromProvenance(provenance) };
-  });
-  stages.push(recorded.stage);
-  if (recorded.value) artifacts.scientificRecord = toHashable(recorded.value.record);
+  emit(
+    runStage('scientificRecord', (): ArtifactBag => {
+      fault('scientificRecord');
+      const result = require_(products.result, 'contours', 'the analysis result');
+      // buildExportProvenance is the app's one derivation of provenance from a
+      // run; the record and the manifest are both derived from it, exactly as
+      // every exporter does, so the benchmark stamps what a real export stamps.
+      const provenance = buildExportProvenance(result, {
+        basename: options.basename ?? null,
+        generatedAt,
+        verticalUnitToMetres: analysisParams.verticalUnitToMetres,
+      });
+      products.provenance = provenance;
+      const record = analysisRecordFromProvenance(provenance);
+      // The build identity and the generation time are what make the full
+      // record machine-scoped; dropping them leaves the science, including the
+      // app's own contentHash taken over exactly that science. See the header.
+      const { build: _build, generatedAt: _generatedAt, ...content } = record;
+      artifactFault('scientificRecord');
+      return {
+        scientificRecord: toHashable(record),
+        scientificRecordContent: toHashable(content),
+      };
+    }),
+  );
 
   // ── manifest ──────────────────────────────────────────────────────────────
-  const manifested = runStage('manifest', () => {
-    fault('manifest');
-    const p = require_(recorded.value, 'scientificRecord', 'the export provenance');
-    const manifest = processingManifestFromProvenance(p.provenance);
-    // Verify the chain in the same stage that built it. A manifest that does
-    // not verify is a failed stage, not a field on an artifact nobody reads.
-    const verification = verifyProcessingManifest(manifest);
-    if (!verification.ok) {
-      throw new Error(
-        `processing manifest failed to verify at op ${String(verification.firstInvalid)}`,
-      );
-    }
-    return manifest;
-  });
-  stages.push(manifested.stage);
-  if (manifested.value) artifacts.processingManifest = toHashable(manifested.value);
+  emit(
+    runStage('manifest', (): ArtifactBag => {
+      fault('manifest');
+      const provenance = require_(products.provenance, 'scientificRecord', 'the export provenance');
+      const manifest = processingManifestFromProvenance(provenance);
+      // Verify the chain in the same stage that built it. A manifest that does
+      // not verify is a failed stage, not a field on an artifact nobody reads.
+      const verification = verifyProcessingManifest(manifest);
+      if (!verification.ok) {
+        throw new Error(
+          `processing manifest failed to verify at op ${String(verification.firstInvalid)}`,
+        );
+      }
+      artifactFault('manifest');
+      return { processingManifest: toHashable(manifest) };
+    }),
+  );
 
   // ── the browser half ──────────────────────────────────────────────────────
-  for (const name of BROWSER_ONLY_STAGES) stages.push(browserStage(name));
+  for (const name of BROWSER_ONLY_STAGES) {
+    stages.push(declaredStage(name, BROWSER_STAGE_REASONS[name], 'browser'));
+  }
 
   return {
-    datasetId: cloud?.datasetId ?? `synthetic-${pointCount}-seed${seed}`,
+    datasetId: products.cloud?.datasetId ?? `synthetic-${pointCount}-seed${seed}`,
     seed,
     pointCount,
     analysisParams,
     stages,
     artifacts,
     metrics: headlineMetrics(stages, pointCount),
-    cloud,
-    result,
+    cloud: products.cloud,
+    result: products.result,
   };
 }
 
 /**
- * A stage that cannot exist in this runtime.
+ * A stage that exists but carries no number, with the reason it carries none.
  *
  * Status 'ok' rather than 'failed': nothing went wrong, and a red row in every
  * reporter would tell a reader the opposite. The honest statement lives in the
  * metric's reason, which is exactly where the framework's schema puts it — and
  * the schema makes it impossible to attach a number to it.
  */
-function browserStage(name: BrowserStageName): StageResult {
-  const reason = BROWSER_STAGE_REASONS[name];
-  const provenance = { runtime: 'browser', deterministic: false } as const;
+function declaredStage(
+  name: PipelineStageName,
+  reason: string,
+  runtime: MetricRuntime,
+): StageResult {
+  const provenance = { runtime, deterministic: false } as const;
   return {
     name,
     status: 'ok',
@@ -468,27 +682,33 @@ function browserStage(name: BrowserStageName): StageResult {
 }
 
 /**
- * Headline numbers for a report. Throughput is only stated when the two stages
- * it divides both produced a measurement — a "points/s" computed from a stage
- * that never ran is the fabricated number this whole framework exists to avoid.
+ * Headline numbers for a report.
+ *
+ * Each is stated only when every stage behind it produced a measurement — a
+ * "points/s" computed from a stage that never ran is the fabricated number this
+ * whole framework exists to avoid.
  */
 function headlineMetrics(
   stages: readonly StageResult[],
   pointCount: number,
 ): Record<string, Metric> {
   const provenance = { runtime: 'node', deterministic: false } as const;
-  const analysisMs = ['dtm', 'contours'].reduce<number | null>((total, name) => {
-    if (total === null) return null;
-    const stage = stages.find((s) => s.name === name);
-    if (!stage || stage.status !== 'ok' || stage.duration.status !== 'measured') return null;
-    return total + stage.duration.value;
-  }, 0);
+  // The application's analysis proper: the app's own two halves, nothing else.
+  const analysisMs = sumStages(stages, ['dtm', 'contours']);
+  const runMs = pipelineDurationMs(stages);
   return {
     pointCount: measured(pointCount, 'points', { runtime: 'node', deterministic: true }),
     analysisDurationMs:
       analysisMs === null
-        ? unavailable('the dtm or contours stage did not complete, so there is no analysis time', provenance)
+        ? unavailable(
+            'the dtm or contours stage did not complete, so there is no analysis time',
+            provenance,
+          )
         : measured(analysisMs, 'ms', provenance),
+    runDurationMs:
+      runMs === null
+        ? unavailable('a pipeline stage did not complete, so the run has no total', provenance)
+        : measured(runMs, 'ms', provenance),
     pointsPerSecond:
       analysisMs === null || analysisMs <= 0
         ? unavailable(
@@ -497,6 +717,30 @@ function headlineMetrics(
           )
         : measured((pointCount / analysisMs) * 1000, 'points/s', provenance),
   };
+}
+
+/** Sum named stages' durations, or null when any one is missing a measurement. */
+function sumStages(stages: readonly StageResult[], names: readonly string[]): number | null {
+  let total = 0;
+  for (const name of names) {
+    const stage = stages.find((s) => s.name === name);
+    if (!stage || stage.status !== 'ok' || stage.duration.status !== 'measured') return null;
+    total += stage.duration.value;
+  }
+  return total;
+}
+
+/**
+ * A byte view over a typed array — no copy, over the buffer the pipeline
+ * produced.
+ *
+ * Byte order is little-endian on both architectures this project targets, so a
+ * hash taken here is comparable between an arm64 laptop and an x86_64 runner. A
+ * big-endian host would hash identical science differently: a limitation worth
+ * naming rather than one to discover.
+ */
+function bytesOf(array: Float32Array | Uint8Array | Uint32Array): Uint8Array {
+  return new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
 }
 
 /** The interval-independent scientific summary of one core run. */
@@ -538,7 +782,7 @@ function summariseCore(core: TerrainCore): Record<string, unknown> {
     cellStatusTally: core.cellStatusTally,
     surface: {
       dsm: core.surface.dsm,
-      // The canopy GRID is on `dtmSurface`; only its statistics belong here.
+      // The canopy GRID goes out as bytes; only its statistics belong here.
       canopy: {
         coveredCells: core.surface.canopy.coveredCells,
         maxHeightM: core.surface.canopy.maxHeightM,
@@ -586,70 +830,4 @@ function require_<T>(value: T | null | undefined, stage: NodeStageName, what: st
     throw new Error(`the ${stage} stage did not produce ${what}`);
   }
   return value;
-}
-
-/** What a non-finite number becomes in an artifact. */
-type NonFiniteLabel = 'NaN' | 'Infinity' | '-Infinity';
-
-/** Anything `canonicalJson` can represent faithfully. */
-type Hashable = string | number | boolean | null | Hashable[] | { [key: string]: Hashable };
-
-/**
- * Convert a pipeline product into something `hashArtifact` accepts.
- *
- * Two deliberate conversions, both of which the framework's guard would
- * otherwise reject outright:
- *
- *   - TYPED ARRAYS become plain arrays. `canonicalJson` keeps own enumerable
- *     keys, so a Float32Array would canonicalise to an index-keyed object that
- *     still hashes but no longer reads as data.
- *   - NON-FINITE NUMBERS become their name as a string. NaN is how this
- *     pipeline says "no data here" (an empty raster cell, an unmeasurable mean
- *     confidence), and `JSON.stringify(NaN)` is `null` — which is
- *     indistinguishable from a field that genuinely held null, and makes NaN,
- *     +Infinity and -Infinity all hash the same. Naming them keeps the three
- *     apart and keeps the absence explicit.
- *
- * Anything else that JSON cannot carry (a Date, a Map, a class instance) throws
- * rather than being flattened, for the same reason `assertHashable` throws: a
- * silent flattening is a hash that stopped discriminating.
- */
-export function toHashable(value: unknown, path = 'artifact'): Hashable {
-  if (value === null) return null;
-  const t = typeof value;
-  if (t === 'string' || t === 'boolean') return value as string | boolean;
-  if (t === 'number') return finiteOrLabel(value as number);
-  if (t === 'bigint' || t === 'function' || t === 'symbol' || t === 'undefined') {
-    throw new TypeError(`benchmark artifact: ${path} is a ${t}, which has no JSON form`);
-  }
-  if (Array.isArray(value)) return value.map((v, i) => toHashable(v, `${path}[${i}]`));
-  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
-    const view = value as unknown as ArrayLike<number>;
-    const out: Hashable[] = new Array<Hashable>(view.length);
-    for (let i = 0; i < view.length; i++) out[i] = finiteOrLabel(view[i]);
-    return out;
-  }
-  const proto = Object.getPrototypeOf(value as object) as object | null;
-  if (proto !== Object.prototype && proto !== null) {
-    throw new TypeError(
-      `benchmark artifact: ${path} is a ${
-        (value as { constructor?: { name?: string } }).constructor?.name ?? 'non-plain object'
-      }, which JSON cannot carry faithfully`,
-    );
-  }
-  const out: Record<string, Hashable> = {};
-  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
-    // An absent optional field and one explicitly set to undefined describe the
-    // same thing, and JSON drops both — mirroring that here keeps the two from
-    // hashing differently.
-    if (v === undefined) continue;
-    out[key] = toHashable(v, `${path}.${key}`);
-  }
-  return out;
-}
-
-function finiteOrLabel(n: number): number | NonFiniteLabel {
-  if (Number.isFinite(n)) return n;
-  if (Number.isNaN(n)) return 'NaN';
-  return n > 0 ? 'Infinity' : '-Infinity';
 }

@@ -10,10 +10,12 @@
  * The third group asserts the cloud is worth analysing at all — a uniform
  * random cube would let the DTM, contour and terrain-descriptor benchmarks run
  * green over a surface with no science in it.
+ *
+ * The clock/random source guard for this module lives in `sourceGuards.test.ts`,
+ * which walks all of `benchmarks/` so a module added later is covered by
+ * default rather than by someone remembering to copy the check.
  */
 import { describe, test, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import {
   FIXTURE_LADDER,
   CI_DEFAULT_TIER,
@@ -111,27 +113,15 @@ describe('the seeded synthetic cloud', () => {
       100_000, 250_000, 500_000, 1_000_000, 2_000_000, 5_000_000,
     ]);
     expect(fullLadder()).toHaveLength(6);
-    // Default (CI) run: only the tiers that finish quickly.
-    expect(defaultLadder().every((t) => !t.optIn)).toBe(true);
+    // Default (CI) run: only the tiers that finish quickly. Pinned as an
+    // explicit list — asserting `every(t => !t.optIn)` would only restate the
+    // filter `defaultLadder` is defined as, and would still pass if every tier
+    // were marked opt-in and the default run measured nothing at all.
     expect(defaultLadder().map((t) => t.pointCount)).toEqual([100_000, 250_000, 500_000]);
+    expect(FIXTURE_LADDER.filter((t) => t.optIn).map((t) => t.id)).toEqual(['1m', '2m', '5m']);
     expect(CI_DEFAULT_TIER.pointCount).toBe(100_000);
     // Ladder ids are what a report keys a scaling curve off, so they must be
     // unique and stable.
     expect(new Set(FIXTURE_LADDER.map((t) => t.id)).size).toBe(FIXTURE_LADDER.length);
-  });
-
-  test('never reaches for Math.random or the wall clock', () => {
-    // A source guard, not a behavioural one: a single Math.random() call would
-    // still produce a plausible cloud and would only surface as an
-    // unreproducible hash weeks later, in a suite that has no way to say why.
-    const file = fileURLToPath(
-      new URL('../../benchmarks/fixtures/syntheticCloud.ts', import.meta.url),
-    );
-    const code = readFileSync(file, 'utf8')
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      .replace(/(^|\s)\/\/[^\n]*/g, '$1');
-    expect(code).not.toMatch(/Math\.random\s*\(/);
-    expect(code).not.toMatch(/Date\.now\s*\(/);
-    expect(code).not.toMatch(/new Date\s*\(/);
   });
 });

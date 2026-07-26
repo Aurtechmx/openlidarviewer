@@ -418,3 +418,68 @@ export function hashArtifact(
     volatilityStripped: true,
   };
 }
+
+/** What a non-finite number becomes when an artifact is converted for hashing. */
+export type NonFiniteLabel = 'NaN' | 'Infinity' | '-Infinity';
+
+/** Anything `canonicalJson` can represent faithfully. */
+export type Hashable = string | number | boolean | null | Hashable[] | { [key: string]: Hashable };
+
+/**
+ * Convert a producer's output into something `hashArtifact` accepts.
+ *
+ * `assertHashable` states what a hashable artifact may contain; this is the
+ * companion that gets a real pipeline product there, and it lives beside those
+ * rules so the two cannot drift. Two deliberate conversions:
+ *
+ *   - TYPED ARRAYS become plain arrays. `canonicalJson` keeps own enumerable
+ *     keys, so a Float32Array would canonicalise to an index-keyed object that
+ *     still hashes but no longer reads as data. (For a large grid, prefer
+ *     hashing the raw bytes: this path costs three full copies of the values.)
+ *   - NON-FINITE NUMBERS become their name as a string. NaN is how a raster
+ *     says "no data here", and `JSON.stringify(NaN)` is `null` — which is
+ *     indistinguishable from a field that genuinely held null, and makes NaN,
+ *     +Infinity and -Infinity all hash the same. Naming them keeps the three
+ *     apart and keeps the absence explicit.
+ *
+ * Anything else JSON cannot carry (a Date, a Map, a class instance) throws
+ * rather than being flattened, for the same reason `assertHashable` throws: a
+ * silent flattening is a hash that quietly stopped discriminating.
+ */
+export function toHashable(value: unknown, path = 'artifact'): Hashable {
+  if (value === null) return null;
+  const t = typeof value;
+  if (t === 'string' || t === 'boolean') return value as string | boolean;
+  if (t === 'number') return finiteOrLabel(value as number);
+  if (t === 'bigint' || t === 'function' || t === 'symbol' || t === 'undefined') {
+    throw new TypeError(`benchmark artifact: ${path} is a ${t}, which has no JSON form`);
+  }
+  if (Array.isArray(value)) return value.map((v, i) => toHashable(v, `${path}[${i}]`));
+  if (ArrayBuffer.isView(value) && !(value instanceof DataView)) {
+    const view = value as unknown as ArrayLike<number>;
+    const out: Hashable[] = new Array<Hashable>(view.length);
+    for (let i = 0; i < view.length; i++) out[i] = finiteOrLabel(view[i]);
+    return out;
+  }
+  const proto = Object.getPrototypeOf(value as object) as object | null;
+  if (proto !== Object.prototype && proto !== null) {
+    throw new TypeError(
+      `benchmark artifact: ${path} is a ${describeType(value)}, which JSON cannot carry faithfully`,
+    );
+  }
+  const out: Record<string, Hashable> = {};
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    // An absent optional field and one explicitly set to undefined describe the
+    // same thing, and JSON drops both — mirroring that here keeps the two from
+    // hashing differently.
+    if (v === undefined) continue;
+    out[key] = toHashable(v, `${path}.${key}`);
+  }
+  return out;
+}
+
+function finiteOrLabel(n: number): number | NonFiniteLabel {
+  if (Number.isFinite(n)) return n;
+  if (Number.isNaN(n)) return 'NaN';
+  return n > 0 ? 'Infinity' : '-Infinity';
+}

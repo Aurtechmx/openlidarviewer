@@ -53,6 +53,7 @@ export {
   assertHashable,
   hashArtifact,
   stripVolatile,
+  toHashable,
   AMBIGUOUS_CLOCK_KEYS,
   MAX_ARTIFACT_DEPTH,
   PORTABLE_DIGEST_MIB_PER_SEC,
@@ -62,7 +63,9 @@ export {
 } from './artifacts';
 export type {
   DigestFn,
+  Hashable,
   HashArtifactOptions,
+  NonFiniteLabel,
   StripResult,
   VolatileKind,
   VolatileRule,
