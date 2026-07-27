@@ -467,7 +467,12 @@ export function toHashable(value: unknown, path = 'artifact'): Hashable {
       `benchmark artifact: ${path} is a ${describeType(value)}, which JSON cannot carry faithfully`,
     );
   }
-  const out: Record<string, Hashable> = {};
+  // `Object.create(null)`, for the reason spelled out in `stripVolatile`:
+  // `out['__proto__'] = v` on a plain literal hits Object.prototype's setter
+  // instead of creating an own property, so the key vanished here too — and two
+  // artifacts differing only under `__proto__` converted to the identical
+  // object and hashed the same.
+  const out = Object.create(null) as Record<string, Hashable>;
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
     // An absent optional field and one explicitly set to undefined describe the
     // same thing, and JSON drops both — mirroring that here keeps the two from

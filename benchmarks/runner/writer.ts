@@ -51,6 +51,8 @@ import {
   reproducibilityMarkdown,
   scalingCsv,
   scalingMarkdown,
+  scienceHashesJson,
+  scientificRecordContentJson,
   type OverviewHeader,
   type OverviewInput,
 } from './render';
@@ -289,26 +291,13 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     writeFile(
       latestDir,
       join('reproducibility', 'artifacts', 'science-hashes.json'),
-      `${JSON.stringify(
-        {
-          note: 'Science-scoped artifact hashes. Build-scoped hashes are listed separately because they track the commit and Node version, not the science.',
-          reference: summary.identity.referenceScienceHashes,
-          buildScoped: summary.identity.referenceBuildScopedHashes,
-          perRun: raw.runs.map((r) => ({
-            run: r.index,
-            science: r.observation.scienceHashes,
-            buildScoped: r.observation.buildScopedHashes,
-          })),
-        },
-        null,
-        2,
-      )}\n`,
+      scienceHashesJson(raw, summary),
       files,
     );
     writeFile(
       latestDir,
       join('reproducibility', 'artifacts', 'scientific-record-content.json'),
-      `${JSON.stringify(raw.runs[0]?.observation.scientificRecordContent ?? null, null, 2)}\n`,
+      scientificRecordContentJson(raw),
       files,
     );
   }
