@@ -61,7 +61,13 @@ const MUTATIONS = [
     effect: 'slope is computed from a native-unit rise against a metre run, so a foot-CRS grid reads 3.28x too steep',
     specialized: {
       kind: 'vitest',
-      files: ['tests/slopeCrossCheck.test.ts', 'tests/verticalAccuracy.test.ts', 'tests/terrainTruth.surface.test.ts'],
+      files: [
+        'tests/benchmark/unitIntegrity.test.ts',
+        'tests/groundFilterUnitFrame.test.ts',
+        'tests/slopeCrossCheck.test.ts',
+        'tests/verticalAccuracy.test.ts',
+        'tests/terrainTruth.surface.test.ts',
+      ],
     },
   },
   {
@@ -160,6 +166,12 @@ const MUTATIONS = [
     file: '.gitattributes',
     append: '\nCLAIMS_AND_LIMITATIONS.md export-ignore\n',
     effect: 'a document the shipped markdown links to is dropped from the archive',
+    // The portability check extracts `git archive HEAD`, which reads
+    // `.gitattributes` from the commit and never from the working tree. A
+    // worktree-only edit would therefore be invisible and score as a survival
+    // that says nothing, so this one is committed for the duration of the run
+    // and the commit is discarded with the mutation.
+    commitRequired: true,
     specialized: { kind: 'exec', argv: ['node', 'scripts/verify-archive-portability.mjs'] },
   },
   {
@@ -203,7 +215,12 @@ const MUTATIONS = [
     effect: 'the GeoKey vertical datum and vertical unit beside a WKT VLR are thrown away',
     specialized: {
       kind: 'vitest',
-      files: ['tests/crsVerticalHardening.test.ts', 'tests/crs.test.ts'],
+      files: [
+        'tests/benchmark/roundtripFidelity.test.ts',
+        'tests/writeLas14.test.ts',
+        'tests/crsVerticalHardening.test.ts',
+        'tests/crs.test.ts',
+      ],
     },
   },
 ];
@@ -234,7 +251,7 @@ function requireCleanTree() {
 }
 
 /** Apply one mutation. Returns a function that restores the file exactly. */
-function applyMutation(m) {
+function applyMutation(m, opts = {}) {
   const before = readFile(m.file);
   let after;
   if (m.append != null) {
@@ -248,7 +265,17 @@ function applyMutation(m) {
   }
   if (after === before) throw new Error(`${m.id}: mutation changed nothing in ${m.file}`);
   writeFile(m.file, after);
-  return () => writeFile(m.file, before);
+  // Committing is only safe where the rest of the tree matches the index; the
+  // conventional phase holds an out-of-index `tests/`, so it never asks for it.
+  if (!m.commitRequired || opts.commit !== true) return () => writeFile(m.file, before);
+  const head = git('rev-parse', 'HEAD').trim();
+  git('add', '--', m.file);
+  git('-c', 'user.name=mutation-campaign', '-c', 'user.email=campaign@localhost', 'commit', '-q', '-m', `temporary mutation ${m.id}`);
+  return () => {
+    git('reset', '--hard', '--quiet', head);
+    const still = readFile(m.file);
+    if (still !== before) writeFile(m.file, before);
+  };
 }
 
 function now() {
@@ -415,7 +442,7 @@ function specializedPhase(results) {
     }
     const baseline = baselines.get(key);
     const entry = results.mutations[m.id];
-    const revert = applyMutation(m);
+    const revert = applyMutation(m, { commit: true });
     let run;
     try {
       run = s.kind === 'vitest' ? runVitest(s.files, s.env) : runExec(s.argv, s.env);
@@ -467,7 +494,7 @@ function gatePhase(results) {
       };
       continue;
     }
-    const revert = applyMutation(m);
+    const revert = applyMutation(m, { commit: true });
     let run;
     try {
       run = runExec(['npm', 'run', 'test:release:execute']);
