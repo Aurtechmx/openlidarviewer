@@ -1096,7 +1096,10 @@ export function contoursFromCore(
   // over-fine request against the level cap) makes this coarser than
   // `intervalM`; everything downstream — styling, the export model, provenance
   // — describes the emitted levels, so it reads this.
-  const emittedIntervalM = contours.intervalM;
+  // `contoursAt` is called above without an explicit `levels` list, so it
+  // always resolves a single spacing here; the null case belongs to the
+  // explicit-levels API, which this path does not use.
+  const emittedIntervalM = contours.intervalM ?? intervalM;
   // Cell-size-aware endpoint quantum: the fixed 1 mm key is ≈111 m in a
   // degree-denominated frame and would weld a fine geographic grid's
   // contours into one blob; scaling by the cell keeps the join unit-free.

@@ -56,14 +56,21 @@ export interface ContourLevel {
 export interface ContourSet {
   readonly levels: ContourLevel[];
   /**
-   * The interval of the levels ACTUALLY emitted, in source linear units. When
-   * the level count exceeds the cap the list is thinned and this becomes the
-   * thinned spacing, not the value that was asked for — a consumer reading it
-   * off the set (or off any artifact derived from it) gets the spacing of the
-   * levels in front of it. The requested value is kept in
+   * The interval of the levels ACTUALLY emitted, in source linear units, or
+   * `null` when the emitted levels have no single spacing.
+   *
+   * When the level count exceeds the cap the list is thinned and this becomes
+   * the thinned spacing, not the value that was asked for — a consumer reading
+   * it off the set (or off any artifact derived from it) gets the spacing of
+   * the levels in front of it.
+   *
+   * An explicit {@link ContoursAtParams.levels} list is measured, not assumed:
+   * uniformly spaced levels report that spacing, and an arbitrary list reports
+   * `null`, because no single number describes it. Fewer than two levels is
+   * also `null` — one level has no spacing. The requested value is kept in
    * {@link requestedIntervalM}.
    */
-  readonly intervalM: number;
+  readonly intervalM: number | null;
   /** The interval the caller asked for, before any thinning. */
   readonly requestedIntervalM: number;
   /** Echoes the grid CRS so exporters never lose georeferencing. */
@@ -79,10 +86,35 @@ export interface ContourSet {
 export interface ContoursAtParams {
   /** Contour interval in source linear units. Must be > 0. */
   readonly intervalM: number;
-  /** Explicit level list — overrides `intervalM`-derived levels. */
+  /**
+   * Explicit level list — overrides `intervalM`-derived levels. `intervalM` is
+   * then only the requested value; the emitted {@link ContourSet.intervalM} is
+   * measured off this list, and is `null` unless the list is uniformly spaced.
+   */
   readonly levels?: ReadonlyArray<number>;
   /** Safety cap on number of levels. Default 200. */
   readonly maxLevels?: number;
+}
+
+/**
+ * The single spacing an ascending level list has, or `null` when it has none.
+ *
+ * A list of two or more levels whose consecutive gaps agree (within a relative
+ * tolerance, so float-built lists are not rejected for their last bit) has one
+ * interval, and reporting it is correct. An irregular list does not: there is
+ * no number a reader could apply to predict the next level, and any single
+ * value stamped on the artifact would be wrong for most of the gaps. Fewer
+ * than two levels has no gap at all.
+ */
+function uniformSpacing(values: readonly number[]): number | null {
+  if (values.length < 2) return null;
+  const first = values[1] - values[0];
+  if (!(first > 0)) return null;
+  for (let i = 2; i < values.length; i++) {
+    const gap = values[i] - values[i - 1];
+    if (Math.abs(gap - first) > first * 1e-6) return null;
+  }
+  return first;
 }
 
 /**
@@ -189,7 +221,8 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     warnings.push('insufficient covered cells for contours');
     return {
       levels: [],
-      intervalM: params.intervalM,
+      // No levels were emitted, so there is no emitted spacing to report.
+      intervalM: null,
       requestedIntervalM: params.intervalM,
       crs: dtm.crs,
       verticalDatum: dtm.verticalDatum,
@@ -202,15 +235,19 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
   // Resolve levels.
   const maxLevels = params.maxLevels ?? 200;
   let levelValues: number[];
+  // True when the level list came from the caller, so its spacing has to be
+  // measured rather than taken from `params.intervalM`.
+  let levelsWereGiven = false;
   if (params.levels && params.levels.length > 0) {
     levelValues = [...params.levels].filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+    levelsWereGiven = true;
   } else {
     const interval = params.intervalM;
     if (!Number.isFinite(interval) || interval <= 0) {
       warnings.push('intervalM invalid — no contours produced');
       return {
         levels: [],
-        intervalM: interval,
+        intervalM: null,
         requestedIntervalM: interval,
         crs: dtm.crs,
         verticalDatum: dtm.verticalDatum,
@@ -226,10 +263,13 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     const count = Math.floor((maxZ - first) / interval + 1e-9) + 1;
     for (let k = 0; k < count; k++) levelValues.push(first + k * interval);
   }
-  // The spacing of the levels that end up emitted. Starts as the requested
-  // interval and is rewritten by the thinning branch below, so every field
-  // derived from it describes the level list that actually ships.
-  let effectiveIntervalM = params.intervalM;
+  // The spacing of the levels that end up emitted, so every field derived from
+  // it describes the level list that actually ships. A caller-supplied list is
+  // measured (null unless uniform); a derived list starts at the requested
+  // interval and is rewritten by the thinning branch below.
+  let effectiveIntervalM: number | null = levelsWereGiven
+    ? uniformSpacing(levelValues)
+    : params.intervalM;
   if (levelValues.length > maxLevels) {
     // THIN evenly rather than truncate from the top: the old slice kept only
     // the LOWEST maxLevels levels, so an over-fine interval silently deleted
@@ -251,7 +291,9 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
         `interval is ${k}× the requested one)`,
     );
     levelValues = thinned;
-    effectiveIntervalM = k * params.intervalM;
+    effectiveIntervalM = levelsWereGiven
+      ? uniformSpacing(levelValues)
+      : k * params.intervalM;
   }
 
   const levels: ContourLevel[] = levelValues.map((value) => ({ value, segments: [] }));
