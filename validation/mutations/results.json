@@ -1,6 +1,6 @@
 {
-  "runAt": "2026-07-27T16:13:59.638Z",
-  "commit": "22ebaadc7eec8168034fc0f9b8f3a25fd5604d63",
+  "runAt": "2026-07-27T16:46:57.966Z",
+  "commit": "c9ee6a0552c6fbabe29f5493445e68b7d93e5df2",
   "machine": {
     "os": "Darwin 25.5.0 arm64",
     "cpu": "Apple M3 Max",
@@ -43,26 +43,29 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24866,
+        "durationMs": 24373,
         "exitCode": 1,
         "newFailures": []
       },
       "specialized": {
         "command": "vitest run tests/benchmark/unitIntegrity.test.ts tests/groundFilterUnitFrame.test.ts tests/slopeCrossCheck.test.ts tests/verticalAccuracy.test.ts tests/terrainTruth.surface.test.ts",
         "env": {},
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 1132,
-        "baselineDurationMs": 1117,
-        "exitCode": 0,
-        "newFailures": []
+        "durationMs": 3932,
+        "baselineDurationMs": 4139,
+        "exitCode": 1,
+        "newFailures": [
+          "tests/benchmark/unitIntegrity.test.ts :: unit integrity: vertical-unit independence analyseContours agrees between an all-metre frame and a foot-vertical frame",
+          "tests/benchmark/unitIntegrity.test.ts :: unit integrity: vertical-unit independence analyseContours reports plane slope in degrees for metre horizontal over foot vertical"
+        ]
       },
       "gate": {
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 165032,
-        "exitCode": 0,
-        "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
+        "durationMs": 56356,
+        "exitCode": 1,
+        "tail": " Test Files  1 failed | 94 passed | 2 skipped (97)\n      Tests  2 failed | 1104 passed | 16 skipped (1122)\n   Start at  10:56:15\n   Duration  7.95s (transform 1.11s, setup 0ms, import 2.61s, tests 3.28s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-2450-2.json\n[unit shard 3/3] pid=7932 elapsed=8.5s code=1 signal=-\n"
       }
     },
     "M02": {
@@ -74,7 +77,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 28039,
+        "durationMs": 24415,
         "exitCode": 1,
         "newFailures": [
           "tests/canonicalFrame.test.ts :: canonicalZUpToYUp inverts in the other order too",
@@ -93,8 +96,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 858,
-        "baselineDurationMs": 861,
+        "durationMs": 883,
+        "baselineDurationMs": 879,
         "exitCode": 1,
         "newFailures": [
           "tests/canonicalFrame.test.ts :: canonicalZUpToYUp inverts in the other order too",
@@ -111,9 +114,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 77619,
+        "durationMs": 54355,
         "exitCode": 1,
-        "tail": " Test Files  1 failed | 94 passed | 2 skipped (97)\n      Tests  7 failed | 1096 passed | 16 skipped (1119)\n   Start at  10:26:52\n   Duration  9.78s (transform 1.31s, setup 0ms, import 3.33s, tests 1.93s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-72487-2.json\n[unit shard 3/3] pid=77714 elapsed=10.5s code=1 signal=-\n"
+        "tail": " Test Files  1 failed | 94 passed | 2 skipped (97)\n      Tests  7 failed | 1099 passed | 16 skipped (1122)\n   Start at  10:57:09\n   Duration  8.02s (transform 1.06s, setup 0ms, import 2.48s, tests 3.43s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-9546-2.json\n[unit shard 3/3] pid=14813 elapsed=8.5s code=1 signal=-\n"
       }
     },
     "M03": {
@@ -125,7 +128,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24724,
+        "durationMs": 25039,
         "exitCode": 1,
         "newFailures": []
       },
@@ -134,8 +137,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 1335,
-        "baselineDurationMs": 1348,
+        "durationMs": 1343,
+        "baselineDurationMs": 1349,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/contourCorrectness.test.ts :: contour correctness — declared properties match the geometry an over-fine interval thins the levels and the declared interval follows"
@@ -144,9 +147,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 76674,
+        "durationMs": 54634,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:28:09\n   Duration  9.77s (transform 1.37s, setup 0ms, import 3.34s, tests 1.89s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-79329-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=84559 elapsed=10.5s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  10:58:03\n   Duration  8.18s (transform 1.09s, setup 0ms, import 2.56s, tests 3.44s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-16433-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=21666 elapsed=8.7s code=0 signal=-\n"
       }
     },
     "M04": {
@@ -158,7 +161,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24522,
+        "durationMs": 33589,
         "exitCode": 1,
         "newFailures": []
       },
@@ -167,15 +170,15 @@
         "env": {},
         "state": "survived",
         "detail": "",
-        "durationMs": 1333,
-        "baselineDurationMs": 1348,
+        "durationMs": 1310,
+        "baselineDurationMs": 1349,
         "exitCode": 0,
         "newFailures": []
       },
       "gate": {
         "state": "survived",
         "detail": "",
-        "durationMs": 163615,
+        "durationMs": 117404,
         "exitCode": 0,
         "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
       }
@@ -189,7 +192,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 25665,
+        "durationMs": 29880,
         "exitCode": 1,
         "newFailures": []
       },
@@ -198,8 +201,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 1356,
-        "baselineDurationMs": 1348,
+        "durationMs": 1333,
+        "baselineDurationMs": 1349,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/contourCorrectness.test.ts :: contour correctness — declared properties match the geometry the emitted level set covers the data range and nothing beyond it",
@@ -209,9 +212,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 78667,
+        "durationMs": 53469,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:32:11\n   Duration  9.90s (transform 1.37s, setup 0ms, import 3.42s, tests 1.94s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-94257-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=99488 elapsed=10.7s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:00:54\n   Duration  8.19s (transform 1.09s, setup 0ms, import 2.62s, tests 3.45s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-31468-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=36694 elapsed=8.7s code=0 signal=-\n"
       }
     },
     "M06": {
@@ -223,7 +226,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24497,
+        "durationMs": 24495,
         "exitCode": 1,
         "newFailures": []
       },
@@ -232,8 +235,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 943,
-        "baselineDurationMs": 933,
+        "durationMs": 936,
+        "baselineDurationMs": 926,
         "exitCode": 1,
         "newFailures": [
           "tests/terrainRasterEngine.test.ts :: the equivalence gate + auto-fallback (probe at init) a later dispatch failure demotes the session and recomputes on CPU"
@@ -242,9 +245,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 114725,
+        "durationMs": 81006,
         "exitCode": 1,
-        "tail": " Test Files  1 failed | 53 passed (54)\n      Tests  1 failed | 718 passed (719)\n   Start at  10:33:53\n   Duration  22.65s (transform 931ms, setup 0ms, import 3.41s, tests 27.22s, environment 4ms)\n\nJSON report written to <temp>/olv-tally-terrain-7204-1.json\n[terrain shard 2/2] pid=7261 elapsed=23.2s code=1 signal=-\n"
+        "tail": " Test Files  1 failed | 53 passed (54)\n      Tests  1 failed | 718 passed (719)\n   Start at  11:02:08\n   Duration  15.71s (transform 711ms, setup 0ms, import 2.52s, tests 18.94s, environment 3ms)\n\nJSON report written to <temp>/olv-tally-terrain-43990-1.json\n[terrain shard 2/2] pid=44048 elapsed=16.1s code=1 signal=-\n"
       }
     },
     "M07": {
@@ -265,15 +268,15 @@
         "env": {},
         "state": "survived",
         "detail": "",
-        "durationMs": 10317,
-        "baselineDurationMs": 10471,
+        "durationMs": 10110,
+        "baselineDurationMs": 10275,
         "exitCode": 0,
         "newFailures": []
       },
       "gate": {
         "state": "survived",
         "detail": "",
-        "durationMs": 165233,
+        "durationMs": 122734,
         "exitCode": 0,
         "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
       }
@@ -287,7 +290,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 24134,
+        "durationMs": 24357,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/artifacts.test.ts :: hash sensitivity — the strip is not over-broad a __proto__ key is a real own property in the canonical form",
@@ -299,8 +302,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 10293,
-        "baselineDurationMs": 9929,
+        "durationMs": 10005,
+        "baselineDurationMs": 9764,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/artifacts.test.ts :: hash sensitivity — the strip is not over-broad a __proto__ key is a real own property in the canonical form",
@@ -311,9 +314,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 76864,
+        "durationMs": 56804,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:38:08\n   Duration  9.75s (transform 1.31s, setup 0ms, import 3.33s, tests 1.87s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-16609-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=21839 elapsed=10.5s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:05:14\n   Duration  8.51s (transform 1.14s, setup 0ms, import 2.75s, tests 3.45s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-53344-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=58585 elapsed=9.1s code=0 signal=-\n"
       }
     },
     "M09": {
@@ -325,7 +328,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24785,
+        "durationMs": 25438,
         "exitCode": 1,
         "newFailures": []
       },
@@ -334,15 +337,15 @@
         "env": {},
         "state": "survived",
         "detail": "",
-        "durationMs": 7033,
-        "baselineDurationMs": 7018,
+        "durationMs": 5219,
+        "baselineDurationMs": 6056,
         "exitCode": 0,
         "newFailures": []
       },
       "gate": {
         "state": "survived",
         "detail": "",
-        "durationMs": 164066,
+        "durationMs": 124894,
         "exitCode": 0,
         "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
       }
@@ -356,7 +359,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 24801,
+        "durationMs": 26550,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/reporters.test.ts :: the CSV reporter an unavailable row says unavailable in the value column and carries the reason"
@@ -369,8 +372,8 @@
         },
         "state": "detected",
         "detail": "",
-        "durationMs": 1378,
-        "baselineDurationMs": 1287,
+        "durationMs": 952,
+        "baselineDurationMs": 1166,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/reporters.test.ts :: the CSV reporter an unavailable row says unavailable in the value column and carries the reason"
@@ -379,9 +382,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 75639,
+        "durationMs": 55868,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:42:08\n   Duration  9.68s (transform 1.34s, setup 0ms, import 3.32s, tests 1.87s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-31963-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=37197 elapsed=10.4s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:08:15\n   Duration  8.32s (transform 1.17s, setup 0ms, import 2.72s, tests 3.39s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-68355-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=73579 elapsed=8.9s code=0 signal=-\n"
       }
     },
     "M11": {
@@ -393,7 +396,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 24726,
+        "durationMs": 23993,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/schema.test.ts :: the unavailable contract measured() rejects a non-finite value rather than serialising NaN as null"
@@ -406,8 +409,8 @@
         },
         "state": "detected",
         "detail": "",
-        "durationMs": 1302,
-        "baselineDurationMs": 1316,
+        "durationMs": 949,
+        "baselineDurationMs": 954,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/failureRecovery.test.ts :: a measurement the runtime cannot supply the metric constructors refuse to build a measurement out of a non-value",
@@ -417,9 +420,9 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 75342,
+        "durationMs": 55750,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:43:23\n   Duration  9.51s (transform 1.26s, setup 0ms, import 3.19s, tests 1.82s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-38810-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=44037 elapsed=10.2s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:09:11\n   Duration  8.18s (transform 1.08s, setup 0ms, import 2.53s, tests 3.41s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-75226-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=80456 elapsed=8.7s code=0 signal=-\n"
       }
     },
     "M12": {
@@ -431,7 +434,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24285,
+        "durationMs": 24033,
         "exitCode": 1,
         "newFailures": []
       },
@@ -440,8 +443,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 1005,
-        "baselineDurationMs": 1013,
+        "durationMs": 727,
+        "baselineDurationMs": 709,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/roundtripFidelity.test.ts :: CRS survival — what is written reads back as the same CRS LAS 1.4 WKT survives, coexisting with the vertical GeoKeys"
@@ -450,16 +453,16 @@
       "gate": {
         "state": "detected",
         "detail": "",
-        "durationMs": 76333,
+        "durationMs": 57380,
         "exitCode": 1,
-        "tail": "      Tests  1103 passed | 16 skipped (1119)\n   Start at  10:44:39\n   Duration  9.59s (transform 1.23s, setup 0ms, import 3.14s, tests 1.91s, environment 7ms)\n\nJSON report written to <temp>/olv-tally-unit-45647-2.json\nGATE TALLY bucket=unit passed=1103 skipped=16\n[unit shard 3/3] pid=50879 elapsed=10.4s code=0 signal=-\n"
+        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:10:08\n   Duration  8.78s (transform 1.49s, setup 0ms, import 3.04s, tests 3.44s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-82063-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=87294 elapsed=9.3s code=0 signal=-\n"
       }
     }
   },
   "conventional": {
     "ref": "v0.6.1",
     "baselineExitCode": 1,
-    "baselineDurationMs": 23972,
+    "baselineDurationMs": 23587,
     "baselineTestsRun": 6198,
     "baselineFailures": [
       "tests/analyseContours.test.ts :: analyseContours exposes ASPRS accuracy and index-contour labels",
@@ -503,7 +506,7 @@
   },
   "gate": {
     "baselineExitCode": 0,
-    "baselineDurationMs": 166782,
+    "baselineDurationMs": 124569,
     "policy": "every mutation"
   }
 }
