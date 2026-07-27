@@ -22,6 +22,7 @@ import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel'
 import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
+import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
@@ -157,7 +158,7 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
     lines.push(prov.notSurveyGrade);
     if (prov.generated) lines.push(`Generated: ${prov.generated.slice(0, 10)}`);
   } else {
-    lines.push('Not survey-grade unless validated against ground-truth control.');
+    lines.push(NOT_SURVEY_GRADE_NOTE);
   }
   return lines;
 }
@@ -246,8 +247,8 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
 
   const caption =
     Number.isFinite(model.interpolatedFraction) && model.interpolatedFraction > 0
-      ? `<!-- ${Math.round(model.interpolatedFraction * 100)}% of contour length is interpolated/uncertain; not survey-grade unless validated -->`
-      : '<!-- not survey-grade unless validated -->';
+      ? `<!-- ${Math.round(model.interpolatedFraction * 100)}% of contour length is interpolated/uncertain. ${NOT_SURVEY_GRADE_NOTE} -->`
+      : `<!-- ${NOT_SURVEY_GRADE_NOTE} -->`;
 
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(2)}" height="${H.toFixed(2)}" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}">`,

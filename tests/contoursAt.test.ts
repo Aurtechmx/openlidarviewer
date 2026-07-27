@@ -94,6 +94,29 @@ describe('contoursAt', () => {
     }
   });
 
+  it('measures the emitted interval off an explicit level list', () => {
+    const dtm = grid((x, y) => 3 * x + 2 * y, 30, 30);
+    // Uniformly spaced levels DO have an interval, and it is theirs — not the
+    // `intervalM` the caller also passed.
+    const uniform = contoursAt(dtm, { intervalM: 7, levels: [4, 8, 12, 16] });
+    expect(uniform.intervalM).toBeCloseTo(4, 9);
+    expect(uniform.requestedIntervalM).toBe(7);
+
+    // An irregular list has no single interval. Reporting one would be wrong
+    // for most of its gaps, so the set reports none.
+    const irregular = contoursAt(dtm, { intervalM: 7, levels: [4, 5, 20, 40] });
+    expect(irregular.intervalM).toBeNull();
+    expect(irregular.requestedIntervalM).toBe(7);
+
+    // One level has no gap to measure.
+    const single = contoursAt(dtm, { intervalM: 7, levels: [10] });
+    expect(single.intervalM).toBeNull();
+
+    // The derived path is unchanged: no explicit list, so the spacing is the
+    // requested interval.
+    expect(contoursAt(dtm, { intervalM: 5 }).intervalM).toBe(5);
+  });
+
   it('is deterministic', () => {
     const zfn = (x: number, y: number) => 0.37 * x + 0.21 * y;
     const a = contoursAt(grid(zfn, 20, 20), { intervalM: 2 });

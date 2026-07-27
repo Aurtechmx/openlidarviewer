@@ -141,15 +141,18 @@ function planeGrid(cols: number, rows: number, g: number) {
 
 function modelFor(dtm: ReturnType<typeof surfaceGrid>, set: ContourSet): ContourFeatureModel {
   const stitched = stitchContourSet(set, dtm.cellSizeM);
+  // These fixtures build level lists from an interval, so the set always
+  // reports a spacing; the null case is the explicit-levels API.
+  const emitted = set.intervalM ?? set.requestedIntervalM;
   const styled = styleLevels(
     set.levels.map((l) => l.value),
-    { intervalM: set.intervalM },
+    { intervalM: emitted },
   );
   return buildFeatureModel(stitched, styled.levels, {
     crs: dtm.crs,
     verticalDatum: dtm.verticalDatum,
     verticalUnitToMetres: dtm.verticalUnitToMetres ?? 1,
-    intervalM: set.intervalM,
+    intervalM: emitted,
     requestedIntervalM: set.requestedIntervalM,
     contourStyle: 'crisp',
   });
@@ -562,7 +565,7 @@ describe('contour correctness — declared properties match the geometry', () =>
     }
     // Index classification is anchored to the emitted interval, so the kept
     // levels land on the round elevations a reader expects.
-    const styled = styleLevels(values, { intervalM: set.intervalM });
+    const styled = styleLevels(values, { intervalM: set.intervalM! });
     expect(styled.levels.filter((l) => l.isIndex).length).toBeGreaterThan(0);
   });
 

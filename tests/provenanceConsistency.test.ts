@@ -27,6 +27,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { inflateSync } from 'node:zlib';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportNotes';
+import { NOT_SURVEY_GRADE } from '../src/terrain/contour/contourCopy';
 import {
   ACCURACY_BASIS_NOTE,
   buildExportProvenance,
@@ -597,6 +601,38 @@ describe('provenance consistency — un-georeferenced (Preview) run', () => {
     expect(flat).toContain('PREVIEW - not survey-grade until validated against control.');
     expect(flat).not.toContain('not a survey certification');
     expect(mapSheetText).toContain('not georeferenced');
+  });
+
+  it('every writer states the not-survey-grade limitation in the canonical wording', async () => {
+    const { svg, geojson } = await readyOutputs();
+    // The canonical constant, and nothing else, reaches the artifacts.
+    expect(geojson.metadata.notSurveyGrade).toBe(NOT_SURVEY_GRADE_NOTE);
+    expect(svg).toContain(NOT_SURVEY_GRADE_NOTE);
+    // The Analyse panel footer is the same string, not a parallel wording.
+    expect(NOT_SURVEY_GRADE).toBe(NOT_SURVEY_GRADE_NOTE);
+    // No source file may carry the older standalone phrasing.
+    const roots = ['src'];
+    const offenders: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) walk(full);
+        else if (/\.(ts|tsx)$/.test(entry.name)) {
+          const text = readFileSync(full, 'utf8');
+          if (full.endsWith('exportNotes.ts')) continue;
+          if (/not survey-grade unless validated against ground-truth control/i.test(text)) {
+            // Only the canonical constant carries this sentence; a literal copy
+            // of it in any other file is a second wording waiting to drift.
+            if (!text.includes('NOT_SURVEY_GRADE_NOTE')) offenders.push(full);
+            else if (/'[^']*[Nn]ot survey-grade unless validated against ground-truth control[^']*'/.test(text)) {
+              offenders.push(full);
+            }
+          }
+        }
+      }
+    };
+    for (const r of roots) walk(r);
+    expect(offenders).toEqual([]);
   });
 
   it('the un-georeferenced GeoJSON omits the CRS member but still says so in metadata', async () => {

@@ -132,9 +132,10 @@ def render_tile(mark: Image.Image, master_px: int = 2048, *, rounded: bool,
 
 def load_tagline_font(size: int) -> ImageFont.FreeTypeFont:
     """
-    Prefer Inter Bold, instanced from the variable woff2 the app already
-    ships (node_modules/@fontsource-variable/inter) via fontTools; fall back
-    to DejaVu Sans Bold (present wherever Pillow is).
+    Prefer Inter Bold, instanced via fontTools from the variable woff2 in
+    node_modules/@fontsource-variable/inter. That package is a build-time
+    asset source only; the app bundle ships Manrope and JetBrains Mono, not
+    Inter. Falls back to DejaVu Sans Bold (present wherever Pillow is).
     """
     import tempfile
 

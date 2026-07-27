@@ -11,8 +11,8 @@
  * Read state is exposed as getters, not methods, so `if (routing.pinned)`
  * narrows and reads the same as the raw fields did. The debounce handle lives in
  * the closure rather than on the context: it is a transient timer, not
- * application state worth persisting or inspecting. Part of the v0.6
- * decomposition (see `docs/architecture/stabilization-release-plan.md`).
+ * application state worth persisting or inspecting. Part of the v0.6 decomposition of main.ts
+ * into per-cluster services.
  */
 
 import type { ScanTypeOverride } from '../terrain/scanRoute';

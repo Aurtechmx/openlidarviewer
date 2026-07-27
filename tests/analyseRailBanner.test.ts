@@ -21,6 +21,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
+import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportNotes';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
 class FakeEl {
@@ -120,8 +121,16 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
     const previewBanners = root.findContaining('Preview export — not survey-grade');
     expect(previewBanners.length).toBe(0);
 
-    // Total "not survey-grade" statements in the export area: one.
-    expect(root.findContaining('not survey-grade').length).toBe(1);
+    // Two elements state the limitation, and they are different things: the
+    // consolidated banner above (conditional) and the panel's standing footer
+    // (always present, carrying the canonical note verbatim). P12 consolidated
+    // two stacked BANNERS; the footer is not a banner and is not conditional.
+    const stating = root.findContaining('not survey-grade');
+    const footers = stating.filter((e) => e.className.includes('olv-analyse-footer'));
+    expect(footers.length).toBe(1);
+    expect(footers[0].ownText).toBe(NOT_SURVEY_GRADE_NOTE);
+    // Exactly one banner states it — the consolidated one, and no other.
+    expect(stating.length - footers.length).toBe(1);
   });
 
   it('fully georeferenced full-coverage result renders NO caveat banner', async () => {
@@ -138,9 +147,14 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
       expect(root.findContaining('Preliminary DEM').length).toBe(0);
       expect(root.findContaining('Preview export').length).toBe(0);
     } else {
-      // Georeferenced but still partial → a single banner, never two.
+      // Georeferenced but still partial → a single banner, never two. The
+      // standing footer is excluded: it always states the limitation and is
+      // not one of the banners this pin is about.
       expect(root.findContaining('Preliminary DEM').length).toBeLessThanOrEqual(1);
-      expect(root.findContaining('not survey-grade').length).toBeLessThanOrEqual(1);
+      const banners = root
+        .findContaining('not survey-grade')
+        .filter((e) => !e.className.includes('olv-analyse-footer'));
+      expect(banners.length).toBeLessThanOrEqual(1);
     }
   });
 });

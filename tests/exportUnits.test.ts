@@ -2,9 +2,10 @@
  * exportUnits.test.ts
  *
  * Pins the export linear-unit helpers: a foot-CRS scan must label its
- * dimensions / Z-range / contour interval in "ft", a metre or unknown unit in
- * "m". Coordinates are stored native, so this is what keeps the Studio raster
- * exports (height/depth/contour) from labelling feet as metres.
+ * dimensions / Z-range / contour interval in "ft", a metre CRS in "m", and an
+ * unresolved CRS in "units". Coordinates are stored native, so this is what
+ * keeps the Studio raster exports (height/depth/contour) from labelling feet,
+ * or an unverified frame, as metres.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -36,10 +37,14 @@ describe('linearUnitOf', () => {
 });
 
 describe('linearUnitLabel', () => {
-  it('ft for foot, m for metre and unknown (the standing default)', () => {
+  it('ft for foot, m for metre, units for an unresolved CRS', () => {
     expect(linearUnitLabel('foot')).toBe('ft');
     expect(linearUnitLabel('metre')).toBe('m');
-    expect(linearUnitLabel('unknown')).toBe('m');
+    // An unresolved unit is not metres. It must not print as one, and it must
+    // still print something (never empty, never undefined).
+    expect(linearUnitLabel('unknown')).toBe('units');
+    expect(linearUnitLabel('unknown')).not.toBe('m');
+    expect(linearUnitLabel('unknown').length).toBeGreaterThan(0);
   });
 });
 
@@ -55,9 +60,16 @@ describe('formatLinear', () => {
     expect(formatLinear(2000, 'foot')).toBe('2000.0 ft');
   });
 
-  it('metre and unknown use the metre formatter (km/m/cm grouping)', () => {
+  it('metre uses the metre formatter (km/m/cm grouping)', () => {
     expect(formatLinear(2000, 'metre')).toBe('2.00 km');
     expect(formatLinear(42, 'metre')).toBe('42.0 m');
-    expect(formatLinear(42, 'unknown')).toBe('42.0 m');
+  });
+
+  it('an unresolved unit reads "units" and is not regrouped', () => {
+    expect(formatLinear(42, 'unknown')).toBe('42.0 units');
+    expect(formatLinear(5, 'unknown')).toBe('5.00 units');
+    // No metre scale is asserted: no km, no cm, no bare "m".
+    expect(formatLinear(2000, 'unknown')).toBe('2000.0 units');
+    expect(formatLinear(0.5, 'unknown')).not.toMatch(/cm/);
   });
 });

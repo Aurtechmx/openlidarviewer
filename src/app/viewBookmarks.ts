@@ -6,8 +6,8 @@
  * that used to sit as free logic in main.ts. This is pure data management with
  * no viewer or UI dependency, so it is unit-tested directly; main.ts keeps the
  * viewer-coupled capture and apply (which read the render state) and routes the
- * list operations through here. Part of the v0.6 decomposition (see
- * `docs/architecture/stabilization-release-plan.md`).
+ * list operations through here. Part of the v0.6 decomposition of main.ts
+ * into per-cluster services.
  */
 
 import type { AppContext, StoredView } from './appContext';

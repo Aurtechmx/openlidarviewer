@@ -1,6 +1,6 @@
 /**
  * streamingBaselineV055.test.ts — the v0.5.5 P0 deterministic scheduler
- * baseline (docs/_audit/v0.5.5-program.md §5 P0).
+ * baseline.
  *
  * Drives the UNCHANGED v0.5.4 StreamingScheduler through a scripted camera
  * path (orbit sweep → wheel-zoom dolly → rapid rotate → hard stop) over a
@@ -21,8 +21,9 @@
  *      halves concurrency; the stable fast path stops rescoring after stop).
  *
  * NOTE ON HONESTY: this scenario measures scheduler *decisions* in mocked
- * time. It records no wall-clock performance numbers — those come from the
- * maintainer's reference devices (see docs/_audit/v0.5.5-baseline/README.md).
+ * time. It records no wall-clock performance numbers. Timings were measured
+ * separately, on the maintainer's own reference devices, and are not derivable
+ * from this suite — nothing here may be quoted as a performance result.
  *
  * Regenerate the fixture (after a deliberate behavior change):
  *   UPDATE_V055_BASELINE=1 npx vitest run tests/streamingBaselineV055.test.ts

@@ -21,5 +21,11 @@ declare const __BUILD_IDENTITY__: {
   readonly channel: string;
 };
 
-/** Side-effect import of the self-hosted Inter variable font (CSS only). */
+/**
+ * Inter is not part of the shipped bundle — the interface face is Manrope
+ * (`--font` in style.css) with JetBrains Mono for monospace. The package is
+ * kept for `scripts/make-brand-rasters.py`, which instances its variable woff2
+ * out of node_modules to typeset the OG-card tagline. This declaration exists
+ * so a side-effect CSS import of it would still type-check.
+ */
 declare module '@fontsource-variable/inter';
