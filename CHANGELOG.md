@@ -12,9 +12,12 @@ are fixed: four carried from the v0.6.1 vertical-unit audit, fourteen found by
 the new suites. The evidence ceiling moves from one cross-implemented product to
 three, with aspect and hillshade joining slope at E4 against GDAL 3.13.1 on the
 shared analytic DEM. The reproducibility comparator and its two-platform CI
-matrix, darwin-arm64 and linux-x64, are in place; the only run recorded in the
-tree so far is a single darwin-arm64 leg, which establishes single-platform
-reproducibility and nothing cross-platform.
+matrix, darwin-arm64 and linux-x64, are in place, and the two-platform result is
+tracked at `docs/validation/evidence/portability-v0.6.2/`: identical
+science-scoped output on both platforms from the same seeded fixture, 15 artifact
+hashes and 18 scalars at zero tolerance with none differing. That covers two
+little-endian platforms, one commit and a synthetic fixture; Windows, big-endian
+hosts and real scan data are outside it.
 
 Four defects reached published v0.6.1 output. `docs/release/ERRATUM_v0.6.2.md`
 states, for each, what the software did, which outputs carry the error and what
@@ -22,6 +25,16 @@ recovers a correct figure. Open limits are in `KNOWN_LIMITATIONS_v0.6.2.md`.
 
 ### Fixed
 
+- **The RFC 7946 contour GeoJSON states its third ordinate in metres.**
+  `toGeoJSONWgs84` (`src/terrain/contour/geojsonContours.ts`) wrote the DTM
+  elevation into the third position element at its source value, so a foot
+  vertical unit beside a WGS 84 ellipsoidal datum shipped 100 ft where RFC 7946
+  section 3.1.1 requires metres. The ordinate now carries the metre equivalent,
+  converted through the resolved vertical factor, and `metadata` records
+  `elevationOrdinateUnit: 'metre'`. A factor that is unresolved or not positive
+  drops the geometry to 2D with an `elevationNote` naming that cause, rather
+  than asserting metres about a number of unknown unit. Every feature keeps
+  `elevation`, `elevationUnit` and `elevationDatum` in the source unit.
 - **A contour set declares the interval it emitted.** An over-fine request is
   thinned against the 200-level cap, but `intervalM` kept reporting the value
   that was asked for, so the GeoJSON `metadata.intervalM`, every feature's
@@ -267,31 +280,13 @@ affected and what recovers a correct figure.
 
 ### Known limitations
 
-- **The RFC 7946 contour GeoJSON writes its third ordinate in the source
-  vertical unit, not in metres.** `toGeoJSONWgs84`
-  (`src/terrain/contour/geojsonContours.ts`) emits the elevation as the third
-  position element only when the model's vertical datum is proven to be WGS 84
-  ellipsoidal height (EPSG:4979); otherwise the geometry is 2D. RFC 7946
-  section 3.1.1 defines that element as height in metres above the WGS 84
-  ellipsoid, and the value written is the DTM's elevation in whatever vertical
-  unit the source declared. The horizontal reprojection does not touch it: the
-  mapper's contract (`src/export/lonLatMapper.ts`) is that the first two
-  ordinates are converted and the third is the source Z, passed through. No
-  check requires the source vertical unit to be metres before the ordinate is
-  written. Reaching the failure needs a source that declares vertical CRS 4979
-  and a non-metre vertical unit at the same time, which GeoTIFF permits
-  mechanically because keys 4096 and 4099 are read independently, but which is
-  an internally contradictory declaration; no such file has been observed, so
-  this is a standards-conformance gap and not a defect seen in output. On such
-  a file a 100 ft contour would ship as a 100 m ellipsoidal height in the
-  geometry. Every feature also carries `elevation`, `elevationUnit` and
-  `elevationDatum`, which state the real unit and reference in both the 2D and
-  the 3D case, so a reader that consults the properties is not misled; the
-  v0.6.1 unit-label fix corrected those properties and left this ordinate as it
-  was. Until the ordinate is guarded, read the elevation properties or take the
-  companion native export rather than the Z ordinate. The resolution is a
-  refusal or a conversion to metres at the point the ordinate is written; a
-  relabelling would not be one. Neither is scheduled.
+- **Antimeridian-crossing contour geometry is not cut at 180 degrees.**
+  RFC 7946 section 3.1.9 says a LineString crossing the antimeridian SHOULD be
+  split into two parts there; `toGeoJSONWgs84`
+  (`src/terrain/contour/geojsonContours.ts`) writes the line whole. That is a
+  SHOULD rather than a MUST, and only a scan footprint straddling 180 degrees
+  reaches it. A reader that interpolates in longitude between the two sides
+  draws the segment the long way round the globe.
 - **Opening a remote streaming source replaces the streaming source already
   open.** A COPC or EPT source opened by URL, including from the curated
   picker, closes any open stream and clears the open static layers before it

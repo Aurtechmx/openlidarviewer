@@ -14,27 +14,35 @@ darwin-arm64 (macOS), with `fail-fast` off: a leg that dies would otherwise
 leave the comparator with one platform, which reports as single-platform and
 establishes nothing while still looking green.
 
-## Current state: single-platform
+## Current state: reproduced on two platforms
 
-The only run recorded in this tree is one darwin-arm64 leg. The comparator
-reports `status: single-platform` and `claimEstablished: false`.
+The tracked result is `docs/validation/evidence/portability-v0.6.2/`, copied from
+workflow run 30221805663. The comparator reports `status: reproduced` and
+`claimEstablished: true` for darwin-arm64 and linux-x64 at commit 50e76d2.
 
-**Cross-platform reproducibility is therefore not established.** What the run
-does establish is seeded reproducibility on one platform: 15 science-scoped
-artifact hashes and 18 scalar values identical across ten recorded runs at zero
-tolerance, with the processing manifest verifying each time.
+The two legs produced identical science-scoped output from the same seeded
+fixture. 15 artifact hashes and 18 scalar values were compared at a tolerance of
+exactly zero; none differ. The source cloud hashed the same on both platforms, so
+a downstream difference would have been a property of the analysis rather than of
+its input.
 
 | Field | Value |
 |---|---|
-| Platforms recorded | darwin-arm64 |
+| Platforms compared | darwin-arm64, linux-x64 |
+| Commit | 50e76d2 |
 | Fixture | synthetic-250000-seed20260726, 250,000 points |
 | Scalar tolerance | 0 |
-| Science-scoped hashes | 15 recorded, 0 compared |
-| Science-scoped scalars | 18 recorded, 0 compared |
-| Byte order | LE (precondition, not a result) |
+| Science-scoped hashes | 15 compared, 0 differing |
+| Science-scoped scalars | 18 compared, 0 differing |
+| Byte order | LE on both (precondition, not a result) |
 
-The darwin-arm64 source-cloud hash is published as the reference a second
-platform will be checked against, rather than as a comparison that succeeded.
+Host fields, execution timing and build identity differ between the legs and are
+published with the value each platform reported.
+
+`benchmark-results/` is untracked, so running the suite locally on one machine
+produces one leg and reports `single-platform` with `claimEstablished: false`.
+That is the correct verdict for one leg, and it is not the verdict the tracked
+evidence carries.
 
 ## What the comparator excludes, and why
 
@@ -55,4 +63,6 @@ rather than which host is faster.
 A result here covers the platforms in the matrix, on the Node major version the
 workflow pins, at the commit recorded in the comparison. Untested platforms,
 other runtime versions and big-endian hosts are outside it. Windows is not
-covered.
+covered. The tracked result covers two little-endian platforms, one commit and
+one synthetic seeded fixture. Real scan data is not part of it, and neither is
+any claim of platform independence beyond the two legs that ran.
