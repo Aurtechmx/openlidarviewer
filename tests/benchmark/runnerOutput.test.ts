@@ -383,6 +383,28 @@ describe('markdown and CSV agree with the JSON they came from', () => {
     );
   });
 
+  /**
+   * The quanta come from `benchmark:seeds`, which measures the seed-to-seed
+   * spread of each scalar over 32 fixtures and reports any published at a finer
+   * quantum than that spread. Pinned here so a renderer cannot go back to
+   * printing digits the measurement does not carry.
+   */
+  test('the scalars are printed at the quantum their seed-to-seed spread supports', () => {
+    const { latest } = publish();
+    const md = readFileSync(join(latest, 'scaling', 'summary.md'), 'utf8');
+    expect(md).toMatch(/^- mean confidence: (\d+|unavailable)$/m);
+    expect(md).toMatch(/^- quality score: (\d+|unavailable)$/m);
+    expect(md).toMatch(/ m interval over (\d+\.\d|unavailable) m of relief$/m);
+
+    const csv = readFileSync(join(latest, 'scaling', 'runs.csv'), 'utf8').split('\n').filter((l) => l !== '');
+    const header = csv[0].split(',');
+    const column = (row: string, name: string): string => row.split(',')[header.indexOf(name)];
+    for (const row of csv.slice(1)) {
+      expect(column(row, 'meanConfidence')).toMatch(/^(-?\d+|unavailable)$/);
+      expect(column(row, 'qualityScore')).toMatch(/^(-?\d+|unavailable)$/);
+    }
+  });
+
   test('the CSVs carry one row per recorded run', () => {
     const { latest } = publish();
     const rows = (file: string): number =>
