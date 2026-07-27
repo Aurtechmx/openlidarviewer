@@ -48,6 +48,10 @@ export interface QuantitySpec {
    * calls in `benchmarks/runner/render.ts`. The reported quantum is 10^-d, and
    * a seed-to-seed spread larger than that quantum means the published figure
    * carries digits the measurement does not support.
+   *
+   * `elevationMinM` and `elevationMaxM` have no format call of their own. They
+   * carry the quantum of `elevationRangeM`, which is the figure the renderers
+   * print and which is their difference.
    */
   readonly publishedDecimals: number;
   /**
@@ -248,7 +252,7 @@ export const PIPELINE_QUANTITIES: readonly QuantitySpec[] = [
     name: 'elevationMinM',
     group: 'variable',
     unit: 'm',
-    publishedDecimals: 2,
+    publishedDecimals: 1,
     toleranceRange: null,
     toleranceBasis: null,
     rationale: 'an order statistic of the draw, plus the uniform ground noise',
@@ -257,7 +261,7 @@ export const PIPELINE_QUANTITIES: readonly QuantitySpec[] = [
     name: 'elevationMaxM',
     group: 'variable',
     unit: 'm',
-    publishedDecimals: 2,
+    publishedDecimals: 1,
     toleranceRange: null,
     toleranceBasis: null,
     rationale: 'an order statistic of the draw, plus the uniform ground noise',
@@ -266,7 +270,7 @@ export const PIPELINE_QUANTITIES: readonly QuantitySpec[] = [
     name: 'elevationRangeM',
     group: 'variable',
     unit: 'm',
-    publishedDecimals: 2,
+    publishedDecimals: 1,
     toleranceRange: null,
     toleranceBasis: null,
     rationale: 'the difference of two order statistics',
@@ -275,16 +279,18 @@ export const PIPELINE_QUANTITIES: readonly QuantitySpec[] = [
     name: 'meanConfidence',
     group: 'variable',
     unit: 'index',
-    publishedDecimals: 6,
+    publishedDecimals: 0,
     toleranceRange: null,
     toleranceBasis: null,
     rationale: 'averages a per-cell score over the returns that landed in each cell',
+    // Printed as a whole number: the index runs 0 to 100 and moves 0.877 of a
+    // point between seeds.
   },
   {
     name: 'qualityScore',
     group: 'variable',
     unit: 'index',
-    publishedDecimals: 1,
+    publishedDecimals: 0,
     toleranceRange: null,
     toleranceBasis: null,
     rationale: 'derived from coverage and confidence, both sample properties',

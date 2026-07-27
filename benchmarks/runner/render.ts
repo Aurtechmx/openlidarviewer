@@ -38,6 +38,25 @@ export const RATE_DECIMALS = 1;
 export const MIB_DECIMALS = 2;
 export const RATIO_DECIMALS = 6;
 
+/**
+ * Decimals for the three pipeline scalars whose seed-to-seed spread is wider
+ * than the quantum they used to be printed at.
+ *
+ * `benchmark:seeds` measures the spread over 32 independently seeded fixtures:
+ * mean confidence sd 0.877 of an index that runs 0 to 100, quality score sd
+ * 0.177, elevation range sd 0.072 m. Each figure below is the quantum that
+ * spread supports. Confidence and quality score were printed through
+ * RATIO_DECIMALS and RATE_DECIMALS, which are the quanta of a dimensionless
+ * ratio and of a point rate and were never about either quantity.
+ *
+ * Only the printed figure changes. The stored values in `raw.json` and
+ * `summary.json` keep full precision, and no hash is taken over a rendered
+ * string.
+ */
+export const CONFIDENCE_DECIMALS = 0;
+export const QUALITY_SCORE_DECIMALS = 0;
+export const ELEVATION_DECIMALS = 1;
+
 const BYTES_PER_MIB = 1024 * 1024;
 
 /**
@@ -312,8 +331,8 @@ export function reproducibilityCsv(raw: ReproducibilityRaw): string {
       formatInteger(o.scalars.gridRows),
       formatInteger(o.scalars.gridCellCount),
       formatInteger(o.scalars.contourPolylineCount),
-      formatFixed(o.scalars.qualityScore, RATE_DECIMALS),
-      formatFixed(o.scalars.meanConfidence, RATIO_DECIMALS),
+      formatFixed(o.scalars.qualityScore, QUALITY_SCORE_DECIMALS),
+      formatFixed(o.scalars.meanConfidence, CONFIDENCE_DECIMALS),
       String(o.manifestVerified),
       o.scalars.applicationContentHash ?? UNAVAILABLE_LABEL,
       o.failedStages.map((f) => `${f.name}: ${f.error}`).join('; '),
@@ -382,7 +401,7 @@ export function scalingTable(summary: ScalingSummary): string[] {
         `${rss ? formatMib(rss.max) : UNAVAILABLE_LABEL} | ` +
         `${formatInteger(tier.gridCellCount)} | ` +
         `${formatFixed(tier.contourIntervalM, 2)} | ` +
-        `${formatFixed(tier.elevationRangeM, 2)} | ` +
+        `${formatFixed(tier.elevationRangeM, ELEVATION_DECIMALS)} | ` +
         `${formatInteger(tier.contourCount)} | ` +
         `${analysis ? formatFixed(analysis.cv, RATIO_DECIMALS) : UNAVAILABLE_LABEL} |`,
     );
@@ -402,9 +421,9 @@ function tierDetail(tier: ScalingTierSummary): string[] {
   lines.push(`- recorded runs: ${tier.runCount}`);
   lines.push(`- generated points: ${formatInteger(tier.generatedPointCount)}`);
   lines.push(`- grid: ${formatInteger(tier.gridCols)} x ${formatInteger(tier.gridRows)} = ${formatInteger(tier.gridCellCount)} cells`);
-  lines.push(`- contours: ${formatInteger(tier.contourCount)} polylines at a ${formatFixed(tier.contourIntervalM, 2)} m interval over ${formatFixed(tier.elevationRangeM, 2)} m of relief`);
-  lines.push(`- quality score: ${formatFixed(tier.qualityScore, RATE_DECIMALS)}`);
-  lines.push(`- mean confidence: ${formatFixed(tier.meanConfidence, RATIO_DECIMALS)}`);
+  lines.push(`- contours: ${formatInteger(tier.contourCount)} polylines at a ${formatFixed(tier.contourIntervalM, 2)} m interval over ${formatFixed(tier.elevationRangeM, ELEVATION_DECIMALS)} m of relief`);
+  lines.push(`- quality score: ${formatFixed(tier.qualityScore, QUALITY_SCORE_DECIMALS)}`);
+  lines.push(`- mean confidence: ${formatFixed(tier.meanConfidence, CONFIDENCE_DECIMALS)}`);
   lines.push(`- science hashes stable within tier: ${tier.scienceHashesStableWithinTier ? 'yes' : 'no'}`);
   lines.push(`- forced GC available: ${tier.forcedGcAvailable ? 'yes' : 'no'}`);
   lines.push(...firstRunLines(tier.firstRunAnalysisMs));
@@ -522,8 +541,8 @@ export function scalingCsv(raw: ScalingRaw): string {
           formatInteger(o.scalars.gridRows),
           formatInteger(o.scalars.gridCellCount),
           formatInteger(o.scalars.contourPolylineCount),
-          formatFixed(o.scalars.qualityScore, RATE_DECIMALS),
-          formatFixed(o.scalars.meanConfidence, RATIO_DECIMALS),
+          formatFixed(o.scalars.qualityScore, QUALITY_SCORE_DECIMALS),
+          formatFixed(o.scalars.meanConfidence, CONFIDENCE_DECIMALS),
           String(o.manifestVerified),
           o.failedStages.map((f) => `${f.name}: ${f.error}`).join('; '),
         ]),

@@ -48,8 +48,14 @@ import {
   SWEEP_POINT_COUNT,
   SWEEP_SEED_COUNT,
   UNCOVERED,
+  specOf,
   sweepSeeds,
 } from '../../benchmarks/seed/classification';
+import {
+  CONFIDENCE_DECIMALS,
+  ELEVATION_DECIMALS,
+  QUALITY_SCORE_DECIMALS,
+} from '../../benchmarks/runner/render';
 import { renderSeedSummary } from '../../benchmarks/seed/render';
 import {
   evaluateSweep,
@@ -275,6 +281,50 @@ describe('reported precision against measured spread', () => {
       expect(f.publishedQuantum).toBeCloseTo(Math.pow(10, -spec!.publishedDecimals), 12);
       expect(f.stdDev).toBeGreaterThan(f.publishedQuantum);
       expect(f.supportedDecimals).toBeLessThanOrEqual(f.publishedDecimals);
+    }
+  });
+
+  /**
+   * The registration says the published decimals are read off the format calls
+   * in the runner's renderer. Read off means it can drift, so the three that
+   * were reduced after this suite reported them are tied to the constants the
+   * renderer actually uses.
+   */
+  test('the registered decimals are the ones the renderer prints with', () => {
+    expect(specOf('meanConfidence')!.publishedDecimals).toBe(CONFIDENCE_DECIMALS);
+    expect(specOf('qualityScore')!.publishedDecimals).toBe(QUALITY_SCORE_DECIMALS);
+    expect(specOf('elevationRangeM')!.publishedDecimals).toBe(ELEVATION_DECIMALS);
+    expect(specOf('elevationMinM')!.publishedDecimals).toBe(ELEVATION_DECIMALS);
+    expect(specOf('elevationMaxM')!.publishedDecimals).toBe(ELEVATION_DECIMALS);
+  });
+
+  test('the reduced quantities no longer carry digits their spread does not support', () => {
+    const reduced = ['meanConfidence', 'qualityScore', 'elevationMinM', 'elevationMaxM', 'elevationRangeM'];
+    for (const name of reduced) {
+      const q = evaluation.quantities.find((x) => x.name === name)!;
+      const spec = specOf(name)!;
+      expect(q.summary.stdDev, name).not.toBeNull();
+      expect(q.summary.stdDev!, name).toBeLessThanOrEqual(Math.pow(10, -spec.publishedDecimals));
+      expect(evaluation.precisionFindings.map((f) => f.name), name).not.toContain(name);
+    }
+  });
+
+  /**
+   * What is left. Each is a count published as an integer, which is the
+   * coarsest a count can be published at, so the finding is a statement about
+   * the sample rather than about the reporting and there is no digit to drop.
+   */
+  test('the remaining findings are integer counts', () => {
+    expect(evaluation.precisionFindings.map((f) => f.name).sort()).toEqual([
+      'analyzedPointCount',
+      'contourFeatureCount',
+      'contourPolylineCount',
+      'sourcePointCount',
+    ]);
+    for (const f of evaluation.precisionFindings) {
+      expect(f.publishedDecimals, f.name).toBe(0);
+      expect(f.supportedDecimals, f.name).toBe(0);
+      expect(specOf(f.name)!.unit, f.name).toBe('count');
     }
   });
 
