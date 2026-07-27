@@ -1,0 +1,142 @@
+name: Clean clone
+
+# Can a stranger with only the public repository install it, build it, and run
+# the published validation suites.
+#
+# WHAT MAKES THIS DIFFERENT FROM CI. The CI workflow answers "does this commit
+# pass", using a cached npm store and the same script set every time. This one
+# answers "is everything those scripts need actually published". A fresh
+# `actions/checkout` carries tracked content at the commit and nothing else, so
+# an untracked file, a gitignored fixture, or a tool that only exists on the
+# author's machine is absent here and the job that needs it goes red. Every
+# cache is off for that reason: `setup-node` is configured WITHOUT `cache: npm`,
+# so `npm ci` resolves the lockfile against the registry rather than against a
+# store some earlier run populated. A workflow that restored a cached artifact
+# would prove nothing.
+#
+# WHAT IT DOES NOT DUPLICATE. `benchmark:archive-portability` already checks an
+# extracted release archive with no repository around it, and recorded the
+# install and build leg as unrun because an archive has no lockfile install to
+# perform. That leg is this workflow's job: `npm ci`, `check:deps`, the build,
+# `check:bundle` and `docs:build`.
+#
+# PROOF THAT IT FAILS ON A MISSING FILE. `verify-clean-clone.mjs --drop <path>`
+# removes a named file from the materialised tree and is expected to exit
+# non-zero; the `negative-control` job below runs it on two paths and fails if
+# either one comes back green.
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly. A clean-clone break is usually caused by something outside the
+    # commit that broke it — a gitignore edit, a dependency yanked from the
+    # registry — so it is worth checking on a clock as well as on a tag.
+    - cron: '17 4 * * 1'
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  install-and-build:
+    name: Install and build from a fresh checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      # No `path:`, no `fetch-depth` tricks, no restored workspace. This is the
+      # tree a stranger gets.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          # No `cache: npm`. See the header.
+      - name: Nothing untracked is present in a fresh checkout
+        run: |
+          untracked="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$untracked" ]; then
+            echo "a fresh checkout is not clean, so this job is not testing what it claims:"
+            echo "$untracked"
+            exit 1
+          fi
+      - name: Every file the published scripts run is tracked
+        run: node scripts/verify-clean-clone.mjs
+      - name: Install from the lockfile
+        run: npm ci
+      - name: The install did not rewrite the lockfile
+        run: git diff --exit-code -- package-lock.json
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Dependency singletons
+        run: npm run check:deps
+      - name: Build
+        run: npm run build
+      - name: Bundle budget
+        run: npm run check:bundle
+      - name: Docs site
+        run: npm run docs:build
+
+  publication-suites:
+    name: Publication battery from a fresh checkout
+    runs-on: ubuntu-latest
+    needs: install-and-build
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          # No `cache: npm`. See the header.
+      - run: npm ci
+      - name: The install did not rewrite the lockfile
+        run: git diff --exit-code -- package-lock.json
+      # The full battery. The GPU leg and the platform comparison report as
+      # skipped with their reasons — a Node runner has no WebGPU adapter and one
+      # machine cannot produce two platform legs — and both are registered as
+      # not required, so the job's verdict turns on the suites that can run here.
+      - name: Publication battery
+        run: npm run benchmark:publication:verify
+      - name: Upload the battery result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-battery
+          path: benchmark-results/publication
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload the result tree
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-clone-results
+          path: benchmark-results
+          if-no-files-found: warn
+          retention-days: 30
+
+  negative-control:
+    name: A missing file fails the check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      # Without this job the check above could pass because it can never fail.
+      # Each path is removed from the materialised tree and the verifier must
+      # exit non-zero; a zero exit here means the check is decorative.
+      - name: Removing a required source file is caught
+        run: |
+          if node scripts/verify-clean-clone.mjs --drop src/build/buildIdentity.ts; then
+            echo "the clean-clone check passed with src/build/buildIdentity.ts removed"
+            exit 1
+          fi
+      - name: Removing a file an npm script runs is caught
+        run: |
+          if node scripts/verify-clean-clone.mjs --drop scripts/lint-sbom.mjs; then
+            echo "the clean-clone check passed with scripts/lint-sbom.mjs removed"
+            exit 1
+          fi
+      - name: An intact tree still passes
+        run: node scripts/verify-clean-clone.mjs

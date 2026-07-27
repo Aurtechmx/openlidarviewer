@@ -192,7 +192,7 @@ jobs:
         run: npm run test:e2e:gpu
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: playwright-report-gpu
           path: playwright-report/
