@@ -293,6 +293,15 @@ check('archive-self-verification', 'the archive’s own node-only verification s
       ran.push({ name, status: 'needs-repo' });
       continue;
     }
+    // A check whose input is produced by the gate this check runs inside
+    // cannot be evaluated from within that gate: on a version bump the
+    // figures are stale until a passing run regenerates them, and the run
+    // cannot pass while the check reads them. `npm run evidence` runs it
+    // after collection, which is where the comparison is meaningful.
+    if (code !== 0 && /Re-run "npm run evidence"/.test(out)) {
+      ran.push({ name, status: 'needs-gate-run' });
+      continue;
+    }
     ran.push({ name, status: code === 0 ? 'pass' : 'fail', exit: code });
     if (code !== 0) {
       f.push({ level: 'error', message: `npm run ${name} exits ${code} inside the extracted archive:\n${out.trim().split('\n').slice(-12).join('\n')}` });
