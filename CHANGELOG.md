@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.2] - 2026-07-26
+## [0.6.2] - 2026-07-27
 
 A validation-and-correction release. Ten validation suites were added, covering
 reproducibility, scaling, cross-platform portability, GPU-versus-CPU backend
