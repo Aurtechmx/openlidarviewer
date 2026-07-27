@@ -212,7 +212,29 @@ export function parseCrsFromVlrs(
     cursor = payloadStart + payloadLength;
   }
 
-  if (wktPayload) return crsFromWkt(wktPayload);
+  if (wktPayload) {
+    const fromWkt = crsFromWkt(wktPayload);
+    if (geokeyBytes == null) return fromWkt;
+    // LAS 1.4 permits a WKT VLR and a GeoKeyDirectory VLR in the same file,
+    // and this app's own 1.4 writer uses that: most WKT — including every WKT
+    // `wktForEpsg` derives — describes the horizontal frame only, so the
+    // vertical datum and vertical unit travel in the GeoKeys beside it.
+    // Taking the WKT and dropping the GeoKeys threw both away, and a NAVD88
+    // height in feet then read back as an undeclared unit the terrain tools
+    // fall back to metres for — 3.28× wrong, provenance gone. The WKT stays
+    // the sole authority on the horizontal frame and on any vertical axis it
+    // does declare; only the vertical fields it leaves empty are filled here.
+    if (fromWkt.verticalEpsg != null && fromWkt.verticalLinearUnit != null) return fromWkt;
+    const fromKeys = crsFromGeoTiff(geokeyBytes, geoAsciiBytes, geoDoubleBytes);
+    const merged: CrsInfo = {
+      ...fromWkt,
+      verticalEpsg: fromWkt.verticalEpsg ?? fromKeys.verticalEpsg,
+      verticalDatum: fromWkt.verticalDatum ?? fromKeys.verticalDatum,
+      verticalLinearUnit: fromWkt.verticalLinearUnit ?? fromKeys.verticalLinearUnit,
+      verticalUnitToMetres: fromWkt.verticalUnitToMetres ?? fromKeys.verticalUnitToMetres,
+    };
+    return merged;
+  }
   if (geokeyBytes) return crsFromGeoTiff(geokeyBytes, geoAsciiBytes, geoDoubleBytes);
   return null;
 }
