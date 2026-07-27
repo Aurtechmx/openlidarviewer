@@ -4,9 +4,9 @@
   "candidateVersion": "0.6.2",
   "totals": {
     "inputs": 15,
-    "recorded": 9,
-    "notExecuted": 6,
-    "files": 36
+    "recorded": 11,
+    "notExecuted": 4,
+    "files": 38
   },
   "defects": {
     "source": "validation/defects/defect-registry.json",
@@ -93,44 +93,44 @@
       {
         "field": "packageVersion",
         "source": "package.json",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "lockfileVersion",
         "source": "package-lock.json",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "lockfileSelfVersion",
         "source": "package-lock.json",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "claimRegisterVersion",
         "source": "docs/validation/claim-register.yaml",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "citationVersion",
         "source": "CITATION.cff",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "readmeVersion",
         "source": "README.md",
-        "value": "0.6.1",
-        "status": "pending-bump",
-        "note": "every stamped source still carries 0.6.1; the bump to 0.6.2 writes them together"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "erratumVersion",
@@ -149,22 +149,22 @@
       {
         "field": "buildIdentityVersion",
         "source": "release/package-build-metadata-v0.6.2.json",
-        "value": null,
-        "status": "not-executed",
-        "note": "run `npm run package` to produce the build identity"
+        "value": "0.6.2",
+        "status": "agrees",
+        "note": null
       },
       {
         "field": "archiveName",
         "source": "release/package-build-metadata-v0.6.2.json",
-        "value": null,
-        "status": "not-executed",
-        "note": "run `npm run package` to produce the archive and its recorded name"
+        "value": "openlidarviewer-v0.6.2-source-20260727-1713.zip",
+        "status": "agrees",
+        "note": null
       }
     ],
     "dates": {
-      "citationVersion": "0.6.1",
-      "citationDate": "2026-07-25",
-      "changelogDateForCitationVersion": "2026-07-25",
+      "citationVersion": "0.6.2",
+      "citationDate": "2026-07-27",
+      "changelogDateForCitationVersion": "2026-07-27",
       "candidateDate": "2026-07-27",
       "status": "agrees"
     },
@@ -302,13 +302,13 @@
         {
           "path": "validation/reachability/summary.json",
           "storedAt": "evidence/reachability/validation/reachability/summary.json",
-          "sha256": "f66b9eea3d80e92bc5dd4ad4a200092a845aa727ec97d863f5cb37b6b478c5d6",
-          "bytes": 2786,
+          "sha256": "87404a21dcc214a88c5a821a967162e0004d132eaee0f7702af9a5a9e196f2c1",
+          "bytes": 3991,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
-              "generatedAt": "string:2026-07-27T15:28:44.209Z",
+              "generatedAt": "string:2026-07-27T17:12:54.400Z",
               "rows": "array[10]",
               "strict": "boolean:false"
             }
@@ -327,19 +327,19 @@
         {
           "path": "validation/mutations/results.json",
           "storedAt": "evidence/mutations/validation/mutations/results.json",
-          "sha256": "eeddc329961ddd00a47f3e7f7a4fa8601dee0f90ab99ab724253e417357e4986",
-          "bytes": 29083,
+          "sha256": "f5dab035cca274587c7512f2cf7a7e9a3ea3f636408683d2ee94aa565334fa1a",
+          "bytes": 26824,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
-              "commit": "string:84246bac0a02003b657c709fdac5ebacaa553df4",
+              "commit": "string:c9ee6a0552c6fbabe29f5493445e68b7d93e5df2",
               "conventional": "object{5}",
               "gate": "object{3}",
               "machine": "object{4}",
               "mutations": "object{12}",
               "order": "array[12]",
-              "runAt": "string:2026-07-27T06:25:02.201Z",
+              "runAt": "string:2026-07-27T16:46:57.966Z",
               "scope": "object{2}"
             }
           }
@@ -347,11 +347,11 @@
         {
           "path": "validation/mutations/summary.md",
           "storedAt": "evidence/mutations/validation/mutations/summary.md.txt",
-          "sha256": "4c6033b471ba34cfae50142a87ca5c3d9f28dc5ff837b2641eeee3785463adef",
-          "bytes": 4953,
+          "sha256": "5b0d88056368333ca9bc0160846ec3eb1b18088c7f35f0624ddbb5d032752b58",
+          "bytes": 5083,
           "shape": {
             "lines": 73,
-            "bytes": 4953
+            "bytes": 5083
           }
         }
       ],
@@ -653,22 +653,22 @@
         {
           "path": "release/archive-portability.json",
           "storedAt": "evidence/archive-portability/release/archive-portability.json",
-          "sha256": "0585307a7e44106308d717d4edd1bd28fcc22ac5811424bed00bf086374d01ec",
-          "bytes": 24829,
+          "sha256": "b245861800fc3d34e32061d409761664e72dbb47fd220e60ba34e5368c82f890",
+          "bytes": 47084,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
               "archiveBuiltHere": "boolean:true",
-              "archiveDir": "string[75]",
-              "fileCount": "number:1431",
-              "generatedAt": "string:2026-07-27T15:32:46.967Z",
+              "archiveDir": "string:<temp>/olv-archive-inH8Tb/archive",
+              "fileCount": "number:1525",
+              "generatedAt": "string:2026-07-27T17:11:11.413Z",
               "nodeVersion": "string:v26.0.0",
               "repositoryPresent": "boolean:true",
               "results": "array[12]",
               "suite": "string:archive-portability",
               "totals": "object{6}",
-              "version": "string:0.6.1"
+              "version": "string:0.6.2"
             }
           }
         }
@@ -685,7 +685,7 @@
         {
           "path": "docs/validation/claim-register.yaml",
           "storedAt": "evidence/claims/docs/validation/claim-register.yaml",
-          "sha256": "5c87d4de041f3281958ec74ae3a841887abb6c5b4d7787d7fefe1cf39f68cf0e",
+          "sha256": "291832a2a4e52c66bd62d12bd9d69118155d73684fb74ee4e944b33bb0c7de7f",
           "bytes": 34358,
           "shape": {
             "lines": 626,
@@ -705,11 +705,11 @@
         {
           "path": "KNOWN_LIMITATIONS_v0.6.2.md",
           "storedAt": "evidence/limitations/KNOWN_LIMITATIONS_v0.6.2.md.txt",
-          "sha256": "1e1ea5262d6c247265ca75ce3e081576dc15cbd275ad87a90286f7a62e60bf19",
-          "bytes": 22738,
+          "sha256": "2fdb2465ef39f8f4d4f8d49964f1399098a188e61af194b7b2ad306b756fa977",
+          "bytes": 22644,
           "shape": {
             "lines": 265,
-            "bytes": 22738
+            "bytes": 22644
           }
         },
         {
@@ -728,13 +728,36 @@
     {
       "id": "environment",
       "title": "Environment",
-      "status": "not-executed",
+      "status": "recorded",
       "primary": "benchmark-results/latest/environment.json",
       "producedBy": "npm run benchmark:repro",
-      "files": [],
-      "missing": [
-        "benchmark-results/latest/environment.json"
-      ]
+      "files": [
+        {
+          "path": "benchmark-results/latest/environment.json",
+          "storedAt": "evidence/environment/benchmark-results/latest/environment.json",
+          "sha256": "dc5fbd2f51baa68da61940fedee09f1b7aae43718093cf04953898164ee5e64d",
+          "bytes": 917,
+          "shape": {
+            "parsed": true,
+            "kind": "object",
+            "keys": {
+              "arch": "object{2}",
+              "cpuModel": "object{2}",
+              "gitCommitFull": "object{2}",
+              "gitCommitShort": "object{2}",
+              "gitDirty": "object{2}",
+              "loadAverage": "object{2}",
+              "logicalCpuCount": "object{2}",
+              "nodeVersion": "object{2}",
+              "npmVersion": "object{2}",
+              "os": "object{2}",
+              "releaseVersion": "object{2}",
+              "totalMemoryBytes": "object{2}"
+            }
+          }
+        }
+      ],
+      "missing": []
     },
     {
       "id": "gate",
@@ -750,13 +773,34 @@
     {
       "id": "build-identity",
       "title": "Build identity and archive name",
-      "status": "not-executed",
+      "status": "recorded",
       "primary": "release/package-build-metadata-v0.6.2.json",
       "producedBy": "npm run package",
-      "files": [],
-      "missing": [
-        "release/package-build-metadata-v0.6.2.json"
-      ]
+      "files": [
+        {
+          "path": "release/package-build-metadata-v0.6.2.json",
+          "storedAt": "evidence/build-identity/release/package-build-metadata-v0.6.2.json",
+          "sha256": "1e5cf5ab5676b1356793f47d4f13f59d8747860a8a1af95321c03ccb5ce464ed",
+          "bytes": 642,
+          "shape": {
+            "parsed": true,
+            "kind": "object",
+            "keys": {
+              "artifacts": "object{2}",
+              "builtAt": "string:2026-07-27T17:13:39Z",
+              "dirtyWorkingTree": "boolean:false",
+              "gitAvailable": "boolean:true",
+              "gitCommit": "string:fffa80c05ded561e6c9e653d5131dc6045d98343",
+              "nodeVersion": "string:v26.0.0",
+              "packagedArtifacts": "string:deploy+source",
+              "project": "string:openlidarviewer",
+              "sourceKind": "string:git-checkout",
+              "version": "string:0.6.2"
+            }
+          }
+        }
+      ],
+      "missing": []
     },
     {
       "id": "identity-sources",
@@ -768,17 +812,17 @@
         {
           "path": "CHANGELOG.md",
           "storedAt": "evidence/identity-sources/CHANGELOG.md.txt",
-          "sha256": "038080767f1a4a5e3f05d2260f7aca7a40a21a90204aed65be7d172910925ea7",
-          "bytes": 241639,
+          "sha256": "2be3e15c56f2ba0b55a69bec9a141fb2335c1c422b2d35657b522a7dcb2095f1",
+          "bytes": 241773,
           "shape": {
-            "lines": 3393,
-            "bytes": 241639
+            "lines": 3395,
+            "bytes": 241773
           }
         },
         {
           "path": "CITATION.cff",
           "storedAt": "evidence/identity-sources/CITATION.cff",
-          "sha256": "c4dad8594a3f6b17089be7feff836ffa5949037cebf9aae0bf5c98e9b71742e3",
+          "sha256": "8a9ac9a95aec3e7ec85a03a0699c9ad137f13efe9f56786306ab1a4be740fe30",
           "bytes": 1066,
           "shape": {
             "lines": 40,
@@ -788,7 +832,7 @@
         {
           "path": "MANIFEST.md",
           "storedAt": "evidence/identity-sources/MANIFEST.md.txt",
-          "sha256": "c220135cd42d720520688ce3f3ad1423f8137ed03987782e9a7cbb39155ea6bc",
+          "sha256": "7c77107708d237b65dc079455d40bbb97e42ca3c291fbdd8bb62990f76f3e7b7",
           "bytes": 2400,
           "shape": {
             "lines": 58,
@@ -798,7 +842,7 @@
         {
           "path": "README.md",
           "storedAt": "evidence/identity-sources/README.md.txt",
-          "sha256": "ad47f028656237ba9214d374ad891980722129a5ea22c157f39803dc5ccba2cc",
+          "sha256": "f3215561a2e0bbeb813ada6aa80cff28b8a70007a8cd71b47ec28ed25088315f",
           "bytes": 39258,
           "shape": {
             "lines": 516,
@@ -808,7 +852,7 @@
         {
           "path": "package-lock.json",
           "storedAt": "evidence/identity-sources/package-lock.json",
-          "sha256": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559",
+          "sha256": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
           "bytes": 308235,
           "shape": {
             "parsed": true,
@@ -818,15 +862,15 @@
               "name": "string:openlidarviewer",
               "packages": "object{618}",
               "requires": "boolean:true",
-              "version": "string:0.6.1"
+              "version": "string:0.6.2"
             }
           }
         },
         {
           "path": "package.json",
           "storedAt": "evidence/identity-sources/package.json",
-          "sha256": "4c944185f8c218f195e21c56f316c7aabf93eba22b77dec106d6991f40b0d315",
-          "bytes": 8838,
+          "sha256": "9e19a11a01cc8ddebb34e9ced932daeea1f70cd1b70d651171ac80205e13e548",
+          "bytes": 8997,
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -843,9 +887,9 @@
               "name": "string:openlidarviewer",
               "packageManager": "string:npm@10.9.2",
               "repository": "object{2}",
-              "scripts": "object{78}",
+              "scripts": "object{80}",
               "type": "string:module",
-              "version": "string:0.6.1"
+              "version": "string:0.6.2"
             }
           }
         }
