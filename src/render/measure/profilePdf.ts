@@ -15,7 +15,7 @@
  *     grade, coverage, sample count, corridor width, CRS/datum.
  *   - A station table (chainage · elevation · grade) so values are exact,
  *     not eyeballed off the graph.
- *   - A provenance footer (not survey-grade unless validated).
+ *   - A provenance footer carrying the canonical NOT_SURVEY_GRADE_NOTE.
  *
  * pdf-lib is imported here so this whole module lands in its own lazy
  * chunk — the panel dynamic-imports it only when the user clicks Export.
@@ -37,6 +37,7 @@ import {
 // unit-aware civil stationing (metric km+m / imperial 100-ft stations) the
 // panel's station table already prints.
 import { computeProfileSummary, formatProfileExtreme, formatStation } from './profileSummary';
+import { NOT_SURVEY_GRADE_NOTE } from '../../terrain/export/exportNotes';
 // Unit-aware length formatting — the SAME formatter every panel readout uses,
 // so the sheet and the screen can never disagree on a number's unit.
 import {
@@ -389,7 +390,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
 
   // Provenance footer.
   const prov =
-    'Not survey-grade unless validated against ground-truth control.' +
+    NOT_SURVEY_GRADE_NOTE +
     (input.residentOnly ? '  Sampled from streaming-resident points only — may refine as more data loads.' : '');
   text(page, prov, M, M - 10, 8, font, INK_DIM);
 
