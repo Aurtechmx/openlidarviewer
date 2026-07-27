@@ -1,0 +1,29 @@
+{
+  "command": "node scripts/verify-archive-portability.mjs",
+  "defect": "OLV-DEF-018",
+  "durationMs": 6084,
+  "environment": {
+    "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
+    "commitShort": "dcd9dbc",
+    "cpus": 14,
+    "label": "candidate",
+    "node": "v26.0.0",
+    "nodeModules": "shared with the candidate tree, so the runtime is identical on both sides",
+    "platform": "darwin arm64",
+    "ref": "candidate working tree",
+    "vitest": "4.1.10"
+  },
+  "exitCode": 0,
+  "injectedFiles": [],
+  "probeCase": null,
+  "probeFile": "scripts/verify-archive-portability.mjs",
+  "probeIndex": 0,
+  "probeKind": "script",
+  "registryCase": null,
+  "reporterJson": null,
+  "schemaVersion": 1,
+  "signal": null,
+  "timedOut": false,
+  "transcript": "Archive portability — checking <temp>/olv-archive-9mHNKM/archive\n  repository present: yes\n\n  ✓ scripts-present — every file the archive’s own package.json scripts execute ships in the archive\n  ✓ documented-scripts-exist — every `npm run` command named in shipping documentation exists in the archive’s package.json\n  ✓ archive-self-verification — the archive’s own node-only verification scripts run and pass inside the archive\n  ✓ no-internal-material — nothing internal or generated ships in the archive\n  ! no-dangling-references-to-excluded — nothing that ships references a file that does not\n      [warn] scripts/lint-release-truth.mjs names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.\n      [warn] validation/defects/defect-registry.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.\n  ✓ doc-links-resolve — every relative link in shipping markdown resolves to a file that also ships\n  ✓ checksum-manifests-bidirectional — every shipped SHA256SUMS accounts for its directory in both directions\n  ✓ archive-determinism — building the archive twice from the same commit yields identical bytes\n  ✓ lockfile-consistent — the lockfile ships and agrees with package.json\n  ✓ imports-declared — every package the archive imports is a declared dependency\n  ✓ sbom-matches-manifest — the SBOM ships and covers the declared dependency set\n  ✓ version-coherence — package.json, the citation file, the changelog and the versioned documents agree\n\n✓ 12 passed, 0 failed, 0 skipped — 0 errors, 2 warnings\n  result: release/archive-portability.json\n",
+  "withheldFiles": []
+}
