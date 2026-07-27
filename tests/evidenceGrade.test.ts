@@ -50,6 +50,7 @@ describe('tallyContourSet', () => {
         { value: 2, segments: [seg(2, 'gap')] },
       ],
       intervalM: 1,
+      requestedIntervalM: 1,
       crs: 'EPSG:32610',
       verticalDatum: null,
       minZ: 0,

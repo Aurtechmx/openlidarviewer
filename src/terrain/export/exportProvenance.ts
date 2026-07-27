@@ -178,8 +178,14 @@ export interface ExportProvenance {
   readonly datumKnown: boolean;
   /** Coverage mode ('full' / 'resident-only' / 'sampled' / 'unknown'). */
   readonly coverageMode: string;
-  /** Contour interval (source units), or null when none was chosen. */
+  /**
+   * Contour interval of the levels actually emitted (source units), or null when
+   * none was chosen. Coarser than {@link contourRequestedIntervalM} when an
+   * over-fine request was thinned against the level cap.
+   */
   readonly contourIntervalM: number | null;
+  /** The interval that was requested, when it differs from what was emitted. */
+  readonly contourRequestedIntervalM: number | null;
   /** Vertical-unit label for the interval ('m' | 'ft' | 'units'); absent/'unknown' ⇒ unverified. */
   readonly contourIntervalUnit?: string;
   /** Contour shape style the geometry was produced with, or null when unknown. */
@@ -293,6 +299,10 @@ export function buildExportProvenance(
   const style =
     result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
   const intervalM = result.intervalM ?? result.model?.intervalM ?? null;
+  // The requested interval is real provenance in its own right: it is what the
+  // operator asked for, and it is not recoverable from the emitted spacing.
+  const requestedIntervalM =
+    result.requestedIntervalM ?? result.model?.requestedIntervalM ?? null;
   // The exact generalization tolerance the geometry was simplified at (cells),
   // read from the real generation config so provenance can never drift from the
   // shipped geometry. Null unless the 'generalized' style actually ran.
@@ -353,6 +363,8 @@ export function buildExportProvenance(
     datumKnown: datum != null,
     coverageMode,
     contourIntervalM: intervalM,
+    contourRequestedIntervalM:
+      requestedIntervalM != null && requestedIntervalM !== intervalM ? requestedIntervalM : null,
     // The interval is in the SOURCE vertical unit; label it from the resolved
     // Z-axis scale (never a hard-coded metre) and say "unknown" when unresolved.
     contourIntervalUnit:
@@ -517,6 +529,11 @@ export function processingManifestFromProvenance(p: ExportProvenance): Processin
     const capturesTolerance = p.contourGeneralizeToleranceCells != null;
     const params: Record<string, string | number> = {
       ...(p.contourIntervalM != null ? { intervalM: p.contourIntervalM } : {}),
+      // Only when thinning moved the emitted spacing off the request; the op's
+      // `intervalM` always names the levels the artifact contains.
+      ...(p.contourRequestedIntervalM != null
+        ? { requestedIntervalM: p.contourRequestedIntervalM }
+        : {}),
       ...(p.contourStyle ? { style: p.contourStyle } : {}),
       // The exact per-purpose generalization tolerance (cells) — so a generalized
       // deliverable is self-describing and two purposes are distinguishable from
@@ -663,6 +680,7 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
     datumKnown: p.datumKnown,
     coverageMode: p.coverageMode,
     contourIntervalM: p.contourIntervalM,
+    contourRequestedIntervalM: p.contourRequestedIntervalM,
     contourIntervalUnit: p.contourIntervalUnit ?? null,
     contourStyle: p.contourStyle,
     contourStyleLabel: p.contourStyleLabel,

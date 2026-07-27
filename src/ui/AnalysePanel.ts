@@ -1834,7 +1834,10 @@ export class AnalysePanel {
       return r;
     }
     return this._cb.buildResultForExport({
-      intervalM: r.model.intervalM,
+      // A regeneration re-runs the pipeline, so it takes the interval that was
+      // REQUESTED. Feeding back the emitted (possibly thinned) spacing would
+      // coarsen the export away from the contours on screen.
+      intervalM: r.requestedIntervalM ?? r.model.intervalM,
       shapeStyle: style,
       generalizeToleranceCells: this._contourGeneralizeToleranceCells,
     });
@@ -2060,7 +2063,8 @@ export class AnalysePanel {
       const canRegen = !!this._cb.buildResultForExport;
       const result = canRegen
         ? await this._cb.buildResultForExport!({
-            intervalM: this._result.model.intervalM,
+            // Requested, not emitted — see `_resultForExport`.
+            intervalM: this._result.requestedIntervalM ?? this._result.model.intervalM,
             shapeStyle: intent.shapeStyle,
             generalizeToleranceCells: intent.generalizeToleranceCells,
           })
@@ -2168,7 +2172,11 @@ export class AnalysePanel {
 
     const ctx = this._cb.getMapContext?.() ?? {};
     const basename = this._cb.getExportBasename?.() ?? 'contours';
+    // Two different quantities: what the contours on the sheet ARE spaced at,
+    // and what was asked for. The sheet's note describes the first; the picker
+    // and the "did it change" test are about the request.
     const currentInterval = r.model.intervalM;
+    const requestedInterval = r.requestedIntervalM ?? r.model.intervalM;
     const currentStyle = r.model.contourStyle;
     const canRegen = typeof this._cb.buildResultForExport === 'function';
     // Capture one timestamp so the LOCKED "Generated" value the user sees equals
@@ -2241,7 +2249,7 @@ export class AnalysePanel {
       o.value = String(opt.intervalM);
       o.textContent = describeIntervalOption(opt);
       o.disabled = !opt.supported;
-      if (opt.intervalM === currentInterval) o.selected = true;
+      if (opt.intervalM === requestedInterval) o.selected = true;
       intervalSel.append(o);
     }
     // Without a regeneration callback we cannot change the interval honestly —
@@ -2363,7 +2371,7 @@ export class AnalysePanel {
           if (
             canRegen &&
             Number.isFinite(chosenInterval) &&
-            (chosenInterval !== currentInterval || chosenStyle !== currentStyle)
+            (chosenInterval !== requestedInterval || chosenStyle !== currentStyle)
           ) {
             result = await this._cb.buildResultForExport!({
               intervalM: chosenInterval,
