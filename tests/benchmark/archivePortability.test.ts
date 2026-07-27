@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -108,5 +108,29 @@ describe('documentedScripts', () => {
 
   it('picks up nothing from prose that names no command', () => {
     expect(documentedScripts('Install the dependencies and open the page.')).toEqual([]);
+  });
+});
+
+describe('readsPackageFromNodeModules', () => {
+  // The real case: a build script assembles the path one segment at a time, so
+  // the joined package name never appears as a single string.
+  const segmented = 'ROOT / "node_modules" / "@fontsource-variable" / "inter" / "files" / "x.woff2"';
+
+  it('finds a scoped package whose path is built from separate segments', () => {
+    expect(readsPackageFromNodeModules([segmented], '@fontsource-variable/inter')).toBe(true);
+  });
+
+  it('finds a package named as one joined path', () => {
+    expect(readsPackageFromNodeModules(['open("node_modules/laz-perf/lib.wasm")'], 'laz-perf')).toBe(true);
+  });
+
+  it('does not report a package nothing reads', () => {
+    expect(readsPackageFromNodeModules([segmented], 'three')).toBe(false);
+    expect(readsPackageFromNodeModules([], '@fontsource-variable/inter')).toBe(false);
+  });
+
+  it('needs both halves of a scoped name, not either one', () => {
+    expect(readsPackageFromNodeModules(['node_modules/@fontsource-variable/roboto'], '@fontsource-variable/inter')).toBe(false);
+    expect(readsPackageFromNodeModules(['node_modules/other-scope/inter'], '@fontsource-variable/inter')).toBe(false);
   });
 });
