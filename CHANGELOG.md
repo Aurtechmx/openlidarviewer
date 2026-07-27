@@ -2,7 +2,23 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [Unreleased]
+## [0.6.2] - 2026-07-26
+
+A validation-and-correction release. Ten validation suites were added, covering
+reproducibility, scaling, cross-platform portability, GPU-versus-CPU backend
+equivalence, failure recovery, provenance integrity, contour correctness, LAS
+round-trip fidelity, unit integrity and archive portability. Eighteen defects
+are fixed: four carried from the v0.6.1 vertical-unit audit, fourteen found by
+the new suites. The evidence ceiling moves from one cross-implemented product to
+three, with aspect and hillshade joining slope at E4 against GDAL 3.13.1 on the
+shared analytic DEM. The reproducibility comparator and its two-platform CI
+matrix, darwin-arm64 and linux-x64, are in place; the only run recorded in the
+tree so far is a single darwin-arm64 leg, which establishes single-platform
+reproducibility and nothing cross-platform.
+
+Four defects reached published v0.6.1 output. `docs/release/ERRATUM_v0.6.2.md`
+states, for each, what the software did, which outputs carry the error and what
+recovers a correct figure. Open limits are in `KNOWN_LIMITATIONS_v0.6.2.md`.
 
 ### Fixed
 
@@ -55,19 +71,123 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   too aggressive: real sub-30 cm terrain features were removed and silently
   re-interpolated. The removal count reached provenance, so two deliverables of
   one scan could disagree about how much data was cut.
+- **The PDF report footprint reads a Y-up scan on the right axes.** The PDF path
+  fed raw X/Y/Z bounds into `footprintMetres`, which assumed Z-up. A PLY, OBJ or
+  glTF scan therefore printed its height as Depth, divided the point count by a
+  vertical cross-section, and put the vertical unit factor on a ground span. The
+  on-screen Scan Report has swizzled by `isZUpFormat` since it was written, so
+  the two disagreed on every mesh-format scan. See the erratum for the figures a
+  v0.6.1 report carries.
+- **The streaming header box converts to cubic metres before density is
+  tiered.** The static refresher scaled the bounding box by the CRS unit factors
+  before the per-cubic-metre bucketing; the streaming one, a few lines below it,
+  passed the raw header extents through. A foot-CRS tile's box is 35.31 times
+  larger in source units, so one scan graded "sparse" streamed and "moderate"
+  loaded statically.
+- **A LAS 1.4 file keeps its vertical datum when it carries WKT plus GeoKeys.**
+  `parseCrsFromVlrs` returned the WKT CRS and discarded the GeoKeyDirectory.
+  This application's own 1.4 writer puts the vertical datum and vertical unit in
+  those keys beside a horizontal-only WKT, so a NAVD88 height in feet came back
+  with no vertical unit and the terrain tools fell back to metres. The WKT still
+  owns the horizontal frame and any vertical axis it declares; only the vertical
+  fields it leaves empty are filled from the keys. See the erratum.
+- **A declared linear unit that cannot be resolved reads as unknown, not as
+  metre.** `crsFromGeoTiff` resolved a `ProjLinearUnits` code outside
+  9001/9002/9003 to metre with a factor of 1, so a file declaring British foot
+  measured 3.28 times wrong and was indistinguishable from a file declaring no
+  unit at all. A declared code the software cannot honour is now tagged unknown,
+  which the downstream unit gates read to withhold the label; an absent key
+  still takes the format default. See the erratum.
+- **Three quantities stop being reported as measured when nothing was
+  measured.** `spaceMetrics` sized its occupancy grid with a 1 metre placeholder
+  cell on an axis with no extent and then multiplied that placeholder out as
+  floor area, so a cloud of coincident points came back with 1 m2 of floor, 40
+  points per m2 and a mean spacing of 0.158 m. The placeholder still divides and
+  no longer contributes area. The PDF report returned a grade of 0 for a slope
+  with no horizontal run, stating a level grade for a vertical face while the
+  live overlay called the same two points "vertical"; it follows
+  `gradePercentOf` and prints the same word. `formatLinear` had no finiteness
+  guard and printed "NaN cm" where `formatVolume` in the same file already
+  returned an em dash.
+- **A prototype key is refused as a method id.** `METHOD_REGISTRY['__proto__']`
+  and `['toString']` resolve on the prototype chain, so `method()` returned a
+  truthy non-entry and `methodRef()` handed back `{id: undefined, version:
+  undefined}`. Two different unregistered ids composed to one method tag and one
+  record fingerprint. The own-property check the registry already had in
+  `isMethodId` now governs both lookups.
+- **The benchmark result verifier sees the files it publishes.** `toHashable`
+  built its output on a plain literal, so assigning a `__proto__` key
+  re-parented the object instead of creating an own property and the key
+  vanished before hashing; two artifacts differing only there hashed the same.
+  The verifier also checked only that every listed file is present, never that
+  every present file is listed, and never re-derived the two artifact JSONs it
+  publishes, so an entry removed from the listing took its file out of the
+  digest check and an edited hash table with a refreshed digest passed.
+- **The contour GeoJSON carries the run warnings and the canonical limitation
+  wording.** The merge rule "model-derived keys win" applied to `warnings` too,
+  so a run whose provenance carried a warning shipped a GeoJSON declaring an
+  empty list while every text stamp of the same run printed it. The file now
+  carries the de-duplicated union of both sources, model order then provenance
+  order, which is stable because these artifacts are hashed. The writer's own
+  copy of the not-survey-grade sentence is gone; it reads `NOT_SURVEY_GRADE_NOTE`,
+  so a GeoJSON reader and a DXF, SVG or README reader get the same string.
+- **A LAS file names the build that produced it.** The 32-byte generating
+  software field was the fixed literal `OpenLiDARViewer converter`, so a LAS file
+  could not answer which version or commit produced it while every other export
+  could. It carries the product name, the release and the short commit, composed
+  longest-first and accepted only when a candidate fits whole. A prefix of a
+  commit hash names a build that does not exist, so the commit is dropped entire
+  rather than truncated, an unresolved commit is never written, and when
+  `+dirty` pushes the string past 32 bytes the commit goes with the marker.
+- **The source archive no longer ships release pages whose include target is
+  excluded.** Each `docs-site/releases/v0.4.x` and `v0.5.x` page is a bare
+  `@include` of a `RELEASE_NOTES` file that `.gitattributes` already excludes, so
+  the archive carried 15 pages that resolved to nothing. The sidebar reads the
+  releases directory, so it follows the pages.
 
 ### Corrected
+
+The four entries below correct statements or output published in v0.6.1.
+`docs/release/ERRATUM_v0.6.2.md` carries the full text, including who is
+affected and what recovers a correct figure.
 
 - **Correction to `KNOWN_LIMITATIONS_v0.6.1.md`: the `geodesicFill` unit-mixing
   defect affected production surfaces.** That document states the defect
   "affects the non-default geodesic interpolation mode only; the default fill is
   unaffected". That is wrong, and it understated the defect.
   `src/terrain/ground/surfaceFromRaster.ts` sets `LIVE_INTERPOLATION` to
-  `'geodesic'`, so geodesic is the mode every production surface used. On
-  geographic (degree) and foot-vertical data, interpolated void heights in
-  v0.6.1 and earlier came from a step cost that mixed horizontal source units
-  with vertical metres. The scope statement should have read: this affected every
-  surface the application produced, not an optional mode.
+  `'geodesic'` and `src/terrain/contour/analyseContours.ts` reads it on the live
+  path, so geodesic is the fill that built every DTM surface the application
+  produced, not an optional mode. Which surfaces changed value is narrower than
+  which used the path: the inverse-distance weights are normalised, so a single
+  common factor cancels and a projected metre-over-metre or foot-over-foot frame
+  interpolates identically before and after. Geographic (degree) frames and
+  compound frames whose vertical unit differs from the horizontal one do change,
+  because two different factors do not cancel.
+- **Correction to v0.6.1 PDF reports: Depth and density are wrong for Y-up
+  formats.** `footprintMetres` read a Y-up cloud's extents as Z-up, so every PDF
+  report from a PLY, OBJ or glTF scan printed the height as Depth and divided
+  the point count by a vertical cross-section. On a 30 by 40 m footprint 8 m
+  tall with 120,000 points, Depth read 8 m against 40 m and density read 500
+  pts/m2 against 100, a fivefold overstatement; on a compound CRS the vertical
+  factor landed on a horizontal span and Height read 12.192 m against 2.4384 m.
+  The on-screen Scan Report was correct throughout.
+- **Correction to v0.6.1 measurements from a CRS declaring an unresolvable
+  linear unit.** A projected CRS carrying `ProjLinearUnitsGeoKey` outside
+  9001/9002/9003 resolved to metre with a factor of 1, so `toMetres(100)`
+  returned 100 where roughly 30.48 is correct for a British-foot CRS, and the
+  file was indistinguishable from one declaring no unit at all. v0.6.2 resolves
+  such a code to unknown, which makes the file refusable rather than
+  convertible: figures already produced from one are not repaired by reopening
+  it.
+- **Correction to v0.6.1 results computed from a LAS 1.4 file this application
+  wrote.** `parseCrsFromVlrs` discarded the GeoKeyDirectory whenever a WKT was
+  present, and the 1.4 writer puts the vertical datum and unit in those keys
+  beside a horizontal-only WKT. `verticalEpsg` and the vertical unit read back
+  as undefined, so a NAVD88 height in US survey feet was taken for metres, 3.28
+  times wrong, and every elevation, contour interval, slope figure and cut/fill
+  volume derived from it inherited that. The files on disk are correct; the loss
+  was on read.
 
 ### Changed
 
@@ -81,8 +201,23 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   (circular difference) and only where the closed-form slope exceeds 2 degrees,
   because a level cell has no aspect: GDAL writes NODATA there and our kernel
   returns 0, which is a real direction. No algorithm changed; this is a change
-  in what the evidence supports, and `HILLSHADE`, which consumes aspect, keeps
-  its own lower level.
+  in what the evidence supports.
+- **The hillshade raster is cross-implementation validated (E3 → E4).** The
+  third terrain product compared against GDAL 3.13.1, on the DEM the slope and
+  aspect references already share, pinned by hash rather than copied. Over
+  11,564 interior cells: ours against the closed form max 0.0000643, GDAL
+  against the closed form max 0.900, ours against GDAL max 1.00 as 8-bit levels,
+  all inside the 1.0 registered before the comparison ran. Both sides implement
+  the same illumination model over a Horn gradient and differ only in byte
+  encoding: we write 255·h, GDAL writes 1 + 254·h with level 0 reserved for
+  nodata. That offset is left visible in the reported figures rather than
+  divided out, and our encoding is unchanged. It spends most of a one-level
+  budget on its own, so the ours-against-GDAL leg is a weak instrument by
+  itself; the claim rests on the closed-form leg and on re-encoding our
+  intensity in GDAL's scale, which reproduces the reference exactly at every
+  cell. The limit is recorded in the fixture README and in
+  `docs/validation/THREATS_TO_VALIDITY.md`. The single-direction model only;
+  `computeMultiHillshade` keeps its own claim and its own level.
 - **The development toolchain moves to TypeScript 7.0.2, Vite 8.1.5 and
   Playwright 1.62.0.** TypeScript 7 is the native compiler and a major version,
   so the whole gate was re-run against it: the typecheck, all five test buckets
@@ -91,6 +226,44 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   untouched. Vite 8.1.5 splits the output into 153 chunks where 8.0.12 produced
   140, which moves about 62 KiB out of the entry chunk; the total emitted
   JavaScript and the obfuscation coverage of the live build are unchanged.
+
+### Added
+
+- **Ten validation suites, each runnable and each stating what it does not
+  cover.** Reproducibility (`benchmark:repro`): one documented seed, 250k
+  points, ten recorded runs, passing only when every science-scoped hash and
+  scalar is identical across all ten, at zero tolerance. Scaling
+  (`benchmark:scaling`): 50k through 1M, five runs a tier, each tier in its own
+  process, no complexity class claimed. Cross-platform portability
+  (`benchmark:repro:portable`, `benchmark:compare-platforms`): a per-platform
+  leg and a comparator that checks the source-cloud hash first, then every
+  science-scoped hash and scalar at zero tolerance. Backend equivalence
+  (`benchmark:backends`): GPU against CPU, suppressed and recorded as
+  backend-unavailable when a requested backend fell back, so a Node run cannot
+  report the CPU agreeing with itself. Failure recovery (`benchmark:failures`):
+  truncated bodies, corrupt headers, degenerate geometry, missing and
+  unresolvable CRS, aborted reads, each with a healthy control off the same
+  fixture. Provenance integrity (`benchmark:provenance`): whether every exported
+  artifact names its source, its method chain with bound parameters, its build
+  and its limitation, and whether an edit stays detectable once the attacker
+  refreshes the digests. Contour correctness (`benchmark:contours`): generated
+  contours against plane, cone, paraboloid and saddle, the topological
+  invariants of a level set, and the declared-against-actual properties, with a
+  negative control on every predicate. LAS round-trip fidelity
+  (`benchmark:roundtrip`): both writers read back twice, once by an independent
+  spec-offset decoder in float64 and once by the application's own loader, with
+  tolerances derived from the scale factor the file declares. Unit integrity
+  (`benchmark:units`): one physical scene through a metre CRS, a foot CRS, a
+  compound frame and a Y-up axis order, comparing what each path reports.
+  Archive portability (`benchmark:archive-portability`): the released source
+  archive checked from an extract in a temp directory outside the repository,
+  which refuses an archive directory inside the repo or carrying a `.git` so
+  there is no working-tree fallback to pass by accident.
+- **A two-platform CI matrix for the portability suite**, darwin-arm64 and
+  linux-x64, with both legs always run: failing fast would leave the comparator
+  with one platform, which reports as single-platform and establishes nothing.
+  Byte order is a precondition rather than a result, and runtimes stay per
+  platform because a median over two machines describes neither.
 
 ### Known limitations
 
@@ -141,6 +314,20 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   scans. No workaround places two streams in one session. Nothing is scheduled;
   concurrent streaming sources depend on the same shared-frame work that
   physical multi-layer mounting waits on.
+- **What the new suites name as uncovered.** Each suite states its own gaps
+  rather than leaving them implicit, and `KNOWN_LIMITATIONS_v0.6.2.md` carries
+  the list in full: GPU-computed derivatives beyond the two engine probe
+  surfaces, render-space lengths and the measurement HUD, rasterised report
+  composition, LAZ output (the application has no encoder, so there is no LAZ
+  file of its own to read back), third-party writer conformance, `npm ci` and a
+  build from a clean extract, and Windows as a reproducibility leg.
+- **The in-memory reconstruction is less precise than the LAS file it came
+  from.** Points are stored as Float32 local to a render origin, so the
+  application's read-back displaces further than the file's own quantisation
+  bound. Measured by the round-trip suite: 1.9 mm over a 50 km extent where the
+  file itself round-trips exactly, and 0.123 m over a 5000 km extent where the
+  file's own bound is 1.25 mm. The written file is not affected; the loss is in
+  what the viewer holds and measures.
 
 ## [0.6.1] - 2026-07-25
 

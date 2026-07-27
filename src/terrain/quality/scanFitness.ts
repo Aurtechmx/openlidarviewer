@@ -87,7 +87,12 @@ export interface ScanFitness {
   readonly verdict: string;
   /** Worst dimension tone — drives the hero colour. */
   readonly overallTone: FitnessTone;
-  /** Named tier badge when earnable (e.g. "USGS QL2-class"), else null. */
+  /**
+   * Named tier badge when earnable, carrying the "(estimated)" qualifier every
+   * other surface stamps on the level (e.g. "QL2 (estimated)"), else null. The
+   * level's RMSEz leg is hold-out, not independent checkpoints, so an unadorned
+   * "QL2" on the hero would read as a 3DEP determination.
+   */
   readonly tierBadge: string | null;
   /** Headline accuracy string, or null when unvalidated. */
   readonly headlineAccuracy: string | null;
@@ -105,7 +110,13 @@ export interface ScanFitness {
 const SEVERITY: Record<FitnessTone, number> = { ready: 0, okay: 1, review: 2 };
 const worst = (a: FitnessTone, b: FitnessTone): FitnessTone => (SEVERITY[a] >= SEVERITY[b] ? a : b);
 
-/** USGS 3DEP nominal ground density floors (pts/m²): QL2 ≥ 2, QL1 ≥ 8. */
+/**
+ * Ground-density thresholds (pts/m²), taken from the USGS 3DEP nominal density
+ * floors: QL2 ≥ 2, QL1 ≥ 8. They are where the numbers come from, not a claim
+ * about the scan — a 3DEP quality level also carries vertical accuracy against
+ * independent checkpoints, coverage and collection requirements this
+ * application does not validate, so density alone establishes no tier.
+ */
 const QL2_DENSITY = 2;
 const QL1_DENSITY = 8;
 /** Coverage fractions where the measured surface is trustworthy vs sparse. */
@@ -146,10 +157,10 @@ function densityDimension(d: number | null): FitnessDimension {
   const v = d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
   const summary =
     tone === 'ready'
-      ? `${v} ground pts/m² — dense (QL1-class).`
+      ? `${v} ground pts/m² — at or above ${QL1_DENSITY} pts/m² (the 3DEP QL1 density floor).`
       : tone === 'okay'
-        ? `${v} ground pts/m² — meets the USGS QL2 floor (2 pts/m²).`
-        : `${v} ground pts/m² — below the USGS QL2 floor of 2 pts/m².`;
+        ? `${v} ground pts/m² — at or above ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`
+        : `${v} ground pts/m² — below ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
@@ -278,7 +289,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const accTone = dimensions.find((d) => d.key === 'accuracy')!.tone;
   const tierBadge =
     inp.qualityLevel && !provisional && densTone !== 'review' && accTone !== 'review' && inp.crsKnown
-      ? inp.qualityLevel
+      ? `${inp.qualityLevel} (estimated)`
       : null;
 
   const headlineAccuracy = inp.verticalRmse != null ? `±${inp.verticalRmse.toFixed(2)} ${unit} vertical` : null;

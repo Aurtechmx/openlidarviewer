@@ -1,6 +1,8 @@
-# Known limitations — OpenLiDARViewer v0.6.1
+# Known limitations: OpenLiDARViewer v0.6.2
 
-This is the v0.6.1 patch release. It fixes three defects found by an audit of the v0.6.0 archive and changes nothing else, so the limits below are the v0.6.0 limits with the corrected items rewritten and the items that audit found still open added. They are recorded here rather than hidden, in keeping with the project's honesty contract.
+This is a validation-and-correction release. Ten validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered. They are recorded here rather than hidden, in keeping with the project's honesty contract.
+
+Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.2.md`. One of them is a correction to the previous version of this file: its scope statement for the `geodesicFill` unit-mixing defect was wrong.
 
 ## The two monoliths are still monoliths
 
@@ -10,7 +12,7 @@ This is the v0.6.1 patch release. It fixes three defects found by an audit of th
 
 `ProjectSpatialFrame` / `LayerSpatialTransform` (value types + pure transform math) are tested and documented (`docs/architecture/project-spatial-frame.md`). This release carries **step 1** of the wiring plan: the app now owns a live project frame (`src/app/projectFrame.ts`, on `AppContext`), reseeded from the loaded layer set on every change, choosing one shared origin and deriving each layer's translation into it. A single layer anchors the frame at its own origin, so its transform is the identity and the single-scan path is unchanged.
 
-**Physical multi-layer mounting is DISABLED in v0.6.1** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — a layer's placement in the project frame is a per-layer Float64 translation held beside the cloud, applied per mesh by the renderer and per read by the analysis consumers, so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Turning mounting on waits on browser verification of two-layer placement (docs/architecture/float64-transform.md, step 6). Still staged for this release:
+**Physical multi-layer mounting is DISABLED in v0.6.2** (`MULTI_LAYER_MOUNT_ENABLED = false`). The mount mechanism exists and is tested — a layer's placement in the project frame is a per-layer Float64 translation held beside the cloud, applied per mesh by the renderer and per read by the analysis consumers, so rendering, picking, terrain, lasso, profiles, volumes and exports all read one frame — but it is not the shipped behaviour. Multiple layers may be loaded and analysed individually; they are not co-registered and are not merged into one estimator. Turning mounting on waits on browser verification of two-layer placement (docs/architecture/float64-transform.md, step 6). Still staged for this release:
 
 - **Two-scan placement is unverified in a browser** — and cannot be verified while mounting is off, because nothing places them. That confirmation belongs to the cycle that turns mounting on.
 - **Mounting no longer rewrites the data.** Earlier alphas mounted by adding the project offset into the Float32 positions in place, which was lossy and made the round trip inexact. That mechanism is removed: source geometry is immutable (byte-identity pinned by `tests/sourceGeometryImmutable.test.ts`), and mount/unmount are exact inverses because setting and clearing a Float64 placement re-quantises nothing. The mm-precision refusal gates REMAIN as conservative admission rules — they model the retired mechanism's measured cost via `PointCloud.rebaseQuantum` (two tiles 1 km apart would have cost ~0.02 mm; 100 km a full millimetre) — until mounting is revisited with browser evidence.
@@ -156,9 +158,17 @@ An earlier build derived nothing, so a scan georeferenced by GeoKeys alone -
 what LAS 1.2 carries, and what PDAL commonly writes - came back out as a 1.4
 file with the right code in the wrong encoding.
 
-## Evidence ceiling: internal self-consistency
+The read side matched the write side only from v0.6.2. Until then `parseCrsFromVlrs` returned the WKT and discarded the GeoKeyDirectory, so the vertical keys the v0.6.1 writer had just started emitting were dropped again on load. `docs/release/ERRATUM_v0.6.2.md` states which output that reached.
 
-One product has been compared against an independent implementation: the slope raster agreed with GDAL 3.13.1 (and the closed-form gradient) on the analytic fixture within the preregistered 0.5 degree tolerance, so `SLOPE-RASTER` is at E4. Every OTHER `REFERENCE_SLOT` in `docs/validation/cross-implementation.md` still ships `pending`, and every other terrain product tops out at E3 — synthetic known-truth against our own implementation. This release does not claim survey-grade accuracy, standards compliance, or independent field validation, and the slope result validates the algorithm on the fixture, not the point-cloud-to-DTM pipeline.
+## Evidence ceiling: three cross-implemented products, no field validation
+
+Three products have been compared against an independent implementation. Slope, aspect and hillshade each agreed with GDAL 3.13.1, and with the surface's closed-form gradient, on one frozen analytic DEM, within tolerances registered before the references were generated. `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE` are at E4 on that basis.
+
+The hillshade tolerance carries a caveat the other two do not: the byte-encoding difference between the two implementations spends most of a one-level budget on its own, so the ours-against-GDAL leg is a weak instrument by itself and the claim rests on the closed-form leg and on an exact re-encoding identity. `docs/validation/cross-implementation.md` states it in full.
+
+Every other `REFERENCE_SLOT` still ships `pending`, and every other terrain product tops out at E3, which is synthetic known-truth against this project's own implementation.
+
+E5 is unreached. Nothing here is field-validated, and the three E4 results validate the algorithms on one analytic fixture rather than the point-cloud-to-DTM pipeline. This release does not claim survey-grade accuracy, standards compliance or independent field validation.
 
 ## No cross-CRS reprojection
 
@@ -166,42 +176,71 @@ Unchanged from prior releases: the viewer does not reproject between coordinate 
 
 ## Axis and compound-unit handling is correct but not yet uniform
 
-alpha.2 fixed the two places where an axis or unit assumption produced a wrong number: box dimensions now follow the scan's up-axis (they previously hardcoded Z as height, which also mis-applied the vertical unit factor on a Y-up frame), and the Scan Report footprint follows the source up-axis. There is still no single explicit model spanning up-axis, horizontal unit, vertical unit and CRS, so an unusual combination is more likely to be silently plausible than loudly refused. That model is a stable-v0.6 requirement.
+alpha.2 fixed the two places where an axis or unit assumption produced a wrong number: box dimensions now follow the scan's up-axis (they previously hardcoded Z as height, which also mis-applied the vertical unit factor on a Y-up frame), and the Scan Report footprint follows the source up-axis. The PDF report's footprint did not follow until v0.6.2, so the on-screen panel and the printed page disagreed on every Y-up scan until then. The unit-integrity suite is what compared the two.
+
+There is still no single explicit model spanning up-axis, horizontal unit, vertical unit and CRS, so an unusual combination is more likely to be silently plausible than loudly refused. That model is a stable-v0.6 requirement.
 
 **Boxes require an axis-aligned frame, and now say so.** A box measurement is stored as min/max corners, so it is axis-aligned by construction and its height can only be an extent along X, Y or Z. Given a genuinely tilted up vector the geometry used to fall back to the *dominant* component — reporting the extent along the nearest axis as the height, and carrying that into the footprint ring, the exported GeoJSON and KML polygons, and the compound-CRS vertical conversion. It now throws instead. No scan can currently trigger this: every world-up the viewer sets is exactly (0, ±1, 0) or (0, 0, ±1), chosen by source format, so the refusal guards the contract rather than gating a feature. Genuinely oriented boxes need a stored basis instead of an axis index, which is a stable-v0.6 item alongside the project frame — the two are the same "arbitrary frames" problem.
 
-## Vertical-unit gaps the v0.6.1 audit found and did not close
+## Vertical-unit gaps still open
 
-The audit that produced this release's three fixes found five more places where
-a vertical unit is unstated, unused, or mixed with a horizontal one. None is
-reachable through the shipped pipeline today, which is why they are recorded
-here instead of fixed under a patch version, and each says what would make it
-reachable.
+Four of the five vertical-unit gaps the v0.6.1 audit recorded are closed in v0.6.2: the contour deliverable's GeoTIFF states its vertical unit, the async and GPU derivative path carries the `zScale`, `geodesicFill` walks in metres, and the unused elevation-grid hillshade wrappers are deleted. One remains.
 
-- **The contour deliverable's GeoTIFF omits the vertical unit.** The standalone
-  DEM package writes `VerticalUnitsGeoKey` (4099) beside the vertical datum
-  (4096); the DTM raster inside the contour deliverable
-  (`src/terrain/export/contourDeliverableBuild.ts`) does not pass the vertical
-  unit to the writer, so a compound-CRS raster from that path leaves its
-  vertical unit unstated. A reader takes what it assumes. The two export paths
-  should write the same key set.
-- **The async and GPU terrain-derivative path takes no `zScale`.** The
-  synchronous path applies a vertical-unit factor; the async/GPU entry point has
-  no parameter to receive one. It is not reachable today, because the live
-  pipeline uses the synchronous path, and it becomes a wrong slope on the day
-  the documented async adoption lands, not before.
-- **`geodesicFill` mixes horizontal and vertical units in its step cost.** The
-  cost combines a horizontal step in source units with a vertical difference in
-  metres, which degrades the void-fill weighting on a geographic (degree) DTM,
-  where the two are not comparable quantities. This affects the non-default
-  geodesic interpolation mode only; the default fill is unaffected.
-- **The convenience hillshade wrappers assume isotropic cells and no vertical
-  scaling.** The wrappers in `src/terrain/surface/hillshade.ts` hard-code a
-  single cell size and no vertical-unit factor. They have no live caller, so no
-  shipped figure comes from them; they are a trap for a future one.
 - **`toGeoJSONWgs84` writes a source-unit height into an RFC 7946 ordinate.**
   When the vertical datum is EPSG:4979 the elevation goes into the third
   position ordinate, which RFC 7946 requires in metres, while the value is in
   source units. A foot factor together with a 4979 datum is self-contradictory
   and may be unreachable in practice, but nothing in the code enforces that, so
   the combination is not refused either.
+
+## What the validation suites do not cover
+
+Each suite states its own gaps rather than leaving them implicit. A check that cannot fail in the environment it runs in would pass without evidence, so these are named instead of tested.
+
+- **GPU-computed derivatives beyond the engine probe surfaces.** The WebGPU
+  backend takes the same cell-metres and `zScale` arguments as the CPU one, but
+  Node has no adapter, so the engine falls back to CPU and a unit check there
+  would test the CPU path twice. GPU-versus-CPU agreement is established by the
+  engine's own equivalence probe, which runs in a browser and covers the probe
+  surfaces only.
+- **Render-space lengths and the measurement HUD.** Values are read back from
+  three.js world transforms, which need a WebGL context.
+- **Rasterised report composition.** Colorbar and legend tick labels, the
+  on-canvas scan report drawing paths and the PDF report's page composition all
+  need a canvas context. Only the pure label and figure builders behind them are
+  checked. The unit strings a page prints come from those builders; the rendered
+  page itself is not inspected.
+- **LAZ output.** `CONVERT_FORMATS.laz.available` is false: there is no LAZ
+  encoder, so there is no LAZ file of the application's own to read back. The
+  LAZ read path shares record decoding with the `.las` path that is exercised,
+  but the compression leg is untested.
+- **Third-party writer conformance.** The round-trip suite reads every file back
+  with an independent ASPRS spec-offset decoder in float64 alongside the
+  application's own loader, which is two readers over one writer. Whether PDAL,
+  lastools or a commercial writer produces files this reader handles, and
+  whether they accept these files, is not measured.
+- **`npm ci` and a build from a clean extract.** The archive-portability suite
+  runs the archive's node-only verification inside an extract with no repository
+  around it. A tool that cannot start without `node_modules` is recorded as
+  needing dependencies, and one that needs a build is recorded as needing a
+  build, rather than counted as a pass. Neither the install nor the build is
+  performed there.
+- **Windows as a reproducibility leg.** The portability matrix is darwin-arm64
+  and linux-x64. Untested platforms, other runtime versions and big-endian hosts
+  are outside the result.
+
+## The in-memory reconstruction is less precise than the file it came from
+
+Points are held as Float32 local to a render origin, so what the application reconstructs from a LAS file displaces further than the file's own quantisation bound allows. The round-trip suite measures both and reports them separately.
+
+Over a 50 km extent at millimetre scale the file round-trips with zero displacement while the application's read-back reaches 1.9 mm. Over a 5000 km extent, where the writer widens the scale to stay inside int32, the file's own bound is 1.25 mm and the application's read-back reaches 0.123 m. The written file is unaffected either way. What the figures describe is the resolution of what the viewer holds, measures and derives from, and it grows with the extent of the cloud rather than with the declared scale.
+
+A wide-area cloud is the case to watch.
+
+## Cross-platform reproducibility is not yet established
+
+The comparator, the per-platform recorder and a CI matrix over darwin-arm64 and linux-x64 are in place, and both legs always run so that a failed leg cannot leave a one-platform comparison looking green. The only run recorded in the tree is a single darwin-arm64 leg, which reports as `single-platform` with `claimEstablished: false`.
+
+That leg establishes seeded reproducibility on one platform: 15 science-scoped artifact hashes and 18 scalars identical across ten runs at zero tolerance.
+
+Nothing has been compared against them.
