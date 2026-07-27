@@ -883,20 +883,22 @@ describe('unit integrity: declared-unit contract', () => {
   });
 
   /**
-   * The scan-report renderer's own label family resolves an unresolved unit to
-   * 'm'. That is the OPPOSITE policy from `verticalUnitSuffix`, and both ship.
-   * Pinned as a known divergence so the two cannot silently swap behaviour;
-   * see the note in the suite report.
+   * The scan-report renderer's label family follows the same rule as
+   * `verticalUnitSuffix`: an unresolved unit is reported as unresolved, not as
+   * metres. Pinned so the two cannot drift back apart.
    */
-  test('the scan-report renderer resolves an unknown linear unit to metres', () => {
+  test('the scan-report renderer reports an unknown linear unit as unresolved', () => {
     expect(linearUnitOf(undefined)).toBe('unknown');
     expect(linearUnitOf(null)).toBe('unknown');
     expect(linearUnitOf('foot')).toBe('foot');
     expect(linearUnitOf('US survey foot')).toBe('foot');
     expect(linearUnitOf('metre')).toBe('metre');
-    // The divergence: 'unknown' renders as 'm'.
-    expect(linearUnitLabel('unknown')).toBe('m');
+    expect(linearUnitLabel('unknown')).toBe('units');
+    expect(linearUnitLabel('unknown')).not.toBe('m');
+    expect(linearUnitLabel('metre')).toBe('m');
     expect(linearUnitLabel('foot')).toBe('ft');
+    // Both families refuse to assert metres for an unresolved unit.
+    expect(verticalUnitSuffix(null)).not.toBe(' m');
   });
 
   /**

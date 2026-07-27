@@ -412,21 +412,33 @@ export function linearUnitOf(unit: string | null | undefined): LinearUnit {
   return 'unknown';
 }
 
-/** Short axis label: `ft` for foot scans, else `m`. */
-export function linearUnitLabel(unit: LinearUnit): 'm' | 'ft' {
-  return unit === 'foot' ? 'ft' : 'm';
+/**
+ * Short axis label: `ft` for foot scans, `m` for metre scans, `units` when the
+ * CRS did not resolve. An unresolved unit is not metres, and labelling it `m`
+ * asserts a scale nobody verified — the same rule the vertical suffix helper
+ * (`verticalUnitSuffix` in units.ts) applies on the vertical axis. `units`
+ * keeps every call site printable; no label renders empty.
+ */
+export function linearUnitLabel(unit: LinearUnit): 'm' | 'ft' | 'units' {
+  if (unit === 'foot') return 'ft';
+  return unit === 'metre' ? 'm' : 'units';
 }
 
 /**
  * Format a length given in the scan's NATIVE units, labelled with the correct
  * unit. Coordinates are stored native (not pre-converted to metres), so a
  * foot-CRS value must read "ft", never "m". Foot values stay in feet (no km/cm
- * regrouping, which only makes sense for metres); metre and unknown units use
- * the metre formatter.
+ * regrouping, which only makes sense for metres); metre units use the metre
+ * formatter. An unresolved unit reads "units" and is not regrouped either —
+ * km/cm prefixes would assert the metre scale the CRS never established,
+ * matching {@link linearUnitLabel}.
  */
 export function formatLinear(value: number, unit: LinearUnit): string {
   if (unit === 'foot') {
     return Math.abs(value) >= 10 ? `${value.toFixed(1)} ft` : `${value.toFixed(2)} ft`;
+  }
+  if (unit === 'unknown') {
+    return Math.abs(value) >= 10 ? `${value.toFixed(1)} units` : `${value.toFixed(2)} units`;
   }
   return formatMetres(value);
 }
