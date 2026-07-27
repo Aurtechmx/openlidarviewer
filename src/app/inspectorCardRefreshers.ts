@@ -48,6 +48,7 @@ export interface InspectorCardRefreshers {
         readonly max?: readonly [number, number, number] | number[];
       };
     };
+    crs?(): { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
   }): void;
   /**
    * Fold a real analysed-point count from a finished terrain run into the
@@ -182,6 +183,7 @@ export function createInspectorCardRefreshers(
         readonly max?: readonly [number, number, number] | number[];
       };
     };
+    crs?(): { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
   }): void {
     try {
       const sourcePoints = cloud.sourcePointCount;
@@ -192,7 +194,14 @@ export function createInspectorCardRefreshers(
         const dx = hMax[0] - hMin[0];
         const dy = hMax[1] - hMin[1];
         const dz = hMax[2] - hMin[2];
-        const v = dx * dy * dz;
+        // Cubic METRES, for the same reason the static path above converts: a
+        // state-plane-feet tile's header box is 35.31x larger in raw units, so
+        // the per-m³ bucketing dropped a genuine QL1 survey a whole tier. The
+        // header carries source units; the CRS carries the factors.
+        const crs = cloud.crs?.() ?? null;
+        const mpu = crs?.linearUnitToMetres ?? 1;
+        const vmpu = crs?.verticalUnitToMetres ?? mpu;
+        const v = dx * dy * dz * mpu * mpu * vmpu;
         if (Number.isFinite(v) && v > 0) bboxVolume = v;
       }
       const summary = {
