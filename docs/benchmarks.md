@@ -441,6 +441,273 @@ control at zero on every quantity:
 Every quantity sits inside the f32 representation floor. Nothing was found above
 it, and no threshold was adjusted.
 
+## Seed sensitivity: how much of a figure is the draw
+
+`benchmark:repro` fixes seed `20260726`, runs the analysis ten times and
+requires every science-scoped hash and every scalar to be identical at a
+tolerance of exactly zero. That establishes determinism at one seed. Stability
+is a different claim, and the gap between them is not academic: a pipeline can
+be bit-exact on replay and still return a materially different answer for the
+next draw from the same distribution, in which case every published figure is a
+property of one fixture rather than of the method.
+
+```
+npm run benchmark:seeds
+```
+
+Thirty-two independently seeded fixtures from the same generator at the same
+density, 60,000 points each on the 2 m grid, and the analysis run over every
+one. Output lands in `benchmark-results/seeds/` as `sweep.json` and
+`summary.md`; every figure in the summary is recomputable from the raw values
+the JSON carries.
+
+### The classification is written before the sweep runs
+
+`benchmarks/seed/classification.ts` places every published scalar in one of two
+groups, with the reason, and every invariant tolerance with the magnitude it was
+derived from. Nothing is classified after seeing a result.
+
+**Invariant.** Fixed by the configuration or by the surface definition rather
+than by which points were drawn. The DTM grid geometry follows from the tile
+extent and the cell size, both pinned. The fitted slope of a planar fixture
+follows from the plane. These are asserted.
+
+**Variable.** Properties of the sample: the extreme elevations are order
+statistics of the draw, the surviving return count is the ground filter's
+verdict on one set of returns, the contour counts follow the realised surface. A
+distribution is reported and nothing is asserted. An assertion over a random
+quantity either holds by construction or fails at a rate nobody chose. The
+specific shape avoided is a check of the form "run 1 falls inside the IQR of the
+rest", which under a stationary process fails about half the time. The warm-up
+order statistics elsewhere in this document are diagnostics for the same
+reason.
+
+There is no third category. `contourIntervalM` is the quantity that invites one:
+every seed in the recorded sweep landed on 0.5 m, but the interval is selected
+from the realised relief, so it is a function of the sample and is classified
+variable. One distinct value over a finite sweep is not invariance.
+
+### What was asserted, and what it cost
+
+| quantity | unit | value over 32 seeds | observed range | tolerance | fraction of tolerance used |
+| --- | --- | --- | --- | --- | --- |
+| `cellSizeM` | m | 2 | 0 | 0 | exact |
+| `gridCols` | count | 62 | 0 | 0 | exact |
+| `gridRows` | count | 62 | 0 | 0 | exact |
+| `gridCellCount` | count | 3844 | 0 | 0 | exact |
+| `planeMeanSlope` | rise/run | 0.100089 to 0.100141 | 5.14e-5 | 6.0e-4 | 0.086 |
+
+The grid geometry is tolerated at exactly zero because the fixture is pinned
+away from a cell boundary. 60,000 points at 4 pts/m² is a 122.474 m tile, which
+is 61.24 cells on the 2 m grid: 0.474 m of margin to the nearest boundary
+against a smallest-drawn-coordinate fluctuation of about 2 mm. A draw would have
+to consume 232 times its own scale to move a column count.
+
+The plane tolerance is a noise-propagation bound, not a figure read off a run.
+Each cell aggregates about 20 returns by median, so the per-cell noise is
+0.05/sqrt(20) = 1.12e-2 m; the Horn stencil turns independent per-cell noise of
+sd *s* into sqrt(12)·*s*/(8·cellSize) = 0.217·*s* per gradient component;
+averaging over 9,604 interior cells divides by 98, and a factor 3 is carried for
+the overlap between neighbouring stencils. That predicts a seed-to-seed sd of
+7.4e-5 and a 32-draw range near 3e-4, and the tolerance is twice that. The
+observed range used 8.6 % of it. The bound is conservative and is reported as a
+bound; if a future sweep consumed it, the finding would be that this derivation
+is wrong.
+
+### What varies, and by how much
+
+| quantity | mean | sd | CV | min | max | distinct |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sourcePointCount` | 51,672 | 77.2 | 0.0015 | 51,534 | 51,845 | 32 |
+| `elevationMinM` | −0.4989 | 0.0224 | n/a | −0.5470 | −0.4438 | 32 |
+| `elevationMaxM` | 6.0965 | 0.0686 | 0.011 | 5.9551 | 6.2654 | 32 |
+| `elevationRangeM` | 6.5954 | 0.0717 | 0.011 | 6.4458 | 6.7458 | 32 |
+| `meanConfidence` | 68.742 | 0.877 | 0.013 | 65.944 | 70.369 | 32 |
+| `qualityScore` | 78.97 | 0.177 | 0.0022 | 78 | 79 | 2 |
+| `contourIntervalM` | 0.5 | 0 | 0 | 0.5 | 0.5 | 1 |
+| `contourLevelCount` | 13.47 | 0.567 | 0.042 | 12 | 14 | 3 |
+| `contourPolylineCount` | 93.6 | 4.17 | 0.045 | 84 | 101 | 13 |
+| `contourFeatureCount` | 423.1 | 105 | 0.248 | 139 | 559 | 31 |
+| `contourLabelCount` | 3.47 | 0.842 | 0.243 | 1 | 5 | 5 |
+
+`elevationMinM` has no CV column because its mean is negative, where sd/mean
+flips sign and reads as a spread it is not.
+
+The largest movers are the contour feature and label counts, at CVs near 0.25.
+A feature count quoted for one fixture is a quarter-scale statement about the
+method. The application's own science content hash takes 32 distinct values over
+32 seeds, which is the direct contrast with the reproducibility suite: ten runs
+at one seed share one hash, and no two seeds do.
+
+### Nine quantities are published to more digits than they support
+
+A quantity whose seed-to-seed sd exceeds the quantum it is printed at carries
+digits the measurement does not support. The comparison uses sd rather than
+range, because sd is the scale a reader attaches to a single figure and does not
+grow with n.
+
+| quantity | sd across seeds | published quantum | decimals supported |
+| --- | --- | --- | --- |
+| `sourcePointCount` | 77.2 | 1 | 0 |
+| `analyzedPointCount` | 77.2 | 1 | 0 |
+| `elevationMinM` | 0.0224 m | 0.01 m | 1 |
+| `elevationMaxM` | 0.0686 m | 0.01 m | 1 |
+| `elevationRangeM` | 0.0717 m | 0.01 m | 1 |
+| `meanConfidence` | 0.877 | 1e-6 | 0 |
+| `qualityScore` | 0.177 | 0.1 | 0 |
+| `contourPolylineCount` | 4.17 | 1 | 0 |
+| `contourFeatureCount` | 105 | 1 | 0 |
+
+`meanConfidence` is the widest gap: printed to six decimals, stable to none of
+them.
+
+These are findings about the reporting rather than defects in the pipeline. A
+quantity that follows the sample is supposed to follow the sample. The suite
+records them and does not fail on them, because a red light that can never go
+green is a light everyone learns to ignore. Check the tables above, or
+`benchmark-results/seeds/summary.md`, before quoting any of these figures to
+their printed precision.
+
+### What n = 32 resolves
+
+A coefficient of variation estimated from n samples carries a relative standard
+error of about 1/sqrt(2(n−1)), which at n = 32 is 0.127. A CV printed above is
+good to roughly ±13 % of itself at one standard error and ±25 % across a 95 %
+interval: the 0.011 on `elevationRangeM` is consistent with anything from about
+0.008 to 0.014. It separates sub-percent from several-percent. It does not
+separate 0.010 from 0.013, and no figure here should be read as if it did.
+
+It resolves the tails not at all. The min and max columns are the two most
+extreme of 32 draws and nothing more; a quantity well behaved over this sweep
+may still have a seed that breaks it.
+
+Thirty-two is where the suite stays fast enough to run on every commit, about
+12 s. The interval is stated rather than bought down.
+
+### Named limits
+
+The fixture PRNG is mulberry32, whose state update is an addition, so two seeds
+differing by a constant produce streams that differ by that constant before the
+avalanche mixes them. The mixing is what makes 32 distinct seeds behave like 32
+draws, and this suite does not test the mixing: what it establishes is the
+spread over 32 seeds of this generator, not over an ideal resampling of the
+distribution. Seeds are spread on a prime stride rather than taken
+consecutively, and none of them is `20260726`.
+
+Timing, memory and throughput are out of scope. They vary with the host far more
+than with the seed, and the scaling suite owns them. So is every browser-only
+quantity, and every parameter other than the seed. So is real scan data: one
+synthetic generator with one surface model produces every fixture here, and the
+spread reported generalises to no field dataset.
+
+## Clean-clone CI: can a stranger reproduce this
+
+```
+npm run benchmark:clean-clone            # presence leg, seconds
+npm run benchmark:clean-clone:install    # + npm ci, build, docs. Minutes.
+```
+
+`.github/workflows/clean-clone.yml` runs the same thing on a fresh
+`actions/checkout` with every cache off. `setup-node` is configured without
+`cache: npm`, so `npm ci` resolves the lockfile against the registry rather than
+against a store some earlier run populated.
+
+A workflow that restored a cached artifact would prove nothing about what the
+repository publishes.
+
+### What it does not duplicate
+
+`benchmark:archive-portability` already checks an extracted release archive with
+no repository around it: every link resolves, every import has a manifest entry,
+every documented script exists. It recorded the install and build leg as unrun,
+because an archive has no lockfile install to perform. That leg is this
+workflow's job: `npm ci`, `check:deps`, `build`, `check:bundle`, `docs:build`.
+It is the whole of the difference between the two.
+
+### How a missing file actually fails
+
+The tree under test carries tracked content at the commit and nothing else. In
+CI that is what `actions/checkout` produces; locally `verify-clean-clone.mjs`
+materialises it with `git archive HEAD`. An untracked file, a gitignored
+fixture, a build artefact left in a working directory and a tool that exists
+only on the author's machine are all absent from it by construction, so anything
+that needs one fails there while passing in the working tree.
+
+The repository has been bitten by exactly this. `.gitignore` carries a note
+about an unanchored `build` pattern that matched `src/build/`, untracking
+`src/build/buildIdentity.ts` and breaking a clean checkout's typecheck while
+every working tree kept building. That file is named in the script's required
+list with that reason attached.
+
+### The check is proved capable of failing
+
+`verify-clean-clone.mjs --drop <path>` removes a named file from the
+materialised tree and must exit non-zero. The workflow's `negative-control` job
+runs it on `src/build/buildIdentity.ts` and on `scripts/lint-sbom.mjs`, and
+fails if either comes back green. It then runs the intact tree once more, to
+show the check still passes when nothing is missing.
+
+Without that job the presence check could be green because it can never be
+red.
+
+Locally, the two drops report:
+
+```
+required file absent from a clean clone: src/build/buildIdentity.ts
+an npm script runs a file a clean clone does not have: scripts/lint-sbom.mjs
+```
+
+both at exit 1, against exit 0 for the intact tree.
+
+### What it cannot establish
+
+A clean clone on a GitHub runner is one operating system, one Node version and
+one registry state. It says nothing about a machine behind a proxy, an
+air-gapped install, or a dependency later yanked from the registry. The
+workflow runs weekly as well as on tags for that reason: a clean-clone break is
+often caused by something outside the commit that broke it.
+
+Uncommitted work is invisible to the local script by design. It materialises
+`HEAD`, and a stranger only gets what was pushed.
+
+## The publication battery
+
+```
+npm run benchmark:publication:quick    # the fast subset, before a push
+npm run benchmark:publication:verify   # every suite behind a published claim
+```
+
+Both write `benchmark-results/publication/battery-<tier>.json` and a Markdown
+summary beside it, with one row per suite carrying its status, its duration and
+the claim its evidence backs. Four statuses, counted separately and never
+merged: `passed`, `failed`, `skipped` with the reason it could not run, and
+`not-run` for a suite the battery never reached.
+
+A suite that did not run is never printed as one that passed. The distinction has
+mattered twice in this program: once for the browser benchmark recorded under
+`notRun` rather than as a zero, once for a portability comparison that would have
+published a single-platform result as if it were a comparison.
+
+The registry in `scripts/publication-battery.mjs` is the single list. `:verify`
+is defined as everything in it, so a suite cannot be added without appearing
+there, and the summary names every suite the running tier omitted.
+
+`:quick` omits `backends`, `repro`, `scaling`, `result-verify`, `backends:gpu`
+and `compare-platforms`: everything that measures rather than checks, plus the
+two legs that need hardware or a second machine. What it runs is the correctness
+set, in about 26 s: units, round-trip, contours, provenance, failure recovery,
+seed sensitivity, archive portability, clean clone.
+
+A green `:quick` is not a publication result, and the summary says so under its
+own heading.
+
+`:verify` fails on any suite that ran and failed, and on any *required* suite
+that was skipped. Two suites are registered as not required, each with the
+reason it cannot run in Node: `backends:gpu` needs a browser with a real WebGPU
+adapter, and `compare-platforms` needs two recorded platform legs, which one
+machine cannot produce. Both report as skipped with those reasons rather than
+being quietly dropped from the list.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather
