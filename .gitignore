@@ -130,3 +130,9 @@ reports/
 
 # Local authoring tools, not part of the project.
 _private/
+
+# Reachability run output. The claim registry (validation/reachability/
+# claims.json) is committed; the witnesses a run leaves behind are not — a
+# checkout with no run of its own should read as not-executed, not as green.
+/validation/reachability/ledger/
+/validation/reachability/summary.json

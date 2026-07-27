@@ -61,6 +61,10 @@ import {
   type Pt,
 } from './contourSurfaces';
 
+import { witnessSuite } from './reachability';
+
+witnessSuite('contour-generation');
+
 // ── pre-registered tolerances ──────────────────────────────────────────────
 
 /**

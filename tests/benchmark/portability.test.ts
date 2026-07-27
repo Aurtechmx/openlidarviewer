@@ -30,6 +30,9 @@ import {
 import { comparisonCsv, comparisonMarkdown } from '../../benchmarks/portability/render';
 import { PORTABILITY_SCHEMA_VERSION, type PlatformRecord } from '../../benchmarks/portability/record';
 import { detectEndianness, platformId } from '../../benchmarks/portability/preconditions';
+import { witnessSuite } from './reachability';
+
+witnessSuite('platform-portability');
 import {
   PLATFORM_RECORD_FILE,
   readPlatformLeg,
