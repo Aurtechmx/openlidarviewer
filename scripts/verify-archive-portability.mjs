@@ -221,8 +221,10 @@ check('documented-scripts-exist', 'every `npm run` command named in shipping doc
 
 /**
  * Run the archive's own dependency-free verification, inside the archive.
- * A tool that cannot start without node_modules is recorded as `needs-deps`
- * rather than counted as a pass — an unrunnable check is not a green one.
+ * A tool that cannot start is recorded as unrun rather than counted as a pass,
+ * because an unrunnable check is not a green one: `needs-install` without
+ * node_modules, `needs-build` without a bundle, `needs-repo` when the check's
+ * subject is the repository the archive was cut from.
  */
 check('archive-self-verification', 'the archive’s own node-only verification scripts run and pass inside the archive', (c) => {
   const f = [];
@@ -267,6 +269,12 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     }
     if (code !== 0 && /No build found/.test(out)) {
       ran.push({ name, status: 'needs-build' });
+      continue;
+    }
+    // A check whose subject is the repository cannot run against an extract by
+    // definition: the extract is what it would have been asked to produce.
+    if (code !== 0 && /needs a git repository|not a git repository/.test(out)) {
+      ran.push({ name, status: 'needs-repo' });
       continue;
     }
     ran.push({ name, status: code === 0 ? 'pass' : 'fail', exit: code });
