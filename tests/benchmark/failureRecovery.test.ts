@@ -76,6 +76,9 @@ import type { Measurement, Vec3 } from '../../src/render/measure/types';
 
 import { measured, unavailable, isMeasured, isUnavailable } from '../../benchmarks/framework/types';
 import { startMemorySampler } from '../../benchmarks/framework/memory';
+import { witnessSuite } from './reachability';
+
+witnessSuite('failure-recovery');
 import { runStage, runStageAsync } from '../../benchmarks/framework/stage';
 import { summariseRuns } from '../../benchmarks/runner/summarise';
 

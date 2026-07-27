@@ -44,6 +44,10 @@ import {
   F32_REL,
 } from './roundtripFidelity';
 
+import { witnessSuite } from './reachability';
+
+witnessSuite('export-writers');
+
 const buf = (b: Uint8Array): ArrayBuffer =>
   b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 
