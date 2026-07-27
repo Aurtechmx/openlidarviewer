@@ -1,6 +1,6 @@
 # Known limitations: OpenLiDARViewer v0.6.2
 
-This is a validation-and-correction release. Ten validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered. They are recorded here rather than hidden, in keeping with the project's honesty contract.
+This is a validation-and-correction release. Ten validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. Twelve of the eighteen were exposed by a validation suite and six by code review. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered.
 
 Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.2.md`. One of them is a correction to the previous version of this file: its scope statement for the `geodesicFill` unit-mixing defect was wrong.
 

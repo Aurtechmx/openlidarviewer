@@ -8,8 +8,11 @@ A validation-and-correction release. Ten validation suites were added, covering
 reproducibility, scaling, cross-platform portability, GPU-versus-CPU backend
 equivalence, failure recovery, provenance integrity, contour correctness, LAS
 round-trip fidelity, unit integrity and archive portability. Eighteen defects
-are fixed: four carried from the v0.6.1 vertical-unit audit, fourteen found by
-the new suites. The evidence ceiling moves from one cross-implemented product to
+are fixed. Twelve were exposed by a validation suite; six came from code review,
+five of those carried from the v0.6.1 vertical-unit audit. Every one was missed
+by the test suite as it stood at v0.6.1, which passes on the defective code.
+Per-defect records are in `validation/defects/defect-registry.json`.
+The evidence ceiling moves from one cross-implemented product to
 three, with aspect and hillshade joining slope at E4 against GDAL 3.13.1 on the
 shared analytic DEM. The reproducibility comparator and its two-platform CI
 matrix, darwin-arm64 and linux-x64, are in place, and the two-platform result is
