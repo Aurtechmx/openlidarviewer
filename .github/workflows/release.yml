@@ -67,7 +67,11 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     needs: validate
-    timeout-minutes: 90
+    # The mutation stage runs 188 mutants over the numeric core at ~174 tests
+    # each, about an hour on this runner class, and coverage precedes it. The
+    # 90 minute budget fitted only while a TypeScript 7 incompatibility made
+    # Stryker exit in seconds; a run that finishes needs the larger one.
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v7
         with:
