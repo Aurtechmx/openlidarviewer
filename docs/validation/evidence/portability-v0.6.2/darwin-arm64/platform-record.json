@@ -1,0 +1,165 @@
+{
+  "portabilitySchemaVersion": 1,
+  "benchmarkSchemaVersion": 2,
+  "platformId": "darwin-arm64",
+  "environment": {
+    "platformId": "darwin-arm64",
+    "endianness": "LE",
+    "os": {
+      "status": "captured",
+      "value": "darwin 25.4.0"
+    },
+    "arch": {
+      "status": "captured",
+      "value": "arm64"
+    },
+    "cpuModel": {
+      "status": "captured",
+      "value": "Apple M1 (Virtual)"
+    },
+    "logicalCpuCount": {
+      "status": "captured",
+      "value": "3"
+    },
+    "totalMemoryBytes": {
+      "status": "captured",
+      "value": "7516192768"
+    },
+    "loadAverage": {
+      "status": "captured",
+      "value": "10.88 11.31 11.32"
+    },
+    "nodeVersion": {
+      "status": "captured",
+      "value": "v22.23.1"
+    },
+    "npmVersion": {
+      "status": "captured",
+      "value": "10.9.8"
+    },
+    "v8Version": {
+      "status": "captured",
+      "value": "12.4.254.21-node.56"
+    }
+  },
+  "evaluated": {
+    "commit": {
+      "status": "captured",
+      "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+    },
+    "commitShort": {
+      "status": "captured",
+      "value": "50e76d2"
+    },
+    "workingTree": {
+      "status": "captured",
+      "value": "clean"
+    },
+    "releaseVersion": {
+      "status": "captured",
+      "value": "0.6.1"
+    },
+    "lockfileSha256": {
+      "status": "captured",
+      "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+    },
+    "config": {
+      "suiteId": "reproducibility",
+      "seed": 20260726,
+      "pointCount": 250000,
+      "warmupRuns": 6,
+      "recordedRuns": 10,
+      "terrain": {
+        "cellSizeM": 2,
+        "crs": "EPSG:32610",
+        "verticalDatum": "EPSG:5703",
+        "holdoutSeed": 1
+      },
+      "scalarTolerance": 0
+    },
+    "benchmarkPackageVersion": "1.1.0"
+  },
+  "fixture": {
+    "datasetId": "synthetic-250000-seed20260726",
+    "seed": 20260726,
+    "requestedPointCount": 250000,
+    "generatedPointCount": 250000,
+    "sourceCloudHash": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+    "descriptorHash": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9"
+  },
+  "science": {
+    "hashes": {
+      "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+      "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+      "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+      "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+      "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+      "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+      "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+      "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+      "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+      "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+      "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+      "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+      "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+      "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+      "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+    },
+    "scalars": {
+      "gridCols": 125,
+      "gridRows": 125,
+      "gridCellCount": 15625,
+      "cellSizeM": 2,
+      "elevationMinM": -1.0761682987213135,
+      "elevationMaxM": 15.386188507080078,
+      "elevationRangeM": 16.46235680580139,
+      "meanConfidence": 70.191552,
+      "qualityScore": 82,
+      "qualityBand": "excellent",
+      "contourIntervalM": 0.5,
+      "contourLevelCount": 33,
+      "contourPolylineCount": 229,
+      "contourFeatureCount": 731,
+      "contourLabelCount": 16,
+      "sourcePointCount": 225262,
+      "analyzedPointCount": 225262,
+      "applicationContentHash": "299b2ad5"
+    },
+    "applicationContentHash": "299b2ad5"
+  },
+  "buildScopedHashes": {
+    "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+    "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+  },
+  "internal": {
+    "pass": true,
+    "failures": [],
+    "scienceHashesStable": true,
+    "scalarsStable": true,
+    "manifestVerifiedOnEveryRun": true,
+    "recordedRuns": 10,
+    "warmupRunsCompleted": 6
+  },
+  "timing": {
+    "medianAnalysisMs": {
+      "value": 1305.1736865,
+      "unit": "ms",
+      "reason": null
+    },
+    "analysisCv": {
+      "value": 0.05316730554592729,
+      "unit": "ratio",
+      "reason": null
+    },
+    "medianPipelineTotalMs": {
+      "value": 1372.8472275000001,
+      "unit": "ms",
+      "reason": null
+    },
+    "peakRssBytes": {
+      "value": 440418304,
+      "unit": "bytes",
+      "reason": null
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "portabilitySchemaVersion": 1,
+  "benchmarkPackageVersion": "1.1.0",
+  "kind": "platform",
+  "platformId": "linux-x64",
+  "commit": {
+    "status": "captured",
+    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+  },
+  "startedAtUtc": "2026-07-26T21:47:56.537Z",
+  "completedAtUtc": "2026-07-26T21:48:21.325Z",
+  "command": "npm run benchmark:repro:portable",
+  "files": [
+    {
+      "path": "environment.json",
+      "sha256": "f79cbc2a92a5c144b34cb065af541a8974a95898e373e1d8428fe39578e954b4",
+      "bytes": 965
+    },
+    {
+      "path": "platform-record.json",
+      "sha256": "bdcbf4494d9456446ab69634e87b89793548042e41e88d952d5cc02407f3b6d3",
+      "bytes": 5120
+    },
+    {
+      "path": "science-hashes.json",
+      "sha256": "82a62437f1908a7e200cb051c5ccbcd289168ccac594c31d31ec7e2d3dcc5947",
+      "bytes": 18720
+    }
+  ]
+}
