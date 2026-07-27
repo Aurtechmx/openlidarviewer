@@ -226,15 +226,18 @@ export function convertCloud(
     } else {
       // LAS 1.2 stores the classification in 5 bits — count what the mask
       // will destroy and say so, instead of silently zeroing class 64 etc.
+      // The writer masks (`& 0x1f`), so a class above 31 WRAPS: it is not
+      // pinned to 31. The message states the wrap, because a reader told
+      // "clamped" would expect 64 to arrive as 31 when it arrives as 0.
       if (g.classification) {
-        let clamped = 0;
+        let wrapped = 0;
         for (let i = 0; i < g.count; i++) {
-          if (g.classification[i] > 31) clamped++;
+          if (g.classification[i] > 31) wrapped++;
         }
-        if (clamped > 0) {
+        if (wrapped > 0) {
           log.push({
             level: 'warn',
-            message: `LAS 1.2 stores 5-bit classes — ${clamped.toLocaleString()} points with classes > 31 were clamped; use LAS 1.4 to preserve them.`,
+            message: `LAS 1.2 stores 5-bit classes — ${wrapped.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.`,
           });
         }
       }

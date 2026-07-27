@@ -207,14 +207,21 @@ describe('LAS 1.2 classification clamp warning (convertCloud)', () => {
     });
   }
 
-  it('warns per file when classes > 31 are clamped by the 1.2 writer', () => {
+  it('warns per file that classes > 31 WRAP in the 1.2 writer, not clamp', () => {
     const { report } = convertCloud(cloudWithHighClasses(), { format: 'las' });
     expect(report.ok).toBe(true);
     // 2 of the 3 points (classes 64 and 200) exceed the 5-bit field.
     expect(report.log).toContainEqual({
       level: 'warn',
-      message: 'LAS 1.2 stores 5-bit classes — 2 points with classes > 31 were clamped; use LAS 1.4 to preserve them.',
+      message:
+        'LAS 1.2 stores 5-bit classes — 2 points with classes > 31 wrap to their low 5 bits (class & 31), so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.',
     });
+    // The verb has to match the writer. `& 0x1f` sends 64 to 0 and 200 to 8;
+    // a clamp would have produced 31 for both.
+    const warn = report.log.find((e) => e.level === 'warn')!;
+    expect(warn.message).not.toMatch(/clamp/i);
+    expect(64 & 0x1f).toBe(0);
+    expect(200 & 0x1f).toBe(8);
   });
 
   it('does not warn when no class exceeds 31, nor on the LAS 1.4 path', async () => {
