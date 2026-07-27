@@ -83,10 +83,18 @@ function polyAreaHorizontal(points: readonly Vec3[]): number {
   return Math.abs(twiceArea) * 0.5;
 }
 
+/**
+ * Grade as a percentage, matching `render/measure/geometry.ts`'s
+ * `gradePercentOf`. A zero horizontal run has no grade at all, so it yields
+ * ±Infinity and the caller renders the word "vertical" — the same answer the
+ * live overlay gives. Returning 0 here instead stated a level grade for a
+ * vertical face, which is the one number in this module a reader could not
+ * have caught.
+ */
 function slopePercent(a: Vec3, b: Vec3): number {
   const dz = b[2] - a[2];
   const dxy = Math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2);
-  if (dxy === 0) return 0;
+  if (dxy === 0) return dz === 0 ? 0 : dz > 0 ? Infinity : -Infinity;
   return (dz / dxy) * 100;
 }
 
@@ -106,6 +114,11 @@ function angleAtVertex(a: Vec3, b: Vec3, c: Vec3): number {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function formatLinear(metres: number, system: UnitSystem): string {
+  // A non-finite length is not a length. Without this the cm branch below
+  // printed "NaN cm" and the km branch "Infinity km" into the PDF, while
+  // `formatVolume` two functions down already returned an em dash for the same
+  // input.
+  if (!Number.isFinite(metres)) return '—';
   if (system === 'imperial') {
     const ft = metres * 3.28084;
     if (ft >= 5280) return `${(ft / 5280).toFixed(2)} mi`;
@@ -164,10 +177,14 @@ function computeValue(m: Measurement, system: UnitSystem, f: number): string {
       return m.points.length >= 3
         ? `${angleAtVertex(m.points[0], m.points[1], m.points[2]).toFixed(1)}°`
         : '—';
-    case 'slope':
-      return m.points.length >= 2
-        ? `${slopePercent(m.points[0], m.points[1]).toFixed(2)}%`
-        : '—';
+    case 'slope': {
+      if (m.points.length < 2) return '—';
+      const grade = slopePercent(m.points[0], m.points[1]);
+      // Same wording as `formatGrade` in render/measure/format.ts, so the PDF
+      // and the overlay describe a vertical pair identically. The report keeps
+      // its own two-decimal precision.
+      return Number.isFinite(grade) ? `${grade.toFixed(2)}%` : 'vertical';
+    }
     case 'profile': {
       // Profile reports the 3D length as its headline value; the rest of
       // the metrics (Δh, grade) live in the live overlay and will be

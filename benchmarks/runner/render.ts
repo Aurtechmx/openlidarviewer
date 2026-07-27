@@ -208,6 +208,41 @@ export function reproducibilityMarkdown(summary: ReproducibilitySummary): string
   return lines.join('\n');
 }
 
+/**
+ * The per-run artifact hash table, `reproducibility/artifacts/science-hashes.json`.
+ *
+ * A renderer rather than an inline literal in the writer for the same reason
+ * the Markdown is one: the verifier re-derives it from `raw.json` and
+ * `summary.json` and compares byte for byte, so an edited hash table with a
+ * refreshed digest is caught. Built inline, it was a published file that no
+ * check could reconstruct — the file a reviewer diffs to claim two machines
+ * produced the same artifact.
+ */
+export function scienceHashesJson(
+  raw: ReproducibilityRaw,
+  summary: ReproducibilitySummary,
+): string {
+  return `${JSON.stringify(
+    {
+      note: 'Science-scoped artifact hashes. Build-scoped hashes are listed separately because they track the commit and Node version, not the science.',
+      reference: summary.identity.referenceScienceHashes,
+      buildScoped: summary.identity.referenceBuildScopedHashes,
+      perRun: raw.runs.map((r) => ({
+        run: r.index,
+        science: r.observation.scienceHashes,
+        buildScoped: r.observation.buildScopedHashes,
+      })),
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/** The first run's scientific-record content, `artifacts/scientific-record-content.json`. */
+export function scientificRecordContentJson(raw: ReproducibilityRaw): string {
+  return `${JSON.stringify(raw.runs[0]?.observation.scientificRecordContent ?? null, null, 2)}\n`;
+}
+
 /** One row per recorded run. Row count is checked against `raw.json`. */
 export function reproducibilityCsv(raw: ReproducibilityRaw): string {
   const header = [
