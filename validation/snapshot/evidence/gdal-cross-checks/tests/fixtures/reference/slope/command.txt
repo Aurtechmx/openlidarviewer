@@ -1,0 +1,1 @@
+gdal raster slope input-dem.asc slope-gdal.asc --gradient-alg Horn --unit degree --xscale 1 --yscale 1 --no-edges --of AAIGrid

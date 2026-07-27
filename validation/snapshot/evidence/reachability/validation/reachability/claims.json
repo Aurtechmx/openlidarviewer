@@ -1,0 +1,152 @@
+{
+  "$comment": "Registry of validation-path claims. Each entry names a validation and the production code it says it exercises. tests/benchmark/reachability.ts turns a 'coverage' claim into a run-time witness; scripts/verify-reachability.mjs aggregates the ledger and reports anything that ran without one. Edit this file when a suite changes what it drives.",
+  "claims": [
+    {
+      "id": "backend-selection",
+      "title": "Backend selection and the equivalence comparator",
+      "suite": "tests/benchmark/backendEquivalence.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "benchmarks/backends/record.ts", "fn": "buildBackendLeg" },
+        { "file": "benchmarks/backends/record.ts", "fn": "gpuClaimNotCredible" },
+        { "file": "benchmarks/backends/leg.ts", "fn": "legFromComputeStatus" },
+        { "file": "benchmarks/backends/compare.ts", "fn": "compareBackends" },
+        { "file": "benchmarks/backends/render.ts", "fn": "comparisonMarkdown" }
+      ]
+    },
+    {
+      "id": "terrain-derivatives-node",
+      "title": "Terrain derivative engine, host-side selection and probe",
+      "suite": "tests/benchmark/backendEquivalence.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/terrain/engine/TerrainRasterEngine.ts", "fn": "init" },
+        { "file": "src/terrain/engine/TerrainRasterEngine.ts", "fn": "runEquivalenceProbe" },
+        { "file": "src/terrain/engine/TerrainRasterEngine.ts", "fn": "buildScatterProbe" },
+        { "file": "src/terrain/engine/cpuBackend.ts", "fn": "createCpuBackend" }
+      ]
+    },
+    {
+      "id": "terrain-derivatives-device",
+      "title": "Terrain derivative kernels on a real adapter",
+      "suite": "tests/e2e/gpuDerivatives.spec.ts",
+      "mode": "unwitnessed",
+      "reason": "The kernels run inside the browser's WebGPU implementation. Node has no adapter, so no witness of their execution can be produced here. The spec's own adapter descriptor and engine reason code are the witness, and only on a runner that exposes an adapter."
+    },
+    {
+      "id": "contour-generation",
+      "title": "Contour generation, stitching, styling and the feature model",
+      "suite": "tests/benchmark/contourCorrectness.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/terrain/contour/contoursAt.ts", "fn": "contoursAt" },
+        { "file": "src/terrain/contour/stitchContours.ts", "fn": "stitchContourSet" },
+        { "file": "src/terrain/contour/stitchContours.ts", "fn": "stitchLevel" },
+        { "file": "src/terrain/contour/contourStyle.ts", "fn": "styleLevels" },
+        { "file": "src/terrain/contour/contourFeatureModel.ts", "fn": "buildFeatureModel" },
+        { "file": "src/terrain/contourStudio/contourGeometryProduct.ts", "fn": "analyticalProduct" },
+        { "file": "src/terrain/contourStudio/contourGeometryProduct.ts", "fn": "cartographicProduct" },
+        { "file": "src/terrain/contourStudio/contourAdaptiveGeneralize.ts", "fn": "terrainAwareCartographicProduct" },
+        { "file": "src/terrain/contour/geojsonContours.ts", "fn": "toGeoJSON" },
+        { "file": "src/terrain/contour/geojsonContours.ts", "fn": "toGeoJSONWgs84" }
+      ]
+    },
+    {
+      "id": "export-writers",
+      "title": "LAS writers and the reader they are checked against",
+      "suite": "tests/benchmark/roundtripFidelity.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/convert/writeLas.ts", "fn": "writeLas" },
+        { "file": "src/convert/writeLas.ts", "fn": "writeLas14" },
+        { "file": "src/convert/writeLas.ts", "fn": "pickPointFormat" },
+        { "file": "src/convert/writeLas.ts", "fn": "pickPointFormat14" },
+        { "file": "src/convert/convertCloud.ts", "fn": "convertCloud" },
+        { "file": "src/io/loadLas.ts", "fn": "loadLas" },
+        { "file": "src/io/lasHeader.ts", "fn": "parseLasHeader" }
+      ]
+    },
+    {
+      "id": "provenance-verification",
+      "title": "Provenance construction and the verifiers that read it back",
+      "suite": "tests/benchmark/provenanceIntegrity.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/terrain/export/exportProvenance.ts", "fn": "buildExportProvenance" },
+        { "file": "src/science/processingManifest.ts", "fn": "buildProcessingManifest" },
+        { "file": "src/science/processingManifest.ts", "fn": "verifyProcessingManifest" },
+        { "file": "src/export/verifyReport.ts", "fn": "verifyReportFile" },
+        { "file": "src/render/measure/reportManifest.ts", "fn": "buildReportManifest" },
+        { "file": "src/canonicalHash.ts", "fn": "canonicalHash" }
+      ]
+    },
+    {
+      "id": "metric-unit-consistency",
+      "title": "Terrain metrics and the unit conversions they declare",
+      "suite": "tests/benchmark/unitIntegrity.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/terrain/ground/terrainDerivatives.ts", "fn": "hornSlope" },
+        { "file": "src/terrain/ground/terrainDerivatives.ts", "fn": "hornSlopeAspect" },
+        { "file": "src/terrain/ground/horizontalScale.ts", "fn": "horizontalCellMetresXY" },
+        { "file": "src/terrain/surface/hillshade.ts", "fn": "slopeStats" },
+        { "file": "src/terrain/surface/hillshade.ts", "fn": "shadeFromSlopeAspect" },
+        { "file": "src/terrain/ground/rasterizeDtm.ts", "fn": "rasterizeDtm" },
+        { "file": "src/terrain/ground/surfaceFromRaster.ts", "fn": "buildSurfaceFromRaster" },
+        { "file": "src/terrain/change/changeDetection.ts", "fn": "detectChange" },
+        { "file": "src/terrain/quality/cellMetrics.ts", "fn": "computeCellMetrics" },
+        { "file": "src/export/measurementExport.ts", "fn": "measurementMetrics" }
+      ]
+    },
+    {
+      "id": "failure-recovery",
+      "title": "Reader guards and the errors they raise on damaged input",
+      "suite": "tests/benchmark/failureRecovery.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "src/io/parseBuffer.ts", "fn": "parseBuffer" },
+        { "file": "src/io/lasHeader.ts", "fn": "parseLasHeader" },
+        { "file": "src/io/loadErrors.ts", "fn": "classifyLoadError" },
+        { "file": "src/io/loadErrors.ts", "fn": "describeLoadError" },
+        { "file": "src/io/validateCount.ts", "fn": "validateDeclaredPointCount" },
+        { "file": "src/io/streamingFiniteGuard.ts", "fn": "assertFinitePositions" },
+        { "file": "src/io/copc/copcChunkDecode.ts", "fn": "decodeRecords" },
+        { "file": "src/render/measure/polygonHygiene.ts", "fn": "validatePolygon" },
+        { "file": "src/render/measure/volume.ts", "fn": "volumeCutFill" }
+      ]
+    },
+    {
+      "id": "platform-portability",
+      "title": "Cross-platform record capture and comparison",
+      "suite": "tests/benchmark/portability.test.ts",
+      "mode": "coverage",
+      "functions": [
+        { "file": "benchmarks/portability/preconditions.ts", "fn": "detectEndianness" },
+        { "file": "benchmarks/portability/preconditions.ts", "fn": "platformId" },
+        { "file": "benchmarks/portability/render.ts", "fn": "comparisonMarkdown" },
+        { "file": "benchmarks/portability/render.ts", "fn": "comparisonCsv" }
+      ]
+    },
+    {
+      "id": "archive-verification",
+      "title": "Released-archive portability checks",
+      "suite": "scripts/verify-archive-portability.mjs",
+      "mode": "artifact",
+      "artifact": "release/archive-portability.json",
+      "requiredChecks": [
+        "scripts-present",
+        "documented-scripts-exist",
+        "archive-self-verification",
+        "no-internal-material",
+        "no-dangling-references-to-excluded",
+        "doc-links-resolve",
+        "checksum-manifests-bidirectional",
+        "archive-determinism",
+        "lockfile-consistent",
+        "imports-declared",
+        "sbom-matches-manifest",
+        "version-coherence"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,582 @@
+{
+  "suite": "archive-portability",
+  "generatedAt": "2026-07-27T15:32:46.967Z",
+  "archiveDir": "/var/folders/t4/3nns59b51zd88xj9s1kx27xh0000gn/T/olv-archive-Wr2EjJ/archive",
+  "archiveBuiltHere": true,
+  "repositoryPresent": true,
+  "nodeVersion": "v26.0.0",
+  "version": "0.6.1",
+  "fileCount": 1431,
+  "totals": {
+    "checks": 12,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "errors": 0,
+    "warnings": 64
+  },
+  "results": [
+    {
+      "id": "scripts-present",
+      "title": "every file the archive’s own package.json scripts execute ships in the archive",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    },
+    {
+      "id": "documented-scripts-exist",
+      "title": "every `npm run` command named in shipping documentation exists in the archive’s package.json",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    },
+    {
+      "id": "archive-self-verification",
+      "title": "the archive’s own node-only verification scripts run and pass inside the archive",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": [],
+      "detail": {
+        "ran": [
+          {
+            "name": "check:bundle",
+            "status": "needs-build"
+          },
+          {
+            "name": "check:deps",
+            "status": "needs-install"
+          },
+          {
+            "name": "benchmark:clean-clone",
+            "status": "needs-repo"
+          },
+          {
+            "name": "lint:main-deferral",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:inline-imports",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:unsafe-html",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:layer-boundaries",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:no-ignored-src",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:claim-register",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:release-sync",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:release-truth",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:sbom",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:evidence",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "verify:reachability",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:position-access",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:monolith-size",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:claims-language",
+            "status": "pass",
+            "exit": 0
+          },
+          {
+            "name": "lint:archive-vocab",
+            "status": "pass",
+            "exit": 0
+          }
+        ]
+      }
+    },
+    {
+      "id": "no-internal-material",
+      "title": "nothing internal or generated ships in the archive",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    },
+    {
+      "id": "no-dangling-references-to-excluded",
+      "title": "nothing that ships references a file that does not",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 64,
+      "findings": [
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names KNOWN_LIMITATIONS_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names KNOWN_LIMITATIONS_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "scripts/lint-release-truth.mjs names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.5.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names REPRODUCIBILITY_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names REPRODUCIBILITY_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names VALIDATION_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names VALIDATION_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/defect-registry.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/defects/validation/defects/defect-registry.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.4-pr.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-alpha-blocker-response.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-hardening-report.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-readiness.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/coordinate-integrity-roadmap.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/gate2-per-cloud-filter-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/v0.5.7-object-e57-capture-lens.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/v0.5.7-plan.md, which is export-ignored and absent from the archive."
+        }
+      ],
+      "detail": {
+        "excludedCount": 61,
+        "excluded": [
+          "KNOWN_LIMITATIONS_v0.6.0-alpha.1.md",
+          "KNOWN_LIMITATIONS_v0.6.0-alpha.2.md",
+          "READINESS_REPORT_v0.5.9.md",
+          "READINESS_REPORT_v0.6.0-alpha.1.md",
+          "READINESS_REPORT_v0.6.0-alpha.2.md",
+          "READINESS_REPORT_v0.6.0.md",
+          "READINESS_REPORT_v0.6.1.md",
+          "RELEASE_CHECKLIST.md",
+          "RELEASE_NOTES_v0.4.1.md",
+          "RELEASE_NOTES_v0.4.6.md",
+          "RELEASE_NOTES_v0.4.7.md",
+          "RELEASE_NOTES_v0.4.8.md",
+          "RELEASE_NOTES_v0.4.9.md",
+          "RELEASE_NOTES_v0.5.0.md",
+          "RELEASE_NOTES_v0.5.1.md",
+          "RELEASE_NOTES_v0.5.2.md",
+          "RELEASE_NOTES_v0.5.3.md",
+          "RELEASE_NOTES_v0.5.4.md",
+          "RELEASE_NOTES_v0.5.5.md",
+          "RELEASE_NOTES_v0.5.6.md",
+          "RELEASE_NOTES_v0.5.7.md",
+          "RELEASE_NOTES_v0.5.8.md",
+          "RELEASE_NOTES_v0.5.9.md",
+          "RELEASE_NOTES_v0.6.0-alpha.1.md",
+          "RELEASE_NOTES_v0.6.0-alpha.2.md",
+          "RELEASE_NOTES_v0.6.0-alpha.3.md",
+          "REPRODUCIBILITY_v0.6.0-alpha.1.md",
+          "REPRODUCIBILITY_v0.6.0-alpha.2.md",
+          "VALIDATION_REPORT_v0.6.0-alpha.1.md",
+          "VALIDATION_REPORT_v0.6.0-alpha.2.md",
+          "docs-site/releases/v0.4.1.md",
+          "docs-site/releases/v0.4.6.md",
+          "docs-site/releases/v0.4.7.md",
+          "docs-site/releases/v0.4.8.md",
+          "docs-site/releases/v0.4.9.md",
+          "docs-site/releases/v0.5.0.md",
+          "docs-site/releases/v0.5.1.md",
+          "docs-site/releases/v0.5.2.md",
+          "docs-site/releases/v0.5.3.md",
+          "docs-site/releases/v0.5.4.md",
+          "docs-site/releases/v0.5.5.md",
+          "docs-site/releases/v0.5.6.md",
+          "docs-site/releases/v0.5.7.md",
+          "docs-site/releases/v0.5.8.md",
+          "docs-site/releases/v0.5.9.md",
+          "docs-site/releases/v0.6.0-alpha.1.md",
+          "docs-site/releases/v0.6.0-alpha.2.md",
+          "docs-site/releases/v0.6.0-alpha.3.md",
+          "docs/_audit/v0.5.4-pr.md",
+          "docs/_audit/v0.5.4-terrain-audit.md",
+          "docs/_audit/v0.5.5-baseline/README.md",
+          "docs/_audit/v0.5.5-program.md",
+          "docs/_audit/v0.6-alpha-blocker-response.md",
+          "docs/_audit/v0.6-hardening-report.md",
+          "docs/_audit/v0.6-readiness.md",
+          "docs/architecture/coordinate-integrity-roadmap.md",
+          "docs/architecture/stabilization-release-plan.md",
+          "docs/architecture/v0.5.8-cleanup-plan.md",
+          "docs/gate2-per-cloud-filter-plan.md",
+          "docs/v0.5.7-object-e57-capture-lens.md",
+          "docs/v0.5.7-plan.md"
+        ]
+      }
+    },
+    {
+      "id": "doc-links-resolve",
+      "title": "every relative link in shipping markdown resolves to a file that also ships",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    },
+    {
+      "id": "checksum-manifests-bidirectional",
+      "title": "every shipped SHA256SUMS accounts for its directory in both directions",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": [],
+      "detail": [
+        {
+          "manifest": "tests/fixtures/reference/aspect/SHA256SUMS",
+          "listed": 4,
+          "siblings": 3
+        },
+        {
+          "manifest": "tests/fixtures/reference/hillshade/SHA256SUMS",
+          "listed": 4,
+          "siblings": 3
+        },
+        {
+          "manifest": "tests/fixtures/reference/slope/SHA256SUMS",
+          "listed": 4,
+          "siblings": 4
+        },
+        {
+          "manifest": "validation/snapshot/SHA256SUMS",
+          "listed": 36,
+          "siblings": 1
+        }
+      ]
+    },
+    {
+      "id": "archive-determinism",
+      "title": "building the archive twice from the same commit yields identical bytes",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": [],
+      "detail": {
+        "tarSha256": "775e6ea3f72369fb646068994338fd78ea19f332e1fff91c86237a13cbd50ad1",
+        "secondRunEnv": "TZ=Asia/Kolkata LC_ALL=C.UTF-8"
+      }
+    },
+    {
+      "id": "lockfile-consistent",
+      "title": "the lockfile ships and agrees with package.json",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    },
+    {
+      "id": "imports-declared",
+      "title": "every package the archive imports is a declared dependency",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": [],
+      "detail": {
+        "imported": [
+          "@fontsource/jetbrains-mono",
+          "@fontsource/manrope",
+          "@loaders.gl/core",
+          "@loaders.gl/gltf",
+          "@loaders.gl/obj",
+          "@loaders.gl/ply",
+          "@playwright/test",
+          "laz-perf",
+          "pdf-lib",
+          "proj4",
+          "rollup-plugin-visualizer",
+          "three",
+          "vite",
+          "vite-plugin-javascript-obfuscator",
+          "vitepress",
+          "vitest"
+        ],
+        "readByPath": [
+          "@fontsource-variable/inter"
+        ]
+      }
+    },
+    {
+      "id": "sbom-matches-manifest",
+      "title": "the SBOM ships and covers the declared dependency set",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": [],
+      "detail": {
+        "components": 59
+      }
+    },
+    {
+      "id": "version-coherence",
+      "title": "package.json, the citation file, the changelog and the versioned documents agree",
+      "status": "pass",
+      "errors": 0,
+      "warnings": 0,
+      "findings": []
+    }
+  ]
+}

@@ -1,0 +1,191 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/defect-registry.schema.json",
+  "title": "Defect registry",
+  "description": "Machine-readable record of defects fixed in a release, one record per CHANGELOG Fixed entry. Validated by scripts/check-defect-registry.mjs, which implements the subset of JSON Schema used here without a runtime dependency.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "registryVersion",
+    "generatedFrom",
+    "recordGranularity",
+    "conventionalSuiteDefinition",
+    "severityScale",
+    "defects"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "registryVersion": { "type": "string", "minLength": 1 },
+    "generatedFrom": { "type": "string", "minLength": 1 },
+    "recordGranularity": { "type": "string", "minLength": 1 },
+    "conventionalSuiteDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["meaning", "howEstablished", "result", "measuredOn", "note"],
+      "properties": {
+        "meaning": { "type": "string", "minLength": 1 },
+        "howEstablished": { "type": "string", "minLength": 1 },
+        "result": { "type": "string", "minLength": 1 },
+        "measuredOn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "severityScale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["high", "medium", "low"],
+      "properties": {
+        "high": { "type": "string", "minLength": 1 },
+        "medium": { "type": "string", "minLength": 1 },
+        "low": { "type": "string", "minLength": 1 }
+      }
+    },
+    "defects": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/defect" }
+    }
+  },
+  "$defs": {
+    "defect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "affectedVersion",
+        "module",
+        "codePath",
+        "observed",
+        "expected",
+        "consequence",
+        "magnitude",
+        "severity",
+        "reachability",
+        "conventionalSuiteAtV061",
+        "conventionalSuiteNote",
+        "preexistingTests",
+        "whyNotDetected",
+        "detectingMechanism",
+        "discoveryMethod",
+        "discoveryContext",
+        "validationCategory",
+        "secondaryTags",
+        "oracleType",
+        "regressionTest",
+        "fixCommit",
+        "fixPr",
+        "verificationStatus"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^OLV-DEF-[0-9]{3}$" },
+        "name": { "type": "string", "minLength": 1 },
+        "affectedVersion": { "type": "string", "minLength": 1 },
+        "module": { "type": "string", "minLength": 1 },
+        "codePath": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "observed": { "type": "string", "minLength": 1 },
+        "expected": { "type": "string", "minLength": 1 },
+        "consequence": { "type": "string", "minLength": 1 },
+        "magnitude": {
+          "description": "A measured magnitude where one exists, null where none was measured. Never zero as a stand-in for absent.",
+          "type": ["string", "null"],
+          "minLength": 1
+        },
+        "severity": { "type": "string", "enum": ["high", "medium", "low"] },
+        "reachability": { "type": "string", "minLength": 1 },
+        "conventionalSuiteAtV061": {
+          "description": "Whether the test suite as it stood at tag v0.6.1 passed on the defective code. `unknown` where it could not be established; `mixed` where the record spans code present at v0.6.1 and code added after it. Never `green` by assumption.",
+          "type": "string",
+          "enum": ["green", "red", "mixed", "unknown", "not-applicable"]
+        },
+        "conventionalSuiteNote": { "type": "string", "minLength": 1 },
+        "preexistingTests": {
+          "description": "Tests that existed before the defect was found. An empty array means none existed, which is itself a finding.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "whyNotDetected": { "type": "string", "minLength": 1 },
+        "detectingMechanism": {
+          "description": "The validation suite that exposed the defect, or `none` when no suite did.",
+          "type": "string",
+          "enum": [
+            "none",
+            "suite-1-reproducibility",
+            "suite-2-unit-integrity",
+            "suite-3-backend-equivalence",
+            "suite-4-failure-recovery",
+            "suite-5-provenance-integrity",
+            "suite-6-contour-correctness",
+            "suite-7-las-round-trip",
+            "suite-8-archive-portability",
+            "suite-9-seed-sensitivity",
+            "suite-10-clean-clone"
+          ]
+        },
+        "discoveryMethod": {
+          "type": "string",
+          "enum": ["validation suite", "code review", "user report", "unknown"]
+        },
+        "discoveryContext": { "type": "string", "minLength": 1 },
+        "validationCategory": { "$ref": "#/$defs/category" },
+        "secondaryTags": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/category" }
+        },
+        "oracleType": { "type": "string", "minLength": 1 },
+        "bundledFaults": {
+          "description": "Present only where one CHANGELOG entry covers more than one distinct fault.",
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "regressionTest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file", "cases"],
+          "properties": {
+            "file": { "type": "string", "minLength": 1 },
+            "cases": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "fixCommit": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "fixPr": { "type": "integer", "minimum": 1 },
+        "verificationStatus": { "type": "string", "minLength": 1 }
+      }
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "execution or reachability gap",
+        "oracle gap",
+        "fixture inadequacy",
+        "unit-conversion divergence",
+        "coordinate-frame or axis error",
+        "metadata asymmetry",
+        "read/write round-trip loss",
+        "fabricated quantity",
+        "unavailable-state handling",
+        "identity collision",
+        "provenance failure",
+        "verification blind spot",
+        "environment mismatch",
+        "archive or release-artifact failure",
+        "unsupported claim or wording"
+      ]
+    }
+  }
+}
