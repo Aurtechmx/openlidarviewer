@@ -122,6 +122,20 @@ async function main() {
   const dropAt = argv.indexOf('--drop');
   const drop = dropAt === -1 ? null : argv[dropAt + 1];
 
+  // The tree under test comes from `git archive HEAD`, so this needs a
+  // repository. An extracted source archive has none, and the archive
+  // portability suite runs every node-only script inside one. Say so in a
+  // sentence a caller can classify, rather than letting git's own "not a git
+  // repository" reach the caller as an ordinary failure.
+  if (!existsSync(join(REPO_ROOT, '.git'))) {
+    process.stderr.write(
+      'clean-clone needs a git repository: the tree under test is materialised ' +
+        'from git archive HEAD, and this directory is not a repository. ' +
+        'Not run.\n',
+    );
+    return 3;
+  }
+
   const dest = mkdtempSync(join(tmpdir(), 'olv-clean-clone-'));
   const failures = [];
   try {
