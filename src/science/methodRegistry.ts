@@ -166,9 +166,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
 };
 
-/** Look up a method entry by id, or `null` when the id is not registered. */
+/**
+ * Look up a method entry by id, or `null` when the id is not registered.
+ *
+ * The own-property check is load-bearing, not defensive style: a plain index
+ * into an object literal resolves `__proto__`, `toString` and `constructor` on
+ * the prototype chain, so those ids returned a truthy non-entry — and
+ * {@link methodRef} then handed back `{id: undefined, version: undefined}`,
+ * which tags as `undefined@undefined`. Two different unregistered ids composed
+ * to one method tag and therefore to one record fingerprint.
+ */
 export function method(id: string): MethodEntry | null {
-  return METHOD_REGISTRY[id] ?? null;
+  return isMethodId(id) ? METHOD_REGISTRY[id] : null;
 }
 
 /** True when `id` names a registered method. */
@@ -182,7 +191,7 @@ export function isMethodId(id: string): boolean {
  * method the registry does not define.
  */
 export function methodRef(id: string): MethodRef {
-  const entry = METHOD_REGISTRY[id];
+  const entry = method(id);
   if (!entry) throw new Error(`Unknown method id: ${id}`);
   return { id: entry.id, version: entry.version };
 }

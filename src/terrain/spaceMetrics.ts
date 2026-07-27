@@ -342,7 +342,13 @@ export function spaceMetrics(
   }
   const cellW = ex1 > 0 ? ex1 / cols : 1;
   const cellH = ex2 > 0 ? ex2 / rows : 1;
-  const cellArea = cellW * cellH;
+  // The 1 above is a divisor placeholder that keeps the binning below from
+  // dividing by zero on an axis with no extent. It is not a measured cell size,
+  // so it must not become one: a footprint with no extent in either horizontal
+  // axis encloses no area. Multiplying the placeholder out gave a cloud of
+  // coincident points a floor of 1 m² — and, through `densityPerM2` and
+  // `meanSpacingM` below, a point density and a spacing derived from it.
+  const cellArea = ex1 > 0 && ex2 > 0 ? cellW * cellH : 0;
   const zMin = new Float32Array(cols * rows).fill(Infinity);
   const zMax = new Float32Array(cols * rows).fill(-Infinity);
   const occ = new Uint8Array(cols * rows);

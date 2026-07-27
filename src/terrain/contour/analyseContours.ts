@@ -429,8 +429,13 @@ export interface AnalyseContoursResult {
   /** Recommended DTM grid + contour interval for this dataset. */
   readonly gridRecommendation: GridRecommendation;
   readonly gate: IntervalGateResult;
-  /** The interval actually used for the contours. */
+  /**
+   * The interval of the contour levels actually emitted. Coarser than
+   * {@link requestedIntervalM} when an over-fine request was thinned.
+   */
   readonly intervalM: number | null;
+  /** The interval that was requested (explicit or gate-recommended). */
+  readonly requestedIntervalM: number | null;
   readonly contours: ContourSet;
   readonly stitched: StitchedLevel[];
   readonly style: ContourStyleResult;
@@ -1038,6 +1043,7 @@ export function contoursFromCore(
     const emptyContours: ContourSet = {
       levels: [],
       intervalM: 0,
+      requestedIntervalM: 0,
       crs,
       verticalDatum,
       minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
@@ -1063,6 +1069,7 @@ export function contoursFromCore(
       gridRecommendation,
       gate,
       intervalM: null,
+      requestedIntervalM: null,
       contours: emptyContours,
       stitched: [],
       style: { levels: [], warnings: [] },
@@ -1085,6 +1092,11 @@ export function contoursFromCore(
 
   const contours = contoursAt(dtm, { intervalM });
   warnings.push(...contours.warnings);
+  // The interval of the levels that were actually emitted. Thinning (an
+  // over-fine request against the level cap) makes this coarser than
+  // `intervalM`; everything downstream — styling, the export model, provenance
+  // — describes the emitted levels, so it reads this.
+  const emittedIntervalM = contours.intervalM;
   // Cell-size-aware endpoint quantum: the fixed 1 mm key is ≈111 m in a
   // degree-denominated frame and would weld a fine geographic grid's
   // contours into one blob; scaling by the cell keeps the join unit-free.
@@ -1092,7 +1104,7 @@ export function contoursFromCore(
 
   const style = styleLevels(
     contours.levels.map((l) => l.value),
-    { intervalM, indexEvery: intervalParams.indexEvery ?? 5 },
+    { intervalM: emittedIntervalM, indexEvery: intervalParams.indexEvery ?? 5 },
   );
 
   // Beauty: apply the chosen shape style to the raw stitched runs. Every style
@@ -1111,7 +1123,8 @@ export function contoursFromCore(
     crs,
     verticalDatum,
     verticalUnitToMetres,
-    intervalM,
+    intervalM: emittedIntervalM,
+    requestedIntervalM: intervalM,
     coverageMode: dtm.coverageMode,
     contourStyle: shapeStyle,
   });
@@ -1144,7 +1157,8 @@ export function contoursFromCore(
     complexity: core.complexity,
     gridRecommendation,
     gate,
-    intervalM,
+    intervalM: emittedIntervalM,
+    requestedIntervalM: intervalM,
     contours,
     stitched,
     style,

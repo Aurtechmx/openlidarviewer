@@ -47,6 +47,8 @@ import {
   reproducibilityMarkdown,
   scalingCsv,
   scalingMarkdown,
+  scienceHashesJson,
+  scientificRecordContentJson,
 } from './render';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
 import { PRINCIPAL_SERIES, type ScalingRaw, type ScalingSummary } from './scaling';
@@ -160,6 +162,24 @@ function verifyReproducibility(
     problems.push('reproducibility: summary claims a pass while listing failures');
   }
   checked.push('reproducibility identity claims agree with the run records');
+
+  // The artifact evidence, re-derived like every other rendered file: this is
+  // the table someone diffs to claim two machines produced the same artifact,
+  // and it was published, hashed and never reconstructed from anything.
+  checkText(
+    join(dir, 'artifacts', 'science-hashes.json'),
+    scienceHashesJson(raw, summary),
+    'reproducibility/artifacts/science-hashes.json',
+    problems,
+    checked,
+  );
+  checkText(
+    join(dir, 'artifacts', 'scientific-record-content.json'),
+    scientificRecordContentJson(raw),
+    'reproducibility/artifacts/scientific-record-content.json',
+    problems,
+    checked,
+  );
 
   checkText(join(dir, 'summary.md'), reproducibilityMarkdown(summary), 'reproducibility/summary.md', problems, checked);
   const csv = reproducibilityCsv(raw);
@@ -300,6 +320,17 @@ export function requiredFiles(manifest: BenchmarkManifest): readonly string[] {
   return files;
 }
 
+/** Every file under `dir`, as POSIX paths relative to it. */
+function treeFiles(dir: string, prefix = ''): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(join(dir, prefix), { withFileTypes: true })) {
+    const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...treeFiles(dir, rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
 /** Fields that must never carry private machine information. */
 const PRIVACY_FORBIDDEN = /(?:\/Users\/|\/home\/|C:\\Users\\|\b(?:\d{1,3}\.){3}\d{1,3}\b)/;
 
@@ -343,6 +374,18 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
     problems.push(`published files carry a home-directory path or an IP address: ${leaking.join(', ')}`);
   } else {
     checked.push(`no home-directory path or IP address in any of the ${scanned.length} published files`);
+  }
+
+  // Every file PRESENT must be listed, not only every file listed must be
+  // present. Without this the listing is the attacker's to edit: delete an
+  // entry and the file it covered leaves the digest check entirely, and a file
+  // added to the tree is published under a manifest that never mentions it.
+  const listedPaths = new Set(manifest.files.map((f) => f.path));
+  const unlisted = treeFiles(dir).filter((p) => p !== 'manifest.json' && !listedPaths.has(p));
+  if (unlisted.length > 0) {
+    problems.push(`published files are not listed in the manifest: ${unlisted.sort().join(', ')}`);
+  } else {
+    checked.push('every file in the tree is listed in the manifest');
   }
 
   for (const relPath of requiredFiles(manifest)) {

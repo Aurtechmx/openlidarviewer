@@ -6,6 +6,21 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- **A contour set declares the interval it emitted.** An over-fine request is
+  thinned against the 200-level cap, but `intervalM` kept reporting the value
+  that was asked for, so the GeoJSON `metadata.intervalM`, every feature's
+  `interval` property and the index-contour classification all described a
+  spacing the file did not have. `intervalM` is now the emitted spacing
+  everywhere it appears, and the request survives beside it as
+  `requestedIntervalM` — in the set, the export model, the GeoJSON metadata and
+  the provenance op. Regeneration paths (the map-sheet interval picker, the
+  Studio re-export) read the requested value, since they re-run the pipeline.
+- **A flat surface says it is flat.** A constant grid returned one level with
+  zero segments and no warning, so nothing downstream could tell a flat surface
+  from a computed contour set without counting geometry. A set that produces no
+  segments now states the reason, in the same shape the all-gap path uses:
+  flat, an elevation range that falls between two adjacent levels, or no
+  crossing cells.
 - **The contour deliverable's GeoTIFF states its vertical unit.** The
   deliverable wrote `VerticalCSType` (GeoKey 4096) without `VerticalUnits`
   (4099), so the same DTM raster was ambiguous between metres and feet when it
@@ -76,6 +91,56 @@ The format is based on Keep a Changelog and the project follows Semantic Version
   untouched. Vite 8.1.5 splits the output into 153 chunks where 8.0.12 produced
   140, which moves about 62 KiB out of the entry chunk; the total emitted
   JavaScript and the obfuscation coverage of the live build are unchanged.
+
+### Known limitations
+
+- **The RFC 7946 contour GeoJSON writes its third ordinate in the source
+  vertical unit, not in metres.** `toGeoJSONWgs84`
+  (`src/terrain/contour/geojsonContours.ts`) emits the elevation as the third
+  position element only when the model's vertical datum is proven to be WGS 84
+  ellipsoidal height (EPSG:4979); otherwise the geometry is 2D. RFC 7946
+  section 3.1.1 defines that element as height in metres above the WGS 84
+  ellipsoid, and the value written is the DTM's elevation in whatever vertical
+  unit the source declared. The horizontal reprojection does not touch it: the
+  mapper's contract (`src/export/lonLatMapper.ts`) is that the first two
+  ordinates are converted and the third is the source Z, passed through. No
+  check requires the source vertical unit to be metres before the ordinate is
+  written. Reaching the failure needs a source that declares vertical CRS 4979
+  and a non-metre vertical unit at the same time, which GeoTIFF permits
+  mechanically because keys 4096 and 4099 are read independently, but which is
+  an internally contradictory declaration; no such file has been observed, so
+  this is a standards-conformance gap and not a defect seen in output. On such
+  a file a 100 ft contour would ship as a 100 m ellipsoidal height in the
+  geometry. Every feature also carries `elevation`, `elevationUnit` and
+  `elevationDatum`, which state the real unit and reference in both the 2D and
+  the 3D case, so a reader that consults the properties is not misled; the
+  v0.6.1 unit-label fix corrected those properties and left this ordinate as it
+  was. Until the ordinate is guarded, read the elevation properties or take the
+  companion native export rather than the Z ordinate. The resolution is a
+  refusal or a conversion to metres at the point the ordinate is written; a
+  relabelling would not be one. Neither is scheduled.
+- **Opening a remote streaming source replaces the streaming source already
+  open.** A COPC or EPT source opened by URL, including from the curated
+  picker, closes any open stream and clears the open static layers before it
+  attaches (`src/main.ts:6691`, `6729` for EPT, and the equivalent
+  `clearOpenStaticLayers()` at `6434` for COPC). Only one remote stream is
+  resident at a time. Static local scans differ: they accumulate as separate
+  layers, each listed in the LAYERS panel with its own removal control. The
+  source comment at `src/main.ts:6098` records the split, and streaming
+  exclusivity is the intended behaviour, but no user-facing or release document
+  states it. What the limitations documents do say is that streaming sources
+  "are never merged with static ones", which a reader can take to mean two
+  streams merge with each other. They do not; the second one replaces the
+  first. Reachable in normal use, and confirmed by loading the curated Swiss
+  COPC tile and then opening an adjacent tile by URL, which left only the
+  second loaded. There is no known effect on the correctness of any result: the
+  remaining stream is analysed in its own frame, as a single stream always was.
+  The cost is workflow and expectation. It also means multi-layer behaviour
+  cannot be exercised with two remote streams, so the multi-layer work that is
+  staged behind `MULTI_LAYER_MOUNT_ENABLED` can only be exercised with static
+  scans. No workaround places two streams in one session. Nothing is scheduled;
+  concurrent streaming sources depend on the same shared-frame work that
+  physical multi-layer mounting waits on.
 
 ## [0.6.1] - 2026-07-25
 

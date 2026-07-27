@@ -72,7 +72,7 @@ export type {
 } from './artifacts';
 
 export { toJson } from './reporters/json';
-export { toCsv } from './reporters/csv';
+export { toCsv, csvCell, csvRow } from './reporters/csv';
 export { toMarkdown } from './reporters/markdown';
 export { toHtml } from './reporters/html';
 export {

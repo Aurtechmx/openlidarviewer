@@ -58,14 +58,23 @@ export function styleLevels(
   const baseWeight = params.baseWeight ?? 1;
   const indexWeight = params.indexWeight ?? 2;
 
-  // Consistency check: adjacent diffs should equal the interval.
+  // Consistency check: adjacent diffs should equal the interval. The caller is
+  // expected to pass the EMITTED interval, so a thinned level list is measured
+  // against its own spacing rather than the finer value that was requested.
+  // Thinning still leaves one irregular gap — the top level is forced in so the
+  // summit contour survives — so the warning names how many gaps deviate
+  // instead of implying the whole list is mixed.
   const sorted = [...values].sort((a, b) => a - b);
+  let offGrid = 0;
   for (let i = 1; i < sorted.length; i++) {
     const d = sorted[i] - sorted[i - 1];
-    if (Math.abs(d - intervalM) > intervalM * 1e-3) {
-      warnings.push('level spacing is not a consistent interval');
-      break;
-    }
+    if (Math.abs(d - intervalM) > intervalM * 1e-3) offGrid++;
+  }
+  if (offGrid > 0) {
+    warnings.push(
+      `level spacing is not a consistent interval (${offGrid} of ` +
+        `${Math.max(0, sorted.length - 1)} gaps differ from ${intervalM})`,
+    );
   }
 
   const levels: StyledLevel[] = sorted.map((value) => {

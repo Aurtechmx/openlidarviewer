@@ -256,6 +256,191 @@ runner has no way to establish or to prove it established. Until those two
 pieces exist, browser figures are recorded by hand under the protocol below,
 where the conditions are stated and a reader can see what was controlled.
 
+## Cross-platform scientific reproducibility
+
+A third suite asks a question the two above cannot: does the same commit,
+over the same seeded fixture, produce the same science on a different machine
+and a different operating system.
+
+```
+npm run benchmark:repro:portable    # record this platform's leg
+npm run benchmark:compare-platforms # compare two or more recorded legs
+```
+
+The name is narrower than platform independence and stays that way. What the
+suite can establish is a statement about the platforms whose legs it was
+handed, on one Node major version, at one commit. Nothing in it generalises to
+an untested platform. The workflow `.github/workflows/benchmark-portability.yml`
+runs a matrix over `ubuntu-latest` and `macos-latest` on Node 22, uploads each
+leg, then downloads both and compares them. Windows is out of scope for this
+workflow. It is little-endian and would be a legitimate third leg, but it has
+not been run.
+
+### What must be identical
+
+The seeded source-cloud hash, the canonical DTM
+bytes, the DTM dimensions and cell size, the terrain scientific summary,
+elevation min and max, the contour artifact and contour count, terrain
+complexity, the build-stripped scientific record, the application's own
+science-content hash, the processing manifest's scientific content, and every
+scalar scientific value. Tolerance is exactly zero, the same tolerance
+benchmark 1 uses and for the same reason.
+
+### What is allowed to differ
+
+Every difference below is reported, never dropped. Execution time, memory observations, CPU model, operating system, architecture, Node and
+V8 metadata, timestamps, build identity, everything derived from build
+identity, and archive paths. `comparison.json` lists each observed difference
+with the value every platform reported, and names the categories excluded by
+construction.
+
+### The fixture is compared first
+
+Every downstream artifact is a function of
+the seeded source cloud, so a generator that produced different points on two
+hosts makes every later hash differ too. Sorted by hash that reads as "the
+science diverged", which would be the wrong conclusion: the pipeline may be
+perfectly reproducible over an input that is not. The source-cloud hash is
+therefore checked before anything else, a mismatch carries its own status
+(`generator-not-portable`), and the downstream comparison is reported as
+suppressed rather than run and blamed.
+
+The generator's PRNG is integer arithmetic and exact on any engine. Its surface
+uses `Math.sin`, `Math.cos` and `Math.exp`, which ECMAScript leaves
+implementation-defined, and `syntheticCloud.ts` flags that in its own header as
+the one place byte-identity rests on the engine. If this suite ever fails, that
+is the first thing to check. It would be a real portability finding about
+transcendental functions, not a defect to normalise away, and it is not grounds
+for widening the comparison.
+
+### Byte order is a precondition
+
+Several science-scoped artifacts are raw
+typed-array bytes, which serialise in host order. Every leg records its byte
+order, and a leg from an unsupported architecture halts the comparison by name
+instead of producing a mismatch that names the wrong cause. The claim covers
+little-endian platforms only.
+
+### Runtime is per platform
+
+Runtimes are never pooled. A median over two machines
+describes neither of them. `summary.md` carries one row per platform with
+median analysis time, the coefficient of variation, and peak RSS. The result
+this suite reports is output identity, not which host is faster.
+
+### Output
+
+`benchmark-results/portability/` holds `manifest.json`,
+`environments.json`, `comparison.json`, `comparison.csv`, `summary.md`, and one
+subdirectory per platform. Every human-readable file is rendered from
+`comparison.json`, and the verifier re-derives the comparison from the platform
+records in the subdirectories before re-rendering both and comparing byte for
+byte. That is what makes an edited verdict fail even when every digest in the
+manifest has been refreshed to match the edit.
+
+### A single leg reports itself as one
+
+Run on one machine the command
+writes a `single-platform` result and states that the cross-platform claim
+remains unestablished. CI sets `BENCHMARK_REQUIRE_PLATFORMS`, so a missing leg
+fails the job rather than publishing a one-platform result that reads like a
+comparison.
+
+## Backend equivalence: GPU against the CPU reference
+
+Slope, aspect, hillshade and the DTM min/count scatter have two
+implementations. The CPU one delegates to `hornSlopeAspect`,
+`shadeFromSlopeAspect` and `scatterMinCountReference`, computes in f64 and is
+the reference by contract. The GPU one is WGSL compute, f32 throughout. This
+suite asks whether the second agrees with the first, and to what precision.
+
+```
+npm run benchmark:backends       # the CPU control, and what this host could run
+npm run benchmark:backends:gpu   # the GPU leg, in a browser with a real adapter
+```
+
+Output lands in `benchmark-results/backends/`: one JSON per leg, the comparison,
+and `comparison.md`.
+
+### The GPU leg has to prove a GPU ran
+
+Node exposes no WebGPU adapter. The engine detects that and returns the CPU
+reference, silently, which is what a user on a WebGL2-only device should get. A
+suite that asked for the GPU and compared whatever came back would therefore
+compare the CPU against itself on every Node host and report flawless agreement.
+
+Each leg records two separate fields: what it requested, and what the engine's
+own `getComputePath()` said executed. The comparator reads the second. A GPU
+claim is believed only from a browser leg carrying an adapter descriptor read
+from `navigator.gpu`. Nothing in Node can produce one, so an injected backend
+factory cannot dress the CPU implementation up as a GPU.
+
+When the requested backend did not execute, the status is `backend-unavailable`
+and the comparison is suppressed. No tolerance is evaluated and no agreement is
+claimed. Three negative controls in `tests/benchmark/backendEquivalence.test.ts`
+force that situation: a factory reporting no WebGPU, a factory whose device
+request fails, and a factory handing back the CPU backend under a GPU label,
+and they assert the suite refuses to call any of them agreement.
+
+### The thresholds are fixed before the comparison
+
+`benchmarks/backends/tolerances.ts` carries each threshold with the magnitude it
+was derived from, and the derivation is a computed constant rather than a
+rounded figure.
+
+| quantity | gate | what f32 alone accounts for |
+| --- | --- | --- |
+| slope | 1e-4 rise/run | 6.1e-5, from 32 f32 operations at 2⁻²³ quoted at a 16:1 rise/run cap |
+| aspect | 1e-4 rad | 5.3e-6, the gradient relative error through `atan2` plus 4 ulp |
+| hillshade | 1 grey level | the 1/255 quantisation step, not a floating-point figure |
+| scatter min/count | exact | order-independent integer-stable reductions have no floor |
+
+An observation above the floor and below the gate passes and is printed as an
+observation, because it is a difference f32 arithmetic does not fully explain.
+An observation above a gate is a finding: the report names the quantity, the
+magnitude and the backend, and no threshold moves.
+
+### Three ways to not be a disagreement
+
+`backend-unavailable`, `record-not-credible` and `parameters-diverged` all
+suppress the comparison rather than run it. The last one covers legs taken at
+different commits, different probe geometries or edited engine constants: the
+workload descriptor is hashed and checked before any measurement is read, so a
+parameter difference is never attributed to a backend.
+
+### The control on the instrument
+
+Before the GPU is measured, the CPU backend is put through the same workload and
+must disagree with the CPU reference nowhere at all. Both sides are the same f64
+code, so anything but zero means the harness is measuring itself.
+
+### What this suite does not establish
+
+The comparison covers a 64×64 derivative grid over three geometries and a 24×24
+scatter grid, so it bounds nothing about a tiling error that only appears past
+one dispatch tile. The ground filter and all four `rasterizeDtm` reduction modes have no GPU
+implementation and run the CPU functions under both backends. The surfaces are
+the engine probe fixtures rather than real scan data.
+WGSL leaves `atan2`, `sqrt` and operation fusion at implementation precision, so
+a result covers the adapter its leg ran on and no other. Nothing here is a
+timing measurement.
+
+### Recorded runs
+
+Headless Chromium exposes `navigator.gpu` but returns no adapter, so
+`benchmark:backends:gpu` runs headed. On an Apple Metal-3 adapter, with the CPU
+control at zero on every quantity:
+
+| quantity | max observed | gate | cells |
+| --- | --- | --- | --- |
+| slope | 9.54e-7 rise/run | 1e-4 | 4096 |
+| aspect | 2.26e-6 rad | 1e-4 | 11949 |
+| hillshade | 0 levels | 1 | 4096 |
+| scatter min/count | 0 cells differing | 0 | 576 |
+
+Every quantity sits inside the f32 representation floor. Nothing was found above
+it, and no threshold was adjusted.
+
 ## The frozen stable benchmark
 
 One protocol, frozen for the stable line, chased for reproducibility rather
