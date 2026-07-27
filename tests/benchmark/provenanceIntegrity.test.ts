@@ -75,6 +75,7 @@ import { writeResults } from '../../benchmarks/runner/writer';
 import { verifyResultsDir } from '../../benchmarks/runner/verify';
 import type { ReproducibilityConfig } from '../../benchmarks/runner/config';
 import { nodeSha256Hex } from '../../benchmarks/framework/node';
+import { witnessSuite } from './reachability';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -214,6 +215,8 @@ function metadataOf(artifact: Record<string, unknown>): Record<string, unknown> 
 // ---------------------------------------------------------------------------
 // 1. Completeness
 // ---------------------------------------------------------------------------
+
+witnessSuite('provenance-verification');
 
 describe('completeness — what the artifact declares on its own', () => {
   test('the GeoJSON a receiver holds names source, build, methods, parameters and limits', () => {
