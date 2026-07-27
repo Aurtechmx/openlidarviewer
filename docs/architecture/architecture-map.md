@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 7,510 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 7,360 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -80,6 +80,12 @@ quietly undone, and no vanity extraction is forced to chase a number.
 - the two-finger tracker → `src/render/touchTracker.ts` (11 tests)
 - the render-frame decision → `src/render/renderActivityGate.ts` (9 tests)
 
+Moved for locality rather than testability: the panel column's layout chrome
+(measure-bar and dock clearance, the rail collapse, panel wheel containment)
+now lives in `src/ui/panelChrome.ts`. It is ResizeObserver and CSS custom
+property work with no logic a Node test could decide, but it is panel geometry,
+so it belongs beside the panels.
+
 ### Checked and deliberately NOT extracted
 
 Recorded so the next pass does not re-derive them:
@@ -96,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (7,510)** — the largest blocks, which are the extraction
+**`src/main.ts` (7,360)** — the largest blocks, which are the extraction
 candidates:
 
 | Block | ~Lines | Extraction target |
@@ -104,7 +110,6 @@ candidates:
 | `buildActionRegistry` | 424 | `src/app/actionDefinitions.ts` *(planned)* — command/action definitions |
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
-| `containPanelWheel` | 293 | `src/ui/` behaviour helper |
 | `toClassBuffer` | 268 | `src/model/` or `src/render/class/` |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |

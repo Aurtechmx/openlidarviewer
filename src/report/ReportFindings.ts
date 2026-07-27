@@ -12,7 +12,11 @@
  *  - It reports what was *measured*. Point density, extent and attribute
  *    presence are read straight from the loaded cloud. They are stated, not
  *    judged.
- *  - It only compares density against the USGS QL1 / QL2 tiers when the
+ *  - A density floor is a threshold, not a quality level. A 3DEP quality level
+ *    also carries vertical accuracy against independent checkpoints, coverage
+ *    and collection requirements nothing here validates, so the findings say
+ *    where the density sits relative to the QL1 / QL2 floors and stop there.
+ *  - It only compares density against the USGS QL1 / QL2 floors when the
  *    capture-type classifier has *itself* cited USGS QL literature for this
  *    scan (an airborne-ALS delivery). The Scan Acceptance template
  *    deliberately bakes in no QL thresholds because they would be misapplied
@@ -157,7 +161,7 @@ function densityFinding(
     return {
       label: DENSITY_LABEL,
       value,
-      detail: `Meets USGS QL1 (≥ ${USGS_QL1_PTS_PER_M2} pts/m²) on all-returns density.${GROUND_BASIS_NOTE}`,
+      detail: `All-returns density is at or above the USGS QL1 density floor (≥ ${USGS_QL1_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
       tier: 'met',
       source: USGS_DENSITY_SOURCE,
     };
@@ -166,7 +170,7 @@ function densityFinding(
     return {
       label: DENSITY_LABEL,
       value,
-      detail: `Meets USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²); below QL1 (≥ ${USGS_QL1_PTS_PER_M2}) on all-returns density.${GROUND_BASIS_NOTE}`,
+      detail: `All-returns density is at or above the USGS QL2 density floor (≥ ${USGS_QL2_PTS_PER_M2} pts/m²) and below the QL1 floor (≥ ${USGS_QL1_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
       tier: 'met',
       source: USGS_DENSITY_SOURCE,
     };
@@ -174,7 +178,7 @@ function densityFinding(
   return {
     label: DENSITY_LABEL,
     value,
-    detail: `Below USGS QL2 (≥ ${USGS_QL2_PTS_PER_M2} pts/m²) on all-returns density.${GROUND_BASIS_NOTE}`,
+    detail: `All-returns density is below the USGS QL2 density floor (≥ ${USGS_QL2_PTS_PER_M2} pts/m²).${GROUND_BASIS_NOTE}`,
     tier: 'caution',
     source: USGS_DENSITY_SOURCE,
   };

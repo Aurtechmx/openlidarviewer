@@ -38,7 +38,7 @@ describe('buildScanFitness — scorecard tones', () => {
     const f = buildScanFitness(base());
     expect(f.overallTone).toBe<FitnessTone>('ready');
     expect(f.verdict).toMatch(/ready for terrain products/i);
-    expect(f.tierBadge).toBe('USGS QL1');
+    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
     expect(f.headlineAccuracy).toBe('±0.07 m vertical');
     expect(f.dimensions).toHaveLength(6);
   });
@@ -95,7 +95,7 @@ describe('buildScanFitness — provisional (streaming / partial) state', () => {
   it('a full-cloud grade is not provisional and can earn its badge', () => {
     const f = buildScanFitness(base());
     expect(f.provisional).toBe(false);
-    expect(f.tierBadge).toBe('USGS QL1');
+    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
   });
 });
 
@@ -173,5 +173,28 @@ describe('buildScanFitness — non-hideable caveats', () => {
   });
   it('a clean georeferenced survey-grade scan has no caveats', () => {
     expect(buildScanFitness(base()).caveats).toHaveLength(0);
+  });
+});
+
+describe('buildScanFitness — density reports a measurement, not a quality level', () => {
+  const summary = (d: number): string =>
+    buildScanFitness(base({ groundDensityPerM2: d })).dimensions.find((x) => x.key === 'density')!.summary;
+
+  it('never claims the scan IS a USGS quality level', () => {
+    for (const d of [12, 3, 0.9]) {
+      expect(summary(d)).not.toMatch(/QL\d-class/i);
+      expect(summary(d)).not.toMatch(/meets the USGS QL/i);
+    }
+  });
+
+  it('keeps the measured density and names the threshold it is compared against', () => {
+    expect(summary(12)).toMatch(/12 ground pts\/m²/);
+    expect(summary(12)).toMatch(/8 pts\/m².*QL1 density floor/i);
+    expect(summary(3)).toMatch(/2 pts\/m².*QL2 density floor/i);
+    expect(summary(0.9)).toMatch(/below.*2 pts\/m².*QL2 density floor/i);
+  });
+
+  it('marks the tier badge as an estimate, matching every other surface', () => {
+    expect(buildScanFitness(base()).tierBadge).toBe('USGS QL1 (estimated)');
   });
 });

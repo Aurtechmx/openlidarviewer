@@ -32,6 +32,7 @@ import { join } from 'node:path';
 import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportNotes';
 import { NOT_SURVEY_GRADE } from '../src/terrain/contour/contourCopy';
 import {
+  ACCURACY_BASIS_NOTE,
   buildExportProvenance,
   provenanceLines,
   type ExportProvenance,
@@ -347,7 +348,9 @@ describe('provenance consistency — export-ready run', () => {
     expect(md.surfaceQuality).toBe(prov.surfaceQuality);
     expect(md.exportReadiness).toBe(prov.exportReadiness);
     expect(md.exportReason).toBe(prov.exportReason);
-    expect(md.accuracy).toEqual(prov.accuracy);
+    // Every figure mirrors, plus the basis field the JSON keys cannot carry in
+    // their labels the way the text surfaces do.
+    expect(md.accuracy).toEqual({ ...prov.accuracy, basis: ACCURACY_BASIS_NOTE });
     expect(md.pointDensityPerM2).toBe(prov.pointDensityPerM2);
     expect(md.measuredCells).toBe(prov.measuredCells);
     expect(md.totalCells).toBe(prov.totalCells);

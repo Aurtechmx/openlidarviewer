@@ -135,6 +135,19 @@ export interface ExportPermitStamp {
   readonly caveats: readonly string[];
 }
 
+/**
+ * What the exported accuracy figures actually are, for the machine-readable
+ * blocks whose keys carry no room for the "-style (hold-out)" / "(estimated)"
+ * qualifiers the text surfaces put in the label.
+ */
+export const ACCURACY_BASIS_NOTE =
+  'RMSEz, NVA and VVA are computed from hold-out residuals within this cloud using the '
+  + 'ASPRS 2014 formulas — withheld ground points, not independent survey checkpoints, and '
+  + 'the VVA figure is the 95th percentile of all hold-out residuals rather than '
+  + 'vegetated-class checkpoints. The quality level compares measured ground density and '
+  + 'that hold-out RMSEz against the 3DEP thresholds. This is not an ASPRS conformance '
+  + 'assessment and not a USGS 3DEP determination.';
+
 /** Validated vertical-accuracy figures, present only when the run measured them. */
 export interface ExportProvenanceAccuracy {
   /** Vertical RMSEz in metres. */
@@ -695,6 +708,11 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
           nvaM: p.accuracy.nvaM,
           vvaM: p.accuracy.vvaM,
           usgsQualityLevel: p.accuracy.usgsQualityLevel,
+          // The text surfaces qualify these in the label itself ("NVA-style
+          // (95%, hold-out)", "QL2 (estimated)"). A JSON key cannot, and a
+          // consumer reading `nvaM` has nothing telling it the figure is not an
+          // ASPRS checkpoint result — so the qualifier is a field.
+          basis: ACCURACY_BASIS_NOTE,
         }
       : null,
     // The record is already plain data — copy it wholesale (fresh caveats

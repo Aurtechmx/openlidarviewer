@@ -690,13 +690,15 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
     }
   });
 
-  it('EPSG:4979 with a foot vertical factor writes feet into a metre ordinate', () => {
-    // KNOWN_LIMITATIONS_v0.6.1.md records this combination as open. The check
-    // is on the CURRENT behaviour: the ordinate is written, and it carries the
-    // source-unit value while the per-feature property says the unit is foot.
+  it('EPSG:4979 with a foot vertical factor writes the METRE equivalent into the ordinate', () => {
+    // RFC 7946 §3.1.1 fixes the third position element as metres above the WGS
+    // 84 ellipsoid. The source elevation is in feet, so the ordinate carries
+    // elevation × 0.3048 while the property keeps the source value and names
+    // its own unit.
     const geo = toGeoJSONWgs84(footModel('EPSG:4979'), identityLonLat);
     const metadata = geo.metadata as Record<string, unknown>;
     expect(metadata.elevationIn3d).toBe(true);
+    expect(metadata.elevationOrdinateUnit).toBe('metre');
     const features = geo.features as Array<Record<string, unknown>>;
     expect(features.length).toBeGreaterThan(0);
     for (const f of features) {
@@ -705,13 +707,39 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
       const geom = f.geometry as { coordinates: number[][] };
       for (const c of geom.coordinates) {
         expect(c.length).toBe(3);
-        // The ordinate is the raw source value, NOT the metre equivalent.
-        expect(c[2]).toBe(props.elevation);
-        expect(c[2]).not.toBe((props.elevation as number) * 0.3048);
+        expect(c[2]).toBeCloseTo((props.elevation as number) * 0.3048, 9);
       }
     }
-    // Nothing refuses the self-contradictory combination.
-    expect(metadata.elevationNote).toBeUndefined();
+  });
+
+  it('EPSG:4979 with an unresolved vertical factor falls back to 2D', () => {
+    // Without a factor the metre value cannot be computed, and an unconverted
+    // ordinate would assert metres about a number of unknown unit.
+    const model = { ...footModel('EPSG:4979'), verticalUnitToMetres: null };
+    const geo = toGeoJSONWgs84(model, identityLonLat);
+    const metadata = geo.metadata as Record<string, unknown>;
+    expect(metadata.elevationIn3d).toBe(false);
+    expect(metadata.elevationNote).toMatch(/vertical unit/i);
+    for (const f of geo.features as Array<Record<string, unknown>>) {
+      const geom = f.geometry as { coordinates: number[][] };
+      for (const c of geom.coordinates) expect(c.length).toBe(2);
+    }
+  });
+
+  it('EPSG:4979 already in metres leaves the ordinate equal to the elevation', () => {
+    const dtm = surfaceGrid((col) => 0.5 * (col + 0.5), {
+      cols: 30,
+      rows: 8,
+      cellSizeM: CELL,
+      verticalDatum: 'EPSG:4979',
+      verticalUnitToMetres: 1,
+    });
+    const geo = toGeoJSONWgs84(modelFor(dtm, contoursAt(dtm, { intervalM: 2 })), identityLonLat);
+    for (const f of geo.features as Array<Record<string, unknown>>) {
+      const props = f.properties as Record<string, unknown>;
+      const geom = f.geometry as { coordinates: number[][] };
+      for (const c of geom.coordinates) expect(c[2]).toBe(props.elevation);
+    }
   });
 
   it('the native writer writes the third ordinate unconditionally, in source units', () => {
