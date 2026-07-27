@@ -1,0 +1,29 @@
+{
+  "command": "npx vitest run tests/geodesicFill.test.ts -t \"takes the horizontal step in METRES, per axis, and the rise in metres too\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
+  "defect": "OLV-DEF-006",
+  "durationMs": 822,
+  "environment": {
+    "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
+    "commitShort": "dcd9dbc",
+    "cpus": 14,
+    "label": "candidate",
+    "node": "v26.0.0",
+    "nodeModules": "shared with the candidate tree, so the runtime is identical on both sides",
+    "platform": "darwin arm64",
+    "ref": "candidate working tree",
+    "vitest": "4.1.10"
+  },
+  "exitCode": 0,
+  "injectedFiles": [],
+  "probeCase": "takes the horizontal step in METRES, per axis, and the rise in metres too",
+  "probeFile": "tests/geodesicFill.test.ts",
+  "probeIndex": 0,
+  "probeKind": "vitest-case",
+  "registryCase": "takes the horizontal step in METRES, per axis, and the rise in metres too",
+  "reporterJson": "{\"numTotalTestSuites\":2,\"numPassedTestSuites\":2,\"numFailedTestSuites\":0,\"numPendingTestSuites\":0,\"numTotalTests\":5,\"numPassedTests\":1,\"numFailedTests\":0,\"numPendingTests\":4,\"numTodoTests\":0,\"snapshot\":{\"added\":0,\"failure\":false,\"filesAdded\":0,\"filesRemoved\":0,\"filesRemovedList\":[],\"filesUnmatched\":0,\"filesUpdated\":0,\"matched\":0,\"total\":0,\"unchecked\":0,\"uncheckedKeysByFile\":[],\"unmatched\":0,\"updated\":0,\"didUpdate\":false},\"startTime\":1785167087914,\"success\":true,\"testResults\":[{\"assertionResults\":[{\"ancestorTitles\":[\"geodesicFill\"],\"fullName\":\"geodesicFill fills a simple gap on a flat surface to the surrounding value\",\"status\":\"skipped\",\"title\":\"fills a simple gap on a flat surface to the surrounding value\",\"failureMessages\":[],\"meta\":{},\"tags\":[]},{\"ancestorTitles\":[\"geodesicFill\"],\"fullName\":\"geodesicFill does not pull a valley void across a ridge (geodesic < Euclidean)\",\"status\":\"skipped\",\"title\":\"does not pull a valley void across a ridge (geodesic < Euclidean)\",\"failureMessages\":[],\"meta\":{},\"tags\":[]},{\"ancestorTitles\":[\"geodesicFill\"],\"fullName\":\"geodesicFill takes the horizontal step in METRES, per axis, and the rise in metres too\",\"status\":\"passed\",\"title\":\"takes the horizontal step in METRES, per axis, and the rise in metres too\",\"duration\":1.8096660000000213,\"failureMessages\":[],\"meta\":{},\"tags\":[]},{\"ancestorTitles\":[\"geodesicFill\"],\"fullName\":\"geodesicFill costs a diagonal step as the metric hypotenuse of the two axes\",\"status\":\"skipped\",\"title\":\"costs a diagonal step as the metric hypotenuse of the two axes\",\"failureMessages\":[],\"meta\":{},\"tags\":[]},{\"ancestorTitles\":[\"geodesicFill\"],\"fullName\":\"geodesicFill keeps measured cells verbatim and leaves an all-empty grid NaN\",\"status\":\"skipped\",\"title\":\"keeps measured cells verbatim and leaves an all-empty grid NaN\",\"failureMessages\":[],\"meta\":{},\"tags\":[]}],\"startTime\":1785167088116,\"endTime\":1785167088117.8096,\"status\":\"passed\",\"message\":\"\",\"name\":\"<candidate-tree>/tests/geodesicFill.test.ts\"}]}",
+  "schemaVersion": 1,
+  "signal": null,
+  "timedOut": false,
+  "transcript": "\n RUN  v4.1.10 <candidate-tree>\n\n ✓ tests/geodesicFill.test.ts (5 tests | 4 skipped) 3ms\n\n Test Files  1 passed (1)\n      Tests  1 passed | 4 skipped (5)\n   Start at  09:44:47\n   Duration  196ms (transform 28ms, setup 0ms, import 37ms, tests 3ms, environment 0ms)\n\nJSON report written to <candidate-tree>/<reporter-output>\n",
+  "withheldFiles": []
+}

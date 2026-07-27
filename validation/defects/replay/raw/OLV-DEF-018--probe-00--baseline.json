@@ -1,0 +1,38 @@
+{
+  "command": "node scripts/verify-archive-portability.mjs",
+  "defect": "OLV-DEF-018",
+  "durationMs": 4770,
+  "environment": {
+    "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+    "commitShort": "f27163e",
+    "cpus": 14,
+    "label": "baseline",
+    "node": "v26.0.0",
+    "nodeModules": "shared with the candidate tree, so the runtime is identical on both sides",
+    "platform": "darwin arm64",
+    "ref": "v0.6.1",
+    "vitest": "4.1.10"
+  },
+  "exitCode": 1,
+  "injectedFiles": [
+    {
+      "action": "added",
+      "path": "scripts/verify-archive-portability.mjs"
+    },
+    {
+      "action": "added",
+      "path": "validation/reachability/claims.json"
+    }
+  ],
+  "probeCase": null,
+  "probeFile": "scripts/verify-archive-portability.mjs",
+  "probeIndex": 0,
+  "probeKind": "script",
+  "registryCase": null,
+  "reporterJson": null,
+  "schemaVersion": 1,
+  "signal": null,
+  "timedOut": false,
+  "transcript": "Archive portability — checking <temp>/olv-archive-ed3pkT/archive\n  repository present: yes\n\n  ✓ scripts-present — every file the archive’s own package.json scripts execute ships in the archive\n  ✓ documented-scripts-exist — every `npm run` command named in shipping documentation exists in the archive’s package.json\n  ✓ archive-self-verification — the archive’s own node-only verification scripts run and pass inside the archive\n  ✓ no-internal-material — nothing internal or generated ships in the archive\n  ✗ no-dangling-references-to-excluded — nothing that ships references a file that does not\n      [error] docs-site/releases/v0.4.1.md includes RELEASE_NOTES_v0.4.1.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.4.6.md includes RELEASE_NOTES_v0.4.6.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.4.7.md includes RELEASE_NOTES_v0.4.7.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.4.8.md includes RELEASE_NOTES_v0.4.8.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.4.9.md includes RELEASE_NOTES_v0.4.9.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.0.md includes RELEASE_NOTES_v0.5.0.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.1.md includes RELEASE_NOTES_v0.5.1.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.2.md includes RELEASE_NOTES_v0.5.2.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.3.md includes RELEASE_NOTES_v0.5.3.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.4.md includes RELEASE_NOTES_v0.5.4.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.5.md includes RELEASE_NOTES_v0.5.5.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.6.md includes RELEASE_NOTES_v0.5.6.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.7.md includes RELEASE_NOTES_v0.5.7.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.8.md includes RELEASE_NOTES_v0.5.8.md, excluded from the archive by .gitattributes export-ignore.\n      [error] docs-site/releases/v0.5.9.md includes RELEASE_NOTES_v0.5.9.md, excluded from the archive by .gitattributes export-ignore.\n      [warn] scripts/lint-release-truth.mjs names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.\n      [warn] tests/streamingBaselineV055.test.ts names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive.\n      [warn] src/render/panMath.ts names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.\n      [warn] tests/panMath.test.ts names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.\n      [warn] tests/streamingBaselineV055.test.ts names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.\n      [warn] src/app/ScanRouteService.ts names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.\n      [warn] src/app/ScanService.ts names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.\n      [warn] src/app/viewBookmarks.ts names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.\n  ✗ doc-links-resolve — every relative link in shipping markdown resolves to a file that also ships\n      [error] docs-site/releases/v0.4.1.md: include target RELEASE_NOTES_v0.4.1.md is absent from the archive.\n      [error] docs-site/releases/v0.4.6.md: include target RELEASE_NOTES_v0.4.6.md is absent from the archive.\n      [error] docs-site/releases/v0.4.7.md: include target RELEASE_NOTES_v0.4.7.md is absent from the archive.\n      [error] docs-site/releases/v0.4.8.md: include target RELEASE_NOTES_v0.4.8.md is absent from the archive.\n      [error] docs-site/releases/v0.4.9.md: include target RELEASE_NOTES_v0.4.9.md is absent from the archive.\n      [error] docs-site/releases/v0.5.0.md: include target RELEASE_NOTES_v0.5.0.md is absent from the archive.\n      [error] docs-site/releases/v0.5.1.md: include target RELEASE_NOTES_v0.5.1.md is absent from the archive.\n      [error] docs-site/releases/v0.5.2.md: include target RELEASE_NOTES_v0.5.2.md is absent from the archive.\n      [error] docs-site/releases/v0.5.3.md: include target RELEASE_NOTES_v0.5.3.md is absent from the archive.\n      [error] docs-site/releases/v0.5.4.md: include target RELEASE_NOTES_v0.5.4.md is absent from the archive.\n      [error] docs-site/releases/v0.5.5.md: include target RELEASE_NOTES_v0.5.5.md is absent from the archive.\n      [error] docs-site/releases/v0.5.6.md: include target RELEASE_NOTES_v0.5.6.md is absent from the archive.\n      [error] docs-site/releases/v0.5.7.md: include target RELEASE_NOTES_v0.5.7.md is absent from the archive.\n      [error] docs-site/releases/v0.5.8.md: include target RELEASE_NOTES_v0.5.8.md is absent from the archive.\n      [error] docs-site/releases/v0.5.9.md: include target RELEASE_NOTES_v0.5.9.md is absent from the archive.\n  ✓ checksum-manifests-bidirectional — every shipped SHA256SUMS accounts for its directory in both directions\n  ✓ archive-determinism — building the archive twice from the same commit yields identical bytes\n  ✓ lockfile-consistent — the lockfile ships and agrees with package.json\n  ✓ imports-declared — every package the archive imports is a declared dependency\n  ✓ sbom-matches-manifest — the SBOM ships and covers the declared dependency set\n  ✓ version-coherence — package.json, the citation file, the changelog and the versioned documents agree\n\n✗ 10 passed, 2 failed, 0 skipped — 30 errors, 8 warnings\n  result: release/archive-portability.json\n",
+  "withheldFiles": []
+}
