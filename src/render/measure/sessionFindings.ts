@@ -44,20 +44,27 @@ export class SessionFindings {
 }
 
 /**
- * Stockpile result → finding, converting native CRS units to metres (volume by
- * lin³). The ± band, confidence, and the honest caveats ride through unchanged.
+ * Stockpile result → finding, converting native CRS units to metres. A stockpile
+ * volume is footprint area times thickness, so the factor is lin²·vert: the
+ * horizontal factor squared for the footprint, the vertical factor once for the
+ * height. `vert` defaults to `lin`, which keeps a single-unit CRS at lin³; a
+ * compound CRS (metre eastings over foot heights) must not scale height by the
+ * horizontal factor, matching {@link measurementMetrics}. The ± band,
+ * confidence, and the honest caveats ride through unchanged.
  */
 export function stockpileFinding(
   result: StockpileVolumeResult,
   lin = 1,
   label = 'Stockpile volume',
+  vert = lin,
 ): ReportFinding {
-  const lin3 = lin * lin * lin;
+  const v = Number.isFinite(vert) && vert > 0 ? vert : lin;
+  const volFactor = lin * lin * v;
   return {
     label,
-    value: result.volume * lin3,
+    value: result.volume * volFactor,
     unit: 'm³',
-    sigma: result.sigma * lin3,
+    sigma: result.sigma * volFactor,
     confidence: result.confidence,
     caveats: result.caveats,
   };

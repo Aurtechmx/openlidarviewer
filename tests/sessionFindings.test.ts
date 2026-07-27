@@ -60,6 +60,16 @@ describe('converters preserve band + caveats', () => {
     expect(m.caveats?.[0]).toMatch(/point-sample/i);
   });
 
+  test('stockpileFinding scales a compound CRS by lin²·vert, not lin³', () => {
+    // Metre eastings over foot heights: footprint is already m², thickness is ft.
+    const compound = stockpileFinding(stock({ volume: 1000, sigma: 30 }), 1, 'Stockpile volume', 0.3048);
+    expect(compound.value).toBeCloseTo(1000 * 0.3048, 6);
+    expect(compound.sigma).toBeCloseTo(30 * 0.3048, 6);
+    // Single-unit CRS keeps lin³.
+    const single = stockpileFinding(stock({ volume: 1000, sigma: 30 }), 0.3048);
+    expect(single.value).toBeCloseTo(1000 * 0.3048 ** 3, 6);
+  });
+
   test('changeFinding carries detectability honesty', () => {
     const u = changeVolumeUncertainty({
       netVolumeM3: 2,
