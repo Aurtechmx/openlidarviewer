@@ -7,8 +7,8 @@
  * `activeId ? viewer.getCloud(activeId) : null` lookup at a dozen of them; the
  * selection now moves through this service and the lookup has one home.
  * The viewer is read through a getter because it is bound after construction,
- * the same contract {@link LayerService} uses. Part of the v0.6 decomposition
- * (see `docs/architecture/stabilization-release-plan.md`).
+ * the same contract {@link LayerService} uses. Part of the v0.6 decomposition of main.ts
+ * into per-cluster services.
  */
 
 import type { Viewer } from '../render/Viewer';

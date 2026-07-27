@@ -1,8 +1,10 @@
 /**
  * panMath.ts
  *
- * Pure, dependency-free geometry and input-mapping logic for the P1 hand
- * tool (grab-and-drag panning) — docs/_audit/v0.5.5-program.md §P1.
+ * Pure, dependency-free geometry and input-mapping logic for the hand tool
+ * (grab-and-drag panning), the v0.5.5 P1 work item. Its acceptance criterion
+ * is the 1:1 contract spelled out below: the grabbed world point stays under
+ * the pointer for the whole gesture, with no jump at pointer-down.
  *
  * Deliberately free of three.js so it can be unit-tested in Node, in the
  * same spirit as `navMath.ts`: `NavController` builds the browser-bound

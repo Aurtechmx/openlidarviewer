@@ -1,15 +1,14 @@
 /**
  * panMath.test.ts
  *
- * Unit tests for the P1 hand tool's pure geometry and input mapping
- * (docs/_audit/v0.5.5-program.md §P1): the locked-plane drag model, the
- * screen-space fallback, the pointer-down eligibility gate, and the
- * Digit4 / G key mapping.
+ * Unit tests for the hand tool's pure geometry and input mapping (the v0.5.5
+ * P1 work item): the locked-plane drag model, the screen-space fallback, the
+ * pointer-down eligibility gate, and the Digit4 / G key mapping.
  *
  * The heart of the suite is a scripted-drag simulator with a pure pinhole
  * camera: it locks a plane at pointer-down exactly like NavController does,
  * walks a pointer path, applies each returned delta to camera AND target,
- * and asserts the program's acceptance criteria numerically —
+ * and asserts the acceptance criteria numerically —
  *
  *   - the grabbed world point re-projects onto the pointer at EVERY step
  *     (the "physically attached" 1:1 contract),
@@ -153,7 +152,7 @@ describe('panPlaneDelta', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-// Scripted drag — the program's acceptance criteria, numerically
+// Scripted drag — the acceptance criteria, numerically
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
