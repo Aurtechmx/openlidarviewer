@@ -88,8 +88,10 @@ export interface SampleGrade {
 
 /**
  * Tier an AREAL point density (points per m²) using bands aligned to the USGS
- * quality levels the rest of the app references (QL2 ≈ 2 pts/m², QL1 ≈ 8): below
- * QL2 is sparse, QL2–QL1 moderate, above QL1 dense, and terrestrial / very
+ * 3DEP nominal density floors the rest of the app references (QL2 ≥ 2 pts/m²,
+ * QL1 ≥ 8). The output is a density word, never a quality level: below the QL2
+ * floor is sparse, between the floors moderate, above QL1 dense, and
+ * terrestrial / very
  * low-altitude drone (≳ 50 pts/m²) very dense. Reuses {@link DensityBucket} so
  * the streaming grade speaks the same Sparse/Moderate/Dense language as the
  * static path. Returns 'unknown' for a non-finite or non-positive density.

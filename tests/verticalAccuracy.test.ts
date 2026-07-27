@@ -39,7 +39,7 @@ describe('computeVerticalAccuracy', () => {
     expect(a.rmseZ).toBe(0.5);
     expect(a.nva95).toBeCloseTo(0.5 * NVA_95_MULTIPLIER, 6);
     expect(a.vva95).toBe(1.1);
-    expect(a.standard).toBe('ASPRS 2014');
+    expect(a.standard).toBe('ASPRS 2014 formulas, hold-out basis');
   });
 
   it('carries signed bias + NMAD through, and formats them with direction', () => {
@@ -79,5 +79,14 @@ describe('formatVerticalAccuracy', () => {
     const lines = formatVerticalAccuracy(report(Number.NaN, Number.NaN, 0));
     expect(lines.length).toBe(1);
     expect(lines[0]).toMatch(/not enough ground points/i);
+  });
+});
+
+describe('VerticalAccuracy.standard — a basis tag, not a conformance tag', () => {
+  it('never reads as a bare "ASPRS 2014" conformance claim', () => {
+    const a = computeVerticalAccuracy(report(0.5, 1.1));
+    expect(a.standard).not.toBe('ASPRS 2014');
+    expect(a.standard).toMatch(/formulas/i);
+    expect(a.standard).toMatch(/hold-out/i);
   });
 });

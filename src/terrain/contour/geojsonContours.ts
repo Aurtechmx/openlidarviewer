@@ -7,10 +7,13 @@
  * evidence grade, index flag, and confidence, so the recipient can style
  * or filter the uncertain spans rather than trusting one flat line.
  *
- * Elevation is written into the coordinate Z (3D positions, RFC 7946's
- * optional third element) AS WELL AS the `elevation` property — a 2D
- * LineString with attribute-only elevation imports flat (every contour at
- * Z=0) in 3D-aware GIS/CAD, which reads as "contours have no elevation".
+ * In the NATIVE writer elevation goes into the coordinate Z (3D positions) AS
+ * WELL AS the `elevation` property — a 2D LineString with attribute-only
+ * elevation imports flat (every contour at Z=0) in 3D-aware GIS/CAD, which
+ * reads as "contours have no elevation". The RFC 7946 writer gates that
+ * ordinate on a proven WGS 84 ellipsoidal height and a resolved vertical unit,
+ * and converts it to metres, because RFC 7946 defines the third element as
+ * exactly that and nothing else.
  *
  * CRS note (honest, documented): RFC 7946 assumes WGS84 lon/lat, but
  * LiDAR contours are in a projected CRS (UTM etc.). We emit the
@@ -230,23 +233,41 @@ export function toGeoJSONWgs84(
   // vertical reference is proven to be WGS 84 ellipsoidal height; otherwise
   // the geometry is 2D and the elevation survives as a property that states
   // its own unit and reference, which cannot be mistaken for a coordinate.
-  const ellipsoidal = isWgs84EllipsoidalHeight(model.verticalDatum);
+  //
+  // §3.1.1 also fixes that element's UNIT as metres. The source elevation is in
+  // the DTM's own vertical unit, which for a foot vertical CRS is feet, so the
+  // ordinate carries the metre equivalent and the source value survives on the
+  // `elevation` property beside the unit it is actually in. Writing the raw
+  // value there shipped 100 ft as 100 m — a 69 m error stated as a coordinate.
+  // The conversion needs a resolved vertical factor; without one the metre
+  // value cannot be computed, so the geometry drops to 2D rather than asserting
+  // metres about a number of unknown unit.
+  const vScale = model.verticalUnitToMetres;
+  const metresPerVerticalUnit =
+    vScale != null && Number.isFinite(vScale) && vScale > 0 ? vScale : null;
+  const ellipsoidal = isWgs84EllipsoidalHeight(model.verticalDatum) && metresPerVerticalUnit != null;
   metadata.elevationIn3d = ellipsoidal;
-  if (!ellipsoidal) {
-    metadata.elevationNote =
-      'Geometry is 2D: the source vertical reference is not WGS 84 ellipsoidal height, '
-      + 'which is the only thing RFC 7946 permits in the third position element. '
-      + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.';
+  if (ellipsoidal) {
+    metadata.elevationOrdinateUnit = 'metre';
+  } else {
+    metadata.elevationNote = isWgs84EllipsoidalHeight(model.verticalDatum)
+      ? 'Geometry is 2D: the source vertical unit could not be resolved, so the height '
+        + 'cannot be expressed in the metres RFC 7946 requires in the third position element. '
+        + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.'
+      : 'Geometry is 2D: the source vertical reference is not WGS 84 ellipsoidal height, '
+        + 'which is the only thing RFC 7946 permits in the third position element. '
+        + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.';
   }
 
-  // The elevation is in the DTM's SOURCE vertical units, so its label comes
-  // from the resolved vertical factor. A constant 'metre' here shipped US
-  // survey feet as metres — 100 read as 100 m instead of 30.48 m — for the
-  // compound CRSs (metre horizontal over a foot height) that take this WGS 84
-  // path. An unresolved factor says so; it does not fall back to metre.
-  const vScale = model.verticalUnitToMetres;
+  // The elevation PROPERTY stays in the DTM's SOURCE vertical units, so its
+  // label comes from the resolved vertical factor. A constant 'metre' here
+  // shipped US survey feet as metres — 100 read as 100 m instead of 30.48 m —
+  // for the compound CRSs (metre horizontal over a foot height) that take this
+  // WGS 84 path. An unresolved factor says so; it does not fall back to metre.
   const elevationUnit =
-    vScale == null ? 'unknown' : ELEVATION_UNIT_NAME[verticalUnitLabel(vScale)];
+    metresPerVerticalUnit == null
+      ? 'unknown'
+      : ELEVATION_UNIT_NAME[verticalUnitLabel(metresPerVerticalUnit)];
 
   obj.features = (obj.features as Array<Record<string, unknown>>).map((f) => {
     const geom = f.geometry as { type: string; coordinates: number[][] };
@@ -263,7 +284,10 @@ export function toGeoJSONWgs84(
         ...geom,
         coordinates: geom.coordinates.map((c) => {
           const p = toLonLat([c[0], c[1], c[2] ?? 0]);
-          return ellipsoidal ? p : [p[0], p[1]];
+          // `toLonLat` converts the horizontal pair only and hands the source Z
+          // straight back (see LocalToLonLatSourceZ), so the metre conversion
+          // happens here.
+          return ellipsoidal ? [p[0], p[1], p[2] * (metresPerVerticalUnit as number)] : [p[0], p[1]];
         }),
       },
     };

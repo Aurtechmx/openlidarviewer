@@ -375,3 +375,19 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     expect(/replay/i.test(src)).toBe(false);
   });
 });
+
+describe('provenanceJson — the machine-readable accuracy block states its basis', () => {
+  const p: ExportProvenance = buildExportProvenance(readyResult(), OPTS);
+  it('carries a basis string beside nvaM / vvaM / usgsQualityLevel', () => {
+    const j = provenanceJson(p);
+    const acc = j.accuracy as Record<string, unknown>;
+    expect(acc.nvaM).toBeTypeOf('number');
+    // Every text surface says "-style (hold-out)" and "(estimated)". The JSON
+    // keys carry bare values, so the disclosure has to be a field of its own or
+    // a consumer reads nvaM as an ASPRS checkpoint figure.
+    expect(acc.basis).toMatch(/hold-out/i);
+    expect(acc.basis).toMatch(/not independent survey checkpoints/i);
+    expect(acc.basis).toMatch(/not an ASPRS conformance/i);
+    expect(acc.basis).toMatch(/not a USGS 3DEP determination/i);
+  });
+});

@@ -63,7 +63,7 @@ function find(summary: ReturnType<typeof buildInspectionSummary>, label: string)
 }
 
 describe('buildInspectionSummary — density tier gating', () => {
-  it('asserts USGS QL1 for airborne ALS at >= 8 pts/m²', () => {
+  it('reports the QL1 density floor for airborne ALS at >= 8 pts/m²', () => {
     const s = buildInspectionSummary(meta({ density: 16 }), alsProvenance());
     const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('met');
@@ -72,19 +72,19 @@ describe('buildInspectionSummary — density tier gating', () => {
     expect(s.densityBar?.measured).toBe(16);
   });
 
-  it('asserts USGS QL2 (below QL1) for airborne ALS between 2 and 8', () => {
+  it('reports the QL2 density floor (below QL1) for airborne ALS between 2 and 8', () => {
     const s = buildInspectionSummary(meta({ density: 4 }), alsProvenance());
     const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('met');
     expect(d?.detail).toMatch(/QL2/);
-    expect(d?.detail).toMatch(/below QL1/i);
+    expect(d?.detail).toMatch(/below the QL1 floor \(≥ 8 pts\/m²\)/i);
   });
 
   it('flags below-QL2 as caution for airborne ALS under 2 pts/m²', () => {
     const s = buildInspectionSummary(meta({ density: 1 }), alsProvenance());
     const d = find(s, 'Point density (all returns)');
     expect(d?.tier).toBe('caution');
-    expect(d?.detail).toMatch(/Below USGS QL2/);
+    expect(d?.detail).toMatch(/below the USGS QL2 density floor \(≥ 2 pts\/m²\)/i);
   });
 
   it('does NOT apply QL tiers for TLS (no QL literature cited)', () => {
@@ -160,5 +160,24 @@ describe('buildInspectionSummary — honesty invariants', () => {
     expect(s.headline).toMatch(/Aerial \/ airborne LiDAR/);
     expect(s.headline).toMatch(/ha/);
     expect(s.headline).toMatch(/M points/);
+  });
+});
+
+describe('buildInspectionSummary — density states the threshold, not the quality level', () => {
+  const detail = (density: number): string =>
+    find(buildInspectionSummary(meta({ density }), alsProvenance()), 'Point density (all returns)')!.detail!;
+
+  it('never reports the scan as meeting a USGS quality level', () => {
+    for (const d of [16, 4, 1]) {
+      expect(detail(d)).not.toMatch(/Meets USGS QL\d\b/);
+      expect(detail(d)).not.toMatch(/Below USGS QL\d\b/);
+    }
+  });
+
+  it('keeps the density floor each comparison was made against', () => {
+    expect(detail(16)).toMatch(/QL1 density floor \(≥ 8 pts\/m²\)/);
+    expect(detail(4)).toMatch(/QL2 density floor \(≥ 2 pts\/m²\)/);
+    expect(detail(4)).toMatch(/below the QL1 floor/i);
+    expect(detail(1)).toMatch(/below the USGS QL2 density floor \(≥ 2 pts\/m²\)/i);
   });
 });
