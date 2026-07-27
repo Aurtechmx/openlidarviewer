@@ -105,8 +105,12 @@ and a factor that cannot be resolved reads unknown rather than defaulting to
 metre.
 
 The RFC file's geometry is **2D unless the vertical reference is proven to be
-WGS 84 ellipsoidal height**, which is the only thing RFC 7946 permits in a
-position's third element. Elevations always ride as `elevation`,
+WGS 84 ellipsoidal height and the vertical unit resolves**, which is what RFC 7946
+permits in a position's third element: a height above the WGS 84 ellipsoid, in
+metres. Both conditions are needed, since an unresolved factor leaves no way to
+state the height in metres. When they hold, the ordinate carries the metre
+equivalent and `metadata.elevationOrdinateUnit` reads `metre`; when they do not,
+`metadata.elevationNote` names which one failed. Elevations always ride as `elevation`,
 `elevationUnit` and `elevationDatum` properties. KML geometry is **2D unless the vertical reference is a
 known metric orthometric one** (NAVD88, MSL height, EGM2008, EGM96), since
 KML `absolute` means metres above mean sea level specifically — a WGS 84
@@ -182,16 +186,30 @@ There is still no single explicit model spanning up-axis, horizontal unit, verti
 
 **Boxes require an axis-aligned frame, and now say so.** A box measurement is stored as min/max corners, so it is axis-aligned by construction and its height can only be an extent along X, Y or Z. Given a genuinely tilted up vector the geometry used to fall back to the *dominant* component — reporting the extent along the nearest axis as the height, and carrying that into the footprint ring, the exported GeoJSON and KML polygons, and the compound-CRS vertical conversion. It now throws instead. No scan can currently trigger this: every world-up the viewer sets is exactly (0, ±1, 0) or (0, 0, ±1), chosen by source format, so the refusal guards the contract rather than gating a feature. Genuinely oriented boxes need a stored basis instead of an axis index, which is a stable-v0.6 item alongside the project frame — the two are the same "arbitrary frames" problem.
 
-## Vertical-unit gaps still open
+## Vertical-unit gaps: all five closed in v0.6.2
 
-Four of the five vertical-unit gaps the v0.6.1 audit recorded are closed in v0.6.2: the contour deliverable's GeoTIFF states its vertical unit, the async and GPU derivative path carries the `zScale`, `geodesicFill` walks in metres, and the unused elevation-grid hillshade wrappers are deleted. One remains.
+All five vertical-unit gaps the v0.6.1 audit recorded are closed in v0.6.2: the contour deliverable's GeoTIFF states its vertical unit, the async and GPU derivative path carries the `zScale`, `geodesicFill` walks in metres, the unused elevation-grid hillshade wrappers are deleted, and the RFC 7946 ordinate is now in metres.
 
-- **`toGeoJSONWgs84` writes a source-unit height into an RFC 7946 ordinate.**
-  When the vertical datum is EPSG:4979 the elevation goes into the third
-  position ordinate, which RFC 7946 requires in metres, while the value is in
-  source units. A foot factor together with a 4979 datum is self-contradictory
-  and may be unreachable in practice, but nothing in the code enforces that, so
-  the combination is not refused either.
+- **Closed in v0.6.2: `toGeoJSONWgs84` wrote a source-unit height into an
+  RFC 7946 ordinate.** In v0.6.1, an EPSG:4979 vertical datum put the elevation
+  into the third position ordinate at its source value, so a foot vertical unit
+  shipped 100 ft where the format requires 100 m. Nothing refused the
+  self-contradictory foot-factor-plus-4979 combination either. The writer now
+  converts the ordinate to metres through `model.verticalUnitToMetres` and
+  records `metadata.elevationOrdinateUnit: 'metre'`; an unresolved or
+  non-positive factor drops the geometry to 2D with an `elevationNote` naming
+  that cause, distinct from the note for a non-ellipsoidal reference. A v0.6.1
+  RFC file from a foot vertical CRS carries the source number in a metre field
+  and should be re-exported.
+
+One residual remains.
+
+- **Antimeridian-crossing geometry is not cut.** RFC 7946 §3.1.9 says a
+  LineString crossing 180 degrees longitude SHOULD be split into two parts at
+  the antimeridian; the writer emits the line whole. That is a SHOULD rather
+  than a MUST, and only a scan footprint straddling 180 degrees reaches it. A
+  reader that interpolates between the two sides in longitude draws the segment
+  the long way round the globe.
 
 ## What the validation suites do not cover
 
@@ -237,10 +255,10 @@ Over a 50 km extent at millimetre scale the file round-trips with zero displacem
 
 A wide-area cloud is the case to watch.
 
-## Cross-platform reproducibility is not yet established
+## Cross-platform reproducibility covers two little-endian platforms
 
-The comparator, the per-platform recorder and a CI matrix over darwin-arm64 and linux-x64 are in place, and both legs always run so that a failed leg cannot leave a one-platform comparison looking green. The only run recorded in the tree is a single darwin-arm64 leg, which reports as `single-platform` with `claimEstablished: false`.
+The two-platform result is tracked at `docs/validation/evidence/portability-v0.6.2/`: `status: reproduced`, `claimEstablished: true`, platforms darwin-arm64 and linux-x64, from workflow run 30221805663 at commit 50e76d2. The two legs produced identical science-scoped output from the same seeded fixture, with 15 artifact hashes and 18 scalars compared at a tolerance of exactly zero and none differing. Host, timing and build-identity fields differ and are published per platform.
 
-That leg establishes seeded reproducibility on one platform: 15 science-scoped artifact hashes and 18 scalars identical across ten runs at zero tolerance.
+The scope is two platforms, both little-endian, one commit, one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data is in the comparison. What holds is that the same arithmetic returns the same values on a second architecture.
 
-Nothing has been compared against them.
+`benchmark-results/` is untracked, so a local run on one machine still reports `single-platform` with `claimEstablished: false`. That is the correct verdict for one leg and is not the verdict of the tracked evidence.

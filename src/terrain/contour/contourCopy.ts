@@ -73,9 +73,10 @@ export const METRIC_TOOLTIPS = {
     '(95th percentile), computed over ALL hold-out residuals, NOT ' +
     'vegetated-class checkpoints.',
   qualityLevel:
-    'USGS 3DEP Quality Level — the level the surface meets on point ' +
-    'density and vertical accuracy together. Estimated: the RMSEz leg is ' +
-    'measured on internally withheld points (hold-out), not the independent ' +
+    'USGS 3DEP Quality Level — where the measured ground density and ' +
+    'vertical accuracy sit against the 3DEP thresholds for that level. ' +
+    'Estimated, not a determination: the RMSEz leg is measured on ' +
+    'internally withheld points (hold-out), NOT the independent ' +
     'checkpoints a 3DEP assessment requires.',
   crs:
     'CRS — coordinate reference system; exports are not georeferenced ' +
