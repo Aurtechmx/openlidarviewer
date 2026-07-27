@@ -251,6 +251,9 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     'scripts/verify-archive-portability.mjs',
     'scripts/verify-release-assets.mjs',
     'scripts/create-release-manifest.mjs',
+    // build-validation-snapshot writes a directory; verify-validation-snapshot
+    // is the check over what it wrote, and that one does run here.
+    'scripts/build-validation-snapshot.mjs',
     'scripts/generate-claim-registry.mjs',
     'scripts/render-claim-register.mjs',
     // test-file.mjs prints `usage: test-file.mjs <file.test.ts ...>` and exits
