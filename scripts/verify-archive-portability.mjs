@@ -113,6 +113,19 @@ export function scriptFileTargets(scripts) {
 }
 
 /** `npm run <name>` invocations named in prose. */
+/**
+ * Does any of `texts` read `name` out of node_modules? Each text is a shipped
+ * non-JS file that mentions node_modules at all. A scoped package may be
+ * assembled one path segment at a time, so the scope and the bare name are
+ * looked for separately rather than as one joined string. Every text is
+ * already known to mention node_modules, which is what keeps a bare name like
+ * "three" from matching unrelated prose.
+ */
+export function readsPackageFromNodeModules(texts, name) {
+  const [scope, bare] = name.startsWith('@') ? name.split('/') : [null, name];
+  return texts.some((t) => (scope == null ? t.includes(bare) : t.includes(scope) && t.includes(bare)));
+}
+
 export function documentedScripts(text) {
   return [...text.matchAll(/npm run ([a-z0-9][a-z0-9:_-]*)/g)].map((m) => m[1]);
 }
@@ -439,10 +452,25 @@ check('imports-declared', 'every package the archive imports is a declared depen
       if (!declared.has(b)) f.push({ level: 'error', message: `${p} imports "${b}", which is not declared in package.json.` });
     }
   }
+  // A package can be consumed by path rather than by import: a build script
+  // that reads a font file out of node_modules writes no import specifier, and
+  // may assemble the path one segment at a time so no full package name ever
+  // appears as a single string. Scanning imports alone reports such a package
+  // as unused, which is true of the import graph and false of the archive.
+  const byPath = new Set();
+  const nonJs = c.files
+    .filter((p) => /\.(py|sh|ya?ml|css|html)$/.test(p))
+    .map((p) => c.read(p))
+    .filter((t) => t != null && t.includes('node_modules'));
   for (const name of Object.keys(c.pkg.dependencies ?? {})) {
-    if (!used.has(name)) f.push({ level: 'warn', message: `runtime dependency "${name}" is declared but never imported by anything in the archive.` });
+    if (used.has(name)) continue;
+    if (readsPackageFromNodeModules(nonJs, name)) {
+      byPath.add(name);
+      continue;
+    }
+    f.push({ level: 'warn', message: `runtime dependency "${name}" is declared but nothing in the archive imports it or reads it out of node_modules.` });
   }
-  return { findings: f, detail: { imported: [...used].sort() } };
+  return { findings: f, detail: { imported: [...used].sort(), readByPath: [...byPath].sort() } };
 });
 
 check('sbom-matches-manifest', 'the SBOM ships and covers the declared dependency set', (c) => {
