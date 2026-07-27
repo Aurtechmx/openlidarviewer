@@ -335,6 +335,26 @@ function runVitest(files, env) {
   };
 }
 
+/**
+ * Replace host-specific roots in captured output.
+ *
+ * The results file ships inside the source archive. A macOS temp root carries
+ * a per-user identifier and a stack frame carries the checkout location.
+ */
+function redactHostPaths(text) {
+  const roots = [
+    [ROOT, '<repo>'],
+    [os.tmpdir(), '<temp>'],
+    ['/private/var/folders', '<temp>'],
+    ['/var/folders', '<temp>'],
+    [os.homedir(), '<home>'],
+  ].sort((a, b) => b[0].length - a[0].length);
+  let out = text;
+  for (const [from, to] of roots) out = out.split(from).join(to);
+  return out;
+}
+
+
 /** Run an arbitrary command; detection is by exit code against a baseline. */
 function runExec(argv, env) {
   const t0 = now();
@@ -348,7 +368,10 @@ function runExec(argv, env) {
     exitCode: res.status,
     durationMs: msSince(t0),
     stderrTail: (res.stderr ?? '').split('\n').slice(-8).join('\n'),
-    stdoutTail: (res.stdout ?? '').split('\n').slice(-8).join('\n'),
+    // This tail is written into a results file that ships in the source
+    // archive, and a test tail can carry an absolute path from a stack frame
+    // or a temp directory whose name identifies the host.
+    stdoutTail: redactHostPaths((res.stdout ?? '').split('\n').slice(-8).join('\n')),
   };
 }
 

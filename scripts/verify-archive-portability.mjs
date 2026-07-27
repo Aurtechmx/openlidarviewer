@@ -585,7 +585,10 @@ function main() {
   const out = {
     suite: 'archive-portability',
     generatedAt: new Date().toISOString(),
-    archiveDir: A,
+    // The extract lives in a per-user temp directory whose name carries a
+    // host identifier, and this file ships inside the archive it describes.
+    // The path is recorded relative to the temp root.
+    archiveDir: A.replace(tmpdir(), '<temp>').replace('/private/var/folders', '<temp>').replace('/var/folders', '<temp>'),
     archiveBuiltHere: built,
     repositoryPresent: hasRepo,
     nodeVersion: process.version,
