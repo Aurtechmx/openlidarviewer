@@ -1,0 +1,51 @@
+{
+  "os": {
+    "status": "captured",
+    "value": "darwin 25.4.0"
+  },
+  "cpuModel": {
+    "status": "captured",
+    "value": "Apple M1 (Virtual)"
+  },
+  "arch": {
+    "status": "captured",
+    "value": "arm64"
+  },
+  "nodeVersion": {
+    "status": "captured",
+    "value": "v22.23.1"
+  },
+  "gitCommitFull": {
+    "status": "captured",
+    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+  },
+  "gitCommitShort": {
+    "status": "captured",
+    "value": "50e76d2"
+  },
+  "gitDirty": {
+    "status": "captured",
+    "value": "clean"
+  },
+  "releaseVersion": {
+    "status": "captured",
+    "value": "0.6.1"
+  },
+  "logicalCpuCount": {
+    "status": "captured",
+    "value": "3"
+  },
+  "totalMemoryBytes": {
+    "status": "captured",
+    "value": "7516192768"
+  },
+  "loadAverage": {
+    "status": "captured",
+    "value": "10.88 11.31 11.32"
+  },
+  "npmVersion": {
+    "status": "captured",
+    "value": "10.9.8"
+  },
+  "endianness": "LE"
+}

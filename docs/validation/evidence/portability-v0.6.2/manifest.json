@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "portabilitySchemaVersion": 1,
+  "benchmarkPackageVersion": "1.1.0",
+  "kind": "comparison",
+  "platformId": null,
+  "commit": {
+    "status": "captured",
+    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+  },
+  "startedAtUtc": "2026-07-26T21:49:06.509Z",
+  "completedAtUtc": "2026-07-26T21:49:06.509Z",
+  "command": "npm run benchmark:compare-platforms",
+  "files": [
+    {
+      "path": "comparison.csv",
+      "sha256": "64e1e00511d701e422388a886e5fb5f1eeb9c504b936274b170ea7b04a30cea1",
+      "bytes": 3211
+    },
+    {
+      "path": "comparison.json",
+      "sha256": "2b2a9e14d9f9bf80a8fb54bdf681b8f1a879162ea9c1440c0e472263578af06e",
+      "bytes": 5216
+    },
+    {
+      "path": "darwin-arm64/environment.json",
+      "sha256": "497c15fdf48385c4b17dacd59f16415843aebd4e6be933d960ee8e715d199a81",
+      "bytes": 946
+    },
+    {
+      "path": "darwin-arm64/manifest.json",
+      "sha256": "ba4758732a3c297bf46a89df438778609976c6cbd531edb1b35c9f08a819cdfc",
+      "bytes": 871
+    },
+    {
+      "path": "darwin-arm64/platform-record.json",
+      "sha256": "9a18d1a5c98a788fbc70d676272b1cab0a48ca57db90239de466e78bf556d4b3",
+      "bytes": 5113
+    },
+    {
+      "path": "darwin-arm64/science-hashes.json",
+      "sha256": "82a62437f1908a7e200cb051c5ccbcd289168ccac594c31d31ec7e2d3dcc5947",
+      "bytes": 18720
+    },
+    {
+      "path": "environments.json",
+      "sha256": "94bf13bebefb05dbde0e5b6e9539142db2ab1ebe1b787d2855005f80480a8aae",
+      "bytes": 5886
+    },
+    {
+      "path": "linux-x64/environment.json",
+      "sha256": "f79cbc2a92a5c144b34cb065af541a8974a95898e373e1d8428fe39578e954b4",
+      "bytes": 965
+    },
+    {
+      "path": "linux-x64/manifest.json",
+      "sha256": "137eddafc6a4d2a60c6e61c5dcf877a021dbd783985e23f95ead5103fe92b25f",
+      "bytes": 868
+    },
+    {
+      "path": "linux-x64/platform-record.json",
+      "sha256": "bdcbf4494d9456446ab69634e87b89793548042e41e88d952d5cc02407f3b6d3",
+      "bytes": 5120
+    },
+    {
+      "path": "linux-x64/science-hashes.json",
+      "sha256": "82a62437f1908a7e200cb051c5ccbcd289168ccac594c31d31ec7e2d3dcc5947",
+      "bytes": 18720
+    },
+    {
+      "path": "summary.md",
+      "sha256": "0007fb4b8b83576f5835962934d967bd0d0e77fed5691c67446f59d6e6253c56",
+      "bytes": 4357
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 2,
+  "portabilitySchemaVersion": 1,
+  "benchmarkPackageVersion": "1.1.0",
+  "kind": "platform",
+  "platformId": "darwin-arm64",
+  "commit": {
+    "status": "captured",
+    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+  },
+  "startedAtUtc": "2026-07-26T21:48:06.012Z",
+  "completedAtUtc": "2026-07-26T21:48:35.337Z",
+  "command": "npm run benchmark:repro:portable",
+  "files": [
+    {
+      "path": "environment.json",
+      "sha256": "497c15fdf48385c4b17dacd59f16415843aebd4e6be933d960ee8e715d199a81",
+      "bytes": 946
+    },
+    {
+      "path": "platform-record.json",
+      "sha256": "9a18d1a5c98a788fbc70d676272b1cab0a48ca57db90239de466e78bf556d4b3",
+      "bytes": 5113
+    },
+    {
+      "path": "science-hashes.json",
+      "sha256": "82a62437f1908a7e200cb051c5ccbcd289168ccac594c31d31ec7e2d3dcc5947",
+      "bytes": 18720
+    }
+  ]
+}

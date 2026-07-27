@@ -1,0 +1,51 @@
+{
+  "os": {
+    "status": "captured",
+    "value": "linux 6.17.0-1020-azure"
+  },
+  "cpuModel": {
+    "status": "captured",
+    "value": "AMD EPYC 9V74 80-Core Processor"
+  },
+  "arch": {
+    "status": "captured",
+    "value": "x64"
+  },
+  "nodeVersion": {
+    "status": "captured",
+    "value": "v22.23.1"
+  },
+  "gitCommitFull": {
+    "status": "captured",
+    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+  },
+  "gitCommitShort": {
+    "status": "captured",
+    "value": "50e76d2"
+  },
+  "gitDirty": {
+    "status": "captured",
+    "value": "clean"
+  },
+  "releaseVersion": {
+    "status": "captured",
+    "value": "0.6.1"
+  },
+  "logicalCpuCount": {
+    "status": "captured",
+    "value": "4"
+  },
+  "totalMemoryBytes": {
+    "status": "captured",
+    "value": "16766423040"
+  },
+  "loadAverage": {
+    "status": "captured",
+    "value": "0.97 0.27 0.09"
+  },
+  "npmVersion": {
+    "status": "captured",
+    "value": "10.9.8"
+  },
+  "endianness": "LE"
+}

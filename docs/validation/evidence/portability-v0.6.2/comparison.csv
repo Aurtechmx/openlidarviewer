@@ -1,0 +1,40 @@
+section,field,kind,verdict,platform,value
+status,status,comparison,reproduced,,reproduced
+status,claimEstablished,comparison,established,,true
+precondition,endianness,host,recorded,darwin-arm64,LE
+precondition,endianness,host,recorded,linux-x64,LE
+fixture,sourceCloudHash,sha256,identical,darwin-arm64,4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3
+fixture,sourceCloudHash,sha256,identical,linux-x64,4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3
+fixture,descriptorHash,sha256,identical,darwin-arm64,98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9
+fixture,descriptorHash,sha256,identical,linux-x64,98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9
+science,hashesCompared,count,evaluated,,15
+science,hashesMismatched,count,evaluated,,0
+science,scalarsCompared,count,evaluated,,18
+science,scalarsMismatched,count,evaluated,,0
+expected-difference,os,host,expected,darwin-arm64,darwin 25.4.0
+expected-difference,os,host,expected,linux-x64,linux 6.17.0-1020-azure
+expected-difference,arch,host,expected,darwin-arm64,arm64
+expected-difference,arch,host,expected,linux-x64,x64
+expected-difference,cpuModel,host,expected,darwin-arm64,Apple M1 (Virtual)
+expected-difference,cpuModel,host,expected,linux-x64,AMD EPYC 9V74 80-Core Processor
+expected-difference,logicalCpuCount,host,expected,darwin-arm64,3
+expected-difference,logicalCpuCount,host,expected,linux-x64,4
+expected-difference,totalMemoryBytes,host,expected,darwin-arm64,7516192768
+expected-difference,totalMemoryBytes,host,expected,linux-x64,16766423040
+expected-difference,loadAverage,host,expected,darwin-arm64,10.88 11.31 11.32
+expected-difference,loadAverage,host,expected,linux-x64,0.97 0.27 0.09
+expected-difference,medianAnalysisMs,timing,expected,darwin-arm64,1305.1736865
+expected-difference,medianAnalysisMs,timing,expected,linux-x64,1060.506257
+expected-difference,peakRssBytes,timing,expected,darwin-arm64,440418304
+expected-difference,peakRssBytes,timing,expected,linux-x64,413757440
+expected-difference,timestamps,structural,not-compared,,"Run start and completion times are wall-clock readings. The framework strips them from every hashed artifact, and they are recorded in each platform manifest rather than compared."
+expected-difference,archive paths,structural,not-compared,,Each platform writes into its own results directory and each CI runner has its own workspace root. Paths are relative in every manifest and are not part of any hash.
+expected-difference,build identity,structural,not-compared,,"The build identity string embeds the commit and the runtime that produced it. The scientific record and the processing manifest are seeded from it, which is why both are build-scoped and compared separately."
+timing,medianAnalysisMs,ms,measured,darwin-arm64,1305.1736865
+timing,analysisCv,ratio,measured,darwin-arm64,0.05316730554592729
+timing,peakRssBytes,bytes,measured,darwin-arm64,440418304
+timing,recordedRuns,count,measured,darwin-arm64,10
+timing,medianAnalysisMs,ms,measured,linux-x64,1060.506257
+timing,analysisCv,ratio,measured,linux-x64,0.052659910444877854
+timing,peakRssBytes,bytes,measured,linux-x64,413757440
+timing,recordedRuns,count,measured,linux-x64,10

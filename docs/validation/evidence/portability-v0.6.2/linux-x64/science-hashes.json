@@ -1,0 +1,266 @@
+{
+  "note": "Science-scoped artifact hashes per recorded run on this platform. Build-scoped hashes are listed separately because they track the commit and the runtime, not the science.",
+  "reference": {
+    "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+    "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+    "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+    "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+    "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+    "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+    "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+    "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+    "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+    "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+    "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+    "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+    "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+    "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+    "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+  },
+  "buildScoped": {
+    "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+    "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+  },
+  "perRun": [
+    {
+      "run": 1,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 2,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 3,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 4,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 5,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 6,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 7,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 8,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 9,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    },
+    {
+      "run": 10,
+      "science": {
+        "fixture": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+        "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+        "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
+        "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
+        "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+        "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
+        "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
+        "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
+        "dtmCountsBytes": "8f4e945f948df46df1f0289b07421682871244849cf5e47fcb3d58e66d9958e3",
+        "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
+        "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
+        "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
+        "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+        "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
+        "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
+      },
+      "buildScoped": {
+        "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
+        "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+      }
+    }
+  ]
+}

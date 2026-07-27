@@ -1,0 +1,156 @@
+{
+  "portabilitySchemaVersion": 1,
+  "status": "reproduced",
+  "ok": true,
+  "claimEstablished": true,
+  "claim": "At commit 50e76d2, OpenLiDARViewer produced identical science-scoped artifacts from the same seeded fixture on darwin-arm64 and linux-x64. Build-scoped provenance and execution timing differed, as expected. Nothing is claimed for platforms not in that list.",
+  "platforms": [
+    "darwin-arm64",
+    "linux-x64"
+  ],
+  "evaluatedCommit": "50e76d22d405f716386dea50138e684fbe5a6911",
+  "lockfileSha256": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559",
+  "releaseVersion": "0.6.1",
+  "scalarTolerance": 0,
+  "endianness": {
+    "darwin-arm64": "LE",
+    "linux-x64": "LE"
+  },
+  "preconditionFailures": [],
+  "fixture": {
+    "identical": true,
+    "seed": 20260726,
+    "requestedPointCount": 250000,
+    "generatedPointCount": 250000,
+    "datasetId": "synthetic-250000-seed20260726",
+    "sourceCloudHashes": {
+      "darwin-arm64": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
+      "linux-x64": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3"
+    },
+    "descriptorHashes": {
+      "darwin-arm64": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9",
+      "linux-x64": "98e511999d36f75773d20d807700c785cb1e159e4fe1982b3f936639d44174f9"
+    },
+    "mismatches": [],
+    "likelyCause": null
+  },
+  "science": {
+    "evaluated": true,
+    "suppressedReason": null,
+    "hashesCompared": 15,
+    "hashesMismatched": 0,
+    "scalarsCompared": 18,
+    "scalarsMismatched": 0,
+    "mismatches": []
+  },
+  "expectedDifferences": [
+    {
+      "category": "host",
+      "field": "os",
+      "why": "The operating system and its release are properties of the host, not of the analysis.",
+      "values": {
+        "darwin-arm64": "darwin 25.4.0",
+        "linux-x64": "linux 6.17.0-1020-azure"
+      }
+    },
+    {
+      "category": "host",
+      "field": "arch",
+      "why": "The instruction set is a property of the host. Byte order is the part that must match, and it is checked as a precondition.",
+      "values": {
+        "darwin-arm64": "arm64",
+        "linux-x64": "x64"
+      }
+    },
+    {
+      "category": "host",
+      "field": "cpuModel",
+      "why": "The CPU model changes timing and nothing else; every science-scoped value is deterministic arithmetic.",
+      "values": {
+        "darwin-arm64": "Apple M1 (Virtual)",
+        "linux-x64": "AMD EPYC 9V74 80-Core Processor"
+      }
+    },
+    {
+      "category": "host",
+      "field": "logicalCpuCount",
+      "why": "Core count is a property of the runner. The pipeline is single-threaded here.",
+      "values": {
+        "darwin-arm64": "3",
+        "linux-x64": "4"
+      }
+    },
+    {
+      "category": "host",
+      "field": "totalMemoryBytes",
+      "why": "Installed memory is a property of the runner.",
+      "values": {
+        "darwin-arm64": "7516192768",
+        "linux-x64": "16766423040"
+      }
+    },
+    {
+      "category": "host",
+      "field": "loadAverage",
+      "why": "Host load at the moment of writing. It moves the timing column and nothing else.",
+      "values": {
+        "darwin-arm64": "10.88 11.31 11.32",
+        "linux-x64": "0.97 0.27 0.09"
+      }
+    },
+    {
+      "category": "timing",
+      "field": "medianAnalysisMs",
+      "why": "Execution time is a property of the machine. Reported per platform and never pooled.",
+      "values": {
+        "darwin-arm64": "1305.1736865",
+        "linux-x64": "1060.506257"
+      }
+    },
+    {
+      "category": "timing",
+      "field": "peakRssBytes",
+      "why": "Memory high-water observations track the allocator and the host, not the outputs.",
+      "values": {
+        "darwin-arm64": "440418304",
+        "linux-x64": "413757440"
+      }
+    }
+  ],
+  "structuralExclusions": [
+    {
+      "field": "timestamps",
+      "why": "Run start and completion times are wall-clock readings. The framework strips them from every hashed artifact, and they are recorded in each platform manifest rather than compared."
+    },
+    {
+      "field": "archive paths",
+      "why": "Each platform writes into its own results directory and each CI runner has its own workspace root. Paths are relative in every manifest and are not part of any hash."
+    },
+    {
+      "field": "build identity",
+      "why": "The build identity string embeds the commit and the runtime that produced it. The scientific record and the processing manifest are seeded from it, which is why both are build-scoped and compared separately."
+    }
+  ],
+  "timing": [
+    {
+      "platformId": "darwin-arm64",
+      "medianAnalysisMs": 1305.1736865,
+      "medianAnalysisUnavailableReason": null,
+      "analysisCv": 0.05316730554592729,
+      "analysisCvUnavailableReason": null,
+      "peakRssBytes": 440418304,
+      "peakRssUnavailableReason": null,
+      "recordedRuns": 10
+    },
+    {
+      "platformId": "linux-x64",
+      "medianAnalysisMs": 1060.506257,
+      "medianAnalysisUnavailableReason": null,
+      "analysisCv": 0.052659910444877854,
+      "analysisCvUnavailableReason": null,
+      "peakRssBytes": 413757440,
+      "peakRssUnavailableReason": null,
+      "recordedRuns": 10
+    }
+  ]
+}
