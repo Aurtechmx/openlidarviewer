@@ -49,7 +49,12 @@ export interface VerticalAccuracy {
   readonly nmad: number;
   /** Held-out sample size behind the figures. */
   readonly sampleSize: number;
-  /** Standard tag for the deliverable. */
+  /**
+   * What the figures are, for a deliverable that prints this tag. It names the
+   * formulas and their basis, never a standard the figures conform to — a bare
+   * "ASPRS 2014" beside an NVA number is a conformance claim, and hold-out
+   * residuals are not an ASPRS checkpoint assessment.
+   */
   readonly standard: string;
 }
 
@@ -63,7 +68,7 @@ export function computeVerticalAccuracy(report: ValidationReport): VerticalAccur
     bias: Number.isFinite(report.bias) ? report.bias : Number.NaN,
     nmad: Number.isFinite(report.nmad) ? report.nmad : Number.NaN,
     sampleSize: report.sampleSize,
-    standard: 'ASPRS 2014',
+    standard: 'ASPRS 2014 formulas, hold-out basis',
   };
 }
 
@@ -79,7 +84,7 @@ export function formatVerticalAccuracy(report: ValidationReport, units = 'm'): s
   const u = ` ${units}`;
   const lines = [
     `Vertical RMSEz: ${a.rmseZ.toFixed(2)}${u} (n=${a.sampleSize}, hold-out)`,
-    `NVA-style @ 95% (${a.standard} formula, hold-out): ${a.nva95.toFixed(2)}${u} — ` +
+    `NVA-style @ 95% (${a.standard}): ${a.nva95.toFixed(2)}${u} — ` +
       `assumes normally distributed error; withheld points, not independent checkpoints`,
     `VVA-style @ 95% (percentile, hold-out): ${a.vva95.toFixed(2)}${u} — ` +
       `p95 of ALL residuals, not vegetated-class checkpoints`,

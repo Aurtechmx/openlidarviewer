@@ -26,9 +26,13 @@ import { triggerDownload } from '../../io/download';
 /** Supported pure-data export formats. */
 /**
  * `geojson` is RFC 7946 — WGS 84 degrees, no `crs` member — because that is
- * what the extension promises a reader. `geojson-native` keeps the source
+ * what the extension promises a reader. The third position element is written
+ * only when the vertical reference is proven to be WGS 84 ellipsoidal height
+ * AND the vertical unit resolves, and it carries the metre value RFC 7946
+ * requires; otherwise the geometry is 2D and the elevation rides as a property
+ * that names its own unit and datum. `geojson-native` keeps the source
  * projected frame and the pre-RFC `crs` member for GIS that wants the survey
- * grid, under a filename that says so.
+ * grid, under a filename that says so — it is not RFC 7946.
  */
 export type ContourFormat = 'geojson' | 'geojson-native' | 'svg' | 'dxf';
 
