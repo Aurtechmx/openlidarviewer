@@ -38,6 +38,10 @@ Twelve validation suites ship with their own npm scripts, and each states what i
 
 The development toolchain moves to TypeScript 7.0.2, Vite 8.1.5 and Playwright 1.62.0. All three are development-only, so the shipped runtime dependency set and the SBOM are unchanged.
 
+## User guide
+
+A user guide is published at [lidar.aurtech.mx/guide](https://lidar.aurtech.mx/guide). The application header links to it beside the GitHub link.
+
 ## What the gate still does not catch
 
 The mutation campaign exists to answer that question with evidence rather than confidence, and four of its twelve targeted mutations survive the full gate. `validation/mutations/summary.md` carries the current state and the commands. As recorded there:

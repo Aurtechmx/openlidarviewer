@@ -249,6 +249,17 @@ export class Stage {
     github.target = '_blank';
     github.rel = 'noreferrer';
 
+    // User guide — same ghost treatment as GitHub, sitting beside it so the
+    // two off-site destinations read as one group.
+    const guide = el('a', {
+      className: 'olv-github',
+      text: 'Guide',
+      href: 'https://lidar.aurtech.mx/guide',
+      ariaLabel: 'OpenLiDARViewer user guide',
+    });
+    guide.target = '_blank';
+    guide.rel = 'noreferrer';
+
     // Data sources & credits — a quiet ghost link, same treatment as GitHub.
     // Keeps attribution for the streamed public datasets one click away from
     // every screen without crowding the trust signal.
@@ -270,6 +281,7 @@ export class Stage {
       privacy,
       fullscreen.element,
       credits,
+      guide,
       github,
     ]);
     this._topBarRight = right;
