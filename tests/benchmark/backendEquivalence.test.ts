@@ -57,6 +57,11 @@ import {
 } from '../../src/terrain/engine/TerrainRasterEngine';
 import { createCpuBackend } from '../../src/terrain/engine/cpuBackend';
 
+import { witnessSuite } from './reachability';
+
+// Both claims are witnessed from one counter window; see reachability.ts.
+witnessSuite('backend-selection', 'terrain-derivatives-node');
+
 const ADAPTER: AdapterDescriptor = {
   vendor: 'test',
   architecture: 'test-arch',

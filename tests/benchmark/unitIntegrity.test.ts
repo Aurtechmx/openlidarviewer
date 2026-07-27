@@ -66,6 +66,9 @@ import {
 } from '../../src/units/units';
 import { linearUnitOf, linearUnitLabel } from '../../src/export/ScanReportRenderer';
 import { createInspectorCardRefreshers } from '../../src/app/inspectorCardRefreshers';
+import { witnessSuite } from './reachability';
+
+witnessSuite('metric-unit-consistency');
 
 // ── Pre-registered tolerances ────────────────────────────────────────────────
 // Written before any comparison was run. Each states the physical magnitude
