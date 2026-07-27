@@ -247,8 +247,8 @@
       "vitest": "4.1.10"
     },
     {
-      "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-      "commitShort": "dcd9dbc",
+      "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+      "commitShort": "7d9d2d3",
       "cpus": 14,
       "label": "candidate",
       "node": "v26.0.0",
@@ -265,26 +265,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 with a foot vertical factor writes the METRE equivalent into the ordinate\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 947,
+        "durationMs": 1238,
         "exitCode": 1,
         "injectedFileCount": 4,
         "observation": "AssertionError: expected undefined to be 'metre' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:2d0cdd02b72a0440c7f395d83aa8141d49958a2d0a0bf95aa7789451e230c162",
-        "transcriptDigest": "sha256:fcc5e464dd05f69179548d1542d5b29078b96689f38c7a8766d86dab7c17164e"
+        "reporterDigest": "sha256:7b49a11f3f26f1f366c7e3402183fecd836a4b2ee371df0be58fb694b4415a86",
+        "transcriptDigest": "sha256:c1bb5af1d8015c4fca02b282cfb49d12d00a25bcceab657c794cb74b4ded7611"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 with a foot vertical factor writes the METRE equivalent into the ordinate\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 953,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1005,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:a5d94288b74f8f4ef23012b5dc13976992ecb3eec4a93316ee658bcf3be0fbda",
-        "transcriptDigest": "sha256:156bd0c664de3eb7584c859907b659f0674027230e30fc03f3f8613ce7d8f906"
+        "reporterDigest": "sha256:bafee6f741cde3eaffea51fe39ae5088ddea436a87374d8b594d0422aeb352d9",
+        "transcriptDigest": "sha256:595c73b06cab2bf44119286e51359608bdac17a3f7e5da473ee68c1e1eb03535"
       },
       "defect": "OLV-DEF-001",
       "defectName": "RFC 7946 third ordinate written in source units",
@@ -305,26 +305,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 with an unresolved vertical factor falls back to 2D\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1003,
+        "durationMs": 1013,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected true to be false // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:b2dd0c326af831530b434e1df4412ca80c38067d2b40e057b53e1754d0cd3ad3",
-        "transcriptDigest": "sha256:a137e3ff4676cdd8a4c72fd4a05d1a7dedf96233494371c61de412c065f9aaac"
+        "reporterDigest": "sha256:1f48f1d3fe57ffe58be1396e7b1958cacccc1e48d4fc936f7b2b8a841ab98e4e",
+        "transcriptDigest": "sha256:c25fd1757876865b5f1c1c17157abf6996d3a22e3bf08d8ac8e8781698b4553d"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 with an unresolved vertical factor falls back to 2D\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 973,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1014,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c57cea3b929ce3aff845a9b65272a8dc56f61930202ca30cf97729d502b4baee",
-        "transcriptDigest": "sha256:6901928f35d7277cf7f4bafc5cab4c7f15f541c9ef97aec412071ba032af3e61"
+        "reporterDigest": "sha256:4fad82ed3a11f76578f6ceeb80d7a0a129ce2efcff9158cafd7bef25686a1357",
+        "transcriptDigest": "sha256:a1902b5ee0e0cbb892080f22c4edb5501f4bbed008f06f084155a5c4db4502e4"
       },
       "defect": "OLV-DEF-001",
       "defectName": "RFC 7946 third ordinate written in source units",
@@ -345,26 +345,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 already in metres leaves the ordinate equal to the elevation\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 953,
+        "durationMs": 995,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:552f887269ae4876ee1ec4998ce9e1405732f7dfecc4b28ce0388ebbaad9a6fc",
-        "transcriptDigest": "sha256:53fee59093984712c45837673658880070d8124b5992b9a9815a3865a204018d"
+        "reporterDigest": "sha256:208479f12d5ab78bdcda07d9af83a76881cc88405c6a3848f7af97d910823bad",
+        "transcriptDigest": "sha256:996bc3847940128a7da8ec3641611879b6d9af2128f0d04c1b740ae464304321"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"EPSG:4979 already in metres leaves the ordinate equal to the elevation\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 981,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 995,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:b59c1335bc76ff5faebc87e908003c380641e9a467e83740900000fe76f337a7",
-        "transcriptDigest": "sha256:45439d351e6b9ee6160fa42d30986d249954322f2d9b7faf44dd8040ad7b6b14"
+        "reporterDigest": "sha256:690d8262116aa841d95de5c2d8084f2202e7b2b5c38ad48955157a8b394e1e60",
+        "transcriptDigest": "sha256:682ffd025a105c28dcfdeb9fbc4f066dd51d3cd35354f74aec01a83b141c3778"
       },
       "defect": "OLV-DEF-001",
       "defectName": "RFC 7946 third ordinate written in source units",
@@ -385,26 +385,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"the declared interval equals the actual spacing of adjacent levels\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 958,
+        "durationMs": 1012,
         "exitCode": 0,
         "injectedFileCount": 4,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:986ec23bc73c392f632e0b570912d4537cf4507b2002d90e00f2ed5cf238af57",
-        "transcriptDigest": "sha256:882e451e0b8229a681355b7fa86b00ecbd2e077f7d5cb844c698ae12a4c34c99"
+        "reporterDigest": "sha256:95fb51a171c00081b6ae6b2866c8241cccc316a5436cbb079ba1d90b2a56a851",
+        "transcriptDigest": "sha256:1a041f8ac9f3464d4eaf82a9ca0aab2af52060922a98e5bca6a6e8b3f85b12e6"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"the declared interval equals the actual spacing of adjacent levels\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 995,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1016,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:e6f8557697b9ce76274b830384dd8985c8fab27c2804e5087c37c85e76f560c1",
-        "transcriptDigest": "sha256:421bd2f3f125c3f314536f3f4df04c982dc41494d82da5c8428e57ce8d690400"
+        "reporterDigest": "sha256:b7fdd79c6016b777ddae4df76c87f30692aba25cedb9aebc72182cbadedc6dfb",
+        "transcriptDigest": "sha256:7e5b75d7c49b43bfa7ac61db107c509518625042e2e787614dbd7e85cef8a434"
       },
       "defect": "OLV-DEF-002",
       "defectName": "Contour set reported the requested interval, not the emitted one",
@@ -431,20 +431,20 @@
         "observation": "AssertionError: expected undefined to be 0.01 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:c91f69b01bd5a6535e01a31ef77ea797450509e5080a4f57ec37fe629cffec50",
-        "transcriptDigest": "sha256:98cbbab98f593218af70c89563068bcb82d70ae04dcd0d1359ffeb3678f7af79"
+        "reporterDigest": "sha256:fec15944841a92ba05df196117454bd14ba603089c1bffafde31c19def4a3d2f",
+        "transcriptDigest": "sha256:ec14807aaffa1873e854f251fc374e9e66d957900179044d9f6106100a5ebf6d"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"an over-fine interval thins the levels and the declared interval follows\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 989,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 992,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:3d3da9d1b89490a375383b2c3887db706d95172e72b7e317ca5c6e3923b9c4f2",
-        "transcriptDigest": "sha256:cf7af9c4c5588e0a88846b8db2d79127bc6bbd7654bed769c0fee0a72b467507"
+        "reporterDigest": "sha256:84a52800a04161ecc9c0e1622e927a248af7661406264f35971b095a99c8c9d1",
+        "transcriptDigest": "sha256:04704651721b47b435085bdfe88bd6d231ed0c62c64565c5a47f6b23bad74b9b"
       },
       "defect": "OLV-DEF-002",
       "defectName": "Contour set reported the requested interval, not the emitted one",
@@ -465,26 +465,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"the GeoJSON interval property matches the set interval on every feature\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 965,
+        "durationMs": 997,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:452b37fbdc9b36e0ba877d4e60afc781f9a47aaca99823d4365ec2dd111c224e",
-        "transcriptDigest": "sha256:bd840a1b41cbc5945f21c971ed3ac0d94e2ab0ca28bc5239e5518b0edaddcdc6"
+        "reporterDigest": "sha256:5a09e790215329b87ed8f132efa110461d761b2a8c9cf39506a98463bfc4071c",
+        "transcriptDigest": "sha256:d08004b515e03dc39627888c7b64d1057c855f4293e198427b79e25928b3bafe"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"the GeoJSON interval property matches the set interval on every feature\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 971,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 996,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:999175b9bdb9a53ab0e40bfabc8e48a473cdb212b0bf3480c5a5ffa25787d254",
-        "transcriptDigest": "sha256:300c5bdbea3a978175dc190b859ca3ebcfeb6f4e45396c28e65ba871af287f24"
+        "reporterDigest": "sha256:45e8b6b16daac26ed3bc1cb8f6f1fd5c04a56cb700797b4af4a036a37329ae27",
+        "transcriptDigest": "sha256:670f40750e9fe411662fed49763dd1bb9b3ade0c7afbcf1162ff6019ed37b7c3"
       },
       "defect": "OLV-DEF-002",
       "defectName": "Contour set reported the requested interval, not the emitted one",
@@ -505,26 +505,26 @@
       "baseline": {
         "command": "npx vitest run tests/contoursAt.test.ts -t \"measures the emitted interval off an explicit level list\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 862,
+        "durationMs": 866,
         "exitCode": 1,
         "injectedFileCount": 1,
         "observation": "AssertionError: expected 7 to be close to 4, received difference is 3, but expected 5e-10",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:d940097ee40794c3c32dd5f1e55fd629c20a9aaa2284a0c99c3f8eb730ec080a",
-        "transcriptDigest": "sha256:fb7973ed748e8fac1de9211dee13cb7aa5a8c84137e5c6614db1fabf2a192e6d"
+        "reporterDigest": "sha256:f8ebabbbe949b4088599923c7ab0e12830a5abaae23ed111ce2f72335728810e",
+        "transcriptDigest": "sha256:fd7fca5e5672c54e185c1a7dfc4d37180d317bbf2d2805237fc5b3c243b5963c"
       },
       "candidate": {
         "command": "npx vitest run tests/contoursAt.test.ts -t \"measures the emitted interval off an explicit level list\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 861,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 858,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:6e8df24bab09151ac584d291cf7e594569007de7dd84413e005b11ff278ac73b",
-        "transcriptDigest": "sha256:f4726d82dc264177c0869a4e06ee6d4ecc2bfbd704ed8f751783710f03ce9b75"
+        "reporterDigest": "sha256:57f1b65f68c738bbc2363dbd66d0c8eb432682098a71a966580f28a5d0575e08",
+        "transcriptDigest": "sha256:c0f33ead4155da636c02a74007410a2c092ee00ebfc2bfdecfd45f104c2b1c0e"
       },
       "defect": "OLV-DEF-002",
       "defectName": "Contour set reported the requested interval, not the emitted one",
@@ -545,26 +545,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"a flat surface emits no contour geometry\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1005,
+        "durationMs": 1006,
         "exitCode": 1,
         "injectedFileCount": 4,
         "observation": "AssertionError: expected '' to contain 'flat surface'",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:9c6cb59bee7fa68c85dd3edd45f606c5708cf6c23f33b729d983bf4aab0f05ac",
-        "transcriptDigest": "sha256:cd8ecea2871c790bdd344760259b1cd55205e936de3130e07cd9bf3c8cb4a0d1"
+        "reporterDigest": "sha256:c2916c2479c8dcef6542d06e814da3069e2262e08a25147fbf58a987336366c6",
+        "transcriptDigest": "sha256:b9382408ebcdcb5472d3ba603d5aace88f09d59f6c8c310046f8551679210803"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/contourCorrectness.test.ts -t \"a flat surface emits no contour geometry\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 947,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 997,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:2e8328e203b3a5aa8a57481edae1d03928ec58c1e2394b00367646428321a675",
-        "transcriptDigest": "sha256:b8ecbfbca5c6f1e6108d5f6037b0b91ce32095b9eb12f16dfc3ea49dfd676081"
+        "reporterDigest": "sha256:657c85fa24299fc5207e3b2756141ee5439f74fe21b1c82504d1e150074d3220",
+        "transcriptDigest": "sha256:2c3f9cf94e119f3d854e2e5c174498e5b6e6da0bde39fafcc9bbfb5c28a6c4ac"
       },
       "defect": "OLV-DEF-003",
       "defectName": "A flat surface produced an unexplained empty contour set",
@@ -585,26 +585,26 @@
       "baseline": {
         "command": "npx vitest run tests/demExport.test.ts -t \"maps a metres-per-unit factor to its GeoTIFF unit code, or to none\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1158,
+        "durationMs": 1286,
         "exitCode": 1,
         "injectedFileCount": 2,
         "observation": "TypeError: (0 , __vite_ssr_import_2__.verticalUnitGeoKeyCode) is not a function",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:47b26d615dcffd7b43d9d1f4be77dff54f79c85a9f00e7ec53b9d402f464a65c",
-        "transcriptDigest": "sha256:ae34c368ed1a83a6b7c91b3a318538e4ac68195b0c378ec50a52f7f5758df9b2"
+        "reporterDigest": "sha256:9b9e56bed8c5bba2e55058282be00a3e0d1344ffa6e2ea6de202df7d7ec44cb4",
+        "transcriptDigest": "sha256:6d3a30bea92c95cc306fff6767ce5f45f7fc87ee456ace3c7c11c53cb2955b82"
       },
       "candidate": {
         "command": "npx vitest run tests/demExport.test.ts -t \"maps a metres-per-unit factor to its GeoTIFF unit code, or to none\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1157,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1235,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:379b84dc6e2502b206c6790ca083afc482d660a88e228fa90b717997578b105f",
-        "transcriptDigest": "sha256:858635d0f28867e78415d201cae598da1ebea064035e8fe22fcb048bb33b2416"
+        "reporterDigest": "sha256:6f5b4ccf085f7d4ee3edeb692077df05d86d90a1eb777db45325b6d9bda167bb",
+        "transcriptDigest": "sha256:4df20532e4d37343251a46cd37ba47197de5d33287a9afdbdd22653aa1058735"
       },
       "defect": "OLV-DEF-004",
       "defectName": "Contour deliverable GeoTIFF omitted the vertical-unit key",
@@ -625,26 +625,26 @@
       "baseline": {
         "command": "npx vitest run tests/demExport.test.ts -t \"writes the same vertical unit key from the contour deliverable as from the DEM package\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1171,
+        "durationMs": 1233,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected null to be 9002 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:7c2908710acfef5c58fa602f2cda5040f42e1415133349c37051c399fbbb34c6",
-        "transcriptDigest": "sha256:7e25257aef0893f18cba0aa866a8a8c09ed30a9fd92a138e54508275cea71445"
+        "reporterDigest": "sha256:fdd888bc94420a07f95a1aa2c35e7ec1e55186d427b2ce19329d1c09fcca98fe",
+        "transcriptDigest": "sha256:6484359cfd61998831c61abda36270095a039862a73b57d099b8b06b8ff2cd89"
       },
       "candidate": {
         "command": "npx vitest run tests/demExport.test.ts -t \"writes the same vertical unit key from the contour deliverable as from the DEM package\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1180,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1243,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:3c4ab92bf2ce064efa52e258c705f92f2b1c4cbe1bbb561f568280e3fa128f3f",
-        "transcriptDigest": "sha256:760a95213a21669649a52b9b4e5f2b0e8f6200b084f9256feea215adb2f94e41"
+        "reporterDigest": "sha256:6dec546308c14563120080234285973967af37b36431e08d5ead84df134a5787",
+        "transcriptDigest": "sha256:60f578a73bbb9fb8192a80acf44c3e5fa6857463b36ebe5c3d540aab49f38910"
       },
       "defect": "OLV-DEF-004",
       "defectName": "Contour deliverable GeoTIFF omitted the vertical-unit key",
@@ -665,26 +665,26 @@
       "baseline": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"async derivatives convert the rise with the vertical unit factor, like derivativesSync\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 872,
+        "durationMs": 910,
         "exitCode": 1,
         "injectedFileCount": 2,
         "observation": "AssertionError: expected false to be true // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:866fbac99d6791dff8802387953d6e9d594608c769d5ebcc49832c6598a1cde8",
-        "transcriptDigest": "sha256:e8dfed1c5e6cc37412ba2d56a2472bc8516c698e2c5b247990d8999008008b9d"
+        "reporterDigest": "sha256:21d547a10d0e3f3bf8d50832a351b232033b69171c583d45e437fa38bea2e9ce",
+        "transcriptDigest": "sha256:db7e1f4408cd2c0653c000366a83191aea7bdd1133d031342ac86d82f48f61f5"
       },
       "candidate": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"async derivatives convert the rise with the vertical unit factor, like derivativesSync\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 917,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 903,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c53816d71eabe8a1e55a90186b837d95752662cefec5d27b22b9b05abbdbb883",
-        "transcriptDigest": "sha256:a6cc990cb4e5f0cf60aa5df3035f7ccf6d75bd9e3498f3fc47196cbfae1aed2d"
+        "reporterDigest": "sha256:581309445f14a2be908dba118c1278f45ef2757dc4c17097f9c72966317897b2",
+        "transcriptDigest": "sha256:74871e4025da90a0c02650acd25cc7d8bf83a195ee9bff3e1067f172c0c741d0"
       },
       "defect": "OLV-DEF-005",
       "defectName": "Async and GPU derivative path took no vertical-unit factor",
@@ -705,26 +705,26 @@
       "baseline": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"a backend that IGNORES the vertical unit factor FAILS the probe\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 881,
+        "durationMs": 929,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected 'gpu' to be 'cpu' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:2aa0d625cd3bb8be750c33618197eeb22d733f1ba73229844eff3273ec52ae6d",
-        "transcriptDigest": "sha256:cac3ebac7ffc1063ba84a3826e525bfd5b4765aa8ac190df94a8cf0c22b668e6"
+        "reporterDigest": "sha256:625a2c39f7ae544b2cc653195917002cbc62a928764288745084694d8e151180",
+        "transcriptDigest": "sha256:e570179ade26fd4f9afe0bddfaa48a24b3ddf23a45f635cc99373190ca2d05fd"
       },
       "candidate": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"a backend that IGNORES the vertical unit factor FAILS the probe\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 874,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 900,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:00ee697b276fffce707fd85bc6320efbd45e7d7ae851f3ede6e84fb2c4a9af86",
-        "transcriptDigest": "sha256:d3699ed7fe01af6b5a27d847f7a49b1335ac346910583f30bd025b01f0c13339"
+        "reporterDigest": "sha256:fb31a837dd020fbb83be01980396247ee922f22cb1f4d1d873a04e3da6073eda",
+        "transcriptDigest": "sha256:a04fbf860cab52273c6c422fc0b539d7ff7a19cae7eb2d52d1dca91a43f4ee35"
       },
       "defect": "OLV-DEF-005",
       "defectName": "Async and GPU derivative path took no vertical-unit factor",
@@ -745,26 +745,26 @@
       "baseline": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"f32 transcription applies the vertical unit factor like the CPU reference\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 888,
+        "durationMs": 898,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected 3.245837926864624 to be less than or equal to 0.0001",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:6ff13893b2a3ee58c497421c8ffd4284296ca58e39af972b599ebf223f3cb7ab",
-        "transcriptDigest": "sha256:2c9c5812811bd4db1358622724b86c5b53d169cb8491a95c5b6f846801fd9d4d"
+        "reporterDigest": "sha256:f82cbc3b912a9eeae271930b77dab97129b7f42eff49a616c40e008aa96d6ca3",
+        "transcriptDigest": "sha256:af21dcd826fbdfe9601f07b6a06f57a851ec1c14417c5984106babc557f9f7c9"
       },
       "candidate": {
         "command": "npx vitest run tests/terrainRasterEngine.test.ts -t \"f32 transcription applies the vertical unit factor like the CPU reference\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 903,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 899,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:6aa99426d335eb6e7d6bb3cc4abcb494a9b87af52a7fdcc56eb15442b1b7b2d3",
-        "transcriptDigest": "sha256:f10492b4a40f91880b88f870ea40686a16766bf7f0792fb4f1ff1261dcdc241f"
+        "reporterDigest": "sha256:e25acaea9697fac0cf1c3db1f5ff7070ccd286b0daabcbcb685489a7481da47f",
+        "transcriptDigest": "sha256:a1b0ff0407956866968c810674d832cab065a1a3e2c3c95189ed43fa4aeeae49"
       },
       "defect": "OLV-DEF-005",
       "defectName": "Async and GPU derivative path took no vertical-unit factor",
@@ -785,26 +785,26 @@
       "baseline": {
         "command": "npx vitest run tests/geodesicFill.test.ts -t \"takes the horizontal step in METRES, per axis, and the rise in metres too\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 820,
+        "durationMs": 841,
         "exitCode": 1,
         "injectedFileCount": 2,
         "observation": "AssertionError: expected 13.044410760498048 to be close to 13.053507804870605, received difference is 0.009097044372557761, but expected 0.000005",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:60c86c0ead52b6f77866940bf890d272757cf0dcd9918dfb31327a056cc2f950",
-        "transcriptDigest": "sha256:eebd6f3ce7133d5bd94844b5afefb02502e4b0ec7261299d5caf1345f37e0501"
+        "reporterDigest": "sha256:bd5e3a530b3b98c31c8b271fe57562f1afeeeb1e83ebd7beeb7236fc1cd43592",
+        "transcriptDigest": "sha256:4969174b639bb213e59a03b15891dbbd768957d5280703de23c070908ce96959"
       },
       "candidate": {
         "command": "npx vitest run tests/geodesicFill.test.ts -t \"takes the horizontal step in METRES, per axis, and the rise in metres too\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 822,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 837,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:8217adcacfb5567b6715cda8d650019ffada38abffa561cbfe8d8493ce10f892",
-        "transcriptDigest": "sha256:4a066c546e78d4b95d062c0cf4cf25c76f2dc99548985ef3ba015874880056b2"
+        "reporterDigest": "sha256:63d81a4a0acd09ac25812416bfa8a22c1e6c5368d636646658bd676611db2502",
+        "transcriptDigest": "sha256:02507def9a8159cf71e7115fc1d23eda08110b22eedf88eb70173092fe2a7b9b"
       },
       "defect": "OLV-DEF-006",
       "defectName": "geodesicFill mixed horizontal and vertical units in its step cost",
@@ -825,26 +825,26 @@
       "baseline": {
         "command": "npx vitest run tests/geodesicFill.test.ts -t \"costs a diagonal step as the metric hypotenuse of the two axes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 833,
+        "durationMs": 832,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected 13.053507804870605 to be close to 9.12470722198, received difference is 3.928800582890606, but expected 5e-9",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:784731105ec0c8dccff9dd0d4b12bbd95810d74922c2b5c2c636c1348d91709f",
-        "transcriptDigest": "sha256:1efd228feba63e344f437f3ab3773fae25b262f2367ed0bafdc114341b9ff828"
+        "reporterDigest": "sha256:81e7a57058e142dc16054ca52a92185ec4ab099ecc7e6c59bd5c7a976f02261e",
+        "transcriptDigest": "sha256:fa31e7adf86dd458cfba0ccbb722ee3813f41afe155f6375fd78e9dd47a527f1"
       },
       "candidate": {
         "command": "npx vitest run tests/geodesicFill.test.ts -t \"costs a diagonal step as the metric hypotenuse of the two axes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 822,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 849,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:d67bd7cf4f307d33ed77a182aedb205ef1ea46f784f063812f9dc56b5e1e2efc",
-        "transcriptDigest": "sha256:e19ea3a5cb24d82701a639623249516aabacf6fca1c3b5bc72555477d3e61a0a"
+        "reporterDigest": "sha256:a58328d8411edd7536f445b47e90d2a96f1a17c53ed89841b362d700057965fa",
+        "transcriptDigest": "sha256:afbd1da11ff6416fdf4a587fb429b2c2b9d618e7319b2dd0bd38a2703f562532"
       },
       "defect": "OLV-DEF-006",
       "defectName": "geodesicFill mixed horizontal and vertical units in its step cost",
@@ -883,26 +883,26 @@
       "baseline": {
         "command": "npx vitest run tests/terrainTruth.hillshade.test.ts --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 856,
+        "durationMs": 854,
         "exitCode": 0,
         "injectedFileCount": 2,
         "observation": "6 cases passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:7cb5f87aa4eddd1d017da461dd620dc604d1f87c3041206905e2b1d2a717cddb",
-        "transcriptDigest": "sha256:cba002fddcfc42ae85babb611b2ae4fb44e26d521fe1431c032a62c128f9e2dd"
+        "reporterDigest": "sha256:28b116ed73c017912fe9a512b0255fa81d3ee8b859f6cd4a96e46d11808cc95f",
+        "transcriptDigest": "sha256:d5cae1ef449f0b4eeed0d8c5637a53c7416b53259b4d29cf856f8076151bf1f5"
       },
       "candidate": {
         "command": "npx vitest run tests/terrainTruth.hillshade.test.ts --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 850,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 868,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "6 cases passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:47d6c1df3f8693a98236a619f566b17d894a9c12852eb0d4f33343af784c9b83",
-        "transcriptDigest": "sha256:926c4ef8adbcc61c7cfda0822b3da55a969f68ab98556f8a7441616969cf7da7"
+        "reporterDigest": "sha256:0cef89cd8aabd6df4b86e224797a2ae5b5911814f00def2f58751c32e344afd7",
+        "transcriptDigest": "sha256:7f51a9df6eda43b4ef7a59133f98cd4cf9b1c0774698fdff782a1a6c5198ee40"
       },
       "defect": "OLV-DEF-007",
       "defectName": "Hillshade convenience wrappers hard-coded square cells and no vertical scale",
@@ -923,26 +923,26 @@
       "baseline": {
         "command": "npx vitest run tests/dtmHardening.test.ts -t \"measures the floor in METRES against native-unit heights\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 859,
+        "durationMs": 883,
         "exitCode": 1,
         "injectedFileCount": 2,
         "observation": "AssertionError: expected 1 to be +0 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:2dd704a0822ffbb6f65d88547dced497f5cf6181930dc12f6b3a440cdb234b40",
-        "transcriptDigest": "sha256:c2f1e8c74024872054af387d7e99f48008ddb35834b784eb31fd7d2868052896"
+        "reporterDigest": "sha256:6936769bf21a228d6ca82aea233ed7934066f3cf943e8b915a939752e7dbcf12",
+        "transcriptDigest": "sha256:85b2f36a481d3b315baf3e0838041c81f14e316528672c70e3877f90396ee1e5"
       },
       "candidate": {
         "command": "npx vitest run tests/dtmHardening.test.ts -t \"measures the floor in METRES against native-unit heights\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 852,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 877,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:41e42522fef8d08274a174d9f8c3a7e8308e95714166ce05aaad634c83baa673",
-        "transcriptDigest": "sha256:425d4cbd8c36f567ac033a2161affe890cd13898923b9258211756fc4b5def7e"
+        "reporterDigest": "sha256:c0d8e15ed29279a738694a6f43f8ae3c77b5276e3c377c7d5312927603d702df",
+        "transcriptDigest": "sha256:bff9eb64efbdd14fcf7ae7f784fde12d272bc717953ee0693f43545486e1b7b0"
       },
       "defect": "OLV-DEF-008",
       "defectName": "Despike blunder floor compared a metres constant against native-unit heights",
@@ -963,26 +963,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"report footprint is the same for a Y-up and a Z-up cloud of the same building\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 950,
+        "durationMs": 996,
         "exitCode": 1,
         "injectedFileCount": 3,
         "observation": "AssertionError: expected 32 to be less than 1e-9",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:8562efd5a8d88133fb7010a68da17f9c8656b60fd3458733a4537d7a6b1bfa81",
-        "transcriptDigest": "sha256:9df6c43c5cb79f54e5a825fa0f0fb8eed0cf729017ee63ce45ec8dd2b2e9cd0e"
+        "reporterDigest": "sha256:4803e4ed4092bfff195565f0201fcec0a4041bbd70fa05233a999a7703643f4d",
+        "transcriptDigest": "sha256:673c3a51dd536a7eb43009115c6c3e638d1adcd15a93ba46b6ff286662c14b51"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"report footprint is the same for a Y-up and a Z-up cloud of the same building\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 963,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 981,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:407850925dcaf3bf386712eb09a03b56f222b42033e253d16276b4b6e82a5a17",
-        "transcriptDigest": "sha256:c2145b1c24cadf5f246284f8f63040023ffed824eb674ff3ef60a31f276528f9"
+        "reporterDigest": "sha256:4a9e015a37281749b3d7c1c989da4c5b150f6e5f9f6c91018367396c33b537bc",
+        "transcriptDigest": "sha256:f94ac467bc4737989177a1bf0ea4e719d9cf0cf8d52d62785c03968c8c26feb7"
       },
       "defect": "OLV-DEF-009",
       "defectName": "PDF report footprint read a Y-up scan's extents as Z-up",
@@ -1003,26 +1003,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"the static and streaming refreshers agree on the density tier for one foot-CRS box\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 959,
+        "durationMs": 992,
         "exitCode": 1,
         "injectedFileCount": 3,
         "observation": "AssertionError: expected 'sparse' to be 'moderate' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:b9021192fbba4d38a35f979607f7f7fe6c9880fa6f598bdbbafe5a3c6e3ef6a1",
-        "transcriptDigest": "sha256:fe8b1802fc265508fc746125fe7e3074daf6b02c8b2f8ff34457118380790346"
+        "reporterDigest": "sha256:78d5c5359b1d58236c9f1d6ebdd424e6a5d8adf48fbe8f02afe15808baa17565",
+        "transcriptDigest": "sha256:6a6c4bb5d102d22f73061312c1812166149427fef3f34319b6a328223602c0e3"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"the static and streaming refreshers agree on the density tier for one foot-CRS box\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 966,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 977,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:404f465fae7cd3b7c9ee77d0cae3b14eaa949fa00d3738e553e491cdd3d19924",
-        "transcriptDigest": "sha256:0a477cad273d4a7021380918e03f4d9ea0cbbe62bcebc50cebdeee265739c99f"
+        "reporterDigest": "sha256:3195099c91c119c5a867cebc2c0a17c7f4cdb322b5e5bc0fc36d943b29e8de78",
+        "transcriptDigest": "sha256:1dd5664693ce27f99054b2ea066a45c81ade510aebe68e3e5b3e000eb9111358"
       },
       "defect": "OLV-DEF-010",
       "defectName": "Streaming density tier skipped the CRS unit conversion the static path applied",
@@ -1043,26 +1043,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"the density tier is the same for a metre and a foot bounding box\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 979,
+        "durationMs": 974,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:bc89e9ceb0e7960e21adcbf4edede363d198ca543bd890ffa303ae26443bcc1e",
-        "transcriptDigest": "sha256:8393a96affff2486702696a0f6ddb89651730164cd3e69759750a610bfc02efc"
+        "reporterDigest": "sha256:4015985c77be301ee17e37bd735c400f90b67d56c8f836ea21c20abc4c2f353d",
+        "transcriptDigest": "sha256:211169508fe7795a4e852d7b0f6480ffbb6c88208b57b01833ccfc202864ab97"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"the density tier is the same for a metre and a foot bounding box\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 956,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 989,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c7fabd06305617cb9d3c0f1c154bc64ac3113b858fdb6e3358ff30c67628ad10",
-        "transcriptDigest": "sha256:979b18e6583804828c44de62190e2b6e2f7de57986e46f9286d9bc04b9c1401c"
+        "reporterDigest": "sha256:2e30d84d820fbd67e8089652adbcb3ba833e9700df9a766e669db9e557a92e6f",
+        "transcriptDigest": "sha256:668e6bd6b0c254cee236cbad9935f58de996179fe8f61585c0feae0f8924f81c"
       },
       "defect": "OLV-DEF-010",
       "defectName": "Streaming density tier skipped the CRS unit conversion the static path applied",
@@ -1083,26 +1083,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"an unconverted foot bounding box lands in a different density tier\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 941,
+        "durationMs": 982,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:b45f85f9ee2a820adfe5ac838e53ea6e81951abfd5c850ce91c9a0a77ce6b023",
-        "transcriptDigest": "sha256:468b37917baf8e082398a4d41ca59e46e6d7a08d0f58eb314718c3c8ec3b6e47"
+        "reporterDigest": "sha256:a00f3782c11c011d92ea02f16fb55effad4de269bb420c274b205500fcb58f04",
+        "transcriptDigest": "sha256:982f1e550718578ba1574c9a0f914fb5ffaae0bfbd934e94995cd4aec78033ce"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/unitIntegrity.test.ts -t \"an unconverted foot bounding box lands in a different density tier\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 974,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 996,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:bffb5f97161483aad84a6b1703c32efa069d7d32c73f23ba17b1dbb9c71c19e4",
-        "transcriptDigest": "sha256:8de74b76d90c6a676a470b5936bfeeb02e4b616c72d2fe825e6d924fa11521e3"
+        "reporterDigest": "sha256:ac7feed2b412f14a85e0f415adb57e0268a0f70f1067072b8fad49ad08ab46c3",
+        "transcriptDigest": "sha256:3c007fc3d6db60fab4edfa2d1bfc2f383a0e944dce20c4f4557f33052210cb2d"
       },
       "defect": "OLV-DEF-010",
       "defectName": "Streaming density tier skipped the CRS unit conversion the static path applied",
@@ -1123,26 +1123,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"LAS 1.4 WKT survives, coexisting with the vertical GeoKeys\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 976,
+        "durationMs": 988,
         "exitCode": 1,
         "injectedFileCount": 4,
         "observation": "AssertionError: expected undefined to be 5703 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:cd2b9cb76bfa14bb7db424bf2dcd9e2aa5c6d1f591e01099b3989a20cc4efe72",
-        "transcriptDigest": "sha256:181e69747cc48a16a9d71f37071bd9f7af4765cf75ce5ea67c4461cf25cb159f"
+        "reporterDigest": "sha256:2748095f39c46cf7d8a3c5410309c714823c393da9384d9e13140a3e99923c83",
+        "transcriptDigest": "sha256:7f020c2ed8195ddef220922cfecb0c228fb43f0f5734a759f5060bd143ab8ef2"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"LAS 1.4 WKT survives, coexisting with the vertical GeoKeys\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 963,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 965,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:95ecd413be520b0494e3806bb6080155226236639a58ec9658c5c712013cec97",
-        "transcriptDigest": "sha256:31b80d1ec754076fa1aa51859960a937e79c4f15eee61a57603bbd82d92a9788"
+        "reporterDigest": "sha256:d280215a1f13855d6b4196854424bc306572969b88beb0ba8cbe690838ee0d9d",
+        "transcriptDigest": "sha256:1e05915a9b5165dbb08aae8db5ba81ff38a5633abcb7480a36202d0f5584c80c"
       },
       "defect": "OLV-DEF-011",
       "defectName": "LAS 1.4 vertical CRS discarded when a WKT record was present",
@@ -1163,26 +1163,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"a compound CRS (metre horizontal, foot vertical) survives both axes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 975,
+        "durationMs": 981,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:b828ae6af119265aa8babcb5ee3188b53dd90e60279db271638848ddd1ec5556",
-        "transcriptDigest": "sha256:13e371a0dd8ba907ea69ed6f09b832ceb4b30dffaedfd3978de1e9a3adbe91b0"
+        "reporterDigest": "sha256:a7b2d3777ee4aaa07fdd3e4710157898a5d109d4d04dfda785cbd93c44187e46",
+        "transcriptDigest": "sha256:a8ccd85d4324f3af7060e37a6d2fd1dc48ec991ae1562e6c7d02ba058167709b"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"a compound CRS (metre horizontal, foot vertical) survives both axes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 972,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 994,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:d9e140504c7d75753c25ab72cc5e7be226ab090dfffc2523d2105eee895ea2bd",
-        "transcriptDigest": "sha256:729cba42e62a737c9f0d784167f49186fe5d5ec8b8f447ef813820b66784d6bd"
+        "reporterDigest": "sha256:ee27e985be0fedd0915d38cf7991db464b300aaa838d261cd161f783d66ec42e",
+        "transcriptDigest": "sha256:a1c6089ba471e01208894c5e90eea4a55d04e340dc0c9c2149557ba7658fbbf2"
       },
       "defect": "OLV-DEF-011",
       "defectName": "LAS 1.4 vertical CRS discarded when a WKT record was present",
@@ -1203,26 +1203,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"a foot horizontal CRS keeps its own unit and does not infect the vertical\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 968,
+        "durationMs": 987,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:d28f0718950ede5b27b4a46ab38dfc51de57d49a20a38c64658fec6bf5168f13",
-        "transcriptDigest": "sha256:f0242fe18b4fbb56b4bc25a2a15b89a1c85284a8747f028f40778fd46133375a"
+        "reporterDigest": "sha256:f0072bef7be6877c8c4b8876fdcd6681b0bd3b2a6f5898ba1da5fc12171cb125",
+        "transcriptDigest": "sha256:6ff9e485ecbef1fb8047b653414b12bbb2694ef2eeac660651b9c8f1bd84495a"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/roundtripFidelity.test.ts -t \"a foot horizontal CRS keeps its own unit and does not infect the vertical\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 950,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 976,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:d8374f38f6fc788649716a2f286abe44750579fb4bb8a76336bc2f398dbc0a6d",
-        "transcriptDigest": "sha256:34f44a3fd36c0ebc15265750563187de58d34b1c67b677615d3ebff173ba4b70"
+        "reporterDigest": "sha256:3dffb090323b2e5cc85ae9996fea8ff6cccac7a2ca19ce2b06efbb8f271636ce",
+        "transcriptDigest": "sha256:38bdca3498bebf374d7c667e57a305df8e3f788043504447524a6916ad9824db"
       },
       "defect": "OLV-DEF-011",
       "defectName": "LAS 1.4 vertical CRS discarded when a WKT record was present",
@@ -1243,26 +1243,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a projected CRS declaring a unit code we cannot resolve is tagged unknown, not metres\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1263,
+        "durationMs": 1328,
         "exitCode": 1,
         "injectedFileCount": 11,
         "observation": "AssertionError: expected 'metre' to be 'unknown' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:f2f5e56fc8a55ab9fce4efe0308d7ab6565fff9a3fe2a4e52f324d5564881c8e",
-        "transcriptDigest": "sha256:2cd43f7326ca3d08cb32c67eee690fec102381049a0a059786dd6b1d6f6f3435"
+        "reporterDigest": "sha256:fcbc9023b7eb6b43790ce048a6aa1f57aa2e4afadb14b7bbd3d2c0680579eb08",
+        "transcriptDigest": "sha256:a961f8fa8b42de905a2da1f90aad84c44ee9ff45e8276e154179410cc972a056"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a projected CRS declaring a unit code we cannot resolve is tagged unknown, not metres\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1305,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1313,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:264c6efd3b938dd859841171142a2ba890985f668212ee2c078bf0d8d68c644e",
-        "transcriptDigest": "sha256:767dc9523826bdb52391d959841e5bbc4f632d947ee7ac5dd3076ad13b9b2ab2"
+        "reporterDigest": "sha256:5061c3097381247fffa40147d0254a8f385b4f872853aaaed734efb1e1600d10",
+        "transcriptDigest": "sha256:57ae76df61b1245aa87fe910e2beaa828de93870d79b640b6d2fd334a534287e"
       },
       "defect": "OLV-DEF-012",
       "defectName": "A declared linear unit that could not be resolved was answered as metre",
@@ -1283,26 +1283,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"an unrecognised WKT unit is tagged unknown, and the factor beside it is a no-op not a claim\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1260,
+        "durationMs": 1318,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:a88c0be7cfa19594b2057aa4d52b8240d7087ed42301c71c08bbb242f6b0f2ed",
-        "transcriptDigest": "sha256:e101abee32e963c44fa86df47a0489f2bf67b7dd7bebee3b5afca9666c7ddbe0"
+        "reporterDigest": "sha256:a7e54a51cf5152a1e84409e5cb8f987223ccd4085dce845d3b04500ed28da6a5",
+        "transcriptDigest": "sha256:9792b9fdb401864097c9ab9fed2a21b1019e3ae0df34285e313d242411e119af"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"an unrecognised WKT unit is tagged unknown, and the factor beside it is a no-op not a claim\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1258,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1314,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:3dc7cb811b7226c5ca0e96625551228243c840ff208979610d3cbef4025b7a08",
-        "transcriptDigest": "sha256:d1f7afdd2eeeb726031ff7a588be2a831b4f6f50c092f5ee2f3705054a251f66"
+        "reporterDigest": "sha256:5a1e54f0fec797a621155e36a061c7307c861b35cede21d1a808dab0527411e4",
+        "transcriptDigest": "sha256:1e242a8a4022364d5f71f3955092020a1a7d139885e748f935a01f460b1a5f6f"
       },
       "defect": "OLV-DEF-012",
       "defectName": "A declared linear unit that could not be resolved was answered as metre",
@@ -1323,26 +1323,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a vertical unit the file does not state is left undefined, never defaulted to metres\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1247,
+        "durationMs": 1358,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:6eb4b0b5b0e518b84abf169f686fb937d68ea82e41b6b73f70cfa492658df894",
-        "transcriptDigest": "sha256:24702339819da1cf1d5b8b0756fe773fab6232d45b01362ede6e8371ff125e0c"
+        "reporterDigest": "sha256:267ea238a8ca42aeb2fd6eddbd7e9a57a42ed917faa5502b333574c2a0769428",
+        "transcriptDigest": "sha256:3891f0bc2caf7ee3168fa52996b3ee814410924ac5e4160bb816e58eaeaadef7"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a vertical unit the file does not state is left undefined, never defaulted to metres\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1254,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1334,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:84494e658b78905fe060db31b6ce160214e75bc6f88c35b25b94bd41a002429b",
-        "transcriptDigest": "sha256:4ed865dec952eb3bc449ed2aab311e60d8763a67f52595ccbb69ff311e161f22"
+        "reporterDigest": "sha256:3408765b9f73eb4106a2a27db40e1e0e3f1210d57465e372e6f13cc4554516f8",
+        "transcriptDigest": "sha256:27e38126c27762972b4ff06ef5c831d5c0e65dd66eb65718ba772a78190eaeeb"
       },
       "defect": "OLV-DEF-012",
       "defectName": "A declared linear unit that could not be resolved was answered as metre",
@@ -1363,26 +1363,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a zero-extent cloud is given no floor area, and no density derived from one\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1262,
+        "durationMs": 1350,
         "exitCode": 1,
         "injectedFileCount": 11,
         "observation": "AssertionError: expected 1 to be +0 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:d0974241bc240677e0478786927042116f4c61c9996a0618682e59e4b1b1b304",
-        "transcriptDigest": "sha256:866bcf4299cd4fc658f3f5aa4c09bd379560138881a1e117ac15665dd3969896"
+        "reporterDigest": "sha256:1591c92ca66b3b39960f762a76e491886c781b55ac1c5f523697044de374f0b2",
+        "transcriptDigest": "sha256:0ce621559cc6578f3f5b366f182a91408c0e9c58d2a1e7bdd6be11a706763a14"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a zero-extent cloud is given no floor area, and no density derived from one\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1255,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1299,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:ef9c2f3242a383a461682ab3a45ffa80deb46fbab22e49241697f1a623482b59",
-        "transcriptDigest": "sha256:c226b6f456856da993d6ca815925912f25c4aa3aeca850278e556a9ad5df543d"
+        "reporterDigest": "sha256:af48488604713ce77d541549af302a55a4904167f7350032653faf39f6a10a6e",
+        "transcriptDigest": "sha256:e984b4325208237023174341386b435238c7956634238447ae9280734e4a82ea"
       },
       "defect": "OLV-DEF-013",
       "defectName": "Three quantities were reported as measured when nothing was measured",
@@ -1403,26 +1403,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a collinear cloud is given no floor area, because a line encloses none\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1250,
+        "durationMs": 1289,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected 5.900000095367432 to be +0 // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:031e62b5d0639ea32f72e87e50dfb65d1bc7a03f67311cd893e273defe53142e",
-        "transcriptDigest": "sha256:155f1cf569b9a2025eea27ed1092e54add3cb638806cb472ca8253d1f44998f1"
+        "reporterDigest": "sha256:53757bcd2df992fb9d6d0ddef2f159329797ef933a6b24b6b15b0dcde6b65105",
+        "transcriptDigest": "sha256:35cb851d83680e268ab0871558a48fe7791b4a915b724d239fb1bf2b423eecda"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a collinear cloud is given no floor area, because a line encloses none\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1268,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1292,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c565d95c6ac87d62f136714735727249585032a0edbd34d330384e63d7408d55",
-        "transcriptDigest": "sha256:a2c7072da798c32d2eaf267a57ffa7bfa6dd9eb0d6453dc0313a120372fc63e9"
+        "reporterDigest": "sha256:b403dc13dc81d2b99ea852ac47a4b148bf4d97279d49c1e2575680d0baa20120",
+        "transcriptDigest": "sha256:f904079b2ea76cb86f1f0f50c149b53c7c0f042bb4cbac499cf5f121cfcd8b00"
       },
       "defect": "OLV-DEF-013",
       "defectName": "Three quantities were reported as measured when nothing was measured",
@@ -1443,26 +1443,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a vertical slope reads \\\"vertical\\\" in the report, the same word the live tool uses\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1300,
+        "durationMs": 1311,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected '0.00%' to be 'vertical' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:4a3d1c90c55987109a9b529eab478e9b6a0ffb4f7f7c127b90c53463930ce4f3",
-        "transcriptDigest": "sha256:61157b975c583bd406a05a39ce1429465eff17a52bd5df488f029fdabba08289"
+        "reporterDigest": "sha256:ed4eeaf78271de51c24e262556f01ee45af1b8647cc294c619e3789b19b2401c",
+        "transcriptDigest": "sha256:49e173cf91f04682e3168c9fc29ee6f44ba50d0091159497d7703e198cf97c74"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a vertical slope reads \\\"vertical\\\" in the report, the same word the live tool uses\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1268,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1334,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:f4693d092844988f809f643f622d0a369a573bfbb0fff0abdafc40281c5e65c7",
-        "transcriptDigest": "sha256:b269fb2ac3800583bf511a14d5600901600accdc32b540d942b5ee3a1f84a14b"
+        "reporterDigest": "sha256:d5eaac8b2bd5b81628256391f950457f6a221fe59890085cdd703a94c4391f49",
+        "transcriptDigest": "sha256:a06126f9083b848f01bfe8eabb4794f9824e020ace358ab21f075427d28c6d23"
       },
       "defect": "OLV-DEF-013",
       "defectName": "Three quantities were reported as measured when nothing was measured",
@@ -1483,26 +1483,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a non-finite length refuses, matching the volume formatter beside it\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1258,
+        "durationMs": 1344,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected [ 'NaN cm', 'Infinity km', …(2) ] to deeply equal [ '—', '—', '—', '—' ]",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:e0dc508c3f981c3551a465d88a6ccfbff9c7304992574e27beece13a1a498a96",
-        "transcriptDigest": "sha256:352c2ee84ea945d99ea4abca6e4ee01ef245333abeb337073b16f6bb2ad73f9b"
+        "reporterDigest": "sha256:a81de25aea022cba4c378054b74bd70ce5dfd3702690704f89b479b7ae57e62d",
+        "transcriptDigest": "sha256:37b95168a2c2f5b6d438a788b9d7d3e1e360f25d24af7fe3b77eef7e4cde9b7d"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/failureRecovery.test.ts -t \"a non-finite length refuses, matching the volume formatter beside it\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1250,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1345,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c36ec6c0933453bf569c49fc9e59953957ebd82a6fdaeaccae3cc25b2482cdb6",
-        "transcriptDigest": "sha256:3a30a967939ab41898e9cc025d75d124c0a56aa03e5299daac310fdfa0ab0204"
+        "reporterDigest": "sha256:ec40513fec5d958f80c62370fec8dad0fc07bcbcf0bab694a46beecfaa46e4be",
+        "transcriptDigest": "sha256:7f7853a8faa10f4e04bbfff548ebf131f10700bd0c15491654e1e4700fe8baf5"
       },
       "defect": "OLV-DEF-013",
       "defectName": "Three quantities were reported as measured when nothing was measured",
@@ -1523,26 +1523,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"an unregistered method id is refused, including a prototype key\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1247,
+        "durationMs": 1288,
         "exitCode": 1,
         "injectedFileCount": 19,
         "observation": "AssertionError: expected { …(12) } to be null",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:1df589857c5912feaf376991e06813e276a79b590fbf658b126f51add1727e8f",
-        "transcriptDigest": "sha256:bde7cc5e0789a8c2b089ffb5c48ddd441c629cfaa5c040527f3c7dfbb42f0dcc"
+        "reporterDigest": "sha256:51a15bb6b8205ff8de9dd54581d57375b97e5efff623ada6fb5550488ea20e7e",
+        "transcriptDigest": "sha256:73318c64061cf4f2dc4b6c1cf3ac6cecee21a7cc2243cb46198455b29c21d5a9"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"an unregistered method id is refused, including a prototype key\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1265,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1257,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:c38866c5281f20a32dab0968fff5e8197c5287ed4f1bce125fd2e79fd4379605",
-        "transcriptDigest": "sha256:f8d0a30dd0cae9ae15d5218bcd34e5e10ca09d89c3375e7b8e6025f00f500e4b"
+        "reporterDigest": "sha256:cdd92d5a8f4cd04036c896d25388f93bee5e6d6b28f02e58b7ba230085f66a73",
+        "transcriptDigest": "sha256:46165c744aebca7e2f4fa08e8ebed30f10d1b106ced37ed77e9ae65a6dc7b179"
       },
       "defect": "OLV-DEF-014",
       "defectName": "A prototype key resolved as a method id",
@@ -1563,26 +1563,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a benchmark artifact keyed `__proto__` keeps a distinct hash\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1221,
+        "durationMs": 1225,
         "exitCode": 1,
         "injectedFileCount": 13,
         "observation": "the probe could not load: missing module ../../benchmarks/runner/writer",
         "outcome": "failed-collection",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:5e24ac7d71e7874522c818567f26f42a83412aa60c711a56246e7485730851f9",
-        "transcriptDigest": "sha256:acd1f62289121ced20c5b31380c93de16502f9a4890a391db1a3670e24df9fbf"
+        "reporterDigest": "sha256:5358af492bfe22fcca54bb42cb3482f28f36b5db77652b9c242657aa52b4a836",
+        "transcriptDigest": "sha256:cadaada144717c939e1c8f4b7ca2c801f4509ec95f40e8d479619599f3523384"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a benchmark artifact keyed `__proto__` keeps a distinct hash\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1254,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1248,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:94cdc68179427aacd21d6c9fb79ec0e5f0b56ece508fd551b4e13413006a93e7",
-        "transcriptDigest": "sha256:ba27ffa01323ea601fe168f35f8ff1b9d59e510e4b3bec8f55d52f05c0b7c1bf"
+        "reporterDigest": "sha256:468d4251e332a6f6087818df63e9d55c685eaad5eb403ec1ad64209db00c3e6e",
+        "transcriptDigest": "sha256:489dfa66a11ed2ed218ab2d818e86835e350aa685b22b67e40e432c5cf70130f"
       },
       "defect": "OLV-DEF-015",
       "defectName": "The benchmark result verifier was blind to the files it publishes",
@@ -1603,26 +1603,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"every file the writer emits is listed in the manifest it writes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1201,
+        "durationMs": 1270,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "the probe could not load: missing module ../../benchmarks/runner/writer",
         "outcome": "failed-collection",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:9038136cde912924292c23bc8cac2b5c6d7dc32486de1c6b122ecb8ef469be83",
-        "transcriptDigest": "sha256:b29c630e84904a376ae0a43889750746638112a6f2cb8ca18b8ee96247d1ab4d"
+        "reporterDigest": "sha256:63d472c6885a83f56e72ee73d93e5a0da3c4b6a5f44faef35f71f0d32b1160aa",
+        "transcriptDigest": "sha256:c0c714e1a0dba9e41a09e51aaf7dbb3ecdd059ca52ed59e1370db75a8c31b074"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"every file the writer emits is listed in the manifest it writes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 2924,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 3031,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:0f2b56325e238ffa50d8ff0659b437f05698fbda46ce2e90b5230f071f9815ba",
-        "transcriptDigest": "sha256:f6fbe1956cca4be60cdc6e60bcec181ca50a85bc8b69af5e48f9cb54c0b0a4d3"
+        "reporterDigest": "sha256:4af52944015a3e33e2cf6b3d4d2c071818eee2626e7f25d90670afae558fe48b",
+        "transcriptDigest": "sha256:98fcf6fcbbd367653ecf8941775b448c7beb7e1fd4060c458d3b5722ec45f3d4"
       },
       "defect": "OLV-DEF-015",
       "defectName": "The benchmark result verifier was blind to the files it publishes",
@@ -1643,26 +1643,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"an edited artifact hash table with a refreshed digest is caught by re-derivation\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1209,
+        "durationMs": 1241,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "the probe could not load: missing module ../../benchmarks/runner/writer",
         "outcome": "failed-collection",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:ed210c16bccda0912b7fa994459d86e51f76749ed413aa7918f46ece525b5025",
-        "transcriptDigest": "sha256:6a841476e0afd5774fa46596f570ebe60d14948eceab4a9722d962bb6a0ffae2"
+        "reporterDigest": "sha256:7a17d2d353362fe7a92d305b3a21dab948dabd3a9f2a043cdd53d9f4e6b0b3ef",
+        "transcriptDigest": "sha256:0196bf290616d4cdb5a3300bec2b6de195a68fe0ba80e5a3f03088bf20738f99"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"an edited artifact hash table with a refreshed digest is caught by re-derivation\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 2996,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 2891,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:2a6100bb36b1d0f41edb28d1e93bf3b72191270fa4dfc63fbe34f9c1ba5fda17",
-        "transcriptDigest": "sha256:03b02578e087c810b978e8d975e7352076de4e57e31ec51e822f719422531841"
+        "reporterDigest": "sha256:8fb1378af5192e6b5b7ea3803d85b78e8db1580d781a1986af582b8efad2a118",
+        "transcriptDigest": "sha256:d5654e4132b1be59daeffaae0a3f28d17c63823105342f44b318fc43cb979f2d"
       },
       "defect": "OLV-DEF-015",
       "defectName": "The benchmark result verifier was blind to the files it publishes",
@@ -1683,26 +1683,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"the GeoJSON carries every warning the run produced, model and provenance alike\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1238,
+        "durationMs": 1294,
         "exitCode": 1,
         "injectedFileCount": 19,
         "observation": "AssertionError: expected [] to deeply equal [ Array(1) ]",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:1d49b6f3b1a731e4863aad7871c08b6b2e8889b7e4450fb5a32ef76b256be216",
-        "transcriptDigest": "sha256:5df982d75482356617af73eb59aff668577b16e03c0ca42d9eedc0cf9ac5d8ca"
+        "reporterDigest": "sha256:dd6258fdf32a7d355fb72e9de2ca996bf28c0429a00fa96bf8df693e56c08a3e",
+        "transcriptDigest": "sha256:a26cabe208f02901f03e987de66c1a7ede011382d09be7893d0c4efd84882459"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"the GeoJSON carries every warning the run produced, model and provenance alike\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1228,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1265,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:00e5145bfdae9889ac9ab43ffcfec4c89dd683c68f4b85c970d5b9d7eb9b9e10",
-        "transcriptDigest": "sha256:616617aff01998b6554ff6c9d76145103be60aa5c9d4580b316f6f999a9dfd96"
+        "reporterDigest": "sha256:e2b431a48dff9d61c50a4258423ff20af7bcb8b274a645a7376c5fe93139892a",
+        "transcriptDigest": "sha256:748ba1d18d5756ae57df34311ea2bc4f7a476b5927d9eee5b409522322cb73b6"
       },
       "defect": "OLV-DEF-016",
       "defectName": "The contour GeoJSON dropped run warnings and worded the standing limitation its own way",
@@ -1723,26 +1723,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"the GeoJSON warning list is the de-duplicated union in a stable order\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1254,
+        "durationMs": 1292,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "AssertionError: expected [ 'Model-only caveat.', …(1) ] to deeply equal [ 'Model-only caveat.', …(2) ]",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:ce6b47634438031274d6f8f3f5cb01d83fd94de9aa9092db7ed5547c31ecdb7f",
-        "transcriptDigest": "sha256:e7aebead7de9a468763f56c204e572b7ec755578db32c67de2485df550835f3d"
+        "reporterDigest": "sha256:2fbbeca93e7da10da12d107b43c42edc36759a8155b1d9a4ce11bfe70c8d3c5a",
+        "transcriptDigest": "sha256:f47d69a3b57062bbe61c344dac37f3a3a28e8faf23a7d30d82763b046a5534c1"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"the GeoJSON warning list is the de-duplicated union in a stable order\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1242,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1279,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:6cf2260d98a7ef685580850a3bc2bbb29206f61d29df5fd31ea0d6a16301528b",
-        "transcriptDigest": "sha256:f92e0d547379e9a76a3a66dbda70ef4f96befa73c1d37b2b203a44db1dac9caa"
+        "reporterDigest": "sha256:e14f68367fda29af622bc7d9c7407bf08f17e15e45ca576013052d71201300de",
+        "transcriptDigest": "sha256:b488aca3bfd5b636335f89629f00c57be604df6b5bf22f24aac613aa2bd61233"
       },
       "defect": "OLV-DEF-016",
       "defectName": "The contour GeoJSON dropped run warnings and worded the standing limitation its own way",
@@ -1763,26 +1763,26 @@
       "baseline": {
         "command": "npx vitest run tests/provenanceConsistency.test.ts -t \"every writer states the not-survey-grade limitation in the canonical wording\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1161,
+        "durationMs": 1144,
         "exitCode": 1,
         "injectedFileCount": 1,
         "observation": "AssertionError: expected 'Not survey-grade unless validated aga…' to be 'Suitability: not survey-grade unless …' // Object.is equality",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:63aeb6c38114efc5d56008d06c7cf507f13ec413ce03e9acc1eddd7862d976e3",
-        "transcriptDigest": "sha256:1c431fbcbf4374c81efc68540ae84870f7056e81b1808ff5baaae915be413c9c"
+        "reporterDigest": "sha256:97b6692d5bb567bd4eaebfe1038de1bc1032c379604e4d3af78b1963e25958c6",
+        "transcriptDigest": "sha256:d4561a7aecf19bd7f884fa06e0c395562124f68775e3bd372074b5b6645a07e2"
       },
       "candidate": {
         "command": "npx vitest run tests/provenanceConsistency.test.ts -t \"every writer states the not-survey-grade limitation in the canonical wording\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1134,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1241,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:e7b74862fdd6bd652a1223efcfed5475c0226afae982c4a10dbe6ac0004aeb17",
-        "transcriptDigest": "sha256:e89cd79e4e86cbce2414a0203d40275c98daeb1e81a19c5e60bb0058620750c6"
+        "reporterDigest": "sha256:94dfca8d3c3698ca9635e679beb26b3337b8bf2bf8bfc4f945cb4ba795f8fa84",
+        "transcriptDigest": "sha256:72c6225a85c53f9249b2595f6a4283c3fe7298fa9f6ceb5c70db40216ec32dad"
       },
       "defect": "OLV-DEF-016",
       "defectName": "The contour GeoJSON dropped run warnings and worded the standing limitation its own way",
@@ -1803,26 +1803,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a LAS/LAZ export names the build that produced it, in 32 bytes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1253,
+        "durationMs": 1274,
         "exitCode": 1,
         "injectedFileCount": 19,
         "observation": "AssertionError: expected 'OpenLiDARViewer converter' to contain '0.6.1'",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:cc8696214ebe57c25499f80c2229267350b3a8bcdb505f3c76306d1e29c562cd",
-        "transcriptDigest": "sha256:9bc2ee36027c99e7e25392a19bacedeaf7c2e941abb162a954a977e84d6e073a"
+        "reporterDigest": "sha256:b86ecc04d17dcbd42e08bc2a85e097a4441c3b68295a42d15d23e67b98ed833b",
+        "transcriptDigest": "sha256:32bd80efe655094df9c4aab07d20bec71ed36a685c11417d0154a5bb15200a89"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a LAS/LAZ export names the build that produced it, in 32 bytes\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1246,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1268,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:df1ac523f26b68ff6d2f4012ac166c751915423b211363d0c0dc1b22c4239852",
-        "transcriptDigest": "sha256:ca83d2f32be9aa4155612867a6be82d4867732420328cbaa2feb6b73021c0efb"
+        "reporterDigest": "sha256:3e1c3dd500ed316e75a19b3c3da8106a4ba13aa53f74e12e67e26323227f99ae",
+        "transcriptDigest": "sha256:0a59b2985380e14b406f167078918ec81d2d60a8bcf2052ba937b8b96c3c8843"
       },
       "defect": "OLV-DEF-017",
       "defectName": "A LAS file could not name the build that produced it",
@@ -1843,26 +1843,26 @@
       "baseline": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a commit that cannot fit drops whole, leaving the product and version\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 1241,
+        "durationMs": 1251,
         "exitCode": 1,
         "injectedFileCount": 0,
         "observation": "TypeError: (0 , __vite_ssr_import_15__.composeGeneratingSoftware) is not a function",
         "outcome": "failed-assertion",
         "ref": "v0.6.1",
-        "reporterDigest": "sha256:ddd7067485d61475c7b73337703a015053e100b959a66fd19a816ac085492429",
-        "transcriptDigest": "sha256:3880a1213e12516aa1f611603910d0e1e21915bc565830526c2b2557614e9b6a"
+        "reporterDigest": "sha256:491aa3118781dd06c72f5272649316e8a994e8e5fd1420aa0bfee7d2e6f4a90b",
+        "transcriptDigest": "sha256:bc91c0849e4f2652d15cb26bef4d40185e82b52d48d777691d89553c43d54895"
       },
       "candidate": {
         "command": "npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t \"a commit that cannot fit drops whole, leaving the product and version\" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 1263,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 1324,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "1 case passed",
         "outcome": "passed",
         "ref": "candidate working tree",
-        "reporterDigest": "sha256:0c6160a13f29c2368d0023f6345b36dd7bbae7f936817b20b0529b4cf7001425",
-        "transcriptDigest": "sha256:72831481c77fff61b2bc5499bba43463639ee6cdd70e329db9cf421090de762b"
+        "reporterDigest": "sha256:7b806b30cf8658934886ef22995ca1875c7e8f8d801d320f778b8c6ba50c803a",
+        "transcriptDigest": "sha256:d3209c654bcaa88faf5fd444b8c041ad03501685ca237fe63a3dcb0edcdc88b2"
       },
       "defect": "OLV-DEF-017",
       "defectName": "A LAS file could not name the build that produced it",
@@ -1883,26 +1883,26 @@
       "baseline": {
         "command": "node scripts/verify-archive-portability.mjs",
         "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
-        "durationMs": 4770,
+        "durationMs": 4887,
         "exitCode": 1,
         "injectedFileCount": 2,
         "observation": "[error] docs-site/releases/v0.4.1.md includes RELEASE_NOTES_v0.4.1.md, excluded from the archive by .gitattributes export-ignore.",
         "outcome": "failed",
         "ref": "v0.6.1",
         "reporterDigest": null,
-        "transcriptDigest": "sha256:3989c322e944ebae8eb855e9ed26cbc854646a6dfb9d9be1d995d4a1dce07d37"
+        "transcriptDigest": "sha256:5911cbbb4616b9362d5726bd4506ad50022078331e004cbd74aa790564cc5ebe"
       },
       "candidate": {
         "command": "node scripts/verify-archive-portability.mjs",
-        "commit": "dcd9dbca6dbbad1be89708f0b0f3fdc896c48fca",
-        "durationMs": 6084,
+        "commit": "7d9d2d321bf090d2444439d41e134472f59a1680",
+        "durationMs": 6959,
         "exitCode": 0,
         "injectedFileCount": 0,
         "observation": "the script exited 0",
         "outcome": "passed",
         "ref": "candidate working tree",
         "reporterDigest": null,
-        "transcriptDigest": "sha256:9b31b4d2ffeefd1d9643c020680914b875649e41d952cafb5a8e1ec9809d3ba7"
+        "transcriptDigest": "sha256:c6687b463ebb0de9b46299855c1231967401de6862ddab10366e033627e46050"
       },
       "defect": "OLV-DEF-018",
       "defectName": "The source archive shipped release pages whose include target was excluded",

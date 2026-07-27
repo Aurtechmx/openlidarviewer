@@ -350,7 +350,12 @@ export function crossCheck(record) {
   const problems = [];
   const t = record.transcript ?? '';
 
-  for (const marker of ['/Users/', '/home/', '/private/tmp/', '/var/folders/']) {
+  // `<home>/` and `<repo>/` are the placeholders, so a path that still carries
+  // segments after one of them is a directory layout that survived redaction.
+  // Checking only for the raw prefixes passes on `<home>/Documents/...`, which
+  // is the leak this guard exists to stop.
+  const markers = ['/Users/', '/home/', '/private/tmp/', '/var/folders/', '<home>/', '<repo>/'];
+  for (const marker of markers) {
     if (t.includes(marker) || (record.reporterJson ?? '').includes(marker)) {
       problems.push(`an absolute path survived redaction (${marker})`);
     }
