@@ -252,6 +252,11 @@ const baselineDir = materializeBaseline();
 const roots = [
   { from: candidateDir, to: '<candidate-tree>' },
   { from: baselineDir, to: '<baseline-tree>' },
+  // The repository root, ahead of the home directory. node_modules resolves
+  // through the main checkout rather than the worktree, so a stack frame
+  // names this path and not candidateDir. Replacing only the home prefix
+  // leaves the rest of one host's directory layout in a shipped record.
+  { from: ROOT, to: '<repo>' },
   { from: os.homedir(), to: '<home>' },
   { from: tmpdir(), to: '<temp>' },
   { from: '/private/var/folders', to: '<temp-root>' },

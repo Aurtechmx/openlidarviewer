@@ -1,0 +1,15 @@
+{
+  "project": "openlidarviewer",
+  "version": "0.6.2",
+  "sourceKind": "git-checkout",
+  "gitAvailable": true,
+  "gitCommit": "fffa80c05ded561e6c9e653d5131dc6045d98343",
+  "dirtyWorkingTree": false,
+  "nodeVersion": "v26.0.0",
+  "builtAt": "2026-07-27T17:13:39Z",
+  "packagedArtifacts": "deploy+source",
+  "artifacts": {
+    "deploy": { "file": "openlidarviewer-v0.6.2-deploy-20260727-1713-root.zip", "sha256": "d9231c759bd7757e14df3e2ec72c5196abf4b6fb5deb2a8555a44413ddec8a4c" },
+    "source": { "file": "openlidarviewer-v0.6.2-source-20260727-1713.zip", "sha256": "1391c21f68c36a0aade16006619a132905f2ee548ac3100e2f4dd64985f8efed" }
+  }
+}

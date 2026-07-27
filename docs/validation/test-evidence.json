@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
   "project": "openlidarviewer",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "92622cd375e7bd8a9ace1744eccb76964115aa19",
+  "commit": "c9c20542187072049130a3b9fc3b3b69fddbc738",
   "repository": null,
-  "generatedAt": "2026-07-26T02:14:22.600Z",
-  "nodeVersion": "v22.17.1",
-  "npmVersion": "10.9.2",
+  "generatedAt": "2026-07-27T17:12:54.608Z",
+  "nodeVersion": "v26.0.0",
+  "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
   "workflow": null,
   "workflowRunId": null,
@@ -17,21 +17,21 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "6b8cdf4071f8aea6a9b4cc82976215634283251c78b6f24120c77b17fe41acbb",
+  "gateLogSha256": "b6ca79c5e508a277748a6994f20f13c9a6204a69c8d3e02f3b962a2508316c2d",
   "stages": {},
   "buckets": {
     "unit": {
-      "passed": 3357,
-      "skipped": 16,
+      "passed": 3793,
+      "skipped": 24,
       "runs": 3
     },
     "export": {
-      "passed": 618,
+      "passed": 623,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 1245,
+      "passed": 1270,
       "skipped": 0,
       "runs": 2
     },
@@ -47,26 +47,28 @@
     }
   },
   "total": {
-    "passed": 6182,
-    "skipped": 16
+    "passed": 6648,
+    "skipped": 24
   },
   "bundle": {
-    "liveEntryKiB": 718,
+    "liveEntryKiB": 658,
     "ceilingKiB": 720
   },
-  "packageLockSha256": "046cbc1abbe5b3a62351b8ebf36027225f41c1b8a3c2661ad0b4b85784525af3",
+  "packageLockSha256": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
   "sbom": {
-    "sha256": "4a4db341baab2a3d4fa112029858ccb94084ed67d556576f68829d97ad418ebc",
+    "sha256": "56d335375464ef032c582176096b3d165ec92193b638c411bb25d33ce7ca14c9",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.6.1",
-    "bomRef": "openlidarviewer@0.6.1",
+    "rootVersion": "0.6.2",
+    "bomRef": "openlidarviewer@0.6.2",
     "components": 59
   },
   "science": {
-    "e4ClaimCount": 1,
+    "e4ClaimCount": 3,
     "e4Claims": [
-      "SLOPE-RASTER"
+      "SLOPE-RASTER",
+      "ASPECT-RASTER",
+      "HILLSHADE"
     ],
-    "suppliedReferenceSlots": 1
+    "suppliedReferenceSlots": 3
   }
 }

@@ -1,19 +1,19 @@
 {
   "suite": "archive-portability",
-  "generatedAt": "2026-07-27T15:32:46.967Z",
-  "archiveDir": "/var/folders/t4/3nns59b51zd88xj9s1kx27xh0000gn/T/olv-archive-Wr2EjJ/archive",
+  "generatedAt": "2026-07-27T17:11:11.413Z",
+  "archiveDir": "<temp>/olv-archive-inH8Tb/archive",
   "archiveBuiltHere": true,
   "repositoryPresent": true,
   "nodeVersion": "v26.0.0",
-  "version": "0.6.1",
-  "fileCount": 1431,
+  "version": "0.6.2",
+  "fileCount": 1525,
   "totals": {
     "checks": 12,
     "passed": 12,
     "failed": 0,
     "skipped": 0,
     "errors": 0,
-    "warnings": 64
+    "warnings": 161
   },
   "results": [
     {
@@ -109,6 +109,15 @@
             "exit": 0
           },
           {
+            "name": "validation:defects:replay",
+            "status": "needs-repo"
+          },
+          {
+            "name": "validation:defects:replay:verify",
+            "status": "pass",
+            "exit": 0
+          },
+          {
             "name": "lint:position-access",
             "status": "pass",
             "exit": 0
@@ -144,11 +153,19 @@
       "title": "nothing that ships references a file that does not",
       "status": "pass",
       "errors": 0,
-      "warnings": 64,
+      "warnings": 161,
       "findings": [
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names KNOWN_LIMITATIONS_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names KNOWN_LIMITATIONS_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names KNOWN_LIMITATIONS_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -156,7 +173,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names READINESS_REPORT_v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names READINESS_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -164,11 +189,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names READINESS_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names READINESS_REPORT_v0.6.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names READINESS_REPORT_v0.6.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names READINESS_REPORT_v0.6.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -180,7 +217,27 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/replay.json names RELEASE_NOTES_v0.4.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -188,7 +245,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.4.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.4.7.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -196,7 +269,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.4.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.4.9.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -204,7 +293,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -212,7 +317,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.3.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -220,7 +341,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.5.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.5.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -228,7 +365,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.7.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -236,7 +389,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_NOTES_v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.5.9.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -244,7 +413,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -252,7 +429,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_NOTES_v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_NOTES_v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names REPRODUCIBILITY_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -260,11 +445,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names REPRODUCIBILITY_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names REPRODUCIBILITY_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names VALIDATION_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names VALIDATION_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names VALIDATION_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -276,6 +473,18 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/replay.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive."
         },
         {
@@ -284,7 +493,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -292,7 +517,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -300,7 +541,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -308,7 +565,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -316,7 +589,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -324,7 +613,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -332,7 +637,23 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -340,7 +661,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.1.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.2.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -348,7 +677,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.3.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.4-pr.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -356,7 +693,19 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -364,7 +713,19 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-alpha-blocker-response.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -372,7 +733,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-hardening-report.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-hardening-report.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-readiness.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -380,7 +749,19 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/coordinate-integrity-roadmap.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/coordinate-integrity-roadmap.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -388,7 +769,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/gate2-per-cloud-filter-plan.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -396,7 +785,15 @@
         },
         {
           "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/v0.5.7-object-e57-capture-lens.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
           "message": "validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/v0.5.7-object-e57-capture-lens.md, which is export-ignored and absent from the archive."
+        },
+        {
+          "level": "warn",
+          "message": "validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/v0.5.7-plan.md, which is export-ignored and absent from the archive."
         },
         {
           "level": "warn",
@@ -503,7 +900,7 @@
         },
         {
           "manifest": "validation/snapshot/SHA256SUMS",
-          "listed": 36,
+          "listed": 38,
           "siblings": 1
         }
       ]
@@ -516,7 +913,7 @@
       "warnings": 0,
       "findings": [],
       "detail": {
-        "tarSha256": "775e6ea3f72369fb646068994338fd78ea19f332e1fff91c86237a13cbd50ad1",
+        "tarSha256": "9081e026ff2da1f36c749d49b4e9e6a780e3d4a1116d8242ac82f34909c6e9de",
         "secondRunEnv": "TZ=Asia/Kolkata LC_ALL=C.UTF-8"
       }
     },

@@ -4,14 +4,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [0.6.2] - 2026-07-27
 
-A validation-and-correction release. Ten validation suites were added, covering
+A validation-and-correction release. Twelve validation suites were added, covering
 reproducibility, scaling, cross-platform portability, GPU-versus-CPU backend
 equivalence, failure recovery, provenance integrity, contour correctness, LAS
 round-trip fidelity, unit integrity and archive portability. Eighteen defects
 are fixed. Twelve were exposed by a validation suite; six came from code review,
-five of those carried from the v0.6.1 vertical-unit audit. Every one was missed
-by the test suite as it stood at v0.6.1, which passes on the defective code.
-Per-defect records are in `validation/defects/defect-registry.json`.
+five of those carried from the v0.6.1 vertical-unit audit. Seventeen were missed
+by the test suite as it stood at v0.6.1, which passes on the defective code. The
+eighteenth cannot be evaluated against that suite, because the module carrying
+two of its three faults did not exist then. Per-defect records are in
+`validation/defects/defect-registry.json`.
 The evidence ceiling moves from one cross-implemented product to
 three, with aspect and hillshade joining slope at E4 against GDAL 3.13.1 on the
 shared analytic DEM. The reproducibility comparator and its two-platform CI
@@ -245,7 +247,7 @@ affected and what recovers a correct figure.
 
 ### Added
 
-- **Ten validation suites, each runnable and each stating what it does not
+- **Twelve validation suites, each runnable and each stating what it does not
   cover.** Reproducibility (`benchmark:repro`): one documented seed, 250k
   points, ten recorded runs, passing only when every science-scoped hash and
   scalar is identical across all ten, at zero tolerance. Scaling

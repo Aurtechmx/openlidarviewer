@@ -21,7 +21,7 @@ No benchmark, test result, citation, compatibility statement, or scientific
 conclusion is presented as verified unless it is backed by the repository, an
 executed test, a documented measurement, or a reviewed primary source. Generated
 values were never accepted as evidence. What is and is not validated is recorded
-in [VALIDATION_REPORT_v0.6.1.md](VALIDATION_REPORT_v0.6.1.md)
+in [VALIDATION_REPORT_v0.6.2.md](VALIDATION_REPORT_v0.6.2.md)
 (with the terrain/measurement claims inherited from
 [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)).
 

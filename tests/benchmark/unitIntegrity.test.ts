@@ -50,6 +50,7 @@ import { computeCellMetrics } from '../../src/terrain/quality/cellMetrics';
 import { rasterizeDtm } from '../../src/terrain/ground/rasterizeDtm';
 import { buildSurfaceFromRaster } from '../../src/terrain/ground/surfaceFromRaster';
 import { contoursAt } from '../../src/terrain/contour/contoursAt';
+import { analyseContours } from '../../src/terrain/contour/analyseContours';
 import { classifyDensity } from '../../src/terrain/datasetIntelligence';
 import { footprintMetres } from '../../src/report/reportFootprint';
 import { measurementMetrics } from '../../src/export/measurementExport';
@@ -184,6 +185,34 @@ function pointsInUnit(horizontalMetresPerUnit: number, verticalMetresPerUnit: nu
         x: xM / horizontalMetresPerUnit,
         y: yM / horizontalMetresPerUnit,
         z: surfaceMetres(xM, yM) / verticalMetresPerUnit,
+      });
+    }
+  }
+  return pts;
+}
+
+/**
+ * The regional gradient of `surfaceMetres`, kept as named constants so a check
+ * can be written against the surface definition instead of a recorded output.
+ */
+const PLANE_DZ_DX_M = 0.15;
+const PLANE_DZ_DY_M = 0.05;
+
+/**
+ * The reference surface with the Gaussian removed: the tilted plane alone.
+ * Sampled as a point list in a chosen source unit, the same way
+ * `pointsInUnit` samples the full surface.
+ */
+function planePointsInUnit(horizontalMetresPerUnit: number, verticalMetresPerUnit: number) {
+  const pts: { x: number; y: number; z: number }[] = [];
+  for (let r = 0; r < GRID_N; r++) {
+    for (let c = 0; c < GRID_N; c++) {
+      const xM = c * CELL_M;
+      const yM = r * CELL_M;
+      pts.push({
+        x: xM / horizontalMetresPerUnit,
+        y: yM / horizontalMetresPerUnit,
+        z: (PLANE_DZ_DX_M * xM + PLANE_DZ_DY_M * yM) / verticalMetresPerUnit,
       });
     }
   }
@@ -425,6 +454,89 @@ describe('unit integrity: vertical-unit independence', () => {
     // 1/0.3048 = 3.28x steeper. Assert it is grossly different, not merely
     // outside the tolerance, so this control cannot pass by a rounding accident.
     expect(maxAbsDiff(allMetres, unconverted)).toBeGreaterThan(0.1);
+  });
+
+  /**
+   * The two tests above exercise `hornSlope` directly. That is the callee. The
+   * vertical factor also has to REACH it: `analyseContours` resolves the cell
+   * size to metres, then hands `verticalUnitToMetres` to the derivative stage,
+   * and dropping it at that hand-off is invisible to any check that calls the
+   * callee itself. This case drives the whole pipeline instead, from a point
+   * list in a compound frame to the slope statistics the report prints.
+   *
+   * The fixture is the REGIONAL term of `surfaceMetres` on its own: a tilted
+   * plane, 0.15 rise per metre east and 0.05 per metre north. A plane is the
+   * right surface here because the quantity under test is the vertical unit,
+   * not an axis mix-up, and a plane's slope is known in closed form AND
+   * reproduced by the Horn stencil without discretisation error, so the
+   * assertion can be made against the surface definition rather than against a
+   * recorded number. The two components differ, so an east/north swap would
+   * still show.
+   *
+   * Only the maximum and 95th-percentile slope are asserted. The MEAN is not:
+   * the grid perimeter has no full Horn stencil, and which perimeter cells come
+   * back measured rather than interpolated depends on the ground filter, which
+   * carries its own unit handling upstream of this call site. Those cells move
+   * the mean and say nothing about the conversion under test. Max and p95 are
+   * taken from the plane's interior, where the stencil is complete.
+   */
+  test('analyseContours reports plane slope in degrees for metre horizontal over foot vertical', () => {
+    // Closed-form slope of the fixture plane: atan(|grad|), grad = (0.15, 0.05).
+    const expectedDeg =
+      (Math.atan(Math.hypot(PLANE_DZ_DX_M, PLANE_DZ_DY_M)) * 180) / Math.PI;
+
+    const result = analyseContours(planePointsInUnit(1, M_PER_FT), {
+      cellSizeM: CELL_M,
+      crs: 'EPSG:32610',
+      horizontalUnitToMetres: 1, // eastings and northings already metres
+      verticalUnitToMetres: M_PER_FT, // heights in international feet
+    });
+
+    expect(Math.abs(result.surface.slope.maxDeg - expectedDeg)).toBeLessThan(SLOPE_DEGREE_TOL);
+    expect(Math.abs(result.surface.slope.p95Deg - expectedDeg)).toBeLessThan(SLOPE_DEGREE_TOL);
+  });
+
+  /** The same physical ground expressed all in metres must land on the same
+   * degrees, so the case above is not passing because both sides happen to be
+   * wrong in the same way. */
+  test('analyseContours agrees between an all-metre frame and a foot-vertical frame', () => {
+    const base = { cellSizeM: CELL_M, crs: 'EPSG:32610', horizontalUnitToMetres: 1 } as const;
+    const metre = analyseContours(planePointsInUnit(1, 1), {
+      ...base,
+      verticalUnitToMetres: 1,
+    });
+    const compound = analyseContours(planePointsInUnit(1, M_PER_FT), {
+      ...base,
+      verticalUnitToMetres: M_PER_FT,
+    });
+    expect(Math.abs(metre.surface.slope.maxDeg - compound.surface.slope.maxDeg)).toBeLessThan(
+      SLOPE_DEGREE_TOL,
+    );
+    expect(Math.abs(metre.surface.slope.p95Deg - compound.surface.slope.p95Deg)).toBeLessThan(
+      SLOPE_DEGREE_TOL,
+    );
+  });
+
+  /**
+   * The negative control for the two cases above. Running the SAME foot-height
+   * point list through `analyseContours` without declaring the vertical factor
+   * is the caller-side form of the conversion going missing at the derivative
+   * hand-off, and it must not agree. 1/0.3048 = 3.28x on the tangent takes the
+   * plane from 8.98 degrees to 27.42, so the gap is asserted at 10 degrees:
+   * far above SLOPE_DEGREE_TOL, and far below the ~18.4 degrees the defect
+   * actually produces, so the control cannot pass by a rounding accident and
+   * cannot fail on one either.
+   */
+  test('analyseContours slope is grossly wrong when the vertical factor is not declared', () => {
+    const expectedDeg =
+      (Math.atan(Math.hypot(PLANE_DZ_DX_M, PLANE_DZ_DY_M)) * 180) / Math.PI;
+    const undeclared = analyseContours(planePointsInUnit(1, M_PER_FT), {
+      cellSizeM: CELL_M,
+      crs: 'EPSG:32610',
+      horizontalUnitToMetres: 1,
+      // verticalUnitToMetres omitted: the pipeline defaults it to 1
+    });
+    expect(undeclared.surface.slope.p95Deg - expectedDeg).toBeGreaterThan(10);
   });
 
   /**

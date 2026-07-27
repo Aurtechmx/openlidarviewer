@@ -1,6 +1,6 @@
 # Known limitations: OpenLiDARViewer v0.6.2
 
-This is a validation-and-correction release. Ten validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. Twelve of the eighteen were exposed by a validation suite and six by code review. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered.
+This is a validation-and-correction release. Twelve validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. Twelve of the eighteen were exposed by a validation suite and six by code review. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered.
 
 Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.2.md`. One of them is a correction to the previous version of this file: its scope statement for the `geodesicFill` unit-mixing defect was wrong.
 
@@ -124,7 +124,7 @@ An anti-thrash resident-stickiness option exists in the budget selector and is u
 
 ## Startup bundle above the early-warning line
 
-The live entry chunk measures 718 KiB against a hard 720 KiB ceiling — **2 KiB of headroom**, and above the 680 KiB early-warning threshold. Treat the ceiling as effectively reached: shed weight before adding any, and do not raise it. The figure is machine-derived into `docs/validation/test-evidence.json` and checked by `lint:evidence`, because three documents once quoted a size for a build that produced a different one.
+The live entry chunk measures 658 KiB against a hard 720 KiB ceiling, so 62 KiB of headroom, and below the 680 KiB early-warning threshold. The figure is machine-derived into `docs/validation/test-evidence.json` and checked by `lint:evidence`, because three documents once quoted a size for a build that produced a different one.
 
 ## Mutation and coverage evidence is advisory, not archived
 

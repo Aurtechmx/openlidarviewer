@@ -82,10 +82,10 @@
     "component": {
       "type": "application",
       "name": "openlidarviewer",
-      "version": "0.6.1",
-      "bom-ref": "openlidarviewer@0.6.1",
+      "version": "0.6.2",
+      "bom-ref": "openlidarviewer@0.6.2",
       "author": "A. Urias",
-      "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
+      "description": "Open any 3D scan \u2014 drone LiDAR, terrestrial laser scan, or phone scan \u2014 instantly and privately, in a browser tab. No install, no upload, no conversion.",
       "licenses": [
         {
           "license": {
@@ -94,7 +94,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/openlidarviewer@0.6.1?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer.git",
+      "purl": "pkg:npm/openlidarviewer@0.6.2?vcs_url=git%2Bhttps%3A%2F%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer.git",
       "externalReferences": [
         {
           "url": "git+https://github.com/Aurtechmx/openlidarviewer.git",
@@ -1633,7 +1633,7 @@
       "group": "@swc",
       "version": "0.5.23",
       "bom-ref": "openlidarviewer@0.6.1|@swc/helpers@0.5.23",
-      "author": "강동윤",
+      "author": "\uac15\ub3d9\uc724",
       "description": "External helpers for the swc project.",
       "licenses": [
         {
