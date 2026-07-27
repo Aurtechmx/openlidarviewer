@@ -4,14 +4,15 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Two claims
-#     currently reach E4: SLOPE-RASTER and ASPECT-RASTER, each cross-implemented
-#     against GDAL 3.13.1 on the same frozen analytic fixture within the
-#     preregistered 0.5 degree tolerance. No claim reaches E5 (no field
-#     validation has been run). Synthetic known-truth fixtures alone remain E3,
-#     not accuracy.
+#   - currentEvidence must reflect evidence that EXISTS today. Three claims
+#     currently reach E4: SLOPE-RASTER, ASPECT-RASTER and HILLSHADE, each
+#     cross-implemented against GDAL 3.13.1 on the same frozen analytic fixture
+#     within the tolerance registered before its reference was generated (0.5
+#     degree for slope and aspect, 1.0 8-bit level for hillshade). No claim
+#     reaches E5 (no field validation has been run). Synthetic known-truth
+#     fixtures alone remain E3, not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Two independent GDAL reference slots are supplied; all
+#     and unavailable. Three independent GDAL reference slots are supplied; all
 #     remaining independent-reference slots are pending. Never infer it from
 #     density / format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
@@ -21,8 +22,8 @@
 #
 # Phase 3–4 tooling (v0.5.8) — mechanisms exist to REACH the required levels:
 #   - Cross-implementation harness: src/validation/crossCheck.ts +
-#     docs/validation/cross-implementation.md. The SLOPE-RASTER and
-#     ASPECT-RASTER GDAL reference slots are supplied and promote those two
+#     docs/validation/cross-implementation.md. The SLOPE-RASTER, ASPECT-RASTER
+#     and HILLSHADE GDAL reference slots are supplied and promote those three
 #     claims to E4; all remaining reference slots are pending, each awaiting a
 #     real PDAL/GDAL/CloudCompare reference committed.
 #   - Honest estimators: src/terrain/validate/spatialBlockHoldout.ts
@@ -50,11 +51,21 @@ schemaVersion: 1
 # of always saying metre — and adds a finite-position refusal to the EPT laszip
 # decoder. None of the three changes what an algorithm computes, so every
 # evidence level is inherited unchanged.
-# 0.6.2 changes the EVIDENCE STATE of one more claim without changing any
-# algorithm: ASPECT-RASTER is promoted E3->E4 by a committed GDAL 3.13.1
-# cross-implementation reference, generated on the same frozen fixture the
-# slope reference uses. No algorithm changed; softwareVersion below is stamped
-# at release time.
+# 0.6.2 changes the EVIDENCE STATE of two more claims without changing any
+# algorithm: ASPECT-RASTER and HILLSHADE are promoted E3->E4 by committed GDAL
+# 3.13.1 cross-implementation references, generated on the same frozen fixture
+# the slope reference uses and pinning it by hash. The hillshade leg against
+# GDAL is a weak instrument on its own, because the two implementations' byte
+# encodings differ by up to one level and the gate is one level; that claim
+# rests on the closed-form leg and on an exact re-encoding identity, and the
+# limit is recorded in docs/validation/cross-implementation.md. 0.6.2 also
+# fixes eighteen defects, four of which reached published v0.6.1 output and are
+# corrected in docs/release/ERRATUM_v0.6.2.md; none of the eighteen changes
+# what a registered algorithm computes except the geodesic void fill, whose
+# unit correction changes interpolated heights on geographic and mixed-unit
+# compound frames. No claim's evidence level moves on that account, because the
+# fixtures behind every level are projected metre frames. softwareVersion below
+# is stamped at release time.
 softwareVersion: 0.6.1
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
