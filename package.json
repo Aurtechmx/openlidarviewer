@@ -57,6 +57,7 @@
     "benchmark:quick:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:quick",
     "benchmark:repro:portable": "BENCHMARK_PORTABLE=1 vitest run tests/benchmark/runPortable.test.ts --testTimeout=3600000",
     "benchmark:compare-platforms": "BENCHMARK_COMPARE=1 vitest run tests/benchmark/comparePlatforms.test.ts --testTimeout=600000",
+    "benchmark:contours": "vitest run tests/benchmark/contourCorrectness.test.ts --testTimeout=600000",
     "benchmark:provenance": "vitest run tests/benchmark/provenanceIntegrity.test.ts --testTimeout=600000",
     "benchmark:failures": "BENCHMARK_FAILURES=1 vitest run tests/benchmark/failureRecovery.test.ts --testTimeout=600000",
     "benchmark:backends": "BENCHMARK_BACKENDS=1 vitest run tests/benchmark/runBackends.test.ts --testTimeout=600000",
