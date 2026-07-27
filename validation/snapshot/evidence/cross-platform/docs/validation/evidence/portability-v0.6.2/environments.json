@@ -1,0 +1,227 @@
+{
+  "note": "Full environment of every platform leg. Every field here is allowed to differ between platforms; the comparison lists the ones that actually did.",
+  "platforms": [
+    {
+      "platformId": "darwin-arm64",
+      "environment": {
+        "platformId": "darwin-arm64",
+        "endianness": "LE",
+        "os": {
+          "status": "captured",
+          "value": "darwin 25.4.0"
+        },
+        "arch": {
+          "status": "captured",
+          "value": "arm64"
+        },
+        "cpuModel": {
+          "status": "captured",
+          "value": "Apple M1 (Virtual)"
+        },
+        "logicalCpuCount": {
+          "status": "captured",
+          "value": "3"
+        },
+        "totalMemoryBytes": {
+          "status": "captured",
+          "value": "7516192768"
+        },
+        "loadAverage": {
+          "status": "captured",
+          "value": "10.88 11.31 11.32"
+        },
+        "nodeVersion": {
+          "status": "captured",
+          "value": "v22.23.1"
+        },
+        "npmVersion": {
+          "status": "captured",
+          "value": "10.9.8"
+        },
+        "v8Version": {
+          "status": "captured",
+          "value": "12.4.254.21-node.56"
+        }
+      },
+      "evaluated": {
+        "commit": {
+          "status": "captured",
+          "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+        },
+        "commitShort": {
+          "status": "captured",
+          "value": "50e76d2"
+        },
+        "workingTree": {
+          "status": "captured",
+          "value": "clean"
+        },
+        "releaseVersion": {
+          "status": "captured",
+          "value": "0.6.1"
+        },
+        "lockfileSha256": {
+          "status": "captured",
+          "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+        },
+        "config": {
+          "suiteId": "reproducibility",
+          "seed": 20260726,
+          "pointCount": 250000,
+          "warmupRuns": 6,
+          "recordedRuns": 10,
+          "terrain": {
+            "cellSizeM": 2,
+            "crs": "EPSG:32610",
+            "verticalDatum": "EPSG:5703",
+            "holdoutSeed": 1
+          },
+          "scalarTolerance": 0
+        },
+        "benchmarkPackageVersion": "1.1.0"
+      },
+      "internal": {
+        "pass": true,
+        "failures": [],
+        "scienceHashesStable": true,
+        "scalarsStable": true,
+        "manifestVerifiedOnEveryRun": true,
+        "recordedRuns": 10,
+        "warmupRunsCompleted": 6
+      },
+      "timing": {
+        "medianAnalysisMs": {
+          "value": 1305.1736865,
+          "unit": "ms",
+          "reason": null
+        },
+        "analysisCv": {
+          "value": 0.05316730554592729,
+          "unit": "ratio",
+          "reason": null
+        },
+        "medianPipelineTotalMs": {
+          "value": 1372.8472275000001,
+          "unit": "ms",
+          "reason": null
+        },
+        "peakRssBytes": {
+          "value": 440418304,
+          "unit": "bytes",
+          "reason": null
+        }
+      }
+    },
+    {
+      "platformId": "linux-x64",
+      "environment": {
+        "platformId": "linux-x64",
+        "endianness": "LE",
+        "os": {
+          "status": "captured",
+          "value": "linux 6.17.0-1020-azure"
+        },
+        "arch": {
+          "status": "captured",
+          "value": "x64"
+        },
+        "cpuModel": {
+          "status": "captured",
+          "value": "AMD EPYC 9V74 80-Core Processor"
+        },
+        "logicalCpuCount": {
+          "status": "captured",
+          "value": "4"
+        },
+        "totalMemoryBytes": {
+          "status": "captured",
+          "value": "16766423040"
+        },
+        "loadAverage": {
+          "status": "captured",
+          "value": "0.97 0.27 0.09"
+        },
+        "nodeVersion": {
+          "status": "captured",
+          "value": "v22.23.1"
+        },
+        "npmVersion": {
+          "status": "captured",
+          "value": "10.9.8"
+        },
+        "v8Version": {
+          "status": "captured",
+          "value": "12.4.254.21-node.56"
+        }
+      },
+      "evaluated": {
+        "commit": {
+          "status": "captured",
+          "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+        },
+        "commitShort": {
+          "status": "captured",
+          "value": "50e76d2"
+        },
+        "workingTree": {
+          "status": "captured",
+          "value": "clean"
+        },
+        "releaseVersion": {
+          "status": "captured",
+          "value": "0.6.1"
+        },
+        "lockfileSha256": {
+          "status": "captured",
+          "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+        },
+        "config": {
+          "suiteId": "reproducibility",
+          "seed": 20260726,
+          "pointCount": 250000,
+          "warmupRuns": 6,
+          "recordedRuns": 10,
+          "terrain": {
+            "cellSizeM": 2,
+            "crs": "EPSG:32610",
+            "verticalDatum": "EPSG:5703",
+            "holdoutSeed": 1
+          },
+          "scalarTolerance": 0
+        },
+        "benchmarkPackageVersion": "1.1.0"
+      },
+      "internal": {
+        "pass": true,
+        "failures": [],
+        "scienceHashesStable": true,
+        "scalarsStable": true,
+        "manifestVerifiedOnEveryRun": true,
+        "recordedRuns": 10,
+        "warmupRunsCompleted": 6
+      },
+      "timing": {
+        "medianAnalysisMs": {
+          "value": 1060.506257,
+          "unit": "ms",
+          "reason": null
+        },
+        "analysisCv": {
+          "value": 0.052659910444877854,
+          "unit": "ratio",
+          "reason": null
+        },
+        "medianPipelineTotalMs": {
+          "value": 1121.9685645,
+          "unit": "ms",
+          "reason": null
+        },
+        "peakRssBytes": {
+          "value": 413757440,
+          "unit": "bytes",
+          "reason": null
+        }
+      }
+    }
+  ]
+}

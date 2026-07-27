@@ -1,0 +1,86 @@
+{
+  "generatedAt": "2026-07-27T15:28:44.209Z",
+  "strict": false,
+  "rows": [
+    {
+      "id": "backend-selection",
+      "title": "Backend selection and the equivalence comparator",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "terrain-derivatives-node",
+      "title": "Terrain derivative engine, host-side selection and probe",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "terrain-derivatives-device",
+      "title": "Terrain derivative kernels on a real adapter",
+      "mode": "unwitnessed",
+      "state": "unwitnessed",
+      "detail": "The kernels run inside the browser's WebGPU implementation. Node has no adapter, so no witness of their execution can be produced here. The spec's own adapter descriptor and engine reason code are the witness, and only on a runner that exposes an adapter.",
+      "problems": []
+    },
+    {
+      "id": "contour-generation",
+      "title": "Contour generation, stitching, styling and the feature model",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "export-writers",
+      "title": "LAS writers and the reader they are checked against",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "provenance-verification",
+      "title": "Provenance construction and the verifiers that read it back",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "metric-unit-consistency",
+      "title": "Terrain metrics and the unit conversions they declare",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "failure-recovery",
+      "title": "Reader guards and the errors they raise on damaged input",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "platform-portability",
+      "title": "Cross-platform record capture and comparison",
+      "mode": "coverage",
+      "state": "not-executed",
+      "detail": "no ledger entry from this run",
+      "problems": []
+    },
+    {
+      "id": "archive-verification",
+      "title": "Released-archive portability checks",
+      "mode": "artifact",
+      "state": "not-executed",
+      "detail": "release/archive-portability.json is not present",
+      "problems": []
+    }
+  ]
+}

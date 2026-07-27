@@ -1,0 +1,1 @@
+gdaldem aspect ../slope/input-dem.asc aspect-gdal.asc -alg Horn -of AAIGrid

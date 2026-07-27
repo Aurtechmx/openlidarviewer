@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+message: "If you use OpenLiDARViewer in your research, please cite this software."
+title: "OpenLiDARViewer"
+type: software
+
+authors:
+  - given-names: "A."
+    family-names: "Urias"
+    affiliation: "Aurtech"
+    orcid: "https://orcid.org/0009-0007-3147-323X"
+
+version: "0.6.1"
+date-released: "2026-07-25"
+license: MIT
+repository-code: "https://github.com/Aurtechmx/openlidarviewer"
+url: "https://lidar.aurtech.mx/"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.21608260"
+    description: "Version DOI for the archived v0.6.1 release"
+  - type: doi
+    value: "10.5281/zenodo.21544619"
+    description: "Concept DOI, resolves to the newest version"
+
+abstract: >-
+  OpenLiDARViewer is an open-source, local-first, browser-native platform
+  for LiDAR and point-cloud inspection, streaming visualization,
+  measurement, terrain analysis, validation, and reproducible reporting.
+
+keywords:
+  - LiDAR
+  - point cloud
+  - geospatial software
+  - browser-native visualization
+  - terrain analysis
+  - COPC
+  - EPT
+  - WebGPU
+  - research software

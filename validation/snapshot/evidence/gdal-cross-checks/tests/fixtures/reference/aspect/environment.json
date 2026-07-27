@@ -1,0 +1,9 @@
+{
+  "referenceTool": "GDAL",
+  "gdalVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "projVersion": "PROJ 9.8.1",
+  "command": "gdaldem aspect (Horn, azimuth degrees clockwise from north, flat cells NODATA, edges excluded, AAIGrid)",
+  "inputDem": "../slope/input-dem.asc (shared with the SLOPE-RASTER reference)",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64"
+}
