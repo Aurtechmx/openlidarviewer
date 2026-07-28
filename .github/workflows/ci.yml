@@ -197,3 +197,34 @@ jobs:
           name: playwright-report-gpu
           path: playwright-report/
           retention-days: 7
+
+  # ── The single status to protect the branch with ──────────────────────────
+  # Branch protection names one check, not fifteen. Requiring the matrix legs
+  # by name would rebind the ruleset every time the sharding changes, and a
+  # renamed leg would silently stop being required. This job depends on every
+  # blocking job instead, so the ruleset has one stable name to point at.
+  #
+  # `if: always()` matters: without it a failed dependency SKIPS this job, and
+  # a skipped required check sits pending forever rather than failing. The
+  # results are read explicitly so a skip is a failure here.
+  #
+  # e2e-gpu is absent deliberately. It is `continue-on-error`, so its result is
+  # success whatever happens, and depending on it would assert nothing.
+  ci-green:
+    runs-on: ubuntu-latest
+    needs: [verify, test, smoke, e2e-deterministic]
+    if: always()
+    steps:
+      - name: Every blocking job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          set -euo pipefail
+          echo "blocking job results: $RESULTS"
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then
+              echo "::error::a blocking job reported '$r'"
+              exit 1
+            fi
+          done
+          echo "all blocking jobs passed"
