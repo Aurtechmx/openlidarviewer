@@ -54,9 +54,22 @@ const SOURCE_FILES: Record<string, string> = {
 
 const ALL_STAGES = [
   'staticGate', 'e2e', 'docsBuild', 'productionAudit',
-  'fixtureChecksums', 'coverage', 'mutation',
+  'fixtureChecksums', 'coverage',
 ] as const;
-const passedStages = () => Object.fromEntries(ALL_STAGES.map((s) => [s, 'passed']));
+/** The steady state: every mandatory stage ran here, mutation was cited. */
+const passedStages = () => ({
+  ...Object.fromEntries(ALL_STAGES.map((s) => [s, 'passed'])),
+  mutation: 'not-executed',
+});
+const citedMutation = (over: Record<string, unknown> = {}) => ({
+  score: 87.23,
+  break: 75,
+  measuredAtCommit: COMMIT,
+  measuredAt: '2026-07-20T04:00:00.000Z',
+  coversReleaseCommit: true,
+  workflowRunUrl: 'https://github.com/o/r/actions/runs/123',
+  ...over,
+});
 
 const DEPLOY_FILES: Record<string, string> = {
   'index.html': '<!doctype html>',
@@ -67,7 +80,7 @@ const DEPLOY_FILES: Record<string, string> = {
 
 function evidenceRecord(over: Record<string, unknown> = {}) {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     version: VERSION,
     tag: TAG,
     commit: COMMIT,
@@ -79,6 +92,7 @@ function evidenceRecord(over: Record<string, unknown> = {}) {
     bundle: { liveEntryKiB: 713, ceilingKiB: 720 },
     science: { e4ClaimCount: 2, e4Claims: [...EXPECTED_E4], suppliedReferenceSlots: 2 },
     stages: passedStages(),
+    mutation: citedMutation(),
     gateLogSha256: '',
     ...over,
   };
@@ -146,6 +160,7 @@ const verify = () =>
   verifyStagedRelease(dir, { version: VERSION, expectedE4Claims: EXPECTED_E4 }) as {
     ok: boolean;
     problems: string[];
+    advisories: string[];
   };
 const failsWith = (needle: string) => {
   const r = verify();
@@ -245,9 +260,47 @@ describe('release:verify — mandatory stage record', () => {
 
   it('rejects evidence whose stage record omits a mandatory stage', () => {
     const s = passedStages();
+    delete (s as Record<string, string>).coverage;
+    stageRelease({ evidence: { stages: s } });
+    failsWith('coverage');
+  });
+
+  it('rejects evidence that omits the deferred mutation stage entirely', () => {
+    const s = passedStages();
     delete (s as Record<string, string>).mutation;
     stageRelease({ evidence: { stages: s } });
-    failsWith('mutation');
+    failsWith('omits deferred stage');
+  });
+
+  it('rejects a stage state outside the vocabulary', () => {
+    stageRelease({ evidence: { stages: { ...passedStages(), mutation: 'skipped' } } });
+    failsWith('not a stage state');
+  });
+
+  it('accepts mutation as not-executed when a passing result is cited', () => {
+    stageRelease();
+    expect(verify().ok).toBe(true);
+  });
+
+  it('rejects not-executed mutation with nothing cited', () => {
+    stageRelease({ evidence: { mutation: null } });
+    failsWith('cites no measured result');
+  });
+
+  it('rejects a cited mutation score under the break threshold', () => {
+    stageRelease({ evidence: { mutation: citedMutation({ score: 70 }) } });
+    failsWith('below the break threshold');
+  });
+
+  it('advises, without failing, when the cited score predates the release commit', () => {
+    stageRelease({
+      evidence: {
+        mutation: citedMutation({ coversReleaseCommit: false, measuredAtCommit: 'f'.repeat(40) }),
+      },
+    });
+    const r = verify();
+    expect(r.ok).toBe(true);
+    expect(r.advisories.some((a: string) => a.includes('not at the release commit'))).toBe(true);
   });
 
   it('rejects evidence recording a mandatory stage as failed', () => {

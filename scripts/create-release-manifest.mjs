@@ -85,6 +85,12 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
     if (!evidence.stages) {
       problems.push('evidence carries no stage record; a release run proves every mandatory stage');
     }
+    // A stage recorded as not-executed has to name the out-of-band result it
+    // was deferred to. Without that the manifest would publish a gap dressed
+    // as a decision.
+    if (evidence.stages?.mutation === 'not-executed' && !evidence.mutation?.measuredAtCommit) {
+      problems.push('mutation is recorded as not-executed but no measured result is cited');
+    }
   }
 
   for (const kind of PAYLOAD_KINDS) {
@@ -130,6 +136,20 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
         referenceTool: 'GDAL',
         referenceVersion: '3.13.1',
         stages: evidence.stages ?? null,
+        // The mutation figure is cited, not re-measured, so the manifest
+        // carries the citation intact: a reader who sees `stages.mutation:
+        // not-executed` needs the commit that score WAS measured at in the
+        // same object, or the omission reads as a gap.
+        mutation: evidence.mutation
+          ? {
+              score: evidence.mutation.score ?? null,
+              break: evidence.mutation.break ?? null,
+              measuredAtCommit: evidence.mutation.measuredAtCommit ?? null,
+              measuredAt: evidence.mutation.measuredAt ?? null,
+              coversReleaseCommit: evidence.mutation.coversReleaseCommit ?? false,
+              workflowRunUrl: evidence.mutation.workflowRunUrl ?? null,
+            }
+          : null,
       },
       bundle: {
         liveEntryKiB: evidence.bundle?.liveEntryKiB ?? null,

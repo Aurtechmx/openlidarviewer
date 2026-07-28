@@ -131,6 +131,30 @@ export function documentedScripts(text) {
   return [...text.matchAll(/npm run ([a-z0-9][a-z0-9:_-]*)/g)].map((m) => m[1]);
 }
 
+/**
+ * The repository paths MANIFEST.md declares the archive to carry.
+ *
+ * MANIFEST.md is the archive's own inventory: every document it names in a
+ * code span is a promise to the reader that the file is in the deposit. The
+ * tokens are taken literally — one code span, no spaces, path characters only
+ * — so prose in code spans (`npm run gate`, a version string with a space)
+ * never enters the list. A trailing slash marks a directory and is kept, so
+ * the caller can tell "this file ships" from "something under here ships".
+ *
+ * Release-asset names such as `release-manifest-v0.6.2.json` come out of here
+ * too; the caller drops anything the repository does not track, because a file
+ * that is not in the tree cannot have been export-ignored out of the archive.
+ */
+export function manifestInventoryPaths(text) {
+  const out = new Set();
+  for (const m of text.matchAll(/`([^`\n]+)`/g)) {
+    const tok = m[1].trim();
+    if (!/^[A-Za-z0-9][\w.@-]*(?:\/[\w.@-]+)*\/?$/.test(tok)) continue;
+    out.add(tok);
+  }
+  return [...out];
+}
+
 // ── archive acquisition ──────────────────────────────────────────────────────
 
 function listFiles(root, base = root) {
@@ -350,7 +374,13 @@ check('no-dangling-references-to-excluded', 'nothing that ships references a fil
       f.push({ level: 'error', message: `${md} ${kind === 'include' ? 'includes' : 'links to'} ${target}, ${why}.` });
     }
   }
-  const codeFiles = c.files.filter((p) => /\.(ts|mts|mjs|js|sh|json|yaml|yml)$/.test(p));
+  // Markdown is scanned here as well as through its links. A shipped document
+  // that names an excluded file in prose or in a code span — no link syntax
+  // around it — used to be read by neither loop: `markdownTargets` only sees
+  // link and include syntax, and this scan only saw source and tooling. That
+  // is exactly how a governing document can be export-ignored while three
+  // shipped files still tell the reader to go and read it.
+  const codeFiles = c.files.filter((p) => /\.(ts|mts|mjs|js|sh|json|yaml|yml|md)$/.test(p));
   for (const p of excluded) {
     if (p === '.gitattributes') continue;
     for (const cf of codeFiles) {
@@ -361,6 +391,53 @@ check('no-dangling-references-to-excluded', 'nothing that ships references a fil
     }
   }
   return { findings: f, detail: { excludedCount: excluded.length, excluded } };
+}, { needsRepo: true });
+
+/**
+ * The archive against its own inventory.
+ *
+ * The dangling-reference check above answers "does anything shipped point at
+ * something absent", which degrades to a warning for a prose mention and so
+ * cannot, on its own, fail a release. This one asks the stronger question the
+ * deposit actually makes: MANIFEST.md tells a reader what the archive holds,
+ * so every path it names that the repository TRACKS must be in the archive.
+ * Tracked-but-absent is one thing and one thing only — an export-ignore that
+ * deleted a declared document — and it is an error, never a warning.
+ *
+ * Untracked names are skipped rather than flagged: `SHA256SUMS` and the
+ * per-release manifest are attached to the release, not committed, so their
+ * absence from a source archive is correct.
+ */
+check('manifest-inventory-ships', 'every tracked path MANIFEST.md declares is in the archive', (c) => {
+  const f = [];
+  const text = c.read('MANIFEST.md');
+  if (text === null) return [{ level: 'error', message: 'MANIFEST.md is not in the archive.' }];
+  const tracked = git(['ls-files']).split('\n').filter(Boolean);
+  const trackedFiles = new Set(tracked);
+  const trackedDirs = new Set();
+  for (const p of tracked) {
+    const parts = p.split('/');
+    for (let i = 1; i < parts.length; i++) trackedDirs.add(parts.slice(0, i).join('/'));
+  }
+  const declared = [];
+  for (const tok of manifestInventoryPaths(text)) {
+    const p = tok.replace(/\/$/, '');
+    if (trackedFiles.has(p)) {
+      declared.push({ token: tok, kind: 'file' });
+      if (!c.set.has(p)) {
+        f.push({ level: 'error', message: `MANIFEST.md declares ${tok}, which the repository tracks but the archive does not carry.` });
+      }
+    } else if (trackedDirs.has(p)) {
+      declared.push({ token: tok, kind: 'directory' });
+      if (!c.files.some((q) => q.startsWith(`${p}/`))) {
+        f.push({ level: 'error', message: `MANIFEST.md declares ${tok}, which the repository tracks but the archive carries nothing from.` });
+      }
+    }
+  }
+  if (declared.length === 0) {
+    f.push({ level: 'error', message: 'MANIFEST.md declares no tracked path at all — the inventory check has nothing to verify.' });
+  }
+  return { findings: f, detail: { declared } };
 }, { needsRepo: true });
 
 // ── 3. doc-link integrity across everything that ships ───────────────────────
