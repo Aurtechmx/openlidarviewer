@@ -23,7 +23,7 @@ executed test, a documented measurement, or a reviewed primary source. Generated
 values were never accepted as evidence. What is and is not validated is recorded
 in [VALIDATION_REPORT_v0.6.2.md](VALIDATION_REPORT_v0.6.2.md)
 (with the terrain/measurement claims inherited from
-[VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)).
+[VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md)).
 
 Scope, architecture, scientific boundaries, security requirements, interpretation
 of results, and the decision to release remained the responsibility of the

@@ -2,7 +2,7 @@
 
 This report states, soberly, what v0.6.2 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-v0.6.2 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.2.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.2 itself adds to the record.
+v0.6.2 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.2.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](docs/releases/VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](docs/releases/VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.2 itself adds to the record.
 
 ## Evidence ceiling
 

@@ -56,7 +56,7 @@ not import the renderer.
 
 - Strict TypeScript (`verbatimModuleSyntax`, `erasableSyntaxOnly`)
 - Conventional Commits — `type(scope): description`
-- See the [Developer Manual](docs/developer-manual.md) for the full standard
+- See the [Developer Manual](../docs/developer-manual.md) for the full standard
 
 ## Documentation
 

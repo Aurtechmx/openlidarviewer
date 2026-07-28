@@ -12,4 +12,4 @@ with their own identity and the kind of contribution (code, documentation, tests
 review).
 
 Dependency authors are not contributors to this project and are not listed here —
-see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [sbom.json](sbom.json).
+see [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) and [sbom.json](../sbom.json).

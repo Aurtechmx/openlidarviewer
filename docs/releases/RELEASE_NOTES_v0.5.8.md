@@ -46,4 +46,4 @@ produced it and to the paper that specifies it.
 - The staged cleanup program and its current state are recorded in
   `docs/architecture/v0.5.8-cleanup-plan.md`.
 
-Full history is in [CHANGELOG.md](CHANGELOG.md).
+Full history is in [CHANGELOG.md](../../CHANGELOG.md).

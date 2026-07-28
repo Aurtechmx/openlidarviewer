@@ -44,7 +44,7 @@ it by adding them up.
 
 ## Claims and evidence
 
-- Evidence package: [VALIDATION_REPORT_v0.6.1.md](VALIDATION_REPORT_v0.6.1.md), [KNOWN_LIMITATIONS_v0.6.1.md](KNOWN_LIMITATIONS_v0.6.1.md). Terrain and measurement claims are inherited unchanged from v0.5.9: no algorithm changed in this release.
+- Evidence package: [VALIDATION_REPORT_v0.6.1.md](../releases/VALIDATION_REPORT_v0.6.1.md), [KNOWN_LIMITATIONS_v0.6.1.md](../releases/KNOWN_LIMITATIONS_v0.6.1.md). Terrain and measurement claims are inherited unchanged from v0.5.9: no algorithm changed in this release.
 - Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.1` with the inheritance noted; `lint:claim-register` passes.
 
 ## The gate runner terminates, verified
@@ -87,6 +87,6 @@ What this release changes is small and stated: three defects that made an export
 
 **Physical multi-layer mounting is still disabled** (`MULTI_LAYER_MOUNT_ENABLED = false`), and a stream is never merged with a static cloud, because their local coordinates are recentred about independent origins. Single-layer work, which is the overwhelming majority of use, is unaffected.
 
-The five vertical-unit gaps this release's audit found and did not close are recorded in [KNOWN_LIMITATIONS_v0.6.1.md](KNOWN_LIMITATIONS_v0.6.1.md) with what would make each reachable. None is reachable through the shipped pipeline today; that is the reason they are documented rather than patched here, and it is not a reason to leave them open indefinitely.
+The five vertical-unit gaps this release's audit found and did not close are recorded in [KNOWN_LIMITATIONS_v0.6.1.md](../releases/KNOWN_LIMITATIONS_v0.6.1.md) with what would make each reachable. None is reachable through the shipped pipeline today; that is the reason they are documented rather than patched here, and it is not a reason to leave them open indefinitely.
 
 One thing stands between this and a tag: **browser evidence must come from a green GitHub Actions run on the tagged commit.** The local e2e suite passes, which is not the same claim.

@@ -1,6 +1,6 @@
 # Reproducibility — OpenLiDARViewer v0.6.0
 
-The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](REPRODUCIBILITY.md). This note fixes the figures reported for this release to the commands that produce them, so a reviewer can regenerate each rather than take it on trust.
+The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](../../REPRODUCIBILITY.md). This note fixes the figures reported for this release to the commands that produce them, so a reviewer can regenerate each rather than take it on trust.
 
 ## Toolchain
 
@@ -67,7 +67,7 @@ shasum -a 256 -c SHA256SUMS
 npm run release:verify -- --dir <downloaded-assets>
 ```
 
-See [docs/release/RELEASE_ASSETS.md](docs/release/RELEASE_ASSETS.md) for the
+See [docs/release/RELEASE_ASSETS.md](../release/RELEASE_ASSETS.md) for the
 full asset set and how the hash chain closes.
 
 ## Regenerate each reported figure

@@ -7,10 +7,10 @@ do: an unversioned readiness report reads as a claim about the current tree, and
 this one stopped being that the moment the version moved on.
 
 For the readiness of the current pre-release, see
-[docs/_audit/v0.6-hardening-report.md](docs/_audit/v0.6-hardening-report.md).
+[docs/_audit/v0.6-hardening-report.md](v0.6-hardening-report.md).
 
-It complements [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md)
-(scientific evidence ceiling) and [DEPENDENCIES.md](DEPENDENCIES.md) (audit + SBOM).
+It complements [VALIDATION_REPORT_v0.5.9.md](../releases/VALIDATION_REPORT_v0.5.9.md)
+(scientific evidence ceiling) and [DEPENDENCIES.md](../../DEPENDENCIES.md) (audit + SBOM).
 
 ## Release identity
 
@@ -45,15 +45,15 @@ browser gate is only valid on the exact commit being published.
 - Production `npm audit`: **0 vulnerabilities**.
 - Full `npm audit` (with dev tooling): 3 advisories (2 moderate, 1 high), all in
   the vite / esbuild / vitepress dev server, which never ships. Recorded in
-  [DEPENDENCIES.md](DEPENDENCIES.md) with remediation status.
-- SBOM: [sbom.json](sbom.json), CycloneDX 1.6, 61 production components.
+  [DEPENDENCIES.md](../../DEPENDENCIES.md) with remediation status.
+- SBOM: [sbom.json](../../sbom.json), CycloneDX 1.6, 61 production components.
 - License: MIT (LICENSE, package.json, CITATION.cff agree). Third-party
-  attributions in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+  attributions in [THIRD_PARTY_NOTICES.md](../../THIRD_PARTY_NOTICES.md).
 
 ## Authorship and citation
 
 - Author: A. Urias (Aurtech) — from git history and CITATION.cff; no inferred
-  people, ORCID, or DOI. [AUTHORS.md](AUTHORS.md), [CONTRIBUTORS.md](CONTRIBUTORS.md).
+  people, ORCID, or DOI. [AUTHORS.md](../AUTHORS.md), [CONTRIBUTORS.md](../CONTRIBUTORS.md).
 - CITATION.cff parses; required fields present; version 0.5.9, dated 2026-07-15.
   No preferred-citation DOI is asserted (none has been minted).
 

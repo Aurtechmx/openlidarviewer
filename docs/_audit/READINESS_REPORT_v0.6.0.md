@@ -44,7 +44,7 @@ it by adding them up.
 
 ## Claims and evidence
 
-- Evidence package: [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), [KNOWN_LIMITATIONS_v0.6.0.md](KNOWN_LIMITATIONS_v0.6.0.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
+- Evidence package: [VALIDATION_REPORT_v0.6.0.md](../releases/VALIDATION_REPORT_v0.6.0.md), [KNOWN_LIMITATIONS_v0.6.0.md](../releases/KNOWN_LIMITATIONS_v0.6.0.md), and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`). Terrain/measurement claims inherited unchanged from v0.5.9.
 - Claim register (`docs/validation/claim-register.yaml`) version stamp advanced to `0.6.0` with the inheritance noted; `lint:claim-register` passes.
 
 ## The gate runner terminates, verified

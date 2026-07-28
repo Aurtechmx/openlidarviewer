@@ -1,6 +1,6 @@
 # Reproducibility — OpenLiDARViewer v0.6.0-alpha.2
 
-The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](REPRODUCIBILITY.md). This note fixes the figures reported for this alpha to the commands that produce them, so a reviewer can regenerate each rather than take it on trust.
+The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](../../REPRODUCIBILITY.md). This note fixes the figures reported for this alpha to the commands that produce them, so a reviewer can regenerate each rather than take it on trust.
 
 ## Toolchain
 

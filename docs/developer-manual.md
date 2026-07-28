@@ -5,7 +5,7 @@ the reference for building, testing, extending, and shipping the project.
 
 - **Project README:** [`../README.md`](../README.md)
 - **Architecture map:** [`architecture.md`](architecture.md)
-- **Contributing guide:** [`../CONTRIBUTING.md`](../CONTRIBUTING.md)
+- **Contributing guide:** [`../CONTRIBUTING.md`](../.github/CONTRIBUTING.md)
 - **Release history:** [`../CHANGELOG.md`](../CHANGELOG.md)
 
 ---
