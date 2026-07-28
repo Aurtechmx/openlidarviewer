@@ -3471,6 +3471,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   pointer-events: none;
 }
 .olv-left-panels > * { pointer-events: auto; }
+/* A scrollbar belongs to the scroll container, so `pointer-events: none` above
+   makes it un-hittable and the pointer passes through it. Invisible with the
+   overlay scrollbars macOS uses; on Windows the classic 15px scrollbar cannot
+   be dragged and the rail reads as stalled. wireRailScrollAffordance() adds
+   this class only while the column actually overflows, so the canvas keeps its
+   pass-through everywhere a scrollbar is not present. */
+.olv-left-panels.olv-rail-scrollable { pointer-events: auto; }
 
 /* ── P11 · premium left rail — dock clearance, one-tap collapse, even sizing ─────
    Desktop/tablet only (mobile bottom-sheet owns small screens). Token-driven so
@@ -3679,6 +3686,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    the canvas controller only dollies events that target the canvas (see
    NavController `_handleWheel`). `content-visibility` and list virtualization
    are intentionally NOT applied here: the program gates them on profiling. */
+.olv-palette-list,
+.olv-modal-body,
+.olv-help-body,
+.olv-msheet-body,
+.olv-measure-panel,
+.olv-bc-dialog,
+.olv-wfc-card,
 .olv-left-panels,
 .olv-inspector,
 .olv-streaming-panel,
@@ -3688,6 +3702,128 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar styling for the same surfaces.
+   Windows and most Linux browsers draw a classic scrollbar that occupies
+   layout width, is always visible, and is dragged. Left at the platform
+   default it renders as a light-grey system widget sitting inside a dark
+   panel, which is the one piece of chrome that ignores the theme.
+
+   Sized at 10px rather than the hairline a dark UI invites: the thumb is a
+   drag target, and the panel it scrolls was just made hit-testable so it
+   could be dragged at all. Both colours are tokens, so light, dark and the
+   high-contrast theme all follow without a second rule. The track stays
+   transparent, letting the panel fill show through, so the gutter reads as
+   part of the surface instead of a channel cut into it. */
+/* The standard properties are scoped to Firefox on purpose. Setting
+   `scrollbar-color` in Chromium switches the element to the standard scrollbar
+   and silently disables every ::-webkit-scrollbar rule below, so declaring
+   both un-styles the scrollbar rather than styling it twice. Measured in
+   Chromium: webkit rules alone give a 10px themed bar, the two together give
+   the 0px platform default. `-moz-appearance` is the narrowest reliable
+   Firefox probe. */
+@supports (-moz-appearance: none) {
+  .olv-palette-list,
+  .olv-modal-body,
+  .olv-help-body,
+  .olv-msheet-body,
+  .olv-measure-panel,
+  .olv-bc-dialog,
+  .olv-wfc-card,
+  .olv-left-panels,
+  .olv-inspector,
+  .olv-streaming-panel,
+  .olv-catalog-results,
+  .olv-mp-stations-wrap,
+  .olv-shortcuts-list {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+  }
+}
+.olv-palette-list::-webkit-scrollbar,
+.olv-modal-body::-webkit-scrollbar,
+.olv-help-body::-webkit-scrollbar,
+.olv-msheet-body::-webkit-scrollbar,
+.olv-measure-panel::-webkit-scrollbar,
+.olv-bc-dialog::-webkit-scrollbar,
+.olv-wfc-card::-webkit-scrollbar,
+.olv-left-panels::-webkit-scrollbar,
+.olv-inspector::-webkit-scrollbar,
+.olv-streaming-panel::-webkit-scrollbar,
+.olv-catalog-results::-webkit-scrollbar,
+.olv-mp-stations-wrap::-webkit-scrollbar,
+.olv-shortcuts-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.olv-palette-list::-webkit-scrollbar-track,
+.olv-modal-body::-webkit-scrollbar-track,
+.olv-help-body::-webkit-scrollbar-track,
+.olv-msheet-body::-webkit-scrollbar-track,
+.olv-measure-panel::-webkit-scrollbar-track,
+.olv-bc-dialog::-webkit-scrollbar-track,
+.olv-wfc-card::-webkit-scrollbar-track,
+.olv-left-panels::-webkit-scrollbar-track,
+.olv-inspector::-webkit-scrollbar-track,
+.olv-streaming-panel::-webkit-scrollbar-track,
+.olv-catalog-results::-webkit-scrollbar-track,
+.olv-mp-stations-wrap::-webkit-scrollbar-track,
+.olv-shortcuts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.olv-palette-list::-webkit-scrollbar-thumb,
+.olv-modal-body::-webkit-scrollbar-thumb,
+.olv-help-body::-webkit-scrollbar-thumb,
+.olv-msheet-body::-webkit-scrollbar-thumb,
+.olv-measure-panel::-webkit-scrollbar-thumb,
+.olv-bc-dialog::-webkit-scrollbar-thumb,
+.olv-wfc-card::-webkit-scrollbar-thumb,
+.olv-left-panels::-webkit-scrollbar-thumb,
+.olv-inspector::-webkit-scrollbar-thumb,
+.olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-catalog-results::-webkit-scrollbar-thumb,
+.olv-mp-stations-wrap::-webkit-scrollbar-thumb,
+.olv-shortcuts-list::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 999px;
+  /* Inset the thumb without shrinking the 10px hit area: the border is
+     transparent and the fill is clipped to the padding box, so the pointer
+     still catches the full width while the visible bar reads as 6px. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.olv-palette-list::-webkit-scrollbar-thumb:hover,
+.olv-modal-body::-webkit-scrollbar-thumb:hover,
+.olv-help-body::-webkit-scrollbar-thumb:hover,
+.olv-msheet-body::-webkit-scrollbar-thumb:hover,
+.olv-measure-panel::-webkit-scrollbar-thumb:hover,
+.olv-bc-dialog::-webkit-scrollbar-thumb:hover,
+.olv-wfc-card::-webkit-scrollbar-thumb:hover,
+.olv-left-panels::-webkit-scrollbar-thumb:hover,
+.olv-inspector::-webkit-scrollbar-thumb:hover,
+.olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-catalog-results::-webkit-scrollbar-thumb:hover,
+.olv-mp-stations-wrap::-webkit-scrollbar-thumb:hover,
+.olv-shortcuts-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: padding-box;
+}
+/* The corner where two scrollbars meet defaults to opaque white. */
+.olv-palette-list::-webkit-scrollbar-corner,
+.olv-modal-body::-webkit-scrollbar-corner,
+.olv-help-body::-webkit-scrollbar-corner,
+.olv-msheet-body::-webkit-scrollbar-corner,
+.olv-measure-panel::-webkit-scrollbar-corner,
+.olv-bc-dialog::-webkit-scrollbar-corner,
+.olv-wfc-card::-webkit-scrollbar-corner,
+.olv-left-panels::-webkit-scrollbar-corner,
+.olv-inspector::-webkit-scrollbar-corner,
+.olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-catalog-results::-webkit-scrollbar-corner,
+.olv-mp-stations-wrap::-webkit-scrollbar-corner,
+.olv-shortcuts-list::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /*
@@ -8080,4 +8216,82 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 }
 .olv-layerhealth-empty {
   font-size: var(--text-xs); color: var(--text-dim);
+}
+
+/* ── Windows High Contrast / forced-colors ──────────────────────────────────
+   Windows High Contrast replaces the author palette with a small system one.
+   Backgrounds, borders and shadows are forced, `backdrop-filter` stops
+   compositing, and gradients are dropped. Anything whose meaning lives only in
+   a colour or a frosted fill stops carrying that meaning.
+
+   Most of the interface already survives, and this block deliberately does not
+   restate what already works: 44 icon strokes and 12 fills use `currentColor`
+   so they follow the forced text colour, and 52 focus rules use `outline`
+   rather than `box-shadow`, which forced-colors keeps. What follows covers the
+   two places where meaning was carried by colour alone.
+
+   System colour keywords, not tokens: in this mode the tokens are overridden
+   anyway, and the keywords are what the user actually chose. */
+@media (forced-colors: active) {
+  /* 1 · Frosted surfaces. Twenty-six panels separate from the 3D canvas
+     through a translucent fill and a blur. Neither survives, so each panel
+     would read as a floating block of text over the scene. A real border is
+     the only separation this mode can express. */
+  .olv-inspector,
+  .olv-streaming-panel,
+  .olv-left-panels > *,
+  .olv-inspect-card,
+  .olv-project-card,
+  .olv-shortcuts-card,
+  .olv-tour-card,
+  .olv-wfc-card,
+  .olv-nav-hud,
+  .olv-nav-prompt,
+  .olv-probe-readout,
+  .olv-measure-bar,
+  .olv-measure-hint,
+  .olv-lasso-toast,
+  .olv-toast,
+  .olv-rvc,
+  .olv-dock,
+  .olv-rail-tab,
+  .olv-right-rail-tab {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+
+  /* 2 · States that were a colour change only. `is-active` and `is-on` set a
+     background and nothing else, so with backgrounds forced, on and off render
+     identically and the control stops reporting its own state. An outline is
+     structural, so it survives. */
+  .olv-layer-solo.is-active,
+  .olv-layer-lock.is-active,
+  .olv-ortho-toggle.is-on,
+  .olv-wfc-seg-btn.is-active,
+  .olv-tool.is-active,
+  .olv-tool[aria-pressed='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    /* Forced-colors permits these two, which is what makes the pair readable. */
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  /* 3 · The scrollbar thumb is drawn from a token that no longer resolves. */
+  .olv-left-panels::-webkit-scrollbar-thumb,
+  .olv-inspector::-webkit-scrollbar-thumb,
+  .olv-palette-list::-webkit-scrollbar-thumb,
+  .olv-modal-body::-webkit-scrollbar-thumb {
+    background: ButtonBorder;
+  }
+
+  /* 4 · Disabled controls must stay distinguishable without opacity, which
+     forced-colors ignores. */
+  .olv-tool:disabled,
+  .olv-btn:disabled,
+  button:disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
 }
