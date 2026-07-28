@@ -16,6 +16,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { escapeRegExp } from './regex-escape.mjs';
 
 /** The inputs the snapshot collects, in report order. */
 export const INPUTS = Object.freeze([
@@ -426,7 +427,7 @@ export function deriveIdentity(read, has) {
   } else {
     add('buildIdentityVersion', buildMetaPath, buildMeta.version ?? null);
     const name = buildMeta.artifacts?.source?.file ?? null;
-    const expected = candidate ? new RegExp(`^openlidarviewer-v${candidate.replace(/\./g, '\\.')}-source-`) : null;
+    const expected = candidate ? new RegExp(`^openlidarviewer-v${escapeRegExp(candidate)}-source-`) : null;
     add('archiveName', buildMetaPath, name, {
       status: name == null ? 'not-executed' : expected.test(name) ? 'agrees' : 'disagrees',
       note: name == null ? 'the build identity records no source archive' : null,
@@ -439,7 +440,7 @@ export function deriveIdentity(read, has) {
     changelogText == null || citationVersion == null
       ? null
       : changelogText.match(
-          new RegExp(`^##\\s*\\[${citationVersion.replace(/\./g, '\\.')}\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})`, 'm'),
+          new RegExp(`^##\\s*\\[${escapeRegExp(citationVersion)}\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})`, 'm'),
         )?.[1] ?? null;
   const dates = {
     citationVersion,
