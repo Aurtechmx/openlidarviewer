@@ -59,19 +59,24 @@ jobs:
         run: node scripts/validate-release-ref.mjs
 
   # ── Every mandatory stage, one log, one record ────────────────────────────
-  # Static gate, e2e, docs build, production audit, fixture checksums,
-  # coverage and mutation all run here, in release mode, into one gate.log.
-  # The evidence is derived from that log's stage markers, so a stage that
-  # did not run cannot be described as passed. Packaging happens in the SAME
-  # job on the SAME still-clean checkout.
+  # Static gate, e2e, docs build, production audit, fixture checksums and
+  # coverage all run here, in release mode, into one gate.log. The evidence is
+  # derived from that log's stage markers, so a stage that did not run cannot
+  # be described as passed. Mutation is not among them: it runs on its own
+  # schedule (mutation.yml) and the record cites its last result, naming the
+  # commit that result was measured at. Packaging happens in the SAME job on
+  # the SAME still-clean checkout.
   gate:
     runs-on: ubuntu-latest
     needs: validate
-    # The mutation stage runs 188 mutants over the numeric core at ~174 tests
-    # each, about an hour on this runner class, and coverage precedes it. The
-    # 90 minute budget fitted only while a TypeScript 7 incompatibility made
-    # Stryker exit in seconds; a run that finishes needs the larger one.
-    timeout-minutes: 300
+    # Measured basis: the v0.6.2 release gate took 2 h 20 m wall clock, of
+    # which the mutation stage — 188 mutants over the numeric core at ~174
+    # tests each — was roughly 2 h. Removing it leaves about 20 minutes of
+    # gate, plus npm ci, the Playwright install and packaging. 60 minutes is
+    # that measurement with room for a slow runner, and it is short enough that
+    # a hung stage is caught the same day rather than five hours later. The
+    # scheduled mutation workflow carries its own, larger budget.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

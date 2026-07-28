@@ -10,13 +10,26 @@
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types
-import { buildEvidenceRecord, parseGateStages, parseGateLog, CANONICAL_NPM, MANDATORY_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
+import { buildEvidenceRecord, parseGateStages, parseGateLog, summariseStages, bindMutationEvidence, CANONICAL_NPM, MANDATORY_RELEASE_STAGES, DEFERRED_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 const fullBuckets = () =>
   Object.fromEntries(BUCKETS.map((b) => [b, { passed: 10, skipped: 0, runs: 1 }]));
 const allStages = () =>
   Object.fromEntries((MANDATORY_RELEASE_STAGES as string[]).map((s) => [s, 0]));
+const RELEASE_COMMIT = 'a'.repeat(40);
+const mutationEvidence = (over: Record<string, unknown> = {}) => ({
+  schemaVersion: 1,
+  score: 87.23,
+  break: 75,
+  mutants: { detected: 164, undetected: 24, scored: 188 },
+  commit: RELEASE_COMMIT,
+  measuredAt: '2026-07-20T04:00:00.000Z',
+  workflow: 'Mutation',
+  workflowRunId: '123',
+  workflowRunUrl: 'https://github.com/o/r/actions/runs/123',
+  ...over,
+});
 
 const base = (over: Record<string, unknown> = {}) => ({
   mode: 'release',
@@ -33,6 +46,7 @@ const base = (over: Record<string, unknown> = {}) => ({
   gateLogSha256: 'b'.repeat(64),
   science: { e4ClaimCount: 2, e4Claims: ['SLOPE-RASTER', 'ASPECT-RASTER'], suppliedReferenceSlots: 2 },
   stages: allStages(),
+  mutation: mutationEvidence(),
   ...over,
 });
 
@@ -45,7 +59,7 @@ describe('buildEvidenceRecord — release mode', () => {
     expect(r.ok).toBe(true);
     expect(r.record.releaseAuthoritative).toBe(true);
     expect(r.record.releaseChannel).toBe('prerelease');
-    expect(r.record.schemaVersion).toBe(2);
+    expect(r.record.schemaVersion).toBe(3);
     expect(r.record.total).toEqual({ passed: 50, skipped: 0 });
   });
 
@@ -111,8 +125,8 @@ describe('buildEvidenceRecord — release mode', () => {
 
   it('refuses when a mandatory stage never ran', () => {
     const s = allStages();
-    delete (s as Record<string, number>).mutation;
-    expect(problems({ stages: s }).some((p) => p.includes('mutation') && p.includes('did not run'))).toBe(true);
+    delete (s as Record<string, number>).coverage;
+    expect(problems({ stages: s }).some((p) => p.includes('coverage') && p.includes('did not run'))).toBe(true);
   });
 
   it('refuses when a mandatory stage failed', () => {
@@ -141,6 +155,107 @@ describe('buildEvidenceRecord — release mode', () => {
     for (const s of MANDATORY_RELEASE_STAGES as string[]) {
       expect(r.record.stages[s]).toBe('passed');
     }
+  });
+});
+
+describe('the deferred mutation stage', () => {
+  it('is not mandatory, but is never silently omitted', () => {
+    expect(MANDATORY_RELEASE_STAGES as string[]).not.toContain('mutation');
+    expect(DEFERRED_RELEASE_STAGES as string[]).toContain('mutation');
+    const s = allStages();
+    expect((s as Record<string, number>).mutation).toBeUndefined();
+    const r = buildEvidenceRecord(base({ stages: s }));
+    expect(r.ok).toBe(true);
+    // The distinction the contract turns on: absent from the log, present in
+    // the record, and named as not-executed rather than left out.
+    expect(r.record.stages.mutation).toBe('not-executed');
+  });
+
+  it('refuses a release record with no mutation result to stand on', () => {
+    const p = problems({ mutation: null });
+    expect(p.some((x) => x.includes('no mutation result to stand on'))).toBe(true);
+    expect(buildEvidenceRecord(base({ mutation: null })).record).toBeNull();
+  });
+
+  it('cites the score, the commit it was measured at, and the run', () => {
+    const r = buildEvidenceRecord(base());
+    expect(r.record.mutation.score).toBe(87.23);
+    expect(r.record.mutation.break).toBe(75);
+    expect(r.record.mutation.measuredAtCommit).toBe(RELEASE_COMMIT);
+    expect(r.record.mutation.workflowRunUrl).toContain('/actions/runs/123');
+    expect(r.record.mutation.coversReleaseCommit).toBe(true);
+  });
+
+  it('says so when the measurement is for a different commit', () => {
+    const r = buildEvidenceRecord(base({ mutation: mutationEvidence({ commit: 'c'.repeat(40) }) }));
+    // Still a valid record — a cited stale figure beats no figure — but it
+    // must not read as covering the release commit.
+    expect(r.ok).toBe(true);
+    expect(r.record.mutation.coversReleaseCommit).toBe(false);
+    expect(r.record.mutation.measuredAtCommit).toBe('c'.repeat(40));
+    expect(r.record.mutation.note).toContain('does not cover the release commit');
+  });
+
+  it('refuses a score under the break threshold', () => {
+    expect(
+      problems({ mutation: mutationEvidence({ score: 74.9 }) })
+        .some((p) => p.includes('below the break threshold')),
+    ).toBe(true);
+  });
+
+  it('refuses a measurement with no commit or no score', () => {
+    expect(
+      problems({ mutation: mutationEvidence({ commit: null }) })
+        .some((p) => p.includes('names no commit')),
+    ).toBe(true);
+    expect(
+      problems({ mutation: mutationEvidence({ score: null }) })
+        .some((p) => p.includes('carries no score')),
+    ).toBe(true);
+  });
+
+  it('still fails a release when the stage DID run here and failed', () => {
+    const s = { ...allStages(), mutation: 1 };
+    expect(problems({ stages: s }).some((p) => p.includes('deferred stage "mutation" exited 1'))).toBe(true);
+  });
+
+  it('marks it passed when the local one-pass gate ran it inline', () => {
+    const s = { ...allStages(), mutation: 0 };
+    const r = buildEvidenceRecord(base({ stages: s, mutation: mutationEvidence({ ranInThisGate: true }) }));
+    expect(r.record.stages.mutation).toBe('passed');
+    expect(r.record.mutation.ranInThisGate).toBe(true);
+  });
+
+  it('leaves a development record usable without any mutation measurement', () => {
+    const r = buildEvidenceRecord(base({ mode: 'development', tag: null, mutation: null }));
+    expect(r.ok).toBe(true);
+    expect(r.record.mutation).toBeNull();
+  });
+});
+
+describe('summariseStages', () => {
+  it('translates exit codes and fills in every deferred stage', () => {
+    expect(summariseStages({ staticGate: 0, e2e: 3 })).toEqual({
+      staticGate: 'passed',
+      e2e: 'failed',
+      mutation: 'not-executed',
+    });
+  });
+
+  it('returns null when there are no stages at all', () => {
+    expect(summariseStages(null)).toBeNull();
+  });
+});
+
+describe('bindMutationEvidence', () => {
+  it('reports absence only when the caller requires a result', () => {
+    expect(bindMutationEvidence(null, RELEASE_COMMIT, { required: false }).problems).toEqual([]);
+    expect(bindMutationEvidence(null, RELEASE_COMMIT, { required: true }).problems.length).toBe(1);
+  });
+
+  it('does not claim coverage when the release commit is unknown', () => {
+    const r = bindMutationEvidence(mutationEvidence(), null, { required: false });
+    expect(r.reference.coversReleaseCommit).toBe(false);
   });
 });
 

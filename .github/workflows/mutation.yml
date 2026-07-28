@@ -1,0 +1,93 @@
+name: Mutation
+
+# Mutation testing over the numeric core, on a schedule instead of on every
+# tag. It measured about two hours of the v0.6.2 release gate's 2 h 20 m, over
+# three modules that most releases do not touch, and paying that per tag bought
+# nothing a weekly run does not. The release record no longer reproduces this
+# measurement; it CITES it, naming the score, the commit it was measured at,
+# and this workflow run.
+#
+# So the committed record is the product of this workflow, not a side effect:
+# `docs/validation/mutation-evidence.json` is written here and pushed back to
+# the default branch, which is where `collect-evidence.mjs` reads it from when
+# the gate did not run the stage itself.
+#
+# This fails, it does not merely report. `stryker.conf.json` sets break: 75
+# against a measured 87.23; the runner breaks on it and
+# collect-mutation-evidence.mjs latches the same threshold a second time, so a
+# regression is a red run whether or not the runner's exit code survives.
+on:
+  schedule:
+    # 04:00 UTC every Monday — a full run costs about two hours, and the point
+    # is to catch a weakening within a week of it landing, not within an hour.
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One mutation run at a time. Two concurrent runs would race to push the same
+# evidence file, and the loser's measurement would vanish without a trace.
+concurrency:
+  group: mutation
+  cancel-in-progress: false
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    # Measured basis: 188 mutants over the numeric core at ~174 tests each ran
+    # in roughly 2 h inside the v0.6.2 release gate on this runner class. 180
+    # minutes is that figure with headroom; it is the budget the release gate
+    # used to have to carry.
+    timeout-minutes: 180
+    permissions:
+      # Only to push the evidence file back to the default branch.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+      - name: Lockfile is unchanged by a clean install
+        run: git diff --exit-code -- package-lock.json
+
+      # Stryker's break threshold makes this step the pass/fail signal. The
+      # evidence step below re-checks the same threshold, so neither a
+      # swallowed exit code nor a loosened runner config can turn a regression
+      # into a green run.
+      - name: Mutation run
+        run: npm run mutation
+
+      - name: Record the score, the commit, and this run
+        run: node scripts/collect-mutation-evidence.mjs
+
+      - name: Publish the mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-reports
+          retention-days: 90
+          path: |
+            reports/mutation/
+            docs/validation/mutation-evidence.json
+
+      # Only from the default branch, and only when the figure actually moved.
+      # A dispatch against a feature branch still produces the artifact above;
+      # what it must not do is publish a measurement of that branch as the one
+      # every release cites.
+      - name: Commit the evidence to the default branch
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain -- docs/validation/mutation-evidence.json)" ]; then
+            echo "Mutation evidence is unchanged; nothing to commit."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/validation/mutation-evidence.json
+          SCORE="$(node -p "require('./docs/validation/mutation-evidence.json').score")"
+          git commit -m "Record mutation score ${SCORE} from run ${GITHUB_RUN_ID}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
