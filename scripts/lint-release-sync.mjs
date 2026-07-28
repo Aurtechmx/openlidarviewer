@@ -22,6 +22,7 @@
  */
 
 import { execSync } from 'node:child_process';
+import { escapeRegExp } from './regex-escape.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -66,7 +67,7 @@ if (!m) problems.push('README.md has no "current release is **vX.Y.Z**" line to 
 else if (m[1] !== version) problems.push(`README.md says current release v${m[1]}, expected v${version}.`);
 
 // 3. CHANGELOG section — present, DATED, and not a work-in-progress stub.
-const escaped = version.replace(/\./g, '\\.');
+const escaped = escapeRegExp(version);
 const changelog = read('CHANGELOG.md');
 const heading = changelog.match(new RegExp(`^## \\[${escaped}\\][^\\n]*`, 'm'));
 let changelogDate = null;
