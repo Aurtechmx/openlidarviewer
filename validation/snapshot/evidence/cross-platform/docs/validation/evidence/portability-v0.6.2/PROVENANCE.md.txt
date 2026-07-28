@@ -6,8 +6,8 @@ artifact with a retention window.
 
 | Field | Value |
 | --- | --- |
-| Workflow run | https://github.com/Aurtechmx/openlidarviewer/actions/runs/30221805663 |
-| Evaluated commit | 50e76d22d405f716386dea50138e684fbe5a6911 |
+| Workflow run | https://github.com/Aurtechmx/openlidarviewer/actions/runs/30332869792 |
+| Evaluated commit | d9dc052a0 |
 | Status | reproduced |
 | Platforms | darwin-arm64, linux-x64 |
 

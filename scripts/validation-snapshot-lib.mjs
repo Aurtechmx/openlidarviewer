@@ -168,14 +168,24 @@ export const INPUTS = Object.freeze([
  * file named SHA256SUMS is otherwise read as the checksum manifest for the
  * directory it now sits in, and it lists files that were never copied beside
  * it. A markdown copy is otherwise read as shipping documentation, and its
- * links resolve against a directory that carries none of their targets. Both
- * take a `.txt` suffix; the derivation keys off the original path, so the
- * suffix changes nothing it computes.
+ * links resolve against a directory that carries none of their targets. A
+ * dependency manifest is otherwise read as a package to maintain: Dependabot
+ * security updates scan every manifest in the repository, and one opened a
+ * pull request against the collected `package-lock.json`, which the snapshot
+ * manifest hashes and the verifier re-derives. All three take a `.txt`
+ * suffix; the derivation keys off the original path, so the suffix changes
+ * nothing it computes.
  */
+const COLLECTED_AS_TEXT = new Set([
+  'SHA256SUMS',
+  'package.json',
+  'package-lock.json',
+]);
+
 export function evidencePath(inputId, repoPath) {
   const parts = repoPath.split('/');
   let last = parts[parts.length - 1];
-  if (last === 'SHA256SUMS' || last.endsWith('.md')) last = `${last}.txt`;
+  if (COLLECTED_AS_TEXT.has(last) || last.endsWith('.md')) last = `${last}.txt`;
   return `evidence/${inputId}/${[...parts.slice(0, -1), last].join('/')}`;
 }
 

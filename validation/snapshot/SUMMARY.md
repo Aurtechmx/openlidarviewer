@@ -48,22 +48,22 @@ Agreement: agrees.
 | field | source | value | status | note |
 | --- | --- | --- | --- | --- |
 | candidateVersion | `CHANGELOG.md` | 0.6.2 | agrees |  |
-| packageVersion | `package.json` | 0.6.2 | agrees |  |
-| lockfileVersion | `package-lock.json` | 0.6.2 | agrees |  |
-| lockfileSelfVersion | `package-lock.json` | 0.6.2 | agrees |  |
+| packageVersion | `package.json` | none | not-executed |  |
+| lockfileVersion | `package-lock.json` | none | not-executed |  |
+| lockfileSelfVersion | `package-lock.json` | none | not-executed |  |
 | claimRegisterVersion | `docs/validation/claim-register.yaml` | 0.6.2 | agrees |  |
 | citationVersion | `CITATION.cff` | 0.6.2 | agrees |  |
 | readmeVersion | `README.md` | 0.6.2 | agrees |  |
 | erratumVersion | `docs/release/` | 0.6.2 | agrees |  |
 | limitationsVersion | `KNOWN_LIMITATIONS_v<version>.md` | 0.6.2 | agrees |  |
 | buildIdentityVersion | `release/package-build-metadata-v0.6.2.json` | 0.6.2 | agrees |  |
-| archiveName | `release/package-build-metadata-v0.6.2.json` | openlidarviewer-v0.6.2-source-20260727-1713.zip | agrees |  |
+| archiveName | `release/package-build-metadata-v0.6.2.json` | openlidarviewer-v0.6.2-source-20260727-2254.zip | agrees |  |
 
 Release date: the citation states 2026-07-27 for version 0.6.2, the changelog entry for that version states 2026-07-27 (agrees). The candidate entry is dated 2026-07-27.
 
 ## Inputs
 
-11 of 15 collected, 4 not executed, over 38 records.
+10 of 15 collected, 5 not executed, over 36 records.
 
 | input | status | records | produced by |
 | --- | --- | --- | --- |
@@ -81,7 +81,7 @@ Release date: the citation states 2026-07-27 for version 0.6.2, the changelog en
 | Environment | recorded | 1 | `npm run benchmark:repro` |
 | Release-gate result | not-executed | 0 | `npm run evidence` |
 | Build identity and archive name | recorded | 1 | `npm run package` |
-| Identity sources | recorded | 6 | `tracked in the repository; no generator produces it` |
+| Identity sources | not-executed | 4 | `tracked in the repository; no generator produces it` |
 
 ## Not executed
 
@@ -91,6 +91,7 @@ Each of these is absent. Absent is not empty, and it is not passing. The command
 - GDAL cross-checks: `benchmark-results/crosschecks/results.json` is absent. Run `npx vitest run tests/slopeCrossCheck.test.ts tests/aspectCrossCheck.test.ts tests/hillshadeCrossCheck.test.ts`.
 - Clean clone: `release/clean-clone.json` is absent. Run `npm run benchmark:clean-clone`.
 - Release-gate result: `release/test-evidence-v0.6.2.json` is absent. Run `npm run evidence`.
+- Identity sources: `package.json` is absent. Run `tracked in the repository; no generator produces it`.
 
 ## Records
 
@@ -102,15 +103,15 @@ Each of these is absent. Absent is not empty, and it is not passing. The command
 | `validation/defects/defect-summary.json` | 13412 | `8ff7301a90a8ab47119127e7fb92413d5c929e876db63045376ed09d1b9a12f7` |
 | `validation/defects/defect-summary.md` | 11925 | `6fbe8fe8cf65d3ac42c49b849de3d0223350cb428b9a34718298be4f36cf8a0b` |
 | `validation/reachability/claims.json` | 7909 | `f017292ff231ac3f0dc32f544ef4480c0e16e3f07dbe57dfc9d137e7c5c2f700` |
-| `validation/reachability/summary.json` | 3991 | `87404a21dcc214a88c5a821a967162e0004d132eaee0f7702af9a5a9e196f2c1` |
+| `validation/reachability/summary.json` | 3991 | `d4ab5210e81eabf176671dcf67e4185ac5a5cf1e4a05d855bb5e243b27faa2f1` |
 | `validation/mutations/results.json` | 26824 | `f5dab035cca274587c7512f2cf7a7e9a3ea3f636408683d2ee94aa565334fa1a` |
 | `validation/mutations/summary.md` | 5083 | `5b0d88056368333ca9bc0160846ec3eb1b18088c7f35f0624ddbb5d032752b58` |
-| `docs/validation/evidence/portability-v0.6.2/PROVENANCE.md` | 914 | `e18623dbb6b5e1039ad4de9be900b48d12908c6b66588367ca34800bbaa14e2c` |
-| `docs/validation/evidence/portability-v0.6.2/comparison.csv` | 3211 | `64e1e00511d701e422388a886e5fb5f1eeb9c504b936274b170ea7b04a30cea1` |
-| `docs/validation/evidence/portability-v0.6.2/comparison.json` | 5216 | `2b2a9e14d9f9bf80a8fb54bdf681b8f1a879162ea9c1440c0e472263578af06e` |
-| `docs/validation/evidence/portability-v0.6.2/environments.json` | 5886 | `94bf13bebefb05dbde0e5b6e9539142db2ab1ebe1b787d2855005f80480a8aae` |
-| `docs/validation/evidence/portability-v0.6.2/manifest.json` | 2308 | `a72ea53de4645c5c444008828e2584e53858e7117f7f39150d71fb6523bde1ed` |
-| `docs/validation/evidence/portability-v0.6.2/summary.md` | 4357 | `0007fb4b8b83576f5835962934d967bd0d0e77fed5691c67446f59d6e6253c56` |
+| `docs/validation/evidence/portability-v0.6.2/PROVENANCE.md` | 883 | `b6995dec71d18ef9e93021d5b35095f75f179e535b03685790ead86e6334470f` |
+| `docs/validation/evidence/portability-v0.6.2/comparison.csv` | 3204 | `5c3aa49c9a662861023487d4df2bc4f251fd8a2151e001bb7b68de44933c1f4e` |
+| `docs/validation/evidence/portability-v0.6.2/comparison.json` | 5209 | `ae93a383f49eea7d96202541d63d95b835bea5e0023413ede567a45d93f3966b` |
+| `docs/validation/evidence/portability-v0.6.2/environments.json` | 5881 | `1aaed0a3b78de9d9d653d709a5e85f30e922863a1bdc6bcbaa49ddeb7c506c0a` |
+| `docs/validation/evidence/portability-v0.6.2/manifest.json` | 2308 | `62f1f1baf6b43494281f91e3e66f7583df53086a41bc33a8b03e343ca48f7e06` |
+| `docs/validation/evidence/portability-v0.6.2/summary.md` | 4353 | `8acb1962e0fabedb4408beb893f329cd9a1e6d61d4485ba919c33a979c7dcc81` |
 | `tests/fixtures/reference/aspect/SHA256SUMS` | 332 | `80f3f47e551a09434b2c21bfd3930df2ddc07e5b02fe3dc119499c25892dbee4` |
 | `tests/fixtures/reference/aspect/command.txt` | 76 | `05f71ae8d5f0413223d5faaf7723a3684d7b7544642510c4a04e27011f81244e` |
 | `tests/fixtures/reference/aspect/environment.json` | 409 | `27beb33c17a1ccc2febf0c3faa141398c76ce62fe2df60e6163c4b9e3cb29091` |
@@ -122,18 +123,16 @@ Each of these is absent. Absent is not empty, and it is not passing. The command
 | `tests/fixtures/reference/slope/environment.json` | 265 | `3ab30b84c9b806b58ea47317275edd9cb173d964307d09d12aff2f15abc72c81` |
 | `benchmark-results/seeds/summary.md` | 4469 | `9692f4003df4eab1533994135931c967187f87fff28c9ccf7ac2f9b8b46c3e02` |
 | `benchmark-results/seeds/sweep.json` | 22150 | `7be6abdce66c29d811d231b75ff222c71c19a8a697e5e2eded7b6efe7d9bea4a` |
-| `release/archive-portability.json` | 47084 | `b245861800fc3d34e32061d409761664e72dbb47fd220e60ba34e5368c82f890` |
+| `release/archive-portability.json` | 30369 | `4a8f9423d2e646b9c7ac6a813d1fb11555cb4772242bff24028059907d872401` |
 | `docs/validation/claim-register.yaml` | 34358 | `291832a2a4e52c66bd62d12bd9d69118155d73684fb74ee4e944b33bb0c7de7f` |
-| `KNOWN_LIMITATIONS_v0.6.2.md` | 22644 | `2fdb2465ef39f8f4d4f8d49964f1399098a188e61af194b7b2ad306b756fa977` |
+| `KNOWN_LIMITATIONS_v0.6.2.md` | 22644 | `76208579aeae8e4950f409f7beebf3b6e6da583eef381aa0301277903b040873` |
 | `docs/release/ERRATUM_v0.6.2.md` | 7733 | `71427ba2b46294a52b98a288e01bd3c01bc0eba46681a09d2919445d6769c865` |
 | `benchmark-results/latest/environment.json` | 917 | `dc5fbd2f51baa68da61940fedee09f1b7aae43718093cf04953898164ee5e64d` |
-| `release/package-build-metadata-v0.6.2.json` | 642 | `1e5cf5ab5676b1356793f47d4f13f59d8747860a8a1af95321c03ccb5ce464ed` |
+| `release/package-build-metadata-v0.6.2.json` | 642 | `e2e92d79372db6f99b049bfabd71c5a2c77b6d9de0561c060a9b360f09917dd3` |
 | `CHANGELOG.md` | 241773 | `2be3e15c56f2ba0b55a69bec9a141fb2335c1c422b2d35657b522a7dcb2095f1` |
 | `CITATION.cff` | 1066 | `8a9ac9a95aec3e7ec85a03a0699c9ad137f13efe9f56786306ab1a4be740fe30` |
 | `MANIFEST.md` | 2400 | `7c77107708d237b65dc079455d40bbb97e42ca3c291fbdd8bb62990f76f3e7b7` |
-| `README.md` | 39258 | `f3215561a2e0bbeb813ada6aa80cff28b8a70007a8cd71b47ec28ed25088315f` |
-| `package-lock.json` | 308235 | `5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825` |
-| `package.json` | 8997 | `9e19a11a01cc8ddebb34e9ced932daeea1f70cd1b70d651171ac80205e13e548` |
+| `README.md` | 39296 | `c2a4f8b2cfddcf4749fd69a312c3ebc7644f2ec3762fd5ef958d7c5c03adf829` |
 
 ## Scope
 

@@ -2,16 +2,16 @@
 
 Status: **reproduced**
 
-At commit 50e76d2, OpenLiDARViewer produced identical science-scoped artifacts from the same seeded fixture on darwin-arm64 and linux-x64. Build-scoped provenance and execution timing differed, as expected. Nothing is claimed for platforms not in that list.
+At commit d9dc052, OpenLiDARViewer produced identical science-scoped artifacts from the same seeded fixture on darwin-arm64 and linux-x64. Build-scoped provenance and execution timing differed, as expected. Nothing is claimed for platforms not in that list.
 
 ## What was evaluated
 
 | Field | Value |
 | --- | --- |
 | Platforms | darwin-arm64, linux-x64 |
-| Commit | 50e76d22d405f716386dea50138e684fbe5a6911 |
-| Release version | 0.6.1 |
-| Lockfile sha256 | 60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559 |
+| Commit | d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae |
+| Release version | 0.6.2 |
+| Lockfile sha256 | 5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825 |
 | Fixture seed | 20260726 |
 | Fixture points | 250000 requested, 250000 generated |
 | Dataset | synthetic-250000-seed20260726 |
@@ -42,9 +42,9 @@ Each one is published with the value every platform reported. None of them gates
 | host | cpuModel | darwin-arm64=Apple M1 (Virtual)<br>linux-x64=AMD EPYC 9V74 80-Core Processor | The CPU model changes timing and nothing else; every science-scoped value is deterministic arithmetic. |
 | host | logicalCpuCount | darwin-arm64=3<br>linux-x64=4 | Core count is a property of the runner. The pipeline is single-threaded here. |
 | host | totalMemoryBytes | darwin-arm64=7516192768<br>linux-x64=16766423040 | Installed memory is a property of the runner. |
-| host | loadAverage | darwin-arm64=10.88 11.31 11.32<br>linux-x64=0.97 0.27 0.09 | Host load at the moment of writing. It moves the timing column and nothing else. |
-| timing | medianAnalysisMs | darwin-arm64=1305.1736865<br>linux-x64=1060.506257 | Execution time is a property of the machine. Reported per platform and never pooled. |
-| timing | peakRssBytes | darwin-arm64=440418304<br>linux-x64=413757440 | Memory high-water observations track the allocator and the host, not the outputs. |
+| host | loadAverage | darwin-arm64=12.85 7.52 9.26<br>linux-x64=1.56 0.55 0.20 | Host load at the moment of writing. It moves the timing column and nothing else. |
+| timing | medianAnalysisMs | darwin-arm64=1252.41475<br>linux-x64=1070.915724 | Execution time is a property of the machine. Reported per platform and never pooled. |
+| timing | peakRssBytes | darwin-arm64=368885760<br>linux-x64=467886080 | Memory high-water observations track the allocator and the host, not the outputs. |
 
 Excluded from the comparison by construction:
 
@@ -58,8 +58,8 @@ Runtimes are not pooled. A median over two machines describes neither of them, a
 
 | Platform | Recorded runs | Median analysis | Analysis CV | Peak RSS |
 | --- | --- | --- | --- | --- |
-| darwin-arm64 | 10 | 1305.2 ms | 0.0532 | 420.0 MiB |
-| linux-x64 | 10 | 1060.5 ms | 0.0527 | 394.6 MiB |
+| darwin-arm64 | 10 | 1252.4 ms | 0.0438 | 351.8 MiB |
+| linux-x64 | 10 | 1070.9 ms | 0.0995 | 446.2 MiB |
 
 ## Scope
 

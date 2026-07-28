@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-27T17:12:54.400Z",
+  "generatedAt": "2026-07-27T18:30:27.980Z",
   "strict": false,
   "rows": [
     {
@@ -9,7 +9,7 @@
       "state": "witnessed",
       "detail": "buildBackendLeg×32 gpuClaimNotCredible×11 legFromComputeStatus×3 compareBackends×15 comparisonMarkdown×3",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:21.041Z"
+      "recordedAt": "2026-07-27T18:28:28.047Z"
     },
     {
       "id": "terrain-derivatives-node",
@@ -18,7 +18,7 @@
       "state": "witnessed",
       "detail": "init×3 runEquivalenceProbe×2 buildScatterProbe×3 createCpuBackend×5",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:21.041Z"
+      "recordedAt": "2026-07-27T18:28:28.047Z"
     },
     {
       "id": "terrain-derivatives-device",
@@ -35,7 +35,7 @@
       "state": "witnessed",
       "detail": "contoursAt×32 stitchContourSet×21 stitchLevel×289 styleLevels×16 buildFeatureModel×12 analyticalProduct×9 cartographicProduct×8 terrainAwareCartographicProduct×1 toGeoJSON×10 toGeoJSONWgs84×4",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:20.378Z"
+      "recordedAt": "2026-07-27T18:28:27.066Z"
     },
     {
       "id": "export-writers",
@@ -44,7 +44,7 @@
       "state": "witnessed",
       "detail": "writeLas×41 writeLas14×15 pickPointFormat×45 pickPointFormat14×17 convertCloud×3 loadLas×30 parseLasHeader×44",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:12.611Z"
+      "recordedAt": "2026-07-27T18:28:28.322Z"
     },
     {
       "id": "provenance-verification",
@@ -53,7 +53,7 @@
       "state": "witnessed",
       "detail": "buildExportProvenance×41 buildProcessingManifest×39 verifyProcessingManifest×16 verifyReportFile×5 buildReportManifest×4 canonicalHash×4",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:19.078Z"
+      "recordedAt": "2026-07-27T18:28:25.414Z"
     },
     {
       "id": "metric-unit-consistency",
@@ -62,7 +62,7 @@
       "state": "witnessed",
       "detail": "hornSlope×44 hornSlopeAspect×53 horizontalCellMetresXY×38 slopeStats×6 shadeFromSlopeAspect×8 rasterizeDtm×26 buildSurfaceFromRaster×26 detectChange×4 computeCellMetrics×6 measurementMetrics×2",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:42.778Z"
+      "recordedAt": "2026-07-27T18:28:55.906Z"
     },
     {
       "id": "failure-recovery",
@@ -71,7 +71,7 @@
       "state": "witnessed",
       "detail": "parseBuffer×2 parseLasHeader×17 classifyLoadError×2 describeLoadError×1 validateDeclaredPointCount×9 assertFinitePositions×7 decodeRecords×3 validatePolygon×9 volumeCutFill×3",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:21.303Z"
+      "recordedAt": "2026-07-27T18:28:28.036Z"
     },
     {
       "id": "platform-portability",
@@ -80,7 +80,7 @@
       "state": "witnessed",
       "detail": "detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13",
       "problems": [],
-      "recordedAt": "2026-07-27T17:11:31.932Z"
+      "recordedAt": "2026-07-27T18:28:41.382Z"
     },
     {
       "id": "archive-verification",

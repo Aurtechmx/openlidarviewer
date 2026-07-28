@@ -28,7 +28,7 @@
         },
         "loadAverage": {
           "status": "captured",
-          "value": "10.88 11.31 11.32"
+          "value": "12.85 7.52 9.26"
         },
         "nodeVersion": {
           "status": "captured",
@@ -46,11 +46,11 @@
       "evaluated": {
         "commit": {
           "status": "captured",
-          "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+          "value": "d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae"
         },
         "commitShort": {
           "status": "captured",
-          "value": "50e76d2"
+          "value": "d9dc052"
         },
         "workingTree": {
           "status": "captured",
@@ -58,11 +58,11 @@
         },
         "releaseVersion": {
           "status": "captured",
-          "value": "0.6.1"
+          "value": "0.6.2"
         },
         "lockfileSha256": {
           "status": "captured",
-          "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+          "value": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825"
         },
         "config": {
           "suiteId": "reproducibility",
@@ -91,22 +91,22 @@
       },
       "timing": {
         "medianAnalysisMs": {
-          "value": 1305.1736865,
+          "value": 1252.41475,
           "unit": "ms",
           "reason": null
         },
         "analysisCv": {
-          "value": 0.05316730554592729,
+          "value": 0.04377755830476579,
           "unit": "ratio",
           "reason": null
         },
         "medianPipelineTotalMs": {
-          "value": 1372.8472275000001,
+          "value": 1315.7504159999999,
           "unit": "ms",
           "reason": null
         },
         "peakRssBytes": {
-          "value": 440418304,
+          "value": 368885760,
           "unit": "bytes",
           "reason": null
         }
@@ -139,7 +139,7 @@
         },
         "loadAverage": {
           "status": "captured",
-          "value": "0.97 0.27 0.09"
+          "value": "1.56 0.55 0.20"
         },
         "nodeVersion": {
           "status": "captured",
@@ -157,11 +157,11 @@
       "evaluated": {
         "commit": {
           "status": "captured",
-          "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+          "value": "d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae"
         },
         "commitShort": {
           "status": "captured",
-          "value": "50e76d2"
+          "value": "d9dc052"
         },
         "workingTree": {
           "status": "captured",
@@ -169,11 +169,11 @@
         },
         "releaseVersion": {
           "status": "captured",
-          "value": "0.6.1"
+          "value": "0.6.2"
         },
         "lockfileSha256": {
           "status": "captured",
-          "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+          "value": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825"
         },
         "config": {
           "suiteId": "reproducibility",
@@ -202,22 +202,22 @@
       },
       "timing": {
         "medianAnalysisMs": {
-          "value": 1060.506257,
+          "value": 1070.915724,
           "unit": "ms",
           "reason": null
         },
         "analysisCv": {
-          "value": 0.052659910444877854,
+          "value": 0.09953771301170103,
           "unit": "ratio",
           "reason": null
         },
         "medianPipelineTotalMs": {
-          "value": 1121.9685645,
+          "value": 1129.0095895,
           "unit": "ms",
           "reason": null
         },
         "peakRssBytes": {
-          "value": 413757440,
+          "value": 467886080,
           "unit": "bytes",
           "reason": null
         }

@@ -4,9 +4,9 @@
   "candidateVersion": "0.6.2",
   "totals": {
     "inputs": 15,
-    "recorded": 11,
-    "notExecuted": 4,
-    "files": 38
+    "recorded": 10,
+    "notExecuted": 5,
+    "files": 36
   },
   "defects": {
     "source": "validation/defects/defect-registry.json",
@@ -93,22 +93,22 @@
       {
         "field": "packageVersion",
         "source": "package.json",
-        "value": "0.6.2",
-        "status": "agrees",
+        "value": null,
+        "status": "not-executed",
         "note": null
       },
       {
         "field": "lockfileVersion",
         "source": "package-lock.json",
-        "value": "0.6.2",
-        "status": "agrees",
+        "value": null,
+        "status": "not-executed",
         "note": null
       },
       {
         "field": "lockfileSelfVersion",
         "source": "package-lock.json",
-        "value": "0.6.2",
-        "status": "agrees",
+        "value": null,
+        "status": "not-executed",
         "note": null
       },
       {
@@ -156,7 +156,7 @@
       {
         "field": "archiveName",
         "source": "release/package-build-metadata-v0.6.2.json",
-        "value": "openlidarviewer-v0.6.2-source-20260727-1713.zip",
+        "value": "openlidarviewer-v0.6.2-source-20260727-2254.zip",
         "status": "agrees",
         "note": null
       }
@@ -302,13 +302,13 @@
         {
           "path": "validation/reachability/summary.json",
           "storedAt": "evidence/reachability/validation/reachability/summary.json",
-          "sha256": "87404a21dcc214a88c5a821a967162e0004d132eaee0f7702af9a5a9e196f2c1",
+          "sha256": "d4ab5210e81eabf176671dcf67e4185ac5a5cf1e4a05d855bb5e243b27faa2f1",
           "bytes": 3991,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
-              "generatedAt": "string:2026-07-27T17:12:54.400Z",
+              "generatedAt": "string:2026-07-27T18:30:27.980Z",
               "rows": "array[10]",
               "strict": "boolean:false"
             }
@@ -367,28 +367,28 @@
         {
           "path": "docs/validation/evidence/portability-v0.6.2/PROVENANCE.md",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/PROVENANCE.md.txt",
-          "sha256": "e18623dbb6b5e1039ad4de9be900b48d12908c6b66588367ca34800bbaa14e2c",
-          "bytes": 914,
+          "sha256": "b6995dec71d18ef9e93021d5b35095f75f179e535b03685790ead86e6334470f",
+          "bytes": 883,
           "shape": {
             "lines": 22,
-            "bytes": 914
+            "bytes": 883
           }
         },
         {
           "path": "docs/validation/evidence/portability-v0.6.2/comparison.csv",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.csv",
-          "sha256": "64e1e00511d701e422388a886e5fb5f1eeb9c504b936274b170ea7b04a30cea1",
-          "bytes": 3211,
+          "sha256": "5c3aa49c9a662861023487d4df2bc4f251fd8a2151e001bb7b68de44933c1f4e",
+          "bytes": 3204,
           "shape": {
             "lines": 41,
-            "bytes": 3211
+            "bytes": 3204
           }
         },
         {
           "path": "docs/validation/evidence/portability-v0.6.2/comparison.json",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.json",
-          "sha256": "2b2a9e14d9f9bf80a8fb54bdf681b8f1a879162ea9c1440c0e472263578af06e",
-          "bytes": 5216,
+          "sha256": "ae93a383f49eea7d96202541d63d95b835bea5e0023413ede567a45d93f3966b",
+          "bytes": 5209,
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -396,15 +396,15 @@
               "claim": "string[257]",
               "claimEstablished": "boolean:true",
               "endianness": "object{2}",
-              "evaluatedCommit": "string:50e76d22d405f716386dea50138e684fbe5a6911",
+              "evaluatedCommit": "string:d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae",
               "expectedDifferences": "array[8]",
               "fixture": "object{9}",
-              "lockfileSha256": "string:60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559",
+              "lockfileSha256": "string:5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
               "ok": "boolean:true",
               "platforms": "array[2]",
               "portabilitySchemaVersion": "number:1",
               "preconditionFailures": "array[0]",
-              "releaseVersion": "string:0.6.1",
+              "releaseVersion": "string:0.6.2",
               "scalarTolerance": "number:0",
               "science": "object{7}",
               "status": "string:reproduced",
@@ -416,8 +416,8 @@
         {
           "path": "docs/validation/evidence/portability-v0.6.2/environments.json",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/environments.json",
-          "sha256": "94bf13bebefb05dbde0e5b6e9539142db2ab1ebe1b787d2855005f80480a8aae",
-          "bytes": 5886,
+          "sha256": "1aaed0a3b78de9d9d653d709a5e85f30e922863a1bdc6bcbaa49ddeb7c506c0a",
+          "bytes": 5881,
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -430,7 +430,7 @@
         {
           "path": "docs/validation/evidence/portability-v0.6.2/manifest.json",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/manifest.json",
-          "sha256": "a72ea53de4645c5c444008828e2584e53858e7117f7f39150d71fb6523bde1ed",
+          "sha256": "62f1f1baf6b43494281f91e3e66f7583df53086a41bc33a8b03e343ca48f7e06",
           "bytes": 2308,
           "shape": {
             "parsed": true,
@@ -439,24 +439,24 @@
               "benchmarkPackageVersion": "string:1.1.0",
               "command": "string:npm run benchmark:compare-platforms",
               "commit": "object{2}",
-              "completedAtUtc": "string:2026-07-26T21:49:06.509Z",
+              "completedAtUtc": "string:2026-07-28T05:52:17.355Z",
               "files": "array[12]",
               "kind": "string:comparison",
               "platformId": "null",
               "portabilitySchemaVersion": "number:1",
               "schemaVersion": "number:2",
-              "startedAtUtc": "string:2026-07-26T21:49:06.509Z"
+              "startedAtUtc": "string:2026-07-28T05:52:17.355Z"
             }
           }
         },
         {
           "path": "docs/validation/evidence/portability-v0.6.2/summary.md",
           "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/summary.md.txt",
-          "sha256": "0007fb4b8b83576f5835962934d967bd0d0e77fed5691c67446f59d6e6253c56",
-          "bytes": 4357,
+          "sha256": "8acb1962e0fabedb4408beb893f329cd9a1e6d61d4485ba919c33a979c7dcc81",
+          "bytes": 4353,
           "shape": {
             "lines": 67,
-            "bytes": 4357
+            "bytes": 4353
           }
         }
       ],
@@ -653,16 +653,16 @@
         {
           "path": "release/archive-portability.json",
           "storedAt": "evidence/archive-portability/release/archive-portability.json",
-          "sha256": "b245861800fc3d34e32061d409761664e72dbb47fd220e60ba34e5368c82f890",
-          "bytes": 47084,
+          "sha256": "4a8f9423d2e646b9c7ac6a813d1fb11555cb4772242bff24028059907d872401",
+          "bytes": 30369,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
               "archiveBuiltHere": "boolean:true",
-              "archiveDir": "string:<temp>/olv-archive-inH8Tb/archive",
-              "fileCount": "number:1525",
-              "generatedAt": "string:2026-07-27T17:11:11.413Z",
+              "archiveDir": "string:<temp>/olv-archive-r8QS23/archive",
+              "fileCount": "number:1530",
+              "generatedAt": "string:2026-07-28T16:10:19.366Z",
               "nodeVersion": "string:v26.0.0",
               "repositoryPresent": "boolean:true",
               "results": "array[12]",
@@ -705,7 +705,7 @@
         {
           "path": "KNOWN_LIMITATIONS_v0.6.2.md",
           "storedAt": "evidence/limitations/KNOWN_LIMITATIONS_v0.6.2.md.txt",
-          "sha256": "2fdb2465ef39f8f4d4f8d49964f1399098a188e61af194b7b2ad306b756fa977",
+          "sha256": "76208579aeae8e4950f409f7beebf3b6e6da583eef381aa0301277903b040873",
           "bytes": 22644,
           "shape": {
             "lines": 265,
@@ -780,17 +780,17 @@
         {
           "path": "release/package-build-metadata-v0.6.2.json",
           "storedAt": "evidence/build-identity/release/package-build-metadata-v0.6.2.json",
-          "sha256": "1e5cf5ab5676b1356793f47d4f13f59d8747860a8a1af95321c03ccb5ce464ed",
+          "sha256": "e2e92d79372db6f99b049bfabd71c5a2c77b6d9de0561c060a9b360f09917dd3",
           "bytes": 642,
           "shape": {
             "parsed": true,
             "kind": "object",
             "keys": {
               "artifacts": "object{2}",
-              "builtAt": "string:2026-07-27T17:13:39Z",
+              "builtAt": "string:2026-07-28T01:45:04Z",
               "dirtyWorkingTree": "boolean:false",
               "gitAvailable": "boolean:true",
-              "gitCommit": "string:fffa80c05ded561e6c9e653d5131dc6045d98343",
+              "gitCommit": "string:60c9e04856624f276f13e1116539dd1a449b2014",
               "nodeVersion": "string:v26.0.0",
               "packagedArtifacts": "string:deploy+source",
               "project": "string:openlidarviewer",
@@ -805,7 +805,7 @@
     {
       "id": "identity-sources",
       "title": "Identity sources",
-      "status": "recorded",
+      "status": "not-executed",
       "primary": "package.json",
       "producedBy": "tracked in the repository; no generator produces it",
       "files": [
@@ -842,59 +842,18 @@
         {
           "path": "README.md",
           "storedAt": "evidence/identity-sources/README.md.txt",
-          "sha256": "f3215561a2e0bbeb813ada6aa80cff28b8a70007a8cd71b47ec28ed25088315f",
-          "bytes": 39258,
+          "sha256": "c2a4f8b2cfddcf4749fd69a312c3ebc7644f2ec3762fd5ef958d7c5c03adf829",
+          "bytes": 39296,
           "shape": {
             "lines": 516,
-            "bytes": 39258
-          }
-        },
-        {
-          "path": "package-lock.json",
-          "storedAt": "evidence/identity-sources/package-lock.json",
-          "sha256": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
-          "bytes": 308235,
-          "shape": {
-            "parsed": true,
-            "kind": "object",
-            "keys": {
-              "lockfileVersion": "number:3",
-              "name": "string:openlidarviewer",
-              "packages": "object{618}",
-              "requires": "boolean:true",
-              "version": "string:0.6.2"
-            }
-          }
-        },
-        {
-          "path": "package.json",
-          "storedAt": "evidence/identity-sources/package.json",
-          "sha256": "9e19a11a01cc8ddebb34e9ced932daeea1f70cd1b70d651171ac80205e13e548",
-          "bytes": 8997,
-          "shape": {
-            "parsed": true,
-            "kind": "object",
-            "keys": {
-              "author": "string:A. Urias",
-              "bugs": "object{1}",
-              "dependencies": "object{11}",
-              "description": "string[152]",
-              "devDependencies": "object{12}",
-              "engines": "object{1}",
-              "homepage": "string:https://lidar.aurtech.mx/",
-              "keywords": "array[10]",
-              "license": "string:MIT",
-              "name": "string:openlidarviewer",
-              "packageManager": "string:npm@10.9.2",
-              "repository": "object{2}",
-              "scripts": "object{80}",
-              "type": "string:module",
-              "version": "string:0.6.2"
-            }
+            "bytes": 39296
           }
         }
       ],
-      "missing": []
+      "missing": [
+        "package-lock.json",
+        "package.json"
+      ]
     }
   ],
   "verdict": "PASS",
