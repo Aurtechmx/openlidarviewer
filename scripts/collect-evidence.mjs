@@ -100,8 +100,25 @@ export const MANDATORY_RELEASE_STAGES = [
   'productionAudit',
   'fixtureChecksums',
   'coverage',
-  'mutation',
 ];
+
+/**
+ * Stages a release run may legitimately NOT execute, provided the record
+ * carries the out-of-band result it is standing on instead.
+ *
+ * `mutation` is here because it costs about two hours per run — the v0.6.2
+ * gate took 2 h 20 m end to end, of which mutation was roughly two — while
+ * measuring a slice of the tree (three numeric modules) that most releases do
+ * not touch. It runs on its own schedule now, and the release record cites
+ * that run: score, the commit it was measured at, and the workflow run that
+ * produced it. A deferred stage is written into the record as
+ * `not-executed`, never omitted: a release that skipped mutation and a
+ * release whose record simply forgot to mention it must not look the same.
+ */
+export const DEFERRED_RELEASE_STAGES = ['mutation'];
+
+/** The three states a stage can be in. `not-executed` is only legal for a deferred stage. */
+export const STAGE_STATES = ['passed', 'failed', 'not-executed'];
 
 /** Parse `GATE STAGE <name> EXIT: <code>` markers into { name: exitCode }. */
 export function parseGateStages(text) {
@@ -110,6 +127,72 @@ export function parseGateStages(text) {
     stages[m[1]] = Number(m[2]);
   }
   return stages;
+}
+
+/**
+ * Stage exit codes → the published vocabulary, with the deferred stages always
+ * present. `Object.entries` alone would omit a stage that never ran, and an
+ * absent key reads as "not applicable" rather than "not measured here".
+ */
+export function summariseStages(stages) {
+  if (!stages) return null;
+  const out = {};
+  for (const [name, code] of Object.entries(stages)) out[name] = code === 0 ? 'passed' : 'failed';
+  for (const s of DEFERRED_RELEASE_STAGES) if (out[s] === undefined) out[s] = 'not-executed';
+  return out;
+}
+
+/**
+ * Validate a mutation result read from `mutation-evidence.json` and bind it to
+ * the commit this record describes.
+ *
+ * Returns `{ problems, reference }`. The reference is written into the record
+ * whether or not it covers the release commit — a stale measurement is still
+ * the measurement the release stands on, and hiding that fact is the failure
+ * mode this whole file exists to prevent. What it must never do is imply
+ * currency it does not have, so `coversReleaseCommit` is explicit and
+ * `measuredAtCommit` is always named.
+ */
+export function bindMutationEvidence(mutation, releaseCommit, { required }) {
+  const problems = [];
+  if (!mutation) {
+    if (required) {
+      problems.push(
+        'no mutation result to stand on: run the Mutation workflow, or set ' +
+          'OLV_GATE_MUTATION=1 to run the stage inline',
+      );
+    }
+    return { problems, reference: null };
+  }
+  const score = typeof mutation.score === 'number' ? mutation.score : null;
+  const breakAt = typeof mutation.break === 'number' ? mutation.break : null;
+  if (score === null) problems.push('mutation evidence carries no score');
+  if (breakAt === null) problems.push('mutation evidence carries no break threshold');
+  if (!mutation.commit) problems.push('mutation evidence names no commit');
+  if (score !== null && breakAt !== null && score < breakAt) {
+    problems.push(`mutation score ${score} is below the break threshold ${breakAt}`);
+  }
+  const covers = Boolean(releaseCommit) && mutation.commit === releaseCommit;
+  return {
+    problems,
+    reference: {
+      score,
+      break: breakAt,
+      mutants: mutation.mutants ?? null,
+      mutate: mutation.mutate ?? null,
+      measuredAtCommit: mutation.commit ?? null,
+      measuredAt: mutation.measuredAt ?? null,
+      coversReleaseCommit: covers,
+      ranInThisGate: mutation.ranInThisGate === true,
+      workflow: mutation.workflow ?? null,
+      workflowRunId: mutation.workflowRunId ?? null,
+      workflowRunUrl: mutation.workflowRunUrl ?? null,
+      nodeVersion: mutation.nodeVersion ?? null,
+      note: covers
+        ? 'Measured at this release commit.'
+        : 'Measured at a different commit; this figure does not cover the release commit.',
+    },
+  };
 }
 
 /**
@@ -160,6 +243,7 @@ export function buildEvidenceRecord(input) {
     science = null,
     stages = null,
     canonicalNode = null,
+    mutation = null,
   } = input;
 
   const problems = [];
@@ -226,7 +310,19 @@ export function buildEvidenceRecord(input) {
       if (code === undefined) problems.push(`mandatory stage "${s}" did not run (no marker in the gate log)`);
       else if (code !== 0) problems.push(`mandatory stage "${s}" exited ${code}`);
     }
+    // A deferred stage may be absent, but if it DID run here it still has to
+    // have passed — running it and ignoring the result is the worst of both.
+    for (const s of DEFERRED_RELEASE_STAGES) {
+      const code = stages?.[s];
+      if (code !== undefined && code !== 0) problems.push(`deferred stage "${s}" exited ${code}`);
+    }
   }
+
+  // The mutation figure is required for a release record and optional for a
+  // development one: a developer who has never run Stryker locally still gets
+  // usable evidence, it just carries no mutation claim.
+  const bound = bindMutationEvidence(mutation, commit, { required: release });
+  problems.push(...bound.problems);
 
   if (problems.length > 0) return { ok: false, problems, record: null };
 
@@ -237,7 +333,7 @@ export function buildEvidenceRecord(input) {
     ok: true,
     problems: [],
     record: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       project: 'openlidarviewer',
       version,
       releaseChannel: release ? 'prerelease' : 'development',
@@ -256,11 +352,8 @@ export function buildEvidenceRecord(input) {
       gateExit: 0,
       gateLog: 'release/gate.log',
       gateLogSha256,
-      stages: stages
-        ? Object.fromEntries(
-            Object.entries(stages).map(([k, v]) => [k, v === 0 ? 'passed' : 'failed']),
-          )
-        : null,
+      stages: summariseStages(stages),
+      mutation: bound.reference,
       buckets,
       total: { passed: totalPassed, skipped: totalSkipped },
       bundle,
@@ -388,6 +481,18 @@ function main() {
     };
   } catch { /* the claim-register lint reports its absence */ }
 
+  // The mutation figure this record stands on. `release/` wins over the
+  // tracked copy because a gate that ran the stage inline writes there, and a
+  // measurement from THIS run beats one from the last scheduled run.
+  const MUTATION_SOURCES = ['release/mutation-evidence.json', 'docs/validation/mutation-evidence.json'];
+  let mutation = null;
+  for (const rel of [flag('mutation-evidence'), ...MUTATION_SOURCES].filter(Boolean)) {
+    try {
+      mutation = JSON.parse(readFileSync(resolve(ROOT, rel), 'utf8'));
+      break;
+    } catch { /* try the next source; absence is reported by buildEvidenceRecord */ }
+  }
+
   let canonicalNode = null;
   try {
     canonicalNode = readFileSync(resolve(ROOT, '.nvmrc'), 'utf8').trim() || null;
@@ -405,6 +510,7 @@ function main() {
     gateExit: 0,
     stages: parseGateStages(text),
     canonicalNode,
+    mutation,
     bundle: { liveEntryKiB, ceilingKiB },
     nodeVersion: process.version,
     npmVersion,
@@ -435,6 +541,13 @@ function main() {
   console.log(`test-evidence.json written: ${BUCKETS.map((b) => `${b} ${buckets[b].passed}`).join(' · ')}`);
   console.log(`total ${totalPassed} passed / ${totalSkipped} skipped`);
   console.log(`live entry ${liveEntryKiB ?? '?'} KiB / ${ceilingKiB ?? '?'} KiB`);
+  const mu = evidence.mutation;
+  console.log(
+    mu
+      ? `mutation ${mu.score} (break ${mu.break}) at ${String(mu.measuredAtCommit).slice(0, 12)} — ` +
+        (mu.coversReleaseCommit ? 'this commit' : 'NOT this commit')
+      : 'mutation: no measurement cited',
+  );
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) main();

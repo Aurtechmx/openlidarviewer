@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line import/no-relative-packages — same repo, ships in the archive
-import { MANDATORY_RELEASE_STAGES } from './collect-evidence.mjs';
+import { MANDATORY_RELEASE_STAGES, DEFERRED_RELEASE_STAGES, STAGE_STATES } from './collect-evidence.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -147,11 +147,16 @@ function readRegisterE4Claims() {
 export function verifyStagedRelease(dir, opts = {}) {
   const problems = [];
   const note = (m) => problems.push(m);
+  // Advisories are true statements about the release that are not defects.
+  // They exist so a fact like "the cited mutation score predates this commit"
+  // can be SAID without either blocking the release or being swallowed.
+  const advisories = [];
+  const advise = (m) => advisories.push(m);
   const pkgVersion =
     opts.version ?? JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
   const expectedTag = `v${pkgVersion}`;
 
-  if (!existsSync(dir)) return { ok: false, problems: [`staging directory not found: ${dir}`] };
+  if (!existsSync(dir)) return { ok: false, problems: [`staging directory not found: ${dir}`], advisories };
 
   const names = readdirSync(dir).filter((n) => statSync(resolve(dir, n)).isFile());
 
@@ -176,7 +181,7 @@ export function verifyStagedRelease(dir, opts = {}) {
       note(`asset from another release is staged: ${n} (expected v${pkgVersion})`);
     }
   }
-  if (problems.length > 0 && !found.manifest) return { ok: false, problems };
+  if (problems.length > 0 && !found.manifest) return { ok: false, problems, advisories };
 
   // ── 2. Identity agreement across manifest, evidence, SBOM, filenames ─────
   let manifest = null;
@@ -218,6 +223,39 @@ export function verifyStagedRelease(dir, opts = {}) {
     for (const s of MANDATORY_RELEASE_STAGES) {
       if (evidence.stages?.[s] !== 'passed') {
         note(`evidence does not record mandatory stage "${s}" as passed`);
+      }
+    }
+    // A deferred stage may be `not-executed`, and that is the only thing that
+    // makes deferral different from omission — so the state has to BE there,
+    // and it has to be one of the three the vocabulary allows. An unrecognised
+    // string would otherwise sail through as neither passed nor missing.
+    for (const s of DEFERRED_RELEASE_STAGES) {
+      const state = evidence.stages?.[s];
+      if (state === undefined) {
+        note(`evidence omits deferred stage "${s}"; it must be recorded, "not-executed" included`);
+      } else if (!STAGE_STATES.includes(state)) {
+        note(`evidence records stage "${s}" as "${state}", which is not a stage state`);
+      } else if (state === 'failed') {
+        note(`evidence records deferred stage "${s}" as failed`);
+      }
+    }
+    // Deferral is only honest if the record names what it deferred TO.
+    if (evidence.stages?.mutation === 'not-executed') {
+      const m = evidence.mutation;
+      if (!m?.measuredAtCommit) {
+        note('mutation is recorded as not-executed but the evidence cites no measured result');
+      } else if (m.score == null || m.break == null) {
+        note('the cited mutation result carries no score or no break threshold');
+      } else if (m.score < m.break) {
+        note(`the cited mutation score ${m.score} is below the break threshold ${m.break}`);
+      } else if (!m.coversReleaseCommit && m.measuredAtCommit !== evidence.commit) {
+        // Not a defect: a cited figure from another commit is the expected
+        // steady state between scheduled runs. It is recorded as an advisory
+        // so the release page says out loud what the record already encodes.
+        advise(
+          `mutation score ${m.score} was measured at ${String(m.measuredAtCommit).slice(0, 12)}, ` +
+            'not at the release commit',
+        );
       }
     }
     // The expected E4 set is DERIVED from the claim register, not typed in
@@ -343,7 +381,7 @@ export function verifyStagedRelease(dir, opts = {}) {
     }
   }
 
-  return { ok: problems.length === 0, problems };
+  return { ok: problems.length === 0, problems, advisories };
 }
 
 function isMain() {
@@ -366,7 +404,8 @@ if (isMain()) {
     }).trim();
   } catch { /* no tag locally: the identity checks that do not need it still run */ }
 
-  const { ok, problems } = verifyStagedRelease(resolve(dir), { tagCommit });
+  const { ok, problems, advisories } = verifyStagedRelease(resolve(dir), { tagCommit });
+  for (const a of advisories ?? []) console.log(`  ℹ ${a}`);
   if (ok) {
     console.log(`release:verify OK — ${dir} is a complete, self-consistent release asset set.`);
     process.exit(0);
