@@ -48,6 +48,9 @@ export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): 
  * ResizeObserver is unavailable.
  */
 export function wireDockClearance(dock: HTMLElement, column: HTMLElement): void {
+  // The column's scroll affordance travels with it, so the composition root
+  // wires the rail once rather than remembering two calls that must agree.
+  wireRailScrollAffordance(column);
   if (typeof ResizeObserver === 'undefined') return;
   try {
     const ro = new ResizeObserver(() => {
@@ -58,6 +61,67 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): void 
   } catch {
     /* Static 80px fallback — only ancient engines. */
   }
+}
+
+/**
+ * Make the rail's scrollbar grabbable, but only while it has one.
+ *
+ * `.olv-left-panels` is the scroll container AND carries `pointer-events: none`
+ * so clicks and drags in the gaps between panels reach the canvas underneath.
+ * A scrollbar belongs to the scroll container, so `pointer-events: none` makes
+ * the scrollbar itself un-hittable: the pointer passes straight through it.
+ *
+ * On macOS and this project's own test browsers that is invisible, because
+ * overlay scrollbars occupy no layout width and are not dragged; the wheel goes
+ * to a panel and chains to the column. On Windows the default scrollbar is a
+ * classic one that takes 15px of layout and is meant to be dragged, and that
+ * drag does nothing. The rail reads as stalled while the wheel still works.
+ *
+ * Toggling rather than simply setting `pointer-events: auto` keeps the
+ * pass-through everywhere it is not paid for: the column only becomes
+ * hit-testable while its content actually overflows, which is exactly when a
+ * scrollbar exists for the user to reach.
+ */
+export function wireRailScrollAffordance(column: HTMLElement): () => void {
+  const sync = (): void => {
+    column.classList.toggle('olv-rail-scrollable', column.scrollHeight > column.clientHeight);
+  };
+  sync();
+
+  const stops: Array<() => void> = [];
+  // Each observer is attached on its own. An earlier revision shared one try
+  // block, so a MutationObserver that refused to attach discarded a working
+  // ResizeObserver and forced the column permanently hit-testable.
+  try {
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(sync);
+      ro.observe(column);
+      stops.push(() => ro.disconnect());
+    }
+  } catch {
+    /* Attachment refused; the other observer may still work. */
+  }
+  try {
+    if (typeof MutationObserver !== 'undefined') {
+      // Panels mount and unmount as tools open, which changes overflow without
+      // ever resizing the column.
+      const mo = new MutationObserver(sync);
+      mo.observe(column, { childList: true, subtree: true });
+      stops.push(() => mo.disconnect());
+    }
+  } catch {
+    /* As above. */
+  }
+
+  // Nothing is watching, so overflow can change without this being re-run.
+  // A scrollbar that cannot be grabbed is worse than losing pass-through in
+  // the gaps between panels, so the column stays reachable.
+  if (stops.length === 0) column.classList.add('olv-rail-scrollable');
+
+  return () => {
+    for (const stop of stops) stop();
+    stops.length = 0;
+  };
 }
 
 /**

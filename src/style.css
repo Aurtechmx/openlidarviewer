@@ -3471,6 +3471,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   pointer-events: none;
 }
 .olv-left-panels > * { pointer-events: auto; }
+/* A scrollbar belongs to the scroll container, so `pointer-events: none` above
+   makes it un-hittable and the pointer passes through it. Invisible with the
+   overlay scrollbars macOS uses; on Windows the classic 15px scrollbar cannot
+   be dragged and the rail reads as stalled. wireRailScrollAffordance() adds
+   this class only while the column actually overflows, so the canvas keeps its
+   pass-through everywhere a scrollbar is not present. */
+.olv-left-panels.olv-rail-scrollable { pointer-events: auto; }
 
 /* ── P11 · premium left rail — dock clearance, one-tap collapse, even sizing ─────
    Desktop/tablet only (mobile bottom-sheet owns small screens). Token-driven so
