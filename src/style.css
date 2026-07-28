@@ -318,7 +318,7 @@
 
 /* Full-screen toggle — same ghost-icon treatment as the theme toggle so the
    header cluster reads as one family (Gestalt similarity). */
-.olv-fs-toggle {
+.olv-fs-toggle, .olv-recenter {
   display: inline-flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; padding: 0; margin: 0;
   color: var(--text-dim);
@@ -331,29 +331,29 @@
     background var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
-.olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
-/* Back to centre only means something once a scan is on screen. */
+.olv-fs-toggle svg, .olv-recenter svg { width: 17px; height: 17px; display: block; }
+/* Rendered only while a scan is loaded. */
 body:not(.olv-has-scan) .olv-recenter { display: none; }
-/* Touch targets: the header glyphs are 28 px, under the 44 px minimum the
-   mobile specs assert, so they grow on coarse pointers. */
+/* Coarse-pointer touch target: 44 px minimum (28 px on fine pointers). */
 @media (pointer: coarse) {
-  .olv-fs-toggle { width: 44px; height: 44px; }
-  .olv-fs-toggle svg { width: 20px; height: 20px; }
+  .olv-fs-toggle, .olv-recenter { width: 44px; height: 44px; }
+  .olv-fs-toggle svg, .olv-recenter svg { width: 20px; height: 20px; }
 }
-.olv-fs-toggle:hover {
+.olv-fs-toggle:hover, .olv-recenter:hover {
   color: var(--text);
   border-color: var(--hairline);
   background: rgba(255, 255, 255, 0.04);
   transform: scale(1.06);
 }
-.olv-fs-toggle:active { transform: scale(0.94); }
+.olv-fs-toggle:active, .olv-recenter:active { transform: scale(0.94); }
 .olv-fs-toggle.is-fs { color: var(--accent); }
-.olv-fs-toggle:focus-visible {
+.olv-fs-toggle:focus-visible, .olv-recenter:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .olv-fs-toggle { transition: none; }
-  .olv-fs-toggle:hover, .olv-fs-toggle:active { transform: none; }
+  .olv-fs-toggle, .olv-recenter { transition: none; }
+  .olv-fs-toggle:hover, .olv-fs-toggle:active,
+  .olv-recenter:hover, .olv-recenter:active { transform: none; }
 }
 /* Each icon state is absolutely stacked in the same 18px box. */
 .olv-theme-icon {

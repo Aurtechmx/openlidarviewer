@@ -41,13 +41,13 @@ type FsDoc = Document & {
 type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
 
 /**
- * Can this browser take an element full screen?
+ * Element-level Fullscreen API availability.
  *
- * Android Chromium and iPadOS can. iPhone Safari exposes the Fullscreen API
- * only for video, so `requestFullscreen` is absent on an ordinary element and
- * the button would be a control that does nothing. The manifest declares
- * `display: standalone`, so an installed copy already opens without browser
- * chrome on that platform.
+ * True when the document element exposes `requestFullscreen` (or the webkit
+ * prefix) and `fullscreenEnabled` is not false. iPhone Safari exposes the API
+ * on `HTMLVideoElement` only, so both checks fail there; Android Chromium and
+ * iPadOS pass. The manifest's `display: standalone` covers the iPhone case for
+ * an installed copy.
  */
 export function fullscreenSupported(doc: Document = document): boolean {
   const d = doc as FsDoc & { fullscreenEnabled?: boolean; webkitFullscreenEnabled?: boolean };
@@ -69,7 +69,7 @@ export class FullscreenToggle {
     }) as HTMLButtonElement;
     this.element.type = 'button';
     this.element.setAttribute('aria-pressed', 'false');
-    // A button that cannot do the thing it names is worse than no button.
+    // No element-level Fullscreen API: the control has no effect, so it is not rendered.
     if (!fullscreenSupported()) this.element.hidden = true;
 
     this.element.addEventListener('click', () => {

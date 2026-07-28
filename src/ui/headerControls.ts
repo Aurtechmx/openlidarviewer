@@ -5,10 +5,6 @@
  * performs the same reset the navigation keybinding does, for the case where
  * no key is available. Both mount left of the GitHub link, and both are no-ops
  * in embed mode, where there is no top bar to mount into.
- *
- * These live here rather than in the entry module because the entry module is
- * under a size ratchet: header wiring is its own concern and belongs beside
- * the components it wires.
  */
 import { RecenterButton } from './RecenterButton';
 import { ThemeToggle } from './ThemeToggle';

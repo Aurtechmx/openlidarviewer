@@ -1,13 +1,9 @@
 /**
- * RecenterButton.ts — return the camera to the loaded scan.
+ * RecenterButton.ts — header control that frames the loaded scan.
  *
- * Orbiting, walking or flying away from a scan leaves no obvious way back:
- * the keyboard reset exists but is undiscoverable, and on touch there is no
- * key to press at all. This is the same action the navigation reset performs,
- * given a control.
- *
- * It carries the header's ghost-button treatment and stays hidden until a
- * scan is loaded, so an empty viewer shows nothing to press.
+ * Invokes the same `Viewer.frameAll()` the navigation reset binding calls, so
+ * the tween, target and easing are identical on both paths. Carries the
+ * header ghost-button class; CSS hides it while `body` lacks `olv-has-scan`.
  */
 import { el } from './dom';
 
@@ -23,7 +19,7 @@ export class RecenterButton {
 
   constructor(onRecenter: () => void) {
     this.element = el('button', {
-      className: 'olv-fs-toggle olv-recenter',
+      className: 'olv-recenter',
       unsafeHtml: ICON_RECENTER,
       title: 'Back to centre',
       ariaLabel: 'Return the view to the scan',
