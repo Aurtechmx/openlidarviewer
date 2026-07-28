@@ -1,0 +1,47 @@
+name: Scorecard
+
+# Supply-chain posture, measured by an external checker rather than asserted
+# here. It reads the repository's own configuration: pinned action digests,
+# per-workflow permissions, branch protection, dependency update automation,
+# and whether releases are signed. The score is published to the OpenSSF API,
+# which is what the README badge reads; nothing in this repository can set it.
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: '17 4 * * 1'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Analyse
+    runs-on: ubuntu-latest
+    permissions:
+      # The OIDC token identifies this repository to the OpenSSF API. Without
+      # it the run still analyses, but publishes nothing and the badge stays
+      # blank.
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run the analysis
+        uses: ossf/scorecard-action@55891bbd73f2425e97637d96e306fc9d491d0b21 # v2.4.4
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: true
+
+      # Kept as a downloadable artifact. Code scanning is not configured on
+      # this repository, so there is no SARIF ingestion step to upload to.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: scorecard-results
+          path: scorecard-results.sarif
+          retention-days: 5

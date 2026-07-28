@@ -143,8 +143,8 @@ export function collectReleaseTruthProblems(read) {
     const text = read(DEPS);
     if (text == null) problems.push(`${DEPS} is missing.`);
     else {
-      const h = text.match(/^#\s*Dependency audit\s*[—-]\s*v([0-9][0-9A-Za-z.\-]*)/m);
-      if (!h) problems.push(`${DEPS} has no "# Dependency audit — vX.Y.Z" heading to check.`);
+      const h = text.match(/^#\s*Dependency audit\s*(?:[—-]\s*|\()v([0-9][0-9A-Za-z.\-]*)/m);
+      if (!h) problems.push(`${DEPS} has no "# Dependency audit (vX.Y.Z)" heading to check.`);
       else if (h[1] !== version) {
         problems.push(`${DEPS} is headed "v${h[1]}", expected v${version} — it is a stale audit record.`);
       }

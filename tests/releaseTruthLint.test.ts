@@ -67,8 +67,8 @@ describe('lint:release-truth', () => {
 
   it('fails on a stale dependency-audit version heading', () => {
     const doc = realRead(DEPS)!.replace(
-      `# Dependency audit — v${VERSION}`,
-      '# Dependency audit — v0.5.9',
+      `# Dependency audit (v${VERSION})`,
+      '# Dependency audit (v0.5.9)',
     );
     const problems = problemsFor(withOverride(DEPS, doc));
     expect(problems.some((p) => p.includes('stale audit'))).toBe(true);

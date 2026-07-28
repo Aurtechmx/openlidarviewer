@@ -43,19 +43,46 @@ npm run build
 five coverage-complete buckets you can run individually (and CI runs in
 parallel): `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, and
 `test:slow`.
-The buckets always union to the full suite — a newly added test defaults into
+The buckets always union to the full suite, and a newly added test defaults into
 `unit`; `npm run test:buckets:verify` asserts that partition holds. Playwright
 specs run via `npm run test:e2e`.
 
-Add or update tests with your change. The algorithmic core is test-first
-(Vitest), and the renderer is covered by Playwright. Keep the module
-boundaries intact: one file per format or concern, and analysis modules must
-not import the renderer.
+Keep the module boundaries intact: one file per format or concern, and
+analysis modules must not import the renderer.
+
+## Testing policy
+
+New functionality ships with automated tests covering it. This is a
+requirement of the project, not a preference. It applies to bug fixes too: a
+fix comes with a test that fails before the change and passes after. That
+second rule matters more than it sounds, because a fix without a failing test
+proves only that the code changed, not that the bug was understood, and the
+suite stayed green through all eighteen defects corrected in v0.6.2.
+
+The algorithmic core is test-first (Vitest); the renderer is covered by
+Playwright. Where a change corrects a published number or a declared unit,
+the test asserts the corrected value rather than the code path that produces
+it.
+
+Three things enforce this rather than trusting the author:
+
+- CI runs the full suite on every push and pull request, and a red suite
+  blocks the merge;
+- `npm run test:buckets:verify` asserts the five buckets still union to the
+  whole suite, so a new test cannot be added outside what CI runs;
+- the release gate refuses to produce an evidence record if any mandatory
+  stage did not run, which includes coverage and the unit suite.
+
+A change that genuinely cannot be tested should say so in the pull request and
+explain why. Reviewers usually read that as a design question rather than a
+testing one, because the parts of this codebase that resist testing are almost
+always the parts doing too much at once, and the fix is to split them before
+writing the test.
 
 ## Coding style
 
 - Strict TypeScript (`verbatimModuleSyntax`, `erasableSyntaxOnly`)
-- Conventional Commits — `type(scope): description`
+- Conventional Commits: `type(scope): description`
 - See the [Developer Manual](../docs/developer-manual.md) for the full standard
 
 ## Documentation

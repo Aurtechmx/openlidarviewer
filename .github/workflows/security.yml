@@ -2,7 +2,7 @@
 # Complements ci.yml (typecheck / build / tests, which already run the
 # unsafeHtml + bundle guards). Kept as a separate workflow so it can run on a
 # schedule and surface independently of the build matrix.
-name: security
+name: Security audit
 
 on:
   push:
