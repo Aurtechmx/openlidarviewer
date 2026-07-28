@@ -31,6 +31,7 @@
  */
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs';
+import { escapeRegExp } from './regex-escape.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative, posix } from 'node:path';
@@ -514,7 +515,7 @@ check('version-coherence', 'package.json, the citation file, the changelog and t
   }
   const changelog = c.read('CHANGELOG.md');
   if (changelog == null) f.push({ level: 'error', message: 'CHANGELOG.md is not in the archive.' });
-  else if (!new RegExp(`^##\\s*\\[${v.replace(/\./g, '\\.')}\\]`, 'm').test(changelog)) {
+  else if (!new RegExp(`^##\\s*\\[${escapeRegExp(v)}\\]`, 'm').test(changelog)) {
     f.push({ level: 'error', message: `CHANGELOG.md has no released section for ${v}.` });
   }
   for (const doc of [`RELEASE_NOTES_v${v}.md`, `KNOWN_LIMITATIONS_v${v}.md`, `VALIDATION_REPORT_v${v}.md`, `REPRODUCIBILITY_v${v}.md`]) {
@@ -530,7 +531,7 @@ check('version-coherence', 'package.json, the citation file, the changelog and t
   // A CITATION date must match the changelog entry for the same version.
   if (cff && changelog) {
     const cffDate = cff.match(/^date-released:\s*"?([\d-]+)"?/m)?.[1];
-    const clDate = changelog.match(new RegExp(`^##\\s*\\[${v.replace(/\./g, '\\.')}\\]\\s*-\\s*([\\d-]+)`, 'm'))?.[1];
+    const clDate = changelog.match(new RegExp(`^##\\s*\\[${escapeRegExp(v)}\\]\\s*-\\s*([\\d-]+)`, 'm'))?.[1];
     if (cffDate && clDate && cffDate !== clDate) {
       f.push({ level: 'error', message: `CITATION.cff date-released ${cffDate} disagrees with the CHANGELOG entry for ${v} (${clDate}).` });
     }

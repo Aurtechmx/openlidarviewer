@@ -584,14 +584,18 @@ export function deriveClassification(
 
   // Counts + per-class support accumulation over the FINAL codes, so the legend
   // totals and the per-class confidence both match what is rendered.
-  const counts: Record<number, number> = {};
-  const classSupportSum: Record<number, number> = {};
+  // Null-prototype: the keys are classification codes read from the file, and
+  // a plain object literal would resolve inherited names on lookup. The codes
+  // are numeric, so this is defence rather than a fix, but two registries in
+  // this release shipped with exactly that collision.
+  const counts: Record<number, number> = Object.create(null) as Record<number, number>;
+  const classSupportSum: Record<number, number> = Object.create(null) as Record<number, number>;
   for (let i = 0; i < count; i++) {
     const c = codes[i];
     counts[c] = (counts[c] ?? 0) + 1;
     classSupportSum[c] = (classSupportSum[c] ?? 0) + support[i];
   }
-  const classConfidence: Record<number, number> = {};
+  const classConfidence: Record<number, number> = Object.create(null) as Record<number, number>;
   for (const k of Object.keys(counts)) {
     const c = Number(k);
     classConfidence[c] = counts[c] > 0 ? classSupportSum[c] / counts[c] : 0;
