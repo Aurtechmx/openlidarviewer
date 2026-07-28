@@ -1,0 +1,20 @@
+# Every path has an owner. GitHub requests review from the owner on any pull
+# request that touches a matching file.
+
+*                       @Aurtechmx
+
+# Release identity, evidence and the gate that produces it.
+/.github/workflows/     @Aurtechmx
+/scripts/               @Aurtechmx
+/docs/validation/       @Aurtechmx
+/validation/            @Aurtechmx
+/CITATION.cff           @Aurtechmx
+/.zenodo.json           @Aurtechmx
+/CLAIMS_AND_LIMITATIONS.md @Aurtechmx
+/STABILITY_POLICY.md    @Aurtechmx
+
+# Numeric core: a wrong value here is a silent scientific error.
+/src/process/numerics.ts        @Aurtechmx
+/src/terrain/quantile.ts        @Aurtechmx
+/src/terrain/ground/            @Aurtechmx
+/src/io/crs.ts                  @Aurtechmx
