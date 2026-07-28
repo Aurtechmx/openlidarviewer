@@ -6,11 +6,14 @@
  * the seven tunables that drive the readability of a LiDAR scan:
  *
  *   - EDL strength (depth-edge shading)
- *   - AO strength (cavity / crevice shading, when supported)
- *   - elevation palette (for the height colour mode)
  *   - point size + point-size mode (fixed vs adaptive)
  *   - sky preset (background gradient style)
- *   - hillshade enabled (terrain-only relief shading)
+ *   - the colour mode the preset moves into
+ *
+ * Three further settings the presets used to declare (AO strength,
+ * elevation palette, hillshade) have no runtime setter behind them. They
+ * live under `reserved` so the applied set and the aspirational set are
+ * not read as one thing.
  *
  * Pure data — no DOM, no three.js — so it ships through the same seam
  * every other v0.3.7 module reads. The Viewer applies a preset by
@@ -44,6 +47,38 @@ export type SkyPreset =
   | 'terrain'
   | 'black';
 
+/**
+ * Fields a preset declares but the live renderer does not apply.
+ *
+ * These sat in `InspectionPreset` and read as operational: a preset naming a
+ * palette, or switching hillshade on, appeared to change the scene and did
+ * not. `Viewer.applyPreset()` never touched any of them, and no runtime
+ * setter exists for them to call.
+ *
+ * They are kept rather than deleted, because the values were tuned against
+ * real survey data and are the right starting point once each capability
+ * lands. Holding them behind `reserved` makes the separation explicit:
+ * nothing in here is claimed to affect the live view.
+ */
+export interface ReservedPresetCapabilities {
+  /**
+   * SSAO strength 0..1. `ssaoApproximation.ts` computes an AO factor, but no
+   * pass consumes it, so there is nothing for a preset to set.
+   */
+  readonly aoStrength: number;
+  /**
+   * Elevation palette for height colouring. The Viewer exposes no palette
+   * setter; the ramp is selected inside `colorForMode`.
+   */
+  readonly elevationPalette: ElevationPalette;
+  /**
+   * Terrain relief shading. Hillshade is an analysis product derived from a
+   * DEM, not a live point-cloud render control, so a preset field cannot
+   * switch it on: there is no live hillshade renderer to switch.
+   */
+  readonly hillshade: boolean;
+}
+
 /** A complete preset bundle. */
 export interface InspectionPreset {
   /** Identifier — used for persistence and the chip label. */
@@ -56,24 +91,20 @@ export interface InspectionPreset {
   readonly edlStrength: number;
   /** Whether EDL is on in this preset. */
   readonly edlEnabled: boolean;
-  /**
-   * SSAO strength 0..1. Renderer ignores this on backends that don't
-   * yet have the SSAO pass plumbed; the field is shipped so when SSAO
-   * lands the presets pick up the right look without further edits.
-   */
-  readonly aoStrength: number;
-  /** Elevation palette for height colouring. */
-  readonly elevationPalette: ElevationPalette;
   /** Base point size in pixels. */
   readonly pointSize: number;
   /** Fixed or adaptive size by distance. */
   readonly pointSizeMode: 'fixed' | 'adaptive';
   /** Sky / background preset. */
   readonly sky: SkyPreset;
-  /** Whether the hillshade colour-mode overlay is on (terrain only). */
-  readonly hillshade: boolean;
-  /** Default colour-mode to switch into when the preset applies. */
+  /**
+   * Colour mode the preset moves into. Applied per cloud, and only where the
+   * cloud carries what that mode needs; a cloud with no classification keeps
+   * the mode it has rather than rendering a uniform default.
+   */
   readonly defaultColorMode: 'rgb' | 'elevation' | 'classification' | 'density' | 'intensity';
+  /** Declared, not applied to the live view. See `ReservedPresetCapabilities`. */
+  readonly reserved: ReservedPresetCapabilities;
 }
 
 /** The set of preset ids. Closed so the type system catches unknown names. */
@@ -95,13 +126,11 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
     description: 'Balanced default — colour + EDL + light AO for general drone / mobile scans',
     edlEnabled: true,
     edlStrength: 0.7,
-    aoStrength: 0.35,
-    elevationPalette: 'cividis',
     pointSize: 2,
     pointSizeMode: 'adaptive',
     sky: 'survey-blue',
-    hillshade: false,
     defaultColorMode: 'rgb',
+    reserved: { aoStrength: 0.35, elevationPalette: 'cividis', hillshade: false },
   },
   terrain: {
     id: 'terrain',
@@ -109,13 +138,11 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
     description: 'Bare-earth + DTM workflows — hillshade + cividis ramp + warm sky',
     edlEnabled: true,
     edlStrength: 0.55,
-    aoStrength: 0.25,
-    elevationPalette: 'cividis',
     pointSize: 2,
     pointSizeMode: 'adaptive',
     sky: 'terrain-sand',
-    hillshade: true,
     defaultColorMode: 'elevation',
+    reserved: { aoStrength: 0.25, elevationPalette: 'cividis', hillshade: true },
   },
   foliage: {
     id: 'foliage',
@@ -123,13 +150,11 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
     description: 'Forestry + canopy work — soft EDL, deep teal sky, viridis ramp',
     edlEnabled: true,
     edlStrength: 0.5,
-    aoStrength: 0.2,
-    elevationPalette: 'viridis',
     pointSize: 2,
     pointSizeMode: 'adaptive',
     sky: 'foliage-teal',
-    hillshade: false,
     defaultColorMode: 'elevation',
+    reserved: { aoStrength: 0.2, elevationPalette: 'viridis', hillshade: false },
   },
   classification: {
     id: 'classification',
@@ -137,13 +162,11 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
     description: 'ASPRS class review — class palette, modest EDL so colours dominate',
     edlEnabled: true,
     edlStrength: 0.45,
-    aoStrength: 0.15,
-    elevationPalette: 'cividis',
     pointSize: 2.25,
     pointSizeMode: 'adaptive',
     sky: 'deep',
-    hillshade: false,
     defaultColorMode: 'classification',
+    reserved: { aoStrength: 0.15, elevationPalette: 'cividis', hillshade: false },
   },
   qa: {
     id: 'qa',
@@ -151,13 +174,11 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
     description: 'Acceptance review — high EDL + AO, cool sky, density colouring',
     edlEnabled: true,
     edlStrength: 0.85,
-    aoStrength: 0.5,
-    elevationPalette: 'inferno',
     pointSize: 2.5,
     pointSizeMode: 'fixed',
     sky: 'qa-cool',
-    hillshade: false,
     defaultColorMode: 'density',
+    reserved: { aoStrength: 0.5, elevationPalette: 'inferno', hillshade: false },
   },
 } as const;
 
