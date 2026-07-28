@@ -2,6 +2,18 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Build provenance attestation for release archives and the SBOM. The release
+  workflow signs a SLSA provenance statement through Sigstore, binding each
+  archive to the workflow run and commit that produced it. Verify a downloaded
+  archive with `gh attestation verify <file> --repo Aurtechmx/openlidarviewer`.
+  This applies from the next release onward; assets published for v0.6.2 and
+  earlier carry no attestation, and `release:verify` remains the check for
+  those.
+
 ## [0.6.2] - 2026-07-27
 
 A validation-and-correction release. Twelve validation suites were added, covering
