@@ -1,0 +1,38 @@
+# Coverage is reported, not enforced by a second gate.
+#
+# The release gate already runs coverage as a mandatory stage and refuses an
+# evidence record when it did not run. Codecov's job here is to make the number
+# externally inspectable per pull request, so a reviewer sees what a change did
+# to coverage without running the suite. Setting it to block as well would give
+# two systems a veto over the same measurement, and the one with the weaker
+# claim would win arguments.
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        # A change that moves total coverage by less than this is noise from
+        # test sharding, not a regression worth a red mark.
+        threshold: 1%
+        informational: true
+    patch:
+      default:
+        # New code should carry tests. Informational so it reports rather than
+        # blocks: the branch ruleset names ci-green and CodeQL, and adding a
+        # third required check that depends on a third-party service would make
+        # merges dependent on that service being up.
+        target: 80%
+        informational: true
+
+comment:
+  layout: "condensed_header, diff, flags, components"
+  require_changes: true
+
+# Excluded from the measurement because a percentage over them says nothing
+# about whether the software works.
+ignore:
+  - "tests/**"
+  - "benchmarks/**"
+  - "scripts/**"
+  - "docs-site/**"
+  - "**/*.d.ts"
