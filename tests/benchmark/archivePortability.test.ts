@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -108,6 +108,31 @@ describe('documentedScripts', () => {
 
   it('picks up nothing from prose that names no command', () => {
     expect(documentedScripts('Install the dependencies and open the page.')).toEqual([]);
+  });
+});
+
+describe('manifestInventoryPaths', () => {
+  it('reads the documents and directories a manifest declares', () => {
+    const text = [
+      '- `POLICY_DOCUMENT.md`: the canonical policy.',
+      '- `docs/validation/test-evidence.json`: development runs.',
+      '- `src/`: application source.',
+      'MIT. See `LICENSE`.',
+    ].join('\n');
+    expect(manifestInventoryPaths(text)).toEqual([
+      'POLICY_DOCUMENT.md',
+      'docs/validation/test-evidence.json',
+      'src/',
+      'LICENSE',
+    ]);
+  });
+
+  it('reads nothing out of a code span that is prose rather than a path', () => {
+    expect(manifestInventoryPaths('Run `npm run gate` and read `the notes`.')).toEqual([]);
+  });
+
+  it('does not join a code span that spans a line break', () => {
+    expect(manifestInventoryPaths('walks `npm run\nrelease:verify` from the tag.')).toEqual([]);
   });
 });
 
