@@ -1,0 +1,212 @@
+{
+  "@context": "https://w3id.org/codemeta/3.0",
+  "@type": "SoftwareSourceCode",
+  "identifier": "https://doi.org/10.5281/zenodo.21544619",
+  "name": "OpenLiDARViewer",
+  "description": "Browser-native, local-first platform for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting.",
+  "version": "0.6.2",
+  "softwareVersion": "0.6.2",
+  "dateModified": "2026-07-27",
+  "datePublished": "2026-07-27",
+  "license": "https://spdx.org/licenses/MIT.html",
+  "codeRepository": "https://github.com/Aurtechmx/openlidarviewer",
+  "url": "https://lidar.aurtech.mx/",
+  "issueTracker": "https://github.com/Aurtechmx/openlidarviewer/issues",
+  "readme": "https://github.com/Aurtechmx/openlidarviewer/blob/main/README.md",
+  "programmingLanguage": [
+    "TypeScript",
+    "JavaScript",
+    "Python"
+  ],
+  "runtimePlatform": [
+    "Web browser (WebGPU, WebGL 2)",
+    "Node.js 22.17.1"
+  ],
+  "operatingSystem": [
+    "Any (browser)"
+  ],
+  "applicationCategory": "Geospatial",
+  "developmentStatus": "active",
+  "keywords": [
+    "lidar",
+    "point-cloud",
+    "las",
+    "laz",
+    "e57",
+    "ply",
+    "gltf",
+    "viewer",
+    "three.js",
+    "webgpu"
+  ],
+  "author": [
+    {
+      "@type": "Person",
+      "givenName": "A.",
+      "familyName": "Urias",
+      "@id": "https://orcid.org/0009-0007-3147-323X",
+      "affiliation": {
+        "@type": "Organization",
+        "name": "Aurtech"
+      }
+    }
+  ],
+  "maintainer": {
+    "@type": "Person",
+    "@id": "https://orcid.org/0009-0007-3147-323X"
+  },
+  "softwareRequirements": [
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@fontsource-variable/inter",
+      "name": "@fontsource-variable/inter",
+      "version": "^5.3.0",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@fontsource-variable/inter"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@fontsource/jetbrains-mono",
+      "name": "@fontsource/jetbrains-mono",
+      "version": "^5.3.0",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@fontsource/jetbrains-mono"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@fontsource/manrope",
+      "name": "@fontsource/manrope",
+      "version": "^5.3.0",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@fontsource/manrope"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@loaders.gl/core",
+      "name": "@loaders.gl/core",
+      "version": "^4.4.2",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@loaders.gl/core"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@loaders.gl/gltf",
+      "name": "@loaders.gl/gltf",
+      "version": "^4.4.2",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@loaders.gl/gltf"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@loaders.gl/obj",
+      "name": "@loaders.gl/obj",
+      "version": "^4.4.2",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@loaders.gl/obj"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "@loaders.gl/ply",
+      "name": "@loaders.gl/ply",
+      "version": "^4.4.2",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/@loaders.gl/ply"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "laz-perf",
+      "name": "laz-perf",
+      "version": "^0.0.7",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/laz-perf"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "pdf-lib",
+      "name": "pdf-lib",
+      "version": "^1.17.1",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/pdf-lib"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "proj4",
+      "name": "proj4",
+      "version": "^2.20.8",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/proj4"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "identifier": "three",
+      "name": "three",
+      "version": "^0.184.0",
+      "provider": {
+        "@type": "Organization",
+        "name": "npm",
+        "url": "https://www.npmjs.com"
+      },
+      "downloadUrl": "https://www.npmjs.com/package/three"
+    }
+  ],
+  "isPartOf": "https://lidar.aurtech.mx/",
+  "relatedLink": [
+    "https://lidar.aurtech.mx/guide",
+    "https://github.com/Aurtechmx/openlidarviewer/blob/main/DATA_AVAILABILITY.md"
+  ],
+  "citation": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "GDAL",
+      "identifier": "https://doi.org/10.5281/zenodo.5884351",
+      "version": "3.13.1",
+      "description": "Reference implementation the terrain derivative claims are compared against."
+    },
+    {
+      "@type": "SoftwareApplication",
+      "name": "proj4js",
+      "codeRepository": "https://github.com/proj4js/proj4js",
+      "description": "Coordinate reference system transforms."
+    }
+  ]
+}

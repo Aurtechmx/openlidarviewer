@@ -20,7 +20,7 @@ import type { ReproducibilityConfig, ScalingConfig } from '../../benchmarks/runn
 import { runReproducibilitySuite } from '../../benchmarks/runner/reproducibility';
 import { runScalingSuite } from '../../benchmarks/runner/scaling';
 import { archiveStamp, writeResults } from '../../benchmarks/runner/writer';
-import { verifyArchives, verifyResultsDir } from '../../benchmarks/runner/verify';
+import { requiredFiles, verifyArchives, verifyResultsDir } from '../../benchmarks/runner/verify';
 import {
   overviewMarkdown,
   reproducibilityCsv,
@@ -500,6 +500,57 @@ describe('the verifier', () => {
     const outcome = verifyResultsDir(latest);
     expect(outcome.ok).toBe(false);
     expect(outcome.problems.join('\n')).toMatch(/scaling\/summary\.md/);
+  });
+
+  test('the required-file list covers every top-level artifact the writer emits', () => {
+    // Pinned as a set, not as a membership test, because the failure mode is
+    // silent subtraction: a name dropped from the list stops being required
+    // and nothing else in the tree notices, since every suite here writes the
+    // file anyway. The suite-conditional entries are derived from the manifest
+    // the publish actually produced.
+    const { latest } = publish();
+    const manifest = JSON.parse(readFileSync(join(latest, 'manifest.json'), 'utf8'));
+    const required = requiredFiles(manifest);
+    expect(required.slice(0, 4)).toEqual([
+      'manifest.json',
+      'environment.json',
+      'summary.md',
+      'summary.html',
+    ]);
+    expect([...required].sort()).toEqual(
+      [
+        'manifest.json',
+        'environment.json',
+        'summary.md',
+        'summary.html',
+        'reproducibility/raw.json',
+        'reproducibility/runs.csv',
+        'reproducibility/summary.json',
+        'reproducibility/summary.md',
+        'reproducibility/artifacts/science-hashes.json',
+        'scaling/raw.json',
+        'scaling/runs.csv',
+        'scaling/summary.json',
+        'scaling/summary.md',
+      ].sort(),
+    );
+  });
+
+  test('catches summary.html removed from the tree and from the listing', () => {
+    // The rendered overview page is the artifact a reader is most likely to
+    // open and the one least likely to be missed by eye, so its absence has to
+    // be reported by the required-file list itself — not only by the
+    // re-rendering check, which a tree could dodge by dropping the entry.
+    const { latest } = publish();
+    const manifestPath = join(latest, 'manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    manifest.files = manifest.files.filter((f: { path: string }) => f.path !== 'summary.html');
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    rmSync(join(latest, 'summary.html'));
+
+    const outcome = verifyResultsDir(latest);
+    expect(outcome.ok).toBe(false);
+    expect(outcome.problems).toContain('summary.html: required file is missing');
   });
 
   test('catches an edited number in the top-level summary.md', () => {

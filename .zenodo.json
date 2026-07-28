@@ -31,6 +31,26 @@
       "relation": "isDescribedBy",
       "identifier": "https://lidar.aurtech.mx/",
       "resource_type": "other"
+    },
+    {
+      "relation": "references",
+      "identifier": "10.5281/zenodo.5884351",
+      "resource_type": "software"
+    },
+    {
+      "relation": "references",
+      "identifier": "https://github.com/proj4js/proj4js",
+      "resource_type": "software"
+    },
+    {
+      "relation": "references",
+      "identifier": "https://github.com/Aurtechmx/openlidarviewer/tree/main/tests/fixtures",
+      "resource_type": "dataset"
+    },
+    {
+      "relation": "references",
+      "identifier": "https://github.com/Aurtechmx/openlidarviewer/blob/main/docs/public-lidar-catalog.md",
+      "resource_type": "dataset"
     }
   ],
   "notes": "The author declares no competing interests. Development is self-funded by Aurtech."
