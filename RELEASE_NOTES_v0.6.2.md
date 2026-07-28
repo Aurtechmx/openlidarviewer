@@ -42,6 +42,14 @@ The development toolchain moves to TypeScript 7.0.2, Vite 8.1.5 and Playwright 1
 
 A user guide is published at [lidar.aurtech.mx/guide](https://lidar.aurtech.mx/guide). The application header links to it beside the GitHub link.
 
+## Header controls
+
+A back-to-centre button returns the view to the loaded scan. It performs the same reset the navigation keybinding does, for the case where no keyboard is available, and it appears only once a scan is open.
+
+The full-screen button now hides where the browser cannot honour it. iPhone Safari exposes the Fullscreen API for video only, so on that platform the control was present and did nothing; it still works on Android and iPadOS, and an installed copy opens without browser chrome through the manifest's standalone display mode.
+
+Header controls grow to 44 px on coarse pointers, the touch-target minimum the mobile specs assert.
+
 ## What the gate still does not catch
 
 The mutation campaign exists to answer that question with evidence rather than confidence, and four of its twelve targeted mutations survive the full gate. `validation/mutations/summary.md` carries the current state and the commands. As recorded there:

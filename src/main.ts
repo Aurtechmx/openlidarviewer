@@ -16,6 +16,7 @@ import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
 import { ThemeToggle } from './ui/ThemeToggle';
+import { mountHeaderControls } from './ui/headerControls';
 import { ToolDock } from './ui/toolDock';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
@@ -497,17 +498,11 @@ const stage = new Stage(app, {
   onBatchConvert: () => void openBatchConverter(),
 });
 
-// v0.4.3 — the header theme toggle. A single shape-morphing button that
-// cycles Dark → Light → High-contrast → Dark, mounted into the top bar's
-// right cluster (just left of the GitHub link). Its onChange routes through
-// the same `setTheme` the old Inspector chip rail used, so `applyTheme` +
-// persistence are unchanged. Skipped in embed mode, where the top bar — and
-// therefore the mount slot — doesn't exist.
-themeToggle = new ThemeToggle({
-  initial: currentTheme,
-  onChange: (name) => setTheme(name),
+themeToggle = mountHeaderControls(stage, {
+  initialTheme: currentTheme,
+  onThemeChange: (name) => setTheme(name),
+  onRecenter: () => { viewer?.frameAll(); },
 });
-stage.mountThemeToggle(themeToggle.element);
 
 /**
  * Lazily build (once) and open the batch format converter. Its chunk carries

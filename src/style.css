@@ -332,6 +332,14 @@
     transform 90ms var(--ease-standard);
 }
 .olv-fs-toggle svg { width: 17px; height: 17px; display: block; }
+/* Back to centre only means something once a scan is on screen. */
+body:not(.olv-has-scan) .olv-recenter { display: none; }
+/* Touch targets: the header glyphs are 28 px, under the 44 px minimum the
+   mobile specs assert, so they grow on coarse pointers. */
+@media (pointer: coarse) {
+  .olv-fs-toggle { width: 44px; height: 44px; }
+  .olv-fs-toggle svg { width: 20px; height: 20px; }
+}
 .olv-fs-toggle:hover {
   color: var(--text);
   border-color: var(--hairline);

@@ -122,6 +122,9 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/ClassLegendPanel.ts::ICON_SOLO',
   'src/ui/ExportPanel.ts::Export / Convert',
   'src/ui/FullscreenToggle.ts::ICON_ENTER',
+  // Back-to-centre glyph: a module-level literal SVG string with no
+  // interpolation and no parameter, same shape as the entries above.
+  'src/ui/RecenterButton.ts::ICON_RECENTER',
   // P11 left-rail toggle: `chevron` is a hardcoded, literal static SVG string
   // (a chevron path) defined inline in panelChrome.ts — no user data, same
   // sanctioned pattern as the other icon SVGs above.

@@ -296,6 +296,14 @@ export class Stage {
    * bar). Returns true when mounted so callers can branch on it.
    */
   mountThemeToggle(element: HTMLElement): boolean {
+    return this.mountHeaderControl(element);
+  }
+
+  /**
+   * Put a control in the top bar's right cluster, left of the GitHub link.
+   * No-op in embed mode, where there is no top bar. Returns true when mounted.
+   */
+  mountHeaderControl(element: HTMLElement): boolean {
     if (!this._topBarRight) return false;
     if (this._githubLink) {
       this._topBarRight.insertBefore(element, this._githubLink);
