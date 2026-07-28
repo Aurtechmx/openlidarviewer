@@ -82,7 +82,8 @@ export function parseClaimRegister(yaml) {
 export function renderClaimRegisterMarkdown({ softwareVersion, generated, claims }) {
   // A literal `|` inside a cell would end the cell; nothing else in the
   // register's prose needs escaping inside a markdown table.
-  const cell = (s) => String(s ?? '—').replace(/\|/g, '\\|');
+  // Backslash first, or a literal `\` before a `|` escapes the escape.
+const cell = (s) => String(s ?? '—').replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
   const header =
     '| Claim | Product | Method@version | Current evidence | Required | External status | Approved claim | Prohibited claims |';
   const rule = `|${' --- |'.repeat(8)}`;

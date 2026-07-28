@@ -423,7 +423,9 @@ function esc(v) {
 }
 
 function mdCell(v) {
-  return String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+  // Backslash first: escaping the pipe alone turns a literal `\` before a
+  // `|` into `\\|`, which markdown renders as a backslash plus a cell break.
+  return String(v ?? '').replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
 }
 
 export function renderComparisons(registry, probes, records) {
