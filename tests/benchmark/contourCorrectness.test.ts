@@ -410,6 +410,47 @@ describe('contour correctness — topological invariants', () => {
     expect(diagonalCrossings(2.99)).toBe(2); // level > z*: high corners isolated
   });
 
+  it('an ambiguous cell whose saddle value equals the level joins the high corners', () => {
+    // The boundary of the saddle rule, at the one level where `≥` and `>`
+    // disagree. Corners (BL, BR, TR, TL) = (2, 0, 2, 0) give
+    //   z* = (v0·v2 − v1·v3) / (v0 + v2 − v1 − v3) = (2·2 − 0·0) / (2 + 2) = 1
+    // exactly: every input is a dyadic rational, exact in float32 storage and
+    // in the float64 arithmetic above it, so the equality z* == 1 is a
+    // property of the fixture and not of rounding. The three levels below
+    // bracket it — 0.75 under z*, 1 on it, 1.25 over it — so the test pins the
+    // transition rather than one point on one side of it. None of the three
+    // coincides with a corner value, so no crossing degenerates onto a corner.
+    const zByIndex = [2, 0, 0, 2]; // row-major: [BL, BR], [TL, TR]
+    const dtm = surfaceGrid((col, row) => zByIndex[row * 2 + col], {
+      cols: 2,
+      rows: 2,
+      cellSizeM: CELL,
+    });
+    const zStar = (2 * 2 - 0 * 0) / (2 + 2 - 0 - 0);
+    const diagonalCrossings = (level: number) => {
+      const set = contoursAt(dtm, { intervalM: 1, levels: [level] });
+      let n = 0;
+      for (const s of set.levels[0].segments) {
+        if (
+          properlyIntersect(
+            { x: 0.5, y: 0.5 }, // BL cell centre (one high corner)
+            { x: 1.5, y: 1.5 }, // TR cell centre (the other high corner)
+            { x: s.x1, y: s.y1 },
+            { x: s.x2, y: s.y2 },
+          )
+        ) {
+          n += 1;
+        }
+      }
+      return n;
+    };
+    // Stated as an exact equality, because that is the condition under test.
+    expect(zStar === 1).toBe(true);
+    expect(diagonalCrossings(0.75)).toBe(0); // level < z*: high corners joined
+    expect(diagonalCrossings(1)).toBe(0); // level == z*: the tie joins them too
+    expect(diagonalCrossings(1.25)).toBe(2); // level > z*: high corners isolated
+  });
+
   it('connectivity changes at the col: one ring below it, two above', () => {
     // Two Gaussian peaks joined by a col at z ≈ 4.53. Below the col the
     // {z ≥ level} region is one connected component, so its boundary is a
