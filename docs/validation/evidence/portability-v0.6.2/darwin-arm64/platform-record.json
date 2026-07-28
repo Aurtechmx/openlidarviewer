@@ -27,7 +27,7 @@
     },
     "loadAverage": {
       "status": "captured",
-      "value": "10.88 11.31 11.32"
+      "value": "12.85 7.52 9.26"
     },
     "nodeVersion": {
       "status": "captured",
@@ -45,11 +45,11 @@
   "evaluated": {
     "commit": {
       "status": "captured",
-      "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+      "value": "d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae"
     },
     "commitShort": {
       "status": "captured",
-      "value": "50e76d2"
+      "value": "d9dc052"
     },
     "workingTree": {
       "status": "captured",
@@ -57,11 +57,11 @@
     },
     "releaseVersion": {
       "status": "captured",
-      "value": "0.6.1"
+      "value": "0.6.2"
     },
     "lockfileSha256": {
       "status": "captured",
-      "value": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559"
+      "value": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825"
     },
     "config": {
       "suiteId": "reproducibility",
@@ -93,7 +93,7 @@
       "pointBytes": "4026c8c9c008fa0ed97ee61d43d9cc63451ea4b09a5c6951221da49d57237ee3",
       "rasterSummary": "590291e7510ed02eb404cb27c279a7484d0d14fb1cba483b54a9391212b8f286",
       "rasterZBytes": "7b1f1e54c089912f0aedaf362d1ad6cffb83eebe6d6e9ef4b73988f6dce74ed9",
-      "dtmSummary": "f3f3aae42c69d882225f9788654f060da12d01ea658ca98b23aac8f4ec356d43",
+      "dtmSummary": "bfa34b5d4464a8c74ffa88b0773ec8357634bd4ff6325828d6ba6db1635a0c7f",
       "dtmZBytes": "37db0921f4d0982658963db9f146ab6e0de053eda68cb69f1521460c402d53ba",
       "dtmConfidenceBytes": "1f4e3a9081b6bec650c19704773e7347cb444ea72389557b1b05672ea3f54ae0",
       "dtmCoverageBytes": "dc68bb30f240b9096303c97eb55ce8d3a2a61f1a736a980fdf28dbe255cc6e9a",
@@ -101,7 +101,7 @@
       "heightAboveGroundBytes": "abb4f026c4647293f5f30e5151149f9f03b18279d09c032f26f4337ad489477a",
       "descriptors": "32bec835720524d0f7cb3aee7c321535e20f6de15c9883fed1f390f9bd44d4ce",
       "contours": "1dcaec1be9bd8ba0523c9317f1f5e75f15709a63ecf4b4cad229a70bd0aef541",
-      "contourFeatures": "9075d17a8143052968aa7e4186f34fdeaf03ec55009b7ec961ae23c108be83d8",
+      "contourFeatures": "3aedea65eb1476a6968a4ddab15b844f71d3db8ddce59103acfa78a08268263c",
       "scientificRecordContent": "80a2607572179f16c79c20ae7fdea14e6c568f6a2edf9e15344071ec241bc8f1",
       "processingManifestContent": "f2f1a205c2cbe10d450d52f10c1374c51637c462434d0b371dcf31ebdc78c461"
     },
@@ -128,8 +128,8 @@
     "applicationContentHash": "299b2ad5"
   },
   "buildScopedHashes": {
-    "scientificRecord": "d3bf8f8fefb9142914e7dffa2cc86ebe4ddc7cda0c07c6f596f9521483a84c5f",
-    "processingManifest": "d84d28446c23d051c30060d05adb9a9a374154a31e944f2c44b6eae1acd4c3cd"
+    "scientificRecord": "e0d969968361080e03f9e2f4a3a3f5c419671f0ee1005246a80590edd540d9a0",
+    "processingManifest": "68916b6b91b5e035138a7d8a334d9c407e4e43515841d3fbc5b32e5f6fc78931"
   },
   "internal": {
     "pass": true,
@@ -142,22 +142,22 @@
   },
   "timing": {
     "medianAnalysisMs": {
-      "value": 1305.1736865,
+      "value": 1252.41475,
       "unit": "ms",
       "reason": null
     },
     "analysisCv": {
-      "value": 0.05316730554592729,
+      "value": 0.04377755830476579,
       "unit": "ratio",
       "reason": null
     },
     "medianPipelineTotalMs": {
-      "value": 1372.8472275000001,
+      "value": 1315.7504159999999,
       "unit": "ms",
       "reason": null
     },
     "peakRssBytes": {
-      "value": 440418304,
+      "value": 368885760,
       "unit": "bytes",
       "reason": null
     }

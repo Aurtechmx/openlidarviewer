@@ -21,20 +21,20 @@ expected-difference,logicalCpuCount,host,expected,darwin-arm64,3
 expected-difference,logicalCpuCount,host,expected,linux-x64,4
 expected-difference,totalMemoryBytes,host,expected,darwin-arm64,7516192768
 expected-difference,totalMemoryBytes,host,expected,linux-x64,16766423040
-expected-difference,loadAverage,host,expected,darwin-arm64,10.88 11.31 11.32
-expected-difference,loadAverage,host,expected,linux-x64,0.97 0.27 0.09
-expected-difference,medianAnalysisMs,timing,expected,darwin-arm64,1305.1736865
-expected-difference,medianAnalysisMs,timing,expected,linux-x64,1060.506257
-expected-difference,peakRssBytes,timing,expected,darwin-arm64,440418304
-expected-difference,peakRssBytes,timing,expected,linux-x64,413757440
+expected-difference,loadAverage,host,expected,darwin-arm64,12.85 7.52 9.26
+expected-difference,loadAverage,host,expected,linux-x64,1.56 0.55 0.20
+expected-difference,medianAnalysisMs,timing,expected,darwin-arm64,1252.41475
+expected-difference,medianAnalysisMs,timing,expected,linux-x64,1070.915724
+expected-difference,peakRssBytes,timing,expected,darwin-arm64,368885760
+expected-difference,peakRssBytes,timing,expected,linux-x64,467886080
 expected-difference,timestamps,structural,not-compared,,"Run start and completion times are wall-clock readings. The framework strips them from every hashed artifact, and they are recorded in each platform manifest rather than compared."
 expected-difference,archive paths,structural,not-compared,,Each platform writes into its own results directory and each CI runner has its own workspace root. Paths are relative in every manifest and are not part of any hash.
 expected-difference,build identity,structural,not-compared,,"The build identity string embeds the commit and the runtime that produced it. The scientific record and the processing manifest are seeded from it, which is why both are build-scoped and compared separately."
-timing,medianAnalysisMs,ms,measured,darwin-arm64,1305.1736865
-timing,analysisCv,ratio,measured,darwin-arm64,0.05316730554592729
-timing,peakRssBytes,bytes,measured,darwin-arm64,440418304
+timing,medianAnalysisMs,ms,measured,darwin-arm64,1252.41475
+timing,analysisCv,ratio,measured,darwin-arm64,0.04377755830476579
+timing,peakRssBytes,bytes,measured,darwin-arm64,368885760
 timing,recordedRuns,count,measured,darwin-arm64,10
-timing,medianAnalysisMs,ms,measured,linux-x64,1060.506257
-timing,analysisCv,ratio,measured,linux-x64,0.052659910444877854
-timing,peakRssBytes,bytes,measured,linux-x64,413757440
+timing,medianAnalysisMs,ms,measured,linux-x64,1070.915724
+timing,analysisCv,ratio,measured,linux-x64,0.09953771301170103
+timing,peakRssBytes,bytes,measured,linux-x64,467886080
 timing,recordedRuns,count,measured,linux-x64,10

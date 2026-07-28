@@ -3,14 +3,14 @@
   "status": "reproduced",
   "ok": true,
   "claimEstablished": true,
-  "claim": "At commit 50e76d2, OpenLiDARViewer produced identical science-scoped artifacts from the same seeded fixture on darwin-arm64 and linux-x64. Build-scoped provenance and execution timing differed, as expected. Nothing is claimed for platforms not in that list.",
+  "claim": "At commit d9dc052, OpenLiDARViewer produced identical science-scoped artifacts from the same seeded fixture on darwin-arm64 and linux-x64. Build-scoped provenance and execution timing differed, as expected. Nothing is claimed for platforms not in that list.",
   "platforms": [
     "darwin-arm64",
     "linux-x64"
   ],
-  "evaluatedCommit": "50e76d22d405f716386dea50138e684fbe5a6911",
-  "lockfileSha256": "60a48b52d87325ac5e6ab823b64fafa86d7aeccc7474733d066cd1358f50e559",
-  "releaseVersion": "0.6.1",
+  "evaluatedCommit": "d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae",
+  "lockfileSha256": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
+  "releaseVersion": "0.6.2",
   "scalarTolerance": 0,
   "endianness": {
     "darwin-arm64": "LE",
@@ -94,8 +94,8 @@
       "field": "loadAverage",
       "why": "Host load at the moment of writing. It moves the timing column and nothing else.",
       "values": {
-        "darwin-arm64": "10.88 11.31 11.32",
-        "linux-x64": "0.97 0.27 0.09"
+        "darwin-arm64": "12.85 7.52 9.26",
+        "linux-x64": "1.56 0.55 0.20"
       }
     },
     {
@@ -103,8 +103,8 @@
       "field": "medianAnalysisMs",
       "why": "Execution time is a property of the machine. Reported per platform and never pooled.",
       "values": {
-        "darwin-arm64": "1305.1736865",
-        "linux-x64": "1060.506257"
+        "darwin-arm64": "1252.41475",
+        "linux-x64": "1070.915724"
       }
     },
     {
@@ -112,8 +112,8 @@
       "field": "peakRssBytes",
       "why": "Memory high-water observations track the allocator and the host, not the outputs.",
       "values": {
-        "darwin-arm64": "440418304",
-        "linux-x64": "413757440"
+        "darwin-arm64": "368885760",
+        "linux-x64": "467886080"
       }
     }
   ],
@@ -134,21 +134,21 @@
   "timing": [
     {
       "platformId": "darwin-arm64",
-      "medianAnalysisMs": 1305.1736865,
+      "medianAnalysisMs": 1252.41475,
       "medianAnalysisUnavailableReason": null,
-      "analysisCv": 0.05316730554592729,
+      "analysisCv": 0.04377755830476579,
       "analysisCvUnavailableReason": null,
-      "peakRssBytes": 440418304,
+      "peakRssBytes": 368885760,
       "peakRssUnavailableReason": null,
       "recordedRuns": 10
     },
     {
       "platformId": "linux-x64",
-      "medianAnalysisMs": 1060.506257,
+      "medianAnalysisMs": 1070.915724,
       "medianAnalysisUnavailableReason": null,
-      "analysisCv": 0.052659910444877854,
+      "analysisCv": 0.09953771301170103,
       "analysisCvUnavailableReason": null,
-      "peakRssBytes": 413757440,
+      "peakRssBytes": 467886080,
       "peakRssUnavailableReason": null,
       "recordedRuns": 10
     }

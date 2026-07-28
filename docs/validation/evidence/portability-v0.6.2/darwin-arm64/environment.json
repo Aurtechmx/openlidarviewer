@@ -17,11 +17,11 @@
   },
   "gitCommitFull": {
     "status": "captured",
-    "value": "50e76d22d405f716386dea50138e684fbe5a6911"
+    "value": "d9dc052a0cb8fce6ce3d9dad5979e6f8d6af39ae"
   },
   "gitCommitShort": {
     "status": "captured",
-    "value": "50e76d2"
+    "value": "d9dc052"
   },
   "gitDirty": {
     "status": "captured",
@@ -29,7 +29,7 @@
   },
   "releaseVersion": {
     "status": "captured",
-    "value": "0.6.1"
+    "value": "0.6.2"
   },
   "logicalCpuCount": {
     "status": "captured",
@@ -41,7 +41,7 @@
   },
   "loadAverage": {
     "status": "captured",
-    "value": "10.88 11.31 11.32"
+    "value": "12.85 7.52 9.26"
   },
   "npmVersion": {
     "status": "captured",
