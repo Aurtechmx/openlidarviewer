@@ -8,6 +8,7 @@
  * custom properties — so they belong beside the panels rather than in main.ts.
  */
 import { el } from './dom';
+import { applyClassicScrollbarClass } from './classicScrollbars';
 
 /**
  * Keep the left panel column clear of the measure toolbar (v0.4.5 overlap
@@ -50,7 +51,7 @@ export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): 
 export function wireDockClearance(dock: HTMLElement, column: HTMLElement): void {
   // The column's scroll affordance travels with it, so the composition root
   // wires the rail once rather than remembering two calls that must agree.
-  wireRailScrollAffordance(column);
+  wireRailScrollAffordance(column, applyClassicScrollbarClass());
   if (typeof ResizeObserver === 'undefined') return;
   try {
     const ro = new ResizeObserver(() => {
@@ -82,7 +83,15 @@ export function wireDockClearance(dock: HTMLElement, column: HTMLElement): void 
  * hit-testable while its content actually overflows, which is exactly when a
  * scrollbar exists for the user to reach.
  */
-export function wireRailScrollAffordance(column: HTMLElement): () => void {
+export function wireRailScrollAffordance(
+  column: HTMLElement,
+  classicScrollbars = true,
+): () => void {
+  // Overlay-scrollbar platforms have nothing to grab, so the class would cost
+  // the canvas its pass-through in the gaps between panels and buy nothing.
+  // Passed in rather than read here: platform detection belongs at the point
+  // that composes the UI, and this stays testable without a document.
+  if (!classicScrollbars) return () => {};
   const sync = (): void => {
     column.classList.toggle('olv-rail-scrollable', column.scrollHeight > column.clientHeight);
   };
