@@ -37,21 +37,33 @@ import { groupBySection, rankActions, type Action } from './actionRegistry';
  */
 export function formatShortcutKeys(keys: string | undefined): string {
   if (!keys) return '';
-  return (
-    keys
-      // Render the OS-appropriate primary modifier — ⌘ on macOS, Ctrl
-      // elsewhere. We detect macOS via the userAgent because both
-      // platforms commonly use the same binding semantically.
-      .replace(
-        /\bCmd\b/g,
-        typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
-          ? '⌘'
-          : 'Ctrl',
-      )
+  // ⇧ and ⌥ are Apple's glyphs. Rendering them everywhere put a macOS Option
+  // symbol in front of a Windows shortcut, so "Cmd-Shift-U" read as "Ctrl ⇧ U"
+  // on Windows for a chord that is written Ctrl+Shift+U there. Each platform
+  // gets the notation its own users read.
+  if (isApplePlatform()) {
+    return keys
+      .replace(/\bCmd\b/g, '⌘')
       .replace(/\bShift\b/g, '⇧')
       .replace(/\bAlt\b/g, '⌥')
-      .replace(/-/g, ' ')
-  );
+      .replace(/-/g, ' ');
+  }
+  return keys.replace(/\bCmd\b/g, 'Ctrl').replace(/-/g, '+');
+}
+
+/**
+ * Whether this is an Apple platform, for notation only.
+ *
+ * `navigator.platform` is deprecated and frozen in some engines, so
+ * `userAgentData.platform` is preferred where present and the old property is
+ * the fallback rather than the source.
+ */
+function isApplePlatform(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const withData = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const modern = withData.userAgentData?.platform;
+  if (typeof modern === 'string' && modern.length > 0) return /mac/i.test(modern);
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
 }
 
 export class ShortcutSheet {
