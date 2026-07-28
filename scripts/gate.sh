@@ -14,8 +14,10 @@
 #
 #   release                Runs EVERY mandatory release stage into ONE log:
 #                          static gate, deterministic e2e, docs build,
-#                          production audit, fixture checksums, coverage,
-#                          mutation. Writes the authoritative record to
+#                          production audit, fixture checksums, coverage.
+#                          Mutation is deferred to its own scheduled workflow
+#                          and cited by the record; OLV_GATE_MUTATION=1 runs it
+#                          here too. Writes the authoritative record to
 #                          release/test-evidence-v<version>.json and touches
 #                          no tracked file. That last property is the point:
 #                          the exact-tag workflow packages this same checkout
@@ -62,6 +64,17 @@ production_audit() {
   return $audit_code
 }
 
+# Mutation and its record are ONE stage. Splitting them would let the runner
+# pass while the record went unwritten, and collect-evidence would then quietly
+# fall back to the last scheduled figure — a stale number attributed to a run
+# that had actually measured this commit.
+mutation_with_evidence() {
+  npm run mutation || return $?
+  node scripts/collect-mutation-evidence.mjs \
+    --output release/mutation-evidence.json \
+    --in-gate
+}
+
 run_stage staticGate npm run test:release
 
 if [ "$MODE" = "release" ]; then
@@ -71,7 +84,18 @@ if [ "$MODE" = "release" ]; then
     run_stage productionAudit production_audit
     run_stage fixtureChecksums fixture_checksums
     run_stage coverage npm run coverage -- --reporter=dot
-    run_stage mutation npm run mutation
+    # Mutation is opt-in. It costs about two hours against three numeric
+    # modules, which is most of the release gate's wall time, so it runs on its
+    # own schedule and the record cites that run. OLV_GATE_MUTATION=1 keeps the
+    # everything-in-one-pass local path available; when set, the stage runs here
+    # and its result is written where collect-evidence prefers it, so the record
+    # cites THIS commit rather than the last scheduled one.
+    if [ "${OLV_GATE_MUTATION:-0}" = "1" ]; then
+      run_stage mutation mutation_with_evidence
+    else
+      echo "mutation: deferred to the scheduled workflow; the record cites its last result." | tee -a "$LOG"
+      echo "Set OLV_GATE_MUTATION=1 to run it inline." | tee -a "$LOG"
+    fi
   else
     echo "staticGate failed; the remaining release stages were not run." | tee -a "$LOG"
   fi
