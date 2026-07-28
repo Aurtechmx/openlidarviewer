@@ -230,5 +230,9 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           make_latest: ${{ !contains(github.ref_name, '-') }}
           tag_name: ${{ github.ref_name }}
+          # The release body is the shipped notes asset, so the page and the
+          # hashed artifact carry the same bytes. Without this the action falls
+          # back to the tag message.
+          body_path: assets/RELEASE_NOTES_${{ github.ref_name }}.md
           files: assets/**/*
           fail_on_unmatched_files: true
