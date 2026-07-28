@@ -9,6 +9,7 @@
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 ![Node](https://img.shields.io/badge/node-22.17.1-339933)
+[![FAIR checklist](https://fairsoftwarechecklist.net/badge.svg)](https://fairsoftwarechecklist.net/v0.2?f=11&a=22113&i=22322&r=113)
 
 [![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
 ![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
