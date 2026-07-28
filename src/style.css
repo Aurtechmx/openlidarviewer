@@ -3686,6 +3686,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    the canvas controller only dollies events that target the canvas (see
    NavController `_handleWheel`). `content-visibility` and list virtualization
    are intentionally NOT applied here: the program gates them on profiling. */
+.olv-palette-list,
+.olv-modal-body,
+.olv-help-body,
+.olv-msheet-body,
+.olv-measure-panel,
+.olv-bc-dialog,
+.olv-wfc-card,
 .olv-left-panels,
 .olv-inspector,
 .olv-streaming-panel,
@@ -3717,6 +3724,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    the 0px platform default. `-moz-appearance` is the narrowest reliable
    Firefox probe. */
 @supports (-moz-appearance: none) {
+  .olv-palette-list,
+  .olv-modal-body,
+  .olv-help-body,
+  .olv-msheet-body,
+  .olv-measure-panel,
+  .olv-bc-dialog,
+  .olv-wfc-card,
   .olv-left-panels,
   .olv-inspector,
   .olv-streaming-panel,
@@ -3727,6 +3741,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     scrollbar-color: var(--hairline-strong) transparent;
   }
 }
+.olv-palette-list::-webkit-scrollbar,
+.olv-modal-body::-webkit-scrollbar,
+.olv-help-body::-webkit-scrollbar,
+.olv-msheet-body::-webkit-scrollbar,
+.olv-measure-panel::-webkit-scrollbar,
+.olv-bc-dialog::-webkit-scrollbar,
+.olv-wfc-card::-webkit-scrollbar,
 .olv-left-panels::-webkit-scrollbar,
 .olv-inspector::-webkit-scrollbar,
 .olv-streaming-panel::-webkit-scrollbar,
@@ -3736,6 +3757,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   width: 10px;
   height: 10px;
 }
+.olv-palette-list::-webkit-scrollbar-track,
+.olv-modal-body::-webkit-scrollbar-track,
+.olv-help-body::-webkit-scrollbar-track,
+.olv-msheet-body::-webkit-scrollbar-track,
+.olv-measure-panel::-webkit-scrollbar-track,
+.olv-bc-dialog::-webkit-scrollbar-track,
+.olv-wfc-card::-webkit-scrollbar-track,
 .olv-left-panels::-webkit-scrollbar-track,
 .olv-inspector::-webkit-scrollbar-track,
 .olv-streaming-panel::-webkit-scrollbar-track,
@@ -3744,6 +3772,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-shortcuts-list::-webkit-scrollbar-track {
   background: transparent;
 }
+.olv-palette-list::-webkit-scrollbar-thumb,
+.olv-modal-body::-webkit-scrollbar-thumb,
+.olv-help-body::-webkit-scrollbar-thumb,
+.olv-msheet-body::-webkit-scrollbar-thumb,
+.olv-measure-panel::-webkit-scrollbar-thumb,
+.olv-bc-dialog::-webkit-scrollbar-thumb,
+.olv-wfc-card::-webkit-scrollbar-thumb,
 .olv-left-panels::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
 .olv-streaming-panel::-webkit-scrollbar-thumb,
@@ -3758,6 +3793,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 2px solid transparent;
   background-clip: padding-box;
 }
+.olv-palette-list::-webkit-scrollbar-thumb:hover,
+.olv-modal-body::-webkit-scrollbar-thumb:hover,
+.olv-help-body::-webkit-scrollbar-thumb:hover,
+.olv-msheet-body::-webkit-scrollbar-thumb:hover,
+.olv-measure-panel::-webkit-scrollbar-thumb:hover,
+.olv-bc-dialog::-webkit-scrollbar-thumb:hover,
+.olv-wfc-card::-webkit-scrollbar-thumb:hover,
 .olv-left-panels::-webkit-scrollbar-thumb:hover,
 .olv-inspector::-webkit-scrollbar-thumb:hover,
 .olv-streaming-panel::-webkit-scrollbar-thumb:hover,
@@ -3768,6 +3810,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background-clip: padding-box;
 }
 /* The corner where two scrollbars meet defaults to opaque white. */
+.olv-palette-list::-webkit-scrollbar-corner,
+.olv-modal-body::-webkit-scrollbar-corner,
+.olv-help-body::-webkit-scrollbar-corner,
+.olv-msheet-body::-webkit-scrollbar-corner,
+.olv-measure-panel::-webkit-scrollbar-corner,
+.olv-bc-dialog::-webkit-scrollbar-corner,
+.olv-wfc-card::-webkit-scrollbar-corner,
 .olv-left-panels::-webkit-scrollbar-corner,
 .olv-inspector::-webkit-scrollbar-corner,
 .olv-streaming-panel::-webkit-scrollbar-corner,
