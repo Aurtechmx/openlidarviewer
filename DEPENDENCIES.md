@@ -1,4 +1,4 @@
-# Dependency audit — v0.6.2
+# Dependency audit (v0.6.2)
 
 This is the committed dependency baseline for OpenLiDARViewer v0.6.2, recorded
 2026-07-25 (UTC) from the committed `package-lock.json`. It is a baseline, not
@@ -81,34 +81,51 @@ result in the attached evidence.
 
 ```
 npm audit
-7 vulnerabilities (4 moderate, 3 high)
+5 vulnerabilities (5 high)
 ```
 
-Every advisory sits in build or docs tooling that never ships:
+All five are one package reached by four paths:
 
 | Root package | Severity | Reached through | Reaches the deployed app? |
 |---|---|---|---|
-| brace-expansion | high | dev tooling | No |
-| fast-uri | high | dev tooling | No |
-| esbuild | moderate | vitepress → vite | No, docs site build only |
-| qs | moderate | typed-rest-client | No, dev tooling only |
+| brace-expansion | high | minimatch, multimatch, javascript-obfuscator, the obfuscator Vite plugin | No |
 
-These affect a developer running the dev server, the VitePress docs server, or
-the mutation runner on their own machine. The static production build is not
-exposed to any of them.
+The advisory is GHSA-mh99-v99m-4gvg, an out-of-memory crash on unbounded brace
+expansion. It covers every published version up to and including 5.0.7, so
+there is no version to move to; `npm audit` reports `fixAvailable: false`. The
+input in each of these paths is a glob pattern written in this repository, not
+anything a user supplies, and the code runs at build time on a developer
+machine or a CI runner. It will be picked up when upstream publishes a fix.
+
+The production dependency set is clean: `npm audit --omit=dev` reports zero.
+
+## Resolved by override
+
+Four advisories that previously sat here are closed. `package.json` pins them
+through `overrides` rather than waiting on the packages that depend on them:
+
+| Package | Was | Now | Advisory |
+|---|---|---|---|
+| vite (under vitepress) | 5.4.21 | 6.4.3 | dev-server path traversal, `server.fs.deny` bypass, launch-editor NTLM disclosure |
+| esbuild (under vitepress) | 0.21.5 | 0.25.12 | dev-server permissive CORS |
+| qs (under typed-rest-client) | 6.15.1 | 6.15.3 | `qs.stringify` denial of service |
+| brace-expansion | 1.1.15 | 1.1.16 | CVE-2026-13149, exponential-time expansion |
+
+The `vite` override is scoped to `vitepress` alone. The application builds on
+Vite 8.1.5 and is not affected by it. `npm run docs:build` passes on the
+overridden tree.
 
 ## Deferred upgrades
 
-Clearing the remaining dev-tooling advisories and open Dependabot bumps means
-major-version migrations: `vitepress` and its bundled `vite`, the `actions/*`
-bumps, Three.js 0.185. Each would invalidate the build and test contract this
-release line was validated against, so they wait for a dedicated update.
-Deferred, with their tracking PRs:
+Remaining open Dependabot bumps are major-version migrations that would
+invalidate the build and test contract this release line was validated
+against, so they wait for a dedicated update:
 
-- `vitepress` / bundled `vite` / `esbuild`: the docs-tooling advisory chain.
-- `brace-expansion`, `fast-uri`, `qs` (via `typed-rest-client`): dev tree only.
 - Dependabot #10, #27, #28, #29, #30 (GitHub Actions), #33 (Three.js 0.185.x):
   not merged into this release line.
+
+VitePress itself stays at 1.6.4, which is the latest stable release; 2.0.0 has
+only alpha builds.
 
 The TypeScript 7 / Vite 8.1.5 toolchain bump is no longer deferred. Dependabot
 #40 landed as a dedicated toolchain update: TypeScript 7.0.2, Vite 8.1.5, and
@@ -122,5 +139,5 @@ be re-validated against one variable.
 nvm use          # 22.17.1, from .nvmrc
 npm ci
 npm audit --omit=dev --audit-level=high   # production set: expect 0
-npm audit                                 # full dev tree: expect the advisories above
+npm audit                                 # full dev tree: expect the advisory above
 ```
