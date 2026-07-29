@@ -12,6 +12,7 @@
  */
 
 import { el } from './dom';
+import { registerMetricsHook } from '../perf/metricsHook';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { FrameStats } from '../render/Viewer';
 import type { LoadTelemetry } from '../io/loadTelemetry';
@@ -230,6 +231,11 @@ export class DebugOverlay {
 
   /** Begin polling the sampler and collecting per-frame telemetry. Idempotent. */
   start(): void {
+    // Publish the metrics document for the performance harness. Registered
+    // here rather than by the composition root because the overlay owns the
+    // document, and this module only loads on ?debug=1, so a normal session
+    // neither ships this chunk nor gains the hook.
+    registerMetricsHook(() => this.metricsJson());
     if (this._timer !== undefined) return;
     this._perfCollector.start();
     this._refresh();
