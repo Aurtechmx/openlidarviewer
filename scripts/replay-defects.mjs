@@ -40,7 +40,7 @@
  * Exit 0 when every run completed and the comparison files were written, 1 when
  * a run could not be launched, 2 on a usage, read or setup error.
  */
-import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, statSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, statSync, readdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative, join } from 'node:path';
@@ -241,6 +241,23 @@ function runProbe(probe, env, dir, roots) {
 const registry = JSON.parse(readFileSync(REGISTRY_PATH, 'utf8'));
 const probes = planProbes(registry, candidateDir);
 let currentDefect = null;
+
+// Rebuilding the comparison files after a rendering change must not require
+// re-running the probes: a re-run would produce new raw records, and then the
+// files would agree with a different set of runs rather than with the recorded
+// one. --render-only projects the raw records already on disk, which is the
+// only way to correct a rendering defect without touching the evidence.
+if (process.argv.includes('--render-only')) {
+  if (!existsSync(RAW_DIR)) fail('no raw records to render from', 2);
+  const existing = readdirSync(RAW_DIR).filter((f) => f.endsWith('.json')).sort()
+    .map((f) => JSON.parse(readFileSync(join(RAW_DIR, f), 'utf8')));
+  const rendered = renderComparisons(registry, probes, existing);
+  for (const [name, text] of Object.entries(rendered)) {
+    writeFileSync(join(REPLAY_DIR, name), text);
+  }
+  console.log(`rendered ${Object.keys(rendered).length} comparison files from ${existing.length} raw records`);
+  process.exit(0);
+}
 
 /** Return the baseline tree to the tag exactly, keeping the shared modules. */
 function resetBaseline(dir) {
