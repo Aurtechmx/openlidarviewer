@@ -1,0 +1,477 @@
+{
+  "schemaVersion": 1,
+  "registryVersion": "0.6.2",
+  "defectCount": 18,
+  "derivedFrom": [
+    "validation/defects/defect-registry.json",
+    "validation/defects/replay/raw/",
+    "validation/mutations/results.json",
+    "git log in this repository"
+  ],
+  "unknownPolicy": "A field is \"unknown\" when neither the registry nor git establishes it. No value here is estimated, and datePrecision is never \"exact\" because no dated discovery record exists.",
+  "vocabularies": {
+    "discoverySource": [
+      "prospective-exposure",
+      "retrospective-regression-evidence",
+      "discovery-by-review",
+      "external-report",
+      "unknown"
+    ],
+    "datePrecision": [
+      "exact",
+      "commit-order-only",
+      "approximate",
+      "unknown"
+    ],
+    "discoveryEvidence": [
+      "known-limitations-record",
+      "detecting-suite-first-commit",
+      "replay-baseline",
+      "none"
+    ],
+    "firstFailingValidationBasis": [
+      "prospective-run",
+      "retrospective-replay",
+      "unknown"
+    ],
+    "classificationConfidence": [
+      "high",
+      "medium",
+      "low"
+    ]
+  },
+  "records": [
+    {
+      "defectId": "OLV-DEF-001",
+      "name": "RFC 7946 third ordinate written in source units",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"EPSG:4979 with a foot vertical factor writes the METRE equivalent into the ordinate\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "9ecdae87e6bd4a25d5842348285542da6f91fc7d",
+      "fixCommittedAt": "2026-07-26T22:22:46-06:00",
+      "regressionTestCommit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git. Mutation M03 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-002",
+      "name": "Contour set reported the requested interval, not the emitted one",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+        "committedAt": "2026-07-26T18:08:09-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"an over-fine interval thins the levels and the declared interval follows\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+      "fixCommittedAt": "2026-07-26T18:08:09-06:00",
+      "regressionTestCommit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/contourCorrectness.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutations M03, M04, M05 target a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-003",
+      "name": "A flat surface produced an unexplained empty contour set",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+        "committedAt": "2026-07-26T18:08:09-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"a flat surface emits no contour geometry\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+      "fixCommittedAt": "2026-07-26T18:08:09-06:00",
+      "regressionTestCommit": "76dd71b644807dbefa880d21615bc9a308a457dd",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/contourCorrectness.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutations M04, M05 target a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-004",
+      "name": "Contour deliverable GeoTIFF omitted the vertical-unit key",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"maps a metres-per-unit factor to its GeoTIFF unit code, or to none\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "ee0526b9fbfed92298d55270603b349908bafe82",
+      "fixCommittedAt": "2026-07-26T10:35:43-06:00",
+      "regressionTestCommit": "488be9e71dfaee6b84810dafda832758f3c93c9d",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git."
+    },
+    {
+      "defectId": "OLV-DEF-005",
+      "name": "Async and GPU derivative path took no vertical-unit factor",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"async derivatives convert the rise with the vertical unit factor, like derivativesSync\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "ee0526b9fbfed92298d55270603b349908bafe82",
+      "fixCommittedAt": "2026-07-26T10:35:43-06:00",
+      "regressionTestCommit": "40fb9e3d0b2c9da76b173d23b5980bd8f1d8110a",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git. Mutation M06 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-006",
+      "name": "geodesicFill mixed horizontal and vertical units in its step cost",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"takes the horizontal step in METRES, per axis, and the rise in metres too\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "ee0526b9fbfed92298d55270603b349908bafe82",
+      "fixCommittedAt": "2026-07-26T10:35:43-06:00",
+      "regressionTestCommit": "488be9e71dfaee6b84810dafda832758f3c93c9d",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git. Mutation M01 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-007",
+      "name": "Hillshade convenience wrappers hard-coded square cells and no vertical scale",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "unknown",
+        "basis": "unknown",
+        "note": "No replay baseline for this defect exits non-zero, so no commit in this repository is established as failing validation."
+      },
+      "fixCommit": "ee0526b9fbfed92298d55270603b349908bafe82",
+      "fixCommittedAt": "2026-07-26T10:35:43-06:00",
+      "regressionTestCommit": "4b7d188c8a0ed4f9f3ece151b8a04d87082505e5",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "medium",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git."
+    },
+    {
+      "defectId": "OLV-DEF-008",
+      "name": "Despike blunder floor compared a metres constant against native-unit heights",
+      "discoverySource": "discovery-by-review",
+      "discovery": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "committedAt": "2026-07-25T20:31:31-06:00",
+        "evidence": "known-limitations-record"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"measures the floor in METRES against native-unit heights\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "ee0526b9fbfed92298d55270603b349908bafe82",
+      "fixCommittedAt": "2026-07-26T10:35:43-06:00",
+      "regressionTestCommit": "488be9e71dfaee6b84810dafda832758f3c93c9d",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that added KNOWN_LIMITATIONS_v0.6.1.md, which records the gap. The review itself is undated in git."
+    },
+    {
+      "defectId": "OLV-DEF-009",
+      "name": "PDF report footprint read a Y-up scan's extents as Z-up",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "100337763c44ef697f459d69d0db55df07390293",
+        "committedAt": "2026-07-26T18:08:25-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"report footprint is the same for a Y-up and a Z-up cloud of the same building\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "100337763c44ef697f459d69d0db55df07390293",
+      "fixCommittedAt": "2026-07-26T18:08:25-06:00",
+      "regressionTestCommit": "100337763c44ef697f459d69d0db55df07390293",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/unitIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding."
+    },
+    {
+      "defectId": "OLV-DEF-010",
+      "name": "Streaming density tier skipped the CRS unit conversion the static path applied",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "100337763c44ef697f459d69d0db55df07390293",
+        "committedAt": "2026-07-26T18:08:25-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"the static and streaming refreshers agree on the density tier for one foot-CRS box\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "100337763c44ef697f459d69d0db55df07390293",
+      "fixCommittedAt": "2026-07-26T18:08:25-06:00",
+      "regressionTestCommit": "100337763c44ef697f459d69d0db55df07390293",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/unitIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding."
+    },
+    {
+      "defectId": "OLV-DEF-011",
+      "name": "LAS 1.4 vertical CRS discarded when a WKT record was present",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "98c1e9bf253bb8b9b408498f9fcdb554d8b80e4c",
+        "committedAt": "2026-07-26T18:08:17-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"LAS 1.4 WKT survives, coexisting with the vertical GeoKeys\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "98c1e9bf253bb8b9b408498f9fcdb554d8b80e4c",
+      "fixCommittedAt": "2026-07-26T18:08:17-06:00",
+      "regressionTestCommit": "98c1e9bf253bb8b9b408498f9fcdb554d8b80e4c",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/roundtripFidelity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutation M12 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-012",
+      "name": "A declared linear unit that could not be resolved was answered as metre",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+        "committedAt": "2026-07-26T17:59:51-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"a projected CRS declaring a unit code we cannot resolve is tagged unknown, not metres\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+      "fixCommittedAt": "2026-07-26T17:59:51-06:00",
+      "regressionTestCommit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/failureRecovery.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutation M12 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-013",
+      "name": "Three quantities were reported as measured when nothing was measured",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+        "committedAt": "2026-07-26T17:59:51-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"a zero-extent cloud is given no floor area, and no density derived from one\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+      "fixCommittedAt": "2026-07-26T17:59:51-06:00",
+      "regressionTestCommit": "98c456e5a4daafbe21e42c4a999ff8ed3adc154a",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/failureRecovery.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding."
+    },
+    {
+      "defectId": "OLV-DEF-014",
+      "name": "A prototype key resolved as a method id",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+        "committedAt": "2026-07-26T18:08:01-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"an unregistered method id is refused, including a prototype key\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "fixCommittedAt": "2026-07-26T18:08:01-06:00",
+      "regressionTestCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/provenanceIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding."
+    },
+    {
+      "defectId": "OLV-DEF-015",
+      "name": "The benchmark result verifier was blind to the files it publishes",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+        "committedAt": "2026-07-26T18:08:01-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"a benchmark artifact keyed `__proto__` keeps a distinct hash\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "fixCommittedAt": "2026-07-26T18:08:01-06:00",
+      "regressionTestCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "partially-released",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/provenanceIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutations M07, M08 target a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect. Registry affectedVersion: 0.6.1 for the artifact hashing; the verifier itself was added after v0.6.1"
+    },
+    {
+      "defectId": "OLV-DEF-016",
+      "name": "The contour GeoJSON dropped run warnings and worded the standing limitation its own way",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+        "committedAt": "2026-07-26T18:08:01-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"the GeoJSON carries every warning the run produced, model and provenance alike\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "fixCommittedAt": "2026-07-26T18:08:01-06:00",
+      "regressionTestCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/provenanceIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutation M03 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    },
+    {
+      "defectId": "OLV-DEF-017",
+      "name": "A LAS file could not name the build that produced it",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+        "committedAt": "2026-07-26T18:08:01-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"a LAS/LAZ export names the build that produced it, in 32 bytes\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "fixCommittedAt": "2026-07-26T18:08:01-06:00",
+      "regressionTestCommit": "cc5b5610fee4e95a1c9735a021a2ee22303bfc17",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "unknown",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added tests/benchmark/provenanceIntegrity.test.ts, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding."
+    },
+    {
+      "defectId": "OLV-DEF-018",
+      "name": "The source archive shipped release pages whose include target was excluded",
+      "discoverySource": "prospective-exposure",
+      "discovery": {
+        "commit": "214d23b44cd7cac71ee60e418413878714c675b2",
+        "committedAt": "2026-07-26T17:58:03-06:00",
+        "evidence": "detecting-suite-first-commit"
+      },
+      "datePrecision": "commit-order-only",
+      "firstFailingValidation": {
+        "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
+        "basis": "retrospective-replay",
+        "note": "Probe \"unknown\" exits non-zero against v0.6.1 with the regression case injected. The run post-dates the fix; it establishes that the defect was reachable at that commit, not when it was found."
+      },
+      "fixCommit": "214d23b44cd7cac71ee60e418413878714c675b2",
+      "fixCommittedAt": "2026-07-26T17:58:03-06:00",
+      "regressionTestCommit": "214d23b44cd7cac71ee60e418413878714c675b2",
+      "replayCreationCommit": "722b7b525e58cb9f12f0c80085c8cd91c64dfc61",
+      "mutationCreationCommit": "05ad7933ad16aa67c36ae3f6e60daf6f13dcdf12",
+      "releasedImpact": "released-through-v0.6.1",
+      "classificationConfidence": "high",
+      "notes": "Discovery is bounded by the commit that first added scripts/verify-archive-portability.mjs, the suite the registry credits with the finding. Git establishes the ordering, not the day of the finding. Mutation M09 targets a file in this defect's code path. The link is file-level; the campaign does not claim to reproduce this defect."
+    }
+  ]
+}
