@@ -4,8 +4,15 @@
  * A header button that toggles the browser Fullscreen API on the whole app
  * (document root). The glyph swaps between an "expand to corners" enter mark
  * and an "arrows inward" exit mark, and stays in sync with the actual
- * fullscreen state — so it reflects the user pressing F11 or Esc directly,
- * not just clicks on this button. Self-contained: no host wiring needed.
+ * Fullscreen API state, so Esc and a second click both leave the button
+ * correct. Self-contained: no host wiring needed.
+ *
+ * It does NOT track F11. F11 is the browser's own fullscreen, which is a
+ * window state rather than an element one: it fires no `fullscreenchange` and
+ * leaves `document.fullscreenElement` null, and no cross-browser API reports
+ * it. An earlier comment here claimed the button reflected F11, and on Windows
+ * — where F11 is the usual way to do this — it did not. The labels say "app
+ * full screen" so the two are not conflated.
  *
  * Safari still ships the webkit-prefixed Fullscreen API, so request/exit/state
  * and the change event are all read through prefixed fallbacks.
@@ -64,8 +71,8 @@ export class FullscreenToggle {
     this.element = el('button', {
       className: 'olv-fs-toggle',
       unsafeHtml: ICON_ENTER,
-      title: 'Enter full screen',
-      ariaLabel: 'Enter full screen',
+      title: 'Enter app full screen',
+      ariaLabel: 'Enter app full screen',
     }) as HTMLButtonElement;
     this.element.type = 'button';
     this.element.setAttribute('aria-pressed', 'false');
@@ -110,8 +117,8 @@ export class FullscreenToggle {
   private _sync(): void {
     const fs = this._isFullscreen();
     this.element.innerHTML = fs ? ICON_EXIT : ICON_ENTER;
-    this.element.title = fs ? 'Exit full screen' : 'Enter full screen';
-    this.element.setAttribute('aria-label', fs ? 'Exit full screen' : 'Enter full screen');
+    this.element.title = fs ? 'Exit app full screen' : 'Enter app full screen';
+    this.element.setAttribute('aria-label', fs ? 'Exit app full screen' : 'Enter app full screen');
     this.element.setAttribute('aria-pressed', fs ? 'true' : 'false');
     this.element.classList.toggle('is-fs', fs);
   }
