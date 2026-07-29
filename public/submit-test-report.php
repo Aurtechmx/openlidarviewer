@@ -25,6 +25,11 @@
  * A public endpoint that writes files needs a ceiling. There is a byte cap, a
  * per-address hourly cap, and a honeypot field, so filling the disk takes
  * deliberate effort rather than one loop.
+ *
+ * Targets PHP 7.4, which is what the host runs. Nothing here needs a newer
+ * language: no `never`, no `match`, no nullsafe operator, no named arguments.
+ * Keep it that way, because the failure mode is a parse error that takes the
+ * whole endpoint down rather than a warning anyone would notice in testing.
  */
 
 declare(strict_types=1);
@@ -51,7 +56,7 @@ const MAX_PER_HOUR = 5;
  * and "directory not writable" is useful to the maintainer and useful to an
  * attacker mapping the filesystem.
  */
-function reply(int $status, bool $ok, string $message, string $log = ''): never
+function reply(int $status, bool $ok, string $message, string $log = ''): void
 {
     if ($log !== '') {
         error_log('[olv-test-report] ' . $log);
