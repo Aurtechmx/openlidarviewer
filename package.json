@@ -66,6 +66,7 @@
     "benchmark:backends:gpu": "playwright test tests/e2e/backendGpuLeg.spec.ts --project=gpu --headed",
     "benchmark:archive-portability": "node scripts/verify-archive-portability.mjs",
     "benchmark:seeds": "vitest run tests/benchmark/seedSensitivity.test.ts --testTimeout=1800000",
+    "benchmark:frame:compare": "vitest run tests/benchmark/frameRecord.test.ts",
     "benchmark:clean-clone": "node scripts/verify-clean-clone.mjs",
     "benchmark:clean-clone:install": "node scripts/verify-clean-clone.mjs --install",
     "benchmark:publication:quick": "node scripts/publication-battery.mjs quick",
