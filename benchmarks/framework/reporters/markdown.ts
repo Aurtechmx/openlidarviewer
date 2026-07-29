@@ -32,7 +32,8 @@ import {
  * unavailability reasons — so neither can be assumed away.
  */
 function md(value: string): string {
-  return value.replace(/\|/g, '\\|').replace(/\s*[\r\n]+\s*/g, '; ');
+  // Backslash first, or a literal `\` before a `|` escapes the escape.
+  return value.replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\s*[\r\n]+\s*/g, '; ');
 }
 
 function table(header: readonly string[], rows: readonly (readonly string[])[]): string {

@@ -287,8 +287,18 @@ function readScan(scan: XmlNode, warnings: string[]): E57Scan {
 // fabricated zero / blank. Malformed metadata degrades to omission.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** The ASTM E57 core namespace marker — elements in it are "standard". */
-const E57_CORE_NS = /astm\.org\/.*E57/i;
+/**
+ * The ASTM E57 core namespace marker. Elements in it are standard, so they are
+ * skipped when collecting vendor extensions.
+ *
+ * Anchored to the host on purpose. The unanchored form matched `astm.org` and
+ * `E57` anywhere in the URI, so a namespace such as
+ * `http://vendor.example/?ref=astm.org/E57` was read as core and its fields
+ * were dropped from the reported extensions instead of being declared. The
+ * real namespace is `http://www.astm.org/COMMIT/E57/2010-e57-v1.0`, so
+ * requiring astm.org to be the actual host loses nothing.
+ */
+const E57_CORE_NS = /^https?:\/\/(?:www\.)?astm\.org\/[^?#]*E57/i;
 
 /** Trimmed element text, or undefined when the element is missing / empty. */
 function declaredText(node: XmlNode | undefined): string | undefined {
