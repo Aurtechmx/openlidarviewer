@@ -1,8 +1,8 @@
-# Validation report: OpenLiDARViewer v0.6.2
+# Validation report: OpenLiDARViewer v0.6.3
 
-This report states, soberly, what v0.6.2 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
+This report states, soberly, what v0.6.3 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-v0.6.2 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.2.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](docs/releases/VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](docs/releases/VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.2 itself adds to the record.
+v0.6.3 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.3.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](docs/releases/VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](docs/releases/VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.3 itself adds to the record.
 
 ## Evidence ceiling
 
@@ -22,12 +22,12 @@ The composition, derived from `validation/defects/defect-registry.json` rather t
 
 - Twelve were exposed by one of the new validation suites; six came from code review. Five of the six were already recorded as open gaps by the v0.6.1 vertical-unit audit, and one was found while threading the vertical-unit factor through the fill and slope stages.
 - Nine are severity high, seven medium, two low.
-- Four reached output that v0.6.1 published. Each is stated in `docs/release/ERRATUM_v0.6.2.md` with who is affected and what recovers a correct figure.
+- Four reached output that v0.6.1 published. Each is stated in `docs/release/ERRATUM_v0.6.3.md` with who is affected and what recovers a correct figure.
 - Six have `detectingMechanism: none`, meaning no suite in this release would have found them either. They came from reading the code.
 
 Each record carries its own `whyNotDetected` field, and the answers repeat: a test pinned the defective behaviour as expected, or two paths were each checked against their own assumptions and never against each other, or the fixture used the unit in which the fault is invisible. The cross-path comparisons the new suites run are aimed at that shape.
 
-## What was tested for v0.6.2
+## What was tested for v0.6.3
 
 Run with `npm run test:unit`, `test:export`, `test:terrain`, `test:ui`, `test:slow`, plus `npm run test:file <path>` for a single file. Every regression test named in the defect registry runs in the default vitest suite.
 
@@ -48,7 +48,7 @@ Twelve validation suites are runnable on their own, and each states what it does
 
 Three records support them. `validation/defects/defect-registry.json` holds one machine-readable record per fixed defect. `validation/reachability/claims.json` witnesses which production call sites the validation paths actually reach, so a suite that exercises only a convenience wrapper is visible as such. `validation/mutations/` holds a targeted mutation campaign over the defect patterns.
 
-Whole-suite evidence for this release comes from the release-mode gate run at the tagged commit, with an exit marker per blocking stage in the shipped `gate.log`. The authoritative record is the release asset `test-evidence-v0.6.2.json`; its SHA-256 is in `SHA256SUMS`, and `release-manifest-v0.6.2.json` binds the tag to the full 40-character commit and to every artifact hash, which `npm run release:verify` walks. Published totals are read from that file rather than entered by hand, and `npm run lint:evidence` checks the documents against it. A green GitHub Actions run on the pushed tag reproduces the same gate in CI; it comes into existence when the tag is published and is not asserted here.
+Whole-suite evidence for this release comes from the release-mode gate run at the tagged commit, with an exit marker per blocking stage in the shipped `gate.log`. The authoritative record is the release asset `test-evidence-v0.6.3.json`; its SHA-256 is in `SHA256SUMS`, and `release-manifest-v0.6.3.json` binds the tag to the full 40-character commit and to every artifact hash, which `npm run release:verify` walks. Published totals are read from that file rather than entered by hand, and `npm run lint:evidence` checks the documents against it. A green GitHub Actions run on the pushed tag reproduces the same gate in CI; it comes into existence when the tag is published and is not asserted here.
 
 ## What the gate does not catch, measured
 
@@ -63,7 +63,7 @@ Four more survived the conventional set and were killed by a specialized suite, 
 
 ## What was NOT tested (and is staged, not claimed)
 
-- Physical multi-layer mounting is DISABLED in v0.6.2. The shared project frame and the compatibility model are present and tested, and the app now owns a live project frame; layers are not co-registered and are not merged into one estimator. Multi-layer placement is unverified in a browser by construction, because nothing places them. See [KNOWN_LIMITATIONS_v0.6.2.md](KNOWN_LIMITATIONS_v0.6.2.md).
+- Physical multi-layer mounting is DISABLED in v0.6.3. The shared project frame and the compatibility model are present and tested, and the app now owns a live project frame; layers are not co-registered and are not merged into one estimator. Multi-layer placement is unverified in a browser by construction, because nothing places them. See [KNOWN_LIMITATIONS_v0.6.3.md](KNOWN_LIMITATIONS_v0.6.3.md).
 - Windows is not a reproducibility leg. The tracked two-platform result covers darwin-arm64 and linux-x64, both little-endian, at one commit on one synthetic seeded fixture. Untested platforms, other runtime versions, big-endian hosts and real scan data are outside it. A local run on one machine reports `single-platform` with `claimEstablished: false`, which is the correct verdict for one leg.
 - GPU-computed derivatives beyond the engine probe surfaces. The WebGPU backend takes the same cell-metres and vertical-factor arguments as the CPU one, but Node has no adapter, so the engine falls back to CPU and a check there would test the CPU path twice. GPU-versus-CPU agreement rests on the engine's own equivalence probe, which runs in a browser and covers the probe surfaces only.
 - LAZ output. `CONVERT_FORMATS.laz.available` is false. There is no LAZ encoder, so there is no file of the application's own to read back, and the compression leg is untested.
@@ -71,7 +71,7 @@ Four more survived the conventional set and were killed by a specialized suite, 
 - `npm ci` and a build from a clean extract. The archive-portability suite runs the archive's node-only verification inside an extract with no repository around it. A tool that cannot start without `node_modules` is recorded as needing dependencies, and one that needs a build is recorded as needing a build, rather than counted as a pass. Neither the install nor the build is performed there.
 - Render-space lengths, the measurement HUD and rasterised report composition. These need a WebGL or canvas context. Only the pure label and figure builders behind them are checked.
 - The anti-thrash streaming-selection option is opt-in and unwired. Its logic is unit-tested; its visual effect on flicker needs a browser and is not enabled in this build.
-- Browser behaviour on GitHub CI is not part of this archive's evidence. The e2e suite passed locally. The publication order is fixed: push the `v0.6.2` tag, confirm the CI gate is green on that commit, then deposit the archive and assets.
+- Browser behaviour on GitHub CI is not part of this archive's evidence. The e2e suite passed locally. The publication order is fixed: push the `v0.6.3` tag, confirm the CI gate is green on that commit, then deposit the archive and assets.
 
 ## Reproducing
 
@@ -81,10 +81,10 @@ npm run test:release     # typecheck, lints, live build, all buckets, smoke
 npm run test:e2e         # full Playwright suite
 ```
 
-Per-figure commands are in [REPRODUCIBILITY_v0.6.2.md](REPRODUCIBILITY_v0.6.2.md).
+Per-figure commands are in [REPRODUCIBILITY_v0.6.3.md](REPRODUCIBILITY_v0.6.3.md).
 
 ## Verdict
 
 Two things moved. The evidence ceiling went from one cross-implemented terrain product to three, and cross-platform output identity went from untested to established on two little-endian platforms. Neither is field validation, and neither raises any other product above E3.
 
-Against that, eighteen defects were present at v0.6.1 and the suite of the day passed on all of them. Four had already reached published output. What the twelve new suites and the mutation campaign establish is a measured account of where the checks reach and where they do not, including four gate-surviving mutations that this release does not close. The correct reading of v0.6.2 is that specific figures are corrected and specific coverage is now measured, not that the software is now validated.
+Against that, eighteen defects were present at v0.6.1 and the suite of the day passed on all of them. Four had already reached published output. What the twelve new suites and the mutation campaign establish is a measured account of where the checks reach and where they do not, including four gate-surviving mutations that this release does not close. The correct reading of v0.6.3 is that specific figures are corrected and specific coverage is now measured, not that the software is now validated.
