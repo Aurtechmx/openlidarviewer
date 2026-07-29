@@ -20,6 +20,7 @@
  * Exit 0 when every check passes, 1 when any fails, 2 on a read or parse error.
  */
 import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import {
@@ -89,6 +90,37 @@ const COMMIT_FIELDS = [
   ['replayCreationCommit', (r) => r.replayCreationCommit],
   ['mutationCreationCommit', (r) => r.mutationCreationCommit],
 ];
+/**
+ * Whether this checkout has the history the commit checks need.
+ *
+ * CI clones at depth 1 by default, so every referenced commit is genuinely
+ * absent and the resolution check reports E_UNRESOLVED_COMMIT for all of them.
+ * That message is wrong in a way that matters: it says the chronology names a
+ * commit that does not exist, when what happened is that this checkout cannot
+ * see it. One is a corrupt record, the other is a missing environment, and
+ * conflating them would either mask a real defect or fail a good record.
+ */
+function historyIsShallow() {
+  try {
+    return (
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
+const shallow = historyIsShallow();
+if (shallow) {
+  console.error(
+    'history is shallow: commit resolution is reported as environment-unavailable, not verified.',
+  );
+  console.error('Run with a full clone (actions/checkout fetch-depth: 0) to check commits.');
+}
+
 const resolved = new Map();
 for (const r of records) {
   for (const [label, get] of COMMIT_FIELDS) {
@@ -96,7 +128,11 @@ for (const r of records) {
     if (value === undefined || value === UNKNOWN) continue;
     const commit = resolveCommit(value);
     if (!commit) {
-      fail('E_UNRESOLVED_COMMIT', `${r.defectId} ${label} ${value} does not resolve`);
+      // A shallow clone cannot see the commit; that is an unavailable
+      // environment, not a bad record, and must not be reported as one.
+      if (!shallow) {
+        fail('E_UNRESOLVED_COMMIT', `${r.defectId} ${label} ${value} does not resolve`);
+      }
     } else {
       resolved.set(`${r.defectId}:${label}`, commit);
     }
