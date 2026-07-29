@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OpenLiDARViewer External Testing Form</title>
+<style>
+:root{color-scheme:dark;--bg:#07111e;--panel:#0d1a2a;--panel2:#122338;--text:#eef6ff;--muted:#a9b9c9;--line:#29435d;--accent:#35c4df;--danger:#ffb4b4;--ok:#a7f3d0}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(#06101c,#07111e);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}.wrap{width:min(960px,calc(100% - 28px));margin:28px auto 60px}header,section,details,.notice{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;margin-top:18px}header{margin-top:0;background:radial-gradient(circle at 90% 0,rgba(53,196,223,.14),transparent 35%),var(--panel)}h1{margin:0 0 6px;font-size:clamp(1.8rem,4vw,2.8rem)}h2{margin:0 0 14px;font-size:1.35rem}h3{margin:18px 0 8px}.lead,.small{color:var(--muted)}.small{font-size:.91rem}.notice{border-left:5px solid var(--accent)}.notice strong,a{color:#81dff0}.links,.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}.links a,button{min-height:44px;border-radius:10px;padding:10px 15px;border:1px solid var(--line);background:var(--panel2);color:var(--text);text-decoration:none;font-weight:650;cursor:pointer}button.primary{background:var(--accent);color:#03202a;border-color:transparent}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}@media(max-width:720px){.grid{grid-template-columns:1fr}}label{display:block;font-weight:650}label .hint{display:block;color:var(--muted);font-weight:400;font-size:.87rem;margin-top:2px}input,textarea,select{width:100%;margin-top:6px;padding:11px 12px;border-radius:9px;border:1px solid var(--line);background:#071321;color:var(--text);font:inherit}textarea{min-height:100px;resize:vertical}input[type=checkbox]{width:auto;margin:4px 9px 0 0}.check{display:flex;align-items:flex-start;font-weight:500;margin:11px 0}.required{color:var(--danger)}summary{cursor:pointer;font-weight:750;font-size:1.1rem}details[open] summary{margin-bottom:14px}fieldset{border:1px solid var(--line);border-radius:12px;padding:14px;margin:14px 0}legend{padding:0 8px;font-weight:750}.hidden{display:none!important}#status{min-height:1.5em;margin-top:12px;color:var(--ok);font-weight:650}#preview{min-height:280px;font-family:ui-monospace,Menlo,monospace;font-size:.9rem}footer{color:var(--muted);font-size:.9rem;margin-top:22px}code{color:#b9f3ff}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header>
+  <h1>Help OpenLiDARViewer grow</h1>
+  <p class="lead">Test a workflow you already know and send honest technical feedback. A quick report takes about 5–10 minutes; the detailed GIS comparison is optional.</p>
+  <div class="links">
+    <a href="https://lidar.aurtech.mx/" target="_blank" rel="noopener">Open live demo</a>
+    <a href="https://github.com/Aurtechmx/openlidarviewer" target="_blank" rel="noopener">Open GitHub</a>
+    <a href="OpenLiDARViewer_Test_Guide.pdf" target="_blank" rel="noopener">Open test guide</a>
+  </div>
+</header>
+
+<div class="notice">
+  <strong>Simple participation terms</strong>
+  <p>Participation is optional and unpaid. This is community technical feedback—not professional consulting, certification, surveying, engineering approval, or safety assessment. Use only data you are authorized to use, keep backups, and do not submit confidential, personal, restricted, or security-sensitive material.</p>
+  <p class="small">The software and outputs are provided “as is.” Do not rely on them alone for safety-critical, legal, regulatory, surveying, engineering, emergency, or operational decisions.</p>
+</div>
+
+<form id="form" novalidate>
+<section>
+  <h2>1. Quick report</h2>
+  <div class="grid">
+    <label>Name or alias<span class="hint">Optional; leave blank to remain anonymous.</span><input name="name" maxlength="100"></label>
+    <label>Email<span class="hint">Optional; only if you want a reply.</span><input name="email" type="email" maxlength="160"></label>
+    <label>Role / affiliation<span class="hint">Optional.</span><input name="role" maxlength="160"></label>
+    <label>OLV version or link <span class="required">*</span><input name="olvVersion" required maxlength="180" placeholder="v0.6.2 or live demo URL"></label>
+    <label>Operating system <span class="required">*</span><input name="os" required maxlength="120"></label>
+    <label>Browser + version <span class="required">*</span><input name="browser" required maxlength="120"></label>
+    <label>Reference software<input name="reference" maxlength="160" placeholder="ArcGIS, QGIS, CloudCompare, PDAL…"></label>
+    <label>Dataset description<span class="hint">Avoid private paths and confidential names.</span><input name="dataset" maxlength="220" placeholder="Format, approximate size, source type"></label>
+  </div>
+  <label style="margin-top:15px">What did you test? <span class="required">*</span><textarea name="tested" required maxlength="2200"></textarea></label>
+  <div class="grid">
+    <label>What worked or matched well? <span class="required">*</span><textarea name="worked" required maxlength="1800"></textarea></label>
+    <label>What differed, failed, or looked unclear? <span class="required">*</span><textarea name="issues" required maxlength="2200"></textarea></label>
+    <label>Most important improvement<textarea name="priority" maxlength="1200"></textarea></label>
+    <label>Reproduction steps<span class="hint">What you did, what happened, and whether it repeats.</span><textarea name="steps" maxlength="1800"></textarea></label>
+  </div>
+</section>
+
+<details>
+  <summary>2. Optional detailed GIS comparison</summary>
+  <p class="small">Use this only when you want to compare OLV with ArcGIS, QGIS, CloudCompare, PDAL, or another reference workflow.</p>
+  <fieldset>
+    <legend>Metadata cases</legend>
+    <label class="check"><input type="checkbox" name="geoCase">Tested LAS / LAZ / COPC with CRS and units</label>
+    <label class="check"><input type="checkbox" name="limitedCase">Tested XYZ / CSV / PCD or another limited-metadata format</label>
+    <label class="check"><input type="checkbox" name="completeCloud">Cloud appeared complete and correctly oriented</label>
+    <label class="check"><input type="checkbox" name="clearWarnings">Missing CRS / units were reported clearly</label>
+  </fieldset>
+  <div class="grid">
+    <label>Format / file size<input name="formatSize" maxlength="160"></label>
+    <label>Ground class used<input name="groundClass" maxlength="100"></label>
+    <label>Source point count — OLV<input name="pointsOlv" maxlength="100"></label>
+    <label>Source point count — reference<input name="pointsRef" maxlength="100"></label>
+    <label>CRS / EPSG — OLV<input name="crsOlv" maxlength="140"></label>
+    <label>CRS / EPSG — reference<input name="crsRef" maxlength="140"></label>
+    <label>Linear units — OLV<input name="unitsOlv" maxlength="100"></label>
+    <label>Linear units — reference<input name="unitsRef" maxlength="100"></label>
+    <label>XY bounds / Z range — OLV<textarea name="boundsOlv" maxlength="700"></textarea></label>
+    <label>XY bounds / Z range — reference<textarea name="boundsRef" maxlength="700"></textarea></label>
+    <label>Three elevation comparisons<textarea name="elevations" maxlength="1200" placeholder="Location, OLV Z, reference Z"></textarea></label>
+    <label>Distance / height comparison<textarea name="distance" maxlength="900"></textarea></label>
+    <label>Terrain products and settings<textarea name="terrain" maxlength="1400" placeholder="DTM, slope, hillshade or contours; cell size; gaps; edges"></textarea></label>
+    <label>Workflow observations<textarea name="workflow" maxlength="1400" placeholder="Coordinates, units, navigation, point selection, hidden information"></textarea></label>
+  </div>
+</details>
+
+<section>
+  <h2>3. Attachments and permission</h2>
+  <p class="small">Nothing is uploaded. Screenshots you pick here are read in your browser, scaled down, and written into a single self-contained report file you can review and send as one attachment. They never leave this page on their own.</p>
+  <label>Screenshots (PNG or JPEG)<input type="file" id="shots" accept="image/png,image/jpeg" multiple></label>
+  <p class="small" id="shotStatus">No screenshots selected.</p>
+  <label>Anything else you are attaching separately<textarea name="attachments" maxlength="1500" placeholder="terrain-notes.pdf, exported-contours.geojson…"></textarea></label>
+
+  <label class="check"><input type="checkbox" name="coreConsent" required><span><strong>I confirm that my contribution is voluntary and unpaid.</strong> I have the right to share the material, it contains no confidential or restricted information, and I allow the project to store, summarize, reproduce, and use this technical feedback for open-source development, documentation, validation records, and issue investigation. <span class="required">*</span></span></label>
+
+  <label class="check"><input type="checkbox" id="creditConsent" name="creditConsent"><span>I allow public acknowledgment using the name and professional information I provide. I understand that acknowledgment does not guarantee authorship, endorsement, payment, publication, or use of the submission.</span></label>
+  <div id="creditFields" class="grid hidden">
+    <label>Preferred credit wording<input name="creditWording" maxlength="220"></label>
+    <label>LinkedIn or ORCID<input name="profile" maxlength="220"></label>
+  </div>
+
+  <label class="check"><input type="checkbox" id="researchConsent" name="researchConsent"><span>I separately allow my de-identified feedback and submitted screenshots or outputs to be analyzed, quoted, or summarized in future research materials and publications. Leaving this unchecked still permits ordinary project-development use.</span></label>
+  <label id="adultRow" class="check hidden"><input type="checkbox" id="adultConfirm" name="adultConfirm"><span>I confirm that I am 18 years of age or older for this optional research-use permission.</span></label>
+
+  <p class="small">The project may redact, consolidate, decline, or not use a submission. Contributors retain ownership of their original material; the permission above is non-exclusive and limited to the stated project purposes.</p>
+</section>
+
+<section>
+  <h2>4. Generate and send</h2>
+  <p class="small">Nothing is transmitted automatically. Generate the report, review it, then download it. With screenshots selected, the download is a single HTML file containing them, so you attach one file rather than several.</p>
+  <div class="actions">
+    <button type="button" class="primary" id="generate">Generate report</button>
+    <button type="button" id="copy">Copy</button>
+    <button type="button" id="download">Download report</button>
+    <button type="button" id="email">Open email</button>
+    <button type="reset">Clear</button>
+  </div>
+  <div id="status" role="status" aria-live="polite"></div>
+  <label>Report preview<textarea id="preview" readonly></textarea></label>
+</section>
+</form>
+
+<footer>
+  <p><strong>Maintainer setup:</strong> change <code>SUBMISSION_EMAIL</code> in the script before publishing.</p>
+  <p>This form is a practical project workflow, not jurisdiction-specific legal advice. Keep the MIT license and a concise privacy/contribution notice available alongside it.</p>
+</footer>
+</main>
+
+<script>
+const SUBMISSION_EMAIL="info@aurtech.mx";
+
+/* ── Screenshots ───────────────────────────────────────────────────────────
+   Read locally, scaled down, and embedded in the downloaded report.
+
+   A browser cannot attach a local file to a mailto: message, and a plain
+   upload would need a server holding other people's screenshots. Downscaling
+   is not cosmetic: base64 adds about a third again, and a few untouched phone
+   screenshots exceed what mail servers accept, so a 1600px cap keeps a report
+   with several images inside a normal attachment limit while staying legible.
+*/
+const SHOT_MAX_EDGE = 1600, SHOT_QUALITY = 0.8;
+let shots = [];
+
+function scaleDown(file){
+  return new Promise((resolve,reject)=>{
+    const img = new Image(), url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, SHOT_MAX_EDGE / Math.max(img.width, img.height));
+      const w = Math.round(img.width*scale), h = Math.round(img.height*scale);
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img,0,0,w,h);
+      resolve({ name: file.name, w, h, dataUrl: cv.toDataURL("image/jpeg", SHOT_QUALITY) });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Not a readable image: "+file.name)); };
+    img.src = url;
+  });
+}
+
+const shotInput = document.getElementById("shots");
+const shotStatus = document.getElementById("shotStatus");
+if (shotInput) shotInput.onchange = async () => {
+  shotStatus.textContent = "Reading…";
+  try {
+    shots = await Promise.all([...shotInput.files].map(scaleDown));
+    const kb = Math.round(shots.reduce((n,s)=>n+s.dataUrl.length,0)*0.75/1024);
+    shotStatus.textContent = shots.length
+      ? `${shots.length} screenshot(s) ready, about ${kb} KB once embedded.`
+      : "No screenshots selected.";
+  } catch (e) {
+    shots = [];
+    shotStatus.textContent = e.message;
+  }
+};
+
+/* Escapes quotes as well as angle brackets, because the result is used in an
+   attribute as well as in text. Without the quote cases a filename containing
+   one closes alt="..." early and everything after it is parsed as markup. The
+   name comes from the tester's own file picker, so the risk is not to them: it
+   is to whoever opens the report they email, which is the maintainer. */
+function escapeHtml(t){
+  return String(t).replace(/[&<>"']/g, c => ({
+    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;",
+  }[c]));
+}
+
+/** A self-contained HTML report: the text, then each screenshot inline. */
+function buildHtmlReport(text){
+  const imgs = shots.map(s =>
+    `<figure><img alt="${escapeHtml(s.name)}" src="${s.dataUrl}">`
+    + `<figcaption>${escapeHtml(s.name)} (${s.w}x${s.h})</figcaption></figure>`).join("\n");
+  return `<!doctype html><meta charset="utf-8">
+<title>OpenLiDARViewer external test report</title>
+<style>body{font:14px/1.5 system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem}
+pre{white-space:pre-wrap;background:#f5f5f7;padding:1rem;border-radius:8px}
+img{max-width:100%;border:1px solid #ccc;border-radius:6px}
+figcaption{color:#555;font-size:12px;margin:.35rem 0 1.5rem}</style>
+<pre>${escapeHtml(text)}</pre>
+${imgs}`;
+}
+
+const form=document.getElementById("form"),preview=document.getElementById("preview"),statusBox=document.getElementById("status");
+const credit=document.getElementById("creditConsent"),creditFields=document.getElementById("creditFields");
+const research=document.getElementById("researchConsent"),adultRow=document.getElementById("adultRow"),adult=document.getElementById("adultConfirm");
+credit.addEventListener("change",()=>creditFields.classList.toggle("hidden",!credit.checked));
+research.addEventListener("change",()=>{adultRow.classList.toggle("hidden",!research.checked);adult.required=research.checked;if(!research.checked)adult.checked=false});
+const val=(fd,k)=>{const v=fd.get(k);return typeof v==="string"&&v.trim()?v.trim():"Not provided"};
+const yes=(fd,k)=>fd.get(k)==="on"?"Yes":"No";
+function build(){
+  if(!form.reportValidity()){statusBox.textContent="Please complete the required fields and confirmation.";return ""}
+  const fd=new FormData(form);
+  const r=[
+    "OPENLIDARVIEWER EXTERNAL TEST REPORT",`Generated: ${new Date().toISOString()}`,"",
+    "SETUP",`Name or alias: ${val(fd,"name")}`,`Email: ${val(fd,"email")}`,`Role / affiliation: ${val(fd,"role")}`,`OLV version or link: ${val(fd,"olvVersion")}`,`Operating system: ${val(fd,"os")}`,`Browser + version: ${val(fd,"browser")}`,`Reference software: ${val(fd,"reference")}`,`Dataset: ${val(fd,"dataset")}`,"",
+    "QUICK REPORT",`What was tested:\n${val(fd,"tested")}`,"",`What worked or matched well:\n${val(fd,"worked")}`,"",`What differed, failed, or looked unclear:\n${val(fd,"issues")}`,"",`Most important improvement:\n${val(fd,"priority")}`,"",`Reproduction steps:\n${val(fd,"steps")}`,"",
+    "OPTIONAL DETAILED COMPARISON",`Georeferenced case tested: ${yes(fd,"geoCase")}`,`Limited-metadata case tested: ${yes(fd,"limitedCase")}`,`Cloud complete/oriented: ${yes(fd,"completeCloud")}`,`Warnings clear: ${yes(fd,"clearWarnings")}`,`Format / size: ${val(fd,"formatSize")}`,`Ground class: ${val(fd,"groundClass")}`,`Point count — OLV: ${val(fd,"pointsOlv")}`,`Point count — reference: ${val(fd,"pointsRef")}`,`CRS — OLV: ${val(fd,"crsOlv")}`,`CRS — reference: ${val(fd,"crsRef")}`,`Units — OLV: ${val(fd,"unitsOlv")}`,`Units — reference: ${val(fd,"unitsRef")}`,`Bounds / Z — OLV: ${val(fd,"boundsOlv")}`,`Bounds / Z — reference: ${val(fd,"boundsRef")}`,`Elevation comparisons:\n${val(fd,"elevations")}`,`Distance / height:\n${val(fd,"distance")}`,`Terrain products:\n${val(fd,"terrain")}`,`Workflow observations:\n${val(fd,"workflow")}`,"",
+    "ATTACHMENTS",val(fd,"attachments"),"",
+    "PERMISSIONS",`Voluntary/project-use confirmation: ${yes(fd,"coreConsent")}`,`Public credit allowed: ${yes(fd,"creditConsent")}`,`Preferred credit wording: ${val(fd,"creditWording")}`,`LinkedIn / ORCID: ${val(fd,"profile")}`,`Optional research use allowed: ${yes(fd,"researchConsent")}`,`18+ confirmed for research use: ${yes(fd,"adultConfirm")}`,"",
+    "Contributor statement:","I confirm that my participation is voluntary and unpaid, that I have the right to share the material, and that it contains no confidential or restricted information. The software was tested at my own discretion, and submission does not guarantee payment, public credit, academic authorship, endorsement, publication, or use of the contribution."
+  ].join("\n");
+  preview.value=r;statusBox.textContent="Report generated. Review it before sending.";return r;
+}
+document.getElementById("generate").onclick=build;
+document.getElementById("copy").onclick=async()=>{const r=preview.value||build();if(!r)return;try{await navigator.clipboard.writeText(r);statusBox.textContent="Report copied."}catch{preview.select();document.execCommand("copy");statusBox.textContent="Report selected/copied."}};
+document.getElementById("download").onclick=()=>{
+  const r = preview.value || build();
+  if (!r) return;
+  // With screenshots, one self-contained HTML file beats a .txt the tester has
+  // to remember to send several images alongside.
+  const withShots = shots.length > 0;
+  const body = withShots ? buildHtmlReport(r) : r;
+  const blob = new Blob([body], { type: withShots ? "text/html;charset=utf-8" : "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob), a = document.createElement("a");
+  a.href = url;
+  a.download = `OLV-external-test-${new Date().toISOString().slice(0,10)}.${withShots ? "html" : "txt"}`;
+  a.click();
+  URL.revokeObjectURL(url);
+  statusBox.textContent = withShots
+    ? `Report downloaded with ${shots.length} screenshot(s) inside. Send that one file.`
+    : "Report downloaded. Attach it to your email.";
+};
+document.getElementById("email").onclick=()=>{const r=preview.value||build();if(!r)return;if(SUBMISSION_EMAIL.includes("YOUR_EMAIL")){statusBox.textContent="Set SUBMISSION_EMAIL in the HTML before publishing.";return}const fd=new FormData(form),who=val(fd,"name")==="Not provided"?"anonymous tester":val(fd,"name"),body=r.length>5500?r.slice(0,5000)+"\n\n[Shortened for email compatibility; attach the full .txt report.]":r;location.href=`mailto:${encodeURIComponent(SUBMISSION_EMAIL)}?subject=${encodeURIComponent("OLV external test report — "+who)}&body=${encodeURIComponent(body)}`};
+form.addEventListener("reset",()=>setTimeout(()=>{preview.value="";statusBox.textContent="Form cleared.";creditFields.classList.add("hidden");adultRow.classList.add("hidden");adult.required=false},0));
+</script>
+</body>
+</html>

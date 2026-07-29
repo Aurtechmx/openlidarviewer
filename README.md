@@ -40,6 +40,33 @@ No install, no account, no upload. Open **[lidar.aurtech.mx](https://lidar.aurte
 
 ---
 
+## Help test OpenLiDARViewer
+
+OpenLiDARViewer improves through feedback from people who work with point
+clouds day to day: GIS, drone mapping, terrain analysis, hydrology, surveying,
+web mapping.
+
+Open a workflow you already know, on the live demo or a local build. Use one of
+your own authorised files, compare the values you care about against ArcGIS,
+QGIS, CloudCompare, PDAL or whatever you normally trust, and say what worked,
+what failed, and what was unclear.
+
+The quick report takes five to ten minutes. A longer GIS comparison is there if
+you want to check metadata, CRS, units, elevations, measurements or terrain
+products against a reference tool, and it is optional.
+
+Participation is voluntary and unpaid. Please do not submit confidential,
+restricted or personal information, and do not send source datasets you are not
+free to redistribute. Public credit and research use are each a separate
+optional permission.
+
+A failed file, an unexpected warning or one confusing screenshot is worth
+sending. Negative results are the useful kind here.
+
+[Submit a test report](https://lidar.aurtech.mx/test-report.html). The form runs
+entirely in your browser, stores nothing, and sends nothing anywhere. It builds
+a single report file, screenshots included, that you review before sending.
+
 ## Overview
 
 OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You can inspect a scan, navigate it in 3D, switch how it is colored, measure distances, and export results, without setting up a desktop GIS workflow.
