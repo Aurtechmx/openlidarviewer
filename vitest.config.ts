@@ -102,7 +102,10 @@ export default defineConfig({
      */
     coverage: {
       provider: 'v8',
-      reporter: ['text-summary', 'json-summary'],
+      // lcov is for Codecov; the other two are read by the gate and by a
+      // human respectively. Adding a reporter does not change what is
+      // measured, only how it is written out.
+      reporter: ['text-summary', 'json-summary', 'lcov'],
       include: [
         'src/process/**/*.ts',
         'src/terrain/**/*.ts',
