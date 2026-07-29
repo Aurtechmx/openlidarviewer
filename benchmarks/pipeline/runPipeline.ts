@@ -831,7 +831,12 @@ function withoutSamples(validation: TerrainCore['validation']): Record<string, u
  * changing `src/` to suit a benchmark.
  */
 function boxPoints(positions: Float32Array): TerrainPoint[] {
-  const n = (positions.length / 3) | 0;
+  // Math.trunc, not `| 0`. The bitwise form converts through a signed 32-bit
+  // integer, so a count above 2,147,483,647 comes back negative: at 2.2
+  // billion points it yields -2,094,967,296 and the Array constructor below
+  // throws. The largest declared stress tier is one billion, which clears it
+  // by barely a factor of two, and the tiers are meant to grow.
+  const n = Math.trunc(positions.length / 3);
   const points: TerrainPoint[] = new Array<TerrainPoint>(n);
   for (let i = 0; i < n; i++) {
     points[i] = { x: positions[i * 3], y: positions[i * 3 + 1], z: positions[i * 3 + 2] };
