@@ -209,6 +209,17 @@ export class NavController {
   private readonly _onPanPointerMove: (e: PointerEvent) => void;
   private readonly _onPanPointerUp: (e: PointerEvent) => void;
   private readonly _onWheel: (e: WheelEvent) => void;
+  /**
+   * Whether a physical Control key is down.
+   *
+   * A macOS trackpad pinch arrives as a wheel event with `ctrlKey: true` even
+   * though no key is held, so `ctrlKey` alone cannot tell a page-zoom gesture
+   * from a pinch. Tracking real keydown/keyup separates them: ctrlKey without
+   * a tracked press is a pinch and belongs to the camera; ctrlKey with one is
+   * the browser's zoom gesture and belongs to the browser.
+   */
+  private _ctrlHeld = false;
+  private readonly _onCtrlKeyChange: (e: KeyboardEvent) => void;
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -231,8 +242,18 @@ export class NavController {
     this._onPanPointerMove = (e) => this._handlePanPointerMove(e);
     this._onPanPointerUp = (e) => this._handlePanPointerUp(e);
     this._onWheel = (e) => this._handleWheel(e);
+    this._onCtrlKeyChange = (e) => {
+      this._ctrlHeld = e.type === 'keyup' ? false : e.ctrlKey;
+    };
 
     window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keydown', this._onCtrlKeyChange);
+    window.addEventListener('keyup', this._onCtrlKeyChange);
+    // A tab switch mid-chord never delivers the keyup, which would leave the
+    // flag stuck and hand every later pinch to the browser.
+    window.addEventListener('blur', () => {
+      this._ctrlHeld = false;
+    });
     window.addEventListener('keyup', this._onKeyUp);
     canvas.addEventListener('click', this._onCanvasClick);
     document.addEventListener('pointerlockchange', this._onPointerLockChange);
@@ -523,6 +544,12 @@ export class NavController {
     const target = e.target as Node | null;
     if (target !== this._canvas && !(target !== null && this._canvas.contains(target))) return;
     if (this._mode !== 'orbit' && this._mode !== 'pan') return;
+    // Ctrl+wheel is the browser's page-zoom gesture on Windows and Linux, and
+    // the canvas fills the window, so cancelling it left a low-vision user no
+    // way to enlarge the interface at all. Hand it back — but only when a key
+    // is genuinely held, because a macOS trackpad pinch is delivered as a
+    // wheel with `ctrlKey: true` and must still drive the camera.
+    if (e.ctrlKey && this._ctrlHeld) return;
     e.preventDefault();
     // Capture the pointer in NDC so the cursor-centred dolly keeps driving toward
     // where the wheel happened for the whole inertial tail, not just this frame.
@@ -602,6 +629,8 @@ export class NavController {
     this._releaseCursor();
     this._canvas.removeEventListener('wheel', this._onWheel);
     window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keydown', this._onCtrlKeyChange);
+    window.removeEventListener('keyup', this._onCtrlKeyChange);
     window.removeEventListener('keyup', this._onKeyUp);
     this._canvas.removeEventListener('click', this._onCanvasClick);
     document.removeEventListener('pointerlockchange', this._onPointerLockChange);
