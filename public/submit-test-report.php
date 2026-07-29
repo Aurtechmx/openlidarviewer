@@ -36,7 +36,18 @@ declare(strict_types=1);
 
 // ── Maintainer settings ─────────────────────────────────────────────────────
 
-/** Where reports are written. MUST NOT be reachable over HTTP. */
+/**
+ * Where reports are written. MUST NOT be reachable over HTTP.
+ *
+ * One level above the document root. On the current host each domain is rooted
+ * at its own folder in the home directory, so this lands beside those folders
+ * rather than inside one, and no domain serves it.
+ *
+ * Check this before moving the endpoint to a host that roots a site at the home
+ * directory itself, or at a subfolder of another site's root. Both would put
+ * reports back in reach, and the deny-all .htaccess written below is a backstop
+ * rather than the actual protection.
+ */
 const STORAGE_DIR = __DIR__ . '/../olv-test-reports';
 
 /** Notification address. Leave empty to store silently without mailing. */
