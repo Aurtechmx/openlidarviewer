@@ -26,6 +26,8 @@ export interface NodeCounts {
 export class StreamingNodeStore {
   private readonly _nodes = new Map<string, StreamingNode>();
   private _residentPoints = 0;
+  /** Points decoded and waiting for the renderer, kept exact at each transition. */
+  private _decodedPoints = 0;
   /**
    * Live count of nodes in the `queued` state, maintained at every
    * transition through {@link setState}. Lets the scheduler report the
@@ -60,6 +62,7 @@ export class StreamingNodeStore {
    * own candidates and is order-independent for eviction).
    */
   private readonly _resident = new Set<StreamingNode>();
+  private readonly _decoded = new Set<StreamingNode>();
   private readonly _queued = new Set<StreamingNode>();
 
   /**
@@ -128,6 +131,10 @@ export class StreamingNodeStore {
       this._residentPoints -= node.residentPointCount;
       this._resident.delete(node);
     }
+    if (node.state === 'decoded') {
+      this._decodedPoints -= node.residentPointCount;
+      this._decoded.delete(node);
+    }
     // Maintain the O(1) queued counter + the resident/queued working sets at
     // the transition: every state change (enqueue, dequeue-to-load, decode,
     // cancel, evict-reset, stop) routes through here, so the counter and the
@@ -138,15 +145,38 @@ export class StreamingNodeStore {
     if (node.state === 'loading') this._loadingCount--;
     if (node.state === 'error') this._errorCount--;
     node.state = state;
-    node.residentPointCount = state === 'resident' ? residentPointCount : 0;
+    // `decoded` carries its point count too: the scheduler needs to know how
+    // much is waiting so it can stop dispatching before the pending set becomes
+    // the new unbounded queue.
+    node.residentPointCount = state === 'resident' || state === 'decoded' ? residentPointCount : 0;
     if (state === 'resident') {
       this._residentPoints += residentPointCount;
       this._resident.add(node);
+    }
+    if (state === 'decoded') {
+      this._decodedPoints += residentPointCount;
+      this._decoded.add(node);
     }
     if (state === 'queued') { this._queuedCount++; this._queued.add(node); }
     if (state === 'loading') this._loadingCount++;
     if (state === 'error') this._errorCount++;
     if (state !== 'error') node.error = undefined;
+  }
+
+  /**
+   * Points decoded and waiting for the renderer.
+   *
+   * Deliberately not folded into `residentPointCount`: resident means drawn.
+   * A caller sizing what the user sees reads resident; a caller sizing memory
+   * in flight adds this.
+   */
+  get decodedPendingPointCount(): number {
+    return this._decodedPoints;
+  }
+
+  /** Every node decoded but not yet committed. */
+  decodedPending(): StreamingNode[] {
+    return [...this._decoded];
   }
 
   /** Mark a node failed, with a reason. */
