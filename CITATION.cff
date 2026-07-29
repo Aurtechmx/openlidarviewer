@@ -21,6 +21,9 @@ identifiers:
   - type: doi
     value: "10.5281/zenodo.21544619"
     description: "Concept DOI, resolves to the newest version"
+  - type: swh
+    value: "swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83"
+    description: "Software Heritage snapshot of the repository, including its history"
 
 abstract: >-
   OpenLiDARViewer is an open-source, local-first, browser-native platform

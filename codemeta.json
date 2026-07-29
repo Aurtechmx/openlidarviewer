@@ -1,7 +1,10 @@
 {
   "@context": "https://w3id.org/codemeta/3.0",
   "@type": "SoftwareSourceCode",
-  "identifier": "https://doi.org/10.5281/zenodo.21544619",
+  "identifier": [
+    "https://doi.org/10.5281/zenodo.21544619",
+    "https://archive.softwareheritage.org/swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83"
+  ],
   "name": "OpenLiDARViewer",
   "description": "Browser-native, local-first platform for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting.",
   "version": "0.6.2",
