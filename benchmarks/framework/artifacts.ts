@@ -209,6 +209,20 @@ export function stripVolatile(input: unknown): StripResult {
     return out;
   };
 
+  // Default sort, deliberately. Static analysis flags `.sort()` without a
+  // comparator and suggests `String.localeCompare`; taking that advice here
+  // would introduce the exact non-determinism this framework exists to detect.
+  // `localeCompare` orders by collation, which depends on the locale and on
+  // the ICU build behind the runtime, so darwin-arm64 and linux-x64 can
+  // legitimately disagree. Default sort on strings is UTF-16 code-unit order,
+  // fixed by the language spec and identical on every platform.
+  //
+  // This list ships inside ArtifactRecord and is compared across platforms at
+  // zero tolerance, so a locale-dependent order would show up as a
+  // reproducibility failure with no cause in the data.
+  //
+  // These are field paths, never numbers, so the other half of that rule --
+  // that default sort compares numbers as strings -- does not apply.
   return { value: walk(input, '', 0), stripped: [...stripped].sort() };
 }
 
