@@ -90,4 +90,21 @@ jobs:
           git add docs/validation/mutation-evidence.json
           SCORE="$(node -p "require('./docs/validation/mutation-evidence.json').score")"
           git commit -m "Record mutation score ${SCORE} from run ${GITHUB_RUN_ID}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          # The campaign takes over two hours, so the branch has almost always
+          # moved by the time it finishes. A plain push is rejected and the
+          # measurement is lost with it — which is what happened to run
+          # 30414720675, whose 96.81 had to be recovered from the artifact.
+          # Rebase and retry: the evidence file is written by this job alone,
+          # so a conflict on it is not possible, and the record names the
+          # commit it was measured at rather than wherever the branch has got
+          # to, so replaying it onto a newer tip changes nothing it asserts.
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "pushed on attempt ${attempt}"
+              exit 0
+            fi
+            echo "push rejected; rebasing onto the current tip (attempt ${attempt})"
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
+          done
+          echo "::error::could not push the mutation evidence after three attempts"
+          exit 1

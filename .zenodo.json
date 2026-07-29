@@ -51,6 +51,11 @@
       "relation": "references",
       "identifier": "https://github.com/Aurtechmx/openlidarviewer/blob/main/docs/public-lidar-catalog.md",
       "resource_type": "dataset"
+    },
+    {
+      "relation": "isIdenticalTo",
+      "identifier": "swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83",
+      "resource_type": "software"
     }
   ],
   "notes": "The author declares no competing interests. Development is self-funded by Aurtech."
