@@ -1483,6 +1483,13 @@ body.olv-theme-light .olv-empty::before {
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-lg) var(--space-xl);
   pointer-events: none;
+  /* The overlay scrolls and ignores the pointer, so its own scrollbar is not
+     hittable and cannot be dragged, the same collision the left rail had. It
+     is kept here rather than wired to a toggle: this is the `?debug=1` overlay
+     for a developer, the pass-through is the point, and the wheel still
+     scrolls it. The gutter is reserved so its readings do not shift sideways
+     the moment the list grows past the panel. */
+  scrollbar-gutter: stable;
 }
 .olv-debug-title {
   /* A real <button>: reset the chrome, keep it clickable while the rest of the
@@ -1972,8 +1979,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(11, 17, 33,0.82);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
-  max-width: 640px;
+  border-radius: var(--radius-lg);
+  /* Tighter than it was, and narrower. At 640px with the roomier padding the
+     legend covered the middle of the view, which is where the scan is. */
+  padding: var(--space-md) var(--space-lg);
+  max-width: 460px;
 }
 /* v0.3.10 — Header row carries the title + X close button.
    Flex layout keeps the title flush-left and the X flush-right so the
@@ -3477,7 +3487,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    be dragged and the rail reads as stalled. wireRailScrollAffordance() adds
    this class only while the column actually overflows, so the canvas keeps its
    pass-through everywhere a scrollbar is not present. */
-.olv-left-panels.olv-rail-scrollable { pointer-events: auto; }
+.olv-classic-scrollbars .olv-left-panels.olv-rail-scrollable { pointer-events: auto; }
+/* The debug overlay is the same collision: it scrolls and ignores the pointer,
+   so its scrollbar cannot be dragged on Windows. Scoped the same way, and only
+   while the pointer is over it, so the canvas keeps the overlay's pass-through
+   everywhere else. */
+.olv-classic-scrollbars .olv-debug:hover { pointer-events: auto; }
 
 /* ── P11 · premium left rail — dock clearance, one-tap collapse, even sizing ─────
    Desktop/tablet only (mobile bottom-sheet owns small screens). Token-driven so
@@ -3521,7 +3536,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    Annotate·Measure 218) without editing them one by one. Desktop only — the
    mobile bottom-sheet reparents these panels and owns their sizing. The Measure
    panel stays user-resizable: a drag writes an inline width that wins over this. */
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .olv-left-panels:not(.olv-rail-collapsed) > * {
     width: 100%;
     box-sizing: border-box;
@@ -3588,7 +3603,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-left-panels:not(.olv-rail-collapsed) > * { animation: none; }
   .olv-rail-tab, .olv-rail-tab svg { transition: none; }
 }
-@media (max-width: 768px) { .olv-rail-tab { display: none; } }
+/* 767, matching MOBILE_LAYOUT_QUERY. At exactly 768 the old pair left the
+   desktop panels mounted with their collapse handles hidden. */
+@media (max-width: 767px) { .olv-rail-tab { display: none; } }
 
 /* ── Right rail — one-tap collapse for the right column ──────────────────────
    Mirror of the left rail. A single grabber slides BOTH right panels (the
@@ -3598,7 +3615,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    column's left (canvas-facing) edge. Desktop only — the mobile sheet owns
    small screens. Motion/opacity are scoped to desktop so the mobile bottom
    sheet's own transforms are never touched. */
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .olv-inspector,
   .olv-streaming-panel {
     transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
@@ -3676,7 +3693,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
-@media (max-width: 768px) { .olv-right-rail-tab { display: none; } }
+@media (max-width: 767px) { .olv-right-rail-tab { display: none; } }
 
 /* ── P9 · panel scroll hygiene & wheel ownership ─────────────────────────────
    Scrollable overlay panels CONTAIN their scroll: no chaining to the page and
@@ -3741,50 +3758,50 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     scrollbar-color: var(--hairline-strong) transparent;
   }
 }
-.olv-palette-list::-webkit-scrollbar,
-.olv-modal-body::-webkit-scrollbar,
-.olv-help-body::-webkit-scrollbar,
-.olv-msheet-body::-webkit-scrollbar,
-.olv-measure-panel::-webkit-scrollbar,
-.olv-bc-dialog::-webkit-scrollbar,
-.olv-wfc-card::-webkit-scrollbar,
-.olv-left-panels::-webkit-scrollbar,
-.olv-inspector::-webkit-scrollbar,
-.olv-streaming-panel::-webkit-scrollbar,
-.olv-catalog-results::-webkit-scrollbar,
-.olv-mp-stations-wrap::-webkit-scrollbar,
-.olv-shortcuts-list::-webkit-scrollbar {
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.olv-palette-list::-webkit-scrollbar-track,
-.olv-modal-body::-webkit-scrollbar-track,
-.olv-help-body::-webkit-scrollbar-track,
-.olv-msheet-body::-webkit-scrollbar-track,
-.olv-measure-panel::-webkit-scrollbar-track,
-.olv-bc-dialog::-webkit-scrollbar-track,
-.olv-wfc-card::-webkit-scrollbar-track,
-.olv-left-panels::-webkit-scrollbar-track,
-.olv-inspector::-webkit-scrollbar-track,
-.olv-streaming-panel::-webkit-scrollbar-track,
-.olv-catalog-results::-webkit-scrollbar-track,
-.olv-mp-stations-wrap::-webkit-scrollbar-track,
-.olv-shortcuts-list::-webkit-scrollbar-track {
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-track {
   background: transparent;
 }
-.olv-palette-list::-webkit-scrollbar-thumb,
-.olv-modal-body::-webkit-scrollbar-thumb,
-.olv-help-body::-webkit-scrollbar-thumb,
-.olv-msheet-body::-webkit-scrollbar-thumb,
-.olv-measure-panel::-webkit-scrollbar-thumb,
-.olv-bc-dialog::-webkit-scrollbar-thumb,
-.olv-wfc-card::-webkit-scrollbar-thumb,
-.olv-left-panels::-webkit-scrollbar-thumb,
-.olv-inspector::-webkit-scrollbar-thumb,
-.olv-streaming-panel::-webkit-scrollbar-thumb,
-.olv-catalog-results::-webkit-scrollbar-thumb,
-.olv-mp-stations-wrap::-webkit-scrollbar-thumb,
-.olv-shortcuts-list::-webkit-scrollbar-thumb {
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb {
   background: var(--hairline-strong);
   border-radius: 999px;
   /* Inset the thumb without shrinking the 10px hit area: the border is
@@ -3793,36 +3810,36 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-.olv-palette-list::-webkit-scrollbar-thumb:hover,
-.olv-modal-body::-webkit-scrollbar-thumb:hover,
-.olv-help-body::-webkit-scrollbar-thumb:hover,
-.olv-msheet-body::-webkit-scrollbar-thumb:hover,
-.olv-measure-panel::-webkit-scrollbar-thumb:hover,
-.olv-bc-dialog::-webkit-scrollbar-thumb:hover,
-.olv-wfc-card::-webkit-scrollbar-thumb:hover,
-.olv-left-panels::-webkit-scrollbar-thumb:hover,
-.olv-inspector::-webkit-scrollbar-thumb:hover,
-.olv-streaming-panel::-webkit-scrollbar-thumb:hover,
-.olv-catalog-results::-webkit-scrollbar-thumb:hover,
-.olv-mp-stations-wrap::-webkit-scrollbar-thumb:hover,
-.olv-shortcuts-list::-webkit-scrollbar-thumb:hover {
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
   background-clip: padding-box;
 }
 /* The corner where two scrollbars meet defaults to opaque white. */
-.olv-palette-list::-webkit-scrollbar-corner,
-.olv-modal-body::-webkit-scrollbar-corner,
-.olv-help-body::-webkit-scrollbar-corner,
-.olv-msheet-body::-webkit-scrollbar-corner,
-.olv-measure-panel::-webkit-scrollbar-corner,
-.olv-bc-dialog::-webkit-scrollbar-corner,
-.olv-wfc-card::-webkit-scrollbar-corner,
-.olv-left-panels::-webkit-scrollbar-corner,
-.olv-inspector::-webkit-scrollbar-corner,
-.olv-streaming-panel::-webkit-scrollbar-corner,
-.olv-catalog-results::-webkit-scrollbar-corner,
-.olv-mp-stations-wrap::-webkit-scrollbar-corner,
-.olv-shortcuts-list::-webkit-scrollbar-corner {
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-corner {
   background: transparent;
 }
 

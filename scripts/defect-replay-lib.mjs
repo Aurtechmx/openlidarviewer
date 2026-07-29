@@ -418,22 +418,62 @@ export function crossCheck(record) {
 /* ------------------------------------------------------- comparison files */
 
 function esc(v) {
-  const s = v == null ? '' : String(v);
+  const s = v == null ? '' : lf(v);
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-function mdCell(v) {
-  return String(v ?? '').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+// One line-ending convention for every derived string, chosen so a record
+// captured on Windows and one captured on POSIX render the same bytes: LF.
+// CRLF and lone CR both collapse to LF before anything else looks at the text.
+export function lf(v) {
+  return String(v ?? '').replace(/\r\n?/g, '\n');
+}
+
+export function mdCell(v) {
+  // Backslash first: escaping the pipe alone turns a literal `\` before a
+  // `|` into `\\|`, which markdown renders as a backslash plus a cell break.
+  return lf(v).replace(/\\/g, '\\\\').replace(/\|/g, '\\|').replace(/\n/g, ' ');
+}
+
+// Inline code spans are the opposite case from mdCell: CommonMark performs no
+// backslash processing inside a code span, so running the text escaper over a
+// command turned `-t "\"vertical\""` into `-t "\\"vertical\\""` and the page
+// showed a command that would not run. Code-span content goes in verbatim; the
+// only things that need handling are backticks, which are closed by widening
+// the fence, and newlines, which would end the span.
+export function mdCode(v) {
+  const s = lf(v).replace(/\n/g, ' ');
+  const longestRun = [...s.matchAll(/`+/g)].reduce((n, m) => Math.max(n, m[0].length), 0);
+  const fence = '`'.repeat(longestRun + 1);
+  // A code span whose content starts or ends with a backtick, or is all
+  // spaces, needs one padding space each side; CommonMark strips exactly one.
+  const pad = s.startsWith('`') || s.endsWith('`') || /^ +$/.test(s) ? ' ' : '';
+  return `${fence}${pad}${s}${pad}${fence}`;
 }
 
 export function renderComparisons(registry, probes, records) {
   const states = probeStates(probes, records);
   const byDefect = new Map(registry.defects.map((d) => [d.id, d]));
 
+  // The three comparison files are projections of these rows and of nothing
+  // else, so JSON, CSV and Markdown cannot disagree about a value. Free text
+  // is normalised to LF once, here, rather than per format.
   const rows = states.map((s) => {
     const d = byDefect.get(s.probe.defect);
     const bOut = s.baseline ? deriveOutcome(s.baseline) : null;
     const cOut = s.candidate ? deriveOutcome(s.candidate) : null;
+    const side = (rec, out) => (rec ? {
+      commit: rec.environment.commit,
+      ref: rec.environment.ref,
+      command: lf(rec.command),
+      exitCode: rec.exitCode,
+      outcome: out.outcome,
+      observation: lf(out.detail),
+      durationMs: rec.durationMs,
+      transcriptDigest: digestOf(rec.transcript),
+      reporterDigest: rec.reporterJson == null ? null : digestOf(rec.reporterJson),
+      injectedFileCount: rec.injectedFiles.length,
+    } : null);
     return {
       defect: s.probe.defect,
       defectName: d.name,
@@ -449,30 +489,8 @@ export function renderComparisons(registry, probes, records) {
       expectedOldBehaviour: d.observed,
       expectedCorrectedBehaviour: d.expected,
       regressionTest: d.regressionTest.file,
-      baseline: s.baseline ? {
-        commit: s.baseline.environment.commit,
-        ref: s.baseline.environment.ref,
-        command: s.baseline.command,
-        exitCode: s.baseline.exitCode,
-        outcome: bOut.outcome,
-        observation: bOut.detail,
-        durationMs: s.baseline.durationMs,
-        transcriptDigest: digestOf(s.baseline.transcript),
-        reporterDigest: s.baseline.reporterJson == null ? null : digestOf(s.baseline.reporterJson),
-        injectedFileCount: s.baseline.injectedFiles.length,
-      } : null,
-      candidate: s.candidate ? {
-        commit: s.candidate.environment.commit,
-        ref: s.candidate.environment.ref,
-        command: s.candidate.command,
-        exitCode: s.candidate.exitCode,
-        outcome: cOut.outcome,
-        observation: cOut.detail,
-        durationMs: s.candidate.durationMs,
-        transcriptDigest: digestOf(s.candidate.transcript),
-        reporterDigest: s.candidate.reporterJson == null ? null : digestOf(s.candidate.reporterJson),
-        injectedFileCount: s.candidate.injectedFiles.length,
-      } : null,
+      baseline: side(s.baseline, bOut),
+      candidate: side(s.candidate, cOut),
     };
   });
 
@@ -616,14 +634,14 @@ export function renderComparisons(registry, probes, records) {
     md.push('');
     md.push(`- state: ${r.state}`);
     md.push(`- why: ${mdCell(r.why)}`);
-    md.push(`- probe: ${r.probeKind}, \`${r.probeFile}\`${r.probeCase ? `, case "${mdCell(r.probeCase)}"` : ''}`);
+    md.push(`- probe: ${r.probeKind}, ${mdCode(r.probeFile)}${r.probeCase ? `, case "${mdCell(r.probeCase)}"` : ''}`);
     if (r.registryCase && !r.probeCase) md.push(`- registry entry: ${mdCell(r.registryCase)}`);
     if (r.baseline) {
-      md.push(`- baseline: \`${mdCell(r.baseline.command)}\` exit ${r.baseline.exitCode}, ${r.baseline.outcome}: ${mdCell(r.baseline.observation)}`);
+      md.push(`- baseline: ${mdCode(r.baseline.command)} exit ${r.baseline.exitCode}, ${r.baseline.outcome}: ${mdCell(r.baseline.observation)}`);
       md.push(`- baseline transcript digest: ${r.baseline.transcriptDigest}`);
     }
     if (r.candidate) {
-      md.push(`- candidate: \`${mdCell(r.candidate.command)}\` exit ${r.candidate.exitCode}, ${r.candidate.outcome}: ${mdCell(r.candidate.observation)}`);
+      md.push(`- candidate: ${mdCode(r.candidate.command)} exit ${r.candidate.exitCode}, ${r.candidate.outcome}: ${mdCell(r.candidate.observation)}`);
       md.push(`- candidate transcript digest: ${r.candidate.transcriptDigest}`);
     }
     md.push(`- expected old behaviour: ${mdCell(r.expectedOldBehaviour)}`);
@@ -634,6 +652,8 @@ export function renderComparisons(registry, probes, records) {
   return {
     'replay.json': `${canonicalJson(json)}\n`,
     'replay.csv': csv,
-    'replay.md': `${md.join('\n')}`,
+    // LF joins throughout and exactly one trailing newline, so the file is the
+    // same bytes wherever it was generated.
+    'replay.md': `${md.join('\n').replace(/\n+$/, '')}\n`,
   };
 }

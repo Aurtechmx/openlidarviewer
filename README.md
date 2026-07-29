@@ -1,12 +1,21 @@
 # OpenLiDARViewer
 
-<!-- Row 1 is software assurance. Two slots are held open:
-     - OpenSSF Scorecard, after api.securityscorecards.dev serves this repo
-       (the workflow already publishes; the last run scored 6.1);
-     - Codecov, after the repository is activated and CODECOV_TOKEN is set.
-     Neither badge is added before it renders a real value. -->
+<!-- Ten badges, two rows: software assurance, then research and release.
+     Each is set by a workflow run or an external registry, so none of them is
+     a claim this repository makes about itself.
+
+     One slot is held open: OpenSSF Scorecard, between CI and Security audit.
+     The workflow publishes (last run 6.1, transparency-log entry recorded) but
+     api.scorecard.dev has not ingested the project and the badge still renders
+     "invalid repo path". It goes in when it renders a score, making ten.
+
+     Rendering, privacy, status, Node and the live demo were badges here and
+     are not any more: each restated something the paragraph below or the
+     Live version line already says, and a badge that asserts rather than
+     reports earns no trust. -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
@@ -14,12 +23,6 @@
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
-
-[![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
-![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
-![Privacy](https://img.shields.io/badge/privacy-local--first-green)
-![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
-![Node](https://img.shields.io/badge/node-22.17.1-339933)
 
 **A browser-based LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, volume and cross-section analysis, theming, and a command palette — built on a research-derived approach to scan quality, capture provenance, and honesty about uncertainty.**
 

@@ -1,4 +1,5 @@
 import { el } from './dom';
+import { storageGet, storageSet } from './safeStorage';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -123,6 +124,29 @@ function legendItem(keys: string[], caption: string): HTMLElement {
   ]);
 }
 
+
+/**
+ * Persisted state for the navigation legend.
+ *
+ * Absent means the user has never chosen, which is the only case that opens
+ * the legend for them. Storage failures degrade to "does not persist", so a
+ * sandboxed embed still opens with the legend rather than crashing.
+ */
+const HELP_PINNED_KEY = 'olv.nav.helpPinned';
+
+function hasStoredHelpPinned(): boolean {
+  return storageGet(HELP_PINNED_KEY) !== null;
+}
+
+function readStoredHelpPinned(): boolean {
+  const stored = storageGet(HELP_PINNED_KEY);
+  return stored === null ? true : stored === '1';
+}
+
+function writeStoredHelpPinned(pinned: boolean): void {
+  storageSet(HELP_PINNED_KEY, pinned ? '1' : '0');
+}
+
 /**
  * The bottom-centre navigation bar: a three-way mode switcher (Orbit / Walk /
  * Fly), a speed slider for walk & fly, a glassy controls HUD, and a centred
@@ -155,7 +179,17 @@ export class NavBar {
   // and the H keyboard shortcut both flip this; flashHelp() is a no-op
   // when already pinned. Camera presets and the legend stay on screen
   // until the user explicitly dismisses them.
-  private _helpPinned = true;
+  /**
+   * Whether the navigation legend is pinned open.
+   *
+   * It used to start open on every scan, and `flashHelp()` re-pinned it each
+   * time a new one loaded. The legend is a 640px panel over the middle of the
+   * view, so the first thing a user saw of their own scan was the help for
+   * reading it. It now opens for a first-time user and remembers the choice
+   * after that; H, the dock's Help button and the command palette all bring it
+   * back.
+   */
+  private _helpPinned = readStoredHelpPinned();
   private _hintTimer: number | null = null;
   private _touchTimer: number | null = null;
 
@@ -494,6 +528,7 @@ export class NavBar {
   /** Toggle the controls HUD (the `H` key / help action). */
   toggleHelp(): void {
     this._helpPinned = !this._helpPinned;
+    writeStoredHelpPinned(this._helpPinned);
     this._render();
   }
 
@@ -504,6 +539,13 @@ export class NavBar {
    * having the HUD come back, then auto-close = surprising).
    */
   flashHelp(): void {
+    // Only for someone who has never chosen. Re-pinning on every scan load
+    // overrode a dismissal the user had already made, so the panel came back
+    // over the view each time they opened a file.
+    if (hasStoredHelpPinned()) {
+      this._render();
+      return;
+    }
     this._helpPinned = true;
     if (this._hintTimer !== null) {
       clearTimeout(this._hintTimer);

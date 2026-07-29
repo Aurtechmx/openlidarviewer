@@ -516,9 +516,9 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 - state: component-absent-at-baseline
 - why: the probe could not load at the baseline: ../../benchmarks/runner/writer did not exist in that tree
 - probe: vitest-case, `tests/benchmark/provenanceIntegrity.test.ts`, case "a benchmark artifact keyed `__proto__` keeps a distinct hash"
-- baseline: ``npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t "a benchmark artifact keyed `__proto__` keeps a distinct hash" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000`` exit 1, failed-collection: the probe could not load: missing module ../../benchmarks/runner/writer
+- baseline: `npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t "a benchmark artifact keyed `__proto__` keeps a distinct hash" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 1, failed-collection: the probe could not load: missing module ../../benchmarks/runner/writer
 - baseline transcript digest: sha256:cadaada144717c939e1c8f4b7ca2c801f4509ec95f40e8d479619599f3523384
-- candidate: ``npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t "a benchmark artifact keyed `__proto__` keeps a distinct hash" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000`` exit 0, passed: 1 case passed
+- candidate: `npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t "a benchmark artifact keyed `__proto__` keeps a distinct hash" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - candidate transcript digest: sha256:489dfa66a11ed2ed218ab2d818e86835e350aa685b22b67e40e432c5cf70130f
 - expected old behaviour: toHashable built its output on a plain object literal, so assigning a __proto__ key re-parented the object instead of creating an own property and the key vanished before hashing. The verifier also checked only that every listed file is present, never that every present file is listed, and never re-derived the two artifact JSONs it publishes.
 - expected corrected behaviour: Hashable output is built on a null-prototype object; the tree is walked for unlisted files; the published artifacts come from shared renderers that the writer and the verifier both call.

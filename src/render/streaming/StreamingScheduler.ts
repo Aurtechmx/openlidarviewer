@@ -13,6 +13,7 @@
  */
 
 import type { Box6, VoxelKey } from '../../io/copc/copcTypes';
+import { GpuUploadQueue } from '../gpuUploadQueue';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
@@ -206,6 +207,18 @@ const RETRY_BACKOFF_MAX_MS = 30_000;
 
 /** Per-scheduler tunables — defaulted, injected for unit tests. */
 export interface SchedulerOptions {
+  /**
+   * Meter renderer commits through this queue instead of committing on decode.
+   *
+   * Off by default. The change alters when a node counts as resident and when
+   * its mesh is built, and the plan's success gates require WebGPU and forced
+   * WebGL2 runs before it becomes the default. Absent, the scheduler keeps the
+   * historical direct-commit path exactly.
+   */
+  readonly uploadQueue?: GpuUploadQueue;
+  /** Identifies this scan to the queue, for cancellation and staleness. */
+  readonly datasetId?: string;
+
   /** Hysteresis window for eviction, ms. */
   evictDeferMs?: number;
   /** Total / budget threshold above which deferred nodes are evicted now. */
@@ -275,6 +288,30 @@ function boxCentre(b: Box6): [number, number, number] {
 }
 
 /**
+ * Bytes a decoded chunk occupies.
+ *
+ * Derived from `pointCount` and the chunk's fixed layout rather than by
+ * reading each array's `byteLength`. Reading `.positions` here would raise the
+ * direct-position-access ratchet, and this needs no coordinate at all: the
+ * decoder sizes every array to `pointCount`, so the arithmetic is exact.
+ * `decodedChunkBytes matches the allocated arrays` in the integration suite
+ * asserts that against real arrays, where reading them is permitted.
+ *
+ * A guessed per-point constant would defeat the queue's byte budget, which
+ * exists to bound what the next frame absorbs — chunks differ by which
+ * optional attributes the source supplied.
+ */
+export function decodedChunkBytes(decoded: DecodedChunk): number {
+  const n = Math.max(0, decoded.pointCount);
+  // positions Float32x3, intensity Uint16, classification/returnNumber/
+  // returnCount Uint8, gpsTime Float64.
+  let perPoint = 12 + 2 + 1 + 1 + 1 + 8;
+  if (decoded.rgb) perPoint += 3;
+  if (decoded.pointSourceId) perPoint += 2;
+  return n * perPoint;
+}
+
+/**
  * The view-dependent streaming scheduler. Operates against the format-agnostic
  * {@link StreamingSource} interface — today's COPC implementation
  * ({@link StreamingPointCloud}) and tomorrow's EPT implementation both plug in
@@ -292,6 +329,9 @@ export class StreamingScheduler {
   private readonly _cache: CompressedChunkCache;
 
   private _pointBudget: number;
+  private readonly _uploadQueue: GpuUploadQueue | undefined;
+  private readonly _datasetId: string;
+  private _generationId = 0;
   private _maxConcurrent: number;
   /**
    * Reused per-tick to avoid the spread-clone of `view.cameraPosition`
@@ -392,6 +432,8 @@ export class StreamingScheduler {
     this._cloud = cloud;
     this._decoder = decoder;
     this._callbacks = callbacks;
+    this._uploadQueue = options.uploadQueue;
+    this._datasetId = options.datasetId ?? 'default';
     this._pointBudget = budgets.pointBudget;
     this._maxConcurrent = budgets.maxConcurrentDecodes;
     this._effectiveMaxConcurrent = budgets.maxConcurrentDecodes;
@@ -1005,6 +1047,60 @@ export class StreamingScheduler {
    * will deliver; small over-estimates from voxel decimation only mean we
    * dispatch slightly fewer decodes when at the boundary, never more.
    */
+  /**
+   * Hand a decoded payload to the renderer, directly or through the queue.
+   *
+   * Directly is the historical path: mark resident, call the renderer, done.
+   * When several decodes land together that builds several meshes in one
+   * frame, which is the hitch the upload queue exists to spread out.
+   *
+   * Through the queue the node first becomes `decoded` — in memory, not drawn
+   * — and only becomes `resident` when the queue commits it. `residentPointCount`
+   * then means points the user can see, which is what the budget should
+   * throttle against.
+   *
+   * The renderer callback stays fenced in both paths: a synchronous throw
+   * there is this node's error, not a decode failure, or it would un-do the
+   * residency just recorded and book a phantom retry with backoff.
+   */
+  private _commitDecoded(node: StreamingNode, decoded: DecodedChunk): void {
+    const store = this._cloud.octree.store;
+    const queue = this._uploadQueue;
+    if (!queue) {
+      store.setState(node, 'resident', decoded.pointCount);
+      try {
+        this._callbacks.onNodeReady(node, decoded);
+      } catch (err) {
+        store.setError(node, err instanceof Error ? err.message : String(err));
+      }
+      return;
+    }
+    store.setState(node, 'decoded', decoded.pointCount);
+    queue.enqueue({
+      id: String(node.record.key),
+      datasetId: this._datasetId,
+      generationId: this._generationId,
+      estBytes: decodedChunkBytes(decoded),
+      commit: () => {
+        // The desired set can change between decode and commit. A node no
+        // longer wanted must not build a mesh.
+        if (node.state !== 'decoded') return;
+        store.setState(node, 'resident', decoded.pointCount);
+        try {
+          this._callbacks.onNodeReady(node, decoded);
+        } catch (err) {
+          store.setError(node, err instanceof Error ? err.message : String(err));
+        }
+        this._callbacks.onChange?.();
+      },
+      onDiscard: () => {
+        // Never drawn, so it returns to unloaded rather than resident. The
+        // store subtracts the pending points on the transition.
+        if (node.state === 'decoded') store.setState(node, 'unloaded');
+      },
+    });
+  }
+
   private _dispatch(): void {
     const store = this._cloud.octree.store;
     const pressureCap = this._pointBudget * this._memoryPressureRatio;
@@ -1061,22 +1157,12 @@ export class StreamingScheduler {
           // Capture the file-level RGB bit-depth from the first colour chunk so
           // every later node narrows colour the same way (see decodeMeta).
           this._cloud.noteDecodedRgbDepth?.(decoded.rgbEightBit);
-          store.setState(node, 'resident', decoded.pointCount);
           // A clean decode clears any prior failure history so a node that
           // recovered (transient read error, then success) isn't held back by
           // a stale backoff on a later re-decode.
           this._decodeFailures.delete(id);
           this._retryReadyAt.delete(id);
-          // The renderer callback is fenced so a synchronous throw there (a
-          // mesh-build or colour-seeding bug) can't fall through to the decode
-          // .catch below — which would silently un-do the residency just
-          // recorded and book a phantom decode failure with backoff. A failed
-          // mesh build is recorded as this node's error instead.
-          try {
-            this._callbacks.onNodeReady(node, decoded);
-          } catch (err) {
-            store.setError(node, err instanceof Error ? err.message : String(err));
-          }
+          this._commitDecoded(node, decoded);
         }
         this._dispatch();
         this._callbacks.onChange?.();
