@@ -36,9 +36,12 @@ export const INPUTS = Object.freeze([
   {
     id: 'replay',
     title: 'Replay results',
-    primary: 'validation/replay/results.json',
-    command: 'node validation/replay/run-replay.mjs',
-    dir: { path: 'validation/replay', match: /\.(json|md)$/ },
+    primary: 'validation/defects/replay/replay.json',
+    command: 'npm run validation:defects:replay',
+    // Anchored to the directory's own level: `raw/` below it holds 82 per-probe
+    // transcripts that `replay.json` already aggregates and that the snapshot
+    // would otherwise carry twice.
+    dir: { path: 'validation/defects/replay', match: /^validation\/defects\/replay\/[^/]+\.(json|md|csv)$/ },
     files: [],
   },
   {
@@ -164,7 +167,7 @@ export const INPUTS = Object.freeze([
 /**
  * The evidence-relative path a collected file is stored at.
  *
- * Two names are changed on the way in, both for the same reason: a copy of a
+ * Some names are changed on the way in, all for the same reason: a copy of a
  * record is a record, and it must not be read as the thing it is a copy of. A
  * file named SHA256SUMS is otherwise read as the checksum manifest for the
  * directory it now sits in, and it lists files that were never copied beside
@@ -173,9 +176,13 @@ export const INPUTS = Object.freeze([
  * dependency manifest is otherwise read as a package to maintain: Dependabot
  * security updates scan every manifest in the repository, and one opened a
  * pull request against the collected `package-lock.json`, which the snapshot
- * manifest hashes and the verifier re-derives. All three take a `.txt`
- * suffix; the derivation keys off the original path, so the suffix changes
- * nothing it computes.
+ * manifest hashes and the verifier re-derives.
+ *
+ * This function is used when a snapshot is BUILT and nowhere else. Reading a
+ * snapshot never inverts it: the pairing of source path to stored path is
+ * written into every artifact record, so a rename policy can change without
+ * invalidating snapshots taken under the old one, and a genuine `foo.txt`
+ * stays unambiguous.
  */
 const COLLECTED_AS_TEXT = new Set([
   'SHA256SUMS',
@@ -183,11 +190,67 @@ const COLLECTED_AS_TEXT = new Set([
   'package-lock.json',
 ]);
 
-export function evidencePath(inputId, repoPath) {
-  const parts = repoPath.split('/');
+export function evidencePath(producerId, sourcePath) {
+  const parts = sourcePath.split('/');
   let last = parts[parts.length - 1];
   if (COLLECTED_AS_TEXT.has(last) || last.endsWith('.md')) last = `${last}.txt`;
-  return `evidence/${inputId}/${[...parts.slice(0, -1), last].join('/')}`;
+  return `evidence/${producerId}/${[...parts.slice(0, -1), last].join('/')}`;
+}
+
+/**
+ * The statuses a declared producer can carry. Exactly one applies to every
+ * producer in every snapshot; a producer is never dropped from the manifest for
+ * being unavailable, because a missing row and a healthy row are then the same
+ * thing to a reader.
+ */
+export const PRODUCER_STATUSES = Object.freeze([
+  'collected',
+  'not-executed',
+  'environment-unavailable',
+  'not-applicable',
+  'failed',
+]);
+
+/** Producers whose absence is not the same fact as "nobody ran it". */
+const ABSENT_STATUS = Object.freeze({
+  // Requires a GDAL installation to generate the reference rasters, so absence
+  // on a host without one is an environment fact, not an unrun step.
+  'gdal-cross-checks': 'environment-unavailable',
+  // Requires a second host to compare against; a single-host run cannot produce
+  // it at all.
+  'cross-platform': 'environment-unavailable',
+});
+
+const MEDIA_TYPES = Object.freeze({
+  json: 'application/json',
+  csv: 'text/csv',
+  md: 'text/markdown',
+  yaml: 'application/yaml',
+  yml: 'application/yaml',
+  cff: 'application/yaml',
+  txt: 'text/plain',
+});
+
+/**
+ * The media type of a collected record, keyed off the ORIGINAL source path.
+ * The stored copy's own suffix is a storage detail and says nothing about the
+ * bytes.
+ */
+export function mediaTypeOf(sourcePath) {
+  const name = sourcePath.split('/').pop();
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+  return MEDIA_TYPES[ext] ?? 'application/octet-stream';
+}
+
+/**
+ * The source-path/stored-path pairing a snapshot states, read straight off its
+ * artifact records. This is the ONLY way a snapshot's stored files are located
+ * when it is read back; no filename is ever transformed to guess another.
+ */
+export function artifactIndex(snapshot) {
+  return (snapshot.producers ?? []).flatMap((p) =>
+    (p.artifacts ?? []).map((a) => ({ sourcePath: a.sourcePath, storedPath: a.storedPath })),
+  );
 }
 
 export const sha256 = (buf) => createHash('sha256').update(buf).digest('hex');
@@ -474,28 +537,48 @@ export function deriveIdentity(read, has) {
  * `has(path)` says whether it was collected, and `digest(path)` returns its
  * sha256 and byte count. Nothing else is consulted.
  */
-export function deriveSnapshot({ read, has, digest, listed }) {
-  const inputs = [];
+export function deriveSnapshot({ read, has, digest, listed, storedPathOf }) {
+  const producers = [];
   for (const spec of INPUTS) {
     const paths = new Set(spec.files);
     if (spec.dir) for (const p of listed(spec.dir.path)) if (spec.dir.match.test(p)) paths.add(p);
     const present = [...paths].filter((p) => has(p)).sort();
     const missing = [...paths].filter((p) => !has(p)).sort();
-    const status = has(spec.primary) ? 'recorded' : 'not-executed';
-    inputs.push({
-      id: spec.id,
+
+    // Exactly one status, and the partial case is named rather than rounded to
+    // either neighbour: a producer that left some of its declared records
+    // behind but not its primary one did not simply "not run".
+    //
+    // A declared reason for absence outranks that inference. Some producers
+    // declare records that are tracked inputs rather than outputs — the GDAL
+    // reference fixtures are in the repository whether or not GDAL is installed
+    // — so their presence is not evidence that the producer ran and stumbled.
+    let status;
+    if (has(spec.primary)) status = 'collected';
+    else if (spec.notApplicable) status = 'not-applicable';
+    else if (ABSENT_STATUS[spec.id]) status = ABSENT_STATUS[spec.id];
+    else if (present.length > 0) status = 'failed';
+    else status = 'not-executed';
+
+    producers.push({
+      producerId: spec.id,
       title: spec.title,
       status,
       primary: spec.primary,
       producedBy: spec.command,
-      files: present.map((p) => {
+      artifacts: present.map((p) => {
         const { sha256: hash, bytes } = digest(p);
         const text = read(p);
         return {
-          path: p,
-          storedAt: evidencePath(spec.id, p),
+          producerId: spec.id,
+          sourcePath: p,
+          // Taken from the reader, which knows where the bytes actually came
+          // from, rather than recomputed from a naming rule.
+          storedPath: storedPathOf(p),
+          status: 'collected',
           sha256: hash,
-          bytes,
+          sizeBytes: bytes,
+          mediaType: mediaTypeOf(p),
           shape: p.endsWith('.json') ? jsonShape(text) : textShape(text),
         };
       }),
@@ -534,25 +617,70 @@ export function deriveSnapshot({ read, has, digest, listed }) {
   }
 
   const identity = deriveIdentity(read, has);
-  const recorded = inputs.filter((i) => i.status === 'recorded').length;
+
+  const byStatus = Object.fromEntries(
+    PRODUCER_STATUSES.map((s) => [s, producers.filter((p) => p.status === s).length]),
+  );
+  const declared = producers.length;
+  const accountedFor = producers.filter((p) => PRODUCER_STATUSES.includes(p.status)).length;
+  // A producer that cannot run here is not a producer that was skipped, so it
+  // leaves the executable denominator instead of counting as a miss.
+  const executable = declared - byStatus['not-applicable'] - byStatus['environment-unavailable'];
+  const executed = byStatus.collected + byStatus.failed;
+
+  /**
+   * Three separate ratios, each with its own numerator and denominator on the
+   * record. They answer different questions and merging them into one figure
+   * lets an unavailable environment read as a success.
+   */
+  const coverage = {
+    producerAccounting: {
+      question: 'is every declared producer accounted for by exactly one status',
+      numerator: accountedFor,
+      denominator: declared,
+      complete: accountedFor === declared,
+    },
+    executedProducers: {
+      question: 'of the producers that could run here, how many ran',
+      numerator: executed,
+      denominator: executable,
+    },
+    successfulProducers: {
+      question: 'of the producers that ran, how many produced their primary record',
+      numerator: byStatus.collected,
+      denominator: executed,
+    },
+    byStatus,
+  };
+
   const failures = [];
+  if (accountedFor !== declared) {
+    failures.push('a declared producer carries no recognised status');
+  }
+  for (const p of producers) {
+    if (p.status === 'failed') {
+      failures.push(`${p.producerId} left records behind but not its primary record ${p.primary}`);
+    }
+  }
   if (defects.status !== 'recorded') failures.push('the defect records were not collected');
   else if (!defects.reconciles) failures.push('the derived defect composition disagrees with the composition the changelog states');
   if (identity.agreement !== 'agrees') failures.push(`identity fields disagree: ${identity.disagreements.join(', ')}`);
 
   return {
     snapshot: 'validation-snapshot',
-    schemaVersion: 1,
+    // 2: artifact records carry an explicit sourcePath/storedPath pair and every
+    // producer carries one status from a closed set. A version-1 reader inferred
+    // source names from stored names and cannot read this.
+    schemaVersion: 2,
     candidateVersion: identity.candidateVersion,
     totals: {
-      inputs: inputs.length,
-      recorded,
-      notExecuted: inputs.length - recorded,
-      files: inputs.reduce((n, i) => n + i.files.length, 0),
+      producers: declared,
+      artifacts: producers.reduce((n, p) => n + p.artifacts.length, 0),
     },
+    coverage,
     defects,
     identity,
-    inputs,
+    producers,
     verdict: failures.length === 0 ? 'PASS' : 'FAIL',
     failures,
   };
@@ -570,8 +698,8 @@ export function renderSummary(s) {
   L.push(
     'Every figure comes from the records stored under `evidence/`, computed by ' +
       '`scripts/validation-snapshot-lib.mjs` and recomputed from the same bytes each time the ' +
-      'snapshot is checked. An input that was not produced is recorded as not executed, with ' +
-      'the command that produces it. It is never a zero and never a pass.',
+      'snapshot is checked. A producer that was not run carries a status saying so, and the ' +
+      'command that produces its record. It is never a zero and never a pass.',
   );
   L.push('');
   if (s.failures.length > 0) {
@@ -629,31 +757,53 @@ export function renderSummary(s) {
       `The candidate entry is dated ${s.identity.dates.candidateDate ?? 'none'}.`,
   );
   L.push('');
-  L.push('## Inputs');
+  L.push('## Producer coverage');
   L.push('');
-  L.push(`${s.totals.recorded} of ${s.totals.inputs} collected, ${s.totals.notExecuted} not executed, over ${s.totals.files} records.`);
+  L.push(
+    'Three separate figures. They answer different questions, and a single ' +
+      'combined percentage would let an unavailable environment read as a success.',
+  );
   L.push('');
-  L.push('| input | status | records | produced by |');
+  const c = s.coverage;
+  L.push('| figure | count | of | question |');
   L.push('| --- | --- | --- | --- |');
-  for (const i of s.inputs) {
-    L.push(`| ${i.title} | ${i.status} | ${i.files.length} | \`${i.producedBy}\` |`);
+  L.push(`| producer accounting completeness | ${c.producerAccounting.numerator} | ${c.producerAccounting.denominator} | ${c.producerAccounting.question} |`);
+  L.push(`| executed producer coverage | ${c.executedProducers.numerator} | ${c.executedProducers.denominator} | ${c.executedProducers.question} |`);
+  L.push(`| successful producer coverage | ${c.successfulProducers.numerator} | ${c.successfulProducers.denominator} | ${c.successfulProducers.question} |`);
+  L.push('');
+  L.push('| status | producers |');
+  L.push('| --- | --- |');
+  for (const [k, v] of Object.entries(c.byStatus)) L.push(`| ${k} | ${v} |`);
+  L.push('');
+  L.push('## Producers');
+  L.push('');
+  L.push(`${s.totals.producers} declared, over ${s.totals.artifacts} artifacts.`);
+  L.push('');
+  L.push('| producer | status | artifacts | produced by |');
+  L.push('| --- | --- | --- | --- |');
+  for (const p of s.producers) {
+    L.push(`| ${p.title} | ${p.status} | ${p.artifacts.length} | \`${p.producedBy}\` |`);
   }
   L.push('');
-  const notRun = s.inputs.filter((i) => i.status === 'not-executed');
-  if (notRun.length > 0) {
-    L.push('## Not executed');
+  const absent = s.producers.filter((p) => p.status !== 'collected');
+  if (absent.length > 0) {
+    L.push('## Producers with no primary record');
     L.push('');
-    L.push('Each of these is absent. Absent is not empty, and it is not passing. The command beside it is what produces the record, and until that runs there is nothing here to report.');
+    L.push('Each of these is absent. Absent is not empty, and it is not passing. Each carries the reason it is absent and the command that produces the record.');
     L.push('');
-    for (const i of notRun) L.push(`- ${i.title}: \`${i.primary}\` is absent. Run \`${i.producedBy}\`.`);
+    for (const p of absent) L.push(`- ${p.title} (${p.status}): \`${p.primary}\` is absent. Run \`${p.producedBy}\`.`);
     L.push('');
   }
-  L.push('## Records');
+  L.push('## Artifacts');
   L.push('');
-  L.push('| record | bytes | sha256 |');
-  L.push('| --- | --- | --- |');
-  for (const i of s.inputs) {
-    for (const f of i.files) L.push(`| \`${f.path}\` | ${f.bytes} | \`${f.sha256}\` |`);
+  L.push('The stored path is stated, not inferred from the source path.');
+  L.push('');
+  L.push('| source path | stored path | media type | bytes | sha256 |');
+  L.push('| --- | --- | --- | --- | --- |');
+  for (const p of s.producers) {
+    for (const a of p.artifacts) {
+      L.push(`| \`${a.sourcePath}\` | \`${a.storedPath}\` | ${a.mediaType} | ${a.sizeBytes} | \`${a.sha256}\` |`);
+    }
   }
   L.push('');
   L.push('## Scope');
