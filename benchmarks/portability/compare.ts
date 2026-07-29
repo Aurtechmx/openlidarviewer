@@ -494,6 +494,20 @@ function compareFixture(records: readonly PlatformRecord[]): FixtureComparison {
 function compareScience(records: readonly PlatformRecord[]): ScienceComparison {
   const mismatches: Mismatch[] = [];
 
+/**
+   * Ordering note for the three `.sort()` calls below.
+   *
+   * Static analysis reports each as a reliability bug and suggests
+   * `String.localeCompare`. Do not take it. Collation depends on the locale and
+   * on the ICU build behind the runtime, so darwin-arm64 and linux-x64 can order
+   * the same names differently. This file decides whether two platforms agree;
+   * an ordering that varies by platform would manufacture the disagreement it
+   * exists to detect. Default sort on strings is UTF-16 code-unit order, fixed
+   * by the language spec.
+   *
+   * The rule's other half, that default sort compares numbers as strings, does
+   * not apply: these are artifact, scalar and build-hash names.
+   */
   const names = [
     ...new Set([...REQUIRED_SCIENCE_ARTIFACTS, ...records.flatMap((r) => Object.keys(r.science.hashes))]),
   ].sort();
