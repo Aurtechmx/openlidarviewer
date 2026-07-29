@@ -39,7 +39,11 @@ jobs:
     # in roughly 2 h inside the v0.6.2 release gate on this runner class. 180
     # minutes is that figure with headroom; it is the budget the release gate
     # used to have to carry.
-    timeout-minutes: 180
+    # 350, just under the six-hour ceiling GitHub allows a hosted job. The
+    # three-file campaign took 2 h 15 m for 188 mutants; the widened
+    # eight-file scope is roughly three times the code, so 180 would kill it
+    # part-way and report nothing rather than a partial result.
+    timeout-minutes: 350
     permissions:
       # Only to push the evidence file back to the default branch.
       contents: write
