@@ -30,6 +30,12 @@ npm run build
 npm run preview
 ```
 
+## Something not working?
+
+A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Negative results are the useful kind here.
+
+[Submit a test report](https://lidar.aurtech.mx/test-report.html) assembles the report in your own browser. Nothing is stored and nothing is sent anywhere. You end up with a single file, screenshots included, and you read it before deciding whether to send it.
+
 ## Where next
 
 - [Navigation](./navigation) — Orbit, Walk, Fly, and Pan, with the full key reference
