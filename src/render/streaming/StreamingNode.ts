@@ -20,7 +20,20 @@ import type { StreamingNodeRecord, VoxelKey } from '../../io/copc/copcTypes';
  * Decode and GPU upload are atomic in `StreamingRenderer`, so there is no
  * separate CPU-resident state between `loading` and `resident`.
  */
-export type NodeState = 'unloaded' | 'queued' | 'loading' | 'resident' | 'error';
+/**
+ * `decoded` sits between `loading` and `resident`: the payload is in memory but
+ * has not been handed to the renderer. Splitting it out is what lets the upload
+ * queue meter commits — while the two were one state, `residentPointCount`
+ * counted points that nothing had drawn yet, so the budget throttled against a
+ * figure the user could not see.
+ */
+export type NodeState =
+  | 'unloaded'
+  | 'queued'
+  | 'loading'
+  | 'decoded'
+  | 'resident'
+  | 'error';
 
 /** A runtime octree node — its parsed record plus mutable streaming state. */
 export interface StreamingNode {
