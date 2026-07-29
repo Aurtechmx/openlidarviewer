@@ -227,12 +227,16 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
 /**
  * The per-point attributes a decoded LAS/LAZ cloud carries in this viewer.
  *
- * The loader decodes position, intensity, classification, and — since
- * the inspection extras (return number/count, point source ID, GPS
- * time); not RGB or surface normals. The set is fixed regardless of the LAS
- * point format. It sizes the load-memory estimate
+ * The loader decodes position, intensity, classification, the inspection
+ * extras (return number/count, point source ID, GPS time), and RGB where the
+ * point format carries it. It sizes the load-memory estimate
  * (`estimateMemoryBytes`); `hasLasExtras` keeps that estimate honest about the
  * ~12 extra bytes per point the attributes add.
+ *
+ * Kept for callers that have no header to read. Anything holding a parsed
+ * header should use `lasDecodedAttributes(pointFormat)` instead: this constant
+ * declares no colour, and a colour-bearing file decodes one anyway, so the
+ * estimate comes in low exactly where memory is tightest.
  */
 export const LAS_DECODED_ATTRIBUTES: PointAttributes = {
   hasColor: false,
@@ -241,3 +245,29 @@ export const LAS_DECODED_ATTRIBUTES: PointAttributes = {
   hasNormals: false,
   hasLasExtras: true,
 };
+
+/**
+ * LAS point formats that carry RGB, per the ASPRS specification.
+ *
+ * 2, 3 and 5 are the LAS 1.2/1.3 colour formats; 7, 8 and 10 are their 1.4
+ * counterparts. 8 and 10 also carry NIR, which the loader does not decode.
+ */
+const RGB_POINT_FORMATS: ReadonlySet<number> = new Set([2, 3, 5, 7, 8, 10]);
+
+/** Whether a LAS point format carries RGB. */
+export function pointFormatHasRgb(pointFormat: number): boolean {
+  return RGB_POINT_FORMATS.has(pointFormat);
+}
+
+/**
+ * What the loader will actually decode from this point format.
+ *
+ * The memory estimate drives admission, so declaring no colour for a file that
+ * decodes colour understates the peak: three bytes per point in the cloud that
+ * ships, and six more per point while the raw 16-bit channels are still
+ * staged. On a large colour-bearing scan the planner admits a point budget the
+ * device cannot hold, which is the outcome the estimate exists to prevent.
+ */
+export function lasDecodedAttributes(pointFormat: number): PointAttributes {
+  return { ...LAS_DECODED_ATTRIBUTES, hasColor: pointFormatHasRgb(pointFormat) };
+}
