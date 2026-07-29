@@ -167,11 +167,19 @@ export function mappingProblems(dir, stored) {
       byStored.set(a.storedPath, a);
 
       const abs = join(dir, a.storedPath);
-      if (!existsSync(abs) || !statSync(abs).isFile()) {
-        problems.push(`${a.sourcePath} is recorded as stored at ${a.storedPath}, which the snapshot does not carry.`);
+      // Read first and handle the failure, rather than existsSync/statSync
+      // then read. The check-then-use form is a race: the file can change
+      // between the two, which is what makes the earlier answer unreliable
+      // rather than merely stale. Reading a directory or a missing path throws
+      // here, so one try subsumes both checks and the result describes the
+      // bytes actually verified.
+      let buf;
+      try {
+        buf = readFileSync(abs);
+      } catch {
+        problems.push(`${a.sourcePath} is recorded as stored at ${a.storedPath}, which the snapshot does not carry as a readable file.`);
         continue;
       }
-      const buf = readFileSync(abs);
       if (sha256(buf) !== a.sha256) {
         problems.push(`${a.storedPath} hashes ${sha256(buf)}, the record for ${a.sourcePath} states ${a.sha256}.`);
       }
