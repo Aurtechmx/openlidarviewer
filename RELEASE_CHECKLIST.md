@@ -4,6 +4,22 @@ Run through this before tagging a release. It exists because a version bump on
 its own leaves siblings stale (the lockfile and README), and because two of the
 hardening steps are deliberately staged and easy to forget.
 
+
+## Version bump
+
+`sbom.json` records the version in its root component, `bom-ref` and `purl`, so
+a bump leaves it stale and `lint:sbom` fails. Regenerate it in the same change:
+
+```bash
+npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json
+```
+
+While the bump lives on a branch and `main` is still on the old version, every
+merge from `main` resolves `sbom.json` backwards and the gate fails again. That
+stops once the bump lands. Until then, regenerate after each merge rather than
+assuming the working tree is right: `package.sh` builds the archive from
+`git archive HEAD`, so an uncommitted fix never reaches the zip.
+
 ## 1. Version sync (do these together)
 
 - [ ] `package.json` `version` bumped.
