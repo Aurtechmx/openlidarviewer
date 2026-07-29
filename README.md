@@ -1,12 +1,12 @@
 # OpenLiDARViewer
 
-<!-- Row 1 is software assurance. Two slots are held open:
-     - OpenSSF Scorecard, after api.securityscorecards.dev serves this repo
-       (the workflow already publishes; the last run scored 6.1);
-     - Codecov, after the repository is activated and CODECOV_TOKEN is set.
-     Neither badge is added before it renders a real value. -->
+<!-- Row 1 is software assurance. One slot is still held open: OpenSSF
+     Scorecard. The workflow publishes (last run scored 6.1, tlog entry
+     recorded), but api.scorecard.dev has not ingested the project yet and its
+     badge renders "invalid repo path". It goes in when it renders a score. -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
