@@ -1,4 +1,4 @@
-# Dependency audit (v0.6.2)
+# Dependency audit (v0.6.3)
 
 This is the committed dependency baseline for OpenLiDARViewer v0.6.2, recorded
 2026-07-25 (UTC) from the committed `package-lock.json`. It is a baseline, not

@@ -1,13 +1,13 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "project": "openlidarviewer",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
-  "tag": "v0.6.2",
-  "commit": "362c5917891aa496223a83c20f2399afc2ea0cce",
+  "tag": null,
+  "commit": "373213c7000c9b27be6bbce2a20a13e8bd9fcbde",
   "repository": null,
-  "generatedAt": "2026-07-27T18:30:28.293Z",
+  "generatedAt": "2026-07-29T16:30:43.177Z",
   "nodeVersion": "v26.0.0",
   "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
@@ -17,11 +17,43 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "e62f13b15b321f72764544a4a9dc2c19ede8a732c70ea8b59593019b9bac604e",
-  "stages": {},
+  "gateLogSha256": "46cf23fcc72a3ca198f15caccaa7ec7450589a1efdffa66678272095fc9d62c6",
+  "stages": {
+    "staticGate": "passed",
+    "mutation": "not-executed"
+  },
+  "mutation": {
+    "score": 96.81,
+    "break": 75,
+    "mutants": {
+      "killed": 129,
+      "timeout": 53,
+      "survived": 5,
+      "noCoverage": 1,
+      "ignored": 0,
+      "errors": 0,
+      "detected": 182,
+      "undetected": 6,
+      "scored": 188
+    },
+    "mutate": [
+      "src/process/numerics.ts",
+      "src/terrain/quantile.ts",
+      "src/terrain/ground/terrainDerivatives.ts"
+    ],
+    "measuredAtCommit": "7f72fa16c72152d2f65f5c9ebb795355fbd42327",
+    "measuredAt": "2026-07-29T03:54:56.232Z",
+    "coversReleaseCommit": false,
+    "ranInThisGate": false,
+    "workflow": "Mutation",
+    "workflowRunId": "30414720675",
+    "workflowRunUrl": "https://github.com/Aurtechmx/openlidarviewer/actions/runs/30414720675",
+    "nodeVersion": "v22.17.1",
+    "note": "Measured at a different commit; this figure does not cover the release commit."
+  },
   "buckets": {
     "unit": {
-      "passed": 3793,
+      "passed": 3887,
       "skipped": 24,
       "runs": 3
     },
@@ -31,35 +63,35 @@
       "runs": 1
     },
     "terrain": {
-      "passed": 1270,
+      "passed": 1283,
       "skipped": 0,
       "runs": 2
     },
     "ui": {
-      "passed": 429,
+      "passed": 433,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 533,
+      "passed": 541,
       "skipped": 0,
       "runs": 2
     }
   },
   "total": {
-    "passed": 6648,
+    "passed": 6767,
     "skipped": 24
   },
   "bundle": {
-    "liveEntryKiB": 658,
+    "liveEntryKiB": 664,
     "ceilingKiB": 720
   },
-  "packageLockSha256": "5ffe4663958b6763e3a546ded33b6ec3230144ec73f8523a6aedb720fa7d1825",
+  "packageLockSha256": "e35dbf8ed968bab60a86b8c01a584f9e04bd5beaabc63ff0120e0b4aaef1f2f5",
   "sbom": {
-    "sha256": "56d335375464ef032c582176096b3d165ec92193b638c411bb25d33ce7ca14c9",
+    "sha256": "575152c292c5160b84b7a3a0f5db620ef77a5ee0d3a6c886b396b5432f34308c",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.6.2",
-    "bomRef": "openlidarviewer@0.6.2",
+    "rootVersion": "0.6.3",
+    "bomRef": "openlidarviewer@0.6.3",
     "components": 59
   },
   "science": {
