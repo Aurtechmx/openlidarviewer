@@ -3532,7 +3532,7 @@ export class Viewer {
     this._edlStrength.value = this._edlBaseStrength;
   }
 
-  /** The current base EDL strength (what the user set). */
+  /** The base the user set, NOT live `_edlStrength` — edlStrengthPersistence.test.ts. */
   get edlStrength(): number {
     return this._edlBaseStrength;
   }
