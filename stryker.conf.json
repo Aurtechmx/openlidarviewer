@@ -16,10 +16,6 @@
     "src/process/numerics.ts",
     "src/terrain/quantile.ts",
     "src/terrain/ground/terrainDerivatives.ts",
-    "src/terrain/ground/groundFilter.ts",
-    "src/terrain/ground/cellConfidence.ts",
-    "src/terrain/spaceMetrics.ts",
-    "src/render/measure/geometry.ts",
     "src/render/measure/stockpileVolume.ts"
   ],
   "_thresholds_comment": "break 75 sits under the measured 87.23 so a real weakening fails while equivalent mutants do not hold the gate hostage. Some survivors here are provably EQUIVALENT, not gaps: quantile's early returns (n===1, lo===hi) and its p-clamp boundaries produce identical results through the general path, so no test can kill them. Judge a run by NEW survivors, not by chasing 100.",
@@ -43,7 +39,7 @@
     "test-results",
     ".claude"
   ],
-  "dryRunTimeoutMinutes": 10,
+  "dryRunTimeoutMinutes": 30,
   "_ts7_comment": "tsconfigFile names a path the project does not carry, so Stryker skips its tsconfig rewrite. That rewrite calls ts.parseConfigFileTextToJson, which TypeScript 7 removed. Nothing here needs the rewrite: the sandbox resolves through the copied tree. Remove this once Stryker supports TypeScript 7.",
-  "_scope_comment": "Widened from three files to eight on 2026-07-29. The first three are the original numeric core and their 96.81 is the figure v0.6.3 cites; the other five are their nearest siblings, each carrying real test coverage (4 to 70 referencing suites) so a survivor means a missing assertion rather than an untested file. A score over eight files is NOT comparable with one over three: a wider scope reaches weaker corners, so a lower number here is expected and is not a regression. Compare like with like by reading the per-file breakdown in the Stryker report."
+  "_scope_comment": "Four files, measured at 434 mutants. The ceiling is arithmetic, not preference: 188 mutants took 2 h 15 m in CI, so a hosted job's six-hour limit fits roughly 487. Measured alternatives were base+groundFilter at 599 and base+cellConfidence at 605, each about 7.2 h, so neither can finish. An eight-file attempt instrumented 2,482 mutants, near thirty hours, and died on the dry run before mutating anything. Size a widening by instrumenting it (stryker run --dryRunOnly reports the count in about a minute) rather than by counting lines: three times the source produced thirteen times the mutants. A score over four files is not comparable with one over three."
 }
