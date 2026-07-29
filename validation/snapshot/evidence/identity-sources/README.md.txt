@@ -1,16 +1,25 @@
 # OpenLiDARViewer
 
-[![CI](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/aurtechmx/openlidarviewer/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/aurtechmx/openlidarviewer/releases/latest)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21544619.svg)](https://doi.org/10.5281/zenodo.21544619)
+<!-- Row 1 is software assurance. One slot is still held open: OpenSSF
+     Scorecard. The workflow publishes (last run scored 6.1, tlog entry
+     recorded), but api.scorecard.dev has not ingested the project yet and its
+     badge renders "invalid repo path". It goes in when it renders a score. -->
+[![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
+[![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
+[![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
+
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
+[![FAIR checklist](https://fairsoftwarechecklist.net/badge.svg)](https://fairsoftwarechecklist.net/v0.2?f=11&a=22113&i=22322&r=113)
+[![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
+[![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
+
 [![Live demo](https://img.shields.io/badge/live%20demo-lidar.aurtech.mx-19C2D8)](https://lidar.aurtech.mx/)
-![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
 ![Rendering](https://img.shields.io/badge/rendering-WebGL%20%2F%20WebGPU-blue)
 ![Privacy](https://img.shields.io/badge/privacy-local--first-green)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
-[![Stars](https://img.shields.io/github/stars/aurtechmx/openlidarviewer?style=flat&color=f5c518)](https://github.com/aurtechmx/openlidarviewer/stargazers)
-
-![OpenLiDARViewer — point-cloud exploration without the desktop overhead](docs/screenshots/openlidarviewer-promo.jpg)
+![Status](https://img.shields.io/badge/status-R%26D%20Prototype-teal)
+![Node](https://img.shields.io/badge/node-22.17.1-339933)
 
 **A browser-based LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, volume and cross-section analysis, theming, and a command palette — built on a research-derived approach to scan quality, capture provenance, and honesty about uncertainty.**
 
@@ -383,7 +392,7 @@ The aim is not to replace full GIS or survey-grade processing. It is to give peo
 ## Getting Started
 
 ```bash
-git clone https://github.com/aurtechmx/openlidarviewer.git
+git clone https://github.com/Aurtechmx/openlidarviewer.git
 cd openlidarviewer
 npm install
 npm run dev

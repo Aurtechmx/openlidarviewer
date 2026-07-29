@@ -2,6 +2,52 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Added
+
+- Build provenance attestation for release archives and the SBOM. The release
+  workflow signs a SLSA provenance statement through Sigstore, binding each
+  archive to the workflow run and commit that produced it. Verify a downloaded
+  archive with `gh attestation verify <file> --repo Aurtechmx/openlidarviewer`.
+  This applies from the next release onward; assets published for v0.6.2 and
+  earlier carry no attestation, and `release:verify` remains the check for
+  those.
+
+### Changed
+
+- Mutation testing moved out of the tag-time gate. It ran roughly two hours of
+  the v0.6.2 release gate's 2 h 20 m, against three numeric modules, and forced
+  the gate job's timeout from 90 to 300 minutes. It now runs weekly and on
+  demand in `.github/workflows/mutation.yml`. The release gate's timeout is
+  back to 60 minutes, which is the twenty minutes the remaining stages measured
+  plus headroom.
+- The release record cites the mutation result instead of reproducing it.
+  `mutation` left `MANDATORY_RELEASE_STAGES` and joined a new
+  `DEFERRED_RELEASE_STAGES`. A deferred stage is always written into the record
+  as `not-executed` rather than left out, and the record carries the score, the
+  break threshold, the commit the score was measured at, and the workflow run
+  that produced it. `coversReleaseCommit` states whether that commit is the
+  release commit; where it is not, the record and the manifest say so instead
+  of implying currency. Evidence schema version 2 becomes 3.
+- A release record with no mutation result to cite, or one whose cited score
+  sits under the `break: 75` threshold, is refused. `release:verify` repeats
+  both checks against the shipped assets. It also gained an `advisories`
+  channel for statements that are true without being defects, such as a cited
+  score that predates the release commit.
+- `scripts/collect-mutation-evidence.mjs` recomputes the score from Stryker's
+  JSON report and re-checks the threshold, so a regression fails the scheduled
+  run even where the runner's exit code is lost.
+
+### Notes
+
+- `docs/validation/mutation-evidence.json` is produced by the Mutation
+  workflow; the repository does not ship a seeded copy, because there is no
+  honest way to write one without running the measurement. Dispatch that
+  workflow once before the next tag, or run the release gate with
+  `OLV_GATE_MUTATION=1`, which runs the stage inline and cites the release
+  commit directly.
+
 ## [0.6.2] - 2026-07-27
 
 A validation-and-correction release. Twelve validation suites were added, covering
