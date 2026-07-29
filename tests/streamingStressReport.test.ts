@@ -25,7 +25,7 @@
  * gated) so it never fires in default CI runs.
  */
 
-import { test } from 'vitest';
+import { test, expect } from 'vitest';
 import { runStressTier } from './streamingStressHarness.test';
 import { STRESS_TIERS, type StressTier } from './fixtures/copc/scaledSynthCopc';
 
@@ -61,6 +61,19 @@ if (tiers.length > 0) {
         globalThis as { performance?: { now: () => number } }
       ).performance!.now();
       const { result } = await runStressTier(tier);
+      // The table is the point of this file, but a report that prints NaN and
+      // passes is worse than no report: a partial or degenerate run would be
+      // formatted into a plausible-looking row and read as a measurement.
+      // These check the numbers are real before they are published, which is
+      // also what makes this a test rather than a script that happens to live
+      // in tests/.
+      expect(Number.isFinite(result.peakResidentPoints)).toBe(true);
+      expect(result.peakResidentPoints).toBeGreaterThan(0);
+      expect(Number.isFinite(result.peakResidentBytes)).toBe(true);
+      expect(Number.isFinite(result.schedulerTickMs.mean)).toBe(true);
+      expect(Number.isFinite(result.schedulerTickMs.p95)).toBe(true);
+      expect(result.schedulerTickMs.p95).toBeGreaterThanOrEqual(result.schedulerTickMs.mean);
+      expect(result.thrashEvents).toBeGreaterThanOrEqual(0);
       const wall =
         (globalThis as { performance?: { now: () => number } }).performance!.now() - wall0;
       const row = [
