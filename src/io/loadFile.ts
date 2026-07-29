@@ -5,7 +5,7 @@ import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import type { LoadResult } from './parseBuffer';
 import { POINT_BUDGET, parseBuffer } from './parseBuffer';
-import { parseLasHeader, LAS_DECODED_ATTRIBUTES } from './lasHeader';
+import { parseLasHeader, lasDecodedAttributes } from './lasHeader';
 import {
   planLoad,
   NON_STREAMING_FORMATS,
@@ -120,7 +120,7 @@ function buildLasPlan(
       budget,
       isMobile: options.isMobile ?? false,
       deviceMemoryGB: options.deviceMemoryGB,
-      attributes: LAS_DECODED_ATTRIBUTES,
+      attributes: lasDecodedAttributes(header.pointFormat),
       format,
     });
   } catch {
