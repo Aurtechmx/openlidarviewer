@@ -9,7 +9,7 @@
  * cover the exit codes the release gate actually reads.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
