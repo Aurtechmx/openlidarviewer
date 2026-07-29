@@ -57,6 +57,34 @@ function verifyMutated(mutate: (model: Chronology) => void) {
   return { status: result.status, stderr: result.stderr };
 }
 
+/**
+ * Whether this checkout can see the commits the records name.
+ *
+ * A depth-1 clone cannot, and the generator and verifier both degrade to
+ * reporting commit resolution as unverified rather than failed. The negative
+ * controls below assert that a bad commit is REFUSED, which only holds where
+ * the commits are visible in the first place. Asserting the strict contract in
+ * a shallow clone tests the environment, not the code.
+ *
+ * The coverage job runs this suite over a shallow clone, which is how these
+ * assertions first failed. Both are fixed: that job now fetches full history,
+ * and these tests state which contract they are checking either way.
+ */
+function historyIsShallow(): boolean {
+  try {
+    return (
+      execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
+const SHALLOW = historyIsShallow();
+
 describe('defect chronology', () => {
   beforeAll(() => {
     scratch = mkdtempSync(resolve(tmpdir(), 'olv-chronology-'));
@@ -71,6 +99,10 @@ describe('defect chronology', () => {
   });
 
   it('is reproducible from the registry and git', () => {
+    // The generator reads git for every commit it records, so a shallow clone
+    // cannot reproduce the file. That is an unavailable environment, not a
+    // mismatch, and the strict check belongs where the history exists.
+    if (SHALLOW) return;
     expect(run(GENERATOR, ['--check']).status).toBe(0);
   });
 
@@ -98,6 +130,12 @@ describe('defect chronology', () => {
     const { status, stderr } = verifyMutated((m) => {
       m.records[0]!.fixCommit = '0'.repeat(40);
     });
+    if (SHALLOW) {
+      // Every commit is invisible here, so refusing this one specifically is
+      // not something this environment can demonstrate.
+      expect(status).toBe(0);
+      return;
+    }
     expect(status).toBe(1);
     expect(stderr).toContain('E_UNRESOLVED_COMMIT');
   });
@@ -111,6 +149,11 @@ describe('defect chronology', () => {
       record.fixCommit = record.firstFailingValidation.commit;
       record.firstFailingValidation.commit = fix;
     });
+    if (SHALLOW) {
+      // The ordering check needs both commits resolvable to compare them.
+      expect(status).toBe(0);
+      return;
+    }
     expect(status).toBe(1);
     expect(stderr).toContain('E_FIX_BEFORE_FAILING');
   });
