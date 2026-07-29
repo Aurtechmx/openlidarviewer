@@ -141,6 +141,55 @@ describe('decoded-before-resident', () => {
 });
 
 describe('decodedChunkBytes', () => {
+  /**
+   * Production derives the total from `pointCount` because reading
+   * `.positions` in `src/` raises the direct-position-access ratchet. That is
+   * only sound while the derivation matches what the decoder allocates, so it
+   * is checked here against the real arrays, where reading them is allowed.
+   */
+  it('matches the allocated arrays', () => {
+    const n = 137;
+    const chunk = {
+      pointCount: n,
+      positions: new Float32Array(n * 3),
+      intensity: new Uint16Array(n),
+      classification: new Uint8Array(n),
+      returnNumber: new Uint8Array(n),
+      returnCount: new Uint8Array(n),
+      gpsTime: new Float64Array(n),
+      rgb: new Uint8Array(n * 3),
+      pointSourceId: new Uint16Array(n),
+    };
+    const actual =
+      chunk.positions.byteLength +
+      chunk.intensity.byteLength +
+      chunk.classification.byteLength +
+      chunk.returnNumber.byteLength +
+      chunk.returnCount.byteLength +
+      chunk.gpsTime.byteLength +
+      chunk.rgb.byteLength +
+      chunk.pointSourceId.byteLength;
+    expect(decodedChunkBytes(chunk)).toBe(actual);
+  });
+
+  it('matches the allocated arrays without the optional attributes', () => {
+    const n = 137;
+    const chunk = {
+      pointCount: n,
+      positions: new Float32Array(n * 3),
+      intensity: new Uint16Array(n),
+      classification: new Uint8Array(n),
+      returnNumber: new Uint8Array(n),
+      returnCount: new Uint8Array(n),
+      gpsTime: new Float64Array(n),
+    };
+    const actual =
+      chunk.positions.byteLength + chunk.intensity.byteLength +
+      chunk.classification.byteLength + chunk.returnNumber.byteLength +
+      chunk.returnCount.byteLength + chunk.gpsTime.byteLength;
+    expect(decodedChunkBytes(chunk)).toBe(actual);
+  });
+
   it('sums the arrays the chunk actually carries', () => {
     const n = 100;
     const bytes = decodedChunkBytes({

@@ -288,26 +288,27 @@ function boxCentre(b: Box6): [number, number, number] {
 }
 
 /**
- * Bytes a decoded chunk occupies, summed from the arrays it actually carries.
+ * Bytes a decoded chunk occupies.
  *
- * The queue's byte budget bounds what the next frame has to absorb, so a
- * guessed per-point constant would defeat the point: chunks differ by which
+ * Derived from `pointCount` and the chunk's fixed layout rather than by
+ * reading each array's `byteLength`. Reading `.positions` here would raise the
+ * direct-position-access ratchet, and this needs no coordinate at all: the
+ * decoder sizes every array to `pointCount`, so the arithmetic is exact.
+ * `decodedChunkBytes matches the allocated arrays` in the integration suite
+ * asserts that against real arrays, where reading them is permitted.
+ *
+ * A guessed per-point constant would defeat the queue's byte budget, which
+ * exists to bound what the next frame absorbs — chunks differ by which
  * optional attributes the source supplied.
  */
 export function decodedChunkBytes(decoded: DecodedChunk): number {
-  const arrays: Array<{ byteLength: number } | undefined> = [
-    decoded.positions,
-    decoded.rgb,
-    decoded.intensity,
-    decoded.classification,
-    decoded.returnNumber,
-    decoded.returnCount,
-    decoded.gpsTime,
-    decoded.pointSourceId,
-  ];
-  let total = 0;
-  for (const a of arrays) total += a?.byteLength ?? 0;
-  return total;
+  const n = Math.max(0, decoded.pointCount);
+  // positions Float32x3, intensity Uint16, classification/returnNumber/
+  // returnCount Uint8, gpsTime Float64.
+  let perPoint = 12 + 2 + 1 + 1 + 1 + 8;
+  if (decoded.rgb) perPoint += 3;
+  if (decoded.pointSourceId) perPoint += 2;
+  return n * perPoint;
 }
 
 /**
