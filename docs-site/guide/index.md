@@ -34,7 +34,7 @@ npm run preview
 
 A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Negative results are the useful kind here.
 
-[Submit a test report](https://lidar.aurtech.mx/test-report.html) assembles the report in your own browser. Nothing is stored and nothing is sent anywhere. You end up with a single file, screenshots included, and you read it before deciding whether to send it.
+[Submit a test report](https://lidar.aurtech.mx/test-report.html) assembles the report in your own browser, screenshots and all. You read the finished thing before anything leaves the page, then either send it or download it and email it yourself. Reports go to the project's own server, are kept privately for development, and are not published or shared with anyone else.
 
 ## Where next
 

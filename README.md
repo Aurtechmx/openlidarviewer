@@ -64,8 +64,10 @@ A failed file, an unexpected warning or one confusing screenshot is worth
 sending. Negative results are the useful kind here.
 
 [Submit a test report](https://lidar.aurtech.mx/test-report.html). The form runs
-entirely in your browser, stores nothing, and sends nothing anywhere. It builds
-a single report file, screenshots included, that you review before sending.
+in your browser and builds one self-contained report file, screenshots included,
+which you read before anything is sent. Send it to the project server, or
+download it and email it yourself. Reports are kept privately for development
+and are not published or passed to any third party.
 
 ## Overview
 
