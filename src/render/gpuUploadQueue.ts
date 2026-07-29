@@ -35,7 +35,23 @@ export interface UploadItem {
   readonly estBytes: number;
   /** The real upload. Called exactly once, only while still current and in budget. */
   readonly commit: () => void;
+  /**
+   * Release the decoded payload when the item will never be committed.
+   *
+   * A discarded item still holds its decoded chunk through `commit`'s closure,
+   * so without this the bytes stay reachable until the caller happens to drop
+   * its own reference. Called at most once, and never for an item that
+   * committed. A throw here is swallowed: cleanup failing must not stop the
+   * queue draining.
+   */
+  readonly onDiscard?: (reason: UploadDiscardReason) => void;
 }
+
+/** Why an item was dropped without uploading. */
+export type UploadDiscardReason =
+  | 'stale-generation'
+  | 'dataset-canceled'
+  | 'queue-cleared';
 
 /** What one `process` pass did. */
 export interface UploadProcessResult {
@@ -43,6 +59,22 @@ export interface UploadProcessResult {
   readonly uploadedBytes: number;
   readonly discarded: number;
   readonly remaining: number;
+  /** Which limit ended the pass, or `drained` when the queue emptied. */
+  readonly stoppedBy: 'drained' | 'time' | 'bytes' | 'nodes';
+}
+
+/**
+ * Per-frame commit limits.
+ *
+ * Time alone is not enough. Three.js defers the real buffer upload to the next
+ * render, so a pass can spend almost no CPU and still hand the GPU more than a
+ * frame's worth of work. Bytes and node count bound what the *next* frame has
+ * to absorb, which is the cost a user actually sees.
+ */
+export interface UploadLimits {
+  readonly budgetMs: number;
+  readonly maxBytes?: number;
+  readonly maxNodes?: number;
 }
 
 /** Per-frame upload time budgets (ms). Desktop is roomier than mobile. */
@@ -124,6 +156,7 @@ export class GpuUploadQueue {
     for (const it of this._items) {
       if (it.datasetId === datasetId) {
         this._pendingBytes -= Math.max(0, it.estBytes);
+        this._discard(it, 'dataset-canceled');
         dropped++;
       } else {
         keep.push(it);
@@ -132,6 +165,23 @@ export class GpuUploadQueue {
     this._items = keep;
     if (this._pendingBytes < 0) this._pendingBytes = 0;
     return dropped;
+  }
+
+  /** Drop everything pending, releasing each payload. Returns the count dropped. */
+  clear(): number {
+    const dropped = this._items.length;
+    for (const it of this._items) this._discard(it, 'queue-cleared');
+    this._items = [];
+    this._pendingBytes = 0;
+    return dropped;
+  }
+
+  private _discard(it: UploadItem, reason: UploadDiscardReason): void {
+    try {
+      it.onDiscard?.(reason);
+    } catch {
+      /* Cleanup must never stop the queue draining. */
+    }
   }
 
   private _isCurrent(it: UploadItem): boolean {
@@ -146,21 +196,34 @@ export class GpuUploadQueue {
    * tiny budget can never starve the queue. Items are processed in enqueue order
    * — the caller enqueues central / high-priority nodes first.
    */
-  process(budgetMs: number): UploadProcessResult {
+  process(limits: number | UploadLimits): UploadProcessResult {
+    const { budgetMs, maxBytes, maxNodes } =
+      typeof limits === 'number' ? { budgetMs: limits, maxBytes: undefined, maxNodes: undefined } : limits;
     const start = this._now();
     let uploaded = 0;
     let uploadedBytes = 0;
     let discarded = 0;
+    let stoppedBy: UploadProcessResult['stoppedBy'] = 'drained';
     let i = 0;
     for (; i < this._items.length; i++) {
       const it = this._items[i];
       if (!this._isCurrent(it)) {
         this._pendingBytes -= Math.max(0, it.estBytes);
+        this._discard(it, 'stale-generation');
         discarded++;
         continue; // stale discards are ~free — never stop the loop on them
       }
-      // Budget gate: always allow the first upload, then stop once spent.
-      if (uploaded > 0 && this._now() - start >= budgetMs) break;
+      // Every limit allows the first upload through. A frame budget smaller
+      // than one node would otherwise stall the queue permanently, and a
+      // stalled queue never shows the scan.
+      if (uploaded > 0) {
+        if (this._now() - start >= budgetMs) { stoppedBy = 'time'; break; }
+        if (maxNodes !== undefined && uploaded >= maxNodes) { stoppedBy = 'nodes'; break; }
+        if (maxBytes !== undefined && uploadedBytes + Math.max(0, it.estBytes) > maxBytes) {
+          stoppedBy = 'bytes';
+          break;
+        }
+      }
       this._pendingBytes -= Math.max(0, it.estBytes);
       it.commit();
       uploaded++;
@@ -168,6 +231,7 @@ export class GpuUploadQueue {
     }
     this._items = this._items.slice(i);
     if (this._pendingBytes < 0) this._pendingBytes = 0;
-    return { uploaded, uploadedBytes, discarded, remaining: this._items.length };
+    return { uploaded, uploadedBytes, discarded, remaining: this._items.length, stoppedBy };
   }
+
 }
