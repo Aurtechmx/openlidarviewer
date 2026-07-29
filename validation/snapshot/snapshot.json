@@ -1,12 +1,35 @@
 {
   "snapshot": "validation-snapshot",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "candidateVersion": "0.6.2",
   "totals": {
-    "inputs": 15,
-    "recorded": 10,
-    "notExecuted": 5,
-    "files": 36
+    "producers": 15,
+    "artifacts": 41
+  },
+  "coverage": {
+    "producerAccounting": {
+      "question": "is every declared producer accounted for by exactly one status",
+      "numerator": 15,
+      "denominator": 15,
+      "complete": true
+    },
+    "executedProducers": {
+      "question": "of the producers that could run here, how many ran",
+      "numerator": 12,
+      "denominator": 14
+    },
+    "successfulProducers": {
+      "question": "of the producers that ran, how many produced their primary record",
+      "numerator": 12,
+      "denominator": 12
+    },
+    "byStatus": {
+      "collected": 12,
+      "not-executed": 2,
+      "environment-unavailable": 1,
+      "not-applicable": 0,
+      "failed": 0
+    }
   },
   "defects": {
     "source": "validation/defects/defect-registry.json",
@@ -93,22 +116,22 @@
       {
         "field": "packageVersion",
         "source": "package.json",
-        "value": null,
-        "status": "not-executed",
+        "value": "0.6.2",
+        "status": "agrees",
         "note": null
       },
       {
         "field": "lockfileVersion",
         "source": "package-lock.json",
-        "value": null,
-        "status": "not-executed",
+        "value": "0.6.2",
+        "status": "agrees",
         "note": null
       },
       {
         "field": "lockfileSelfVersion",
         "source": "package-lock.json",
-        "value": null,
-        "status": "not-executed",
+        "value": "0.6.2",
+        "status": "agrees",
         "note": null
       },
       {
@@ -171,19 +194,22 @@
     "disagreements": [],
     "agreement": "agrees"
   },
-  "inputs": [
+  "producers": [
     {
-      "id": "defects",
+      "producerId": "defects",
       "title": "Defect records",
-      "status": "recorded",
+      "status": "collected",
       "primary": "validation/defects/defect-registry.json",
       "producedBy": "node scripts/build-defect-summary.mjs",
-      "files": [
+      "artifacts": [
         {
-          "path": "validation/defects/defect-registry.json",
-          "storedAt": "evidence/defects/validation/defects/defect-registry.json",
+          "producerId": "defects",
+          "sourcePath": "validation/defects/defect-registry.json",
+          "storedPath": "evidence/defects/validation/defects/defect-registry.json",
+          "status": "collected",
           "sha256": "410f98910f7ebafcf2e91da4a41e6335b109cb677b921a5da4ed40dae3cf49c0",
-          "bytes": 49357,
+          "sizeBytes": 49357,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -199,10 +225,13 @@
           }
         },
         {
-          "path": "validation/defects/defect-registry.schema.json",
-          "storedAt": "evidence/defects/validation/defects/defect-registry.schema.json",
+          "producerId": "defects",
+          "sourcePath": "validation/defects/defect-registry.schema.json",
+          "storedPath": "evidence/defects/validation/defects/defect-registry.schema.json",
+          "status": "collected",
           "sha256": "86465b9d9dfd7fc69e371b793ca54f06cc7617cc821f0219c8f9ac466725ec38",
-          "bytes": 7067,
+          "sizeBytes": 7067,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -220,20 +249,26 @@
           }
         },
         {
-          "path": "validation/defects/defect-summary.csv",
-          "storedAt": "evidence/defects/validation/defects/defect-summary.csv",
+          "producerId": "defects",
+          "sourcePath": "validation/defects/defect-summary.csv",
+          "storedPath": "evidence/defects/validation/defects/defect-summary.csv",
+          "status": "collected",
           "sha256": "e7f26da9b99376e61eeff12ed04b7fd69923cdd397b8f71a3c74da5b679654e7",
-          "bytes": 10090,
+          "sizeBytes": 10090,
+          "mediaType": "text/csv",
           "shape": {
             "lines": 20,
             "bytes": 10090
           }
         },
         {
-          "path": "validation/defects/defect-summary.json",
-          "storedAt": "evidence/defects/validation/defects/defect-summary.json",
+          "producerId": "defects",
+          "sourcePath": "validation/defects/defect-summary.json",
+          "storedPath": "evidence/defects/validation/defects/defect-summary.json",
+          "status": "collected",
           "sha256": "8ff7301a90a8ab47119127e7fb92413d5c929e876db63045376ed09d1b9a12f7",
-          "bytes": 13412,
+          "sizeBytes": 13412,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -257,10 +292,13 @@
           }
         },
         {
-          "path": "validation/defects/defect-summary.md",
-          "storedAt": "evidence/defects/validation/defects/defect-summary.md.txt",
+          "producerId": "defects",
+          "sourcePath": "validation/defects/defect-summary.md",
+          "storedPath": "evidence/defects/validation/defects/defect-summary.md.txt",
+          "status": "collected",
           "sha256": "6fbe8fe8cf65d3ac42c49b849de3d0223350cb428b9a34718298be4f36cf8a0b",
-          "bytes": 11925,
+          "sizeBytes": 11925,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 250,
             "bytes": 11925
@@ -270,26 +308,84 @@
       "missing": []
     },
     {
-      "id": "replay",
+      "producerId": "replay",
       "title": "Replay results",
-      "status": "not-executed",
-      "primary": "validation/replay/results.json",
-      "producedBy": "node validation/replay/run-replay.mjs",
-      "files": [],
+      "status": "collected",
+      "primary": "validation/defects/replay/replay.json",
+      "producedBy": "npm run validation:defects:replay",
+      "artifacts": [
+        {
+          "producerId": "replay",
+          "sourcePath": "validation/defects/replay/replay.csv",
+          "storedPath": "evidence/replay/validation/defects/replay/replay.csv",
+          "status": "collected",
+          "sha256": "a2ecf6d58e0fcd1aa4341863fa477ea7270e82b6bfb4db1f52cdee670e78b3cc",
+          "sizeBytes": 62080,
+          "mediaType": "text/csv",
+          "shape": {
+            "lines": 46,
+            "bytes": 62080
+          }
+        },
+        {
+          "producerId": "replay",
+          "sourcePath": "validation/defects/replay/replay.json",
+          "storedPath": "evidence/replay/validation/defects/replay/replay.json",
+          "status": "collected",
+          "sha256": "5016289a3e8dd2902854c748dd9b1c3b4338d86b8c9b8c34b33c2e80eef8d857",
+          "sizeBytes": 121178,
+          "mediaType": "application/json",
+          "shape": {
+            "parsed": true,
+            "kind": "object",
+            "keys": {
+              "baselineSuiteCaveat": "string[378]",
+              "defectStatePrecedence": "array[5]",
+              "defects": "array[18]",
+              "derivedBy": "string:scripts/defect-replay-lib.mjs",
+              "environments": "array[2]",
+              "generatedBy": "string:scripts/replay-defects.mjs",
+              "method": "string[492]",
+              "probeRuns": "array[44]",
+              "registryVersion": "string:0.6.2",
+              "scope": "string[168]",
+              "source": "string:validation/defects/replay/raw",
+              "stateMeanings": "object{5}",
+              "totals": "object{5}"
+            }
+          }
+        },
+        {
+          "producerId": "replay",
+          "sourcePath": "validation/defects/replay/replay.md",
+          "storedPath": "evidence/replay/validation/defects/replay/replay.md.txt",
+          "status": "collected",
+          "sha256": "0e98d4c5347f8ddab5de17eb296c1ebe5752676413b9f19832b4aa35b3c6b5ab",
+          "sizeBytes": 71311,
+          "mediaType": "text/markdown",
+          "shape": {
+            "lines": 639,
+            "bytes": 71311
+          }
+        }
+      ],
       "missing": []
     },
     {
-      "id": "reachability",
+      "producerId": "reachability",
       "title": "Reachability ledger",
-      "status": "recorded",
+      "status": "collected",
       "primary": "validation/reachability/summary.json",
       "producedBy": "npm run verify:reachability",
-      "files": [
+      "artifacts": [
         {
-          "path": "validation/reachability/claims.json",
-          "storedAt": "evidence/reachability/validation/reachability/claims.json",
+          "producerId": "reachability",
+          "sourcePath": "validation/reachability/claims.json",
+          "storedPath": "evidence/reachability/validation/reachability/claims.json",
+          "status": "collected",
           "sha256": "f017292ff231ac3f0dc32f544ef4480c0e16e3f07dbe57dfc9d137e7c5c2f700",
-          "bytes": 7909,
+          "sizeBytes": 7909,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -300,10 +396,13 @@
           }
         },
         {
-          "path": "validation/reachability/summary.json",
-          "storedAt": "evidence/reachability/validation/reachability/summary.json",
+          "producerId": "reachability",
+          "sourcePath": "validation/reachability/summary.json",
+          "storedPath": "evidence/reachability/validation/reachability/summary.json",
+          "status": "collected",
           "sha256": "d4ab5210e81eabf176671dcf67e4185ac5a5cf1e4a05d855bb5e243b27faa2f1",
-          "bytes": 3991,
+          "sizeBytes": 3991,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -318,17 +417,20 @@
       "missing": []
     },
     {
-      "id": "mutations",
+      "producerId": "mutations",
       "title": "Mutation results",
-      "status": "recorded",
+      "status": "collected",
       "primary": "validation/mutations/results.json",
       "producedBy": "node validation/mutations/run-campaign.mjs",
-      "files": [
+      "artifacts": [
         {
-          "path": "validation/mutations/results.json",
-          "storedAt": "evidence/mutations/validation/mutations/results.json",
+          "producerId": "mutations",
+          "sourcePath": "validation/mutations/results.json",
+          "storedPath": "evidence/mutations/validation/mutations/results.json",
+          "status": "collected",
           "sha256": "f5dab035cca274587c7512f2cf7a7e9a3ea3f636408683d2ee94aa565334fa1a",
-          "bytes": 26824,
+          "sizeBytes": 26824,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -345,10 +447,13 @@
           }
         },
         {
-          "path": "validation/mutations/summary.md",
-          "storedAt": "evidence/mutations/validation/mutations/summary.md.txt",
+          "producerId": "mutations",
+          "sourcePath": "validation/mutations/summary.md",
+          "storedPath": "evidence/mutations/validation/mutations/summary.md.txt",
+          "status": "collected",
           "sha256": "5b0d88056368333ca9bc0160846ec3eb1b18088c7f35f0624ddbb5d032752b58",
-          "bytes": 5083,
+          "sizeBytes": 5083,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 73,
             "bytes": 5083
@@ -358,37 +463,46 @@
       "missing": []
     },
     {
-      "id": "cross-platform",
+      "producerId": "cross-platform",
       "title": "Cross-platform comparison",
-      "status": "recorded",
+      "status": "collected",
       "primary": "docs/validation/evidence/portability-v0.6.2/comparison.json",
       "producedBy": "npm run benchmark:compare-platforms",
-      "files": [
+      "artifacts": [
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/PROVENANCE.md",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/PROVENANCE.md.txt",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/PROVENANCE.md",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/PROVENANCE.md.txt",
+          "status": "collected",
           "sha256": "b6995dec71d18ef9e93021d5b35095f75f179e535b03685790ead86e6334470f",
-          "bytes": 883,
+          "sizeBytes": 883,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 22,
             "bytes": 883
           }
         },
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/comparison.csv",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.csv",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/comparison.csv",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.csv",
+          "status": "collected",
           "sha256": "5c3aa49c9a662861023487d4df2bc4f251fd8a2151e001bb7b68de44933c1f4e",
-          "bytes": 3204,
+          "sizeBytes": 3204,
+          "mediaType": "text/csv",
           "shape": {
             "lines": 41,
             "bytes": 3204
           }
         },
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/comparison.json",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.json",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/comparison.json",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/comparison.json",
+          "status": "collected",
           "sha256": "ae93a383f49eea7d96202541d63d95b835bea5e0023413ede567a45d93f3966b",
-          "bytes": 5209,
+          "sizeBytes": 5209,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -414,10 +528,13 @@
           }
         },
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/environments.json",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/environments.json",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/environments.json",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/environments.json",
+          "status": "collected",
           "sha256": "1aaed0a3b78de9d9d653d709a5e85f30e922863a1bdc6bcbaa49ddeb7c506c0a",
-          "bytes": 5881,
+          "sizeBytes": 5881,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -428,10 +545,13 @@
           }
         },
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/manifest.json",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/manifest.json",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/manifest.json",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/manifest.json",
+          "status": "collected",
           "sha256": "62f1f1baf6b43494281f91e3e66f7583df53086a41bc33a8b03e343ca48f7e06",
-          "bytes": 2308,
+          "sizeBytes": 2308,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -450,10 +570,13 @@
           }
         },
         {
-          "path": "docs/validation/evidence/portability-v0.6.2/summary.md",
-          "storedAt": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/summary.md.txt",
+          "producerId": "cross-platform",
+          "sourcePath": "docs/validation/evidence/portability-v0.6.2/summary.md",
+          "storedPath": "evidence/cross-platform/docs/validation/evidence/portability-v0.6.2/summary.md.txt",
+          "status": "collected",
           "sha256": "8acb1962e0fabedb4408beb893f329cd9a1e6d61d4485ba919c33a979c7dcc81",
-          "bytes": 4353,
+          "sizeBytes": 4353,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 67,
             "bytes": 4353
@@ -463,37 +586,46 @@
       "missing": []
     },
     {
-      "id": "gdal-cross-checks",
+      "producerId": "gdal-cross-checks",
       "title": "GDAL cross-checks",
-      "status": "not-executed",
+      "status": "environment-unavailable",
       "primary": "benchmark-results/crosschecks/results.json",
       "producedBy": "npx vitest run tests/slopeCrossCheck.test.ts tests/aspectCrossCheck.test.ts tests/hillshadeCrossCheck.test.ts",
-      "files": [
+      "artifacts": [
         {
-          "path": "tests/fixtures/reference/aspect/SHA256SUMS",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/SHA256SUMS.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/aspect/SHA256SUMS",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/SHA256SUMS.txt",
+          "status": "collected",
           "sha256": "80f3f47e551a09434b2c21bfd3930df2ddc07e5b02fe3dc119499c25892dbee4",
-          "bytes": 332,
+          "sizeBytes": 332,
+          "mediaType": "application/octet-stream",
           "shape": {
             "lines": 5,
             "bytes": 332
           }
         },
         {
-          "path": "tests/fixtures/reference/aspect/command.txt",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/command.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/aspect/command.txt",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/command.txt",
+          "status": "collected",
           "sha256": "05f71ae8d5f0413223d5faaf7723a3684d7b7544642510c4a04e27011f81244e",
-          "bytes": 76,
+          "sizeBytes": 76,
+          "mediaType": "text/plain",
           "shape": {
             "lines": 2,
             "bytes": 76
           }
         },
         {
-          "path": "tests/fixtures/reference/aspect/environment.json",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/environment.json",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/aspect/environment.json",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/aspect/environment.json",
+          "status": "collected",
           "sha256": "27beb33c17a1ccc2febf0c3faa141398c76ce62fe2df60e6163c4b9e3cb29091",
-          "bytes": 409,
+          "sizeBytes": 409,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -509,30 +641,39 @@
           }
         },
         {
-          "path": "tests/fixtures/reference/hillshade/SHA256SUMS",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/SHA256SUMS.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/hillshade/SHA256SUMS",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/SHA256SUMS.txt",
+          "status": "collected",
           "sha256": "869afb63b716a6b821728d536caf3b345485618dfd27f1f18d77670b00a2b059",
-          "bytes": 335,
+          "sizeBytes": 335,
+          "mediaType": "application/octet-stream",
           "shape": {
             "lines": 5,
             "bytes": 335
           }
         },
         {
-          "path": "tests/fixtures/reference/hillshade/command.txt",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/command.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/hillshade/command.txt",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/command.txt",
+          "status": "collected",
           "sha256": "92792cd200ddfb33cda9b2c9b236731bee25d03e488fae19481da2c582d9ea77",
-          "bytes": 108,
+          "sizeBytes": 108,
+          "mediaType": "text/plain",
           "shape": {
             "lines": 2,
             "bytes": 108
           }
         },
         {
-          "path": "tests/fixtures/reference/hillshade/environment.json",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/environment.json",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/hillshade/environment.json",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/hillshade/environment.json",
+          "status": "collected",
           "sha256": "ddc8e31664711f4c6dbbfdf2e1aabf6ce2762de10795ee0ea3d870193d05b8a4",
-          "bytes": 530,
+          "sizeBytes": 530,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -548,30 +689,39 @@
           }
         },
         {
-          "path": "tests/fixtures/reference/slope/SHA256SUMS",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/SHA256SUMS.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/slope/SHA256SUMS",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/SHA256SUMS.txt",
+          "status": "collected",
           "sha256": "d2dd1099a0b6f1462bf07c014a853799a6bf10d15be4aa5995d88f2680052d34",
-          "bytes": 322,
+          "sizeBytes": 322,
+          "mediaType": "application/octet-stream",
           "shape": {
             "lines": 5,
             "bytes": 322
           }
         },
         {
-          "path": "tests/fixtures/reference/slope/command.txt",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/command.txt",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/slope/command.txt",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/command.txt",
+          "status": "collected",
           "sha256": "788d1425d95e2ff2285d6b116afdd820e530d3b63527e5dd5d257808a51d957d",
-          "bytes": 127,
+          "sizeBytes": 127,
+          "mediaType": "text/plain",
           "shape": {
             "lines": 2,
             "bytes": 127
           }
         },
         {
-          "path": "tests/fixtures/reference/slope/environment.json",
-          "storedAt": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/environment.json",
+          "producerId": "gdal-cross-checks",
+          "sourcePath": "tests/fixtures/reference/slope/environment.json",
+          "storedPath": "evidence/gdal-cross-checks/tests/fixtures/reference/slope/environment.json",
+          "status": "collected",
           "sha256": "3ab30b84c9b806b58ea47317275edd9cb173d964307d09d12aff2f15abc72c81",
-          "bytes": 265,
+          "sizeBytes": 265,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -590,27 +740,33 @@
       ]
     },
     {
-      "id": "seed-sensitivity",
+      "producerId": "seed-sensitivity",
       "title": "Seed sensitivity",
-      "status": "recorded",
+      "status": "collected",
       "primary": "benchmark-results/seeds/sweep.json",
       "producedBy": "npm run benchmark:seeds",
-      "files": [
+      "artifacts": [
         {
-          "path": "benchmark-results/seeds/summary.md",
-          "storedAt": "evidence/seed-sensitivity/benchmark-results/seeds/summary.md.txt",
+          "producerId": "seed-sensitivity",
+          "sourcePath": "benchmark-results/seeds/summary.md",
+          "storedPath": "evidence/seed-sensitivity/benchmark-results/seeds/summary.md.txt",
+          "status": "collected",
           "sha256": "9692f4003df4eab1533994135931c967187f87fff28c9ccf7ac2f9b8b46c3e02",
-          "bytes": 4469,
+          "sizeBytes": 4469,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 73,
             "bytes": 4469
           }
         },
         {
-          "path": "benchmark-results/seeds/sweep.json",
-          "storedAt": "evidence/seed-sensitivity/benchmark-results/seeds/sweep.json",
+          "producerId": "seed-sensitivity",
+          "sourcePath": "benchmark-results/seeds/sweep.json",
+          "storedPath": "evidence/seed-sensitivity/benchmark-results/seeds/sweep.json",
+          "status": "collected",
           "sha256": "7be6abdce66c29d811d231b75ff222c71c19a8a697e5e2eded7b6efe7d9bea4a",
-          "bytes": 22150,
+          "sizeBytes": 22150,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -633,28 +789,31 @@
       "missing": []
     },
     {
-      "id": "clean-clone",
+      "producerId": "clean-clone",
       "title": "Clean clone",
       "status": "not-executed",
       "primary": "release/clean-clone.json",
       "producedBy": "npm run benchmark:clean-clone",
-      "files": [],
+      "artifacts": [],
       "missing": [
         "release/clean-clone.json"
       ]
     },
     {
-      "id": "archive-portability",
+      "producerId": "archive-portability",
       "title": "Archive portability",
-      "status": "recorded",
+      "status": "collected",
       "primary": "release/archive-portability.json",
       "producedBy": "npm run benchmark:archive-portability",
-      "files": [
+      "artifacts": [
         {
-          "path": "release/archive-portability.json",
-          "storedAt": "evidence/archive-portability/release/archive-portability.json",
+          "producerId": "archive-portability",
+          "sourcePath": "release/archive-portability.json",
+          "storedPath": "evidence/archive-portability/release/archive-portability.json",
+          "status": "collected",
           "sha256": "4a8f9423d2e646b9c7ac6a813d1fb11555cb4772242bff24028059907d872401",
-          "bytes": 30369,
+          "sizeBytes": 30369,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -676,17 +835,20 @@
       "missing": []
     },
     {
-      "id": "claims",
+      "producerId": "claims",
       "title": "Claims",
-      "status": "recorded",
+      "status": "collected",
       "primary": "docs/validation/claim-register.yaml",
       "producedBy": "npm run gen:claim-registry",
-      "files": [
+      "artifacts": [
         {
-          "path": "docs/validation/claim-register.yaml",
-          "storedAt": "evidence/claims/docs/validation/claim-register.yaml",
+          "producerId": "claims",
+          "sourcePath": "docs/validation/claim-register.yaml",
+          "storedPath": "evidence/claims/docs/validation/claim-register.yaml",
+          "status": "collected",
           "sha256": "291832a2a4e52c66bd62d12bd9d69118155d73684fb74ee4e944b33bb0c7de7f",
-          "bytes": 34358,
+          "sizeBytes": 34358,
+          "mediaType": "application/yaml",
           "shape": {
             "lines": 626,
             "bytes": 34358
@@ -696,27 +858,33 @@
       "missing": []
     },
     {
-      "id": "limitations",
+      "producerId": "limitations",
       "title": "Known limitations",
-      "status": "recorded",
+      "status": "collected",
       "primary": "KNOWN_LIMITATIONS_v0.6.2.md",
       "producedBy": "written by hand for each version; no generator produces it",
-      "files": [
+      "artifacts": [
         {
-          "path": "KNOWN_LIMITATIONS_v0.6.2.md",
-          "storedAt": "evidence/limitations/KNOWN_LIMITATIONS_v0.6.2.md.txt",
-          "sha256": "76208579aeae8e4950f409f7beebf3b6e6da583eef381aa0301277903b040873",
-          "bytes": 22644,
+          "producerId": "limitations",
+          "sourcePath": "KNOWN_LIMITATIONS_v0.6.2.md",
+          "storedPath": "evidence/limitations/KNOWN_LIMITATIONS_v0.6.2.md.txt",
+          "status": "collected",
+          "sha256": "68032a43a8dc8c2e1370368c3fbead66a134b2eb9740a11b0904b03406e09b92",
+          "sizeBytes": 22644,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 265,
             "bytes": 22644
           }
         },
         {
-          "path": "docs/release/ERRATUM_v0.6.2.md",
-          "storedAt": "evidence/limitations/docs/release/ERRATUM_v0.6.2.md.txt",
+          "producerId": "limitations",
+          "sourcePath": "docs/release/ERRATUM_v0.6.2.md",
+          "storedPath": "evidence/limitations/docs/release/ERRATUM_v0.6.2.md.txt",
+          "status": "collected",
           "sha256": "71427ba2b46294a52b98a288e01bd3c01bc0eba46681a09d2919445d6769c865",
-          "bytes": 7733,
+          "sizeBytes": 7733,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 143,
             "bytes": 7733
@@ -726,17 +894,20 @@
       "missing": []
     },
     {
-      "id": "environment",
+      "producerId": "environment",
       "title": "Environment",
-      "status": "recorded",
+      "status": "collected",
       "primary": "benchmark-results/latest/environment.json",
       "producedBy": "npm run benchmark:repro",
-      "files": [
+      "artifacts": [
         {
-          "path": "benchmark-results/latest/environment.json",
-          "storedAt": "evidence/environment/benchmark-results/latest/environment.json",
+          "producerId": "environment",
+          "sourcePath": "benchmark-results/latest/environment.json",
+          "storedPath": "evidence/environment/benchmark-results/latest/environment.json",
+          "status": "collected",
           "sha256": "dc5fbd2f51baa68da61940fedee09f1b7aae43718093cf04953898164ee5e64d",
-          "bytes": 917,
+          "sizeBytes": 917,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -760,28 +931,31 @@
       "missing": []
     },
     {
-      "id": "gate",
+      "producerId": "gate",
       "title": "Release-gate result",
       "status": "not-executed",
       "primary": "release/test-evidence-v0.6.2.json",
       "producedBy": "npm run evidence",
-      "files": [],
+      "artifacts": [],
       "missing": [
         "release/test-evidence-v0.6.2.json"
       ]
     },
     {
-      "id": "build-identity",
+      "producerId": "build-identity",
       "title": "Build identity and archive name",
-      "status": "recorded",
+      "status": "collected",
       "primary": "release/package-build-metadata-v0.6.2.json",
       "producedBy": "npm run package",
-      "files": [
+      "artifacts": [
         {
-          "path": "release/package-build-metadata-v0.6.2.json",
-          "storedAt": "evidence/build-identity/release/package-build-metadata-v0.6.2.json",
+          "producerId": "build-identity",
+          "sourcePath": "release/package-build-metadata-v0.6.2.json",
+          "storedPath": "evidence/build-identity/release/package-build-metadata-v0.6.2.json",
+          "status": "collected",
           "sha256": "e2e92d79372db6f99b049bfabd71c5a2c77b6d9de0561c060a9b360f09917dd3",
-          "bytes": 642,
+          "sizeBytes": 642,
+          "mediaType": "application/json",
           "shape": {
             "parsed": true,
             "kind": "object",
@@ -803,57 +977,117 @@
       "missing": []
     },
     {
-      "id": "identity-sources",
+      "producerId": "identity-sources",
       "title": "Identity sources",
-      "status": "not-executed",
+      "status": "collected",
       "primary": "package.json",
       "producedBy": "tracked in the repository; no generator produces it",
-      "files": [
+      "artifacts": [
         {
-          "path": "CHANGELOG.md",
-          "storedAt": "evidence/identity-sources/CHANGELOG.md.txt",
-          "sha256": "2be3e15c56f2ba0b55a69bec9a141fb2335c1c422b2d35657b522a7dcb2095f1",
-          "bytes": 241773,
+          "producerId": "identity-sources",
+          "sourcePath": "CHANGELOG.md",
+          "storedPath": "evidence/identity-sources/CHANGELOG.md.txt",
+          "status": "collected",
+          "sha256": "96eecdf86ae18943c7f25085f394b7da4cb341567d2a2a5c8a0c83ebb39066b2",
+          "sizeBytes": 244231,
+          "mediaType": "text/markdown",
           "shape": {
-            "lines": 3395,
-            "bytes": 241773
+            "lines": 3441,
+            "bytes": 244231
           }
         },
         {
-          "path": "CITATION.cff",
-          "storedAt": "evidence/identity-sources/CITATION.cff",
+          "producerId": "identity-sources",
+          "sourcePath": "CITATION.cff",
+          "storedPath": "evidence/identity-sources/CITATION.cff",
+          "status": "collected",
           "sha256": "8a9ac9a95aec3e7ec85a03a0699c9ad137f13efe9f56786306ab1a4be740fe30",
-          "bytes": 1066,
+          "sizeBytes": 1066,
+          "mediaType": "application/yaml",
           "shape": {
             "lines": 40,
             "bytes": 1066
           }
         },
         {
-          "path": "MANIFEST.md",
-          "storedAt": "evidence/identity-sources/MANIFEST.md.txt",
+          "producerId": "identity-sources",
+          "sourcePath": "MANIFEST.md",
+          "storedPath": "evidence/identity-sources/MANIFEST.md.txt",
+          "status": "collected",
           "sha256": "7c77107708d237b65dc079455d40bbb97e42ca3c291fbdd8bb62990f76f3e7b7",
-          "bytes": 2400,
+          "sizeBytes": 2400,
+          "mediaType": "text/markdown",
           "shape": {
             "lines": 58,
             "bytes": 2400
           }
         },
         {
-          "path": "README.md",
-          "storedAt": "evidence/identity-sources/README.md.txt",
-          "sha256": "c2a4f8b2cfddcf4749fd69a312c3ebc7644f2ec3762fd5ef958d7c5c03adf829",
-          "bytes": 39296,
+          "producerId": "identity-sources",
+          "sourcePath": "README.md",
+          "storedPath": "evidence/identity-sources/README.md.txt",
+          "status": "collected",
+          "sha256": "77a014f149845e60dd5a48b2208a7ce580b1e71b9b7d2702397e9afd2cb4ce7e",
+          "sizeBytes": 40280,
+          "mediaType": "text/markdown",
           "shape": {
-            "lines": 516,
-            "bytes": 39296
+            "lines": 525,
+            "bytes": 40280
+          }
+        },
+        {
+          "producerId": "identity-sources",
+          "sourcePath": "package-lock.json",
+          "storedPath": "evidence/identity-sources/package-lock.json.txt",
+          "status": "collected",
+          "sha256": "ba795bbff7c5c4dd82f2db173a902120226002a8ea70207546adf2e9cdaa97ce",
+          "sizeBytes": 310400,
+          "mediaType": "application/json",
+          "shape": {
+            "parsed": true,
+            "kind": "object",
+            "keys": {
+              "lockfileVersion": "number:3",
+              "name": "string:openlidarviewer",
+              "packages": "object{621}",
+              "requires": "boolean:true",
+              "version": "string:0.6.2"
+            }
+          }
+        },
+        {
+          "producerId": "identity-sources",
+          "sourcePath": "package.json",
+          "storedPath": "evidence/identity-sources/package.json.txt",
+          "status": "collected",
+          "sha256": "943715b695f94cae0d53be113639b66898e8482a7f68ae4fa5aa43a681679cae",
+          "sizeBytes": 9157,
+          "mediaType": "application/json",
+          "shape": {
+            "parsed": true,
+            "kind": "object",
+            "keys": {
+              "author": "string:A. Urias",
+              "bugs": "object{1}",
+              "dependencies": "object{11}",
+              "description": "string[152]",
+              "devDependencies": "object{12}",
+              "engines": "object{1}",
+              "homepage": "string:https://lidar.aurtech.mx/",
+              "keywords": "array[10]",
+              "license": "string:MIT",
+              "name": "string:openlidarviewer",
+              "overrides": "object{3}",
+              "packageManager": "string:npm@10.9.2",
+              "repository": "object{2}",
+              "scripts": "object{80}",
+              "type": "string:module",
+              "version": "string:0.6.2"
+            }
           }
         }
       ],
-      "missing": [
-        "package-lock.json",
-        "package.json"
-      ]
+      "missing": []
     }
   ],
   "verdict": "PASS",

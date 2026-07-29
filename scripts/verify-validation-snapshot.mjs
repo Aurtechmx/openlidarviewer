@@ -38,7 +38,9 @@ import {
 import { dirname, resolve, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { sha256, deriveSnapshot, renderSummary } from './validation-snapshot-lib.mjs';
+import {
+  sha256, deriveSnapshot, renderSummary, artifactIndex, PRODUCER_STATUSES,
+} from './validation-snapshot-lib.mjs';
 import { evidenceReader, writeManifest } from './build-validation-snapshot.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -122,6 +124,79 @@ export function checkManifest(dir) {
   return problems;
 }
 
+/**
+ * The stated mapping, checked against the directory in both directions.
+ *
+ * Every artifact record must name both ends of its own pairing, the stored file
+ * must exist and must hash and measure as the record says, no two records may
+ * claim the same stored file or the same source path, and no file under
+ * `evidence/` may go unclaimed. Together these mean a swapped or edited pairing
+ * is refused here, before anything reads the bytes as evidence — and the
+ * verifier never has to guess a source name from a stored one.
+ */
+export function mappingProblems(dir, stored) {
+  const problems = [];
+  const producers = stored.producers;
+  if (!Array.isArray(producers)) return ['snapshot.json states no producers.'];
+
+  for (const p of producers) {
+    if (!PRODUCER_STATUSES.includes(p.status)) {
+      problems.push(`producer ${p.producerId} states status ${JSON.stringify(p.status)}, which is not one of ${PRODUCER_STATUSES.join(', ')}.`);
+    }
+  }
+
+  const bySource = new Map();
+  const byStored = new Map();
+  for (const p of producers) {
+    for (const a of p.artifacts ?? []) {
+      const where = `${p.producerId}/${a.sourcePath ?? '(unnamed)'}`;
+      if (typeof a.sourcePath !== 'string' || typeof a.storedPath !== 'string') {
+        problems.push(`artifact ${where} does not state both a sourcePath and a storedPath.`);
+        continue;
+      }
+      if (a.producerId !== p.producerId) {
+        problems.push(`artifact ${a.sourcePath} is listed under ${p.producerId} and states producerId ${a.producerId}.`);
+      }
+      if (bySource.has(a.sourcePath)) {
+        problems.push(`two artifact records claim the source path ${a.sourcePath}.`);
+      }
+      if (byStored.has(a.storedPath)) {
+        problems.push(`two artifact records claim the stored path ${a.storedPath}.`);
+      }
+      bySource.set(a.sourcePath, a);
+      byStored.set(a.storedPath, a);
+
+      const abs = join(dir, a.storedPath);
+      // Read first and handle the failure, rather than existsSync/statSync
+      // then read. The check-then-use form is a race: the file can change
+      // between the two, which is what makes the earlier answer unreliable
+      // rather than merely stale. Reading a directory or a missing path throws
+      // here, so one try subsumes both checks and the result describes the
+      // bytes actually verified.
+      let buf;
+      try {
+        buf = readFileSync(abs);
+      } catch {
+        problems.push(`${a.sourcePath} is recorded as stored at ${a.storedPath}, which the snapshot does not carry as a readable file.`);
+        continue;
+      }
+      if (sha256(buf) !== a.sha256) {
+        problems.push(`${a.storedPath} hashes ${sha256(buf)}, the record for ${a.sourcePath} states ${a.sha256}.`);
+      }
+      if (buf.length !== a.sizeBytes) {
+        problems.push(`${a.storedPath} is ${buf.length} bytes, the record for ${a.sourcePath} states ${a.sizeBytes}.`);
+      }
+    }
+  }
+
+  const evidenceDir = join(dir, 'evidence');
+  const onDisk = existsSync(evidenceDir) ? walk(evidenceDir).map((p) => `evidence/${p}`) : [];
+  for (const p of onDisk.sort()) {
+    if (!byStored.has(p)) problems.push(`${p} is stored in the snapshot and no artifact record claims it.`);
+  }
+  return problems;
+}
+
 /** Every check, over one snapshot directory. */
 export function verifyDir(dir, { relocated }) {
   const steps = [];
@@ -142,15 +217,20 @@ export function verifyDir(dir, { relocated }) {
   }
 
   const stored = JSON.parse(readFileSync(join(dir, 'snapshot.json'), 'utf8'));
-  const missingCopies = (stored.inputs ?? [])
-    .flatMap((i) => i.files.map((f) => f.storedAt))
-    .filter((p) => !existsSync(join(dir, p)))
-    .map((p) => `snapshot.json cites ${p}, which the snapshot does not carry.`);
-  if (!record('records-available', 'every record the snapshot cites is available in it', missingCopies)) {
+  if (!record('schema-version', 'the snapshot states a schema this verifier reads',
+    stored.schemaVersion === 2
+      ? []
+      : [`snapshot.json states schemaVersion ${JSON.stringify(stored.schemaVersion)}; this verifier reads 2. Rebuild it with \`npm run validation:snapshot\`.`])) {
     return steps;
   }
 
-  const derived = deriveSnapshot(evidenceReader(dir));
+  if (!record('artifact-mapping', 'every artifact record states its own source and stored path', mappingProblems(dir, stored))) {
+    return steps;
+  }
+
+  // The mapping the snapshot states, used verbatim. If it is wrong the checks
+  // above have already refused it; nothing below reconstructs a name.
+  const derived = deriveSnapshot(evidenceReader(dir, artifactIndex(stored)));
   const diff = firstDifference(stored, derived);
   record(
     're-derivation',
@@ -192,19 +272,18 @@ function report(label, steps) {
  * digests are all correct and only re-derivation is left to catch it.
  */
 /** Where a snapshot stores its copy of a collected record. */
-function stored(dir, repoPath) {
+function stored(dir, sourcePath) {
   const s = JSON.parse(readFileSync(join(dir, 'snapshot.json'), 'utf8'));
-  for (const input of s.inputs) {
-    for (const f of input.files) if (f.path === repoPath) return join(dir, f.storedAt);
-  }
-  throw new Error(`the snapshot carries no copy of ${repoPath}; a control cannot tamper with it`);
+  const hit = artifactIndex(s).find((e) => e.sourcePath === sourcePath);
+  if (!hit) throw new Error(`the snapshot carries no copy of ${sourcePath}; a control cannot tamper with it`);
+  return join(dir, hit.storedPath);
 }
 
 /** The record a control removes: the last one the snapshot cites. */
 function lastStored(dir) {
   const s = JSON.parse(readFileSync(join(dir, 'snapshot.json'), 'utf8'));
-  const all = s.inputs.flatMap((i) => i.files.map((f) => f.storedAt));
-  return join(dir, all[all.length - 1]);
+  const all = artifactIndex(s);
+  return join(dir, all[all.length - 1].storedPath);
 }
 
 const REGISTRY = 'validation/defects/defect-registry.json';
@@ -215,6 +294,25 @@ function editRegistry(path) {
   const target = j.defects.find((d) => d.discoveryMethod === 'code review') ?? j.defects[0];
   target.discoveryMethod = 'validation suite';
   writeFileSync(path, `${JSON.stringify(j, null, 2)}\n`);
+}
+
+/**
+ * Bring an artifact record back into agreement with its own edited bytes, so
+ * the integrity layer has nothing left to object to and only re-derivation can
+ * refuse the edit.
+ */
+function restateArtifact(dir, sourcePath, storedAbs) {
+  const p = join(dir, 'snapshot.json');
+  const s = JSON.parse(readFileSync(p, 'utf8'));
+  const buf = readFileSync(storedAbs);
+  for (const producer of s.producers) {
+    for (const a of producer.artifacts) {
+      if (a.sourcePath !== sourcePath) continue;
+      a.sha256 = sha256(buf);
+      a.sizeBytes = buf.length;
+    }
+  }
+  writeFileSync(p, `${JSON.stringify(s, null, 2)}\n`);
 }
 
 const CONTROLS = [
@@ -246,6 +344,29 @@ const CONTROLS = [
     what: 'a collected record is removed and the manifest is rebuilt without it',
     tamper: (dir) => {
       unlinkSync(lastStored(dir));
+      writeManifest(dir);
+    },
+  },
+  {
+    id: 'altered-evidence-fully-restated',
+    what: 'a collected record is edited and its own artifact record and every digest are restated over the edit',
+    tamper: (dir) => {
+      const target = stored(dir, REGISTRY);
+      editRegistry(target);
+      restateArtifact(dir, REGISTRY, target);
+      writeManifest(dir);
+    },
+  },
+  {
+    id: 'swapped-path-mapping',
+    what: 'two artifact records swap stored paths, with every digest recomputed',
+    tamper: (dir) => {
+      const p = join(dir, 'snapshot.json');
+      const s = JSON.parse(readFileSync(p, 'utf8'));
+      const collected = s.producers.filter((x) => x.artifacts.length >= 2)[0];
+      const [a, b] = collected.artifacts;
+      [a.storedPath, b.storedPath] = [b.storedPath, a.storedPath];
+      writeFileSync(p, `${JSON.stringify(s, null, 2)}\n`);
       writeManifest(dir);
     },
   },
