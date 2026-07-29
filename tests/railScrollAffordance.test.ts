@@ -45,8 +45,8 @@ function makeColumn(scrollHeight: number, clientHeight: number): ColumnStub {
   };
 }
 
-const wire = (c: ColumnStub): (() => void) =>
-  wireRailScrollAffordance(c as unknown as HTMLElement);
+const wire = (c: ColumnStub, classic = true): (() => void) =>
+  wireRailScrollAffordance(c as unknown as HTMLElement, classic);
 
 /**
  * The node environment has neither observer, and with none attached the
@@ -115,5 +115,13 @@ describe('wireRailScrollAffordance', () => {
     const column = makeColumn(400, 400); // fits, and still opts in
     disposers.push(wire(column));
     expect(column.classes.has('olv-rail-scrollable')).toBe(true);
+  });
+
+  it('does nothing on an overlay-scrollbar platform', () => {
+    // macOS draws no scrollbar to grab, so opting the column in would only
+    // take the canvas's pass-through in the gaps between panels.
+    const column = makeColumn(1200, 400);
+    disposers.push(wire(column, false));
+    expect(column.classes.has('olv-rail-scrollable')).toBe(false);
   });
 });
