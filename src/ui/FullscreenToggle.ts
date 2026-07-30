@@ -85,6 +85,16 @@ export class FullscreenToggle {
   readonly status: HTMLElement;
 
   /**
+   * Optional route to the application's single polite live region.
+   *
+   * Supplied by the host, because the regions belong to the application and
+   * there is exactly one of each. When it is absent the refusal still reaches a
+   * sighted user through `status` and the tooltip, and a screen reader gets
+   * nothing, which is a smaller failure than two competing live regions.
+   */
+  private readonly _announceTo: ((message: string) => void) | null;
+
+  /**
    * Handlers held so `dispose()` can detach them. The click one is on the
    * button, which the host owns and may keep; the change ones are on the
    * document, which outlives every Stage, so leaving them attached keeps this
@@ -95,7 +105,8 @@ export class FullscreenToggle {
   private readonly _supported: boolean;
   private _statusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor() {
+  constructor(options: { announce?: (message: string) => void } = {}) {
+    this._announceTo = options.announce ?? null;
     this.element = el('button', {
       className: 'olv-fs-toggle',
       unsafeHtml: ICON_ENTER,
@@ -104,9 +115,14 @@ export class FullscreenToggle {
     }) as HTMLButtonElement;
     this.element.type = 'button';
     this.element.setAttribute('aria-pressed', 'false');
+    // No role or aria-live here, deliberately. The application mounts exactly
+    // one polite live region and one assertive one, and `a11yAnnouncements`
+    // asserts that count. A second role="status" gives a screen reader two
+    // competing polite queues, so announcements interleave unpredictably and
+    // the reason the single-region layout exists is lost. This node carries the
+    // refusal text for sighted users and for the tooltip; the announcement
+    // itself goes through the host's shared region via `announce`.
     this.status = el('div', { className: 'olv-fs-status olv-visually-hidden' });
-    this.status.setAttribute('role', 'status');
-    this.status.setAttribute('aria-live', 'polite');
 
     this._supported = fullscreenSupported();
     // No element-level Fullscreen API: the control has no effect, so it is not rendered.
@@ -188,6 +204,7 @@ export class FullscreenToggle {
     if (!this._supported) return;
     this.status.textContent = message;
     this.element.title = message;
+    this._announceTo?.(message);
     if (this._statusTimer !== null) clearTimeout(this._statusTimer);
     this._statusTimer = setTimeout(() => {
       this._statusTimer = null;

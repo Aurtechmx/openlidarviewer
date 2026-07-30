@@ -186,10 +186,13 @@ describe('FullscreenToggle refusal status', () => {
   const savedDocument = globalThis.document;
   const live: FullscreenToggle[] = [];
 
-  const install = (request: (() => Promise<void>) | null): { toggle: FullscreenToggle; doc: DocStub } => {
+  const install = (
+    request: (() => Promise<void>) | null,
+    options: { announce?: (message: string) => void } = {},
+  ): { toggle: FullscreenToggle; doc: DocStub } => {
     const doc = makeDoc(request);
     globalThis.document = doc as unknown as Document;
-    const toggle = new FullscreenToggle();
+    const toggle = new FullscreenToggle(options);
     live.push(toggle);
     return { toggle, doc };
   };
@@ -207,14 +210,33 @@ describe('FullscreenToggle refusal status', () => {
     globalThis.document = savedDocument;
   });
 
-  it('exposes a polite live region separate from the button', () => {
+  it('does not create a second live region', () => {
+    // This assertion is inverted from what it first said, and the reason is
+    // worth keeping. Giving this node role="status" added a SECOND polite live
+    // region to a page that mounts exactly one, which broke
+    // tests/e2e/a11yAnnouncements.spec.ts and, more to the point, gives a
+    // screen reader two competing polite queues. The node carries the refusal
+    // text for a sighted user; the announcement travels through the host's
+    // single region instead.
     const { toggle } = install(() => Promise.resolve());
     const status = toggle.status as unknown as NodeStub;
-    expect(status.attrs.role).toBe('status');
-    expect(status.attrs['aria-live']).toBe('polite');
+    expect(status.attrs.role).toBeUndefined();
+    expect(status.attrs['aria-live']).toBeUndefined();
     // Kept out of the button because anything inside it joins the accessible
     // name, and the name has to keep saying what the button does.
     expect(status).not.toBe(toggle.element);
+  });
+
+  it('routes a refusal to the host live region when one is supplied', async () => {
+    const announced: string[] = [];
+    const { toggle } = install(() => Promise.reject(new Error('blocked')), {
+      announce: (m: string) => announced.push(m),
+    });
+    press(toggle);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(announced.length).toBe(1);
+    expect(announced[0]).toBe((toggle.status as unknown as NodeStub).textContent);
   });
 
   it('says nothing until something is refused', async () => {

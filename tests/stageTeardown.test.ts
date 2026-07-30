@@ -158,7 +158,11 @@ describe('Stage teardown', () => {
     expect(byClass('olv-fs-toggle')).toHaveLength(1);
     const status = byClass('olv-fs-status');
     expect(status).toHaveLength(1);
-    expect(status[0].attrs['aria-live']).toBe('polite');
+    // Deliberately no aria-live: the application mounts one polite region and
+    // one assertive one, and a second polite region gives a screen reader two
+    // competing queues. This node is the sighted-user copy of the refusal.
+    expect(status[0].attrs['aria-live']).toBeUndefined();
+    expect(status[0].attrs.role).toBeUndefined();
   });
 
   it('disposes the full-screen control, detaching its document listeners', () => {
