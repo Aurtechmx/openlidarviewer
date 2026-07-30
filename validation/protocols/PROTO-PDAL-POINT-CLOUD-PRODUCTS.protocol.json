@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-PDAL-POINT-CLOUD-PRODUCTS",
+  "example": false,
+  "title": "Ground filtering and DTM against PDAL, on synthetic point clouds",
+  "question": "Do this project's ground classifier and DTM rasteriser agree with PDAL's filters.smrf and writers.gdal, on the same points with matched parameters?",
+  "recordWrittenOn": "2026-07-30",
+  "referenceTool": "PDAL",
+  "referenceVersion": "2.10.2",
+  "claims": [
+    {
+      "claimId": "GROUND-FILTER",
+      "datasetIds": [
+        "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "OLV-DS-008-PC-ROLLING-BUILDINGS",
+        "OLV-DS-009-PC-RIDGE-BUILDINGS",
+        "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+        "OLV-DS-011-PC-PLANE-GAP"
+      ],
+      "parameterSetIds": [
+        "PS-SMRF-CELL1-W16-S015-T05"
+      ],
+      "metrics": {
+        "toleranceAbs": 0,
+        "toleranceUnit": "label (ground or non-ground; a return either carries the same label on both sides or it does not)",
+        "minimumComparableCells": 50000,
+        "requiredWithinToleranceFraction": 0.99
+      },
+      "toleranceDerivation": "A label either matches or it does not, so the per-return tolerance is exactly zero and the only free number is how much disagreement the comparison tolerates. 0.99 was chosen as the level at which two implementations of the same published algorithm, run on the same points with matched parameters, should be indistinguishable for practical use. It was fixed before the run and it was not met: the study reports partial at 0.822 pooled. That is the number the tolerance existed to expose.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-30",
+        "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
+        "witness": "The commit that registered both PDAL studies at pending with their tolerances already frozen, before either was run. It is not an ancestor of the default branch because the pull request was squash-merged.",
+        "resultLandedOn": "2026-07-30",
+        "resultCommit": "1a6518a3",
+        "atInstant": "2026-07-30T10:17:08-06:00",
+        "resultAtInstant": "2026-07-30T11:37:50-06:00"
+      }
+    },
+    {
+      "claimId": "DTM",
+      "datasetIds": [
+        "OLV-DS-012-PC-BARE-PLANE",
+        "OLV-DS-013-PC-BARE-ROLLING",
+        "OLV-DS-014-PC-BARE-RIDGE"
+      ],
+      "parameterSetIds": [
+        "PS-DTM-MIN-CELL1-R045"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.00005,
+        "toleranceUnit": "metre",
+        "minimumComparableCells": 7500,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "Both sides take the minimum elevation in a cell, so on identical points they should produce identical numbers and any difference is float accumulation, not modelling. 5e-5 m is far below any elevation this product is read at and far above float32 noise, so it separates an arithmetic difference from a real one. Every cell must pass, because a single cell outside it would mean the two are not computing the same thing.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-30",
+        "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
+        "witness": "The same registration commit as the ground-filter study above; both manifests were frozen in it before either ran.",
+        "resultLandedOn": "2026-07-30",
+        "resultCommit": "1a6518a3",
+        "atInstant": "2026-07-30T10:17:08-06:00",
+        "resultAtInstant": "2026-07-30T11:37:50-06:00"
+      }
+    }
+  ],
+  "decisionRule": "A study reports agree only when the measured fraction meets its requiredWithinToleranceFraction over at least minimumComparableCells. Below that it reports partial or disagree and says where. The tolerance is never widened to reach agreement; a result under it is the finding.",
+  "notes": [
+    "Written after the studies landed, transcribing the freeze recorded in the registration commit named under each claim. It does not create that freeze.",
+    "Docker was not running on the host, so the reference tool was invoked from its installed path with the version, argv and exit code recorded rather than pinned to a container."
+  ],
+  "digest": "sha256:d2d3d50a44b66e499f36b6660e2eca94f9e842665ce08a040ac1c5ab61cdd852"
+}

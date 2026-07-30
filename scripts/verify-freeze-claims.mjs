@@ -105,7 +105,17 @@ function commitsTouching(file) {
 /** The record as it stood at `sha`, or null if it did not exist there. */
 function recordAt(sha, file) {
   try {
-    return JSON.parse(git('show', `${sha}:${file}`));
+    // stderr is discarded: a path absent from a commit is the ordinary answer
+    // here, and git's "exists on disk, but not in HEAD" printed straight to the
+    // terminal reads as a crash rather than as the null this returns.
+    return JSON.parse(
+      execFileSync(GIT, ['show', `${sha}:${file}`], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        maxBuffer: 32 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }),
+    );
   } catch {
     return null;
   }

@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "studyId": "OLV-XS-001-SLOPE-RASTER-GDAL-HORN",
+  "claimId": "SLOPE-RASTER",
+  "example": false,
+  "notes": [
+    "The record of the comparison SLOPE-RASTER already sits at E4 on. It is written after the fact, from artifacts that were committed at the time; what it adds is that the evidence is now a citable record with a frozen protocol behind it instead of prose in a register.",
+    "No candidate-output artifact is listed because none is committed. The candidate side is recomputed from input-dem.asc by tests/slopeCrossCheck.test.ts on every run, which is stronger than a stored copy: a stored copy can drift from the code it claims to come from, and this cannot.",
+    "The reference was re-run on 2026-07-30 from the command in command.txt, with GDAL 3.13.1 at /opt/homebrew/bin/gdal, and reproduced slope-gdal.asc byte for byte (sha256 982c8bf3656ff8db48c154eb7116ca8eafd190ee500bdefddb98c811e8135557). The original run recorded its version, platform and command but not its executable path; the path below is the one that reproduced the artifact, not a guess at the original.",
+    "This is two implementations of one algorithm on one analytic surface. It catches coding errors. It does not validate the choice of Horn, it says nothing about the point-cloud-to-DTM path because it starts from a DEM, and it is not accuracy against ground truth."
+  ],
+  "protocolRef": {
+    "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
+    "digest": "sha256:4f2ae21a6fa36fff2acbf054d014f392cd4d4666d16c3d4550ef62a1df006c8f"
+  },
+  "protocolDigest": "sha256:78f3b776191687fb6e1337074b0f91088e5372772c27cdf8e9601acbef1e9f8f",
+  "candidate": {
+    "revision": "b405ee04f5d8b0a7208d498cef596714a0141828",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. No container runtime was used for these references, so no image digest exists to record; the executable path, the version GDAL reports, the exact command line and the artifact's own sha256 stand in for it. The reproduction on 2026-07-30 is what makes that substitution checkable rather than asserted.",
+    "executablePath": "/opt/homebrew/bin/gdal",
+    "commandLine": "gdal raster slope input-dem.asc slope-gdal.asc --gradient-alg Horn --unit degree --xscale 1 --yscale 1 --no-edges --of AAIGrid",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+      "description": "The frozen analytic DEM: z = a.x^2 + b.y^2 + c.x.y + d.x + e.y, 120 x 100 cells at 1 m, slope about 0.05 to 16.4 degrees. The cross and linear terms are what make a north-south flip or an east-west mirror visible.",
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2"
+    },
+    {
+      "datasetId": "OLV-DS-002-GDAL-SLOPE",
+      "description": "GDAL 3.13.1 Horn slope in degrees on that DEM, the reference side of the comparison.",
+      "path": "tests/fixtures/reference/slope/slope-gdal.asc",
+      "sha256": "982c8bf3656ff8db48c154eb7116ca8eafd190ee500bdefddb98c811e8135557"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-HORN-DEG-METRE-NOEDGES",
+      "description": "Horn gradient, degrees, projected metre grid, one-cell border excluded on both sides.",
+      "candidateParameters": {
+        "gradientAlgorithm": "Horn",
+        "outputUnit": "degree",
+        "verticalUnit": "metre",
+        "cellSizeMetres": 1,
+        "includeEdges": false
+      },
+      "referenceParameters": {
+        "subcommand": "gdal raster slope",
+        "gradientAlg": "Horn",
+        "unit": "degree",
+        "xscale": 1,
+        "yscale": 1,
+        "noEdges": true,
+        "format": "AAIGrid"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.5,
+    "toleranceUnit": "degree",
+    "minimumComparableCells": 1000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 11,564 interior cells are within the preregistered 0.5 degree tolerance, with a maximum difference of 0.0000368 degree; GDAL against the closed-form gradient agrees on the same cells, so the reference is the raster the command says it is.",
+  "result": {
+    "comparableCells": 11564,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 3.6755931315468615e-05,
+    "rmse": 5.306111487991648e-06,
+    "meanDiff": -1.3754723791540856e-07
+  },
+  "rawArtifacts": [
+    {
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "tests/fixtures/reference/slope/slope-gdal.asc",
+      "sha256": "982c8bf3656ff8db48c154eb7116ca8eafd190ee500bdefddb98c811e8135557",
+      "role": "reference-output"
+    },
+    {
+      "path": "tests/fixtures/reference/slope/command.txt",
+      "sha256": "788d1425d95e2ff2285d6b116afdd820e530d3b63527e5dd5d257808a51d957d",
+      "role": "reference-command"
+    },
+    {
+      "path": "tests/fixtures/reference/slope/environment.json",
+      "sha256": "3ab30b84c9b806b58ea47317275edd9cb173d964307d09d12aff2f15abc72c81",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+        "parameterSetId": "PS-HORN-DEG-METRE-NOEDGES"
+      }
+    ],
+    "unsupported": [
+      "The one-cell border. The comparison drops it because the reference command leaves it undefined, and the border is where this project's kernel and gdaldem -compute_edges are known to differ: the matrix under validation/cross-implementation/raster-matrix/ measured a shortfall of up to 16.2 degrees there.",
+      "Slopes above about 16.4 degrees, which is the steepest this surface reaches.",
+      "Geographic grids. This DEM declares no CRS and its axes are metres; the anisotropic per-axis cell-metre path is not exercised here.",
+      "Any vertical unit other than metre. A foot-vertical grid is a different parameter set and has not been run.",
+      "The point-cloud-to-DTM pipeline. This study starts from a DEM and says nothing about how one is produced.",
+      "Accuracy. Agreement with GDAL is agreement between two implementations of Horn's method, not a measurement against ground truth."
+    ]
+  }
+}

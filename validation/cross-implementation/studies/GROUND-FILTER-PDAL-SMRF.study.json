@@ -284,6 +284,10 @@
       "Agreement with PDAL is not accuracy against ground truth. Ground membership in these scenes is known by construction, which is a comparison against a generator this project also wrote."
     ]
   },
+  "protocolRef": {
+    "protocolId": "PROTO-PDAL-POINT-CLOUD-PRODUCTS",
+    "digest": "sha256:d2d3d50a44b66e499f36b6660e2eca94f9e842665ce08a040ac1c5ab61cdd852"
+  },
   "freeze": {
     "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
     "witness": "The commit that registered this study at pending, with the tolerance already frozen, before it was run. It is not an ancestor of the default branch because the pull request was squash-merged, which collapsed the preregistration and the result into one commit."

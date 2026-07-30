@@ -245,3 +245,54 @@ describe('installStaleChunkRecovery vite:preloadError handler', () => {
     expect(storage.map.get(STALE_RELOAD_MARKER_KEY)).toBe('5000');
   });
 });
+
+/**
+ * The installer registered a listener and handed back no way to remove it.
+ * Every other teardown path here grew a disposer for the same reason: a
+ * listener that outlives its owner keeps the closure alive, and installing
+ * twice leaves two handlers, so one stale chunk recovers twice.
+ */
+describe('dispose', () => {
+  function target() {
+    const handlers: Array<(e: unknown) => void> = [];
+    return {
+      handlers,
+      addEventListener: (_t: string, fn: (e: unknown) => void) => void handlers.push(fn),
+      removeEventListener: (_t: string, fn: (e: unknown) => void) => {
+        const i = handlers.indexOf(fn);
+        if (i >= 0) handlers.splice(i, 1);
+      },
+    };
+  }
+
+  it('removes the listener it registered', () => {
+    const t = target();
+    const r = installStaleChunkRecovery({ eventTarget: t, reload: () => {} });
+    expect(t.handlers).toHaveLength(1);
+    r.dispose();
+    expect(t.handlers).toHaveLength(0);
+  });
+
+  it('is safe to call twice', () => {
+    const t = target();
+    const r = installStaleChunkRecovery({ eventTarget: t, reload: () => {} });
+    r.dispose();
+    expect(() => r.dispose()).not.toThrow();
+    expect(t.handlers).toHaveLength(0);
+  });
+
+  it('leaves no handler behind after install, dispose, install', () => {
+    const t = target();
+    installStaleChunkRecovery({ eventTarget: t, reload: () => {} }).dispose();
+    installStaleChunkRecovery({ eventTarget: t, reload: () => {} });
+    // Without dispose this would be 2, and one stale chunk would recover twice.
+    expect(t.handlers).toHaveLength(1);
+  });
+
+  it('stays a no-op when the target cannot remove listeners', () => {
+    const handlers: Array<(e: unknown) => void> = [];
+    const addOnly = { addEventListener: (_t: string, fn: (e: unknown) => void) => void handlers.push(fn) };
+    const r = installStaleChunkRecovery({ eventTarget: addOnly, reload: () => {} });
+    expect(() => r.dispose()).not.toThrow();
+  });
+});
