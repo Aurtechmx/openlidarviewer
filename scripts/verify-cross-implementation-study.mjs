@@ -463,14 +463,22 @@ export function collectProtocolProblems(ctx) {
     // preregistration. Where both commits are known, the comparison moves to
     // their timestamps, which is stricter than the date test, not looser: the
     // ordering has to hold to the second rather than to the day.
-    const sameDayOrdered =
-      f.on === landed &&
-      (f.witnessCommit ?? null) !== null &&
-      (f.resultCommit ?? null) !== null &&
-      commitInstant(f.witnessCommit) !== null &&
-      commitInstant(f.resultCommit) !== null &&
-      commitInstant(f.witnessCommit) < commitInstant(f.resultCommit);
-    if (f.status === 'preregistered' && landed !== null && !(f.on < landed) && !sameDayOrdered) {
+    const sameDay = f.on === landed && (f.witnessCommit ?? null) !== null && (f.resultCommit ?? null) !== null;
+    const witnessAt = sameDay ? commitInstant(f.witnessCommit) : null;
+    const resultAt = sameDay ? commitInstant(f.resultCommit) : null;
+    const sameDayOrdered = witnessAt !== null && resultAt !== null && witnessAt < resultAt;
+    // Where the history cannot be read at all, the ordering is unknown, not
+    // wrong. An extracted archive has no repository, and this verifier is meant
+    // to run there: failing a record because the evidence is out of reach would
+    // report a defect that the same record does not have in a clone.
+    const sameDayUncheckable = sameDay && (witnessAt === null || resultAt === null);
+    if (
+      f.status === 'preregistered' &&
+      landed !== null &&
+      !(f.on < landed) &&
+      !sameDayOrdered &&
+      !sameDayUncheckable
+    ) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was preregistered, but the freeze date ${f.on} does not precede the result date ${landed}. A tolerance fixed alongside its result is "adopted-with-result"; it may be defensible on the merits, and it is still not a preregistration.`);
     }
     if (f.status === 'adopted-with-result' && landed !== null && (f.on < landed || sameDayOrdered)) {
