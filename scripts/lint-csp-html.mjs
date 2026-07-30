@@ -92,11 +92,32 @@ function inlineScriptCount(html) {
   ).length;
 }
 
+/**
+ * Inline event handler attributes, by shape rather than by name.
+ *
+ * A fixed list of handler names passes anything left off it: onmousedown,
+ * onpointerdown, ontoggle and onpaste all reached this file's OK line while the
+ * policy refused them in the browser, which is the failure described at the top.
+ * So the match is any attribute whose name is `on` followed by letters.
+ *
+ * The tag-open anchor is `<` plus a name character, and `[^>]*?` cannot cross a
+ * `>`, so text between tags is never matched.
+ */
 function inlineHandlerCount(html) {
-  // Attributes only: `\son...=` inside a tag. Prose containing "on" is not a match.
+  return matchesOutsideComments(html, /<[a-z][^>]*?\son[a-z]+\s*=/gi).length;
+}
+
+/**
+ * `javascript:` URLs in src or href.
+ *
+ * script-src governs these as well, so they fail the same silent way as an
+ * inline handler: the link is there, the click does nothing. Every quoting form
+ * counts, including none.
+ */
+function javascriptUrlCount(html) {
   return matchesOutsideComments(
     html,
-    /<[^>]*?\son(?:click|load|error|change|input|submit|focus|blur)\s*=/gi,
+    /\b(?:src|href)\s*=\s*(?:"\s*javascript:|'\s*javascript:|javascript:)/gi,
   ).length;
 }
 
@@ -167,6 +188,13 @@ for (const file of shippedHtml()) {
       problems.push(
         `${file}: ${handlers} inline event handler attribute(s), which script-src refuses. ` +
           'Attach the listener from the external script instead.',
+      );
+    }
+    const jsUrls = javascriptUrlCount(html);
+    if (jsUrls > 0) {
+      problems.push(
+        `${file}: ${jsUrls} javascript: URL(s) in src or href, which script-src refuses. ` +
+          'Use a real URL and handle the click from the external script.',
       );
     }
   }
