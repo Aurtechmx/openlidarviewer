@@ -9,24 +9,25 @@ on:
   workflow_dispatch:
 
 # Least privilege: every job only needs to read the checked-out code. Matches
-# the security workflow; tighten here so a compromised action can't write to the
-# repo or mint tokens.
-permissions:
-  contents: read
-
+# the security workflow; tighten so a compromised action can't write to the repo
+# or mint tokens. Declared per job rather than once at the top: a workflow-level
+# grant is inherited by anything added later, including a job that should have
+# had none, so each job below states what it needs.
 jobs:
   # Static checks + both build contracts. Cheap and fast; everything else
   # depends on it so a typecheck or bundle regression fails before the heavier
   # test shards and the browser jobs run.
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # `npm ci` must not rewrite the lockfile. If it does, the resolved tree
       # is not the one the SBOM, the audit, and the evidence describe.
       - name: Lockfile is unchanged by a clean install
@@ -124,6 +125,8 @@ jobs:
   # small, and the four shards run in parallel instead of one monolithic run.
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: verify
     # Bound a hung bucket so it fails fast instead of burning the default 360 min.
     timeout-minutes: 20
@@ -157,7 +160,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       # scripts/test-bucket.mjs is the SINGLE source of the worker cap (2, to
       # match these ~2-core runners): passing --maxWorkers here as well would
       # make vitest reject a duplicate single-value option before any test runs.
@@ -167,6 +170,8 @@ jobs:
 
   smoke:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: verify
     # Blocking gate: the smoke spec catches the class of bug where the bundle
     # builds and the unit tests pass but the page throws on load in a real
@@ -178,9 +183,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: Smoke tests (normal build)
         run: npm run test:smoke
       - name: Smoke tests (live / obfuscated artifact)
@@ -196,6 +201,8 @@ jobs:
 
   e2e-deterministic:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: verify
     # BLOCKING. Everything in the suite whose result does not depend on the
     # runner's GPU: DOM, layout, routing, export, and streaming-logic flows.
@@ -208,9 +215,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: Deterministic end-to-end tests (blocking)
         run: npm run test:e2e
       - name: Upload Playwright report on failure
@@ -223,6 +230,8 @@ jobs:
 
   e2e-gpu:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: verify
     # Advisory: specs tagged `@gpu`, whose outcome varies with the WebGPU
     # adapter a runner exposes (the equivalence probe legitimately falls back on
@@ -234,9 +243,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: GPU-variable end-to-end tests (advisory)
         run: npm run test:e2e:gpu
       - name: Upload Playwright report on failure
@@ -256,6 +265,8 @@ jobs:
   # service being reachable, to re-assert a number the gate already owns.
   coverage:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: verify
     timeout-minutes: 30
     steps:
@@ -279,7 +290,7 @@ jobs:
       # typecheck, the laz-perf wasm tests and the production build all pass,
       # and the resolved tree differs from the scripted install in nothing the
       # suite reads. Playwright browsers come from an explicit
-      # `npx playwright install` step, which this flag does not touch.
+      # `playwright install` step, which this flag does not touch.
       - run: npm ci --ignore-scripts
       - name: Collect coverage
         run: npm run coverage
@@ -306,6 +317,8 @@ jobs:
   # success whatever happens, and depending on it would assert nothing.
   ci-green:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [verify, test, smoke, e2e-deterministic]
     if: always()
     steps:
