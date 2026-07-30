@@ -32,7 +32,7 @@
  *        node scripts/verify-dataset-register.mjs --register <path> --root <dir>
  */
 
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -428,10 +428,19 @@ if (isMain()) {
   const treeRoot = resolve(SCRIPT_ROOT, arg('--root', '.'));
   const schema = JSON.parse(readFileSync(resolve(SCRIPT_ROOT, SCHEMA_PATH), 'utf8'));
 
+  // One read, no pre-check. Asking existsSync/statSync first and then reading
+  // is a check-then-use window, and it also answers a different question than
+  // the one that matters: whether the bytes can be read now. A directory or a
+  // vanished file both surface here as a read failure, which is the same null
+  // the caller already handles.
   const fileAt = (relPath) => {
     const full = resolve(treeRoot, relPath);
-    if (!existsSync(full) || !statSync(full).isFile()) return null;
-    const buf = readFileSync(full);
+    let buf;
+    try {
+      buf = readFileSync(full);
+    } catch {
+      return null;
+    }
     return { sha256: createHash('sha256').update(buf).digest('hex'), bytes: buf.length };
   };
 
