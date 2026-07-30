@@ -14,9 +14,15 @@
  * that are already export-ignored are exempt.
  */
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -77,7 +83,7 @@ function shippedFiles() {
   try {
     // stderr ignored: a source ZIP is not a git repo, and git's "fatal:
     // not a git repository" is expected there, not an error to surface.
-    tracked = execSync('git ls-files', {
+    tracked = execFileSync(GIT, ['ls-files'], {
       cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).split('\n').filter(Boolean);
   } catch {
@@ -89,7 +95,7 @@ function shippedFiles() {
   // only text we would actually read (markdown, config, source, notices).
   const candidates = tracked.filter((f) => READABLE.test(f));
   if (candidates.length === 0) return walkExported(ROOT);
-  const attrs = execSync(`git check-attr export-ignore -- ${candidates.map((f) => `'${f}'`).join(' ')}`, {
+  const attrs = execFileSync(GIT, ['check-attr', 'export-ignore', '--', ...candidates], {
     cwd: ROOT,
     encoding: 'utf8',
   });

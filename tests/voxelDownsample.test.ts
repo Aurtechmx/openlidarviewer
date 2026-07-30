@@ -186,3 +186,20 @@ test('a cloud with no inspection extras yields none after downsampling', () => {
   expect(out.pointSourceId).toBeUndefined();
   expect(out.gpsTime).toBeUndefined();
 });
+
+// A budget of NaN used to walk past the early return, because `pointCount <=
+// NaN` is false, and surface two calls later as a complaint about a voxel size
+// the caller never chose. These pin the refusal at the argument that was wrong.
+test('downsampleToBudget refuses a budget that is not a usable number', () => {
+  const cloud = makeCloud([0, 0, 0, 1, 1, 1, 2, 2, 2]);
+  for (const bad of [Number.NaN, 0, -5, Number.POSITIVE_INFINITY]) {
+    expect(() => downsampleToBudget(cloud, bad)).toThrow(/maxPoints/);
+  }
+});
+
+test('downsampleToBudget names the argument the caller passed', () => {
+  const cloud = makeCloud([0, 0, 0, 1, 1, 1, 2, 2, 2]);
+  // Not "voxelSize": the caller chose a budget, not a voxel.
+  expect(() => downsampleToBudget(cloud, Number.NaN)).toThrow(/got NaN/);
+  expect(() => downsampleToBudget(cloud, Number.NaN)).not.toThrow(/voxelSize/);
+});

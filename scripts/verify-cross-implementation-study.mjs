@@ -211,6 +211,25 @@ export function derivedInputsDigest(derivedFrom, rawByPath) {
   return `sha256:${sha256(canonicalJson(pairs))}`;
 }
 
+/**
+ * A commit's author instant, or null when this clone cannot resolve it.
+ *
+ * Used only to order a freeze against its result when both fell on the same
+ * day. Returning null on a missing object means the caller falls back to the
+ * date comparison rather than passing on evidence it does not have.
+ */
+function commitInstant(sha) {
+  try {
+    return execFileSync('git', ['log', '-1', '--format=%aI', sha], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
 // ── registers ───────────────────────────────────────────────────────────────
 
 /**
@@ -427,10 +446,22 @@ export function collectProtocolProblems(ctx) {
     if ((f.resultCommit ?? null) !== null && landed === null) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" names a resultCommit but no resultLandedOn; the date is the half a reader can compare against the freeze.`);
     }
-    if (f.status === 'preregistered' && landed !== null && !(f.on < landed)) {
+    // Dates alone cannot separate a freeze from a result on the same day, and a
+    // study registered in the morning and run in the afternoon is a real
+    // preregistration. Where both commits are known, the comparison moves to
+    // their timestamps, which is stricter than the date test, not looser: the
+    // ordering has to hold to the second rather than to the day.
+    const sameDayOrdered =
+      f.on === landed &&
+      (f.witnessCommit ?? null) !== null &&
+      (f.resultCommit ?? null) !== null &&
+      commitInstant(f.witnessCommit) !== null &&
+      commitInstant(f.resultCommit) !== null &&
+      commitInstant(f.witnessCommit) < commitInstant(f.resultCommit);
+    if (f.status === 'preregistered' && landed !== null && !(f.on < landed) && !sameDayOrdered) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was preregistered, but the freeze date ${f.on} does not precede the result date ${landed}. A tolerance fixed alongside its result is "adopted-with-result"; it may be defensible on the merits, and it is still not a preregistration.`);
     }
-    if (f.status === 'adopted-with-result' && landed !== null && f.on < landed) {
+    if (f.status === 'adopted-with-result' && landed !== null && (f.on < landed || sameDayOrdered)) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was adopted with the result, but the freeze date ${f.on} precedes the result date ${landed}; if the witness commit really shows the tolerance before the result, this claim is stronger than the record admits and should say "preregistered".`);
     }
 

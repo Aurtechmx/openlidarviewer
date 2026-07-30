@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "recordId": "EXAMPLE-RESEARCH-OUTPUT",
+  "example": true,
+  "kind": "research-output",
+  "subject": {
+    "title": "EXAMPLE OUTPUT (none exists)",
+    "description": "EXAMPLE. In a real record this says what was done with the software, in enough detail that a reader can tell whether it is use or a mention. A paper that cites the software in a related-work list is a citation, not use, and the two are different records.",
+    "organisation": "EXAMPLE ORGANISATION"
+  },
+  "source": {
+    "kind": "unpublished",
+    "value": "EXAMPLE: no source exists, because no output exists. A real record carries a DOI, an arXiv id, a handle, or an https URL with an archive snapshot next to it.",
+    "retrievedAt": "2026-07-30"
+  },
+  "verification": {
+    "method": "not-verified",
+    "verifiedAt": "2026-07-30",
+    "note": "Nothing was verified. There is nothing to verify: this is a template. A real record names who resolved the identifier and on what date, and the status only becomes \"verified\" once that has happened."
+  },
+  "relationToProject": {
+    "byProjectMembers": false,
+    "selfReported": false
+  },
+  "status": "pending",
+  "statusReason": "Template only. No institutional use, research output or citation has been recorded for this project, and validation/impact/summary.json counts zero.",
+  "notes": [
+    "EXAMPLE RECORD. It is excluded from every count twice over: as an example, and on a status that is not \"verified\".",
+    "The rule this container enforces is that an impact claim carries a source a stranger can resolve. A record whose only source is our own word is kept at \"unverifiable\" and never counted; the verifier refuses to let it sit at \"verified\"."
+  ]
+}

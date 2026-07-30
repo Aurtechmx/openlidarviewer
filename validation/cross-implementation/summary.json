@@ -19,10 +19,11 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 4,
-  "countedStudies": 3,
+  "studiesRead": 6,
+  "countedStudies": 5,
   "byStatus": {
-    "agree": 3
+    "agree": 4,
+    "partial": 1
   },
   "byClaim": {
     "ASPECT-RASTER": {
@@ -36,6 +37,36 @@
       ],
       "parameterSetIds": [
         "PS-HORN-COMPASS-METRE-NOEDGES"
+      ]
+    },
+    "DTM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-012-PC-BARE-PLANE",
+        "OLV-DS-013-PC-BARE-ROLLING",
+        "OLV-DS-014-PC-BARE-RIDGE"
+      ],
+      "parameterSetIds": [
+        "PS-DTM-MIN-CELL1-R045"
+      ]
+    },
+    "GROUND-FILTER": {
+      "studies": 1,
+      "byStatus": {
+        "partial": 1
+      },
+      "datasetIds": [
+        "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "OLV-DS-008-PC-ROLLING-BUILDINGS",
+        "OLV-DS-009-PC-RIDGE-BUILDINGS",
+        "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+        "OLV-DS-011-PC-PLANE-GAP"
+      ],
+      "parameterSetIds": [
+        "PS-SMRF-CELL1-W16-S015-T05"
       ]
     },
     "HILLSHADE": {
@@ -66,10 +97,10 @@
     }
   },
   "agreement": {
-    "denominator": 3,
+    "denominator": 5,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 3,
-    "fraction": 1
+    "agree": 4,
+    "fraction": 0.8
   },
   "excludedFromCounts": [
     {

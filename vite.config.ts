@@ -1,8 +1,14 @@
 import { defineConfig, type PluginOption } from 'vite';
 import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 // Single source of truth for the app version — read from package.json at
 // build time and exposed to the app as the `__APP_VERSION__` global.
@@ -32,11 +38,11 @@ function resolveBuildIdentity(mode: string): {
   let dirty = false;
   try {
     commit =
-      execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      execFileSync(GIT, ['rev-parse', '--short', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] })
         .toString()
         .trim() || 'unknown';
     dirty =
-      execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+      execFileSync(GIT, ['status', '--porcelain'], { stdio: ['ignore', 'pipe', 'ignore'] })
         .toString()
         .trim().length > 0;
   } catch {
@@ -226,6 +232,31 @@ function lazyChunkNames(): string[] {
     );
   }
   return names;
+}
+
+/**
+ * Carry THIRD_PARTY_NOTICES.md into the build.
+ *
+ * The shipped bundle contains three.js, loaders.gl, proj4, pdf-lib, laz-perf
+ * and three typefaces. The notice naming each author and reproducing each
+ * licence lived only in the repository, so anyone who received the built site
+ * got the work without the names attached to it. The deploy archive is a copy
+ * of dist/, so emitting it here is what puts it in front of the people who
+ * actually download the viewer.
+ */
+type NoticeEmitter = {
+  emitFile: (file: { type: 'asset'; fileName: string; source: string }) => void;
+};
+
+function thirdPartyNotices() {
+  return {
+    name: 'olv-third-party-notices',
+    apply: 'build' as const,
+    generateBundle(this: NoticeEmitter): void {
+      const source = readFileSync(new URL('./THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
+      this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
+    },
+  };
 }
 
 function chunkEmissionGuard() {
@@ -456,6 +487,7 @@ export default defineConfig(({ mode }) => ({
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [
     chunkEmissionGuard() as PluginOption,
+    thirdPartyNotices() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
   ].filter(Boolean) as PluginOption[],

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/build-impact-summary.mjs",
+  "source": "validation/impact/records",
+  "evidenceEffect": "None. Impact is not evidence. This file counts records of use and citation; evidence levels live in docs/validation/claim-register.yaml and move only by a human change to that file.",
+  "permittedStatuses": [
+    "pending",
+    "verified",
+    "unverifiable",
+    "retracted",
+    "withdrawn"
+  ],
+  "uncountedStatuses": [
+    "pending",
+    "retracted",
+    "unverifiable",
+    "withdrawn"
+  ],
+  "countableSourceKinds": [
+    "arxiv",
+    "doi",
+    "handle",
+    "isbn",
+    "public-url",
+    "pubmed",
+    "software-heritage"
+  ],
+  "recordsRead": 1,
+  "countedRecords": 0,
+  "byKind": {},
+  "bySourceKind": {},
+  "independence": {
+    "byProjectMembers": 0,
+    "byOthers": 0,
+    "meaning": "byOthers is the only figure that describes adoption. A record authored by this project's own members is a publication, not somebody else taking the software up."
+  },
+  "excludedFromCounts": [
+    {
+      "recordId": "EXAMPLE-RESEARCH-OUTPUT",
+      "kind": "research-output",
+      "status": "pending",
+      "why": "example record: a template, not an impact"
+    }
+  ]
+}
