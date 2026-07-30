@@ -948,10 +948,19 @@ function parseAnnotations(v: unknown): Annotation[] {
   return out;
 }
 
-/** A reasonably unique measurement id — `crypto.randomUUID`, else a fallback. */
+/**
+ * A unique measurement id — `crypto.randomUUID`, else random bytes.
+ *
+ * Only reached for a session whose stored measurement has no id. `randomUUID`
+ * needs a secure context; `getRandomValues` does not, so a viewer served over
+ * plain http still mints ids that cannot collide with another tab's.
+ */
 function freshMeasurementId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  return c?.randomUUID ? c.randomUUID() : `m_${Math.random().toString(36).slice(2, 11)}`;
+  const c = globalThis.crypto;
+  if (typeof c.randomUUID === 'function') return c.randomUUID();
+  const bytes = new Uint32Array(2);
+  c.getRandomValues(bytes);
+  return `m_${bytes[0].toString(36).padStart(7, '0')}${bytes[1].toString(36).padStart(7, '0')}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
