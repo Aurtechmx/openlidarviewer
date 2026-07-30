@@ -21,11 +21,17 @@
  * wired into `test:release` and CI).
  */
 
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { escapeRegExp } from './regex-escape.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
@@ -131,7 +137,7 @@ try {
   const cff = read('CITATION.cff');
   const cffDate = cff.match(/^date-released:\s*["']?(\d{4}-\d{2}-\d{2})["']?\s*$/m);
   if (cffDate) {
-    const headDate = execSync('git log -1 --format=%cs', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+    const headDate = execFileSync(GIT, ['log', '-1', '--format=%cs'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(headDate) && cffDate[1] < headDate) {

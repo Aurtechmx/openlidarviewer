@@ -1,8 +1,14 @@
 import { defineConfig, type PluginOption } from 'vite';
 import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
+import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 // Single source of truth for the app version — read from package.json at
 // build time and exposed to the app as the `__APP_VERSION__` global.
@@ -32,11 +38,11 @@ function resolveBuildIdentity(mode: string): {
   let dirty = false;
   try {
     commit =
-      execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      execFileSync(GIT, ['rev-parse', '--short', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] })
         .toString()
         .trim() || 'unknown';
     dirty =
-      execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+      execFileSync(GIT, ['status', '--porcelain'], { stdio: ['ignore', 'pipe', 'ignore'] })
         .toString()
         .trim().length > 0;
   } catch {
