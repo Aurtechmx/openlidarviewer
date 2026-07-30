@@ -158,7 +158,13 @@ export interface RailToggleConfig {
   storageKey: string;
   ariaControls: string;
 }
-export function wireRailToggle(cfg: RailToggleConfig): void {
+/**
+ * Returns a disposer, same contract as wireRailScrollAffordance: it disconnects
+ * the ResizeObserver, drops the window resize listener, and removes the grabber
+ * this call appended. Without it a torn-down rail left an observer watching
+ * detached panels and a resize handler measuring them forever.
+ */
+export function wireRailToggle(cfg: RailToggleConfig): () => void {
   const tab = el('button', { className: cfg.tabClass, unsafeHtml: cfg.chevron });
   tab.setAttribute('type', 'button');
   tab.setAttribute('aria-controls', cfg.ariaControls);
@@ -183,7 +189,9 @@ export function wireRailToggle(cfg: RailToggleConfig): void {
   }
   apply(collapsed);
 
-  tab.addEventListener('click', () => {
+  // Named so the disposer can detach it. The tab is removed too, but a host
+  // that keeps the node around must not keep the handler with it.
+  const onClick = (): void => {
     collapsed = !collapsed;
     apply(collapsed);
     try {
@@ -191,7 +199,8 @@ export function wireRailToggle(cfg: RailToggleConfig): void {
     } catch {
       /* ignore */
     }
-  });
+  };
+  tab.addEventListener('click', onClick);
   cfg.overlay.append(tab);
 
   // The grabber only makes sense when the column holds visible panels, and it
@@ -212,16 +221,26 @@ export function wireRailToggle(cfg: RailToggleConfig): void {
     const bottom = Math.max(...boxes.map((b) => b.bottom));
     tab.style.top = `${Math.round((top + bottom) / 2)}px`;
   };
+  let observer: ResizeObserver | null = null;
   if (typeof ResizeObserver !== 'undefined') {
     try {
       const ro = new ResizeObserver(positionTab);
       for (const p of cfg.panels) ro.observe(p);
+      observer = ro;
     } catch {
       /* static fallback — the window listener + initial call still run */
     }
   }
   window.addEventListener('resize', positionTab);
   positionTab();
+
+  return () => {
+    observer?.disconnect();
+    observer = null;
+    window.removeEventListener('resize', positionTab);
+    tab.removeEventListener('click', onClick);
+    tab.remove();
+  };
 }
 
 // Inline, literally-embedded chevron SVGs — the sanctioned `unsafeHtml` use (see
