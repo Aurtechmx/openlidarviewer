@@ -104,6 +104,7 @@ export class FullscreenToggle {
   private readonly _onFullscreenChange: () => void;
   private readonly _supported: boolean;
   private _statusTimer: ReturnType<typeof setTimeout> | null = null;
+  private _disposed = false;
 
   constructor(options: { announce?: (message: string) => void } = {}) {
     this._announceTo = options.announce ?? null;
@@ -152,6 +153,7 @@ export class FullscreenToggle {
 
   /** Detach every listener. Pair with the host's own teardown. */
   dispose(): void {
+    this._disposed = true;
     if (this._statusTimer !== null) {
       clearTimeout(this._statusTimer);
       this._statusTimer = null;
@@ -195,13 +197,17 @@ export class FullscreenToggle {
    * Report a refused request. Rejection stays non-fatal (the page is fine and
    * the button is still correct), but silence read as a dead control, because
    * a permissions-policy or iframe-sandbox refusal looks identical to nothing
-   * happening. Both the live region and the tooltip carry it so the message
+   * happening. The host routes it to the application's one polite live region, and the
+   * tooltip carries it too, so the message
    * reaches a screen reader and a pointer user alike.
    */
   private _announce(message: string): void {
     // The control is hidden where the API is missing, so there is no
     // user-initiated request to report on and nothing is emitted.
     if (!this._supported) return;
+    // A requestFullscreen rejection can resolve after teardown. Writing then
+    // would touch a detached node and arm a six-second timer nothing cancels.
+    if (this._disposed) return;
     this.status.textContent = message;
     this.element.title = message;
     this._announceTo?.(message);

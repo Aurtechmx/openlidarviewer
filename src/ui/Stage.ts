@@ -2,6 +2,7 @@ import { el } from './dom';
 import { SOURCE_FORMATS, XYZ_ALIAS_EXTENSIONS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
+import { announcePolite } from './politeAnnounce';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { isMobileDevice } from './isMobileDevice';
 
@@ -305,7 +306,9 @@ export class Stage {
     // correct. It does not see F11, which is the browser's own window state:
     // which fires no event and leaves `fullscreenElement` null (see
     // FullscreenToggle.ts). Held so dispose() can detach its listeners.
-    const fullscreen = new FullscreenToggle();
+    // The refusal has to reach the application's one polite region; a second
+    // region would give a screen reader two competing queues.
+    const fullscreen = new FullscreenToggle({ announce: (m) => void announcePolite(m) });
     this._fullscreen = fullscreen;
 
     const right = el('div', { className: 'olv-topbar-right' }, [
