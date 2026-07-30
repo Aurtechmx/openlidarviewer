@@ -5,11 +5,13 @@
      a claim this repository makes about itself.
 
      The fair-software.eu badge reads three of five, and the two it withholds
-     are real: this is not in a package registry, and it carries no OpenSSF
-     Best Practices badge. It sits next to the fairsoftwarechecklist.net badge
-     on purpose. That one is a self-assessment; this one is measured from the
-     repository by `.github/workflows/fair-software.yml`, and a reader can tell
-     them apart only if both are present.
+     are real. This is not in a package registry, and it carries no OpenSSF
+     Best Practices badge; that second one is deferred rather than overlooked,
+     so a later reader does not spend time rediscovering it. It sits next to
+     the fairsoftwarechecklist.net badge on purpose. That one is a
+     self-assessment; this one is measured from the repository by
+     `.github/workflows/fair-software.yml`, and a reader can tell them apart
+     only if both are present.
 
      One slot is held open: OpenSSF Scorecard, between CI and Security audit.
      The workflow publishes (last run 6.1, transparency-log entry recorded) but
