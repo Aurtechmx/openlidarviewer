@@ -228,6 +228,31 @@ function lazyChunkNames(): string[] {
   return names;
 }
 
+/**
+ * Carry THIRD_PARTY_NOTICES.md into the build.
+ *
+ * The shipped bundle contains three.js, loaders.gl, proj4, pdf-lib, laz-perf
+ * and three typefaces. The notice naming each author and reproducing each
+ * licence lived only in the repository, so anyone who received the built site
+ * got the work without the names attached to it. The deploy archive is a copy
+ * of dist/, so emitting it here is what puts it in front of the people who
+ * actually download the viewer.
+ */
+type NoticeEmitter = {
+  emitFile: (file: { type: 'asset'; fileName: string; source: string }) => void;
+};
+
+function thirdPartyNotices() {
+  return {
+    name: 'olv-third-party-notices',
+    apply: 'build' as const,
+    generateBundle(this: NoticeEmitter): void {
+      const source = readFileSync(new URL('./THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
+      this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
+    },
+  };
+}
+
 function chunkEmissionGuard() {
   const required = [
     // Every lazyChunks.ts seam, derived from the module itself at config
@@ -456,6 +481,7 @@ export default defineConfig(({ mode }) => ({
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [
     chunkEmissionGuard() as PluginOption,
+    thirdPartyNotices() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),
   ].filter(Boolean) as PluginOption[],

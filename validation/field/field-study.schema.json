@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/field-study.schema.json",
+  "title": "Field study record",
+  "description": "One record per field study: real instruments, real operators, surveyed checkpoints held back from everything the product was built with. A verified record is an E5_EXTERNALLY_VALIDATED claim and nothing weaker may be filed here; E4 belongs in validation/cross-implementation and E6 in validation/reproduction. Validated by scripts/verify-field-study.mjs, which implements the JSON Schema subset used here without a runtime dependency and adds the cross-checks a schema cannot express, chief among them the checkpoint-leakage refusal that src/validation/checkpointAccuracy.ts applies to a checkpoint array and this verifier applies to a whole record. Filing a record does not move any claim's evidence level; promotion is a separate, human act recorded in docs/validation/claim-register.yaml. NOTHING IN THIS DIRECTORY IS A STUDY: it holds one EXAMPLE record and no field study has been run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "studyId",
+    "claimId",
+    "example",
+    "evidenceLevelClaimed",
+    "protocolDigest",
+    "preregistration",
+    "fieldwork",
+    "site",
+    "instrument",
+    "surveyMethod",
+    "checkpoints",
+    "operators",
+    "candidate",
+    "metrics",
+    "status",
+    "statusReason",
+    "scope"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "studyId": {
+      "description": "Stable identity. An example record must be prefixed EXAMPLE- and carry example: true, so a reader and the verifier agree about what is real.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "claimId": {
+      "description": "Must exist in docs/validation/claim-register.yaml. The verifier reads that register and never writes it.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9-]*$"
+    },
+    "example": {
+      "description": "True only for a template. An example is excluded from every count whatever its status, and may not carry a result.",
+      "type": "boolean"
+    },
+    "evidenceLevelClaimed": {
+      "description": "A field study is the E5 container. The single permitted value is here rather than implied so a record cannot quietly claim the reproduction level it did not earn.",
+      "type": "string",
+      "enum": ["E5_EXTERNALLY_VALIDATED"]
+    },
+    "protocolDigest": {
+      "description": "sha256 over the canonical protocol object (claim, instrument accuracy, survey method, checkpoint count and provenance, metrics) as registered BEFORE fieldwork. The verifier recomputes it, so a tolerance loosened after seeing the residuals no longer matches.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "preregistration": { "$ref": "#/$defs/preregistration" },
+    "fieldwork": { "$ref": "#/$defs/fieldwork" },
+    "site": { "$ref": "#/$defs/site" },
+    "instrument": { "$ref": "#/$defs/instrument" },
+    "surveyMethod": { "$ref": "#/$defs/surveyMethod" },
+    "checkpoints": { "$ref": "#/$defs/checkpoints" },
+    "operators": { "$ref": "#/$defs/operators" },
+    "candidate": { "$ref": "#/$defs/candidate" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "status": {
+      "description": "See FIELD_STATUSES in scripts/verify-field-study.mjs. blocked-external is separate from unavailable on purpose: a survey crew that does not exist is not a missing package.",
+      "type": "string",
+      "enum": [
+        "pending",
+        "not-executed",
+        "unavailable",
+        "blocked-external",
+        "insufficient",
+        "meets",
+        "partial",
+        "fails",
+        "invalid",
+        "inconclusive"
+      ]
+    },
+    "statusReason": { "type": "string", "minLength": 1 },
+    "result": {
+      "description": "Present only when checkpoints were actually observed and reduced. A status of pending or not-executed carrying a result is rejected.",
+      "$ref": "#/$defs/result"
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "preregistration": {
+      "description": "The protocol as frozen before anyone went to the site. A protocol written afterwards is a report, not a preregistration, and the verifier compares the dates.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registeredAt", "protocolPath", "protocolSha256", "registeredBeforeFieldwork", "witness"],
+      "properties": {
+        "registeredAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "protocolPath": {
+          "description": "Repo-relative path to the frozen protocol document. The verifier hashes the file on disk.",
+          "type": "string",
+          "minLength": 1
+        },
+        "protocolSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "registeredBeforeFieldwork": { "type": "boolean" },
+        "witness": {
+          "description": "What makes the registration date checkable by someone else: the commit that first filed the protocol, a timestamping service receipt, or a registry entry. The digest alone proves nothing, because whoever rewrites the record can recompute it.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "fieldwork": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startedAt", "endedAt"],
+      "properties": {
+        "startedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "endedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "weatherNote": { "type": "string", "minLength": 1 }
+      }
+    },
+    "site": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "crs", "terrainDescription", "strata"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "country": { "type": "string", "minLength": 1 },
+        "crs": {
+          "description": "The frame every coordinate in the record is in. A metric claim without a frame is not checkable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "verticalDatum": { "type": "string", "minLength": 1 },
+        "terrainDescription": { "type": "string", "minLength": 1 },
+        "strata": {
+          "description": "Land-cover or terrain classes the checkpoints are stratified by. A pooled RMSE over open ground and dense canopy describes neither.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "instrument": {
+      "description": "The reference instrument, and what its manufacturer or its calibration certificate says it can do. A study cannot resolve an error smaller than the survey that measured it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["make", "model", "kind", "statedAccuracy", "calibration"],
+      "properties": {
+        "make": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "serialNumber": { "type": "string", "minLength": 1 },
+        "kind": {
+          "type": "string",
+          "enum": ["gnss-receiver", "total-station", "digital-level", "terrestrial-laser-scanner", "other"]
+        },
+        "statedAccuracy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["horizontalMetres", "verticalMetres", "confidenceLevel", "source"],
+          "properties": {
+            "horizontalMetres": { "type": "number", "minimum": 0 },
+            "verticalMetres": { "type": "number", "minimum": 0 },
+            "confidenceLevel": { "type": "string", "minLength": 1 },
+            "source": {
+              "description": "Where the figure comes from: a datasheet, a calibration certificate, or a field check. Not the operator's recollection.",
+              "type": "string",
+              "enum": ["manufacturer-datasheet", "calibration-certificate", "field-check", "published-standard"]
+            }
+          }
+        },
+        "calibration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["lastCalibratedAt", "certificateReference"],
+          "properties": {
+            "lastCalibratedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+            "certificateReference": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "surveyMethod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "description", "referenceFrame"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "gnss-rtk",
+            "gnss-ppk",
+            "gnss-static",
+            "total-station",
+            "level-run",
+            "terrestrial-lidar",
+            "other"
+          ]
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "referenceFrame": { "type": "string", "minLength": 1 },
+        "geoidModel": { "type": "string", "minLength": 1 },
+        "baselineLengthMetres": { "type": "number", "minimum": 0 },
+        "occupationSeconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "checkpoints": {
+      "description": "The surveyed positions the product is compared against. Provenance and usage are the two fields that decide whether the study is worth reading: a checkpoint that fed registration, control, parameter tuning or manual correction is part of the surface being tested, and an accuracy figure over it measures the fit rather than the error.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "provenance", "provenanceNote", "usages", "byStratum", "independentOfProcessing"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 1 },
+        "provenance": {
+          "type": "string",
+          "enum": [
+            "national-geodetic-network",
+            "independent-survey",
+            "third-party-contractor",
+            "project-own-survey"
+          ]
+        },
+        "provenanceNote": { "type": "string", "minLength": 1 },
+        "usages": {
+          "description": "How the checkpoints were used, one entry per usage, with counts that must add up to `count`. The permitted values are CHECKPOINT_USAGES from src/validation/checkpointAccuracy.ts; anything else cannot be shown to be independent and is refused rather than assumed independent.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["usage", "count"],
+            "properties": {
+              "usage": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "byStratum": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stratum", "count"],
+            "properties": {
+              "stratum": { "type": "string", "minLength": 1 },
+              "count": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "independentOfProcessing": {
+          "description": "An explicit statement that no checkpoint entered registration, control, parameter tuning or manual correction of the surface under test. Stating it is not proof; the verifier also checks the usage counts, and refuses when the two disagree.",
+          "type": "boolean"
+        },
+        "rawPath": {
+          "description": "Repo-relative path to the observation file. Required once a result exists: an accuracy figure whose sample nobody can reconstruct is the thing this container refuses to hold.",
+          "type": "string",
+          "minLength": 1
+        },
+        "rawSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "operators": {
+      "description": "Who ran the instrument. One operator is a measurement; independent operators are what turns operator technique from an unmeasured confound into an observed one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "independent", "independenceNote", "affiliations"],
+      "properties": {
+        "count": { "type": "integer", "minimum": 1 },
+        "independent": {
+          "description": "True only when at least two operators worked without sharing a setup, a procedure walkthrough or each other's results, and none of them is affiliated with this project.",
+          "type": "boolean"
+        },
+        "independenceNote": { "type": "string", "minLength": 1 },
+        "affiliations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "candidate": {
+      "description": "The OpenLiDARViewer side: the exact revision whose output was compared against the survey.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "version", "algorithmVersion", "product"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "version": { "type": "string", "minLength": 1 },
+        "algorithmVersion": { "type": "string", "minLength": 1 },
+        "product": {
+          "description": "What was tested: the DTM, a volume, a distance. The surface the checkpoints must not have leaked into.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "metrics": {
+      "description": "The acceptance gate, registered before fieldwork and covered by protocolDigest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["toleranceAbs", "toleranceUnit", "minimumCheckpoints", "minimumStratumCheckpoints", "requiredWithinToleranceFraction"],
+      "properties": {
+        "toleranceAbs": { "type": "number", "minimum": 0 },
+        "toleranceUnit": { "type": "string", "minLength": 1 },
+        "minimumCheckpoints": { "type": "integer", "minimum": 1 },
+        "minimumStratumCheckpoints": { "type": "integer", "minimum": 1 },
+        "requiredWithinToleranceFraction": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["usableCheckpoints", "rmse", "bias", "withinToleranceFraction", "maxAbsResidual"],
+      "properties": {
+        "usableCheckpoints": { "type": "integer", "minimum": 0 },
+        "rmse": { "type": "number", "minimum": 0 },
+        "bias": { "type": "number" },
+        "nmad": { "type": "number", "minimum": 0 },
+        "withinToleranceFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "maxAbsResidual": { "type": "number", "minimum": 0 },
+        "biasCiLower": { "type": "number" },
+        "biasCiUpper": { "type": "number" },
+        "uncertaintyCombinationId": {
+          "description": "The preregistered rule that folded the survey's own uncertainty into the reported figure, echoed from src/validation/checkpointAccuracy.ts. Null when none was applied, never a relabelled observed RMSE.",
+          "type": ["string", "null"]
+        },
+        "byStratum": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stratum", "status", "n"],
+            "properties": {
+              "stratum": { "type": "string", "minLength": 1 },
+              "status": { "type": "string", "enum": ["reported", "insufficient"] },
+              "n": { "type": "integer", "minimum": 0 },
+              "rmse": { "type": ["number", "null"], "minimum": 0 },
+              "bias": { "type": ["number", "null"] }
+            }
+          }
+        }
+      }
+    },
+    "scope": {
+      "description": "What the study supports, and what it explicitly does not. notCovered may never be empty: a field study that states no boundary is being read as covering everything.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "notCovered"],
+      "properties": {
+        "supported": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stratum", "statement"],
+            "properties": {
+              "stratum": { "type": "string", "minLength": 1 },
+              "statement": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "notCovered": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
