@@ -7,15 +7,37 @@
 #   - currentEvidence must reflect evidence that EXISTS today. Three claims
 #     currently reach E4: SLOPE-RASTER, ASPECT-RASTER and HILLSHADE, each
 #     cross-implemented against GDAL 3.13.1 on the same frozen analytic fixture
-#     within the tolerance registered before its reference was generated (0.5
-#     degree for slope and aspect, 1.0 8-bit level for hillshade). No claim
-#     reaches E5 (no field validation has been run). Synthetic known-truth
-#     fixtures alone remain E3, not accuracy.
+#     (0.5 degree for slope and aspect, 1.0 8-bit level for hillshade). Two of
+#     those three tolerances were registered before the reference was generated:
+#     slope and hillshade were fixed in the harness commit a78b0f9 on 2026-07-05,
+#     weeks ahead of their results. ASPECT-RASTER was NOT. Its slot, its
+#     tolerance, its flat-ground exclusion and its reference raster all landed in
+#     40e2ca1 on 2026-07-26, so no commit shows its gate while it had no result;
+#     carrying slope's number over is defensible, and it is not a preregistration
+#     and must not be written as one. Per-claim freeze provenance, with the
+#     commit to check, is in validation/protocols/. No claim reaches E5 (no field
+#     validation has been run). Synthetic known-truth fixtures alone remain E3,
+#     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
 #     and unavailable. Three independent GDAL reference slots are supplied; all
 #     remaining independent-reference slots are pending. Never infer it from
 #     density / format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
+#   - scope states, in the shape the study manifests use, what the evidence
+#     covers (scope.supported, dataset + parameter-set pairs) and what it does
+#     not (scope.unsupported). A claim below E4 has no cross-implementation
+#     study behind it, so its scope.supported is empty and the boundary lives
+#     entirely in scope.unsupported. scripts/lint-claim-register.mjs refuses a
+#     claim with no scope, and refuses a scope.supported entry no supporting
+#     study supports.
+#   - supportingStudies names the cross-implementation study manifests behind an
+#     E4 claim. The ids must exist under validation/cross-implementation/studies/,
+#     must be studies for this claim, and must carry a status that measured
+#     something. Registered-but-not-run cannot hold a claim up.
+#   - externalValidationRecords is what an E5 or E6 claim would have to name,
+#     under validation/field/ or validation/reproduction/. No claim is at either
+#     level, and neither can be produced from inside this repository, so the
+#     lint fails any claim that reaches for one without the record.
 #
 # This is a living document; update an entry in the same change that alters its
 # product. A product with no entry is treated as E0 / not exportable.
@@ -66,6 +88,15 @@ schemaVersion: 1
 # compound frames. No claim's evidence level moves on that account, because the
 # fixtures behind every level are projected metre frames. softwareVersion below
 # is stamped at release time.
+# 0.6.3 adds scope, supportingStudies and externalValidationRecords, and moves no
+# claim. SLOPE-RASTER, ASPECT-RASTER and HILLSHADE now cite the study manifests
+# that record the comparisons they were already at E4 on, and each states what
+# its evidence does not reach. The 24-fixture GDAL matrix under
+# validation/cross-implementation/raster-matrix/ is named in those scopes for
+# what it produced, which is boundaries: the halved border slope, the geographic
+# aspect divergence with no reference to arbitrate it, the multidirectional
+# hillshade split, and the nodata-halo difference. Every one of those narrows a
+# claim. None of them promotes one, and the per-claim scopeNote says so.
 softwareVersion: 0.6.3
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
@@ -92,6 +123,12 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Geometric distance in the stated units; visual-inspection grade."
     prohibitedClaim: ["survey-grade distance", "certified accuracy"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any accuracy figure. The arithmetic is exact for the two points picked; nothing here measures how well those points sit on the surface."
+        - "Geographic-degree frames, where a metric distance is refused rather than approximated."
+        - "Instrument, lens and registration error, none of which is modelled."
 
   - claimId: MEAS-AREA
     product: Area measurement
@@ -113,6 +150,12 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Planimetric area in the stated units; visual-inspection grade."
     prohibitedClaim: ["survey-grade area", "geodetic area"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any accuracy figure. The shoelace area is exact for the polygon given and says nothing about how well the polygon follows the feature."
+        - "Geographic-degree grids, which are refused."
+        - "Extents large enough for the planar-projection assumption to fail."
 
   - claimId: MEAS-HEIGHT
     product: Height / vertical measurement
@@ -134,6 +177,12 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Vertical delta in the stated units; visual-inspection grade."
     prohibitedClaim: ["orthometric height", "datum-referenced elevation"]
+    scope:
+      supported: []
+      unsupported:
+        - "Vertical-datum transformation. The delta is between two picked heights in the scan frame."
+        - "Scans whose vertical unit is undeclared and differs from the horizontal unit."
+        - "Orthometric or datum-referenced elevation of either point."
 
   - claimId: MEAS-ANGLE
     product: Angle measurement
@@ -155,6 +204,12 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Geometric angle between picked segments."
     prohibitedClaim: ["true bearing / azimuth without CRS north"]
+    scope:
+      supported: []
+      unsupported:
+        - "Azimuth or true bearing, which need a CRS north the frame does not supply."
+        - "Frames whose horizontal and vertical scales differ."
+        - "Any accuracy figure for the picked segments."
 
   - claimId: MEAS-PROFILE
     product: Cross-section profile
@@ -176,6 +231,12 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Sampled elevation profile along the section."
     prohibitedClaim: ["survey-grade longitudinal section"]
+    scope:
+      supported: []
+      unsupported:
+        - "Vertical fidelity between samples. The profile is what the sampling density can see."
+        - "Sections crossing gaps, where the line is interpolated rather than measured."
+        - "Any survey-grade longitudinal section."
 
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
@@ -198,6 +259,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Order-of-magnitude preview volume; not a survey quantity."
     prohibitedClaim: ["survey-grade volume", "area-weighted integration", "quantified uncertainty"]
+    scope:
+      supported: []
+      unsupported:
+        - "Every quantitative volume claim. The estimator assumes uniform point density and reports no uncertainty."
+        - "Clouds with a density gradient or a missing footprint quadrant, where the sample is biased and the bias is not measured."
+        - "Bases other than the one specified, including sloped and curved bases."
 
   - claimId: VOL-STOCKPILE
     product: Stockpile volume
@@ -219,6 +286,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Exploratory volume preview; spatial correlation and base uncertainty unquantified."
     prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
+    scope:
+      supported: []
+      unsupported:
+        - "Base-surface uncertainty, which is unquantified."
+        - "Non-uniform density and coverage gaps."
+        - "Any validated uncertainty interval on the reported volume."
 
   # ── Ground / terrain surfaces ───────────────────────────────────────────────
   - claimId: GROUND-FILTER
@@ -241,6 +314,13 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Ground separation validated on synthetic known-truth fixtures."
     prohibitedClaim: ["SMRF (unqualified)", "field-validated ground accuracy", "precision/recall on external benchmarks"]
+    scope:
+      supported: []
+      unsupported:
+        - "Real terrain. The evidence is synthetic known-truth fixtures, and synthetic validation is not field validation."
+        - "Precision and recall against an external benchmark; none has been run."
+        - "Steep sparse terrain, dense low vegetation and complex roofs, the cases the fixtures do not contain."
+        - "The name SMRF unqualified. A subset of the stages is implemented and the output metadata says which."
 
   - claimId: DTM
     product: DTM (bare-earth grid)
@@ -262,6 +342,13 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "DTM validated against analytic surfaces (covered cells)."
     prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy"]
+    scope:
+      supported: []
+      unsupported:
+        - "Real terrain. The evidence is analytic surfaces."
+        - "Independent checkpoint accuracy, which needs checkpoints this project does not have."
+        - "Large voids and steep breaklines."
+        - "Vegetation leakage inherited from the ground filter."
 
   - claimId: DSM
     product: DSM (top surface)
@@ -283,6 +370,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "DSM equals the top surface on synthetic scenes."
     prohibitedClaim: ["field-validated DSM accuracy"]
+    scope:
+      supported: []
+      unsupported:
+        - "Real scenes. The evidence is synthetic overlay scenes."
+        - "Structures thinner than the grid resolution."
+        - "Any field-validated accuracy figure."
 
   - claimId: CHM
     product: CHM (canopy height, DSM − DTM)
@@ -304,6 +397,11 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Canopy-height reconstruction validated on synthetic scenes."
     prohibitedClaim: ["field-validated canopy height"]
+    scope:
+      supported: []
+      unsupported:
+        - "Real canopy. The evidence is synthetic overlay scenes."
+        - "Anything the DTM and DSM it is differenced from do not support; their errors propagate here unchanged."
 
   - claimId: CONTOURS
     product: Contours
@@ -325,6 +423,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Contours validated against synthetic surfaces; grade tracks confidence."
     prohibitedClaim: ["survey-grade contours"]
+    scope:
+      supported: []
+      unsupported:
+        - "Real terrain. The evidence is synthetic surfaces."
+        - "Interpolated stretches. They are graded dashed rather than solid, which marks them, and marking is not measuring."
+        - "Survey-grade contours."
 
   # ── Terrain descriptors ─────────────────────────────────────────────────────
   - claimId: SLOPE-RASTER
@@ -336,6 +440,7 @@ claims:
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     supportingTests: [tests/terrainTruth.surface.test.ts, tests/slopeCrossCheck.test.ts]
     supportingDatasets: [analytic planes, frozen quadratic DEM with GDAL Horn reference]
+    supportingStudies: [OLV-XS-001-SLOPE-RASTER-GDAL-HORN]
     units: [degrees]
     crsDatum: "Handles geographic grids via per-axis cell metres."
     assumptions: ["Horn convention documented"]
@@ -347,6 +452,19 @@ claims:
     externalValidationStatus: partial
     approvedClaim: "Horn slope agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree tolerance (max difference under 0.001 degree)."
     prohibitedClaim: ["field-validated slope accuracy", "survey-grade slope", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated", "slope validated on every terrain type"]
+    scope:
+      supported:
+        - datasetId: OLV-DS-001-ANALYTIC-DEM
+          parameterSetId: PS-HORN-DEG-METRE-NOEDGES
+      unsupported:
+        - "The one-cell border. The 24-fixture GDAL matrix measured a shortfall of up to 16.2 degrees there against gdaldem -compute_edges, with the bias always negative, on the whole outer ring."
+        - "Nodata neighbourhoods. The same matrix found that gdaldem propagates nodata through the 3x3 window while this project substitutes the centre value and answers for every halo cell, biasing slope toward zero near a hole and leaving no marker in the output."
+        - "Slopes above about 16.4 degrees, the steepest the supporting fixture reaches."
+        - "Geographic grids. The supporting study is a metre grid with no CRS in its header, so the per-axis cell-metre path is not exercised by it."
+        - "Vertical units other than metre."
+        - "The point-cloud-to-DTM pipeline. The evidence starts from a DEM."
+        - "Accuracy. Two implementations of Horn's method agreeing is not a measurement against ground truth."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set, and it is not what holds the level up. It is not registered as a study under a frozen protocol, its tolerances were fixed for that exercise rather than for this claim, and what it produced was boundaries rather than breadth - two of the entries above come from it. Evidence that narrows a claim is not grounds to raise it, so the level did not move."
 
   - claimId: ASPECT-RASTER
     product: Aspect raster
@@ -357,6 +475,7 @@ claims:
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     supportingTests: [tests/terrainTruth.surface.test.ts, tests/aspectCrossCheck.test.ts]
     supportingDatasets: [analytic planes, frozen quadratic DEM with GDAL Horn aspect reference]
+    supportingStudies: [OLV-XS-002-ASPECT-RASTER-GDAL-HORN]
     units: [degrees]
     crsDatum: "Handles geographic grids via per-axis cell metres."
     assumptions: ["northing-up grid", "downslope convention documented"]
@@ -366,8 +485,20 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Horn aspect agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree circular tolerance (max separation under 0.001 degree over 10,932 cells with slope above 2 degrees)."
+    approvedClaim: "Horn aspect agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within a 0.5 degree circular tolerance (max separation under 0.001 degree over 10,932 cells with slope above 2 degrees). That tolerance was carried over from slope in the same change that produced this result, not preregistered ahead of it."
     prohibitedClaim: ["field-validated aspect accuracy", "aspect defined on flat ground", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated"]
+    scope:
+      supported:
+        - datasetId: OLV-DS-001-ANALYTIC-DEM
+          parameterSetId: PS-HORN-COMPASS-METRE-NOEDGES
+      unsupported:
+        - "Flat ground, where aspect is undefined. gdaldem writes -9999, or 0 under -zero_for_flat, while this project writes 0 radians in the math frame, which reads as compass 90 and carries no undefined marker; the 24-fixture matrix recorded that difference."
+        - "Geographic grids. gdaldem aspect accepts neither -xscale nor -yscale, so an anisotropic aspect reference cannot be produced from the reference tool at all, and the matrix measured a 7.5 degree divergence at latitude 45 with nothing to arbitrate it."
+        - "The one-cell border, which the reference command leaves undefined."
+        - "Nodata neighbourhoods, where the two nodata policies differ."
+        - "The point-cloud-to-DTM pipeline. The evidence starts from a DEM."
+        - "Accuracy. Agreement between two implementations of Horn's method is not a measurement against ground truth."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is not registered as a study under a frozen protocol, and for aspect its clearest finding is a limit rather than a broadening: on a geographic grid the reference tool cannot be given per-axis scales at all, so there is no reference to arbitrate the 7.5 degree divergence it measured. A finding of that shape narrows the claim; it does not promote it."
 
   - claimId: HILLSHADE
     product: Hillshade
@@ -378,6 +509,7 @@ claims:
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     supportingTests: [tests/terrainTruth.hillshade.test.ts, tests/relief*.test.ts, tests/hillshadeCrossCheck.test.ts]
     supportingDatasets: [analytic flat-plane Lambert, frozen quadratic DEM with GDAL Horn hillshade reference]
+    supportingStudies: [OLV-XS-003-HILLSHADE-GDAL-HORN]
     units: [level on 0-255]
     crsDatum: metric-or-geographic
     assumptions: ["light azimuth/altitude as configured", "single-direction model only, not multidirectional", "our 8-bit encoding is 255*h where GDAL uses 1 + 254*h"]
@@ -389,6 +521,17 @@ claims:
     externalValidationStatus: partial
     approvedClaim: "Single-direction hillshade agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 1.0-level tolerance on the 0-255 scale (ours vs closed form max 0.0000643; ours vs GDAL max 1.00 over all 11,564 interior cells). Our intensity re-encoded in GDAL's 1 + 254*h scale reproduces the reference exactly."
     prohibitedClaim: ["field-validated hillshade accuracy", "multidirectional hillshade cross-implementation validated", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated", "byte-identical agreement with GDAL under our own encoding"]
+    scope:
+      supported:
+        - datasetId: OLV-DS-001-ANALYTIC-DEM
+          parameterSetId: PS-HORN-HILLSHADE-AZ315-ALT45
+      unsupported:
+        - "Byte-identical agreement under this project's own encoding. GDAL writes 1 + 254*h where this project writes 255*h, and the measured maximum of exactly one level is that offset; the identity holds only after re-encoding into GDAL's scale."
+        - "Multidirectional relief, which is a different illumination model on each side. The 24-fixture matrix measured a divergence of up to 50 of 255 levels, coinciding only at zero gradient."
+        - "Sun positions other than azimuth 315 and altitude 45, and z-factors other than 1."
+        - "The one-cell border, which the reference command leaves undefined."
+        - "Accuracy of any kind. Hillshade is a shading index, not a physical quantity, and carries no elevation-accuracy meaning."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is not registered as a study under a frozen protocol, and its extra sun positions and multidirectional legs were compared under its own tolerances rather than this claim's one-level gate. Its multidirectional finding is a divergence of up to 50 of 255 levels, which is recorded above as unsupported. The level did not move."
 
   - claimId: VRM-TPI
     product: VRM / TPI terrain descriptors
@@ -410,6 +553,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Index per the documented convention + neighbourhood."
     prohibitedClaim: ["standardised / cross-validated ruggedness"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any cross-implementation or standardised ruggedness figure; no second implementation has been compared."
+        - "Neighbourhood radii other than the documented one, since both indices are scale-sensitive."
+        - "Cells near the grid edge."
 
   # ── Accuracy statistics ─────────────────────────────────────────────────────
   - claimId: HOLDOUT-RMSE
@@ -432,6 +581,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Internal holdout RMSE against known synthetic surfaces."
     prohibitedClaim: ["independent checkpoint accuracy", "field accuracy", "spatially-blocked error (pending)"]
+    scope:
+      supported: []
+      unsupported:
+        - "Independent checkpoint accuracy. The held-out points come from the same source as the points interpolated."
+        - "Any figure corrected for spatial autocorrelation, which inflates the apparent accuracy of a point-wise holdout."
+        - "Real terrain. The evidence is analytic surfaces."
 
   - claimId: NVA-VVA
     product: NVA/VVA-style vertical accuracy
@@ -453,6 +608,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "NVA/VVA-style statistic from internal holdout."
     prohibitedClaim: ["ASPRS NVA/VVA compliance", "independent checkpoint accuracy"]
+    scope:
+      supported: []
+      unsupported:
+        - "ASPRS NVA/VVA compliance, which presumes independent checkpoints this project does not have."
+        - "Real terrain. The statistic is computed on an internal holdout over analytic surfaces."
+        - "Any statement about vertical datum, which is not transformed."
 
   - claimId: QUALITY-LEVEL
     product: USGS Quality-Level comparison
@@ -474,6 +635,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Density + internal RMSE compared to stated thresholds."
     prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any USGS or ASPRS quality-level compliance determination, which needs independent checkpoints and the full standard."
+        - "The thresholds themselves, which are quoted from a named and versioned source rather than validated here."
+        - "Real terrain, since the internal RMSE it compares is itself an internal diagnostic."
 
   - claimId: CONFIDENCE-OVERLAY
     product: Confidence overlay
@@ -495,6 +662,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Empirical reliability for measured cells at |error| <= tau; model-based support for interpolated cells."
     prohibitedClaim: ["calibrated probability for interpolated cells", "single undifferentiated confidence"]
+    scope:
+      supported: []
+      unsupported:
+        - "Calibrated probability for interpolated cells. Their score is model-based support and has been calibrated against nothing."
+        - "A single undifferentiated confidence number. Measured-cell reliability and interpolated-cell support are different quantities and are kept apart."
+        - "Real terrain. The evidence is analytic surfaces."
 
   # ── Change detection ────────────────────────────────────────────────────────
   - claimId: EPOCH-ALIGN
@@ -517,6 +690,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Rigid alignment with reported residuals on synthetic pairs."
     prohibitedClaim: ["validated registration accuracy", "safe cross-datum comparison"]
+    scope:
+      supported: []
+      unsupported:
+        - "Registration accuracy. Residuals are reported on synthetic epoch pairs and are not a validated accuracy figure."
+        - "Cross-datum and unknown-datum pairs, which are refused for quantitative comparison."
+        - "Low-overlap pairs, and the spatial bias stride sampling introduces."
 
   - claimId: CHANGE-RASTER
     product: Change raster / DTM difference
@@ -538,6 +717,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Per-cell change vs a global LoD on synthetic pairs."
     prohibitedClaim: ["validated change accuracy", "per-cell LoD95 (pending)"]
+    scope:
+      supported: []
+      unsupported:
+        - "Per-cell LoD95. One global level of detection is applied and cells are treated independently."
+        - "Real epoch pairs. The evidence is synthetic."
+        - "Registration error, which propagates into every cell and is not quantified here."
 
   - claimId: CHANGE-VOLUME
     product: Change volume (gain/loss/net)
@@ -559,6 +744,12 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Integrated change volume with exploratory uncertainty."
     prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any validated change volume."
+        - "Spatially correlated uncertainty, which is not quantified."
+        - "Anything the change raster underneath it does not support."
 
   - claimId: UNCERTAINTY-BAND
     product: Uncertainty band (on deltas / volumes)
@@ -580,6 +771,11 @@ claims:
     externalValidationStatus: pending
     approvedClaim: "Model-based band over the included sources."
     prohibitedClaim: ["complete uncertainty budget", "validated coverage interval"]
+    scope:
+      supported: []
+      unsupported:
+        - "A complete uncertainty budget. Several GUM terms and spatial correlation are omitted, and the omitted terms are listed beside the band."
+        - "Any coverage interval that has been validated against outcomes."
 
   # ── Provenance / integrity ──────────────────────────────────────────────────
   - claimId: REPORT-DIGEST
@@ -602,6 +798,11 @@ claims:
     externalValidationStatus: none
     approvedClaim: "SHA-256 detects post-stamp content edits."
     prohibitedClaim: ["proof of authorship", "signed by a trusted identity"]
+    scope:
+      supported: []
+      unsupported:
+        - "Authorship. A digest detects post-stamp edits; it is not a signature and not a trusted identity."
+        - "The correctness of the numbers it covers. It says they have not changed, not that they were right."
 
   - claimId: PROVENANCE-INFERENCE
     product: Capture-type provenance inference
@@ -623,3 +824,9 @@ claims:
     externalValidationStatus: none
     approvedClaim: "Heuristic capture-type guess with cited literature context."
     prohibitedClaim: ["measured accuracy of this dataset", "aerial classification for an object/interior scan", "input to readiness/uncertainty calculations"]
+    scope:
+      supported: []
+      unsupported:
+        - "Measured accuracy of this scan. The literature ranges are context for a capture type, not measurements of this dataset."
+        - "Any input to readiness or uncertainty calculations."
+        - "Capture types outside the metadata and density cues the heuristic reads."

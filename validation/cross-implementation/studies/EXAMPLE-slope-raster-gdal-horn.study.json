@@ -6,8 +6,13 @@
   "notes": [
     "EXAMPLE MANIFEST. It is a filled-in template, not a study: nothing here has been run, and the verifier refuses to let an example carry a result or reach a summary count.",
     "It is written out in full because the shape is the point. SLOPE-RASTER is at E4 on one GDAL run over one dataset with one parameter set; REFERENCE_SLOTS can hold exactly that and no more. This record registers two datasets and two parameter sets for the same claim, which is what a validation programme actually looks like.",
-    "Copy it, change studyId (drop the EXAMPLE- prefix and set example to false), and recompute protocolDigest with protocolDigestOf() from scripts/verify-cross-implementation-study.mjs BEFORE running anything."
+    "Copy it, change studyId (drop the EXAMPLE- prefix and set example to false), and recompute protocolDigest with protocolDigestOf() from scripts/verify-cross-implementation-study.mjs BEFORE running anything.",
+    "protocolRef points at the frozen protocol this study would run under, in validation/protocols/. Write that record first and commit it; a protocol written after the numbers describes a result instead of gating it."
   ],
+  "protocolRef": {
+    "protocolId": "EXAMPLE-PROTO-SLOPE-RASTER-GDAL-HORN",
+    "digest": "sha256:af0634ebc741c18ff62a65be73a303d7398b4d472bc16e7ba1fa58a1d61009b0"
+  },
   "protocolDigest": "sha256:0a8b2ea9c633c1b81a2e6ee6a0d8ebe1559b88b9e62e61b694c2d73484569daf",
   "candidate": {
     "revision": "1c5733c9ce79eb7ae023cde762e6124ee11ec895",
