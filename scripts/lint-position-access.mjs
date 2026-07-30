@@ -24,7 +24,7 @@
  */
 
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { resolve, dirname, relative, join } from 'node:path';
+import { resolve, dirname, relative, join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -60,10 +60,20 @@ function countReads(file) {
   return n;
 }
 
+/**
+ * The baseline is a COMMITTED file keyed by repository-relative path, so the
+ * key has to be the same string on every operating system. `path.relative`
+ * returns `src\core\x.ts` on Windows, which matches nothing in a baseline
+ * written with forward slashes — the ratchet then reports every counted file
+ * as new and fails a clean tree. Normalising the separator is a no-op on
+ * POSIX, where `sep` is already `/`.
+ */
+const posix = (p) => p.split(sep).join('/');
+
 const current = {};
 for (const file of walk(SRC)) {
   const n = countReads(file);
-  if (n > 0) current[relative(ROOT, file)] = n;
+  if (n > 0) current[posix(relative(ROOT, file))] = n;
 }
 
 const update = process.argv.includes('--update');

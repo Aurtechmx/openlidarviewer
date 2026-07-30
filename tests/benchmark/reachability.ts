@@ -36,11 +36,15 @@
 
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import inspector from 'node:inspector';
 import { afterAll, beforeAll, expect } from 'vitest';
 
-const ROOT = resolve(dirname(new URL(import.meta.url).pathname), '../..');
+// `URL.pathname` is a URL path, not a filesystem path: on Windows it is
+// `/D:/a/…`, and resolving that against the cwd produced `D:\D:\a\…`, which
+// no file has. Five benchmark suites failed on ENOENT for the claims registry
+// before this. fileURLToPath returns the real path on every platform.
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const REGISTRY = join(ROOT, 'validation/reachability/claims.json');
 const LEDGER_DIR = join(ROOT, 'validation/reachability/ledger');
 

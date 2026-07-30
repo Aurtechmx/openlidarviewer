@@ -42,7 +42,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
@@ -169,8 +169,12 @@ async function main() {
 
     // Every file the npm scripts execute, derived rather than listed twice.
     const pkg = JSON.parse(readFileSync(join(dest, 'package.json'), 'utf8'));
+    // A file URL, not a raw path. `dest` is under the temp directory, so on
+    // Windows the specifier would start `C:\…` and ESM would read `C:` as a
+    // URL scheme; the `.catch` below would then turn that into a confident
+    // report that the file is missing from the clone, which it is not.
     const { scriptFileTargets } = await import(
-      join(dest, 'scripts', 'verify-archive-portability.mjs')
+      pathToFileURL(join(dest, 'scripts', 'verify-archive-portability.mjs')).href
     ).catch(() => ({ scriptFileTargets: null }));
     if (typeof scriptFileTargets === 'function') {
       const targets = scriptFileTargets(pkg.scripts ?? {});
