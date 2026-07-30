@@ -56,6 +56,58 @@ and is recorded as `mixed`, with the split stated in its
 `conventionalSuiteNote`. The schema permits `unknown`; it does not permit
 inferring `green`.
 
+## Version-paired replay
+
+The registry says what each defect was. The replay asks something narrower: run
+the regression artifact a record names against the tree at tag `v0.6.1` and
+against the current tree, and record what each side did. Reachability at the
+baseline is then established per record by that run, or it is not established and
+the record says so.
+
+| file | what it is |
+| --- | --- |
+| `scripts/replay-defects.mjs` | Runs each probe in both trees and writes one raw record per run. |
+| `scripts/defect-replay-lib.mjs` | The derivation: probe planning, the state of a pair, and the three comparison files. |
+| `scripts/verify-defect-replay.mjs` | Recomputes every derived value from the raw records and refuses any that does not recompute. |
+| `validation/defects/replay/raw/` | One record per run: command, exit code, transcript, reporter capture. Nothing in a raw record is a judgement. |
+| `validation/defects/replay/replay.{json,csv,md}` | Generated. Every state and every count. |
+
+A probe is evidence for a record only when it failed at the baseline and passed
+at the candidate. Three other outcomes exist, they are counted separately, and
+none of them is folded into that one.
+
+A probe can pass on both trees. Some do because they were written as the control
+beside a case that does discriminate, and a control is supposed to hold before
+and after. Others exercise a sibling path the fault never reached: a LAS 1.2
+header where the fault needed a LAS 1.4 WKT record, or a pure classifier where
+the fault was in one of its two callers. Either way that probe shows nothing
+about the old behaviour, and its state is `non-discriminating`.
+
+A probe can also fail at the baseline for a reason that is not the defect. Where
+the binding it calls is the helper the fix introduced, the call throws before it
+reaches any code under test, so nothing was observed there. That reads
+`component-absent-at-baseline`, the same state as a probe whose import did not
+resolve in the baseline tree at all.
+
+A run can also fail to settle, through a timeout, a missing reporter file, or a
+test title that matched nothing. That is `inconclusive`, which reports on the run
+rather than on the probe.
+
+`validation/snapshot/` carries its own copy of the three comparison files,
+checked against that snapshot's manifest rather than against the working tree. A
+snapshot built before the states above were separated therefore still reports the
+older bucket names, and rebuilding it with `npm run validation:snapshot` needs an
+environment holding every producer's records. The files under
+`validation/defects/replay/` are the current ones.
+
+Rewriting a non-discriminating probe so that it fails at the baseline was
+considered for each one and rejected each time. Every such probe sits in a record
+that already carries a probe discriminating on the same fault, so a rewritten
+control would restate evidence the record already has. One record fails the other
+way round: the functions its probe would need to call were deleted by the fix, so
+no probe that must pass at the candidate can reach them, and that record reads
+`non-discriminating` instead of reproduced.
+
 ## Detection and discovery are separate fields
 
 `detectingMechanism` names the validation suite that exposed the defect and

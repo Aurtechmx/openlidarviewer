@@ -22,14 +22,22 @@ export const RAW_DIR = resolve(REPLAY_DIR, 'raw');
 export const BASELINE_REF = 'v0.6.1';
 
 /**
- * The five states. They are kept apart on purpose: each says something
+ * The six states. They are kept apart on purpose: each says something
  * different about what the replay established, and collapsing any of them into
  * a pass or a zero would state more than the run supports.
+ *
+ * `non-discriminating` used to be folded into `inconclusive`, which put two
+ * unlike things in one bucket: a probe that passed on both trees, and a probe
+ * whose pair produced nothing readable. The first is a property of the probe
+ * and will not change on a re-run; the second is a property of the run and may.
+ * Only the first tells a reader that the probe cannot bear on the defect at
+ * all, so it is named.
  */
 export const STATES = [
   'reproduced-then-fixed',
   'component-absent-at-baseline',
   'environment-unavailable',
+  'non-discriminating',
   'not-executed',
   'inconclusive',
 ];
@@ -38,13 +46,15 @@ export const STATE_MEANING = {
   'reproduced-then-fixed':
     'the probe failed at the baseline on the behaviour the record describes, and passes at the candidate',
   'component-absent-at-baseline':
-    'the probe could not load at the baseline because a module it needs did not exist in that tree',
+    'the probe could not observe the baseline at all, because a module it imports or a binding it calls did not exist in that tree',
   'environment-unavailable':
     'the probe needs a runtime this host does not offer',
+  'non-discriminating':
+    'the probe passed on both trees, so it demonstrates nothing about the old behaviour and is not evidence for this record',
   'not-executed':
     'the registry names no separately executable artifact for this entry, so nothing was run for it',
   'inconclusive':
-    'the probe ran on both sides and did not establish the old behaviour',
+    'the pair produced no readable result on one side or the other, so nothing can be read off it',
 };
 
 /* ------------------------------------------------------------- primitives */
@@ -158,6 +168,21 @@ const MODULE_MISSING = /Cannot find module ['"]([^'"]+)['"]|Failed to (?:load|re
 const RUNTIME_MISSING = /navigator\.gpu|WebGPU is not available|browserType\.launch|Executable doesn't exist|requires a browser/i;
 
 /**
+ * A failure that is only "the imported binding this probe calls is not a
+ * function".
+ *
+ * Such a failure says the symbol did not exist in that tree. It does not show
+ * the old behaviour: the probe threw on its first call and observed nothing
+ * about what the code did. Counting it as a reproduction would credit the
+ * absence of the fix's own helper as evidence of the fault the helper replaced.
+ *
+ * The pattern names the vite SSR transform's import wrapper on purpose. A bare
+ * `x.y is not a function` also fires on a method call against a runtime object,
+ * which is an ordinary behavioural failure and must keep its reading.
+ */
+const ABSENT_BINDING = /__vite_ssr_import_\d+__\.([A-Za-z_$][\w$]*)\)? is not a function/;
+
+/**
  * Read one raw record and say what the run did. Pure: the same record always
  * gives the same answer, and it reads only captures, never a stored judgement.
  */
@@ -225,10 +250,15 @@ export function deriveOutcome(record) {
     return { outcome: 'no-matching-case', detail: 'the named title matched no test in that tree', exitCode: record.exitCode };
   }
   if (failed.length > 0) {
+    // Only when EVERY failed case is an absent binding. A probe that failed on
+    // an absent helper AND on a value did observe the value, so it keeps the
+    // behavioural reading.
+    const bindings = failed.map((a) => ABSENT_BINDING.exec((a.failureMessages ?? []).join('\n'))?.[1] ?? null);
     return {
       outcome: 'failed-assertion',
       detail: firstLine((failed[0].failureMessages ?? []).join('\n')) || 'assertion failed with no message',
       failedCases: failed.map((a) => a.fullName ?? a.title ?? '').sort(),
+      absentBinding: bindings.every((b) => b !== null) ? bindings[0] : null,
       exitCode: record.exitCode,
     };
   }
@@ -296,7 +326,16 @@ export function deriveState(probe, baseline, candidate) {
     return { state: 'inconclusive', why: `the candidate side did not pass (${c.outcome}: ${c.detail}), so the pair shows no corrected behaviour` };
   }
   if (b.outcome === 'passed') {
-    return { state: 'inconclusive', why: 'the probe passes on the baseline tree as well, so it does not establish the old behaviour' };
+    return { state: 'non-discriminating', why: 'the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour' };
+  }
+  // Before reading a baseline failure as a reproduction, check what failed. A
+  // probe that threw because the binding it calls was absent established the
+  // absence of that symbol, not the behaviour the record describes.
+  if (b.absentBinding) {
+    return {
+      state: 'component-absent-at-baseline',
+      why: `the probe called ${b.absentBinding} at the baseline and that binding did not exist in that tree, so it observed nothing about the old behaviour`,
+    };
   }
   if (b.outcome === 'failed-assertion' || b.outcome === 'failed') {
     return { state: 'reproduced-then-fixed', why: `the baseline run ${b.outcome === 'failed-assertion' ? 'failed the assertion' : 'failed'} (${b.detail}); the candidate run passes` };
@@ -304,12 +343,21 @@ export function deriveState(probe, baseline, candidate) {
   return { state: 'inconclusive', why: `unclassified baseline outcome ${b.outcome}` };
 }
 
-/** Precedence when one record has several probes. Documented, and stable. */
+/**
+ * Precedence when one record has several probes. Documented, and stable.
+ *
+ * `non-discriminating` sits below `inconclusive` because it is the weaker
+ * report of the two: a probe that passed on both trees says the probe cannot
+ * bear on the record, while an inconclusive pair says the run itself did not
+ * settle. A record whose only executable probe passed on both sides therefore
+ * reads non-discriminating, and never reproduced-then-fixed.
+ */
 export const DEFECT_STATE_PRECEDENCE = [
   'reproduced-then-fixed',
   'component-absent-at-baseline',
   'environment-unavailable',
   'inconclusive',
+  'non-discriminating',
   'not-executed',
 ];
 
@@ -533,7 +581,14 @@ export function renderComparisons(registry, probes, records) {
       'The registry records a full-suite run at the baseline tag that exited 0. That exit code is not read here and '
       + 'establishes nothing per defect: a green suite says the suite passed while the defective code was present, '
       + 'not that any test in it reached a given code path. Where a probe did not establish reachability at the '
-      + 'baseline, the state is inconclusive and the reason says why.',
+      + 'baseline, its state says in which way it did not, and the reason beside it says why.',
+    discriminationCaveat:
+      'A probe is evidence for a record only if it failed at the baseline and passed at the candidate. Two kinds of '
+      + 'probe fail that test and are counted apart from it. A probe that passed on both trees is non-discriminating: '
+      + 'it shows nothing about the old behaviour, whether it was written as a control for the case beside it or it '
+      + 'exercises a sibling path the defect never touched. A probe whose baseline failure was an absent binding is '
+      + 'component-absent-at-baseline: the call threw before it reached the code under test, so no behaviour was '
+      + 'observed there. Neither group is counted under reproduced-then-fixed, at the probe level or the record level.',
     stateMeanings: STATE_MEANING,
     defectStatePrecedence: DEFECT_STATE_PRECEDENCE,
     environments,
@@ -585,6 +640,10 @@ export function renderComparisons(registry, probes, records) {
   md.push(json.method);
   md.push('');
   md.push(json.baselineSuiteCaveat);
+  md.push('');
+  md.push('## What counts as evidence');
+  md.push('');
+  md.push(json.discriminationCaveat);
   md.push('');
   if (environments.length > 0) {
     md.push('| side | ref | commit | node | vitest | platform |');
