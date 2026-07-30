@@ -6013,9 +6013,9 @@ async function handleFile(file: File): Promise<void> {
     document.body.classList.add('olv-has-scan');
     if (isPhone()) navBar.flashTouchHint();
 
-    // A new scan resets the saved viewpoints and annotations.
-    bookmarks.clear();
-    viewer.annotate.clear();
+    // Only a fresh project resets saved work; an additive open keeps the layer
+    // that is still on screen. tests/additiveOpenKeepsWork.test.ts pins this.
+    if (viewer.clouds().length <= 1) { bookmarks.clear(); viewer.annotate.clear(); }
     refreshAnnotationPanel();
 
     // ── Inspector setup — wrapped in defensive try/catches so a single
