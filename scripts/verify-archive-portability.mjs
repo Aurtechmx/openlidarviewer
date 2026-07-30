@@ -375,7 +375,10 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     let out = '';
     let code = 0;
     try {
-      out = execFileSync('node', [script], { cwd: c.A, encoding: 'utf8', stdio: 'pipe', timeout: 300_000 });
+      // `process.execPath` rather than `node` off PATH: the archive's scripts
+      // must be judged under the interpreter running this check, not whichever
+      // node the shell would have found.
+      out = execFileSync(process.execPath, [script], { cwd: c.A, encoding: 'utf8', stdio: 'pipe', timeout: 300_000 });
     } catch (e) {
       code = e.status ?? 1;
       out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
