@@ -126,8 +126,7 @@ Not known to be broken, just never run there:
   other scripts that set an environment variable inline
   (`VAR=1 command`). npm runs scripts through `cmd.exe` on Windows, which does
   not parse that form.
-- `npm run docs:build`, `npm run mutation`, and everything under
-  `npm run benchmark:*`.
+- `npm run docs:build`, `npm run mutation`, and every `benchmark:` script.
 
 #### Known Windows gaps in the tooling
 
