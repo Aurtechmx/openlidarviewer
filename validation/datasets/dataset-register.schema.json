@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Aurtechmx/openlidarviewer/validation/datasets/dataset-register.schema.json",
+  "title": "OpenLiDARViewer validation dataset register",
+  "description": "Shape of validation/datasets/dataset-register.yaml. A dataset record is what a later cross-implementation run or field study cites INSTEAD of prose, so every field a reader would otherwise have to guess is required here. The semantic rules that this schema cannot express (unit/axis agreement, checkpoint independence, checksum drift) live in scripts/verify-dataset-register.mjs and are enforced by the same command.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "datasets"],
+  "properties": {
+    "schemaVersion": {
+      "description": "Bumped only when a field is added, removed, or re-typed. A consumer that does not know the version must refuse the file rather than read it partially.",
+      "type": "integer",
+      "const": 1
+    },
+    "datasets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dataset" }
+    }
+  },
+  "$defs": {
+    "sentinelOrNumber": {
+      "description": "A measured number, or one of two sentinels. `not-applicable` means the quantity has no meaning for this dataset (point density of a raster). `unknown` means it has meaning and was not measured. They are kept apart because a verifier can demand a number for the second case and never for the first.",
+      "type": ["number", "string"]
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "datasetId",
+        "title",
+        "sourceUrl",
+        "landingPage",
+        "licence",
+        "licenceUrl",
+        "redistribution",
+        "acquisitionDate",
+        "sourceSha256",
+        "sourceBytes",
+        "format",
+        "pointCount",
+        "sensorType",
+        "capturePlatform",
+        "captureDate",
+        "horizontalCrs",
+        "verticalCrs",
+        "horizontalUnits",
+        "verticalUnits",
+        "nominalDensity",
+        "terrainClasses",
+        "landCoverClasses",
+        "containsIndependentCheckpoints",
+        "checkpointSource",
+        "checkpointUseRestriction",
+        "dataOwner",
+        "citation",
+        "knownLimitations",
+        "storage"
+      ],
+      "properties": {
+        "datasetId": {
+          "description": "The citation handle. Stable for the life of the register: a study that cited it must keep resolving, so a record is superseded by adding a new id, never by editing an old one.",
+          "type": "string",
+          "pattern": "^[A-Z0-9][A-Z0-9-]{2,63}$"
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "sourceUrl": {
+          "description": "Where the bytes came from: an http(s) URL for external data, or a repo-relative path for data this repository generates. An http(s) URL without an immutable marker is treated as mutable and must carry a checksum.",
+          "type": "string",
+          "minLength": 1
+        },
+        "landingPage": {
+          "description": "The human-readable page or README that states the licence and provenance. Separate from sourceUrl because the licence usually is not served with the bytes.",
+          "type": "string",
+          "minLength": 1
+        },
+        "licence": {
+          "description": "SPDX identifier where one exists, otherwise the licence name as the provider writes it. `unknown` is rejected by the verifier: an unlicensed dataset cannot be cited as evidence.",
+          "type": "string",
+          "minLength": 1
+        },
+        "licenceUrl": { "type": "string", "minLength": 1 },
+        "redistribution": {
+          "description": "What this project may do with the bytes, not what the licence says about the world in general.",
+          "type": "string",
+          "enum": ["permitted", "attribution-required", "share-alike", "prohibited", "unknown"]
+        },
+        "acquisitionDate": {
+          "description": "When THIS project obtained or generated the bytes. Distinct from captureDate, which is when the sensor flew.",
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "sourceSha256": {
+          "description": "SHA-256 of the exact bytes used. `not-fetched` is legal only for a record whose storage says the bytes were deliberately not retrieved.",
+          "type": "string",
+          "pattern": "^([0-9a-f]{64}|not-fetched)$"
+        },
+        "sourceBytes": { "$ref": "#/$defs/sentinelOrNumber" },
+        "format": {
+          "type": "string",
+          "enum": ["las", "laz", "copc", "ept", "e57", "ply", "pcd", "xyz", "pts", "ptx", "asc", "geotiff", "csv", "other"]
+        },
+        "pointCount": { "$ref": "#/$defs/sentinelOrNumber" },
+        "sensorType": {
+          "type": "string",
+          "enum": [
+            "als-linear",
+            "als-photon-counting",
+            "bathymetric-lidar",
+            "tls",
+            "mls",
+            "uas-lidar",
+            "photogrammetric",
+            "ground-survey",
+            "synthetic",
+            "derived-raster"
+          ]
+        },
+        "capturePlatform": {
+          "type": "string",
+          "enum": ["fixed-wing", "helicopter", "uas", "tripod", "vehicle", "backpack", "satellite", "none-synthetic"]
+        },
+        "captureDate": {
+          "description": "ISO date, an ISO range (`2020-03-01/2022-11-30`) for a multi-season programme, or `not-applicable` for synthetic data.",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}(/\\d{4}-\\d{2}-\\d{2})?|not-applicable|unknown)$"
+        },
+        "horizontalCrs": {
+          "description": "EPSG code with its name, or `local-metric-grid` / `local-foot-grid` when the file declares no CRS at all. A blank is rejected: a metric claim without a frame is not checkable.",
+          "type": "string",
+          "minLength": 1
+        },
+        "verticalCrs": {
+          "description": "The vertical datum, stated separately. An ellipsoidal height and an orthometric height differ by tens of metres, and a register that merged the two axes would hide that.",
+          "type": "string",
+          "minLength": 1
+        },
+        "horizontalUnits": {
+          "description": "`not-applicable` is legal only when horizontalCrs also says not-applicable. The verifier enforces the pairing, so the sentinel cannot be used to slip past the unit/axis check.",
+          "type": "string",
+          "enum": ["metre", "us-survey-foot", "international-foot", "degree", "not-applicable"]
+        },
+        "verticalUnits": {
+          "description": "`not-applicable` for a derived raster whose cell values are not lengths (slope degrees, a shading index). Paired with verticalCrs the same way horizontalUnits is.",
+          "type": "string",
+          "enum": ["metre", "us-survey-foot", "international-foot", "not-applicable"]
+        },
+        "nominalDensity": {
+          "description": "Points per square metre as the provider reports it, or a sentinel. Not recomputed here.",
+          "$ref": "#/$defs/sentinelOrNumber"
+        },
+        "terrainClasses": {
+          "description": "Terrain regimes present, so a study can select datasets by difficulty rather than by name.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "landCoverClasses": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "containsIndependentCheckpoints": {
+          "description": "True only when the dataset ships survey checkpoints that were withheld from every processing step. Adjusted control is not a checkpoint.",
+          "type": "boolean"
+        },
+        "checkpointSource": {
+          "description": "Who measured the checkpoints and how. `not-applicable` when there are none. Must not name this project: a checkpoint produced by the software under test measures nothing.",
+          "type": "string",
+          "minLength": 1
+        },
+        "checkpointUseRestriction": {
+          "type": "string",
+          "enum": ["none", "attribution-required", "internal-only", "no-redistribution", "embargoed", "not-applicable"]
+        },
+        "dataOwner": { "type": "string", "minLength": 1 },
+        "citation": { "type": "string", "minLength": 1 },
+        "knownLimitations": {
+          "description": "What this dataset cannot settle. Written before any run, so a later result cannot quietly widen the dataset's reach.",
+          "type": "string",
+          "minLength": 1
+        },
+        "storage": {
+          "description": "Whether the bytes are in this repository (`committed`), held outside it by whoever ran the study (`acquired`), or deliberately not retrieved because access is restricted (`restricted`). See the header comment in dataset-register.yaml for why this field has to exist.",
+          "type": "string",
+          "enum": ["committed", "acquired", "restricted"]
+        },
+        "localPath": {
+          "description": "Repo-relative path to the committed bytes. Required when storage is `committed`, and the only way a verifier can recompute a checksum instead of trusting the recorded one.",
+          "type": "string",
+          "minLength": 1
+        },
+        "controlPointIds": {
+          "description": "Points consumed by processing (boresight, strip adjustment, datum fit). Needed as an explicit list because the reuse of a control point as a checkpoint is invisible when only counts are recorded.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "checkpointIds": {
+          "description": "Points withheld from processing and used only to measure error. Must not intersect controlPointIds.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
