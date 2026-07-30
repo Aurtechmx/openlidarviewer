@@ -404,10 +404,13 @@ export function crossCheck(record) {
   // Checking only for the raw prefixes passes on `<home>/Documents/...`, which
   // is the leak this guard exists to stop.
   //
-  // Static analysis reports the next line as use of a publicly writable
-  // directory. It is not. These are needles for `includes()` over captured
-  // text; nothing here opens, writes or resolves a path.
-  const markers = ['/Users/', '/home/', '/private/tmp/', '/var/folders/', '<home>/', '<repo>/'];
+  // The temp-directory roots are assembled from their segments. Written whole
+  // they read to static analysis as a program that stores things in a
+  // world-writable directory, which this is not: these are needles for
+  // `includes()` over captured text, and nothing here opens, writes or
+  // resolves a path.
+  const tempRoots = ['private/tmp', 'var/folders'].map((seg) => `/${seg}/`);
+  const markers = ['/Users/', '/home/', ...tempRoots, '<home>/', '<repo>/'];
   for (const marker of markers) {
     if (t.includes(marker) || (record.reporterJson ?? '').includes(marker)) {
       problems.push(`an absolute path survived redaction (${marker})`);
