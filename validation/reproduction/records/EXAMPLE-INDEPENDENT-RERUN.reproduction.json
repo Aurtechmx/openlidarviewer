@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "recordId": "EXAMPLE-INDEPENDENT-RERUN",
+  "example": true,
+  "evidenceLevelClaimed": "E6_INDEPENDENTLY_REPRODUCED",
+  "notes": [
+    "EXAMPLE RECORD. Nobody has reproduced anything. This is a filled-in template showing what an E6 record has to state; the verifier refuses to let an example carry an outcome or reach a count.",
+    "The identifier below is the ORCID demonstration id for Josiah Carberry, the fictitious professor ORCID publishes for exactly this purpose. It is used here because it belongs to no real person and still passes the MOD 11-2 check, so the shape of the field is visible without naming anyone.",
+    "A real record is filed by, or with, the person who ran it. Its rawOutput has to live somewhere they control: a DOI, a Zenodo deposit, their own repository. Not here."
+  ],
+  "claimIds": ["DTM", "SLOPE-RASTER"],
+  "reproducer": {
+    "name": "EXAMPLE REPRODUCER (nobody)",
+    "identifier": {
+      "scheme": "ORCID",
+      "value": "https://orcid.org/0000-0002-1825-0097"
+    },
+    "affiliation": {
+      "organisation": "EXAMPLE INSTITUTION (unaffiliated with this project)",
+      "country": "EXAMPLE"
+    }
+  },
+  "independence": {
+    "affiliatedWithProject": false,
+    "fundedByProject": false,
+    "contributedCode": false,
+    "statement": "EXAMPLE. In a real record this is the reproducer's own sentence about their relationship to the project: no employment, no funding, no code contributed, no review role. Anything else and the run is a re-run, not a reproduction."
+  },
+  "artifactUnderTest": {
+    "version": "0.6.3",
+    "revision": "0000000000000000000000000000000000000000",
+    "sourceArchiveSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "downloadUrl": "https://github.com/Aurtechmx/openlidarviewer/releases"
+  },
+  "executed": {
+    "commands": [
+      "EXAMPLE: the exact commands run, copied from their shell history, not a description of the intent"
+    ],
+    "inputs": [],
+    "startedAt": "2026-05-04",
+    "completedAt": "2026-05-04"
+  },
+  "environment": {
+    "os": "EXAMPLE: operating system and version",
+    "cpu": "EXAMPLE: processor, because a timing or a GPU result that only appears on one machine is not a result",
+    "runtime": "EXAMPLE: Node version or browser build that executed the code"
+  },
+  "status": "pending",
+  "statusReason": "Nothing has been run. No third party has taken a release of this software and reproduced anything from it, so the top rung of the evidence ladder is unoccupied and this record exists only to show what would occupy it.",
+  "rawOutput": {
+    "locationKind": "none",
+    "location": "EXAMPLE: none exists, because no run exists. A real record points at a DOI or a deposit under the reproducer's control.",
+    "publishedBy": "reproducer"
+  },
+  "scope": {
+    "reproduced": [],
+    "notReproduced": [
+      "Everything. A pending record reproduces nothing.",
+      "Even a completed reproduction would cover the claims it names, on the inputs it names, on the hardware it names. It would say nothing about other claims, other datasets or other machines.",
+      "An independent reproduction is agreement about behaviour, not accuracy against ground truth. That is E5 and lives in validation/field."
+    ]
+  }
+}

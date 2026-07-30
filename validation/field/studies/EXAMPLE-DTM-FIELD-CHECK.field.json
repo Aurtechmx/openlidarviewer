@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "studyId": "EXAMPLE-DTM-FIELD-CHECK",
+  "claimId": "DTM",
+  "example": true,
+  "evidenceLevelClaimed": "E5_EXTERNALLY_VALIDATED",
+  "notes": [
+    "EXAMPLE RECORD. It is a filled-in template, not a study. No instrument was set up, no checkpoint was surveyed, nobody went to a site. The verifier refuses to let an example carry a result or reach a count, and validation/field/README.md says plainly that this container is empty.",
+    "Every field below is written out because the shape is the point: what a believable E5 record has to state before anyone can judge it. The dates, the site and the operator counts are placeholders in the same sense as the rest.",
+    "To file a real study: copy this, drop the EXAMPLE- prefix, set example to false, register the protocol and its digest BEFORE fieldwork, and recompute protocolDigest with protocolDigestOf() from scripts/verify-field-study.mjs at registration time."
+  ],
+  "protocolDigest": "sha256:d749c35dd7defc2791a30520a3d54a00dfeea959e0ade7f4ae26c6ef769606af",
+  "preregistration": {
+    "registeredAt": "2026-01-15",
+    "protocolPath": "validation/field/EXAMPLE-protocol.md",
+    "protocolSha256": "096ca50536213a4c7426f57c7f33154de9feba1ba2b48b5ae5f4b5e91e7c47d2",
+    "registeredBeforeFieldwork": true,
+    "witness": "EXAMPLE. A real record names the commit that first filed the protocol at status pending, or a timestamping receipt. The digest alone proves nothing: whoever rewrites the record can recompute it. The witness is what someone else can check."
+  },
+  "fieldwork": {
+    "startedAt": "2026-03-02",
+    "endedAt": "2026-03-05"
+  },
+  "site": {
+    "name": "EXAMPLE SITE (none was visited)",
+    "crs": "EXAMPLE: the projected CRS every coordinate in the record is in, by EPSG code",
+    "verticalDatum": "EXAMPLE: the vertical datum and geoid model the surveyed elevations are on",
+    "terrainDescription": "EXAMPLE: relief, slope range and ground cover, in enough detail that a reader can tell whether their site resembles it.",
+    "strata": [
+      "open-ground",
+      "low-vegetation",
+      "dense-canopy"
+    ]
+  },
+  "instrument": {
+    "make": "EXAMPLE MAKE",
+    "model": "EXAMPLE MODEL",
+    "kind": "gnss-receiver",
+    "statedAccuracy": {
+      "horizontalMetres": 0.02,
+      "verticalMetres": 0.035,
+      "confidenceLevel": "1-sigma, as stated on the calibration certificate",
+      "source": "calibration-certificate"
+    },
+    "calibration": {
+      "lastCalibratedAt": "2025-11-20",
+      "certificateReference": "EXAMPLE: the certificate number and the laboratory that issued it"
+    }
+  },
+  "surveyMethod": {
+    "method": "gnss-rtk",
+    "description": "EXAMPLE: how each checkpoint was occupied, for how long, from which base or network stream, and how a repeat occupation was decided on.",
+    "referenceFrame": "EXAMPLE: the realisation and epoch the survey is tied to",
+    "geoidModel": "EXAMPLE: the geoid model applied, by name and version",
+    "occupationSeconds": 120
+  },
+  "checkpoints": {
+    "count": 60,
+    "provenance": "third-party-contractor",
+    "provenanceNote": "EXAMPLE: who surveyed the checkpoints, under what contract, and how the set was chosen before the product was produced. Provenance is the field that decides whether the rest of the record is worth reading.",
+    "usages": [
+      {
+        "usage": "independent",
+        "count": 60
+      }
+    ],
+    "byStratum": [
+      {
+        "stratum": "open-ground",
+        "count": 24
+      },
+      {
+        "stratum": "low-vegetation",
+        "count": 20
+      },
+      {
+        "stratum": "dense-canopy",
+        "count": 16
+      }
+    ],
+    "independentOfProcessing": true
+  },
+  "operators": {
+    "count": 2,
+    "independent": true,
+    "independenceNote": "EXAMPLE: what the two operators did not share — setup, procedure walkthrough, or each other's results — and why that makes operator technique an observed rather than an unmeasured confound.",
+    "affiliations": [
+      "EXAMPLE ORGANISATION A (unaffiliated with this project)",
+      "EXAMPLE ORGANISATION B (unaffiliated with this project)"
+    ]
+  },
+  "candidate": {
+    "revision": "0000000000000000000000000000000000000000",
+    "version": "0.6.3",
+    "algorithmVersion": "EXAMPLE: the ground-filter and interpolation versions the DTM came from",
+    "product": "DTM"
+  },
+  "metrics": {
+    "toleranceAbs": 0.15,
+    "toleranceUnit": "metre",
+    "minimumCheckpoints": 40,
+    "minimumStratumCheckpoints": 12,
+    "requiredWithinToleranceFraction": 0.95
+  },
+  "status": "pending",
+  "statusReason": "Registered as a template only. No fieldwork exists: no instrument was set up, no checkpoint was surveyed, and no residual was computed. The status stays pending because there is nothing to report, and an example may not sit anywhere else.",
+  "scope": {
+    "supported": [],
+    "notCovered": [
+      "Everything. A pending record supports no statement about any site, stratum or product.",
+      "Even once run, a study like this would cover one site, one sensor, one flight geometry and one season. It would say nothing about another site, and nothing about a product other than the DTM.",
+      "Checkpoint agreement is accuracy against one survey, not against truth. The survey has its own uncertainty, stated in instrument.statedAccuracy, and the record may not report a figure below it.",
+      "Nothing here bears on cross-implementation agreement (E4, validation/cross-implementation) or independent reproduction (E6, validation/reproduction)."
+    ]
+  }
+}
