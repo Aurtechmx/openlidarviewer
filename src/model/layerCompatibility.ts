@@ -15,6 +15,7 @@
  * tens of metres; metres vs feet by a factor of three). That pair should align
  * in X/Y — the alignment is true — and must not be aligned or compared in Z.
  */
+import { compareCodeUnits } from '../canonicalHash';
 
 /** What a layer has proven about its relationship to the project frame. */
 export type LayerCompatibility =
@@ -147,7 +148,7 @@ export function classifyLayerCompatibility(
   for (const { key } of declared) counts.set(key, (counts.get(key) ?? 0) + 1);
   let referenceKey = '';
   let best = -1;
-  for (const key of [...counts.keys()].sort()) {
+  for (const key of [...counts.keys()].sort(compareCodeUnits)) {
     const n = counts.get(key) ?? 0;
     if (n > best) {
       best = n;

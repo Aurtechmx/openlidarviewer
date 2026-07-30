@@ -13,7 +13,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions: read-all
+# The single job below declares its own permissions, which replace these
+# outright, so this default applies to nothing today. It is stated narrowly
+# anyway: a job added without its own block inherits read access to the
+# repository contents and nothing else.
+permissions:
+  contents: read
 
 jobs:
   analysis:

@@ -13,6 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const HERE = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -68,7 +69,7 @@ export function canonicalJson(value) {
   const sort = (v) => {
     if (Array.isArray(v)) return v.map(sort);
     if (v && typeof v === 'object') {
-      return Object.fromEntries(Object.keys(v).sort().map((k) => [k, sort(v[k])]));
+      return Object.fromEntries(Object.keys(v).sort(compareCodeUnits).map((k) => [k, sort(v[k])]));
     }
     return v;
   };
@@ -402,6 +403,10 @@ export function crossCheck(record) {
   // segments after one of them is a directory layout that survived redaction.
   // Checking only for the raw prefixes passes on `<home>/Documents/...`, which
   // is the leak this guard exists to stop.
+  //
+  // Static analysis reports the next line as use of a publicly writable
+  // directory. It is not. These are needles for `includes()` over captured
+  // text; nothing here opens, writes or resolves a path.
   const markers = ['/Users/', '/home/', '/private/tmp/', '/var/folders/', '<home>/', '<repo>/'];
   for (const marker of markers) {
     if (t.includes(marker) || (record.reporterJson ?? '').includes(marker)) {

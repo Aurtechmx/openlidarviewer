@@ -28,7 +28,7 @@
  * Nothing in this path reads a clock or a random source.
  */
 
-import { canonicalJson, fnv1a } from '../../src/canonicalHash';
+import { canonicalJson, compareCodeUnits, fnv1a } from '../../src/canonicalHash';
 import { sha256Hex } from '../../src/terrain/export/sha256';
 import type { ArtifactRecord } from './types';
 
@@ -209,21 +209,14 @@ export function stripVolatile(input: unknown): StripResult {
     return out;
   };
 
-  // Default sort, deliberately. Static analysis flags `.sort()` without a
-  // comparator and suggests `String.localeCompare`; taking that advice here
-  // would introduce the exact non-determinism this framework exists to detect.
-  // `localeCompare` orders by collation, which depends on the locale and on
-  // the ICU build behind the runtime, so darwin-arm64 and linux-x64 can
-  // legitimately disagree. Default sort on strings is UTF-16 code-unit order,
-  // fixed by the language spec and identical on every platform.
+  // Code-unit order, not collation. `compareCodeUnits` carries the reasoning:
+  // `localeCompare` would order this list by the runtime locale and ICU build,
+  // so darwin-arm64 and linux-x64 could legitimately disagree.
   //
   // This list ships inside ArtifactRecord and is compared across platforms at
   // zero tolerance, so a locale-dependent order would show up as a
   // reproducibility failure with no cause in the data.
-  //
-  // These are field paths, never numbers, so the other half of that rule --
-  // that default sort compares numbers as strings -- does not apply.
-  return { value: walk(input, '', 0), stripped: [...stripped].sort() };
+  return { value: walk(input, '', 0), stripped: [...stripped].sort(compareCodeUnits) };
 }
 
 /** Byte artifacts are opaque: nothing inside them can be inspected or stripped. */

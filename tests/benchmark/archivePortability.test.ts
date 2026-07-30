@@ -14,7 +14,7 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -133,6 +133,66 @@ describe('manifestInventoryPaths', () => {
 
   it('does not join a code span that spans a line break', () => {
     expect(manifestInventoryPaths('walks `npm run\nrelease:verify` from the tag.')).toEqual([]);
+  });
+});
+
+describe('classifyMarkdownReferences', () => {
+  it('separates local targets from external ones instead of dropping the externals', () => {
+    const text = [
+      '[sibling](./sibling.md)',
+      '[home](https://example.org/x)',
+      '[mail](mailto:someone@example.org)',
+      '[scheme-relative](//cdn.example.org/a.png)',
+      '[section](#results)',
+      '<!--@include: ../../TOP.md-->',
+    ].join('\n');
+    expect(classifyMarkdownReferences(text, 'docs-site/guide/index.md')).toEqual([
+      { via: 'link', raw: './sibling.md', kind: 'local', target: 'docs-site/guide/sibling.md' },
+      { via: 'link', raw: 'https://example.org/x', kind: 'external', target: null },
+      { via: 'link', raw: 'mailto:someone@example.org', kind: 'external', target: null },
+      { via: 'link', raw: '//cdn.example.org/a.png', kind: 'external', target: null },
+      { via: 'link', raw: '#results', kind: 'anchor', target: null },
+      { via: 'include', raw: '../../TOP.md', kind: 'local', target: 'TOP.md' },
+    ]);
+  });
+
+  it('reads a site-absolute link as the site root inside docs-site and as a deployed URL outside it', () => {
+    expect(classifyMarkdownReferences('[a](/releases/v1.md)', 'docs-site/index.md')).toEqual([
+      { via: 'link', raw: '/releases/v1.md', kind: 'local', target: 'docs-site/releases/v1.md' },
+    ]);
+    expect(classifyMarkdownReferences('[a](/releases/v1)', 'README.md')).toEqual([
+      { via: 'link', raw: '/releases/v1', kind: 'deployed', target: null },
+    ]);
+  });
+
+  it('keeps the path of a target that carries a fragment or a query', () => {
+    expect(classifyMarkdownReferences('[a](./x.md#part?y=1)', 'README.md')).toEqual([
+      { via: 'link', raw: './x.md#part?y=1', kind: 'local', target: 'x.md' },
+    ]);
+  });
+});
+
+describe('rootDocumentReferences', () => {
+  it('finds a root document named in prose and in a code span, not only in a link', () => {
+    expect(rootDocumentReferences('governed by CLAIMS_AND_LIMITATIONS.md and `STABILITY_POLICY.md`.')).toEqual([
+      'CLAIMS_AND_LIMITATIONS.md',
+      'STABILITY_POLICY.md',
+    ]);
+  });
+
+  it('finds a versioned root document', () => {
+    expect(rootDocumentReferences('see VALIDATION_REPORT_v0.5.9.md for the inherited claims')).toEqual([
+      'VALIDATION_REPORT_v0.5.9.md',
+    ]);
+  });
+
+  it('does not read a document under a directory as a root document', () => {
+    expect(rootDocumentReferences('docs/releases/RELEASE_NOTES_v0.6.0.md is the copy under docs/')).toEqual([]);
+  });
+
+  it('reads nothing out of prose that names no document', () => {
+    expect(rootDocumentReferences('The policy is versioned and reviewed before a tag.')).toEqual([]);
+    expect(rootDocumentReferences('lower-case names like readme.md are not root documents')).toEqual([]);
   });
 });
 

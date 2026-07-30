@@ -37,6 +37,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { compareCodeUnits } from '../../scripts/lib/codeUnitOrder.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');
@@ -101,7 +102,17 @@ const MUTATIONS = [
     find: '  if (zSaddle >= level) {\n',
     replace: '  if (zSaddle > level) {\n',
     effect: 'a saddle exactly at the level takes the other pairing, relinking contour topology at the ambiguous cell',
-    specialized: { kind: 'vitest', files: ['tests/benchmark/contourCorrectness.test.ts'] },
+    specialized: {
+      kind: 'vitest',
+      files: [
+        'tests/benchmark/contourCorrectness.test.ts',
+        // The dedicated tie fixture: pairing, connectivity through the
+        // neighbouring cell, and the translated and scaled equivalents. Listed
+        // so a re-run attributes the kill to the file that states the property
+        // rather than to the surface suite it happens to sit beside.
+        'tests/contourSaddleExactLevel.test.ts',
+      ],
+    },
   },
   {
     id: 'M05',
@@ -143,7 +154,15 @@ const MUTATIONS = [
     notes: 'benchmark:verify against a published result tree is environment-unavailable in this checkout (no benchmark-results/latest).',
     specialized: {
       kind: 'vitest',
-      files: ['tests/benchmark/runnerOutput.test.ts', 'tests/benchmark/provenanceIntegrity.test.ts'],
+      files: [
+        'tests/benchmark/runnerOutput.test.ts',
+        'tests/benchmark/provenanceIntegrity.test.ts',
+        // The inventory checked against a tree the writer produced, which is
+        // the part the mutation removes. The re-render check rejects a tree
+        // missing the page either way, so a suite that only asks "does
+        // verification fail" cannot see this mutation.
+        'tests/benchmark/requiredArtifactInventory.test.ts',
+      ],
     },
   },
   {
@@ -328,7 +347,7 @@ function runVitest(files, env) {
   return {
     exitCode: res.status,
     durationMs,
-    failures: failures.sort(),
+    failures: failures.sort(compareCodeUnits),
     ran,
     parsed,
     stderrTail: (res.stderr ?? '').split('\n').slice(-8).join('\n'),

@@ -33,6 +33,7 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { compareCodeUnits } from '../../src/canonicalHash';
 import { nodeSha256Hex } from '../framework/node';
 import {
   BENCHMARK_SCHEMA_VERSION,
@@ -78,8 +79,8 @@ function checkSeriesBlock(
   recomputed: SummarisedSeries,
   problems: string[],
 ): void {
-  const publishedKeys = published.available.map((b) => b.key).sort();
-  const recomputedKeys = recomputed.available.map((b) => b.key).sort();
+  const publishedKeys = published.available.map((b) => b.key).sort(compareCodeUnits);
+  const recomputedKeys = recomputed.available.map((b) => b.key).sort(compareCodeUnits);
   if (publishedKeys.join('|') !== recomputedKeys.join('|')) {
     problems.push(
       `${label}: summarised series do not match the raw data — published [${publishedKeys.join(', ')}], recomputed [${recomputedKeys.join(', ')}]`,
@@ -383,7 +384,7 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
   const listedPaths = new Set(manifest.files.map((f) => f.path));
   const unlisted = treeFiles(dir).filter((p) => p !== 'manifest.json' && !listedPaths.has(p));
   if (unlisted.length > 0) {
-    problems.push(`published files are not listed in the manifest: ${unlisted.sort().join(', ')}`);
+    problems.push(`published files are not listed in the manifest: ${unlisted.sort(compareCodeUnits).join(', ')}`);
   } else {
     checked.push('every file in the tree is listed in the manifest');
   }
