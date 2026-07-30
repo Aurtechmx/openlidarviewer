@@ -40,7 +40,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # No dependency lifecycle script runs during install; the suites below
+      # need the resolved tree, not a package's postinstall.
+      - run: npm ci --ignore-scripts
       # Every leg must install from the committed lockfile. The comparison
       # records the lockfile digest and refuses two legs that disagree, so a
       # rewrite here would fail the compare job later rather than silently
