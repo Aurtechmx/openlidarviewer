@@ -28,11 +28,10 @@ on:
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
-# Default to read-only, matching ci.yml / security.yml; the deploy job below
-# grants itself the two write scopes Pages needs, so a compromised build step
-# can never publish.
-permissions:
-  contents: read
+# Permissions are declared per job rather than once for the workflow, so a job
+# added later starts with nothing until someone names what it needs. The build
+# job gets read; the deploy job below grants itself the two write scopes Pages
+# needs, so a compromised build step can never publish.
 
 # One deploy at a time; a superseded push just skips to the newest.
 concurrency:
@@ -42,13 +41,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # No dependency lifecycle script runs during install; the VitePress build
+      # below resolves its platform binaries from the tree npm ci laid down.
+      - run: npm ci --ignore-scripts
       - name: Build docs site (renders claim register, then verifies the publish allowlist)
         run: npm run docs:build
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
