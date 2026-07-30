@@ -5,14 +5,38 @@
  * Shared by the scientific-analysis record fingerprint and the Contour Studio
  * state hash so both produce identical, reproducible digests from the same
  * logical content. Zero dependencies — safe to import from any layer.
+ *
+ * `compareCodeUnits` lives here because ordering is half of canonicalisation:
+ * a digest is only reproducible if the keys that feed it are ordered the same
+ * way on every host. It is the TypeScript counterpart of
+ * `scripts/lib/codeUnitOrder.mjs`, which serves the build and verification
+ * scripts.
  */
+
+/**
+ * UTF-16 code-unit order. Locale-independent, so a committed order is stable.
+ *
+ * Static analysis flags `.sort()` without a comparator and suggests
+ * `String.localeCompare`. That advice is wrong for every ordering that reaches
+ * a digest or a committed record. `localeCompare` orders by collation, which
+ * depends on the runtime locale and on the ICU build behind it, so
+ * darwin-arm64 and linux-x64 can order the same keys differently and the same
+ * content then hashes to two values. Code-unit order is fixed by the language
+ * spec and identical on every host. It is the order a default `.sort()` on
+ * strings already produces, written out so the ordering is stated in the code.
+ *
+ * This comparator is for strings. Numeric arrays need `(a, b) => a - b`.
+ */
+export function compareCodeUnits(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
 /** Deterministic JSON with sorted object keys, so a fingerprint is stable. */
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).sort();
+  const keys = Object.keys(obj).sort(compareCodeUnits);
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 
