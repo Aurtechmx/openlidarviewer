@@ -167,6 +167,12 @@ export function buildValidityMask(z: ArrayLike<number>): {
  * Horn (1981) slope/aspect — the WGSL twin of `hornSlopeAspect`
  * (terrainDerivatives.ts). Grid convention is NORTHING-UP: row+1 is north,
  * so dzdy is +∂z/∂northing and aspect negates BOTH gradient components.
+ *
+ * The border policy must track the CPU kernel exactly, not merely closely:
+ * `runEquivalenceProbe` compares the two over the WHOLE grid, outer ring
+ * included, so a backend that kept edge-clamping after the CPU moved to
+ * gdaldem's `-compute_edges` extrapolation would fail the probe on the border
+ * alone. Both kernels extrapolate perpendicular to an edge and clamp along it.
  */
 export const HORN_DERIVATIVES_WGSL = /* wgsl */ `
 struct Params {
@@ -183,14 +189,32 @@ struct Params {
 @group(0) @binding(3) var<storage, read_write> aspectOut : array<f32>;
 @group(0) @binding(4) var<uniform> p : Params;
 
-// Edge-clamped sample; invalid (originally non-finite) cells fall back to
-// the centre value — mirrors at() in terrainDerivatives.ts.
+// In-grid sample (indices clamped); invalid (originally non-finite) cells fall
+// back to the centre value — mirrors at() in terrainDerivatives.ts.
 fn sample(r : i32, c : i32, fallback : f32) -> f32 {
   let rr = clamp(r, 0, i32(p.rows) - 1);
   let cc = clamp(c, 0, i32(p.cols) - 1);
   let i = u32(rr) * p.cols + u32(cc);
   if (valid[i] == 1u) { return zin[i]; }
   return fallback;
+}
+
+// Is the clamped cell finite in the SOURCE grid? The CPU twin reads rawness off
+// the value itself (NaN survives in a Float32Array); here the NaNs were stripped
+// into the validity mask by buildValidityMask, so it is queried separately.
+fn okAt(r : i32, c : i32) -> bool {
+  let rr = clamp(r, 0, i32(p.rows) - 1);
+  let cc = clamp(c, 0, i32(p.cols) - 1);
+  return valid[u32(rr) * p.cols + u32(cc)] == 1u;
+}
+
+// The virtual cell one step outside the grid: 2a − b, from the edge value a and
+// its inward neighbour b. Degrades to a (the old clamp) when b is missing and to
+// the centre when a is too — mirrors virt() in terrainDerivatives.ts.
+fn virt(a : f32, b : f32, aOk : bool, bOk : bool, centre : f32) -> f32 {
+  if (!aOk) { return centre; }
+  if (!bOk) { return a; }
+  return 2.0 * a - b;
 }
 
 @compute @workgroup_size(16, 16)
@@ -205,15 +229,49 @@ fn horn_main(@builtin(global_invocation_id) gid : vec3<u32>) {
   let e = zin[idx];
   let row = i32(gid.y);
   let col = i32(gid.x);
-  // 3x3 neighbourhood (a b c / d e f / g h i2), edge-clamped, invalid->centre.
-  let a  = sample(row - 1, col - 1, e);
-  let b  = sample(row - 1, col,     e);
-  let c  = sample(row - 1, col + 1, e);
-  let d  = sample(row,     col - 1, e);
-  let f  = sample(row,     col + 1, e);
-  let g  = sample(row + 1, col - 1, e);
-  let h  = sample(row + 1, col,     e);
-  let i2 = sample(row + 1, col + 1, e);
+  let nr = i32(p.rows);
+  let nc = i32(p.cols);
+  // 3x3 neighbourhood in slot (dr+1)*3 + (dc+1) — [a b c / d e f / g h i2] with
+  // dr = +1 the NORTH row. Border cells EXTRAPOLATE perpendicular to the edge
+  // (2a − b) and CLAMP along it: gdaldem's -compute_edges policy, corner
+  // asymmetry included. Mirrors fillWindow() in terrainDerivatives.ts — see its
+  // header for why the row branch is tested first.
+  var w : array<f32, 9>;
+  if (nr >= 2 && (row == 0 || row == nr - 1)) {
+    let inner = select(nr - 2, 1, row == 0);
+    let outward = select(1, -1, row == 0);
+    for (var dc : i32 = -1; dc <= 1; dc = dc + 1) {
+      let cc = clamp(col + dc, 0, nc - 1);
+      w[(outward + 1) * 3 + (dc + 1)] =
+        virt(sample(row, cc, e), sample(inner, cc, e), okAt(row, cc), okAt(inner, cc), e);
+      w[3 + (dc + 1)] = sample(row, cc, e);
+      w[(1 - outward) * 3 + (dc + 1)] = sample(inner, cc, e);
+    }
+  } else if (nc >= 2 && (col == 0 || col == nc - 1)) {
+    let inner = select(nc - 2, 1, col == 0);
+    let outward = select(1, -1, col == 0);
+    for (var dr : i32 = -1; dr <= 1; dr = dr + 1) {
+      let rr = clamp(row + dr, 0, nr - 1);
+      w[(dr + 1) * 3 + (outward + 1)] =
+        virt(sample(rr, col, e), sample(rr, inner, e), okAt(rr, col), okAt(rr, inner), e);
+      w[(dr + 1) * 3 + 1] = sample(rr, col, e);
+      w[(dr + 1) * 3 + (1 - outward)] = sample(rr, inner, e);
+    }
+  } else {
+    for (var dr : i32 = -1; dr <= 1; dr = dr + 1) {
+      for (var dc : i32 = -1; dc <= 1; dc = dc + 1) {
+        w[(dr + 1) * 3 + (dc + 1)] = sample(row + dr, col + dc, e);
+      }
+    }
+  }
+  let a  = w[0];
+  let b  = w[1];
+  let c  = w[2];
+  let d  = w[3];
+  let f  = w[5];
+  let g  = w[6];
+  let h  = w[7];
+  let i2 = w[8];
   // Per-axis cell sizes: a geographic grid's E–W (column) spacing is
   // cos φ × the N–S (row) spacing, so each gradient divides by ITS axis.
   let dzdx = (c + 2.0 * f + i2 - (a + 2.0 * d + g)) / (8.0 * p.cellX);
@@ -408,25 +466,72 @@ export function hornDerivativesF32Reference(
   // Per-axis denominators, mirroring the kernel's cellX / cellY uniforms.
   const denomX = fr(8 * fr(cellSizeM));
   const denomY = fr(8 * fr(cellSizeYM));
+  const clampR = (r: number): number => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
+  const clampC = (c: number): number => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
   const sample = (r: number, c: number, fallback: number): number => {
-    const rr = r < 0 ? 0 : r >= rows ? rows - 1 : r;
-    const cc = c < 0 ? 0 : c >= cols ? cols - 1 : c;
-    const i = rr * cols + cc;
+    const i = clampR(r) * cols + clampC(c);
     return valid[i] === 1 ? zClean[i] : fallback;
   };
+  const okAt = (r: number, c: number): boolean => valid[clampR(r) * cols + clampC(c)] === 1;
+  // 2a − b in the kernel's operation order (one multiply, then one subtract).
+  const virt = (a: number, b: number, aOk: boolean, bOk: boolean, centre: number): number => {
+    if (!aOk) return centre;
+    if (!bOk) return a;
+    return fr(fr(2 * a) - b);
+  };
+  // Slot (dr+1)*3 + (dc+1); the border branches mirror horn_main's, which
+  // mirrors fillWindow() in terrainDerivatives.ts.
+  const w = new Float32Array(9);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const idx = row * cols + col;
       if (valid[idx] === 0) continue; // slope/aspect stay 0
       const e = zClean[idx];
-      const zA = sample(row - 1, col - 1, e);
-      const zB = sample(row - 1, col, e);
-      const zC = sample(row - 1, col + 1, e);
-      const zD = sample(row, col - 1, e);
-      const zF = sample(row, col + 1, e);
-      const zG = sample(row + 1, col - 1, e);
-      const zH = sample(row + 1, col, e);
-      const zI = sample(row + 1, col + 1, e);
+      if (rows >= 2 && (row === 0 || row === rows - 1)) {
+        const inner = row === 0 ? 1 : rows - 2;
+        const outward = row === 0 ? -1 : 1;
+        for (let dc = -1; dc <= 1; dc++) {
+          const cc = clampC(col + dc);
+          w[(outward + 1) * 3 + (dc + 1)] = virt(
+            sample(row, cc, e),
+            sample(inner, cc, e),
+            okAt(row, cc),
+            okAt(inner, cc),
+            e,
+          );
+          w[3 + (dc + 1)] = sample(row, cc, e);
+          w[(1 - outward) * 3 + (dc + 1)] = sample(inner, cc, e);
+        }
+      } else if (cols >= 2 && (col === 0 || col === cols - 1)) {
+        const inner = col === 0 ? 1 : cols - 2;
+        const outward = col === 0 ? -1 : 1;
+        for (let dr = -1; dr <= 1; dr++) {
+          const rr = clampR(row + dr);
+          w[(dr + 1) * 3 + (outward + 1)] = virt(
+            sample(rr, col, e),
+            sample(rr, inner, e),
+            okAt(rr, col),
+            okAt(rr, inner),
+            e,
+          );
+          w[(dr + 1) * 3 + 1] = sample(rr, col, e);
+          w[(dr + 1) * 3 + (1 - outward)] = sample(rr, inner, e);
+        }
+      } else {
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            w[(dr + 1) * 3 + (dc + 1)] = sample(row + dr, col + dc, e);
+          }
+        }
+      }
+      const zA = w[0];
+      const zB = w[1];
+      const zC = w[2];
+      const zD = w[3];
+      const zF = w[5];
+      const zG = w[6];
+      const zH = w[7];
+      const zI = w[8];
       // (c + 2f + i2 − (a + 2d + g)) / (8·cell), f32 at every step, per axis.
       const dzdx = fr(fr(fr(fr(zC + fr(2 * zF)) + zI) - fr(fr(zA + fr(2 * zD)) + zG)) / denomX);
       const dzdy = fr(fr(fr(fr(zG + fr(2 * zH)) + zI) - fr(fr(zA + fr(2 * zB)) + zC)) / denomY);

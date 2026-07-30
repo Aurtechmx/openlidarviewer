@@ -27,9 +27,53 @@
  * smooths single-cell noise — which is exactly what the confidence
  * roughness term and any future hillshade need.
  *
- * Border cells replicate the edge (clamp), and any non-finite neighbour
- * falls back to the centre value, so the result is finite wherever the
- * centre cell is finite. Deterministic. No DOM, no three.js, no I/O.
+ * BORDER POLICY: linear extrapolation, matching `gdaldem -compute_edges`.
+ * A neighbour one step outside the grid is synthesised as 2·a − b, where a is
+ * the edge value and b its inward neighbour — on a locally planar surface that
+ * reconstructs the true neighbour exactly. Through v0.6.3 we CLAMPED instead
+ * (replicating the edge row/column), which left the rise across the window
+ * unchanged while halving the run, so every border slope read roughly HALF its
+ * true value: 9.9 deg on a 19.3 deg plane, a shortfall of up to 16 deg with an
+ * always-negative bias over the 2·(cols+rows)−4 cells of the outer ring. The
+ * raster agreement matrix measured it (tests/rasterAgreementMatrix.test.ts,
+ * "border only" legs); interior cells were never affected.
+ *
+ * The policy is gdaldem's, INCLUDING its corner asymmetry, so the two
+ * implementations agree cell-for-cell rather than approximately. gdaldem
+ * extrapolates PERPENDICULAR to an edge and CLAMPS ALONG it: its first/last-line
+ * branch synthesises the outside row but takes `jmin = j` at j = 0, so at the
+ * four corners the along-edge gradient is still halved. That is deliberate here
+ * — reproducing it buys exact agreement with the reference implementation on the
+ * whole ring, at a cost of 4 cells per raster. Extrapolating symmetrically would
+ * be the better estimator at those corners (it recovers the true planar
+ * gradient) but would diverge from gdaldem by up to 12.7 deg there; interop won.
+ * Extrapolation needs two cells along the axis, so a grid thinner than 2 in one
+ * direction falls back to clamping on that axis.
+ *
+ * WHAT EXTRAPOLATION COSTS. It is a bias-variance trade, not a free win, and the
+ * matrix fixtures cannot show that because they are all analytically smooth.
+ * Substituting the virtual column into the Horn numerator gives an edge
+ * dz/dx = (S1 − S0)/(4·cell) against an interior (S₊ − S₋)/(8·cell), where each
+ * Sk is a 1-2-1 weighted column sum: the same numerator spread over half the
+ * divisor, so Var(edge) = 4·Var(interior) — TWICE the noise SD. Clamping kept the
+ * divisor at 8·cell and so kept the interior noise level, paying ~50% bias
+ * instead. MSE crosses over near σ ≈ G·cell/1.5, so on near-flat noisy ground
+ * (G ≈ 0.02, σ ≈ 5 cm) clamping was actually the lower-error estimator.
+ *
+ * Extrapolation is still the right default: the bias it removes is systematic and
+ * directional — always low, at every terrain scale, which corrupts thresholds and
+ * classifications — while the noise it adds is symmetric and averages out.
+ * Measured in tests/terrainDerivatives.test.ts ("border bias-variance trade"),
+ * including the near-flat case where this choice loses.
+ *
+ * Any non-finite neighbour falls back to the centre value, so the result is
+ * finite wherever the centre cell is finite. gdaldem instead propagates nodata
+ * out of the window; that divergence is a deliberate policy difference (we
+ * answer for every cell) and is recorded as its own leg in the matrix. An
+ * extrapolation whose operands are not both finite degrades to the clamped edge
+ * value, then to the centre — so around missing data the behaviour is exactly
+ * what it was before this policy changed. Deterministic. No DOM, no three.js,
+ * no I/O.
  */
 
 /** Slope (rise/run) and aspect (radians) per cell, row-major. */
@@ -76,11 +120,75 @@ export function hornSlopeAspect(
   // left untouched. zScale 1 (metric, or Z already in metres) is a no-op.
   const zs = Number.isFinite(zScale) && zScale > 0 ? zScale : 1;
 
+  const clampR = (r: number): number => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
+  const clampC = (c: number): number => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
+
+  /** In-grid read (indices clamped), preserving a non-finite value. */
+  const raw = (r: number, c: number): number => z[clampR(r) * cols + clampC(c)];
+
+  /** In-grid read (indices clamped); a non-finite cell degrades to the centre. */
   const at = (r: number, c: number, fallback: number): number => {
-    const rr = r < 0 ? 0 : r >= rows ? rows - 1 : r;
-    const cc = c < 0 ? 0 : c >= cols ? cols - 1 : c;
-    const v = z[rr * cols + cc];
+    const v = raw(r, c);
     return Number.isFinite(v) ? v : fallback;
+  };
+
+  /**
+   * The virtual cell one step outside the grid: 2·a − b, from the edge value a
+   * and its inward neighbour b — both RAW, so a missing one is visible here
+   * rather than already replaced by the centre. Degrades to a (the old clamp)
+   * when b is missing and to the centre when a is too, so the field stays finite
+   * wherever the centre is finite and missing-data behaviour is unchanged.
+   * Extrapolating from a substituted centre value instead would let a hole throw
+   * the border further than clamping did.
+   */
+  const virt = (a: number, b: number, centre: number): number => {
+    if (!Number.isFinite(a)) return centre;
+    return Number.isFinite(b) ? 2 * a - b : a;
+  };
+
+  // Scratch 3x3 window, slot (dr+1)*3 + (dc+1) — so [a b c / d e f / g h i2]
+  // with dr = −1 the SOUTH row and dr = +1 the NORTH row (northing-up).
+  const w = new Float64Array(9);
+
+  /**
+   * Fill `w` for cell (row, col) under gdaldem's `-compute_edges` policy:
+   * extrapolate PERPENDICULAR to an edge, clamp ALONG it. The row-edge branch is
+   * tested first, which is what puts the along-edge clamp at the four corners
+   * (gdaldem's first/last-line branch does the same). An axis thinner than 2
+   * cells cannot be extrapolated and stays clamped.
+   */
+  const fillWindow = (row: number, col: number, e: number): void => {
+    if (rows >= 2 && (row === 0 || row === rows - 1)) {
+      // Row edge: the outside row is synthesised from this row and the one
+      // inward of it. Columns are CLAMPED, corners included.
+      const inner = row === 0 ? 1 : rows - 2;
+      const outward = row === 0 ? -1 : 1;
+      for (let dc = -1; dc <= 1; dc++) {
+        const cc = clampC(col + dc);
+        w[(outward + 1) * 3 + (dc + 1)] = virt(raw(row, cc), raw(inner, cc), e);
+        w[1 * 3 + (dc + 1)] = at(row, cc, e);
+        w[(1 - outward) * 3 + (dc + 1)] = at(inner, cc, e);
+      }
+      return;
+    }
+    if (cols >= 2 && (col === 0 || col === cols - 1)) {
+      // Column edge with real rows above and below (a row edge would have been
+      // caught above). clampR keeps a 1-row grid safe.
+      const inner = col === 0 ? 1 : cols - 2;
+      const outward = col === 0 ? -1 : 1;
+      for (let dr = -1; dr <= 1; dr++) {
+        const rr = clampR(row + dr);
+        w[(dr + 1) * 3 + (outward + 1)] = virt(raw(rr, col), raw(rr, inner), e);
+        w[(dr + 1) * 3 + 1] = at(rr, col, e);
+        w[(dr + 1) * 3 + (1 - outward)] = at(rr, inner, e);
+      }
+      return;
+    }
+    // Interior — unchanged. clampR/clampC are no-ops here except on a grid too
+    // thin for either branch to apply, where they reproduce the old clamp.
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) w[(dr + 1) * 3 + (dc + 1)] = at(row + dr, col + dc, e);
+    }
   };
 
   for (let row = 0; row < rows; row++) {
@@ -92,15 +200,17 @@ export function hornSlopeAspect(
         aspect[i] = 0;
         continue;
       }
-      // 3x3 neighbourhood (a b c / d e f / g h i), edge-clamped, NaN→centre.
-      const a = at(row - 1, col - 1, e);
-      const b = at(row - 1, col, e);
-      const c = at(row - 1, col + 1, e);
-      const d = at(row, col - 1, e);
-      const f = at(row, col + 1, e);
-      const g = at(row + 1, col - 1, e);
-      const h = at(row + 1, col, e);
-      const ii = at(row + 1, col + 1, e);
+      // 3x3 neighbourhood (a b c / d e f / g h i2), border-extrapolated per the
+      // header, NaN→centre.
+      fillWindow(row, col, e);
+      const a = w[0];
+      const b = w[1];
+      const c = w[2];
+      const d = w[3];
+      const f = w[5];
+      const g = w[6];
+      const h = w[7];
+      const ii = w[8];
 
       // Northing-up grid: row+1 (g, h, ii) is NORTH, row−1 (a, b, c) is
       // south, so dzdy is +∂z/∂northing.
@@ -114,6 +224,74 @@ export function hornSlopeAspect(
     }
   }
   return { slope, aspect };
+}
+
+/**
+ * Cells whose Horn window drew on at least one value that was NOT measured at
+ * that location — 1 = synthesised, 0 = every one of the nine came from the grid.
+ *
+ * Two distinct causes, deliberately folded into one flag because they have the
+ * same consequence for a reader of the output:
+ *
+ *  - THE OUTER RING. A border window leaves the grid, so a neighbour is
+ *    extrapolated (or, at a corner's along-edge axis, replicated). That value is
+ *    an estimate; the cell's slope carries twice the interior noise, and on
+ *    curved ground a real bias (see the header).
+ *  - HOLE HALOS. Where a neighbour is non-finite we substitute the centre value
+ *    and still answer, which biases the gradient toward zero. gdaldem instead
+ *    propagates nodata out of the window and answers for nothing there.
+ *
+ * Neither is visible in the products themselves: a halved-looking slope and a
+ * fully-supported one are the same float. The agreement matrix says so in as many
+ * words — the nodata halo "carries no marker distinguishing those cells from
+ * fully-supported ones" — and this is that marker. It is deliberately NOT part of
+ * `CellStatus` (quality/dtmCellStatus.ts): that is a mutually-exclusive
+ * precedence chain about data support, and "my window crossed the grid edge" is
+ * orthogonal to it — a border cell can be perfectly well measured.
+ *
+ * A cell whose own centre is non-finite is NOT flagged: it has no derivative at
+ * all (slope and aspect are 0 there), so there is nothing to qualify.
+ *
+ * Pure geometry plus finiteness — no cell sizes, no gradients. Deterministic.
+ */
+export function synthesisedNeighbourMask(
+  z: Float32Array,
+  cols: number,
+  rows: number,
+): Uint8Array {
+  const mask = new Uint8Array(Math.max(0, cols * rows));
+  if (cols <= 0 || rows <= 0) return mask;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const i = row * cols + col;
+      if (!Number.isFinite(z[i])) continue; // no derivative to qualify
+      if (row === 0 || col === 0 || row === rows - 1 || col === cols - 1) {
+        mask[i] = 1; // window leaves the grid
+        continue;
+      }
+      for (let dr = -1; dr <= 1 && mask[i] === 0; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (!Number.isFinite(z[(row + dr) * cols + (col + dc)])) {
+            mask[i] = 1; // hole halo
+            break;
+          }
+        }
+      }
+    }
+  }
+  return mask;
+}
+
+/** How many cells {@link synthesisedNeighbourMask} flags. */
+export function countSynthesisedNeighbours(
+  z: Float32Array,
+  cols: number,
+  rows: number,
+): number {
+  const mask = synthesisedNeighbourMask(z, cols, rows);
+  let n = 0;
+  for (let i = 0; i < mask.length; i++) n += mask[i];
+  return n;
 }
 
 /** Convenience: just the slope grid (rise/run). `cellMetresY` defaults to X. */

@@ -251,6 +251,65 @@ describe('equivalence harness — f32 kernel arithmetic vs the f64 CPU reference
     });
   }
 
+  it('f32 transcription agrees with CPU where HOLES MEET THE BORDER', () => {
+    // The gap this closes. The border policy's fallback rules — extrapolate from
+    // 2a−b, degrade to the clamped edge value when the inward cell is missing,
+    // degrade to the centre when the edge cell is too — are expressed differently
+    // on the two sides: the CPU kernel reads rawness off the value itself, while
+    // the shader (and so this transcription) has had its NaNs stripped into a
+    // separate validity mask by `buildValidityMask`. Equivalent by construction,
+    // but "by construction" is what the probe grids above already assumed: none
+    // of them puts a hole ON the ring or on the inner ring the extrapolation
+    // reads, so the two encodings of the fallback were never actually compared
+    // where they do any work.
+    //
+    // Grid shapes include the degenerate ones (2 wide, 2 tall, 1x1), because those
+    // take the clamp fallback instead of extrapolating and are the easiest place
+    // for the two implementations to drift apart unnoticed.
+    const rng = (seed: number) => {
+      let s = seed >>> 0;
+      return () => {
+        s = (s * 1664525 + 1013904223) >>> 0;
+        return (s >>> 8) / 16777216;
+      };
+    };
+    let worstSlope = 0;
+    let worstAspect = 0;
+    for (const [cols, rows] of [[9, 7], [2, 9], [9, 2], [2, 2], [1, 6], [6, 1], [1, 1], [12, 12]] as const) {
+      for (let trial = 0; trial < 40; trial++) {
+        const u = rng(4242 + trial * 7919 + cols * 131 + rows * 17);
+        const z = new Float32Array(cols * rows);
+        for (let i = 0; i < z.length; i++) z[i] = u() * 40;
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const onRing = r === 0 || c === 0 || r === rows - 1 || c === cols - 1;
+            const onInner = r === 1 || c === 1 || r === rows - 2 || c === cols - 2;
+            if (u() < (onRing || onInner ? 0.3 : 0.08)) z[r * cols + c] = Number.NaN;
+          }
+        }
+        const ref = hornSlopeAspect(z, cols, rows, 1.5, 2.5, 1);
+        const got = hornDerivativesF32Reference(z, cols, rows, 1.5, 2.5, 1);
+        for (let i = 0; i < z.length; i++) {
+          // The finiteness contract, on both sides, with holes everywhere.
+          expect(Number.isFinite(ref.slope[i]), `CPU slope non-finite at ${i} of ${cols}x${rows}`).toBe(true);
+          expect(Number.isFinite(got.slope[i]), `f32 slope non-finite at ${i} of ${cols}x${rows}`).toBe(true);
+          worstSlope = Math.max(worstSlope, Math.abs(ref.slope[i] - got.slope[i]));
+          if (ref.slope[i] > 1e-6) {
+            let da = Math.abs(ref.aspect[i] - got.aspect[i]);
+            if (da > Math.PI) da = 2 * Math.PI - da;
+            worstAspect = Math.max(worstAspect, da);
+          }
+        }
+      }
+    }
+    // Bounded by f32 rounding, not by the fallback rules disagreeing: a rule
+    // mismatch would show up as a whole-value difference, orders larger.
+    expect(worstSlope, 'the two fallback encodings diverge beyond f32 rounding')
+      .toBeLessThanOrEqual(EQUIVALENCE_SLOPE_TOLERANCE);
+    expect(worstAspect, 'aspect diverges beyond f32 rounding')
+      .toBeLessThanOrEqual(EQUIVALENCE_ASPECT_TOLERANCE_RAD);
+  });
+
   it('f32 transcription agrees with CPU on ANISOTROPIC cells (cos 60° pair)', () => {
     // Same harness as above but with the probe's anisotropic geometry
     // (E–W 0.5 m, N–S 1 m) — bounds the f32-vs-f64 gap on the per-axis
