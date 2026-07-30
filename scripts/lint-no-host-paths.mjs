@@ -38,46 +38,64 @@
 
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import { homedir, tmpdir, userInfo } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** This file names the patterns it looks for, so it excludes itself. */
-const SELF = 'scripts/lint-no-host-paths.mjs';
+/**
+ * Files that describe the leak rather than contain one.
+ *
+ * Each entry is a hole, so each says why it is here. A file whose subject is
+ * path redaction has to quote a path to explain itself, and on a CI runner the
+ * home directory is `/home/runner`, which one of these quotes verbatim. The
+ * alternative is loosening the pattern until it stops matching real leaks.
+ */
+const DESCRIBES_THE_PATTERN = new Map([
+  ['scripts/lint-no-host-paths.mjs', 'this file names the patterns it searches for'],
+  [
+    'benchmarks/framework/artifacts.ts',
+    'documents why an absolute path is stripped from a record, quoting one',
+  ],
+]);
 
 /**
  * Identifiers of the machine running the check.
  *
- * A username under three characters is rejected as a pattern: it would match
- * ordinary words and every finding after that would be noise.
+ * Only path-shaped values qualify. An earlier version also matched the bare
+ * account name, which fails on a CI runner: the account there is `runner`, and
+ * the workflows legitimately contain that word many times over. It also matched
+ * a hyphenated temporary directory, and on Linux `/tmp` flattens to `tmp`,
+ * which appears in .gitignore. A pattern that common reports the whole
+ * repository and teaches everyone to ignore the check.
+ *
+ * A value is used only when it is long enough and carries a separator, so it
+ * names a location rather than a word. The leak this exists to catch is the
+ * home directory embedded in a path, in either form, and both survive the
+ * filter: `/Users/name` and its flattened `Users-name`.
  */
 function hostPatterns() {
   const patterns = [];
-  const add = (value, label) => {
-    if (typeof value === 'string' && value.length >= 3) {
-      patterns.push({ value, label });
-    }
-  };
+  const MIN_LENGTH = 8;
 
-  let user = '';
-  try {
-    user = userInfo().username;
-  } catch {
-    // Some sandboxes have no passwd entry. The directory patterns still apply.
-  }
-  add(user, 'this account name');
+  /** A location, not a word: long enough and containing a separator. */
+  const specific = (value) =>
+    typeof value === 'string' && value.length >= MIN_LENGTH && /[/\\-]/.test(value);
+
+  const add = (value, label) => {
+    if (specific(value)) patterns.push({ value, label });
+  };
 
   const home = homedir();
   add(home, 'this home directory');
-  // `/Users/name` also travels as `-Users-name` in a flattened directory name,
-  // which is the form the original leak took.
-  add(home.replace(/[/\\]/g, '-').replace(/^-/, ''), 'this home directory, hyphenated');
+  // The original leak travelled with separators flattened to hyphens, which is
+  // how a scratch directory encodes the path it belongs to.
+  add(home.replace(/[/\\]/g, '-').replace(/^-/, ''), 'this home directory, flattened');
 
   const tmp = tmpdir();
   add(tmp, 'this temporary directory');
-  add(tmp.replace(/[/\\]/g, '-').replace(/^-/, ''), 'this temporary directory, hyphenated');
+  add(tmp.replace(/[/\\]/g, '-').replace(/^-/, ''), 'this temporary directory, flattened');
 
   // Longest first, so a finding reports the most specific match.
   return patterns.sort((a, b) => b.value.length - a.value.length);
@@ -104,7 +122,7 @@ function readText(path) {
 const patterns = hostPatterns();
 if (patterns.length === 0) {
   console.error('lint:no-host-paths FAILED\n');
-  console.error('  • Could not determine this machine’s identifiers, so nothing was checked.');
+  console.error('  • No path-shaped identifier for this machine, so nothing was checked.');
   console.error('\nA check that cannot run must not report success.');
   process.exit(1);
 }
@@ -112,7 +130,7 @@ if (patterns.length === 0) {
 const problems = [];
 let scanned = 0;
 for (const file of trackedFiles()) {
-  if (file === SELF) continue;
+  if (DESCRIBES_THE_PATTERN.has(file)) continue;
   const text = readText(file);
   if (text === null) continue;
   scanned += 1;
