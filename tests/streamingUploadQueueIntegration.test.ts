@@ -220,3 +220,48 @@ describe('decodedChunkBytes', () => {
     expect(withRgb - decodedChunkBytes(base)).toBe(30);
   });
 });
+
+/**
+ * Two seams that only open once an upload queue is attached, which is why
+ * nothing has hit them: `decoded` is unreachable without one.
+ */
+describe('decoded nodes are not re-entered', () => {
+  it('does not enqueue a node that is already waiting on the queue', async () => {
+    const cloud = await openCloud();
+    const ready: StreamingNode[] = [];
+    const queue = new GpuUploadQueue();
+    const s = makeScheduler(cloud, ready, queue);
+    s.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+    await drain(s);
+    expect(queue.pendingCount).toBe(3);
+
+    // A second pass over the same wanted set. Without the `decoded` guard the
+    // three pending nodes are queued for decode again, and the queue ends up
+    // holding two items for every node.
+    s.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+    await drain(s);
+
+    expect(queue.pendingCount).toBe(3);
+    expect(s.stats().queued).toBe(0);
+    expect(cloud.octree.store.decodedPendingPointCount).toBe(2400);
+  });
+
+  it('returns decoded-but-uncommitted points on stop', async () => {
+    const cloud = await openCloud();
+    const ready: StreamingNode[] = [];
+    const queue = new GpuUploadQueue();
+    const s = makeScheduler(cloud, ready, queue);
+    s.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+    await drain(s);
+    expect(cloud.octree.store.decodedPendingPointCount).toBe(2400);
+
+    s.stop();
+
+    // The pending total has to come back to zero. Left at 2400 a restarted
+    // scheduler starts against a budget that is already spent, and nothing
+    // ever commits those nodes because the queue was cancelled.
+    expect(cloud.octree.store.decodedPendingPointCount).toBe(0);
+    expect(queue.pendingCount).toBe(0);
+    expect(ready).toHaveLength(0);
+  });
+});

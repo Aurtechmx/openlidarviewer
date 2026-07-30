@@ -1,37 +1,40 @@
 # OpenLiDARViewer
 
-<!-- Ten badges, two rows: software assurance, then research and release.
-     Each is set by a workflow run or an external registry, so none of them is
-     a claim this repository makes about itself.
+<!-- Nine badges in two rows. The first row is whether the code works, the
+     second is whether the work can be found and reused. Every one is set by a
+     workflow run or an external service, so none of them is a claim this
+     repository makes about itself. That is the only rule this block follows,
+     and it is why the list keeps getting shorter rather than longer.
 
-     The fair-software.eu badge reads three of five, and the two it withholds
-     are real. This is not in a package registry, and it carries no OpenSSF
-     Best Practices badge; that second one is deferred rather than overlooked,
-     so a later reader does not spend time rediscovering it. It sits next to
-     the fairsoftwarechecklist.net badge on purpose. That one is a
-     self-assessment; this one is measured from the repository by
-     `.github/workflows/fair-software.yml`, and a reader can tell them apart
-     only if both are present.
+     fair-software.eu reads three of five. Both of the ones it withholds are
+     real: this is not in a package registry, and it carries no OpenSSF Best
+     Practices badge, which is deferred rather than overlooked. The score is
+     measured from the repository by `.github/workflows/fair-software.yml`.
+
+     Gone, and worth recording so nobody adds them back. A
+     fairsoftwarechecklist.net badge sat next to fair-software.eu for a while.
+     It is a self-assessment, so it reported whatever we had typed into its
+     URL, and next to a measured score it read as a second opinion when it was
+     really the same opinion twice. Rendering, privacy, status, Node and the
+     live demo went earlier, each restating something the paragraph below or
+     the Live version line already said.
 
      One slot is held open: OpenSSF Scorecard, between CI and Security audit.
      The workflow publishes (last run 6.1, transparency-log entry recorded) but
      api.scorecard.dev has not ingested the project and the badge still renders
-     "invalid repo path". Checked again on 2026-07-30, still invalid. It goes
-     in when it renders a score, making eleven.
+     "invalid repo path". Rechecked 2026-07-30, still invalid. It goes in when
+     it renders a score, making ten. -->
 
-     Rendering, privacy, status, Node and the live demo were badges here and
-     are not any more: each restated something the paragraph below or the
-     Live version line already says, and a badge that asserts rather than
-     reports earns no trust. -->
+<!-- Does the code work -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
-
-[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
-[![FAIR checklist](https://fairsoftwarechecklist.net/badge.svg)](https://fairsoftwarechecklist.net/v0.2?f=11&a=22113&i=22322&r=113)
-[![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
+
+<!-- Can the work be found and reused -->
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
+[![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
 
@@ -541,15 +544,6 @@ when you can put a number beside a number: metadata, CRS and units, elevations,
 terrain products, and how the browser workflow compares with ArcGIS, QGIS,
 CloudCompare or PDAL. It asks for the values you read in both tools, so have the
 reference open.
-
-Either one is worth sending on its own. Neither needs the other.
-
-[Submit a test report](https://lidar.aurtech.mx/test-report.html) is the general
-form, for anything the two above do not cover. It runs in your browser and
-builds one self-contained report file, screenshots included, which you read
-before anything is sent. Send it to the project server, or download it and email
-it yourself. Reports are kept privately for development and are not published or
-passed to any third party.
 
 ## Acknowledgements
 
