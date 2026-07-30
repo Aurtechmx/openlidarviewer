@@ -42,6 +42,7 @@ import {
   sha256, deriveSnapshot, renderSummary, artifactIndex, PRODUCER_STATUSES,
 } from './validation-snapshot-lib.mjs';
 import { evidenceReader, writeManifest } from './build-validation-snapshot.mjs';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_DIR = join(ROOT, 'validation/snapshot');
@@ -89,7 +90,7 @@ export function firstDifference(a, b, path = '') {
     return null;
   }
   if (ta === 'object') {
-    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort();
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort(compareCodeUnits);
     for (const k of keys) {
       const d = firstDifference(a[k], b[k], path ? `${path}.${k}` : k);
       if (d) return d;
@@ -118,7 +119,7 @@ export function checkManifest(dir) {
     const got = sha256(readFileSync(join(dir, p)));
     if (got !== want) problems.push(`${p} hashes ${got}, the manifest says ${want}.`);
   }
-  for (const p of [...present].sort()) {
+  for (const p of [...present].sort(compareCodeUnits)) {
     if (!listed.has(p)) problems.push(`${p} is in the snapshot and the manifest does not account for it.`);
   }
   return problems;

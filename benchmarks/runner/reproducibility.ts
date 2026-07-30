@@ -30,6 +30,7 @@
  * about reproducibility at all. See `ARTIFACT_SCOPE` in the driver.
  */
 
+import { compareCodeUnits } from '../../src/canonicalHash';
 import { scienceScopedArtifacts } from '../pipeline/runPipeline';
 import { BENCHMARK_PACKAGE_VERSION, BENCHMARK_SCHEMA_VERSION, type ReproducibilityConfig } from './config';
 import { executeRun } from './execute';
@@ -115,7 +116,7 @@ export interface ReproducibilityResult {
 
 /** Scalar field names, so a comparison cannot silently skip a new field. */
 function scalarKeys(observation: RunObservation): readonly string[] {
-  return Object.keys(observation.scalars).sort();
+  return Object.keys(observation.scalars).sort(compareCodeUnits);
 }
 
 export function runReproducibilitySuite(config: ReproducibilityConfig): ReproducibilityResult {

@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = resolve(ROOT, 'validation/defects');
@@ -56,7 +57,7 @@ function tally(pairs) {
   const counts = new Map();
   for (const key of pairs) counts.set(key, (counts.get(key) ?? 0) + 1);
   return Object.fromEntries(
-    [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    [...counts].sort((a, b) => b[1] - a[1] || compareCodeUnits(a[0], b[0])),
   );
 }
 
@@ -169,8 +170,8 @@ const SUITE_LABEL = {
 /** Defect to evidence: what exposed each record, and what holds it fixed. */
 function mermaid() {
   const lines = ['```mermaid', 'flowchart LR'];
-  const mechanisms = [...new Set(defects.map((d) => d.detectingMechanism))].sort();
-  const files = [...new Set(defects.map((d) => d.regressionTest.file))].sort();
+  const mechanisms = [...new Set(defects.map((d) => d.detectingMechanism))].sort(compareCodeUnits);
+  const files = [...new Set(defects.map((d) => d.regressionTest.file))].sort(compareCodeUnits);
   const mId = (m) => `M_${m.replaceAll('-', '_')}`;
   const fId = (f) => `F_${f.replaceAll(/[^A-Za-z0-9]/g, '_')}`;
   for (const m of mechanisms) {
