@@ -467,11 +467,16 @@ export function collectProtocolProblems(ctx) {
     const witnessAt = sameDay ? commitInstant(f.witnessCommit) : null;
     const resultAt = sameDay ? commitInstant(f.resultCommit) : null;
     const sameDayOrdered = witnessAt !== null && resultAt !== null && witnessAt < resultAt;
-    // Where the history cannot be read at all, the ordering is unknown, not
-    // wrong. An extracted archive has no repository, and this verifier is meant
-    // to run there: failing a record because the evidence is out of reach would
-    // report a defect that the same record does not have in a clone.
-    const sameDayUncheckable = sameDay && (witnessAt === null || resultAt === null);
+    // Where there is no git at all, the ordering is unknown rather than wrong.
+    // An extracted archive has no repository and this verifier runs there, so
+    // failing a record because the evidence is out of reach would report a
+    // defect the same record does not have in a clone.
+    //
+    // The test is git's absence, NOT an unresolvable commit. Those are opposite
+    // situations: with git present, a commit that does not resolve is a witness
+    // that does not exist, which is a finding and not an excuse. Written the
+    // loose way first, and case 11d caught it.
+    const sameDayUncheckable = sameDay && GIT === null;
     if (
       f.status === 'preregistered' &&
       landed !== null &&
