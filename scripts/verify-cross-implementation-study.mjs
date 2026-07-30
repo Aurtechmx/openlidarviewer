@@ -117,12 +117,27 @@ const FLOATING_TAG = /(^|:)latest$|(^|\s)latest(\s|$)/i;
 
 // ── canonical form + digests ────────────────────────────────────────────────
 
+/**
+ * UTF-16 code-unit order, written out rather than left to the default.
+ *
+ * Digests here depend on sort order, so the order has to be fixed by the
+ * specification and not by the machine that ran the script. That rules out
+ * `localeCompare`, whose result moves with the locale and the ICU build. A
+ * bare `.sort()` already does the right thing, but nothing on the page says
+ * so, and "the default happens to be what we need" is the kind of claim that
+ * gets refactored away.
+ */
+export function byCodeUnit(a, b) {
+  if (a === b) return 0;
+  return a < b ? -1 : 1;
+}
+
 /** Key-sorted JSON, so a digest depends on values and not on key order. */
 export function canonicalJson(value) {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value !== null && typeof value === 'object') {
     const body = Object.keys(value)
-      .sort()
+      .sort(byCodeUnit)
       .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
       .join(',');
     return `{${body}}`;
@@ -160,7 +175,7 @@ export function protocolDigestOf(manifest) {
  */
 export function derivedInputsDigest(derivedFrom, rawByPath) {
   const pairs = [...derivedFrom]
-    .sort()
+    .sort(byCodeUnit)
     .map((path) => ({ path, sha256: rawByPath.get(path) ?? null }));
   return `sha256:${sha256(canonicalJson(pairs))}`;
 }
@@ -618,7 +633,7 @@ if (isMain()) {
 
   const byStatus = new Map();
   for (const s of out.studies) byStatus.set(s.manifest.status, (byStatus.get(s.manifest.status) ?? 0) + 1);
-  const tally = [...byStatus.entries()].sort().map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
+  const tally = [...byStatus.entries()].sort((a, b) => byCodeUnit(a[0], b[0])).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
   console.log(
     `verify:cross-implementation-study OK — ${out.studies.length} manifest(s) in ${out.studiesDir} ` +
       `(${tally}); dataset register ${out.datasetRegisterPath} ` +
