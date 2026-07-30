@@ -1,0 +1,1929 @@
+lint:no-ignored-src OK — no shipped or executed file is git-ignored
+lint:no-tracked-ignored OK — no git-ignored path is tracked
+lint:no-host-paths OK — 1987 tracked text file(s) name none of this machine’s 4 identifier(s).
+lint:release-sync OK — package, lock, README, changelog (dated 2026-07-30), notes, CITATION.cff, the service-worker cache, and the versioned evidence set all on v0.6.3.
+lint:main-deferral OK — no top-level `viewer.*` dereferences in src/main.ts
+lint:inline-imports OK — no inline dynamic import('./…') in src/main.ts
+lint:unsafe-html OK — no user-derived string reaches unsafeHtml/innerHTML
+lint:csp-html OK — 3 shipped page(s) match the enforced policy (script inline refused, style inline allowed), and .htaccess matches _headers.
+lint:html-assets OK — every local reference across 3 page(s) resolves.
+  allowed, deployed separately: THIRD_PARTY_NOTICES.md (emitted by the build from THIRD_PARTY_NOTICES.md)
+  allowed, deployed separately: OpenLiDARViewer_Test_Guide.pdf (uploaded to the web root by hand; too large to carry in the repository)
+lint:python-version OK — Python 3.11 declared for 5 script(s), and static analysis agrees.
+lint:layer-boundaries OK — 135 science/core files import no UI or three.js
+lint:position-access OK — 181 direct reads across 44 files.
+lint:upload-queue-wired OK — 3 seam(s) present; the queue is reachable from the streaming path.
+lint:monolith-size OK — main.ts 7355, Viewer.ts 7070 (3 fewer than baseline; run --update to bank it).
+lint:claim-register OK — 26 claims, YAML and runtime registry in sync, no unregistered gate ids, no banned wording, every claim scoped, every E4 claim bound to a study that measured something.
+lint:release-truth OK — monolith counts, release identifiers, E4 wording (3 E4 / 3 supplied), dependency audit, THIRD_PARTY versions, validation wording, and the checklist asset set all agree with the machine state for v0.6.3.
+lint:claims-language OK — no marketing superlatives in public documents.
+lint:archive-vocab OK — shipped files read in a plain product voice.
+lint:sbom OK — root openlidarviewer@0.6.3, 59 components, every direct production dependency at its locked version (identity + consistency checks, not full schema validation).
+✓ three: single copy @ 0.184.0
+✓ laz-perf: single copy @ 0.0.7
+✓ proj4: single copy @ 2.20.9
+✓ pdf-lib: single copy @ 1.17.1
+
+check:deps OK — all critical packages are single-copy.
+vite v8.1.5 building client environment for production...
+[2Ktransforming...✓ 1209 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/validateCount-B5Uo8w59.js                         0.45 kB
+dist/assets/deduce-mesh-schema-BrxMbpuB.js                    0.55 kB
+dist/assets/rolldown-runtime-EyZ2wyi3.js                      0.61 kB
+dist/assets/loadXyz-BIOMpwpV.js                               1.37 kB
+dist/assets/loadPts-BySRbegT.js                               1.71 kB
+dist/assets/sanitizeCloud-BfQHh5hD.js                         2.51 kB
+dist/assets/loadPtx-Vxa1x40e.js                               2.52 kB
+dist/assets/lasDecodeShared-DP3-9CpN.js                       2.56 kB
+dist/index.html                                               2.60 kB │ gzip:   0.91 kB
+dist/assets/deriveClassificationWorker-b473hyUy.js            7.01 kB
+dist/THIRD_PARTY_NOTICES.md                                   7.97 kB
+dist/assets/loadObj-BrTycdBu.js                               8.68 kB
+dist/assets/loadLas-Dp65_RzN.js                               9.24 kB
+dist/assets/loadPly-CTy6_QqD.js                               9.35 kB
+dist/assets/parseWorker-De7sporE.js                           9.79 kB
+dist/assets/loadPcd-DgvugBLp.js                              10.47 kB
+dist/assets/loadE57-Bgty8aRl.js                              13.68 kB
+dist/assets/manrope-latin-500-normal-BYYD-dBL.woff2          14.04 kB
+dist/assets/manrope-latin-400-normal-PaqtzbVb.woff2          14.10 kB
+dist/assets/manrope-latin-600-normal-4f0koTD-.woff2          14.17 kB
+dist/assets/manrope-latin-500-normal-DMZssgOp.woff           18.24 kB
+dist/assets/manrope-latin-400-normal-8tf8FM3T.woff           18.29 kB
+dist/assets/manrope-latin-600-normal-BqgrALkZ.woff           18.38 kB
+dist/assets/jetbrains-mono-latin-400-normal-V6pRDFza.woff2   21.16 kB
+dist/assets/jetbrains-mono-latin-500-normal-BWZEU5yA.woff2   21.83 kB
+dist/assets/jetbrains-mono-latin-400-normal-6-qcROiO.woff    27.49 kB
+dist/assets/jetbrains-mono-latin-500-normal-CJOVTJB7.woff    28.20 kB
+dist/assets/mesh-utils-l7z_4YQZ.js                           32.62 kB
+dist/assets/terrainCoreWorker-BJpzSlD1.js                    75.74 kB
+dist/assets/loadGltf-DN7xtTXC.js                            103.00 kB
+dist/assets/three.core-xDqn0H1k.js                          126.31 kB
+dist/assets/lazDecode-ClbodIym.js                           338.89 kB
+dist/assets/copcWorker-QLebkYyj.js                          341.76 kB
+dist/assets/eptLaszipWorker-BSk8EHMY.js                     349.39 kB
+dist/assets/index-BtDrjOI3.css                              226.20 kB │ gzip:  33.07 kB
+dist/assets/exportNotes-y_qUPur3.js                           0.10 kB │ gzip:   0.10 kB
+dist/assets/numeric-Mqw7VFZU.js                               0.10 kB │ gzip:   0.10 kB
+dist/assets/permitStamp-KIFFWcv2.js                           0.17 kB │ gzip:   0.14 kB
+dist/assets/formatByteSize-DHuON9SX.js                        0.19 kB │ gzip:   0.14 kB
+dist/assets/quantile-DprfWCbD.js                              0.20 kB │ gzip:   0.16 kB
+dist/assets/colorEncode-ESK4Sm63.js                           0.22 kB │ gzip:   0.18 kB
+dist/assets/reportManifest-CSJKgcZW.js                        0.23 kB │ gzip:   0.19 kB
+dist/assets/crsIdentifier-DOCOqJB8.js                         0.28 kB │ gzip:   0.22 kB
+dist/assets/viewCubeMath-yfnn0zHh.js                          0.29 kB │ gzip:   0.20 kB
+dist/assets/InstrumentedRangeSource-DK4hMpKs.js               0.36 kB │ gzip:   0.20 kB
+dist/assets/types-s-X2lIQT.js                                 0.37 kB │ gzip:   0.22 kB
+dist/assets/buildIdentity-DD42IFS_.js                         0.38 kB │ gzip:   0.26 kB
+dist/assets/coordinateBridge-809eXa4G.js                      0.41 kB │ gzip:   0.25 kB
+dist/assets/canonicalHash-Bvke0U3q.js                         0.43 kB │ gzip:   0.30 kB
+dist/assets/LocalFileRangeSource-WO3WBTI2.js                  0.45 kB │ gzip:   0.27 kB
+dist/assets/textChunkReader-BJvtJ9NJ.js                       0.45 kB │ gzip:   0.31 kB
+dist/assets/changeRaster-BP_lpZlU.js                          0.45 kB │ gzip:   0.32 kB
+dist/assets/validateCount-CNZuSVLP.js                         0.45 kB │ gzip:   0.30 kB
+dist/assets/deduce-mesh-schema-D2YT0PmD.js                    0.55 kB │ gzip:   0.32 kB
+dist/assets/dom-Dr0ZS7KH.js                                   0.55 kB │ gzip:   0.33 kB
+dist/assets/floorPlanConfidence-Du3USE3F.js                   0.58 kB │ gzip:   0.39 kB
+dist/assets/exportEvidenceNote-CTBD0AtT.js                    0.61 kB │ gzip:   0.31 kB
+dist/assets/confirmFullExport-CL8ckAoX.js                     0.63 kB │ gzip:   0.42 kB
+dist/assets/numerics-JuydwlGf.js                              0.64 kB │ gzip:   0.28 kB
+dist/assets/voxelKey-CMl0Pzns.js                              0.69 kB │ gzip:   0.35 kB
+dist/assets/streamingFiniteGuard-D0I_joKW.js                  0.72 kB │ gzip:   0.42 kB
+dist/assets/labelPlacement-3E0tzJ6h.js                        0.76 kB │ gzip:   0.48 kB
+dist/assets/devFlags-BebsePNz.js                              0.83 kB │ gzip:   0.41 kB
+dist/assets/pngWorldFile-DfFmiPWP.js                          0.83 kB │ gzip:   0.49 kB
+dist/assets/units-CvVLdcN6.js                                 0.85 kB │ gzip:   0.46 kB
+dist/assets/eptUrls-BInoBd3n.js                               0.93 kB │ gzip:   0.49 kB
+dist/assets/rolldown-runtime-aKtaBQYM.js                      1.08 kB │ gzip:   0.62 kB
+dist/assets/preload-helper-HclGiUj8.js                        1.21 kB │ gzip:   0.67 kB
+dist/assets/eptTransport-CVNyay5m.js                          1.31 kB │ gzip:   0.65 kB
+dist/assets/loadErrors-BT0zmEHP.js                            1.34 kB │ gzip:   0.62 kB
+dist/assets/loadXyz-CNHbgS_i.js                               1.37 kB │ gzip:   0.75 kB
+dist/assets/streamingColors-DMZJ1TsC.js                       1.38 kB │ gzip:   0.67 kB
+dist/assets/ColorbarOverlay-vGlv-t7N.js                       1.45 kB │ gzip:   0.62 kB
+dist/assets/terrainCoreWorkerClient-B6aZIyeg.js               1.58 kB │ gzip:   0.71 kB
+dist/assets/computeTerrainCoreAsync-C5R1tZX7.js               1.69 kB │ gzip:   0.82 kB
+dist/assets/deriveClassificationWorkerClient-ButSy55e.js      1.70 kB │ gzip:   0.76 kB
+dist/assets/eptUrlValidation-CCu-NEmd.js                      1.70 kB │ gzip:   0.87 kB
+dist/assets/loadPts-2Ibc_HcV.js                               1.70 kB │ gzip:   0.93 kB
+dist/assets/profileStations-D7B6hQn7.js                       1.74 kB │ gzip:   0.74 kB
+dist/assets/StreamingNodeStore-BiymH4lY.js                    1.74 kB │ gzip:   0.57 kB
+dist/assets/compareEpochs-CYnh3CBh.js                         1.79 kB │ gzip:   0.90 kB
+dist/assets/copcWorkerClient-CjXkGgoE.js                      1.79 kB │ gzip:   0.76 kB
+dist/assets/viewCube-Bw_JoA5h.js                              1.83 kB │ gzip:   0.88 kB
+dist/assets/rgbAutoNormalize-D6SOu7HO.js                      1.84 kB │ gzip:   0.88 kB
+dist/assets/contextMenu-C48vVob7.js                           1.89 kB │ gzip:   0.93 kB
+dist/assets/eptLaszipWorkerClient-DWA4k-cY.js                 1.89 kB │ gzip:   0.80 kB
+dist/assets/LayerHealthCard-KHNBGJ90.js                       1.90 kB │ gzip:   0.63 kB
+dist/assets/embedBridge-rswq0ppt.js                           1.93 kB │ gzip:   0.89 kB
+dist/assets/contourFeatureModel-BXymD9Th.js                   2.04 kB │ gzip:   1.06 kB
+dist/assets/reclassifyUi-BOKB3-Sl.js                          2.07 kB │ gzip:   0.94 kB
+dist/assets/auditLog-C1MLQ3XO.js                              2.10 kB │ gzip:   1.29 kB
+dist/assets/measurementReport-Cg_2sXDl.js                     2.17 kB │ gzip:   1.13 kB
+dist/assets/evidenceGrade-DZuPzgG-.js                         2.29 kB │ gzip:   1.09 kB
+dist/assets/scanTypeControl-jv-98cZ-.js                       2.32 kB │ gzip:   0.94 kB
+dist/assets/sanitizeCloud-Jle8t6Se.js                         2.34 kB │ gzip:   1.06 kB
+dist/assets/terrainCoreCache-kyivZz7_.js                      2.41 kB │ gzip:   1.18 kB
+dist/assets/lasDecodeShared-CkB1Umgy.js                       2.45 kB │ gzip:   1.06 kB
+dist/assets/loadPtx-sBd6sTVk.js                               2.52 kB │ gzip:   1.22 kB
+dist/assets/colorbar-BCNyza9_.js                              2.59 kB │ gzip:   1.10 kB
+dist/assets/zipStore-DkeAQnwp.js                              2.67 kB │ gzip:   0.97 kB
+dist/assets/rgbAppearance-B1oaT7yx.js                         2.85 kB │ gzip:   1.24 kB
+dist/assets/EptChunkDecoder-BeHEa9wj.js                       3.01 kB │ gzip:   1.45 kB
+dist/assets/loadLas-Dg_lG4oe.js                               3.11 kB │ gzip:   1.50 kB
+dist/assets/PointCloud-ByhuRbSw.js                            3.15 kB │ gzip:   1.15 kB
+dist/assets/measurementExport-BZYhLQCT.js                     3.15 kB │ gzip:   1.35 kB
+dist/assets/eptDetect-Cx45j7oK.js                             3.20 kB │ gzip:   1.28 kB
+dist/assets/whyNotReasons-BClQlUGA.js                         3.23 kB │ gzip:   1.55 kB
+dist/assets/contourShapeStyle-DNVh0BSS.js                     3.32 kB │ gzip:   1.43 kB
+dist/assets/ShortcutSheet-DnEtkqAj.js                         3.39 kB │ gzip:   1.24 kB
+dist/assets/CommandPalette-DDXVaVHn.js                        3.51 kB │ gzip:   1.22 kB
+dist/assets/epsg-ykHBXbtT.js                                  3.87 kB │ gzip:   1.52 kB
+dist/assets/planetaryComputer-av5-NT74.js                     3.98 kB │ gzip:   1.64 kB
+dist/assets/evidenceRegistry-X5RBOo2x.js                      4.00 kB │ gzip:   0.97 kB
+dist/assets/reportVerifier-CLwCa7rL.js                        4.13 kB │ gzip:   1.67 kB
+dist/assets/surfaceFromRaster-CTVHfjIv.js                     4.34 kB │ gzip:   1.96 kB
+dist/assets/exporters-vwbgKJhz.js                             4.52 kB │ gzip:   1.87 kB
+dist/assets/StreamingRenderer-CQHd05Wr.js                     4.59 kB │ gzip:   1.65 kB
+dist/assets/layerHealth-CA2SH7y4.js                           4.62 kB │ gzip:   1.59 kB
+dist/assets/HttpRangeSource-B3BCTFR_.js                       4.73 kB │ gzip:   1.77 kB
+dist/assets/kmlExport-TqQXUozY.js                             4.75 kB │ gzip:   1.91 kB
+dist/assets/contourExportAdapter-CJGjK5LS.js                  4.78 kB │ gzip:   1.57 kB
+dist/assets/compareDtms-BDonpeOb.js                           4.85 kB │ gzip:   2.04 kB
+dist/assets/applyDisplayProfile-BoSfIEAA.js                   4.86 kB │ gzip:   1.87 kB
+dist/assets/streamingBenchmark-CauN43uD.js                    5.23 kB │ gzip:   1.92 kB
+dist/assets/WorkflowConfigPanel-BKB1lwCi.js                   5.37 kB │ gzip:   1.76 kB
+dist/assets/profilePdf-CYVuyvdS.js                            5.66 kB │ gzip:   2.79 kB
+dist/assets/terrainAssessment-DXzRMrUA.js                     5.90 kB │ gzip:   2.46 kB
+dist/assets/runFullCloudGradeAction-BRvc7Rge.js               6.08 kB │ gzip:   2.73 kB
+dist/assets/alignEpochs-BE6zyPCB.js                           6.14 kB │ gzip:   2.57 kB
+dist/assets/crs-CwFD7i32.js                                   6.28 kB │ gzip:   2.56 kB
+dist/assets/scanShape-BTDJ1iTB.js                             6.99 kB │ gzip:   3.06 kB
+dist/assets/terrainReportPdf-DVkEfSkU.js                      7.72 kB │ gzip:   3.37 kB
+dist/assets/StreamingPointCloud-BavjU_98.js                   8.33 kB │ gzip:   2.94 kB
+dist/assets/spaceReportPdf-CTWjevHC.js                        8.45 kB │ gzip:   3.61 kB
+dist/assets/loadObj-CcbodY9H.js                               8.67 kB │ gzip:   3.01 kB
+dist/assets/EptStreamingPointCloud-CviFib7w.js                9.22 kB │ gzip:   3.82 kB
+dist/assets/loadPly-DOuzHXk5.js                               9.35 kB │ gzip:   3.24 kB
+dist/assets/demPackage-B0xWpIiW.js                           10.05 kB │ gzip:   4.62 kB
+dist/assets/BatchConverter-Bq3Mnidj.js                       10.28 kB │ gzip:   3.62 kB
+dist/assets/loadPcd-BNEFe3eX.js                              10.48 kB │ gzip:   3.65 kB
+dist/assets/floorPlanSvg-VNa-9WJh.js                         10.58 kB │ gzip:   4.18 kB
+dist/assets/DebugOverlay-BRVu9q-3.js                         10.83 kB │ gzip:   3.78 kB
+dist/assets/contourDownload-Tjn0KNMx.js                      10.89 kB │ gzip:   4.62 kB
+dist/assets/ObjectPanel-DsQnlBdn.js                          11.14 kB │ gzip:   3.84 kB
+dist/assets/cellConfidence-BGohOrCK.js                       11.65 kB │ gzip:   4.57 kB
+dist/assets/session-BVrkAFsy.js                              11.75 kB │ gzip:   4.22 kB
+dist/assets/option-utils-De-Ih98n.js                         13.05 kB │ gzip:   4.70 kB
+dist/assets/contourDeliverableBuild-d_ybOhBN.js              13.67 kB │ gzip:   5.19 kB
+dist/assets/loadE57-Dsx5UQld.js                              13.71 kB │ gzip:   5.32 kB
+dist/assets/StreamingScheduler-CbGba9LM.js                   14.14 kB │ gzip:   4.37 kB
+dist/assets/exportProvenance-0PSrUtSP.js                     14.43 kB │ gzip:   5.26 kB
+dist/assets/mapSheetPdf-LurM8Ai3.js                          14.85 kB │ gzip:   6.13 kB
+dist/assets/export-BMLWt0jc.js                               17.24 kB │ gzip:   6.36 kB
+dist/assets/contourStudioMount-BG8LtULR.js                   18.25 kB │ gzip:   5.93 kB
+dist/assets/mesh-utils-DAmvxeri.js                           20.04 kB │ gzip:   7.08 kB
+dist/assets/report-Bf-k3_eq.js                               28.10 kB │ gzip:  10.11 kB
+dist/assets/extractFloorPlan-BavJOPEM.js                     32.16 kB │ gzip:  12.88 kB
+dist/assets/vendor-laz-BsOh0-Bv.js                           51.99 kB │ gzip:  17.65 kB
+dist/assets/AnalysePanel-CA0CFVlQ.js                         57.85 kB │ gzip:  18.05 kB
+dist/assets/analyseContours-nYAWv5jZ.js                      67.18 kB │ gzip:  23.56 kB
+dist/assets/loadGltf-CPLqXLcc.js                            102.93 kB │ gzip:  31.74 kB
+dist/assets/convertCloud-Cxt5iIAu.js                        143.83 kB │ gzip:  48.64 kB
+dist/assets/Viewer-CsCr40c0.js                              213.79 kB │ gzip:  63.90 kB
+dist/assets/lazDecode-B-TfTHkw.js                           286.97 kB │ gzip: 104.92 kB
+dist/assets/vendor-pdf-eH_iJB_O.js                          420.02 kB │ gzip: 175.58 kB
+dist/assets/index-DxAc-75e.js                               453.86 kB │ gzip: 145.65 kB
+dist/assets/vendor-three-webgpu-CpMPpcrR.js                 805.10 kB │ gzip: 220.77 kB
+
+✓ built in 876ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+ RUN  v4.1.10 <clean-clone>
+
+
+ Test Files  2 passed (2)
+      Tests  11 passed (11)
+   Start at  16:17:40
+   Duration  211ms (transform 48ms, setup 0ms, import 65ms, tests 15ms, environment 0ms)
+
+vite v8.1.5 building client environment for live...
+[2Ktransforming...✓ 1208 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/assets/textChunkReader-BJvtJ9NJ.js                         0.45 kB
+dist/assets/validateCount-B5Uo8w59.js                           0.45 kB
+dist/assets/deduce-mesh-schema-BrxMbpuB.js                      0.55 kB
+dist/assets/rolldown-runtime-EyZ2wyi3.js                        0.61 kB
+dist/assets/loadXyz-BIOMpwpV.js                                 1.37 kB
+dist/assets/loadPts-BySRbegT.js                                 1.71 kB
+dist/assets/sanitizeCloud-BfQHh5hD.js                           2.51 kB
+dist/assets/loadPtx-Vxa1x40e.js                                 2.52 kB
+dist/assets/lasDecodeShared-DP3-9CpN.js                         2.56 kB
+dist/index.html                                                 2.60 kB │ gzip:   0.91 kB
+dist/THIRD_PARTY_NOTICES.md                                     7.97 kB
+dist/assets/loadObj-BrTycdBu.js                                 8.68 kB
+dist/assets/loadLas-Dp65_RzN.js                                 9.24 kB
+dist/assets/loadPly-CTy6_QqD.js                                 9.35 kB
+dist/assets/parseWorker-De7sporE.js                             9.79 kB
+dist/assets/loadPcd-DgvugBLp.js                                10.47 kB
+dist/assets/loadE57-Bgty8aRl.js                                13.68 kB
+dist/assets/manrope-latin-500-normal-BYYD-dBL.woff2            14.04 kB
+dist/assets/manrope-latin-400-normal-PaqtzbVb.woff2            14.10 kB
+dist/assets/manrope-latin-600-normal-4f0koTD-.woff2            14.17 kB
+dist/assets/manrope-latin-500-normal-DMZssgOp.woff             18.24 kB
+dist/assets/manrope-latin-400-normal-8tf8FM3T.woff             18.29 kB
+dist/assets/manrope-latin-600-normal-BqgrALkZ.woff             18.38 kB
+dist/assets/jetbrains-mono-latin-400-normal-V6pRDFza.woff2     21.16 kB
+dist/assets/jetbrains-mono-latin-500-normal-BWZEU5yA.woff2     21.83 kB
+dist/assets/jetbrains-mono-latin-400-normal-6-qcROiO.woff      27.49 kB
+dist/assets/jetbrains-mono-latin-500-normal-CJOVTJB7.woff      28.20 kB
+dist/assets/mesh-utils-l7z_4YQZ.js                             32.62 kB
+dist/assets/terrainCoreWorker-BJpzSlD1.js                      75.74 kB
+dist/assets/loadGltf-DN7xtTXC.js                              103.00 kB
+dist/assets/three.core-xDqn0H1k.js                            126.31 kB
+dist/assets/lazDecode-ClbodIym.js                             338.89 kB
+dist/assets/copcWorker-QLebkYyj.js                            341.76 kB
+dist/assets/eptLaszipWorker-BSk8EHMY.js                       349.39 kB
+dist/assets/index-BtDrjOI3.css                                226.20 kB │ gzip:  33.07 kB
+dist/assets/colorEncode-ESK4Sm63.js                             0.22 kB │ gzip:   0.18 kB
+dist/assets/deduce-mesh-schema-D2YT0PmD.js                      0.55 kB │ gzip:   0.32 kB
+dist/assets/rolldown-runtime-aKtaBQYM.js                        1.08 kB │ gzip:   0.62 kB
+dist/assets/exportNotes-BV8QEJz6.js                             1.11 kB │ gzip:   0.76 kB
+dist/assets/numeric-7VzKyRsO.js                                 1.17 kB │ gzip:   0.75 kB
+dist/assets/preload-helper-HclGiUj8.js                          1.21 kB │ gzip:   0.67 kB
+dist/assets/quantile-B4X7T9mk.js                                1.31 kB │ gzip:   0.83 kB
+dist/assets/reportManifest-kQd4pND7.js                          1.32 kB │ gzip:   0.83 kB
+dist/assets/formatByteSize-RIEhs1r3.js                          1.32 kB │ gzip:   0.83 kB
+dist/assets/crsIdentifier-1pLDeOxW.js                           1.37 kB │ gzip:   0.88 kB
+dist/assets/permitStamp-wTFaKAPU.js                             1.41 kB │ gzip:   0.89 kB
+dist/assets/viewCubeMath-CfkNZGf7.js                            1.41 kB │ gzip:   0.87 kB
+dist/assets/coordinateBridge-CVU6-atc.js                        1.52 kB │ gzip:   0.92 kB
+dist/assets/InstrumentedRangeSource-CAAJmbQ9.js                 1.55 kB │ gzip:   0.92 kB
+dist/assets/canonicalHash-DKRvF7wH.js                           1.57 kB │ gzip:   0.98 kB
+dist/assets/types-U6gSWetU.js                                   1.58 kB │ gzip:   0.93 kB
+dist/assets/terrainCoreWorkerClient-B6aZIyeg.js                 1.58 kB │ gzip:   0.71 kB
+dist/assets/validateCount-BKWJCn1U.js                           1.59 kB │ gzip:   1.03 kB
+dist/assets/LocalFileRangeSource-DtO5NV6M.js                    1.61 kB │ gzip:   1.00 kB
+dist/assets/changeRaster-dZoCj5bY.js                            1.62 kB │ gzip:   1.01 kB
+dist/assets/buildIdentity-CIVZh-jn.js                           1.65 kB │ gzip:   1.02 kB
+dist/assets/textChunkReader-CcwzgyIW.js                         1.65 kB │ gzip:   1.02 kB
+dist/assets/computeTerrainCoreAsync-DbsqK886.js                 1.69 kB │ gzip:   0.82 kB
+dist/assets/dom-NSzywxHz.js                                     1.78 kB │ gzip:   1.08 kB
+dist/assets/exportEvidenceNote--Mn2xTc1.js                      1.78 kB │ gzip:   1.17 kB
+dist/assets/copcWorkerClient-CjXkGgoE.js                        1.79 kB │ gzip:   0.76 kB
+dist/assets/floorPlanConfidence-DpLDOHGi.js                     1.79 kB │ gzip:   1.13 kB
+dist/assets/eptLaszipWorkerClient-DWA4k-cY.js                   1.89 kB │ gzip:   0.80 kB
+dist/assets/numerics-BYxmC9rn.js                                1.90 kB │ gzip:   1.07 kB
+dist/assets/voxelKey-Dco7kXpY.js                                1.91 kB │ gzip:   1.11 kB
+dist/assets/labelPlacement-BLD0iGNO.js                          1.95 kB │ gzip:   1.21 kB
+dist/assets/streamingFiniteGuard-BwvjcLIJ.js                    2.04 kB │ gzip:   1.28 kB
+dist/assets/pngWorldFile-EiHA_5dC.js                            2.05 kB │ gzip:   1.25 kB
+dist/assets/devFlags-BlvGYB14.js                                2.10 kB │ gzip:   1.24 kB
+dist/assets/units-ChCbS2w5.js                                   2.19 kB │ gzip:   1.29 kB
+dist/assets/loadXyz-3BAqXLkJ.js                                 2.65 kB │ gzip:   1.51 kB
+dist/assets/eptTransport-CMVXYHsS.js                            2.65 kB │ gzip:   1.53 kB
+dist/assets/loadErrors-DCRqYrf1.js                              2.72 kB │ gzip:   1.64 kB
+dist/assets/streamingColors-KQHFBAbX.js                         2.79 kB │ gzip:   1.54 kB
+dist/assets/ColorbarOverlay-CHGrYD1k.js                         2.83 kB │ gzip:   1.59 kB
+dist/assets/loadPts-BsJfvpxb.js                                 2.86 kB │ gzip:   1.67 kB
+dist/assets/confirmFullExport-BveegxLf.js                       2.96 kB │ gzip:   1.59 kB
+dist/assets/profileStations-D8mYPWz4.js                         3.06 kB │ gzip:   1.51 kB
+dist/assets/eptUrlValidation-t2rEqFJ9.js                        3.06 kB │ gzip:   1.89 kB
+dist/assets/compareEpochs-BBcnwXwv.js                           3.09 kB │ gzip:   1.76 kB
+dist/assets/loadLas-yMGsv5TO.js                                 3.11 kB │ gzip:   1.50 kB
+dist/assets/PointCloud-ByhuRbSw.js                              3.15 kB │ gzip:   1.15 kB
+dist/assets/rgbAutoNormalize-CtLCyZla.js                        3.26 kB │ gzip:   1.83 kB
+dist/assets/eptUrls-N72C4ZJ1.js                                 3.27 kB │ gzip:   1.61 kB
+dist/assets/viewCube-BbKhnuT6.js                                3.40 kB │ gzip:   2.09 kB
+dist/assets/contextMenu-OvRgSc5O.js                             3.41 kB │ gzip:   2.04 kB
+dist/assets/embedBridge-CaBAwWhe.js                             3.44 kB │ gzip:   1.97 kB
+dist/assets/auditLog-DPAZkdNJ.js                                3.48 kB │ gzip:   2.17 kB
+dist/assets/LayerHealthCard-DyWzHgn9.js                         3.49 kB │ gzip:   1.75 kB
+dist/assets/contourFeatureModel--SIchMsQ.js                     3.52 kB │ gzip:   2.08 kB
+dist/assets/measurementReport-2-6YGHfk.js                       3.65 kB │ gzip:   2.21 kB
+dist/assets/reclassifyUi-D9XlPARJ.js                            3.69 kB │ gzip:   2.08 kB
+dist/assets/sanitizeCloud-CnYorHdC.js                           3.71 kB │ gzip:   2.07 kB
+dist/assets/scanTypeControl-mO6IVSdp.js                         3.86 kB │ gzip:   2.14 kB
+dist/assets/loadPtx-asP6m8Iv.js                                 3.88 kB │ gzip:   2.05 kB
+dist/assets/zipStore-Cg_4Zhah.js                                3.96 kB │ gzip:   1.91 kB
+dist/assets/terrainCoreCache-sJs8bKhR.js                        3.97 kB │ gzip:   2.17 kB
+dist/assets/StreamingNodeStore-DBSXNvxz.js                      4.27 kB │ gzip:   1.98 kB
+dist/assets/colorbar-CIA58zyO.js                                4.40 kB │ gzip:   2.42 kB
+dist/assets/rgbAppearance-FwbqFKir.js                           4.47 kB │ gzip:   2.39 kB
+dist/assets/measurementExport-DqBiF190.js                       4.76 kB │ gzip:   2.48 kB
+dist/assets/evidenceGrade-Bm1zPwzb.js                           4.78 kB │ gzip:   2.36 kB
+dist/assets/eptDetect-pXys68GD.js                               4.85 kB │ gzip:   2.49 kB
+dist/assets/lasDecodeShared-BsI9YUnW.js                         4.93 kB │ gzip:   2.37 kB
+dist/assets/CommandPalette-CSVaejaD.js                          5.34 kB │ gzip:   2.56 kB
+dist/assets/ShortcutSheet-ClNH1R2B.js                           5.38 kB │ gzip:   2.60 kB
+dist/assets/EptChunkDecoder-DrdavJCH.js                         5.72 kB │ gzip:   3.04 kB
+dist/assets/epsg-BSj6JsMS.js                                    5.74 kB │ gzip:   3.02 kB
+dist/assets/planetaryComputer-DLnN4q5t.js                       5.82 kB │ gzip:   3.05 kB
+dist/assets/contourShapeStyle-B9APhquF.js                       6.08 kB │ gzip:   2.94 kB
+dist/assets/exporters-BgLvTVO5.js                               6.26 kB │ gzip:   3.25 kB
+dist/assets/HttpRangeSource-Di4g_Ch1.js                         6.53 kB │ gzip:   3.46 kB
+dist/assets/StreamingRenderer-egwdVwhW.js                       6.55 kB │ gzip:   3.08 kB
+dist/assets/layerHealth-6cql2kUw.js                             6.61 kB │ gzip:   3.28 kB
+dist/assets/evidenceRegistry-CW2Csu1l.js                        6.88 kB │ gzip:   2.72 kB
+dist/assets/kmlExport-BD49AKnx.js                               6.98 kB │ gzip:   3.87 kB
+dist/assets/reportVerifier-iijGC2xL.js                          7.20 kB │ gzip:   3.74 kB
+dist/assets/streamingBenchmark-Buamo75I.js                      7.39 kB │ gzip:   3.52 kB
+dist/assets/WorkflowConfigPanel-BS86yZ-w.js                     7.42 kB │ gzip:   3.53 kB
+dist/assets/whyNotReasons-BEiS2JZV.js                           7.44 kB │ gzip:   3.73 kB
+dist/assets/profilePdf-DHLX4x4A.js                              7.64 kB │ gzip:   4.29 kB
+dist/assets/crs-BAxSacf1.js                                     7.91 kB │ gzip:   3.81 kB
+dist/assets/surfaceFromRaster-qoefymy0.js                       7.99 kB │ gzip:   3.69 kB
+dist/assets/compareDtms-BU41f2cQ.js                             8.17 kB │ gzip:   4.28 kB
+dist/assets/contourExportAdapter-BKwM7IC0.js                    8.93 kB │ gzip:   3.79 kB
+dist/assets/alignEpochs-CUhvi5Dn.js                             9.05 kB │ gzip:   4.37 kB
+dist/assets/terrainAssessment-C5INkm1I.js                       9.11 kB │ gzip:   4.55 kB
+dist/assets/applyDisplayProfile-CTEEzpeF.js                     9.26 kB │ gzip:   4.27 kB
+dist/assets/loadObj-EaxXC38D.js                                 9.94 kB │ gzip:   3.80 kB
+dist/assets/scanShape-BPgoIdCd.js                              10.02 kB │ gzip:   4.89 kB
+dist/assets/loadPly-V1Cy-Ew2.js                                10.66 kB │ gzip:   4.15 kB
+dist/assets/terrainReportPdf-B01jUeu_.js                       11.33 kB │ gzip:   5.61 kB
+dist/assets/spaceReportPdf-ThU-27kZ.js                         12.10 kB │ gzip:   5.95 kB
+dist/assets/loadPcd-BTxhNd8T.js                                12.10 kB │ gzip:   4.78 kB
+dist/assets/option-utils-De-Ih98n.js                           13.05 kB │ gzip:   4.70 kB
+dist/assets/floorPlanSvg-8LB0K2iA.js                           13.31 kB │ gzip:   6.42 kB
+dist/assets/runFullCloudGradeAction-DvsK4h9N.js                13.52 kB │ gzip:   5.90 kB
+dist/assets/BatchConverter-D4L8qDcm.js                         14.48 kB │ gzip:   6.60 kB
+dist/assets/ObjectPanel-BX-NH9rs.js                            14.61 kB │ gzip:   7.01 kB
+dist/assets/session-okAuToNf.js                                14.63 kB │ gzip:   6.65 kB
+dist/assets/StreamingPointCloud-CPj8Bn8A.js                    15.45 kB │ gzip:   6.29 kB
+dist/assets/demPackage-0m2AQGl_.js                             15.93 kB │ gzip:   7.60 kB
+dist/assets/EptStreamingPointCloud-DH25rasm.js                 16.56 kB │ gzip:   7.32 kB
+dist/assets/contourDownload-BMVQaD6Q.js                        17.22 kB │ gzip:   8.15 kB
+dist/assets/DebugOverlay-tjPkgxJ6.js                           17.51 kB │ gzip:   7.71 kB
+dist/assets/cellConfidence-C8-REmNw.js                         19.30 kB │ gzip:   7.79 kB
+dist/assets/mapSheetPdf-DfKia5a1.js                            19.80 kB │ gzip:   9.03 kB
+dist/assets/mesh-utils-DAmvxeri.js                             20.04 kB │ gzip:   7.08 kB
+dist/assets/StreamingScheduler-BZHVxzcZ.js                     20.25 kB │ gzip:   8.18 kB
+dist/assets/exportProvenance-BWjil2om.js                       21.40 kB │ gzip:   9.64 kB
+dist/assets/contourDeliverableBuild-BPhQTbqZ.js                22.97 kB │ gzip:  10.33 kB
+dist/assets/loadE57-Du8Hay6v.js                                24.66 kB │ gzip:  10.22 kB
+dist/assets/contourStudioMount-DEiWMR-r.js                     35.65 kB │ gzip:  13.48 kB
+dist/assets/export-CBulF8lR.js                                 37.32 kB │ gzip:  14.20 kB
+dist/assets/report-BdpXOtfH.js                                 42.35 kB │ gzip:  17.27 kB
+dist/assets/extractFloorPlan-BcbmzEF-.js                       43.44 kB │ gzip:  18.37 kB
+dist/assets/vendor-laz-BsOh0-Bv.js                             51.99 kB │ gzip:  17.65 kB
+dist/assets/AnalysePanel-Dzk3Wi1v.js                           80.03 kB │ gzip:  31.52 kB
+dist/assets/loadGltf-BAwDwSZN.js                              104.57 kB │ gzip:  32.94 kB
+dist/assets/analyseContours-DI2uL26d.js                       110.44 kB │ gzip:  42.88 kB
+dist/assets/convertCloud-BNV4Vn8N.js                          152.66 kB │ gzip:  53.54 kB
+dist/assets/lazDecode-Bc-RM36Q.js                             289.26 kB │ gzip: 106.10 kB
+dist/assets/vendor-pdf-eH_iJB_O.js                            420.02 kB │ gzip: 175.58 kB
+dist/assets/Viewer-BbYK79Z9.js                                654.21 kB │ gzip: 188.23 kB
+dist/assets/index-CQrFc_Vo.js                                 683.38 kB │ gzip: 261.71 kB
+dist/assets/vendor-three-webgpu-DzJCMrWN.js                 1,005.21 kB │ gzip: 276.65 kB
+
+[33m[PLUGIN_TIMINGS] [0mYour build spent significant time in plugin `vite-plugin-javascript-obfuscator`. See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 11.35s
+[build:live] elapsed=13s exit=0
+Bundle budget (live build):
+  ✓           index                    667 KiB / 720 KiB (warn 680)  (93%)
+  ✓           vendor-three-webgpu      982 KiB / 1100 KiB  (89%)
+  ✓           vendor-pdf               410 KiB / 512 KiB  (80%)
+✓ All budgeted chunks within ceiling.
+unit: 324
+export: 43
+terrain: 112
+ui: 32
+slow: 61
+tests/benchmark/ → unit (explicit)
+total: 572 / 572 — partition OK
+Archive portability — checking <tmpdir>/olv-archive-l7d1kG/archive
+  repository present: yes
+
+  ✓ scripts-present — every file the archive’s own package.json scripts execute ships in the archive
+  ✓ documented-scripts-exist — every `npm run` command named in shipping documentation exists in the archive’s package.json
+  ✓ archive-self-verification — the archive’s own node-only verification scripts run and pass inside the archive
+  ✓ no-internal-material — nothing internal or generated ships in the archive
+  ! no-dangling-references-to-excluded — nothing that ships references a file that does not
+      [warn] scripts/lint-release-truth.mjs names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names RELEASE_CHECKLIST.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/defect-registry.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/replay.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/replay.md names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/defects/validation/defects/defect-registry.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/replay/validation/defects/replay/replay.json names docs-site/releases/v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.4.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.0.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.4.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.5.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.5.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs-site/releases/v0.6.0-alpha.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs-site/releases/v0.6.0-alpha.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/READINESS_REPORT_v0.5.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/READINESS_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/READINESS_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/READINESS_REPORT_v0.6.0.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/READINESS_REPORT_v0.6.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.4-pr.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.4-pr.md, which is export-ignored and absent from the archive.
+      [warn] scripts/lint-no-tracked-ignored.mjs names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.4-terrain-audit.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.5-baseline/README.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.5.5-program.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-alpha-blocker-response.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-alpha-blocker-response.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-hardening-report.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-hardening-report.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/_audit/v0.6-readiness.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/_audit/v0.6-readiness.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/coordinate-integrity-roadmap.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/coordinate-integrity-roadmap.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--baseline.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/stabilization-release-plan.md, which is export-ignored and absent from the archive.
+      [warn] CHANGELOG.md names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/architecture/v0.5.8-cleanup-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/gate2-per-cloud-filter-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/gate2-per-cloud-filter-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/KNOWN_LIMITATIONS_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/KNOWN_LIMITATIONS_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.4.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.4.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.4.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.4.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.4.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.0.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.4.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.5.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.6.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.7.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.8.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.5.9.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/RELEASE_NOTES_v0.6.0-alpha.3.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/REPRODUCIBILITY_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/REPRODUCIBILITY_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/VALIDATION_REPORT_v0.6.0-alpha.1.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/releases/VALIDATION_REPORT_v0.6.0-alpha.2.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/v0.5.7-object-e57-capture-lens.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/v0.5.7-object-e57-capture-lens.md, which is export-ignored and absent from the archive.
+      [warn] validation/defects/replay/raw/OLV-DEF-018--probe-00--candidate.json names docs/v0.5.7-plan.md, which is export-ignored and absent from the archive.
+      [warn] validation/snapshot/evidence/archive-portability/release/archive-portability.json names docs/v0.5.7-plan.md, which is export-ignored and absent from the archive.
+  ✓ manifest-inventory-ships — every tracked path MANIFEST.md declares is in the archive
+  ✓ doc-links-resolve — every relative link in shipping markdown resolves to a file that also ships
+  ✓ markdown-link-graph — every required reference in the shipped markdown graph resolves in the extracted archive
+  ✓ checksum-manifests-bidirectional — every shipped SHA256SUMS accounts for its directory in both directions
+  ✓ archive-determinism — building the archive twice from the same commit yields identical bytes
+  ✓ lockfile-consistent — the lockfile ships and agrees with package.json
+  ✓ imports-declared — every package the archive imports is a declared dependency
+  ✓ sbom-matches-manifest — the SBOM ships and covers the declared dependency set
+  ✓ version-coherence — package.json, the citation file, the changelog and the versioned documents agree
+
+✓ 14 passed, 0 failed, 0 skipped — 0 errors, 120 warnings
+  result: release/archive-portability.json
+
+──── unit shard 1/3 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/benchmark/failureRecovery.test.ts (34 tests) 53ms
+ ✓ tests/benchmark/contourCorrectness.test.ts (50 tests) 370ms
+stdout | tests/benchmark/roundtripFidelity.test.ts > coordinate fidelity — round-trip displacement is bounded by the declared scale > records the measured precision loss in metres
+
+round-trip displacement (metres, or degrees on a geographic axis)
+UTM 7-digit, 300 m extent, mm scale [x]        scale=1.000e-3 specMax=5.000e-4 specMean=2.437e-4 bound=5.010e-4 appMax=5.146e-4 appMean=2.443e-4 appLimit=5.365e-4
+UTM 7-digit, 300 m extent, mm scale [y]        scale=1.000e-3 specMax=5.000e-4 specMean=2.437e-4 bound=5.010e-4 appMax=5.023e-4 appMean=2.436e-4 appLimit=5.259e-4
+UTM 7-digit, 300 m extent, mm scale [z]        scale=1.000e-3 specMax=2.000e-4 specMean=2.000e-4 bound=5.010e-4 appMax=2.001e-4 appMean=2.000e-4 appLimit=5.011e-4
+quantisation half-step boundary [x]            scale=1.000e-3 specMax=5.000e-4 specMean=5.000e-4 bound=5.010e-4 appMax=5.000e-4 appMean=5.000e-4 appLimit=5.011e-4
+quantisation half-step boundary [y]            scale=1.000e-3 specMax=5.000e-4 specMean=5.000e-4 bound=5.010e-4 appMax=5.000e-4 appMean=5.000e-4 appLimit=5.011e-4
+quantisation half-step boundary [z]            scale=1.000e-3 specMax=5.000e-4 specMean=5.000e-4 bound=5.010e-4 appMax=5.000e-4 appMean=5.000e-4 appLimit=5.011e-4
+negative easting / northing / height [x]       scale=1.000e-3 specMax=1.000e-4 specMean=1.000e-4 bound=5.010e-4 appMax=1.009e-4 appMean=1.007e-4 appLimit=5.150e-4
+negative easting / northing / height [y]       scale=1.000e-3 specMax=0.000e+0 specMean=0.000e+0 bound=5.010e-4 appMax=1.160e-6 appMean=8.963e-7 appLimit=5.108e-4
+negative easting / northing / height [z]       scale=1.000e-3 specMax=5.684e-14 specMean=2.368e-14 bound=5.010e-4 appMax=9.155e-7 appMean=2.094e-7 appLimit=5.031e-4
+geographic degrees, 1e-7 scale [x]             scale=1.000e-7 specMax=2.000e-8 specMean=2.000e-8 bound=1.050e-6 appMax=4.972e-8 appMean=2.232e-8 appLimit=1.169e-6
+geographic degrees, 1e-7 scale [y]             scale=1.000e-7 specMax=1.000e-8 specMean=1.000e-8 bound=1.050e-6 appMax=3.972e-8 appMean=1.696e-8 appLimit=1.169e-6
+geographic degrees, 1e-7 scale [z]             scale=1.000e-3 specMax=1.137e-13 specMean=4.500e-14 bound=5.010e-4 appMax=9.727e-8 appMean=2.824e-8 appLimit=5.013e-4
+wide 50 km extent, mm scale [x]                scale=1.000e-3 specMax=0.000e+0 specMean=0.000e+0 bound=5.010e-4 appMax=1.000e-3 appMean=6.638e-4 appLimit=6.368e-3
+wide 50 km extent, mm scale [y]                scale=1.000e-3 specMax=0.000e+0 specMean=0.000e+0 bound=5.010e-4 appMax=1.906e-3 appMean=6.848e-4 appLimit=6.368e-3
+wide 50 km extent, mm scale [z]                scale=1.000e-3 specMax=0.000e+0 specMean=0.000e+0 bound=5.010e-4 appMax=0.000e+0 appMean=0.000e+0 appLimit=8.014e-4
+explicit cm scale [x]                          scale=1.000e-2 specMax=5.000e-3 specMean=2.509e-3 bound=5.001e-3 appMax=5.003e-3 appMean=2.510e-3 appLimit=5.037e-3
+explicit cm scale [y]                          scale=1.000e-2 specMax=5.000e-3 specMean=2.522e-3 bound=5.001e-3 appMax=5.002e-3 appMean=2.522e-3 appLimit=5.026e-3
+explicit cm scale [z]                          scale=1.000e-2 specMax=2.200e-3 specMean=2.200e-3 bound=5.001e-3 appMax=2.200e-3 appMean=2.200e-3 appLimit=5.001e-3
+explicit 1 m scale [x]                         scale=1.000e+0 specMax=4.988e-1 specMean=2.534e-1 bound=5.000e-1 appMax=4.988e-1 appMean=2.534e-1 appLimit=5.000e-1
+explicit 1 m scale [y]                         scale=1.000e+0 specMax=4.970e-1 specMean=2.521e-1 bound=5.000e-1 appMax=4.970e-1 appMean=2.521e-1 appLimit=5.000e-1
+explicit 1 m scale [z]                         scale=1.000e+0 specMax=4.322e-1 specMean=2.321e-1 bound=5.000e-1 appMax=4.322e-1 appMean=2.321e-1 appLimit=5.000e-1
+5000 km extent — writer widens the scale [x]   scale=2.500e-3 specMax=5.000e-4 specMean=1.667e-4 bound=1.251e-3 appMax=1.230e-1 appMean=4.100e-2 appLimit=5.973e-1
+5000 km extent — writer widens the scale [y]   scale=2.500e-3 specMax=1.000e-3 specMean=3.333e-4 bound=1.251e-3 appMax=4.400e-2 appMean=1.467e-2 appLimit=5.973e-1
+5000 km extent — writer widens the scale [z]   scale=1.000e-3 specMax=0.000e+0 specMean=0.000e+0 bound=5.010e-4 appMax=0.000e+0 appMean=0.000e+0 appLimit=1.097e-3
+
+ ✓ tests/benchmark/roundtripFidelity.test.ts (57 tests) 72ms
+ ✓ tests/benchmark/artifacts.test.ts (80 tests) 29ms
+ ✓ tests/floorPlanRealism.test.ts (25 tests) 13ms
+ ✓ tests/unsafeHtmlGuard.test.ts (4 tests) 4ms
+ ✓ tests/gpuBackendDispatch.test.ts (16 tests) 14ms
+ ✓ tests/benchmark/provenanceIntegrity.test.ts (40 tests) 9523ms
+     ✓ a freshly published tree verifies  306ms
+ ✓ tests/floorPlanQuickWins.test.ts (27 tests) 123ms
+ ✓ tests/scanTypeControl.test.ts (18 tests) 12ms
+ ✓ tests/gpuUploadQueueHardening.test.ts (26 tests) 9ms
+ ✓ tests/deriveClassification.test.ts (31 tests) 59ms
+ ✓ tests/layerHealth.test.ts (35 tests) 10ms
+ ✓ tests/benchmark/backendEquivalence.test.ts (22 tests) 92ms
+ ✓ tests/releaseAssetVerifier.test.ts (37 tests) 1012ms
+ ✓ tests/claimRegisterLint.test.ts (20 tests) 7ms
+ ✓ tests/benchmark/seedSensitivity.test.ts (35 tests) 12309ms
+ ✓ tests/datasetIntelligence.test.ts (33 tests) 6ms
+ ✓ tests/spatialBootstrap.test.ts (22 tests) 61ms
+ ✓ tests/classificationEditor.test.ts (21 tests) 7ms
+ ✓ tests/activeColorbar.test.ts (27 tests) 7ms
+ ✓ tests/workflowRecorder.test.ts (27 tests) 9ms
+ ✓ tests/datasetRegister.test.ts (23 tests) 2213ms
+ ✓ tests/floorPlanWallGraph.test.ts (13 tests) 24ms
+ ✓ tests/holdoutRmse.test.ts (14 tests) 43ms
+ ✓ tests/tilesetParse.test.ts (26 tests) 9ms
+ ✓ tests/sampleGrade.test.ts (18 tests) 46ms
+ ✓ tests/pointCloud.test.ts (23 tests) 9ms
+ ✓ tests/disposalContracts.test.ts (18 tests) 9ms
+ ✓ tests/workflowCardRender.test.ts (9 tests) 11ms
+ ✓ tests/reprojectHonesty.test.ts (13 tests) 25ms
+ ✓ tests/scanShape.test.ts (9 tests) 42ms
+ ✓ tests/edl.test.ts (26 tests) 15ms
+ ✓ tests/fullCloudGradeAdapter.test.ts (11 tests) 6ms
+ ✓ tests/healthCheck.test.ts (22 tests) 21ms
+ ✓ tests/impactRecord.test.ts (18 tests) 1787ms
+ ✓ tests/compareDtms.test.ts (17 tests) 6ms
+ ✓ tests/layerModel.test.ts (18 tests) 6ms
+ ✓ tests/classificationAgreement.test.ts (18 tests) 5ms
+ ✓ tests/floorPlanBudget.test.ts (10 tests) 12ms
+ ✓ tests/scanStory.test.ts (24 tests) 8ms
+ ✓ tests/rgbAppearance.test.ts (16 tests) 6ms
+ ✓ tests/inspectionPresets.test.ts (18 tests) 9ms
+ ✓ tests/patchView.test.ts (9 tests) 11ms
+ ✓ tests/sessionOriginRebase.test.ts (8 tests) 7ms
+(node:17246) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/railToggleTeardown.test.ts (6 tests) 8ms
+ ✓ tests/trainOnlyReclassify.test.ts (7 tests) 178ms
+ ✓ tests/viewerListenerHarness.test.ts (3 tests) 4ms
+ ✓ tests/snapshotColorbarPlumbing.test.ts (3 tests) 18ms
+ ✓ tests/e57.test.ts (16 tests | 4 skipped) 6ms
+ ✓ tests/touchGesture.test.ts (14 tests) 5ms
+ ✓ tests/defectReplayStates.test.ts (8 tests) 4ms
+ ✓ tests/volumeAnalyticalFixtures.test.ts (5 tests) 5ms
+ ✓ tests/measureConfidence.test.ts (16 tests) 5ms
+ ✓ tests/volumeBudget.test.ts (14 tests) 19ms
+ ✓ tests/objectMetrics.test.ts (9 tests) 112ms
+ ✓ tests/viewState.test.ts (10 tests) 7ms
+ ✓ tests/densityColors.test.ts (10 tests) 5ms
+ ✓ tests/e57Intensity.test.ts (6 tests) 5ms
+ ✓ tests/releaseTruthLint.test.ts (10 tests) 52ms
+ ✓ tests/localDensitySize.test.ts (8 tests) 4ms
+ ✓ tests/loadPtx.test.ts (9 tests) 8ms
+ ✓ tests/spatialBlockHoldout.test.ts (6 tests) 45ms
+ ✓ tests/metricsJson.test.ts (5 tests) 4ms
+ ✓ tests/railScrollAffordance.test.ts (6 tests) 4ms
+ ✓ tests/sbomLint.test.ts (11 tests) 27ms
+ ✓ tests/benchmark/comparePlatforms.test.ts (2 tests | 1 skipped) 2ms
+ ✓ tests/loadPly.test.ts (10 tests) 40ms
+ ↓ tests/benchmark/runBackends.test.ts (1 test | 1 skipped)
+ ✓ tests/devFlags.test.ts (16 tests) 5ms
+ ✓ tests/benchmark/schema.test.ts (11 tests) 6ms
+ ✓ tests/remoteSourceNaming.test.ts (17 tests) 4ms
+ ✓ tests/volumeValidity.test.ts (7 tests) 4ms
+ ✓ tests/numerics.test.ts (7 tests) 10ms
+ ✓ tests/pngWorldFile.test.ts (6 tests) 4ms
+ ✓ tests/sourceGeometryImmutable.test.ts (3 tests) 8ms
+ ✓ tests/appContext.test.ts (11 tests) 4ms
+ ✓ tests/htmlComments.test.ts (10 tests) 7ms
+ ✓ tests/utmZone.test.ts (16 tests) 5ms
+ ✓ tests/measureDerivations.test.ts (9 tests) 5ms
+ ✓ tests/politeAnnounce.test.ts (5 tests) 4ms
+ ✓ tests/labelPlacement.test.ts (6 tests) 3ms
+ ✓ tests/scanRouteService.test.ts (9 tests) 10ms
+ ✓ tests/reliefShading.test.ts (5 tests) 5ms
+ ✓ tests/floorPlanConfidence.test.ts (5 tests) 12ms
+ ✓ tests/epsgWkt.test.ts (6 tests) 3ms
+ ✓ tests/loadErrors.test.ts (7 tests) 3ms
+ ✓ tests/scaleBar.test.ts (8 tests) 4ms
+ ✓ tests/sha256.test.ts (7 tests) 5ms
+ ✓ tests/embedBridge.test.ts (8 tests) 4ms
+ ✓ tests/methodRegistry.test.ts (7 tests) 5ms
+ ✓ tests/classColor.test.ts (5 tests) 6ms
+ ✓ tests/lasColourEstimate.test.ts (4 tests) 8ms
+ ✓ tests/benchmark/nodeDigest.test.ts (6 tests) 5ms
+ ✓ tests/stratifiedRmse.test.ts (2 tests) 26ms
+ ✓ tests/viewCubeMath.test.ts (7 tests) 4ms
+stdout | tests/benchmark/forcedGc.test.ts > forced GC plumbing > reports what this worker actually has
+forced GC: BENCHMARK_FORCE_GC=null, typeof global.gc === 'undefined', execArgv=["--experimental-import-meta-resolve","--require","<clean-clone>/node_modules/vitest/suppress-warnings.cjs","--conditions","node","--conditions","development"]
+
+ ✓ tests/benchmark/forcedGc.test.ts (2 tests | 1 skipped) 3ms
+ ✓ tests/pixelProjection.test.ts (7 tests) 3ms
+ ✓ tests/colorblindClasses.test.ts (5 tests) 4ms
+ ✓ tests/finalizeRawColors.test.ts (4 tests) 3ms
+ ✓ tests/fitnessIcons.test.ts (4 tests) 4ms
+ ✓ tests/niceElevationTicks.test.ts (4 tests) 4ms
+ ✓ tests/sampleTerrain.test.ts (4 tests) 4ms
+ ✓ tests/benchmark/strippedFieldOrdering.test.ts (3 tests) 13ms
+ ✓ tests/hypsometric.test.ts (6 tests) 4ms
+ ✓ tests/intensityFilterUniform.test.ts (5 tests) 3ms
+ ✓ tests/numeric.test.ts (6 tests) 4ms
+ ✓ tests/defectChronology.test.ts (14 tests) 23114ms
+     ✓ is reproducible from the registry and git  2554ms
+     ✓ verifies the generated output  1942ms
+     ✓ rejects a chronology missing a registered defect  1631ms
+     ✓ rejects a commit that does not resolve in this repository  1742ms
+     ✓ rejects a fix that precedes its own first failing validation  1785ms
+     ✓ rejects a retrospective replay presented as the original discovery  1910ms
+     ✓ rejects an exact date precision with no dated source  2013ms
+     ✓ rejects a discovery reference labelled as having no evidence  2031ms
+     ✓ rejects high confidence on an unknown discovery source  1880ms
+     ✓ rejects a first-failing commit whose basis is unknown  1811ms
+     ✓ rejects a defect id the registry does not carry  1919ms
+     ✓ rejects a CSV or Markdown view that drifted from the JSON  1889ms
+
+ Test Files  107 passed | 1 skipped (108)
+      Tests  1530 passed | 7 skipped (1537)
+   Start at  16:18:05
+   Duration  41.34s (transform 2.40s, setup 0ms, import 5.83s, tests 52.03s, environment 9ms)
+
+JSON report written to <tmpdir>/olv-tally-unit-14911-0.json
+GATE TALLY bucket=unit passed=1530 skipped=7
+[unit shard 1/3] pid=14912 elapsed=42.1s code=0 signal=-
+
+──── unit shard 2/3 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/session.test.ts (77 tests) 23ms
+ ✓ tests/LayerService.test.ts (40 tests) 12ms
+ ✓ tests/crossImplementationManifest.test.ts (41 tests) 5094ms
+     ✓ verifies the committed example manifest, exit 0  353ms
+     ✓ keeps the committed summary current  333ms
+ ✓ tests/floorPlanPipeline.test.ts (29 tests) 118ms
+ ✓ tests/benchmark/portability.test.ts (21 tests) 91ms
+ ✓ tests/rangeSource.test.ts (34 tests) 51ms
+ ✓ tests/gridAgreement.test.ts (37 tests) 8ms
+ ✓ tests/writeLas14.test.ts (19 tests) 27ms
+ ✓ tests/panMath.test.ts (23 tests) 8ms
+ ✓ tests/checkpointAccuracy.test.ts (27 tests) 7ms
+ ✓ tests/spaceMetrics.test.ts (17 tests) 63ms
+ ✓ tests/frameGateProperties.test.ts (17 tests) 94ms
+ ✓ tests/loadPlan.test.ts (29 tests) 5ms
+ ✓ tests/pointInfo.test.ts (26 tests) 6ms
+ ✓ tests/benchmark/reporters.test.ts (57 tests) 11ms
+ ✓ tests/e57SourceMetadata.test.ts (14 tests) 6ms
+ ✓ tests/icpRegister.test.ts (14 tests) 14ms
+ ✓ tests/scanRoute.test.ts (21 tests) 6ms
+ ✓ tests/lassoVolume.test.ts (24 tests) 7ms
+ ✓ tests/convertCloud.test.ts (16 tests) 34ms
+ ✓ tests/staleChunkReload.test.ts (15 tests) 12ms
+ ✓ tests/viewerActiveColorbar.test.ts (14 tests) 5ms
+ ✓ tests/measureGeometry.test.ts (39 tests) 6ms
+ ✓ tests/benchmark/archivePortability.test.ts (27 tests) 8ms
+ ✓ tests/loadPcd.test.ts (12 tests) 10ms
+ ✓ tests/displayProfile.test.ts (23 tests) 5ms
+ ✓ tests/benchmark/runnerOutput.test.ts (35 tests) 10243ms
+     ✓ names the browser suite as not run rather than reporting zeros for it  365ms
+     ✓ refuses to overwrite an archive  356ms
+     ✓ replaces latest/ rather than leaving a previous suite behind  369ms
+ ✓ tests/layerCompatibility.test.ts (21 tests) 15ms
+ ✓ tests/modalConfirm.test.ts (8 tests) 12ms
+ ✓ tests/scanFitness.test.ts (23 tests) 6ms
+ ✓ tests/convertWriters.test.ts (11 tests) 6ms
+ ✓ tests/measureDatumContext.test.ts (7 tests) 63ms
+ ✓ tests/frameTelemetry.test.ts (17 tests) 6ms
+ ✓ tests/benchmark/runnerStats.test.ts (24 tests) 6ms
+ ✓ tests/gpuErrorLedger.test.ts (17 tests) 10ms
+ ✓ tests/benchmark/requiredArtifactInventory.test.ts (4 tests) 3155ms
+ ✓ tests/stageTeardown.test.ts (5 tests) 6ms
+ ✓ tests/compareEpochs.test.ts (10 tests) 3345ms
+     ✓ puts both epochs on the same grid (same dims, cell size, origin)  768ms
+     ✓ projected metres keep the historical 0.25 m floor (no unit info = factor 1)  569ms
+     ✓ a +1 m raised surface reads as accretion; unverified without CRS/datum  567ms
+     ✓ identical epochs read as no net change  572ms
+     ✓ aligns two clouds by their origins (different origins, same world footprint)  560ms
+ ✓ tests/benchmark/cleanClone.test.ts (21 tests) 6ms
+ ✓ tests/benchmark/sourceGuards.test.ts (6 tests) 21ms
+ ✓ tests/sniffFormat.test.ts (27 tests) 5ms
+ ✓ tests/architectureMap.test.ts (5 tests) 61ms
+ ✓ tests/orbitFeel.test.ts (16 tests) 4ms
+ ✓ tests/benchmark/runnerConfig.test.ts (15 tests) 13ms
+ ✓ tests/coordinatePrecision.test.ts (8 tests) 3ms
+ ✓ tests/changeDetection.test.ts (12 tests) 5ms
+ ✓ tests/renderClaimRegister.test.ts (9 tests) 7ms
+ ✓ tests/localDensitySizeAndSky.test.ts (11 tests) 20ms
+ ✓ tests/paletteCatalog.test.ts (17 tests) 7ms
+ ✓ tests/densitySampleScale.test.ts (6 tests) 282ms
+ ✓ tests/orbitCenter.test.ts (17 tests) 5ms
+ ✓ tests/pipelineLimits.test.ts (14 tests) 4ms
+ ✓ tests/scanStoryViews.test.ts (5 tests) 5ms
+ ✓ tests/geodesicFill.test.ts (5 tests) 4ms
+ ✓ tests/benchmark/stage.test.ts (9 tests) 5ms
+ ✓ tests/viewBookmarks.test.ts (12 tests) 5ms
+ ✓ tests/layerPlacement.test.ts (10 tests) 4ms
+ ✓ tests/lasHeader.test.ts (14 tests) 4ms
+ ✓ tests/las14WktConformance.test.ts (3 tests) 4ms
+ ✓ tests/horizontalScale.test.ts (11 tests) 5ms
+ ✓ tests/refinementPhase.test.ts (13 tests) 5ms
+ ✓ tests/georefStatus.test.ts (10 tests) 4ms
+ ✓ tests/touchTracker.test.ts (11 tests) 4ms
+ ✓ tests/validateReleaseRef.test.ts (8 tests) 4ms
+ ✓ tests/scanShapeStatueBasePlane.test.ts (2 tests) 8ms
+ ✓ tests/testReportFormat.test.ts (12 tests) 4ms
+ ✓ tests/undoRouter.test.ts (11 tests) 4ms
+ ✓ tests/coordinateBridge.test.ts (13 tests) 4ms
+ ✓ tests/figureFraming.test.ts (10 tests) 4ms
+ ✓ tests/scientificAnalysisRecord.test.ts (7 tests) 6ms
+verify:freeze-claims FAILED
+
+  • validation/cross-implementation/studies/S1.study.json: status "agree" first appears in d58889a2 (2026-07-30), and no earlier commit of this record carries protocolDigest sha256:aaaa at an unmeasured status. The gate and the result it judges arrived together, so nothing here shows the tolerance was set before the answer was known. If it was frozen on a branch that was squashed, name that commit in freeze.witnessCommit.
+
+A tolerance is only a gate if it was set before the result. Where the history
+cannot show that, say so in the record rather than letting it read as preregistered.
+ ✓ tests/samplingPlan.test.ts (8 tests) 4ms
+verify:freeze-claims FAILED
+
+  • validation/cross-implementation/studies/S1.study.json: status "agree" first appears in f88b64a3 (2026-07-30), and no earlier commit of this record carries protocolDigest sha256:bbbb at an unmeasured status. The gate and the result it judges arrived together, so nothing here shows the tolerance was set before the answer was known. If it was frozen on a branch that was squashed, name that commit in freeze.witnessCommit.
+
+A tolerance is only a gate if it was set before the result. Where the history
+cannot show that, say so in the record rather than letting it read as preregistered.
+ ✓ tests/loadGltf.test.ts (7 tests) 47ms
+verify:freeze-claims FAILED
+
+  • validation/cross-implementation/studies/S1.study.json: status "agree" asserts a measured outcome but the record carries no protocolDigest, so there is nothing a freeze could be checked against.
+
+A tolerance is only a gate if it was set before the result. Where the history
+cannot show that, say so in the record rather than letting it read as preregistered.
+ ✓ tests/propertyGates.test.ts (2 tests) 28ms
+ ✓ tests/rgbWhiteBalance.test.ts (7 tests) 4ms
+ ✓ tests/freezeClaims.test.ts (5 tests) 1619ms
+     ✓ accepts a gate committed before the result  374ms
+     ✓ refuses a tolerance that moved between preregistration and result  425ms
+ ✓ tests/reliabilitySplit.test.ts (7 tests) 4ms
+ ✓ tests/sessionScanIdentity.test.ts (8 tests) 19ms
+ ✓ tests/ssaoApproximation.test.ts (6 tests) 4ms
+ ✓ tests/svgLabels.test.ts (5 tests) 4ms
+ ✓ tests/writeAscii.test.ts (8 tests) 4ms
+ ✓ tests/deviceProfile.test.ts (15 tests) 4ms
+ ✓ tests/emptyCloud.test.ts (3 tests) 14ms
+ ✓ tests/loadPts.test.ts (7 tests) 7ms
+ ✓ tests/sanitizeUrlForDisplay.test.ts (8 tests) 3ms
+ ✓ tests/curatedLocations.test.ts (60 tests) 7ms
+ ✓ tests/worldCoordinate.test.ts (4 tests) 4ms
+ ✓ tests/clipCloud.test.ts (4 tests) 4ms
+ ✓ tests/loadXyz.test.ts (8 tests) 6ms
+ ✓ tests/edlPresets.test.ts (6 tests) 3ms
+ ✓ tests/buildIdentity.test.ts (6 tests) 4ms
+ ✓ tests/e57IntegerTruncation.test.ts (4 tests) 3ms
+ ✓ tests/instantAnswer.test.ts (7 tests) 4ms
+ ✓ tests/measureVerticalUnit.test.ts (4 tests) 19ms
+ ✓ tests/captureLens.test.ts (7 tests) 3ms
+ ✓ tests/benchmark/runTier.test.ts (2 tests | 1 skipped) 2ms
+ ✓ tests/lintDocsSite.test.ts (5 tests) 3ms
+ ✓ tests/colorEncode.test.ts (6 tests) 6ms
+ ✓ tests/loadObj.test.ts (5 tests) 39ms
+ ✓ tests/changeRaster.test.ts (3 tests) 3ms
+ ✓ tests/histogram.test.ts (5 tests) 3ms
+ ✓ tests/loaderRegistry.test.ts (5 tests) 4ms
+ ✓ tests/flexAxisReuse.test.ts (1 test) 3ms
+ ✓ tests/edlMotionGate.test.ts (6 tests) 3ms
+ ✓ tests/loadProgress.test.ts (4 tests) 3ms
+ ✓ tests/hoverPickGate.test.ts (4 tests) 2ms
+ ✓ tests/formatRegistry.test.ts (3 tests) 3ms
+ ✓ tests/loadTelemetry.test.ts (4 tests) 3ms
+ ✓ tests/loaderConfig.test.ts (1 test) 2ms
+
+ Test Files  108 passed (108)
+      Tests  1504 passed | 1 skipped (1505)
+   Start at  16:18:47
+   Duration  23.09s (transform 2.09s, setup 0ms, import 4.34s, tests 25.03s, environment 8ms)
+
+JSON report written to <tmpdir>/olv-tally-unit-14911-1.json
+GATE TALLY bucket=unit passed=1504 skipped=1
+[unit shard 2/3] pid=18685 elapsed=23.8s code=0 signal=-
+
+──── unit shard 3/3 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/utmConverter.test.ts (41 tests) 7ms
+ ✓ tests/benchmark/pipelineDriver.test.ts (15 tests) 316ms
+ ✓ tests/floorPlan.test.ts (27 tests) 81ms
+ ✓ tests/volume.test.ts (26 tests) 26ms
+ ✓ tests/floorPlanCenterline.test.ts (21 tests) 93ms
+ ✓ tests/benchmark/unitIntegrity.test.ts (35 tests) 2955ms
+     ✓ analyseContours reports plane slope in degrees for metre horizontal over foot vertical  811ms
+     ✓ analyseContours agrees between an all-metre frame and a foot-vertical frame  1310ms
+     ✓ analyseContours slope is grossly wrong when the vertical factor is not declared  703ms
+ ✓ tests/floorPlanRooms.test.ts (17 tests) 113ms
+ ✓ tests/alignEpochs.test.ts (22 tests) 20ms
+ ✓ tests/reproPack.test.ts (5 tests) 77ms
+ ✓ tests/projectFrameService.test.ts (30 tests) 6ms
+ ✓ tests/fieldStudyRecord.test.ts (28 tests) 2349ms
+ ✓ tests/presetApplication.test.ts (23 tests) 7ms
+ ✓ tests/loaderSanitation.test.ts (23 tests) 42ms
+ ✓ tests/validationSnapshotMapping.test.ts (20 tests) 441ms
+ ✓ tests/integrableClouds.test.ts (34 tests) 6ms
+ ✓ tests/measureCrashGuards.test.ts (20 tests) 60ms
+ ✓ tests/planetaryComputer.test.ts (19 tests) 43ms
+ ↓ tests/chunkIsolation.test.ts (4 tests | 4 skipped)
+ ✓ tests/scanTypeMatrix.test.ts (8 tests) 40ms
+ ✓ tests/loadE57Merge.test.ts (12 tests) 22ms
+ ✓ tests/usageCounters.test.ts (17 tests) 36ms
+ ✓ tests/colorbarOverlay.test.ts (9 tests) 15ms
+ ✓ tests/benchmark/runtime.test.ts (19 tests) 16ms
+ ✓ tests/snap.test.ts (25 tests) 12ms
+ ✓ tests/boxGeometry.test.ts (25 tests) 8ms
+ ✓ tests/resultFocus.test.ts (6 tests) 7ms
+ ✓ tests/elevationRange.test.ts (17 tests) 10ms
+ ✓ tests/spaceMetricsAxis.test.ts (7 tests) 56ms
+ ✓ tests/splatShader.test.ts (35 tests) 16ms
+ ✓ tests/reproductionRecord.test.ts (23 tests) 2015ms
+ ✓ tests/polygonHygiene.test.ts (29 tests) 5ms
+ ✓ tests/scanCapability.test.ts (13 tests) 5ms
+ ✓ tests/processingManifest.test.ts (15 tests) 8ms
+ ✓ tests/benchmark/reachability.test.ts (7 tests) 57ms
+ ✓ tests/fullCloudGradeRunner.test.ts (8 tests) 6ms
+ ✓ tests/lassoVolumeCompute.test.ts (10 tests) 6ms
+ ✓ tests/benchmark/runnerObserve.test.ts (14 tests) 133ms
+ ✓ tests/benchmark/fixtures.test.ts (5 tests) 112ms
+stdout | tests/rebasePrecisionBaseline.test.ts > rebaseQuantum — the retired mechanism it models, measured > the disclosed quantum bounds what the retired rewrite would have cost
+  shift    1000 m  simulated h 0.0610 mm  disclosed 0.122 mm
+  shift   10000 m  simulated h 0.488 mm  disclosed 0.977 mm
+  shift  100000 m  simulated h 3.91 mm  disclosed 7.81 mm
+
+ ✓ tests/rebasePrecisionBaseline.test.ts (3 tests) 10ms
+ ✓ tests/canonicalFrame.test.ts (18 tests) 5ms
+ ✓ tests/docsSiteStripComments.test.ts (15 tests) 147ms
+ ✓ tests/crossCheck.test.ts (13 tests) 6ms
+ ↓ tests/orbitSmoke.test.ts (8 tests | 7 skipped | 1 todo)
+ ✓ tests/measureFormat.test.ts (18 tests) 21ms
+ ✓ tests/units.test.ts (13 tests) 7ms
+ ✓ tests/wheelDollyMath.test.ts (19 tests) 4ms
+ ✓ tests/gpuUploadQueue.test.ts (9 tests) 4ms
+ ✓ tests/pointFilter.test.ts (15 tests) 5ms
+ ✓ tests/deriveClassificationAsync.test.ts (6 tests) 11ms
+ ✓ tests/strideSample.test.ts (11 tests) 39ms
+ ✓ tests/benchmark/runSuites.test.ts (2 tests | 1 skipped) 3ms
+ ✓ tests/gpuUploadQueueDiscard.test.ts (10 tests) 7ms
+ ✓ tests/changeUncertainty.test.ts (9 tests) 4ms
+ ✓ tests/renderActivityGate.test.ts (9 tests) 3ms
+ ✓ tests/rgbAutoNormalize.test.ts (7 tests) 6ms
+ ✓ tests/flaiCatalog.test.ts (19 tests) 4ms
+ ✓ tests/projectSpatialFrame.test.ts (8 tests) 4ms
+ ✓ tests/benchmark/frameRecord.test.ts (13 tests) 4ms
+ ✓ tests/benchmark/runPortable.test.ts (2 tests | 1 skipped) 2ms
+ ✓ tests/defectReplayMarkdown.test.ts (6 tests) 3ms
+ ✓ tests/lonLatMapper.test.ts (9 tests) 4ms
+ ✓ tests/prefs.test.ts (11 tests) 5ms
+ ✓ tests/colorbar.test.ts (10 tests) 5ms
+ ✓ tests/additiveOpenKeepsWork.test.ts (6 tests) 2ms
+ ✓ tests/loadFileWarning.test.ts (6 tests) 3ms
+ ✓ tests/edlStrengthPersistence.test.ts (5 tests) 3ms
+ ✓ tests/tierAdaptation.test.ts (8 tests) 2ms
+ ✓ tests/elevationFilterUniform.test.ts (11 tests) 3ms
+ ✓ tests/adaptiveDpr.test.ts (12 tests) 2ms
+ ✓ tests/residentSnapshot.test.ts (5 tests) 3ms
+ ✓ tests/fullCloudGrade.test.ts (5 tests) 3ms
+ ✓ tests/e57Pose.test.ts (5 tests) 4ms
+ ✓ tests/orthoFraming.test.ts (6 tests) 3ms
+ ✓ tests/pointStyle.test.ts (11 tests) 3ms
+ ✓ tests/workflowConfig.test.ts (11 tests) 3ms
+ ✓ tests/quantile.test.ts (12 tests) 3ms
+ ✓ tests/projectCoordinate.test.ts (5 tests) 3ms
+ ✓ tests/verticalAccuracy.test.ts (7 tests) 3ms
+ ✓ tests/loadPlanCeiling.test.ts (5 tests) 2ms
+ ✓ tests/horizontalDatum.test.ts (10 tests) 3ms
+ ✓ tests/classEditHistory.test.ts (8 tests) 3ms
+ ✓ tests/runFullCloudGradeAction.test.ts (4 tests) 2ms
+ ✓ tests/loadPlanNonLas.test.ts (8 tests) 2ms
+ ✓ tests/fadeDither.test.ts (8 tests) 107ms
+ ✓ tests/clipBox.test.ts (9 tests) 4ms
+ ✓ tests/scanShapeObjectSolid.test.ts (2 tests) 5ms
+ ✓ tests/shareState.test.ts (8 tests) 3ms
+ ✓ tests/mutationEvidence.test.ts (6 tests) 2ms
+ ✓ tests/smoothing.test.ts (5 tests) 2ms
+ ✓ tests/scanService.test.ts (6 tests) 3ms
+ ✓ tests/benchmark/verifyResults.test.ts (3 tests | 2 skipped) 2ms
+ ✓ tests/e57XmlUnterminated.test.ts (7 tests) 3ms
+ ✓ tests/measureTypes.test.ts (6 tests) 2ms
+ ✓ tests/classHistogram.test.ts (6 tests) 2ms
+ ✓ tests/idwFill.test.ts (5 tests) 5ms
+ ✓ tests/serialGate.test.ts (3 tests) 3ms
+ ✓ tests/stageSingleInstance.test.ts (2 tests) 2ms
+ ✓ tests/lintUnsafeHtml.test.ts (6 tests) 3ms
+ ✓ tests/classificationFilter.test.ts (5 tests) 2ms
+ ✓ tests/embedConfig.test.ts (8 tests) 3ms
+ ✓ tests/textChunkReader.test.ts (7 tests) 2ms
+ ✓ tests/angularVelocity.test.ts (8 tests) 2ms
+ ✓ tests/swUrl.test.ts (5 tests) 2ms
+ ✓ tests/debugTerrainCompute.test.ts (5 tests) 2ms
+ ✓ tests/photorealLook.test.ts (4 tests) 2ms
+ ✓ tests/measureLabelLayout.test.ts (6 tests) 3ms
+ ✓ tests/classMaskUniform.test.ts (3 tests) 4ms
+ ✓ tests/classificationEpoch.test.ts (4 tests) 2ms
+
+ Test Files  106 passed | 2 skipped (108)
+      Tests  1248 passed | 15 skipped | 1 todo (1264)
+   Start at  16:19:11
+   Duration  15.07s (transform 1.86s, setup 0ms, import 4.89s, tests 9.77s, environment 7ms)
+
+JSON report written to <tmpdir>/olv-tally-unit-14911-2.json
+GATE TALLY bucket=unit passed=1248 skipped=16
+[unit shard 3/3] pid=19879 elapsed=15.8s code=0 signal=-
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/exportStudio.test.ts (47 tests) 31ms
+ ✓ tests/reportEngine.test.ts (51 tests) 20ms
+ ✓ tests/reportPdfLayout.test.ts (16 tests) 137ms
+ ✓ tests/exporters.test.ts (37 tests) 31ms
+ ✓ tests/kmlExport.test.ts (37 tests) 7ms
+ ✓ tests/exportProvenance.test.ts (26 tests) 12ms
+stderr | tests/exportStudioFigure.test.ts > an explicit width routes to renderFigure and reports the real output size
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:107:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > an explicit height alone also routes to the re-render path
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:125:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > without an explicit size the WYSIWYG snapshot path is untouched
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:139:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > an adapter without renderFigure falls back to the snapshot and reports honestly
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:155:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > a renderFigure that returns null (unplannable size request) falls back to the snapshot
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:171:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > the re-render runs INSIDE the colour-mode swap, and the swap is restored
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:216:3
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > the produced PNG carries Software / Creation Time / olv:build / olv:colormap chunks
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:232:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > camera + clip provenance ride along when the adapter can describe the view
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:255:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > metadata embedding is best-effort — a non-PNG payload never sinks the export
+[export] scan-report composite skipped — image decode failed: ReferenceError: Image is not defined
+    at <clean-clone>/src/export/ScanReportRenderer.ts:64:17
+    at new Promise (<anonymous>)
+    at blobToImage (<clean-clone>/src/export/ScanReportRenderer.ts:62:10)
+    at composeScanReportOntoBlob (<clean-clone>/src/export/ScanReportRenderer.ts:236:17)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:384:28)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:280:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+stderr | tests/exportStudioFigure.test.ts > metadata embedding is best-effort — a non-PNG payload never sinks the export
+[export] figure provenance stamping skipped: Error: pngTextChunks: input too short to be a PNG
+    at findIend (<clean-clone>/src/export/pngTextChunks.ts:151:30)
+    at encodePngTextChunks (<clean-clone>/src/export/pngTextChunks.ts:184:16)
+    at stampFigureProvenanceOntoBlob (<clean-clone>/src/export/figureMetadata.ts:57:21)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runStudioExport (<clean-clone>/src/export/BaseExportMode.ts:396:17)
+    at <clean-clone>/tests/exportStudioFigure.test.ts:280:18
+    at file://<clean-clone>/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+
+ ✓ tests/exportStudioFigure.test.ts (10 tests) 27ms
+ ✓ tests/reportPdfSmoke.test.ts (16 tests) 69ms
+ ✓ tests/exportPngTextChunks.test.ts (12 tests) 5ms
+ ✓ tests/measurementExport.test.ts (24 tests) 6ms
+ ✓ tests/scanReport.test.ts (25 tests) 17ms
+ ✓ tests/stockpileVolume.test.ts (12 tests) 11ms
+ ✓ tests/exportWriters.test.ts (16 tests) 7ms
+ ✓ tests/measurementChains.test.ts (28 tests) 4ms
+ ✓ tests/exportGateRouting.test.ts (12 tests) 41ms
+ ✓ tests/reportTemplateGoldens.test.ts (10 tests) 87ms
+ ✓ tests/exportFigureProvenance.test.ts (13 tests) 4ms
+ ✓ tests/spaceReportLayout.test.ts (13 tests) 4ms
+ ✓ tests/reportFindings.test.ts (15 tests) 4ms
+ ✓ tests/floorPlanExportOptions.test.ts (6 tests) 60ms
+ ✓ tests/exportSummary.test.ts (22 tests) 16ms
+ ✓ tests/exportAdapter.test.ts (12 tests) 4ms
+ ✓ tests/stockpilePresenter.test.ts (12 tests) 17ms
+ ✓ tests/measurementTrust.test.ts (14 tests) 4ms
+ ✓ tests/scanReportScope.test.ts (4 tests) 14ms
+ ✓ tests/spaceReportPdf.test.ts (5 tests) 275ms
+ ✓ tests/exportSubsetDisclosure.test.ts (9 tests) 17ms
+ ✓ tests/verifyReport.test.ts (10 tests) 4ms
+ ✓ tests/download.test.ts (7 tests) 6ms
+ ✓ tests/measurementReport.test.ts (9 tests) 4ms
+ ✓ tests/exportFrontier.test.ts (11 tests) 3ms
+ ✓ tests/auditLog.test.ts (13 tests) 4ms
+ ✓ tests/zipStore.test.ts (8 tests) 31ms
+ ✓ tests/sessionFindings.test.ts (5 tests) 3ms
+ ✓ tests/reportManifest.test.ts (8 tests) 4ms
+ ✓ tests/exportManifest.test.ts (8 tests) 4ms
+ ✓ tests/exportUnits.test.ts (8 tests) 3ms
+ ✓ tests/exportClassificationRow.test.ts (4 tests) 14ms
+ ✓ tests/reportFootprint.test.ts (5 tests) 2ms
+ ✓ tests/exportStaleness.test.ts (10 tests) 3ms
+ ✓ tests/exportMemoryGuard.test.ts (5 tests) 2ms
+ ✓ tests/gzip.test.ts (5 tests) 51ms
+ ✓ tests/exportEvidenceNote.test.ts (3 tests) 2ms
+
+ Test Files  43 passed (43)
+      Tests  623 passed (623)
+   Start at  16:19:27
+   Duration  3.95s (transform 783ms, setup 0ms, import 1.78s, tests 1.07s, environment 3ms)
+
+JSON report written to <tmpdir>/olv-tally-export-20204-0.json
+GATE TALLY bucket=export passed=623 skipped=0
+[export bucket] pid=20205 elapsed=4.3s code=0 signal=-
+
+──── terrain shard 1/2 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on slope, in degrees, across every fixture family
+
+SLOPE (degree) ours vs GDAL 3.13.1 — E4:
+  flat-plane           slope-deg                                      GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  flat-plane           slope-deg-edges                                GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-x-pos          slope-deg                                      GDAL 3.13.1            max 3.337e-7 rmse 2.561e-7 bias 2.136e-7 100.00% n=2852 agree
+  slope-x-pos          slope-deg-edges                                GDAL 3.13.1            max 3.337e-7 rmse 2.561e-7 bias 2.136e-7 100.00% n=2852 agree
+  slope-x-neg          slope-deg                                      GDAL 3.13.1            max 1.012e-6 rmse 5.376e-7 bias 1.044e-7 100.00% n=6580 agree
+  slope-y-pos          slope-deg                                      GDAL 3.13.1            max 1.053e-6 rmse 5.322e-7 bias -4.281e-7 100.00% n=2852 agree
+  slope-y-pos          slope-deg-edges                                GDAL 3.13.1            max 1.053e-6 rmse 5.322e-7 bias -4.281e-7 100.00% n=2852 agree
+  slope-y-neg          slope-deg                                      GDAL 3.13.1            max 2.396e-7 rmse 2.385e-7 bias 7.649e-8 100.00% n=6580 agree
+  oblique-plane        slope-deg                                      GDAL 3.13.1            max 2.362e-4 rmse 5.236e-5 bias -1.010e-7 100.00% n=12348 agree
+  convex-hill          slope-deg                                      GDAL 3.13.1            max 3.321e-4 rmse 8.785e-5 bias 1.728e-8 100.00% n=6580 agree
+  convex-hill          slope-deg-edges                                GDAL 3.13.1            max 3.321e-4 rmse 8.785e-5 bias 1.728e-8 100.00% n=6580 agree
+  concave-pit          slope-deg                                      GDAL 3.13.1            max 3.412e-5 rmse 7.984e-6 bias -1.070e-6 100.00% n=2852 agree
+  ridge                slope-deg                                      GDAL 3.13.1            max 8.396e-4 rmse 3.104e-4 bias 5.216e-7 100.00% n=2852 agree
+  ridge                slope-deg-edges                                GDAL 3.13.1            max 8.396e-4 rmse 3.104e-4 bias 5.216e-7 100.00% n=2852 agree
+  valley               slope-deg                                      GDAL 3.13.1            max 1.198e-4 rmse 7.048e-5 bias 9.641e-8 100.00% n=6580 agree
+  saddle               slope-deg                                      GDAL 3.13.1            max 1.055e-3 rmse 2.824e-4 bias -5.757e-7 100.00% n=12348 agree
+  terrace-step         slope-deg                                      GDAL 3.13.1            max 3.815e-5 rmse 3.099e-6 bias -8.062e-7 100.00% n=2852 agree
+  nodata-island        slope-deg                                      GDAL 3.13.1            max 1.686e-4 rmse 5.253e-5 bias -2.288e-9 100.00% n=6121 agree
+  nodata-scatter       slope-deg                                      GDAL 3.13.1            max 3.320e-4 rmse 9.824e-5 bias 7.802e-7 100.00% n=1736 agree
+  thin-corridor        slope-deg                                      GDAL 3.13.1            max 1.686e-4 rmse 6.158e-5 bias -3.053e-7 100.00% n=186 agree
+  geographic-plane     slope-deg                                      GDAL 3.13.1            max 5.218e-5 rmse 9.973e-6 bias -3.851e-7 100.00% n=2852 agree
+  aspect-rose-000      slope-deg                                      GDAL 3.13.1            max 9.847e-7 rmse 4.701e-7 bias -3.226e-7 100.00% n=1748 agree
+  aspect-rose-045      slope-deg                                      GDAL 3.13.1            max 2.674e-4 rmse 1.970e-4 bias -1.963e-7 100.00% n=1748 agree
+  aspect-rose-090      slope-deg                                      GDAL 3.13.1            max 9.847e-7 rmse 4.770e-7 bias -3.284e-7 100.00% n=1748 agree
+  aspect-rose-135      slope-deg                                      GDAL 3.13.1            max 8.016e-4 rmse 3.474e-4 bias -5.385e-8 100.00% n=1748 agree
+  aspect-rose-180      slope-deg                                      GDAL 3.13.1            max 9.847e-7 rmse 4.701e-7 bias -3.226e-7 100.00% n=1748 agree
+  aspect-rose-225      slope-deg                                      GDAL 3.13.1            max 2.674e-4 rmse 1.970e-4 bias -1.963e-7 100.00% n=1748 agree
+  aspect-rose-270      slope-deg                                      GDAL 3.13.1            max 9.847e-7 rmse 4.770e-7 bias -3.284e-7 100.00% n=1748 agree
+  aspect-rose-315      slope-deg                                      GDAL 3.13.1            max 8.016e-4 rmse 3.474e-4 bias -5.385e-8 100.00% n=1748 agree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with the closed form on slope, which is E2 and not cross-implementation
+
+SLOPE ours vs closed form — E2, NOT cross-implementation:
+  flat-plane           slope-deg                                      analytic (closed form) max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  flat-plane           slope-deg [border edge, analytic]              analytic (closed form) max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=216 agree
+  flat-plane           slope-pct                                      analytic (closed form) max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  flat-plane           slope-deg-edges                                analytic (closed form) max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-x-pos          slope-deg                                      analytic (closed form) max 1.168e-4 rmse 9.616e-5 bias 3.769e-6 100.00% n=2852 agree
+  slope-x-pos          slope-deg [border edge, analytic]              analytic (closed form) max 1.168e-4 rmse 8.883e-5 bias -3.101e-5 100.00% n=216 agree
+  slope-x-pos          slope-pct                                      analytic (closed form) max 2.289e-4 rmse 1.884e-4 bias 7.383e-6 100.00% n=2852 agree
+  slope-x-pos          slope-deg-edges                                analytic (closed form) max 1.168e-4 rmse 9.616e-5 bias 3.769e-6 100.00% n=2852 agree
+  slope-x-neg          slope-deg                                      analytic (closed form) max 7.789e-5 rmse 2.678e-5 bias 3.107e-7 100.00% n=6580 agree
+  slope-x-neg          slope-deg [border edge, analytic]              analytic (closed form) max 7.789e-5 rmse 4.227e-5 bias -1.229e-5 100.00% n=328 agree
+  slope-y-pos          slope-deg                                      analytic (closed form) max 1.635e-5 rmse 6.014e-6 bias -2.599e-7 100.00% n=2852 agree
+  slope-y-pos          slope-deg [border edge, analytic]              analytic (closed form) max 1.635e-5 rmse 9.600e-6 bias -4.823e-6 100.00% n=216 agree
+  slope-y-pos          slope-deg-edges                                analytic (closed form) max 1.635e-5 rmse 6.014e-6 bias -2.599e-7 100.00% n=2852 agree
+  slope-y-neg          slope-deg                                      analytic (closed form) max 1.418e-4 rmse 9.907e-5 bias -4.765e-6 100.00% n=6580 agree
+  slope-y-neg          slope-deg [border edge, analytic]              analytic (closed form) max 1.418e-4 rmse 8.210e-5 bias 3.620e-5 100.00% n=328 agree
+  oblique-plane        slope-deg                                      analytic (closed form) max 7.146e-5 rmse 2.528e-5 bias -4.480e-7 100.00% n=12348 agree
+  oblique-plane        slope-deg [border edge, analytic]              analytic (closed form) max 1.627e-4 rmse 4.328e-5 bias 4.133e-6 100.00% n=448 agree
+  oblique-plane        slope-pct                                      analytic (closed form) max 1.377e-4 rmse 4.873e-5 bias -8.635e-7 100.00% n=12348 agree
+  convex-hill          slope-deg                                      analytic (closed form) max 1.783e-4 rmse 4.237e-5 bias -4.879e-7 100.00% n=6580 agree
+  convex-hill          slope-deg [border edge, analytic]              analytic (closed form) max 2.971e-1 rmse 2.243e-1 bias -2.125e-1 0.00% n=328 disagree
+  convex-hill          slope-deg-edges                                analytic (closed form) max 1.783e-4 rmse 4.237e-5 bias -4.879e-7 100.00% n=6580 agree
+  concave-pit          slope-deg                                      analytic (closed form) max 1.039e-5 rmse 3.307e-6 bias -5.384e-8 100.00% n=2852 agree
+  concave-pit          slope-deg [border edge, analytic]              analytic (closed form) max 6.220e-1 rmse 3.295e-1 bias -2.972e-1 0.00% n=216 disagree
+  ridge                slope-deg                                      analytic (closed form) max 1.160e-4 rmse 6.882e-5 bias 3.391e-7 100.00% n=2760 agree
+  ridge                slope-deg [border edge, analytic]              analytic (closed form) max 3.025e-4 rmse 1.843e-4 bias 2.124e-6 100.00% n=212 agree
+  ridge                slope-deg-edges                                analytic (closed form) max 1.160e-4 rmse 6.882e-5 bias 3.391e-7 100.00% n=2760 agree
+  valley               slope-deg                                      analytic (closed form) max 2.942e-5 rmse 1.670e-5 bias 3.081e-8 100.00% n=6440 agree
+  valley               slope-deg [border edge, analytic]              analytic (closed form) max 7.643e-5 rmse 4.568e-5 bias 9.123e-9 100.00% n=324 agree
+  saddle               slope-deg                                      analytic (closed form) max 3.129e-4 rmse 1.012e-4 bias -2.300e-7 100.00% n=12348 agree
+  saddle               slope-deg [border edge, analytic]              analytic (closed form) max 1.503e-1 rmse 1.084e-1 bias -9.993e-2 0.00% n=448 disagree
+  terrace-step         slope-deg                                      analytic (closed form) max 2.840e-5 rmse 2.379e-5 bias 9.499e-8 100.00% n=2208 agree
+  terrace-step         slope-deg [border edge, analytic]              analytic (closed form) max 8.302e-5 rmse 7.308e-5 bias -5.571e-5 100.00% n=96 agree
+  terrace-step         slope-pct                                      analytic (closed form) max 4.959e-5 rmse 4.154e-5 bias 1.659e-7 100.00% n=2208 agree
+  nodata-island        slope-deg                                      analytic (closed form) max 5.687e-5 rmse 2.611e-5 bias -4.294e-7 100.00% n=6121 agree
+  nodata-island        slope-deg [border edge, analytic]              analytic (closed form) max 7.146e-5 rmse 4.394e-5 bias -3.605e-6 100.00% n=328 agree
+  nodata-scatter       slope-deg                                      analytic (closed form) max 1.783e-4 rmse 5.011e-5 bias -6.173e-7 100.00% n=1736 agree
+  nodata-scatter       slope-deg [border edge, analytic]              analytic (closed form) max 3.701e-1 rmse 2.755e-1 bias -2.620e-1 0.00% n=72 disagree
+  thin-corridor        slope-deg                                      analytic (closed form) max 3.899e-5 rmse 2.558e-5 bias 5.732e-7 100.00% n=186 agree
+  geographic-plane     slope-deg                                      analytic (closed form) max 2.131e-5 rmse 4.194e-6 bias 3.031e-7 100.00% n=2852 agree
+  geographic-plane     slope-deg [border edge, analytic]              analytic (closed form) max 3.899e-5 rmse 9.932e-6 bias 1.544e-7 100.00% n=216 agree
+  geographic-plane     slope-pct                                      analytic (closed form) max 4.107e-5 rmse 8.084e-6 bias 5.842e-7 100.00% n=2852 agree
+  aspect-rose-000      slope-deg                                      analytic (closed form) max 3.015e-4 rmse 1.537e-4 bias -3.967e-6 100.00% n=1748 agree
+  aspect-rose-000      slope-deg [border edge, analytic]              analytic (closed form) max 4.522e-4 rmse 3.502e-4 bias 2.458e-4 100.00% n=168 agree
+  aspect-rose-045      slope-deg                                      analytic (closed form) max 1.381e-4 rmse 9.616e-5 bias 1.040e-6 100.00% n=1748 agree
+  aspect-rose-045      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-090      slope-deg                                      analytic (closed form) max 3.015e-4 rmse 1.556e-4 bias -6.554e-6 100.00% n=1748 agree
+  aspect-rose-090      slope-deg [border edge, analytic]              analytic (closed form) max 3.015e-4 rmse 2.332e-4 bias -1.400e-4 100.00% n=168 agree
+  aspect-rose-135      slope-deg                                      analytic (closed form) max 1.381e-4 rmse 9.616e-5 bias 1.040e-6 100.00% n=1748 agree
+  aspect-rose-135      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-180      slope-deg                                      analytic (closed form) max 3.015e-4 rmse 1.537e-4 bias -3.967e-6 100.00% n=1748 agree
+  aspect-rose-180      slope-deg [border edge, analytic]              analytic (closed form) max 4.522e-4 rmse 3.502e-4 bias 2.458e-4 100.00% n=168 agree
+  aspect-rose-225      slope-deg                                      analytic (closed form) max 1.381e-4 rmse 9.616e-5 bias 1.040e-6 100.00% n=1748 agree
+  aspect-rose-225      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-270      slope-deg                                      analytic (closed form) max 3.015e-4 rmse 1.556e-4 bias -6.554e-6 100.00% n=1748 agree
+  aspect-rose-270      slope-deg [border edge, analytic]              analytic (closed form) max 3.015e-4 rmse 2.332e-4 bias -1.400e-4 100.00% n=168 agree
+  aspect-rose-315      slope-deg                                      analytic (closed form) max 1.381e-4 rmse 9.616e-5 bias 1.040e-6 100.00% n=1748 agree
+  aspect-rose-315      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  pooled (17 fixtures) slope-deg [border corner, analytic: along-edge gradient present] analytic (closed form) max 1.304e+1 rmse 8.622e+0 bias -8.191e+0 0.00% n=66 disagree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on slope expressed as percent rise, and records the unit
+
+SLOPE (percent rise) ours vs GDAL 3.13.1 — E4:
+  flat-plane           slope-pct                                      GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-x-pos          slope-pct                                      GDAL 3.13.1            max 4.121e-7 rmse 3.232e-7 bias 1.897e-7 100.00% n=2852 agree
+  oblique-plane        slope-pct                                      GDAL 3.13.1            max 4.576e-4 rmse 1.012e-4 bias 2.765e-7 100.00% n=12348 agree
+  terrace-step         slope-pct                                      GDAL 3.13.1            max 9.516e-5 rmse 6.938e-6 bias -7.182e-7 100.00% n=2852 agree
+  geographic-plane     slope-pct                                      GDAL 3.13.1            max 9.960e-5 rmse 1.938e-5 bias -3.644e-7 100.00% n=2852 agree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on aspect as a CIRCULAR separation, over the whole compass rose
+
+ASPECT (circular separation) ours vs GDAL 3.13.1 — E4:
+  slope-x-pos          aspect                                         GDAL 3.13.1            max 5.009e-6 rmse 5.009e-6 bias 5.009e-6 100.00% n=2852 agree
+  slope-x-neg          aspect                                         GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=6580 agree
+  slope-y-pos          aspect                                         GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias 2.504e-6 100.00% n=2852 agree
+  slope-y-neg          aspect                                         GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias -2.504e-6 100.00% n=6580 agree
+  oblique-plane        aspect                                         GDAL 3.13.1            max 9.564e-4 rmse 2.625e-4 bias 5.371e-6 100.00% n=12348 agree
+  convex-hill          aspect                                         GDAL 3.13.1            max 1.145e-2 rmse 5.497e-4 bias 7.836e-7 100.00% n=6578 agree
+  concave-pit          aspect                                         GDAL 3.13.1            max 7.220e-5 rmse 2.043e-5 bias 5.187e-8 100.00% n=2852 agree
+  ridge                aspect                                         GDAL 3.13.1            max 6.750e-4 rmse 4.746e-4 bias 2.223e-6 100.00% n=2760 agree
+  valley               aspect                                         GDAL 3.13.1            max 2.328e-4 rmse 1.108e-4 bias -8.907e-7 100.00% n=6440 agree
+  saddle               aspect                                         GDAL 3.13.1            max 5.057e-2 rmse 2.632e-3 bias 1.156e-5 100.00% n=12340 agree
+  terrace-step         aspect                                         GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias 2.504e-6 100.00% n=2208 agree
+  terrace-step         aspect-zero-flat                               GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias 2.504e-6 100.00% n=2208 agree
+  nodata-island        aspect                                         GDAL 3.13.1            max 5.841e-4 rmse 2.694e-4 bias 6.130e-6 100.00% n=6121 agree
+  nodata-island        aspect-zero-flat                               GDAL 3.13.1            max 5.841e-4 rmse 2.694e-4 bias 6.130e-6 100.00% n=6121 agree
+  nodata-scatter       aspect                                         GDAL 3.13.1            max 9.355e-3 rmse 8.216e-4 bias 2.361e-5 100.00% n=1735 agree
+  thin-corridor        aspect                                         GDAL 3.13.1            max 5.841e-4 rmse 2.970e-4 bias 5.098e-6 100.00% n=186 agree
+  geographic-plane     aspect                                         GDAL 3.13.1            max 7.523e+0 rmse 7.522e+0 bias -7.522e+0 0.00% n=2852 disagree
+  aspect-rose-000      aspect                                         GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias -2.504e-6 100.00% n=1748 agree
+  aspect-rose-045      aspect                                         GDAL 3.13.1            max 1.546e-3 rmse 8.271e-4 bias -1.092e-7 100.00% n=1748 agree
+  aspect-rose-090      aspect                                         GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=1748 agree
+  aspect-rose-135      aspect                                         GDAL 3.13.1            max 1.252e-6 rmse 1.252e-6 bias 1.252e-6 100.00% n=1748 agree
+  aspect-rose-180      aspect                                         GDAL 3.13.1            max 2.504e-6 rmse 2.504e-6 bias 2.504e-6 100.00% n=1748 agree
+  aspect-rose-225      aspect                                         GDAL 3.13.1            max 1.541e-3 rmse 8.250e-4 bias 6.057e-6 100.00% n=1748 agree
+  aspect-rose-270      aspect                                         GDAL 3.13.1            max 5.009e-6 rmse 5.009e-6 bias 5.009e-6 100.00% n=1748 agree
+  aspect-rose-315      aspect                                         GDAL 3.13.1            max 3.416e-7 rmse 3.416e-7 bias -3.416e-7 100.00% n=1748 agree
+  geographic-plane     aspect [equal-axis assumption, both sides]     GDAL 3.13.1            max 1.474e-4 rmse 3.200e-5 bias 4.133e-6 100.00% n=2852 agree
+  geographic-plane     aspect [true unequal metres vs gdaldem equal-degree] GDAL 3.13.1            max 7.523e+0 rmse 7.522e+0 bias -7.522e+0 0.00% n=2852 disagree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > records how each implementation represents an undefined aspect
+
+UNDEFINED ASPECT — gdaldem default: -9999; gdaldem -zero_for_flat: 0 (north); ours: 90 (east, no marker).
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > excludes and counts the cells below the preregistered minimum slope
+
+ASPECT flat-ground exclusions (slope < 0.5 deg):
+  flat-plane           kept      0  below-min   2852  kink     0  ref-undefined     0
+  flat-plane           kept      0  below-min   2852  kink     0  ref-undefined     0
+  slope-x-pos          kept   2852  below-min      0  kink     0  ref-undefined     0
+  slope-x-neg          kept   6580  below-min      0  kink     0  ref-undefined     0
+  slope-y-pos          kept   2852  below-min      0  kink     0  ref-undefined     0
+  slope-y-neg          kept   6580  below-min      0  kink     0  ref-undefined     0
+  oblique-plane        kept  12348  below-min      0  kink     0  ref-undefined     0
+  convex-hill          kept   6578  below-min      2  kink     0  ref-undefined     0
+  concave-pit          kept   2852  below-min      0  kink     0  ref-undefined     0
+  ridge                kept   2760  below-min      0  kink    92  ref-undefined     0
+  valley               kept   6440  below-min      0  kink   140  ref-undefined     0
+  saddle               kept  12340  below-min      8  kink     0  ref-undefined     0
+  terrace-step         kept   2208  below-min      0  kink   644  ref-undefined     0
+  terrace-step         kept   2208  below-min      0  kink   644  ref-undefined     0
+  nodata-island        kept   6121  below-min      0  kink     0  ref-undefined     0
+  nodata-island        kept   6121  below-min      0  kink     0  ref-undefined     0
+  nodata-scatter       kept   1735  below-min      1  kink     0  ref-undefined     0
+  thin-corridor        kept    186  below-min      0  kink     0  ref-undefined     0
+  geographic-plane     kept   2852  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-000      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-045      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-090      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-135      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-180      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-225      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-270      kept   1748  below-min      0  kink     0  ref-undefined     0
+  aspect-rose-315      kept   1748  below-min      0  kink     0  ref-undefined     0
+  geographic-plane     kept   2852  below-min      0  kink     0  ref-undefined     0
+  geographic-plane     kept   2852  below-min      0  kink     0  ref-undefined     0
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on the hillshade ILLUMINATION MODEL, before quantisation
+
+HILLSHADE illumination model (unquantised h) ours vs GDAL 3.13.1 — E4:
+  flat-plane           hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.555e-3 rmse 1.555e-3 bias -1.555e-3 100.00% n=2852 agree
+  flat-plane           hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 4.995e-4 rmse 4.995e-4 bias -4.995e-4 100.00% n=2852 agree
+  flat-plane           hillshade-south-high [intensity, pre-quantisation] GDAL 3.13.1            max 7.960e-4 rmse 7.960e-4 bias 7.960e-4 100.00% n=2852 agree
+  slope-x-pos          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.876e-3 rmse 1.875e-3 bias 1.875e-3 100.00% n=2852 agree
+  slope-x-neg          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.704e-3 rmse 1.704e-3 bias -1.704e-3 100.00% n=6580 agree
+  slope-x-neg          hillshade-south-high [intensity, pre-quantisation] GDAL 3.13.1            max 1.096e-3 rmse 1.095e-3 bias 1.095e-3 100.00% n=6580 agree
+  slope-y-pos          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 4.841e-4 rmse 4.839e-4 bias 4.839e-4 100.00% n=2852 agree
+  slope-y-neg          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.191e-3 rmse 1.190e-3 bias -1.190e-3 100.00% n=6580 agree
+  slope-y-neg          hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 1.922e-3 rmse 1.921e-3 bias 1.921e-3 100.00% n=6580 agree
+  oblique-plane        hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.333e-3 rmse 1.332e-3 bias -1.332e-3 100.00% n=12348 agree
+  oblique-plane        hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 2.625e-4 rmse 2.620e-4 bias -2.620e-4 100.00% n=12348 agree
+  oblique-plane        hillshade-south-high [intensity, pre-quantisation] GDAL 3.13.1            max 8.115e-4 rmse 8.108e-4 bias -8.108e-4 100.00% n=12348 agree
+  convex-hill          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.969e-3 rmse 1.152e-3 bias 2.154e-5 100.00% n=6580 agree
+  convex-hill          hillshade-south-high [intensity, pre-quantisation] GDAL 3.13.1            max 1.969e-3 rmse 1.132e-3 bias -7.305e-6 100.00% n=6580 agree
+  concave-pit          hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.968e-3 rmse 1.134e-3 bias 5.915e-6 100.00% n=2322 agree
+  concave-pit          hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 1.967e-3 rmse 1.122e-3 bias -1.494e-5 100.00% n=1537 agree
+  ridge                hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.721e-3 rmse 1.303e-3 bias -1.220e-3 100.00% n=2852 agree
+  ridge                hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 1.562e-3 rmse 1.527e-3 bias -1.411e-3 100.00% n=1472 agree
+  valley               hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.634e-3 rmse 1.504e-3 bias -1.080e-4 100.00% n=6580 agree
+  saddle               hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.968e-3 rmse 1.134e-3 bias 1.251e-6 100.00% n=12348 agree
+  saddle               hillshade-south-high [intensity, pre-quantisation] GDAL 3.13.1            max 1.968e-3 rmse 1.135e-3 bias 9.765e-7 100.00% n=12348 agree
+  terrace-step         hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 6.923e-4 rmse 3.446e-4 bias -6.569e-5 100.00% n=2852 agree
+  nodata-island        hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.333e-3 rmse 1.332e-3 bias -1.332e-3 100.00% n=6121 agree
+  nodata-scatter       hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.968e-3 rmse 1.164e-3 bias 2.808e-6 100.00% n=1736 agree
+  thin-corridor        hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.333e-3 rmse 1.332e-3 bias -1.332e-3 100.00% n=186 agree
+  geographic-plane     hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.333e-3 rmse 1.332e-3 bias -1.332e-3 100.00% n=2852 agree
+  geographic-plane     hillshade-ne-low [intensity, pre-quantisation] GDAL 3.13.1            max 2.624e-4 rmse 2.620e-4 bias -2.620e-4 100.00% n=2852 agree
+  aspect-rose-000      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 2.932e-4 rmse 2.922e-4 bias -2.922e-4 100.00% n=1748 agree
+  aspect-rose-045      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 9.487e-4 rmse 9.481e-4 bias -9.481e-4 100.00% n=1748 agree
+  aspect-rose-090      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.605e-3 rmse 1.604e-3 bias -1.604e-3 100.00% n=1748 agree
+  aspect-rose-135      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 2.207e-4 rmse 2.185e-4 bias 2.185e-4 100.00% n=1748 agree
+  aspect-rose-180      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.605e-3 rmse 1.604e-3 bias -1.604e-3 100.00% n=1748 agree
+  aspect-rose-225      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 9.487e-4 rmse 9.482e-4 bias -9.482e-4 100.00% n=1748 agree
+  aspect-rose-270      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 2.932e-4 rmse 2.922e-4 bias -2.922e-4 100.00% n=1748 agree
+  aspect-rose-315      hillshade-nw-default [intensity, pre-quantisation] GDAL 3.13.1            max 1.823e-3 rmse 1.822e-3 bias 1.822e-3 100.00% n=1748 agree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on the hillshade BYTE product, separately from the model
+
+HILLSHADE byte product (ours round(255h) vs gdaldem round(1+254h)) — E4:
+  flat-plane           hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=2852 agree
+  flat-plane           hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=2852 agree
+  flat-plane           hillshade-south-high [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-x-pos          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-x-pos          hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=2852 agree
+  slope-x-neg          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=6580 agree
+  slope-x-neg          hillshade-south-high [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=6580 agree
+  slope-y-pos          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  slope-y-neg          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=6580 agree
+  slope-y-neg          hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=6580 agree
+  oblique-plane        hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=12348 agree
+  oblique-plane        hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=12348 agree
+  oblique-plane        hillshade-south-high [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=12348 agree
+  convex-hill          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 5.946e-1 bias -3.535e-1 100.00% n=6580 agree
+  convex-hill          hillshade-south-high [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 4.235e-1 bias -1.793e-1 100.00% n=6580 agree
+  concave-pit          hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 7.438e-1 bias -5.533e-1 100.00% n=2852 agree
+  concave-pit          hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 7.973e-1 bias -6.357e-1 100.00% n=2852 agree
+  ridge                hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 7.184e-1 bias -5.161e-1 100.00% n=2852 agree
+  ridge                hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 9.919e-1 bias -9.839e-1 100.00% n=2852 agree
+  valley               hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 6.995e-1 bias -4.894e-1 100.00% n=6580 agree
+  saddle               hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 5.574e-1 bias -3.107e-1 100.00% n=12348 agree
+  saddle               hillshade-south-high [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 3.384e-1 bias -1.145e-1 100.00% n=12348 agree
+  terrace-step         hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  nodata-island        hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=6121 agree
+  nodata-scatter       hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 5.755e-1 bias -3.312e-1 100.00% n=1736 agree
+  thin-corridor        hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=186 agree
+  geographic-plane     hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=2852 agree
+  geographic-plane     hillshade-ne-low [byte, as shipped]            GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=2852 agree
+  aspect-rose-000      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=1748 agree
+  aspect-rose-045      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=1748 agree
+  aspect-rose-090      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=1748 agree
+  aspect-rose-135      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=1748 agree
+  aspect-rose-180      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=1748 agree
+  aspect-rose-225      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=1748 agree
+  aspect-rose-270      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=1748 agree
+  aspect-rose-315      hillshade-nw-default [byte, as shipped]        GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=1748 agree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > hides a sub-level shading error in the byte product but not in the intensity
+
+ENCODING SEPARATION on saddle, fault +0.001969 h (= half a gdaldem level):
+  byte leg      (tol 2 levels): Agrees with reference over 12348 cells: max |Δ| 1.00, RMSE 0.442, 100.0% within ±2 (bias +0.192).
+  intensity leg (tol 0.0025 h):      Disagrees with reference over 12348 cells: max |Δ| 0.00394, RMSE 0.00227, 63.3% within ±0.0025 (bias +0.00197).
+
+ground pc-01-plane-buildings: 100.000 % agreement, 0 only-ours, 0 only-PDAL
+ground pc-02-rolling-buildings: 60.703 % agreement, 2 only-ours, 4382 only-PDAL
+ground pc-03-ridge-buildings: 77.344 % agreement, 0 only-ours, 2532 only-PDAL
+ground pc-04-plane-lowblunders: 73.988 % agreement, 1 only-ours, 2896 only-PDAL
+ground pc-05-plane-gap: 100.000 % agreement, 0 only-ours, 0 only-PDAL
+ground pooled: 82.207 % over 55151 returns (gate 99.0 %)
+dtm pc-06-bare-plane: 100.0000 % within 0.00005 m, max |Δ| 3.662e-6 m
+dtm pc-07-bare-rolling: 100.0000 % within 0.00005 m, max |Δ| 3.784e-6 m
+dtm pc-08-bare-ridge: 100.0000 % within 0.00005 m, max |Δ| 3.662e-6 m
+dtm pooled: 100.0000 % over 7500 cells, max |Δ| 3.784e-6 m (gate 0.00005 m)
+ ✓ tests/groundFilterPdalAgreement.test.ts (11 tests) 15ms
+ ✓ tests/provenanceConsistency.test.ts (19 tests) 135ms
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > reports the multidirectional relief as a model divergence, not an agreement
+
+MULTIDIRECTIONAL relief ours vs GDAL 3.13.1 — DIFFERENT MODELS, measured not claimed:
+  flat-plane           hillshade-multi                                GDAL 3.13.1            max 1.000e+0 rmse 1.000e+0 bias -1.000e+0 100.00% n=2852 agree
+  oblique-plane        hillshade-multi                                GDAL 3.13.1            max 9.000e+0 rmse 9.000e+0 bias -9.000e+0 0.00% n=12348 disagree
+  convex-hill          hillshade-multi                                GDAL 3.13.1            max 5.000e+1 rmse 1.939e+1 bias 5.585e+0 4.70% n=6580 disagree
+  terrace-step         hillshade-multi                                GDAL 3.13.1            max 1.900e+1 rmse 9.071e+0 bias -3.516e+0 77.42% n=2852 disagree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > separates the nodata halo, where the two implementations differ by POLICY
+
+NODATA POLICY divergence (excluded from every agreement figure):
+  nodata-island        pattern island    halo    84 cells: gdaldem blanks all, ours answers all
+  nodata-scatter       pattern scatter   halo   992 cells: gdaldem blanks all, ours answers all
+  thin-corridor        pattern corridor  halo   124 cells: gdaldem blanks all, ours answers all
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > agrees with GDAL on the -compute_edges border ring, the matrix's largest closed finding
+
+-compute_edges BORDER ring, both extrapolating — E4:
+  flat-plane           slope-deg-edges [border only]                  GDAL 3.13.1            max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=220 agree
+  slope-x-pos          slope-deg-edges [border only]                  GDAL 3.13.1            max 3.337e-7 rmse 2.893e-7 bias 2.616e-7 100.00% n=220 agree
+  slope-y-pos          slope-deg-edges [border only]                  GDAL 3.13.1            max 1.053e-6 rmse 4.599e-7 bias -2.845e-7 100.00% n=220 agree
+  convex-hill          slope-deg-edges [border only]                  GDAL 3.13.1            max 2.881e-4 rmse 6.539e-5 bias -5.842e-6 100.00% n=332 agree
+  ridge                slope-deg-edges [border only]                  GDAL 3.13.1            max 9.143e-4 rmse 2.607e-4 bias 4.679e-5 100.00% n=220 agree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > checks the border against the CLOSED FORM, not only against gdaldem
+
+BORDER vs CLOSED FORM (E2) — the leg the gdaldem comparison cannot provide:
+  flat-plane           slope-deg [border edge, analytic]              analytic (closed form) max 0.000e+0 rmse 0.000e+0 bias 0.000e+0 100.00% n=216 agree
+  slope-x-pos          slope-deg [border edge, analytic]              analytic (closed form) max 1.168e-4 rmse 8.883e-5 bias -3.101e-5 100.00% n=216 agree
+  slope-x-neg          slope-deg [border edge, analytic]              analytic (closed form) max 7.789e-5 rmse 4.227e-5 bias -1.229e-5 100.00% n=328 agree
+  slope-y-pos          slope-deg [border edge, analytic]              analytic (closed form) max 1.635e-5 rmse 9.600e-6 bias -4.823e-6 100.00% n=216 agree
+  slope-y-neg          slope-deg [border edge, analytic]              analytic (closed form) max 1.418e-4 rmse 8.210e-5 bias 3.620e-5 100.00% n=328 agree
+  oblique-plane        slope-deg [border edge, analytic]              analytic (closed form) max 1.627e-4 rmse 4.328e-5 bias 4.133e-6 100.00% n=448 agree
+  convex-hill          slope-deg [border edge, analytic]              analytic (closed form) max 2.971e-1 rmse 2.243e-1 bias -2.125e-1 0.00% n=328 disagree
+  concave-pit          slope-deg [border edge, analytic]              analytic (closed form) max 6.220e-1 rmse 3.295e-1 bias -2.972e-1 0.00% n=216 disagree
+  ridge                slope-deg [border edge, analytic]              analytic (closed form) max 3.025e-4 rmse 1.843e-4 bias 2.124e-6 100.00% n=212 agree
+  valley               slope-deg [border edge, analytic]              analytic (closed form) max 7.643e-5 rmse 4.568e-5 bias 9.123e-9 100.00% n=324 agree
+  saddle               slope-deg [border edge, analytic]              analytic (closed form) max 1.503e-1 rmse 1.084e-1 bias -9.993e-2 0.00% n=448 disagree
+  terrace-step         slope-deg [border edge, analytic]              analytic (closed form) max 8.302e-5 rmse 7.308e-5 bias -5.571e-5 100.00% n=96 agree
+  nodata-island        slope-deg [border edge, analytic]              analytic (closed form) max 7.146e-5 rmse 4.394e-5 bias -3.605e-6 100.00% n=328 agree
+  nodata-scatter       slope-deg [border edge, analytic]              analytic (closed form) max 3.701e-1 rmse 2.755e-1 bias -2.620e-1 0.00% n=72 disagree
+  geographic-plane     slope-deg [border edge, analytic]              analytic (closed form) max 3.899e-5 rmse 9.932e-6 bias 1.544e-7 100.00% n=216 agree
+  aspect-rose-000      slope-deg [border edge, analytic]              analytic (closed form) max 4.522e-4 rmse 3.502e-4 bias 2.458e-4 100.00% n=168 agree
+  aspect-rose-045      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-090      slope-deg [border edge, analytic]              analytic (closed form) max 3.015e-4 rmse 2.332e-4 bias -1.400e-4 100.00% n=168 agree
+  aspect-rose-135      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-180      slope-deg [border edge, analytic]              analytic (closed form) max 4.522e-4 rmse 3.502e-4 bias 2.458e-4 100.00% n=168 agree
+  aspect-rose-225      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+  aspect-rose-270      slope-deg [border edge, analytic]              analytic (closed form) max 3.015e-4 rmse 2.332e-4 bias -1.400e-4 100.00% n=168 agree
+  aspect-rose-315      slope-deg [border edge, analytic]              analytic (closed form) max 2.720e-4 rmse 1.647e-4 bias -2.036e-6 100.00% n=168 agree
+
+BORDER CORNERS vs CLOSED FORM (E2) — treatment and control:
+  pooled (17 fixtures) slope-deg [border corner, analytic: along-edge gradient present] analytic (closed form) max 1.304e+1 rmse 8.622e+0 bias -8.191e+0 0.00% n=66 disagree
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > measures the geographic anisotropy gdaldem aspect cannot express
+
+GEOGRAPHIC anisotropy at latitude 45 (78715.1 m/deg lon vs 110540 m/deg lat):
+  ours (equal degree axes)   vs gdaldem aspect: max 0.0001474 deg — agree
+  ours (true unequal metres) vs gdaldem aspect: max 7.523 deg — disagree
+  gdaldem aspect has no -xscale/-yscale: an anisotropic reference is UNAVAILABLE from the reference tool.
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > records which fixtures are blind to a row-order flip or an axis mirror
+
+ROW-ORDER / MIRROR detectability — fixtures that DETECT both:
+  convex-hill          flip disagree  (max 177.57 deg)  mirror disagree  (max 179.22 deg)
+  concave-pit          flip disagree  (max 176.27 deg)  mirror disagree  (max 178.82 deg)
+  saddle               flip disagree  (max 177.98 deg)  mirror disagree  (max 179.47 deg)
+  nodata-island        flip disagree  (max 149.20 deg)  mirror disagree  (max 149.20 deg)
+  nodata-scatter       flip disagree  (max 179.90 deg)  mirror disagree  (max 179.98 deg)
+  geographic-plane     flip disagree  (max 7.52 deg)  mirror disagree  (max 7.52 deg)
+fixtures BLIND to at least one (recorded, not hidden):
+  slope-x-pos          flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  slope-x-neg          flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  slope-y-pos          flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  slope-y-neg          flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  oblique-plane        flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  ridge                flip agree     (max 0.00 deg)  mirror disagree  (max 165.75 deg)
+  valley               flip agree     (max 0.00 deg)  mirror disagree  (max 165.75 deg)
+  terrace-step         flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  thin-corridor        flip disagree  (max 149.20 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-000      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-045      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-090      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-135      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-180      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-225      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-270      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+  aspect-rose-315      flip agree     (max 0.00 deg)  mirror agree     (max 0.00 deg)
+
+stdout | tests/rasterAgreementMatrix.test.ts > raster agreement matrix > writes the results record with the exact command lines and output hashes
+
+231 legs recorded, 10 outside tolerance (see results.json boundaries).
+  model divergence declared before the run: oblique-plane / hillshade-multi vs GDAL 3.13.1 — max 9.000 8-bit level (tol 2)
+  model divergence declared before the run: convex-hill / slope-deg [border edge, analytic] vs analytic (closed form) — max 0.2971 degree (tol 0.01)
+  model divergence declared before the run: convex-hill / hillshade-multi vs GDAL 3.13.1 — max 50.00 8-bit level (tol 2)
+  model divergence declared before the run: concave-pit / slope-deg [border edge, analytic] vs analytic (closed form) — max 0.6220 degree (tol 0.01)
+  model divergence declared before the run: saddle / slope-deg [border edge, analytic] vs analytic (closed form) — max 0.1503 degree (tol 0.01)
+  model divergence declared before the run: terrace-step / hillshade-multi vs GDAL 3.13.1 — max 19.00 8-bit level (tol 2)
+  model divergence declared before the run: nodata-scatter / slope-deg [border edge, analytic] vs analytic (closed form) — max 0.3701 degree (tol 0.01)
+  model divergence declared before the run: geographic-plane / aspect vs GDAL 3.13.1 — max 7.523 compass degree (circular separation) (tol 0.25)
+  model divergence declared before the run: geographic-plane / aspect [true unequal metres vs gdaldem equal-degree] vs GDAL 3.13.1 — max 7.523 compass degree (circular separation) (tol 0.25)
+  model divergence declared before the run: pooled (17 fixtures) / slope-deg [border corner, analytic: along-edge gradient present] vs analytic (closed form) — max 13.04 degree (tol 0.01)
+
+ ✓ tests/rasterAgreementMatrix.test.ts (23 tests) 1339ms
+     ✓ keeps the shipped byte exactly the rounded intensity on every fixture  1243ms
+ ✓ tests/terrainCoreAsync.test.ts (24 tests) 218ms
+ ✓ tests/profileSummary.test.ts (43 tests) 7ms
+ ✓ tests/crsService.test.ts (37 tests) 6ms
+ ✓ tests/terrainDerivatives.test.ts (24 tests) 1405ms
+     ✓ extrapolation removes the ~50% edge bias and pays 2x the noise for it  471ms
+     ✓ records the regime where extrapolation is WORSE: near-flat, noisy ground  471ms
+     ✓ confirms the fix does essentially nothing at the four corners  457ms
+ ✓ tests/cellConfidence.test.ts (26 tests) 6ms
+ ✓ tests/crs.test.ts (20 tests) 4ms
+ ✓ tests/evidenceRecord.test.ts (34 tests) 5ms
+ ✓ tests/contourDownload.test.ts (19 tests) 8ms
+ ✓ tests/contourSaddleExactLevel.test.ts (9 tests) 11ms
+ ✓ tests/terrainTruth.dtm.test.ts (13 tests) 37ms
+ ✓ tests/calibrateConfidence.test.ts (14 tests) 5ms
+stdout | tests/slopeCrossCheck.test.ts > SLOPE-RASTER cross-implementation > agrees with GDAL, and GDAL agrees with the closed form
+SLOPE-RASTER  ours vs GDAL: Agrees with reference over 11564 cells: max |Δ| 0.0000368, RMSE 0.00000531, 100.0% within ±0.5 (bias -1.38e-7).
+SLOPE-RASTER  GDAL vs truth: Agrees with reference over 11564 cells: max |Δ| 0.0000518, RMSE 0.00000583, 100.0% within ±0.5 (bias +1.29e-7).
+
+ ✓ tests/slopeCrossCheck.test.ts (5 tests) 23ms
+stderr | tests/contourExportAdapter.test.ts > ContourExportAdapter — gated dispatch > writes NOTHING and flashes the button when the launch state is blocked
+OpenLiDARViewer: contour geojson export blocked by the evidence gate — No usable ground points.
+
+stderr | tests/contourExportAdapter.test.ts > ContourExportAdapter — gated dispatch > refuses the DEM package (writes nothing) when the launch state is blocked
+OpenLiDARViewer: contour package export blocked by the evidence gate — No terrain surface has been computed.
+
+stderr | tests/contourExportAdapter.test.ts > ContourExportAdapter — gated dispatch > refuses the complete deliverable (writes nothing) when the launch state is blocked
+OpenLiDARViewer: contour deliverable export blocked by the evidence gate — No terrain surface has been computed.
+
+stderr | tests/contourExportAdapter.test.ts > ContourExportAdapter — gated dispatch > refuses the terrain report (never calls the writer) when the launch state is blocked
+OpenLiDARViewer: contour report export blocked by the evidence gate — No terrain surface has been computed.
+
+ ✓ tests/contourExportAdapter.test.ts (12 tests) 6ms
+ ✓ tests/demPackageReadme.test.ts (10 tests) 8ms
+ ✓ tests/analyseContoursCore.test.ts (18 tests) 417ms
+ ✓ tests/analyseRailBanner.test.ts (3 tests) 209ms
+ ✓ tests/provenanceDeclared.test.ts (15 tests) 15ms
+ ✓ tests/terrainReportPdf.test.ts (5 tests) 67ms
+ ✓ tests/profileStations.test.ts (16 tests) 4ms
+ ✓ tests/cellMetrics.test.ts (7 tests) 3ms
+ ✓ tests/profileAnalyticalFixtures.test.ts (5 tests) 4ms
+ ✓ tests/contourPackageManifest.test.ts (10 tests) 5ms
+ ✓ tests/contourDeliverablePackage.test.ts (5 tests) 5ms
+ ✓ tests/surfaceModels.test.ts (9 tests) 3ms
+ ✓ tests/contourLevelDefinition.test.ts (13 tests) 4ms
+ ✓ tests/analyseContours.test.ts (9 tests) 110ms
+ ✓ tests/dtmHardening.test.ts (7 tests) 4ms
+ ✓ tests/coverageLabelHonesty.test.ts (2 tests) 89ms
+ ✓ tests/recommendedWorkflow.test.ts (8 tests) 3ms
+ ✓ tests/contourWorldOrigin.test.ts (8 tests) 4ms
+ ✓ tests/terrainCoreWorkerClient.test.ts (2 tests) 75ms
+ ✓ tests/contourGeometryProduct.test.ts (10 tests) 4ms
+ ✓ tests/surfaceFromRaster.test.ts (6 tests) 16ms
+ ✓ tests/analysePanelCoverageTile.test.ts (1 test) 80ms
+ ✓ tests/contourFeatureModel.test.ts (8 tests) 3ms
+ ✓ tests/contourLabelEngine.test.ts (9 tests) 4ms
+ ✓ tests/contourAdaptiveGeneralize.test.ts (8 tests) 3ms
+ ✓ tests/coverageHeatmap.test.ts (8 tests) 3ms
+ ✓ tests/analysePanelReportButton.test.ts (2 tests) 21ms
+ ✓ tests/calibrationCheck.test.ts (5 tests) 2ms
+ ✓ tests/profileChartHeightBounds.test.ts (4 tests) 3ms
+ ✓ tests/groundFilterUnitFrame.test.ts (1 test) 84ms
+ ✓ tests/dtmSurfaceModel.test.ts (4 tests) 104ms
+ ✓ tests/groundFilterDespike.test.ts (5 tests) 3ms
+ ✓ tests/contourStudioPdf.test.ts (2 tests) 28ms
+ ✓ tests/evidenceLevel.test.ts (7 tests) 3ms
+ ✓ tests/evidenceGrade.test.ts (5 tests) 2ms
+ ✓ tests/terrainReadiness.test.ts (3 tests) 92ms
+ ✓ tests/contourOverlayGeometry.test.ts (4 tests) 2ms
+ ✓ tests/demPackageEpsg.test.ts (5 tests) 2ms
+ ✓ tests/dsmChm.test.ts (4 tests) 3ms
+ ✓ tests/contourStyle.test.ts (4 tests) 2ms
+ ✓ tests/demAccuracyStandards.test.ts (3 tests) 2ms
+
+ Test Files  56 passed (56)
+      Tests  593 passed (593)
+   Start at  16:19:31
+   Duration  6.98s (transform 915ms, setup 0ms, import 2.50s, tests 4.72s, environment 3ms)
+
+JSON report written to <tmpdir>/olv-tally-terrain-20291-0.json
+GATE TALLY bucket=terrain passed=593 skipped=0
+[terrain shard 1/2] pid=20292 elapsed=7.4s code=0 signal=-
+
+──── terrain shard 2/2 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/terrainComplexity.test.ts (47 tests) 42ms
+ ✓ tests/terrainRasterEngine.test.ts (39 tests) 203ms
+stdout | tests/hillshadeCrossCheck.test.ts > HILLSHADE cross-implementation > our hillshade matches the closed form on the fixture surface
+HILLSHADE  ours vs truth: Agrees with reference over 11564 cells: max |Δ| 0.0000643, RMSE 0.00000719, 100.0% within ±1 (bias +1.93e-11).
+
+stdout | tests/hillshadeCrossCheck.test.ts > HILLSHADE cross-implementation > agrees with GDAL, and GDAL agrees with the closed form
+HILLSHADE  ours vs GDAL (8-bit, both rounded): Agrees with reference over 11564 cells: max |Δ| 1.00, RMSE 0.536, 100.0% within ±1 (bias -0.287).
+HILLSHADE  ours vs GDAL (ours unrounded): Agrees with reference over 11564 cells: max |Δ| 0.900, RMSE 0.410, 100.0% within ±1 (bias -0.286).
+HILLSHADE  GDAL vs truth: Agrees with reference over 11564 cells: max |Δ| 0.900, RMSE 0.410, 100.0% within ±1 (bias +0.286).
+
+stdout | tests/hillshadeCrossCheck.test.ts > HILLSHADE cross-implementation > is not carried by the near-flat cells
+HILLSHADE  ours vs GDAL (slope above 2° only): Agrees with reference over 10932 cells: max |Δ| 1.00, RMSE 0.536, 100.0% within ±1 (bias -0.287).
+
+ ✓ tests/hillshadeCrossCheck.test.ts (8 tests) 167ms
+ ✓ tests/demExport.test.ts (22 tests) 178ms
+ ✓ tests/terrainAssessment.test.ts (32 tests) 6ms
+ ✓ tests/readinessEngine.test.ts (24 tests) 19ms
+ ✓ tests/terrainReportContent.test.ts (21 tests) 22ms
+ ✓ tests/profileSampler.test.ts (31 tests) 5ms
+stdout | tests/aspectCrossCheck.test.ts > ASPECT-RASTER cross-implementation > our Horn aspect matches the closed form on the fixture surface
+ASPECT-RASTER  ours vs truth: Agrees with reference over 10932 cells: max |Δ| 0.0000835, RMSE 0.0000138, 100.0% within ±0.5 (bias +0.0000102).
+
+stdout | tests/aspectCrossCheck.test.ts > ASPECT-RASTER cross-implementation > agrees with GDAL, and GDAL agrees with the closed form
+ASPECT-RASTER  ours vs GDAL: Agrees with reference over 10932 cells: max |Δ| 0.000163, RMSE 0.0000329, 100.0% within ±0.5 (bias +0.0000240).
+ASPECT-RASTER  GDAL vs truth: Agrees with reference over 10932 cells: max |Δ| 0.000196, RMSE 0.0000354, 100.0% within ±0.5 (bias +0.0000263).
+
+ ✓ tests/aspectCrossCheck.test.ts (5 tests) 104ms
+ ✓ tests/crsVerticalHardening.test.ts (25 tests) 18ms
+ ✓ tests/dtmQuality.test.ts (21 tests) 5ms
+ ✓ tests/terrainAssessmentFixtures.test.ts (20 tests) 63ms
+ ✓ tests/contoursAt.test.ts (15 tests) 15ms
+ ✓ tests/contourPurposeExportBytes.test.ts (9 tests) 60ms
+ ✓ tests/contourShapeStyle.test.ts (18 tests) 9ms
+ ✓ tests/contourReviewSummary.test.ts (15 tests) 15ms
+ ✓ tests/groundFilterValidation.test.ts (6 tests) 29ms
+ ✓ tests/terrainTruth.surface.test.ts (12 tests) 13ms
+ ✓ tests/profilePdf.test.ts (11 tests) 54ms
+ ✓ tests/groundFilter.test.ts (16 tests) 14ms
+ ✓ tests/rasterizeDtm.test.ts (29 tests) 4ms
+ ✓ tests/whyNotReasons.test.ts (14 tests) 4ms
+ ✓ tests/crsDatumWarnings.test.ts (10 tests) 107ms
+ ✓ tests/terrainCoreCache.test.ts (19 tests) 2472ms
+     ✓ defaults compute to the real computeTerrainCore (smoke)  2465ms
+ ✓ tests/terrainProducts.test.ts (7 tests) 3ms
+ ✓ tests/contourStudioWorkspace.test.ts (9 tests) 4ms
+ ✓ tests/provenance.test.ts (21 tests) 14ms
+ ✓ tests/crsFoundation.test.ts (21 tests) 4ms
+ ✓ tests/confidenceOverlay.test.ts (11 tests) 4ms
+ ✓ tests/terrainTruth.hillshade.test.ts (6 tests) 7ms
+ ✓ tests/provenanceSignals.test.ts (13 tests) 3ms
+ ✓ tests/contourStudioState.test.ts (17 tests) 5ms
+ ✓ tests/contourStudioLauncher.test.ts (6 tests) 3ms
+ ✓ tests/terrainStreamSample.test.ts (8 tests) 2ms
+ ✓ tests/contourExportPermit.test.ts (12 tests) 3ms
+ ✓ tests/crsValidation.test.ts (18 tests) 3ms
+ ✓ tests/hillshadeColors.test.ts (9 tests) 3ms
+ ✓ tests/contourDeliverablePdfModel.test.ts (9 tests) 4ms
+ ✓ tests/contourExportIntent.test.ts (9 tests) 3ms
+ ✓ tests/terrainWorkflowPresets.test.ts (7 tests) 3ms
+ ✓ tests/contourStudioLaunchState.test.ts (12 tests) 3ms
+ ✓ tests/contourAnalyticValidation.test.ts (3 tests) 11ms
+ ✓ tests/terrainRunnerCellFloor.test.ts (8 tests) 2ms
+ ✓ tests/contourCopy.test.ts (9 tests) 3ms
+ ✓ tests/intervalGate.test.ts (8 tests) 3ms
+ ✓ tests/terrainCanonicalEquivalence.test.ts (3 tests) 13ms
+ ✓ tests/contourStudioLaunchStateFromResult.test.ts (9 tests) 2ms
+ ✓ tests/civilProfileStats.test.ts (5 tests) 2ms
+ ✓ tests/evidenceRegistry.test.ts (5 tests) 3ms
+ ✓ tests/contourIntervalUnits.test.ts (1 test) 72ms
+ ✓ tests/terrainQualityScore.test.ts (6 tests) 2ms
+ ✓ tests/terrainSuggestion.test.ts (6 tests) 3ms
+ ✓ tests/analyseExportLayout.test.ts (3 tests) 2ms
+ ✓ tests/provenanceObjectShape.test.ts (4 tests) 14ms
+ ✓ tests/recommendView.test.ts (7 tests) 2ms
+ ✓ tests/terrainRunnerDensityWiring.test.ts (5 tests) 15951ms
+     ✓ a strided gather reports the SCAN density, 4× the unscaled run  5383ms
+     ✓ an un-strided gather (totalPoints == sampled) scales by exactly 1  4773ms
+     ✓ a degenerate totalPoints (0 / NaN) falls back to scale 1, never 0  4639ms
+     ✓ forwards groundIsDerived=true to the contour frame  586ms
+     ✓ forwards groundIsDerived=false to the contour frame  569ms
+
+ Test Files  56 passed (56)
+      Tests  746 passed (746)
+   Start at  16:19:39
+   Duration  20.84s (transform 805ms, setup 0ms, import 2.83s, tests 19.78s, environment 3ms)
+
+JSON report written to <tmpdir>/olv-tally-terrain-20291-1.json
+GATE TALLY bucket=terrain passed=746 skipped=0
+[terrain shard 2/2] pid=20388 elapsed=21.2s code=0 signal=-
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/mobileSheet.test.ts (20 tests) 20ms
+ ✓ tests/colorModes.test.ts (54 tests) 8ms
+ ✓ tests/swNavigationCache.test.ts (9 tests) 4ms
+ ✓ tests/cameraPresets.test.ts (58 tests) 6ms
+ ✓ tests/fullscreenToggleTeardown.test.ts (14 tests) 11ms
+ ✓ tests/mapSheetPdf.test.ts (23 tests) 61ms
+ ✓ tests/objectPanelSpace.test.ts (7 tests) 80ms
+ ✓ tests/inspectorOrigin.test.ts (12 tests) 3ms
+ ✓ tests/navMath.test.ts (31 tests) 4ms
+(node:20587) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/themes.test.ts (21 tests) 4ms
+ ✓ tests/themeToggle.test.ts (7 tests) 10ms
+ ✓ tests/exportPanelCrs.test.ts (5 tests) 49ms
+ ✓ tests/commandPalette.test.ts (23 tests) 4ms
+ ✓ tests/catalogPanelStatus.test.ts (6 tests) 10ms
+ ✓ tests/tourSteps.test.ts (21 tests) 4ms
+ ✓ tests/mapExportLayout.test.ts (15 tests) 6ms
+ ✓ tests/floorPlanSheetCalibration.test.ts (9 tests) 14ms
+ ✓ tests/navControllerTeardown.test.ts (4 tests) 3ms
+ ✓ tests/annotation-model.test.ts (13 tests) 3ms
+ ✓ tests/colorChipModel.test.ts (9 tests) 3ms
+ ✓ tests/annotationClustering.test.ts (12 tests) 4ms
+ ✓ tests/mapSheetExportOptions.test.ts (14 tests) 3ms
+ ✓ tests/classVisibility.test.ts (11 tests) 5ms
+ ✓ tests/colorModeSupport.test.ts (6 tests) 3ms
+ ✓ tests/objectPanelExport.test.ts (2 tests) 35ms
+ ✓ tests/mapSheetLayout.test.ts (8 tests) 3ms
+ ✓ tests/classScopeBanner.test.ts (3 tests) 2ms
+ ✓ tests/stitchContours.test.ts (8 tests) 3ms
+ ✓ tests/shortcutSheet.test.ts (8 tests) 2ms
+ ✓ tests/colorProvenance.test.ts (9 tests) 3ms
+ ✓ tests/classScope.test.ts (8 tests) 2ms
+ ✓ tests/isMobileDevice.test.ts (3 tests) 2ms
+
+ Test Files  32 passed (32)
+      Tests  453 passed (453)
+   Start at  16:20:00
+   Duration  2.35s (transform 452ms, setup 0ms, import 791ms, tests 375ms, environment 2ms)
+
+JSON report written to <tmpdir>/olv-tally-ui-20576-0.json
+GATE TALLY bucket=ui passed=453 skipped=0
+[ui bucket] pid=20577 elapsed=2.7s code=0 signal=-
+
+──── slow shard 1/2 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/ept.test.ts (28 tests) 7ms
+ ✓ tests/streamingScheduler.test.ts (34 tests) 43ms
+ ✓ tests/eptStreaming.test.ts (16 tests) 11ms
+ ✓ tests/streamingBenchmark.test.ts (26 tests) 17ms
+ ✓ tests/streamingPicking.test.ts (21 tests) 4ms
+ ✓ tests/pntsDecode.test.ts (18 tests) 4ms
+ ✓ tests/parseWorkerPostFailure.test.ts (8 tests) 11ms
+ ✓ tests/torture.test.ts (7 tests) 110ms
+ ✓ tests/copcDecodePrecision.test.ts (6 tests) 2ms
+ ✓ tests/copcHierarchy.test.ts (12 tests) 5ms
+ ✓ tests/streamingLifecycle.test.ts (2 tests) 86ms
+ ✓ tests/streamingReseed.test.ts (7 tests) 3ms
+ ✓ tests/eptLaszipDecode.test.ts (7 tests) 46ms
+ ✓ tests/eptTransport.test.ts (10 tests) 26ms
+ ✓ tests/eptRealFixture.test.ts (10 tests) 5ms
+ ✓ tests/streamingStress.test.ts (4 tests) 171ms
+ ✓ tests/streamingOctree.test.ts (6 tests) 5ms
+ ✓ tests/convertRoundTrip.test.ts (6 tests) 17ms
+ ✓ tests/streamingSource.test.ts (3 tests) 3ms
+ ✓ tests/streamingBudget.test.ts (14 tests) 3ms
+ ✓ tests/streamingCache.test.ts (12 tests) 3ms
+ ✓ tests/streamingErrorBackoff.test.ts (1 test) 10ms
+ ✓ tests/scaledSynthCopc.test.ts (9 tests) 18ms
+ ✓ tests/streamingStressReport.test.ts (1 test) 13ms
+ ✓ tests/streamingCompatibility.test.ts (7 tests) 2ms
+ ✓ tests/streamingProgress.test.ts (7 tests) 2ms
+ ✓ tests/streamingProfile.test.ts (6 tests) 2ms
+ ✓ tests/streamingFade.test.ts (7 tests) 2ms
+ ✓ tests/streamingSpacingLabel.test.ts (4 tests) 13ms
+ ✓ tests/streamingScore.test.ts (3 tests) 2ms
+ ✓ tests/releasePackagingRepro.test.ts (2 tests) 5762ms
+     ✓ produces a byte-identical source archive for the same commit  3863ms
+     ✓ names the archive from the commit timestamp, not the wall clock  1898ms
+
+ Test Files  31 passed (31)
+      Tests  304 passed (304)
+   Start at  16:20:03
+   Duration  7.94s (transform 551ms, setup 0ms, import 883ms, tests 6.41s, environment 2ms)
+
+JSON report written to <tmpdir>/olv-tally-slow-20646-0.json
+GATE TALLY bucket=slow passed=304 skipped=0
+[slow shard 1/2] pid=20647 elapsed=8.3s code=0 signal=-
+
+──── slow shard 2/2 ────
+
+ RUN  v4.1.10 <clean-clone>
+
+ ✓ tests/streamingSettleCommit.test.ts (8 tests) 7ms
+ ✓ tests/loadLas.test.ts (25 tests) 68ms
+ ✓ tests/copcFailureModes.test.ts (14 tests) 34ms
+ ✓ tests/streamingUploadQueueIntegration.test.ts (10 tests) 14ms
+ ✓ tests/eptLaszipWorkerClient.test.ts (13 tests) 6ms
+ ✓ tests/streamingBaselineV055.test.ts (3 tests) 68ms
+ ✓ tests/voxelDownsample.test.ts (16 tests) 21ms
+ ✓ tests/eptBinaryDecode.test.ts (8 tests) 3ms
+(node:21048) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ tests/measurePanelStationsLazy.test.ts (4 tests) 6ms
+ ✓ tests/streamingStressHarness.test.ts (1 test) 12ms
+ ✓ tests/streamingColors.test.ts (12 tests) 4ms
+ ✓ tests/streamingPanelGrade.test.ts (6 tests) 15ms
+ ✓ tests/copcChunkDecode.test.ts (7 tests) 3ms
+ ✓ tests/eptUrlValidation.test.ts (20 tests) 4ms
+ ✓ tests/convertBatch.test.ts (8 tests) 21ms
+ ✓ tests/streamingFadeReentry.test.ts (1 test) 47ms
+ ✓ tests/streamingFiniteGuard.test.ts (9 tests) 3ms
+ ✓ tests/eptChunkDecoder.test.ts (8 tests) 6ms
+ ✓ tests/streamingRgbAppearance.test.ts (8 tests) 3ms
+ ✓ tests/contourPipeline.integration.test.ts (5 tests) 21ms
+ ✓ tests/copcWorkerClient.test.ts (5 tests) 4ms
+ ✓ tests/copcMetadata.test.ts (9 tests) 3ms
+ ✓ tests/decodeFullWorker.test.ts (3 tests) 4ms
+ ✓ tests/pointFilterAccept.test.ts (7 tests) 2ms
+ ✓ tests/streamingNodeStoreCounts.test.ts (2 tests) 2ms
+ ✓ tests/benchmark.test.ts (8 tests) 14ms
+ ✓ tests/eptCrs.test.ts (5 tests) 3ms
+ ✓ tests/parseBuffer.test.ts (7 tests) 144ms
+ ✓ tests/preloadSummary.test.ts (4 tests) 2ms
+ ✓ tests/moduleApi.test.ts (5 tests) 3ms
+
+ Test Files  30 passed (30)
+      Tests  241 passed (241)
+   Start at  16:20:11
+   Duration  2.30s (transform 552ms, setup 0ms, import 852ms, tests 548ms, environment 2ms)
+
+JSON report written to <tmpdir>/olv-tally-slow-20646-1.json
+GATE TALLY bucket=slow passed=241 skipped=0
+[slow shard 2/2] pid=21039 elapsed=2.6s code=0 signal=-
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 4 tests using 4 workers
+
+  ✓  4 [deterministic] › tests/e2e/smoke.spec.ts:48:3 › startup smoke › ?debug=1 mounts the overlay without errors (711ms)
+  ✓  1 [deterministic] › tests/e2e/lazyChunkLoad.spec.ts:51:3 › runtime lazy chunks resolve on the served build › command palette chunk loads on Cmd-K (882ms)
+  ✓  3 [deterministic] › tests/e2e/lazyChunkLoad.spec.ts:68:3 › runtime lazy chunks resolve on the served build › context-menu chunk loads on canvas right-click (2.3s)
+  ✓  2 [deterministic] › tests/e2e/smoke.spec.ts:16:3 › startup smoke › the empty state renders without console errors or page errors (3.4s)
+
+  4 passed (7.4s)
+[WebServer] [PLUGIN_TIMINGS] Your build spent significant time in plugin `vite:resolve-builtin:get-environment`. See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+[WebServer] 
+[WebServer] [PLUGIN_TIMINGS] Your build spent significant time in plugin `vite-plugin-javascript-obfuscator`. See https://rolldown.rs/reference/InputOptions.checks#plugintimings for more details.
+[WebServer] 
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 4 tests using 4 workers
+
+  ✓  1 [deterministic] › tests/e2e/smoke.spec.ts:48:3 › startup smoke › ?debug=1 mounts the overlay without errors (548ms)
+  ✓  4 [deterministic] › tests/e2e/lazyChunkLoad.spec.ts:51:3 › runtime lazy chunks resolve on the served build › command palette chunk loads on Cmd-K (841ms)
+  ✓  2 [deterministic] › tests/e2e/lazyChunkLoad.spec.ts:68:3 › runtime lazy chunks resolve on the served build › context-menu chunk loads on canvas right-click (2.6s)
+  ✓  3 [deterministic] › tests/e2e/smoke.spec.ts:16:3 › startup smoke › the empty state renders without console errors or page errors (3.5s)
+
+  4 passed (15.2s)
+[WebServer] [plugin builtin:vite-reporter] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 8 tests using 7 workers
+
+  ✓  7 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:65:5 › Visuals Studio on smallest-320 › Visuals Studio surfaces all three chip rails on mobile (2.0s)
+  ✓  5 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:106:5 › Visuals Studio on smallest-320 › Keyboard NavWidget (.olv-navbar) is hidden on mobile (2.3s)
+  ✓  1 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:65:5 › Visuals Studio on iphone-se-375 › Visuals Studio surfaces all three chip rails on mobile (2.4s)
+  ✓  2 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:106:5 › Visuals Studio on iphone-se-375 › Keyboard NavWidget (.olv-navbar) is hidden on mobile (2.5s)
+  ✓  4 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:81:5 › Visuals Studio on smallest-320 › Visuals Studio chips meet 44 px touch-target minimum (2.5s)
+  ✓  6 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:120:5 › Visuals Studio on iphone-se-375 › Section summaries (Visuals Studio / Rendering) hit 44 pt (2.6s)
+  ✓  3 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:81:5 › Visuals Studio on iphone-se-375 › Visuals Studio chips meet 44 px touch-target minimum (2.7s)
+  ✓  8 [deterministic] › tests/e2e/visualsStudioMobile.spec.ts:120:5 › Visuals Studio on smallest-320 › Section summaries (Visuals Studio / Rendering) hit 44 pt (1.8s)
+
+  8 passed (7.8s)
+Validation-path reachability
+
+  ✓ witnessed     backend-selection
+      buildBackendLeg×32 gpuClaimNotCredible×11 legFromComputeStatus×3 compareBackends×15 comparisonMarkdown×3
+  ✓ witnessed     terrain-derivatives-node
+      init×3 runEquivalenceProbe×2 buildScatterProbe×3 createCpuBackend×5
+  · unwitnessed   terrain-derivatives-device
+      The kernels run inside the browser's WebGPU implementation. Node has no adapter, so no witness of their execution can be produced here. The spec's own adapter descriptor and engine reason code are the witness, and only on a runner that exposes an adapter.
+  ✓ witnessed     contour-generation
+      contoursAt×37 stitchContourSet×21 stitchLevel×13 styleLevels×16 buildFeatureModel×12 analyticalProduct×9 cartographicProduct×8 terrainAwareCartographicProduct×1 toGeoJSON×10 toGeoJSONWgs84×4
+  ✓ witnessed     export-writers
+      writeLas×41 writeLas14×15 pickPointFormat×45 pickPointFormat14×17 convertCloud×3 loadLas×30 parseLasHeader×44
+  ✓ witnessed     provenance-verification
+      buildExportProvenance×41 buildProcessingManifest×39 verifyProcessingManifest×16 verifyReportFile×5 buildReportManifest×4 canonicalHash×4
+  ✓ witnessed     metric-unit-consistency
+      hornSlope×44 hornSlopeAspect×53 horizontalCellMetresXY×38 slopeStats×6 shadeFromSlopeAspect×8 rasterizeDtm×26 buildSurfaceFromRaster×26 detectChange×4 computeCellMetrics×6 measurementMetrics×2
+  ✓ witnessed     failure-recovery
+      parseBuffer×2 parseLasHeader×17 classifyLoadError×2 describeLoadError×1 validateDeclaredPointCount×9 assertFinitePositions×7 decodeRecords×3 validatePolygon×9 volumeCutFill×3
+  ✓ witnessed     platform-portability
+      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13
+  ✓ witnessed     archive-verification
+      12 checks executed, 0 skipped
+
+✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed
+  result: <clean-clone>/validation/reachability/summary.json
+lint:evidence OK — documents match docs/validation/test-evidence.json (6,787 passed / 24 skipped at 7acd470).
