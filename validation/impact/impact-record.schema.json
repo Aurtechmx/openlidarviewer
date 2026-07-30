@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/impact-record.schema.json",
+  "title": "Impact record",
+  "description": "One record per instance of institutional use, research output or citation. Each one has to name a source a stranger can check: a DOI, a published paper, an archived page. An unverifiable claim of impact is worse than none, because it spends the credibility that the rest of this repository's evidence discipline is for. Validated by scripts/verify-impact-record.mjs and counted by scripts/build-impact-summary.mjs, which excludes examples and anything unverified. NOTHING IN THIS DIRECTORY IS AN IMPACT CLAIM: it holds one EXAMPLE record and no use, output or citation has been recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordId",
+    "example",
+    "kind",
+    "subject",
+    "source",
+    "verification",
+    "relationToProject",
+    "status",
+    "statusReason"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "recordId": {
+      "description": "Stable identity. An example must be prefixed EXAMPLE- and carry example: true.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "example": { "type": "boolean" },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "institutional-use",
+        "research-output",
+        "citation",
+        "teaching-use",
+        "derived-software"
+      ]
+    },
+    "subject": {
+      "description": "Who or what the record is about, in the words a reader would use to find it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "description"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "organisation": { "type": "string", "minLength": 1 },
+        "authors": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "publishedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "verification": { "$ref": "#/$defs/verification" },
+    "relationToProject": { "$ref": "#/$defs/relationToProject" },
+    "claimIds": {
+      "description": "Claims the use or citation bears on, if any. Each must exist in docs/validation/claim-register.yaml. An impact record is never evidence for a claim; this field only says what the use touched.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*$" }
+    },
+    "status": {
+      "description": "See IMPACT_STATUSES in scripts/verify-impact-record.mjs. Only \"verified\" reaches a count.",
+      "type": "string",
+      "enum": ["pending", "verified", "unverifiable", "retracted", "withdrawn"]
+    },
+    "statusReason": { "type": "string", "minLength": 1 },
+    "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "source": {
+      "description": "Where a stranger goes to check the record. personal-communication and unpublished are in the vocabulary so a record can state honestly that it has no public source; the verifier then refuses to let it be counted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "retrievedAt"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "doi",
+            "arxiv",
+            "pubmed",
+            "isbn",
+            "handle",
+            "software-heritage",
+            "public-url",
+            "personal-communication",
+            "unpublished"
+          ]
+        },
+        "value": { "type": "string", "minLength": 1 },
+        "retrievedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "archivedUrl": {
+          "description": "A snapshot at an independent web archive. Required for a verified public-url record, because a bare URL rots and a dead link is indistinguishable from an invention.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "verification": {
+      "description": "How the source was checked, by whom, and when. not-verified is a permitted answer; it just cannot sit under status verified.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "verifiedAt", "note"],
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "identifier-resolved",
+            "page-archived",
+            "publisher-confirmed",
+            "organisation-confirmed",
+            "not-verified"
+          ]
+        },
+        "verifiedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "relationToProject": {
+      "description": "Whether the impact is somebody else's. A paper by this project's own authors is a publication, not adoption, and the summary counts the two separately rather than letting one read as the other.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["byProjectMembers", "selfReported"],
+      "properties": {
+        "byProjectMembers": { "type": "boolean" },
+        "selfReported": {
+          "description": "True when the only source is the project's own statement that this happened.",
+          "type": "boolean"
+        },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

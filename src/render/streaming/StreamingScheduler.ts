@@ -946,13 +946,18 @@ export class StreamingScheduler {
       }
     }
 
-    // Enqueue wanted nodes that are not already resident or loading.
+    // Enqueue wanted nodes that are not already resident, loading, or waiting
+    // on the upload queue. `decoded` means the points exist and a commit is
+    // pending; re-enqueueing one would decode it a second time and hand the
+    // queue two items for the same node. Only reachable with an upload queue
+    // attached, which is why nothing has hit it yet.
     this._queue.length = 0;
     for (const { node } of scored) {
       if (
         wanted.has(node.record.id) &&
         node.state !== 'resident' &&
-        node.state !== 'loading'
+        node.state !== 'loading' &&
+        node.state !== 'decoded'
       ) {
         // A permanently-failing node stays terminally `error` once it has
         // exhausted its retries or is still inside its backoff window — skip
@@ -1011,6 +1016,14 @@ export class StreamingScheduler {
       if (node.state === 'queued') store.setState(node, 'unloaded');
     }
     this._queue.length = 0;
+    // Nodes decoded but not yet committed hold their points in the store's
+    // pending total. Without this they stay `decoded` forever after a stop,
+    // and the pending count never returns to zero, so a restarted scheduler
+    // begins against a budget that is already spent.
+    if (this._uploadQueue) {
+      this._uploadQueue.cancelDataset(this._datasetId);
+      for (const node of store.decodedPending()) store.setState(node, 'unloaded');
+    }
     this._deferredEvictAt.clear();
     this._decodeFailures.clear();
     this._retryReadyAt.clear();

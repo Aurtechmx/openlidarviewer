@@ -65,6 +65,18 @@ const DEPLOYED_SEPARATELY = new Map([
   ],
 ]);
 
+/**
+ * Assets the build emits into dist/ rather than copying from public/.
+ *
+ * Unlike DEPLOYED_SEPARATELY these are not holes: the value names the tracked
+ * file the build reads, and the check below fails if that file is missing. So a
+ * reference still has to resolve to something real, it just resolves to the
+ * source the plugin emits from instead of to a copy sitting in public/.
+ */
+const BUILT_INTO_DIST = new Map([
+  ['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'],
+]);
+
 /** Anything with a scheme, a protocol-relative URL, or a bare fragment. */
 function isExternal(ref) {
   return (
@@ -146,6 +158,15 @@ for (const { file, bases } of shippedPages()) {
     const relativeTo = path.startsWith('/') ? path.slice(1) : path;
     if (DEPLOYED_SEPARATELY.has(relativeTo)) {
       allowed.push(`${relativeTo} (${DEPLOYED_SEPARATELY.get(relativeTo)})`);
+      continue;
+    }
+    if (BUILT_INTO_DIST.has(relativeTo)) {
+      const from = BUILT_INTO_DIST.get(relativeTo);
+      if (existsSync(resolve(ROOT, from))) {
+        allowed.push(`${relativeTo} (emitted by the build from ${from})`);
+      } else {
+        problems.push(`${file} references ${ref}, which the build emits from ${from}, and that file is missing.`);
+      }
       continue;
     }
     const resolved = bases.some((base) => existsSync(resolve(base, relativeTo)));

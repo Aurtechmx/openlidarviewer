@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0a0e1a" />
-  <title>Data sources & credits — OpenLiDARViewer</title>
+  <title>Data sources & credits, OpenLiDARViewer</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -39,7 +39,7 @@
     <h1>Data sources &amp; credits</h1>
     <p>
       OpenLiDARViewer streams its sample datasets directly from public,
-      openly-hosted buckets — we don't host or own them. A genuine thank-you to
+      openly-hosted buckets, and we don't host or own them. A genuine thank-you to
       everyone who publishes LiDAR openly, and to the open-source projects that
       keep moving this field forward; it's what makes a free, in-browser viewer
       like this possible. Credit and thanks go to the providers below. To
@@ -96,13 +96,32 @@
     <p>With particular thanks to <strong>Howard Butler</strong> and <strong>Hobu, Inc.</strong>, and the wider PDAL / COPC community.</p>
 
     <h2>Built with</h2>
-    <p>The viewer itself is built on open-source work we're grateful for:</p>
+    <p>
+      This is an open-source project, and a research one. None of it would exist
+      without people who gave their work away so that others could go and measure
+      something with it. Every library below ships inside the viewer you are
+      using right now.
+    </p>
     <ul>
-      <li><strong>three.js</strong> — the WebGPU/WebGL rendering engine</li>
-      <li><strong>loaders.gl</strong> — glTF / LAS / OBJ / PLY parsing</li>
-      <li><strong>proj4js</strong> — coordinate-system transforms</li>
-      <li><strong>pdf-lib</strong> — the PDF reports</li>
+      <li><strong>three.js</strong>, the WebGPU and WebGL rendering engine (MIT)</li>
+      <li><strong>loaders.gl</strong>, glTF, LAS, OBJ and PLY parsing (MIT)</li>
+      <li><strong>proj4js</strong>, coordinate-system transforms (MIT)</li>
+      <li><strong>pdf-lib</strong>, the PDF reports (MIT)</li>
+      <li><strong>laz-perf</strong>, the in-browser LAZ decoder (Apache-2.0)</li>
     </ul>
+    <p>
+      The type is open too, and the people who drew it belong here as much as
+      anyone: <strong>Inter</strong> by Rasmus Andersson, <strong>Manrope</strong>
+      by Mikhail Sharanda, and <strong>JetBrains Mono</strong> by the JetBrains
+      Mono authors. All three are under the SIL Open Font License.
+    </p>
+    <p class="note">
+      Full licence texts and copyright lines for everything above now ship with
+      the app, in <a href="THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.
+      If we have credited you wrongly, or missed you, write to
+      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a> and we will put it
+      right.
+    </p>
 
     <footer>OpenLiDARViewer · <a href="https://github.com/aurtechmx/openlidarviewer">GitHub</a> · <a href="https://hobu.co">Hobu</a></footer>
   </main>
