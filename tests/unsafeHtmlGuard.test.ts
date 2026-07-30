@@ -98,7 +98,11 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/MeasurePanel.ts::svg + overlay',
   // The profile row's expand-to-focus control: `ICON_EXPAND`, a module-level
   // literal SVG string from `dockIcons.svg()`, same house style as the dock.
-  'src/ui/MeasurePanel.ts::ICON_EXPAND',
+  'src/ui/MeasurePanel.ts::ICON_EXPAND}<span>',
+  // The decorative corner glyph on the chart wrapper. Distinct from the entry
+  // above, which is the named button in the stretch strip: the glyph carries no
+  // text after the icon, the button appends its own label.
+  'src/ui/MeasurePanel.ts::ICON_EXPAND,',
   'src/ui/Stage.ts::olv-capture-chip-icon',
   // v0.4.6 icon-system pass (hand-verified 2026-06-14). Every entry below
   // injects a module-level literal SVG icon string; any accompanying label is

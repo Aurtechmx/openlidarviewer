@@ -3940,6 +3940,38 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Always-visible badge in the corner the eye lands on — the pill fill and
    border are what make it discoverable (the icon it replaces was
    transparent until hovered). The wrap owns the click, so the badge is inert. */
+/* The named way into the focus view. It sits at the end of the vertical-stretch
+   strip because that row is already where a reader adjusts how the profile is
+   drawn, and because the chart's own corners are taken: the top-right glyph is
+   decorative and the bottom-right is the native resize grip. Auto margin pushes
+   it away from the stretch chips so the two groups do not read as one set. */
+.olv-mp-chart-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-left: auto;
+  padding: 2px var(--space-xs);
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-chart-expand-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+.olv-mp-chart-expand-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+.olv-mp-chart-expand-btn svg { width: 13px; height: 13px; }
+
 .olv-mp-chart-expand {
   position: absolute; top: 6px; right: 6px;
   display: inline-flex; align-items: center; justify-content: center;
