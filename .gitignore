@@ -142,3 +142,20 @@ _private/
 # inside a source archive, which fails archive portability verification.
 .agents/
 skills-lock.json
+
+# Editor and agent working directories. These were excluded through
+# .git/info/exclude, which is local to one clone: it is not committed, does not
+# survive a fresh clone, and protects nobody else. `.claude/launch.json` was
+# committed once before that exclusion existed, and the agent scaffolding above
+# reached the repository the same way, through `git add -A` on a tree nothing
+# was ignoring. Listing them here makes the protection travel with the code.
+.claude/
+.vscode/
+.idea/
+
+# Python bytecode. scripts/__pycache__/make-ept-fixture.cpython-311.pyc was
+# tracked, so every run of the fixture generator showed up as a change to a
+# compiled artifact nobody reads. It also pins one interpreter version into a
+# tree that states 3.11 in .python-version and checks it in CI.
+__pycache__/
+*.py[cod]
