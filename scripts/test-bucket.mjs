@@ -38,8 +38,14 @@ const TESTS_DIR = resolve(ROOT, 'tests');
 // and buffer/worker decode tests spin up a WASM decoder and are the ones that
 // get starved (and time out) under the parallel `unit` bucket, so they belong
 // here where the runner caps parallelism and raises the timeout.
-const SLOW =
-  /^(?:torture|benchmark|parse|loadLas|loadLaz|laszip)|(?:integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload|wasm|decode|packaging)/i;
+// Two rules, not one pattern. The first list matches a file name's opening
+// word, the second matches anywhere in it. Written as a single regex the `^`
+// bound to the first alternative only, which reads as a mistake whether or not
+// it is one, and both scanners flag it as one.
+const SLOW_PREFIX = /^(?:torture|benchmark|parse|loadLas|loadLaz|laszip)/i;
+const SLOW_ANYWHERE =
+  /integration|streaming|copc|ept|laz|octree|voxelDownsample|convertRoundTrip|convertBatch|moduleApi|preload|wasm|decode|packaging/i;
+const isSlow = (name) => SLOW_PREFIX.test(name) || SLOW_ANYWHERE.test(name);
 // The terrain-analysis pipeline.
 const TERRAIN = /^(analyse|analysis|contour|cell|ground|dem|hillshade|slope|calibrat|confidence|coverage|crs|datum|evidence|interval|civilProfile|profile|surface|quality|terrain|raster|gpuDeriv|scatter|aspect|canopy|dsm|dtm|seam|provenance|metricVersion|score|assessment|readiness|whyNot|recommend)/i;
 // The interface layer.
@@ -57,7 +63,7 @@ function bucketOf(name) {
     const routed = NESTED_TEST_DIRS[name.slice(0, slash)];
     if (routed) return routed;
   }
-  if (SLOW.test(name)) return 'slow';
+  if (isSlow(name)) return 'slow';
   if (TERRAIN.test(name)) return 'terrain';
   if (UI.test(name)) return 'ui';
   if (EXPORT.test(name)) return 'export';
@@ -73,7 +79,7 @@ const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 //     to no bucket at all, so the release gate would run every bucket green
 //     while never executing it;
 //   - without the explicit bucket, `tests/benchmark/*` matched `slow` only
-//     because the SLOW regex starts with `^benchmark` (written for the old
+//     because SLOW_PREFIX starts with `benchmark` (written for the old
 //     top-level benchmark.test.ts). Those files run in ~50 ms and belong in
 //     `unit`; routing them by accident would also change silently the next time
 //     a bucket regex is edited.
