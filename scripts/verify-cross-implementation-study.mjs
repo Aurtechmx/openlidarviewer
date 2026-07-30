@@ -5,6 +5,7 @@
  *
  *   node scripts/verify-cross-implementation-study.mjs
  *   node scripts/verify-cross-implementation-study.mjs --studies <dir> --artifact-root <dir>
+ *   node scripts/verify-cross-implementation-study.mjs --dataset-register <path>
  *
  * WHY THIS EXISTS. `REFERENCE_SLOTS` in src/validation/crossCheck.ts carries one
  * reference comparison per claim. Three claims are at E4 on the strength of one
@@ -41,6 +42,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export const STUDIES_DIR = 'validation/cross-implementation/studies';
 export const SCHEMA_PATH = 'validation/cross-implementation/manifest.schema.json';
 export const CLAIM_REGISTER_PATH = 'docs/validation/claim-register.yaml';
+
+/**
+ * The register R2 checks membership against by default. It is a default and not
+ * a fixed read: see `readDatasetIds` for why the path is an argument.
+ */
 export const DATASET_REGISTER_PATH = 'validation/datasets/dataset-register.yaml';
 
 /**
@@ -94,11 +100,9 @@ export const SCOPE_CLAIMABLE_STATUSES = new Set(['agree', 'partial']);
  * A dataset id is an identifier, not a sentence. Uppercase, digit and dot
  * segments joined by hyphens, at least two segments.
  *
- * TODO(dataset-register): validation/datasets/dataset-register.yaml does not
- * exist in this branch yet. Until it does, this checks the SHAPE of the field
- * only, which rejects free prose but cannot reject a well-shaped id nobody
- * registered. When the register lands, `readDatasetIds` starts returning a set
- * and membership is enforced by the R2 branch below; nothing else changes.
+ * This is the weaker half of R2 and it does not need a register: it rejects free
+ * prose, but cannot reject a well-shaped id nobody registered. Membership is the
+ * stronger half, and the R2 branch below applies it whenever a register was read.
  */
 export const DATASET_ID_PATTERN = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$/;
 
@@ -177,9 +181,18 @@ export function parseClaimIds(yamlText) {
   return ids;
 }
 
-/** Dataset ids, or null when no register exists yet (see the R2 TODO above). */
-export function readDatasetIds(read) {
-  const text = read(DATASET_REGISTER_PATH);
+/**
+ * Dataset ids from the register at `registerPath`, or null when that file is not
+ * there, which leaves R2 checking id shape only.
+ *
+ * WHY THE PATH IS AN ARGUMENT. This used to read the module constant directly. A
+ * verifier that reads ambient state cannot be tested for both of its behaviours:
+ * whichever mode the tree happened to be in was the only mode a test could
+ * reach, so the register landing silently changed what the suite was asserting.
+ * Callers name the register they mean, and both modes are reachable on purpose.
+ */
+export function readDatasetIds(read, registerPath = DATASET_REGISTER_PATH) {
+  const text = read(registerPath);
   if (text == null) return null;
   const ids = new Set();
   for (const raw of text.split('\n')) {
@@ -303,7 +316,9 @@ function validateAgainstSchema(value, schema, root, path, errors) {
  *   file            its path, for messages
  *   schema          the parsed manifest schema
  *   claimIds        Set of ids read from the claim register
- *   datasetIds      Set of registered dataset ids, or null when none exists yet
+ *   datasetIds      Set of registered dataset ids, or null when no register was
+ *                   supplied, which leaves R2 checking id shape only
+ *   datasetRegisterPath  the register the ids came from, for messages
  *   readArtifact    (repoRelativePath) => Buffer | null
  *   artifactRoot    absolute root the artifact paths are resolved against
  *
@@ -311,7 +326,10 @@ function validateAgainstSchema(value, schema, root, path, errors) {
  * is stable so tests can assert which rule fired, not merely that one did.
  */
 export function collectStudyProblems(ctx) {
-  const { manifest: m, file, schema, claimIds, datasetIds, readArtifact, artifactRoot } = ctx;
+  const {
+    manifest: m, file, schema, claimIds, datasetIds, readArtifact, artifactRoot,
+    datasetRegisterPath = DATASET_REGISTER_PATH,
+  } = ctx;
   const problems = [];
   const add = (rule, message) => problems.push({ rule, message: `${file}: ${message}` });
 
@@ -340,7 +358,7 @@ export function collectStudyProblems(ctx) {
     if (!DATASET_ID_PATTERN.test(d.datasetId)) {
       add('R2-DATASET-ID', `datasetId ${JSON.stringify(d.datasetId)} is free text, not a registered identifier (expected ${DATASET_ID_PATTERN}).`);
     } else if (datasetIds && !datasetIds.has(d.datasetId)) {
-      add('R2-DATASET-ID', `datasetId "${d.datasetId}" is not in ${DATASET_REGISTER_PATH}.`);
+      add('R2-DATASET-ID', `datasetId "${d.datasetId}" is not in ${datasetRegisterPath}.`);
     }
   }
   const datasetIdSet = new Set(m.datasets.map((d) => d.datasetId));
@@ -523,6 +541,9 @@ export function verifyStudies(opts = {}) {
   const studiesDir = resolve(opts.studiesDir ?? join(root, STUDIES_DIR));
   const artifactRoot = resolve(opts.artifactRoot ?? root);
   const registerPath = resolve(opts.registerPath ?? join(ROOT, CLAIM_REGISTER_PATH));
+  // Kept unresolved so messages name what the caller asked for, and so the
+  // default reads as the repo-relative path it always did.
+  const datasetRegisterPath = opts.datasetRegisterPath ?? DATASET_REGISTER_PATH;
   const read = (rel) => {
     const p = resolve(ROOT, rel);
     return existsSync(p) ? readFileSync(p, 'utf8') : null;
@@ -534,13 +555,14 @@ export function verifyStudies(opts = {}) {
 
   const schema = JSON.parse(readFileSync(resolve(ROOT, SCHEMA_PATH), 'utf8'));
   const claimIds = parseClaimIds(readFileSync(registerPath, 'utf8'));
-  const datasetIds = readDatasetIds(read);
+  const datasetIds = readDatasetIds(read, datasetRegisterPath);
 
   const loaded = loadStudies(studiesDir);
   const seenIds = new Map();
   const studies = loaded.map(({ name, manifest }) => {
     const problems = collectStudyProblems({
       manifest, file: name, schema, claimIds, datasetIds, readArtifact, artifactRoot,
+      datasetRegisterPath,
     });
     const id = manifest?.studyId;
     if (typeof id === 'string') {
@@ -554,6 +576,7 @@ export function verifyStudies(opts = {}) {
   return {
     studiesDir,
     artifactRoot,
+    datasetRegisterPath,
     datasetRegisterPresent: datasetIds !== null,
     studies,
     problems: studies.flatMap((s) => s.problems),
@@ -575,10 +598,11 @@ if (isMain()) {
   const studiesDir = opt('--studies');
   const artifactRoot = opt('--artifact-root');
   const registerPath = opt('--register');
+  const datasetRegisterPath = opt('--dataset-register');
 
   let out;
   try {
-    out = verifyStudies({ studiesDir, artifactRoot, registerPath });
+    out = verifyStudies({ studiesDir, artifactRoot, registerPath, datasetRegisterPath });
   } catch (err) {
     console.error(`verify:cross-implementation-study cannot read its inputs: ${err.message}`);
     process.exit(2);
@@ -597,7 +621,8 @@ if (isMain()) {
   const tally = [...byStatus.entries()].sort().map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
   console.log(
     `verify:cross-implementation-study OK — ${out.studies.length} manifest(s) in ${out.studiesDir} ` +
-      `(${tally}); dataset register ${out.datasetRegisterPresent ? 'present, membership enforced' : 'absent, dataset id shape only'}. ` +
+      `(${tally}); dataset register ${out.datasetRegisterPath} ` +
+      `${out.datasetRegisterPresent ? 'present, membership enforced' : 'absent, dataset id shape only'}. ` +
       'No claim is promoted by this check.',
   );
   process.exit(0);

@@ -6,6 +6,9 @@
  *   node scripts/build-cross-implementation-summary.mjs          write the summary
  *   node scripts/build-cross-implementation-summary.mjs --check  fail if it is stale
  *
+ * Accepts --studies, --artifact-root, --register and --dataset-register and
+ * passes them to the verification step unchanged.
+ *
  * Every number in validation/cross-implementation/summary.json comes from here.
  * Two properties matter more than the arithmetic:
  *
@@ -176,6 +179,10 @@ if (isMain()) {
       studiesDir: opt('--studies'),
       artifactRoot: opt('--artifact-root'),
       registerPath: opt('--register'),
+      // Forwarded so a caller can name the dataset register the verification
+      // step checks membership against, rather than inheriting whatever the tree
+      // happens to hold. No summary number depends on it.
+      datasetRegisterPath: opt('--dataset-register'),
     });
   } catch (err) {
     console.error(`build:cross-implementation-summary cannot read the manifests: ${err.message}`);

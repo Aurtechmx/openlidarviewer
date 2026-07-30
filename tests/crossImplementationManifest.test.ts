@@ -10,6 +10,14 @@
  *
  * The verifier runs as a child process so the exit code the release gate would
  * see is the exit code this suite observes.
+ *
+ * EVERY CASE NAMES ITS OWN DATASET REGISTER, via --dataset-register: either a
+ * temp file it wrote, or a path that deliberately does not exist. R2 has two
+ * behaviours, shape-only and membership, and which one applies used to depend on
+ * whether the repository happened to contain a register. That made the mode
+ * ambient: these cases were written under shape-only and silently changed
+ * meaning when the register landed. Naming the register keeps each case a
+ * function of its arguments, and lets both modes be covered on purpose.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,8 +28,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { protocolDigestOf, STUDY_STATUSES } from '../scripts/verify-cross-implementation-study.mjs';
+import { protocolDigestOf, STUDY_STATUSES, readDatasetIds, DATASET_REGISTER_PATH } from '../scripts/verify-cross-implementation-study.mjs';
 import { REFERENCE_SLOTS, allReferencesPending } from '../src/validation/crossCheck';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,6 +61,24 @@ function rules(out: string): string[] {
     if (!found.includes(m[1])) found.push(m[1]);
   }
   return found;
+}
+
+/**
+ * A path under `dir` that is never created: the "no register supplied" mode,
+ * stated rather than inherited from whatever the tree holds.
+ */
+function absentRegister(dir: string): string {
+  return join(dir, 'no-dataset-register.yaml');
+}
+
+/**
+ * A minimal register listing exactly `ids`. The verifier reads this file
+ * line-wise, so the two keys it looks for are all it needs.
+ */
+function writeRegister(dir: string, ids: string[]): string {
+  const path = join(dir, 'dataset-register.yaml');
+  writeFileSync(path, `schemaVersion: 1\ndatasets:\n${ids.map((id) => `  - datasetId: ${id}\n`).join('')}`);
+  return path;
 }
 
 /**
@@ -144,10 +171,22 @@ function makeStudy(): { dir: string; manifest: Json } {
   return { dir, manifest };
 }
 
-/** Write the manifest and verify it, reporting the literal exit code. */
-function verify(dir: string, manifest: Json): { code: number; out: string } {
+/**
+ * Write the manifest and verify it, reporting the literal exit code. The dataset
+ * register defaults to one that does not exist, so a case says nothing about
+ * membership unless it supplies a register itself.
+ */
+function verify(
+  dir: string,
+  manifest: Json,
+  datasetRegister: string = absentRegister(dir),
+): { code: number; out: string } {
   writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  return run(VERIFIER, ['--studies', dir, '--artifact-root', dir]);
+  return run(VERIFIER, [
+    '--studies', dir,
+    '--artifact-root', dir,
+    '--dataset-register', datasetRegister,
+  ]);
 }
 
 /** Re-freeze the protocol digest, for cases that legitimately change metrics. */
@@ -157,19 +196,42 @@ function refreeze(manifest: Json): Json {
 }
 
 describe('the study verifier accepts a record that holds together', () => {
-  it('verifies the base fixture, exit 0', () => {
+  it('verifies the base fixture with no register supplied, exit 0', () => {
     const { dir, manifest } = makeStudy();
     try {
       const r = verify(dir, manifest);
       expect(r.out).toContain('verify:cross-implementation-study OK');
+      expect(r.out).toContain('dataset id shape only');
       expect(r.code).toBe(0);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('verifies the committed example manifest on the real tree, exit 0', () => {
-    const r = run(VERIFIER, []);
+  it('verifies the base fixture against a register that lists its dataset, exit 0', () => {
+    const { dir, manifest } = makeStudy();
+    try {
+      const r = verify(dir, manifest, writeRegister(dir, ['TEST-DEM-A']));
+      expect(r.out).toContain('membership enforced');
+      expect(r.code).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('verifies the committed example manifest, exit 0', () => {
+    // Shape-only on purpose. What this case is for is that the committed record
+    // is internally consistent: digests, status, scope and dataset-id shape.
+    // Membership of the committed manifests against the committed register is a
+    // different question, and the answer is whatever the default CLI run in the
+    // release gate reports; asserting it from here would put this suite's result
+    // back at the mercy of the tree.
+    const studies = join(ROOT, 'validation/cross-implementation/studies');
+    const r = run(VERIFIER, [
+      '--studies', studies,
+      '--dataset-register', join(ROOT, 'no-such-dataset-register.yaml'),
+    ]);
+    expect(r.out).toContain('verify:cross-implementation-study OK');
     expect(r.code).toBe(0);
     const example = JSON.parse(
       readFileSync(
@@ -190,11 +252,12 @@ describe('the study verifier rejects', () => {
   const bend = (
     mutate: (m: Json) => void,
     expected: string,
+    register?: (dir: string) => string,
   ): { code: number; out: string; ruleIds: string[] } => {
     const { dir, manifest } = makeStudy();
     try {
       mutate(manifest);
-      const r = verify(dir, manifest);
+      const r = verify(dir, manifest, register ? register(dir) : undefined);
       expect(r.code).toBe(1);
       expect(rules(r.out)).toContain(expected);
       return { ...r, ruleIds: rules(r.out) };
@@ -212,7 +275,7 @@ describe('the study verifier rejects', () => {
     expect(r.ruleIds).toEqual(['R1-CLAIM-UNKNOWN']);
   });
 
-  it('2. a datasetId that is free text rather than a registered id', () => {
+  it('2. a datasetId that is free text, with no register supplied', () => {
     const r = bend((m) => {
       m.datasets = [{ datasetId: 'the frozen analytic DEM we used', description: 'prose, not an id' }];
       (m.scope as { supported: unknown[] }).supported = [];
@@ -223,6 +286,26 @@ describe('the study verifier rejects', () => {
       refreeze(m);
     }, 'R2-DATASET-ID');
     expect(r.out).toContain('free text');
+    expect(r.ruleIds).toEqual(['R2-DATASET-ID']);
+  });
+
+  it('2b. a well-shaped datasetId the supplied register does not list', () => {
+    // The half of R2 the shape check cannot reach: TEST-DEM-A is a perfectly
+    // formed id, and the register below lists a different dataset.
+    const r = bend(
+      (m) => {
+        (m.scope as { supported: unknown[] }).supported = [];
+        m.status = 'inconclusive';
+        m.statusReason = 'Kept off the agreement path so only the dataset rule fires.';
+        delete m.result;
+        m.derivedArtifacts = [];
+        refreeze(m);
+      },
+      'R2-DATASET-ID',
+      (dir) => writeRegister(dir, ['TEST-DEM-B']),
+    );
+    expect(r.out).toContain('"TEST-DEM-A" is not in');
+    expect(r.out).toContain('dataset-register.yaml');
     expect(r.ruleIds).toEqual(['R2-DATASET-ID']);
   });
 
@@ -354,16 +437,13 @@ describe('the study verifier rejects', () => {
   });
 });
 
-describe('the dataset-register shape check is present and marked as provisional', () => {
-  // Rule 2 can only check the SHAPE of a datasetId until
-  // validation/datasets/dataset-register.yaml exists. This asserts the shape
-  // check and its TODO are both in the source, so the provisional state cannot
-  // be quietly forgotten or quietly dropped.
+describe('R2 has two modes and reports which one it applied', () => {
   const source = readFileSync(VERIFIER, 'utf8');
 
-  it('names the register it will check membership against', () => {
+  it('defaults to the repository register without reading it as ambient state', () => {
     expect(source).toContain('validation/datasets/dataset-register.yaml');
-    expect(source).toContain('TODO(dataset-register)');
+    // The default lives in a parameter, so a caller can name another register.
+    expect(source).toMatch(/readDatasetIds\([^)]*registerPath\s*=\s*DATASET_REGISTER_PATH\)/);
   });
 
   it('carries an id-shape pattern and enforces it', () => {
@@ -372,10 +452,49 @@ describe('the dataset-register shape check is present and marked as provisional'
     expect(source).toContain('DATASET_ID_PATTERN.test');
   });
 
-  it('reports that membership is unenforced while the register is absent', () => {
-    const r = run(VERIFIER, []);
-    expect(r.code).toBe(0);
-    expect(r.out).toContain('dataset id shape only');
+  it('reads the register a caller names, and the default one otherwise', () => {
+    // Directly on the exported function, with no tree involved: the path it
+    // consults is an argument, and null is how it says "shape only".
+    const asked: string[] = [];
+    const read = (path: string): string | null => {
+      asked.push(path);
+      return path === 'given/register.yaml' ? 'datasets:\n  - datasetId: OLV-DS-999-GIVEN\n' : null;
+    };
+
+    expect(readDatasetIds(read, 'given/register.yaml')).toEqual(new Set(['OLV-DS-999-GIVEN']));
+    expect(readDatasetIds(read, 'other/register.yaml')).toBeNull();
+    readDatasetIds(read);
+
+    expect(asked).toEqual(['given/register.yaml', 'other/register.yaml', DATASET_REGISTER_PATH]);
+    expect(DATASET_REGISTER_PATH).toBe('validation/datasets/dataset-register.yaml');
+  });
+
+  it('reports that membership is unenforced when the named register is not there', () => {
+    const { dir, manifest } = makeStudy();
+    try {
+      // An explicitly absent path, not the repository's state. This case is
+      // about the unenforced mode, and it has to keep testing that whether or
+      // not a register is committed to the tree.
+      const r = verify(dir, manifest, absentRegister(dir));
+      expect(r.code).toBe(0);
+      expect(r.out).toContain('dataset id shape only');
+      expect(r.out).not.toContain('membership enforced');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reports membership enforced when a register is supplied', () => {
+    const { dir, manifest } = makeStudy();
+    try {
+      const register = writeRegister(dir, ['TEST-DEM-A']);
+      const r = verify(dir, manifest, register);
+      expect(r.code).toBe(0);
+      expect(r.out).toContain('membership enforced');
+      expect(r.out).toContain(register);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
@@ -391,7 +510,10 @@ describe('the summary counts only what was measured', () => {
       writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
       const out = join(dir, 'summary.json');
-      const r = run(BUILDER, ['--studies', dir, '--artifact-root', dir, '--out', out]);
+      const r = run(BUILDER, [
+        '--studies', dir, '--artifact-root', dir, '--out', out,
+        '--dataset-register', absentRegister(dir),
+      ]);
       expect(r.code).toBe(0);
 
       const summary = JSON.parse(readFileSync(out, 'utf8')) as {
@@ -419,7 +541,11 @@ describe('the summary counts only what was measured', () => {
     try {
       writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       const out = join(dir, 'summary.json');
-      expect(run(BUILDER, ['--studies', dir, '--artifact-root', dir, '--out', out]).code).toBe(0);
+      const built = run(BUILDER, [
+        '--studies', dir, '--artifact-root', dir, '--out', out,
+        '--dataset-register', absentRegister(dir),
+      ]);
+      expect(built.code).toBe(0);
       const summary = JSON.parse(readFileSync(out, 'utf8')) as {
         countedStudies: number;
         byStatus: Record<string, number>;
@@ -438,7 +564,10 @@ describe('the summary counts only what was measured', () => {
     try {
       manifest.claimId = 'SLOPE-RASTER-V2';
       writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-      const r = run(BUILDER, ['--studies', dir, '--artifact-root', dir, '--out', join(dir, 'summary.json')]);
+      const r = run(BUILDER, [
+        '--studies', dir, '--artifact-root', dir, '--out', join(dir, 'summary.json'),
+        '--dataset-register', absentRegister(dir),
+      ]);
       expect(r.code).toBe(1);
       expect(r.out).toContain('the manifests do not verify');
     } finally {
@@ -447,7 +576,14 @@ describe('the summary counts only what was measured', () => {
   });
 
   it('keeps the committed summary current', () => {
-    const r = run(BUILDER, ['--check']);
+    // No summary number depends on the dataset register, so the staleness check
+    // is run in shape-only mode: it is about the arithmetic in summary.json
+    // matching the committed manifests, not about register membership.
+    const r = run(BUILDER, [
+      '--check',
+      '--dataset-register', join(ROOT, 'no-such-dataset-register.yaml'),
+    ]);
+    expect(r.out).toContain('is current');
     expect(r.code).toBe(0);
   });
 });
