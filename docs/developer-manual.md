@@ -98,7 +98,7 @@ a report.
 | `npm run dev`, `npm run build`, `npm run preview` | |
 | `npm run typecheck` | |
 | `npm run test:buckets:verify` | |
-| `npm run test:unit` | shard 1/3 is the one CI exercises; the other buckets use the same runner |
+| `npm run test:unit` | shard 1/3 is the one CI exercises; the other buckets use the same runner. Clone with full history, or the dataset-register and defect-chronology suites cannot resolve the commits their records name |
 | `npm run lint:position-access`, `lint:layer-boundaries`, `lint:main-deferral`, `lint:inline-imports`, `lint:unsafe-html`, `lint:no-host-paths` | |
 | `npm run test:smoke:widths` | the startup smoke spec at 320, 375, 767, 768 and 1440 px |
 
@@ -141,10 +141,11 @@ Reported here rather than papered over:
 - `npm run benchmark:clean-clone` and `npm run benchmark:archive-portability`
   call `tar`. Windows 10 and later ship bsdtar under that name, so they may
   work; nobody has checked.
-- There is no `text=auto` rule in `.gitattributes`, so `core.autocrlf=true`
-  gives you a CRLF working tree. Nothing in the gates is known to depend on
-  the line ending, but that is the configuration the checks above ran under
-  (a GitHub Windows runner defaults to `autocrlf=true`).
+- Line endings must stay LF. `.gitattributes` sets `* text=auto eol=lf`, so a
+  normal clone gives you LF whatever `core.autocrlf` says. If you defeat that,
+  vitest stops parsing the `scripts/*.mjs` modules the lint suites import
+  (`SyntaxError: Invalid or unexpected token`), and bash refuses `gate.sh` and
+  `package.sh` outright.
 
 ---
 
