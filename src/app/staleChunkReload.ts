@@ -50,6 +50,9 @@ export interface StorageLike {
 /** The narrow slice of an EventTarget this module touches — injectable. */
 export interface EventTargetLike {
   addEventListener(type: string, listener: (event: unknown) => void): void;
+  // Optional because the minimal shape a caller can pass is an adder; a target
+  // without a remover simply cannot be detached, and dispose stays a no-op.
+  removeEventListener?(type: string, listener: (event: unknown) => void): void;
 }
 
 /** Everything the recovery needs from the outside world — all defaulted. */
@@ -83,6 +86,17 @@ export interface StaleChunkRecovery {
    * ordinary rejection, rejects with the original error, untouched.
    */
   importOrReload<T>(loader: () => Promise<T>): Promise<T>;
+
+  /**
+   * Detach the `vite:preloadError` listener this installer registered.
+   *
+   * The other teardown paths in this codebase grew a disposer for the same
+   * reason: a listener that outlives the thing that wanted it keeps that
+   * closure, and its captured state, alive. Installing twice without this
+   * leaves two handlers, so a single stale chunk would attempt recovery twice.
+   * Safe to call more than once.
+   */
+  dispose(): void;
 }
 
 /** Pull `message` (or a nested `payload`) out of any thrown / event-carried value. */
@@ -226,6 +240,13 @@ export function installStaleChunkRecovery(
 
   eventTarget?.addEventListener('vite:preloadError', onPreloadError);
 
+  let disposed = false;
+  function dispose(): void {
+    if (disposed) return;
+    disposed = true;
+    eventTarget?.removeEventListener?.('vite:preloadError', onPreloadError);
+  }
+
   async function importOrReload<T>(loader: () => Promise<T>): Promise<T> {
     try {
       return await loader();
@@ -245,5 +266,5 @@ export function installStaleChunkRecovery(
     }
   }
 
-  return { importOrReload };
+  return { importOrReload, dispose };
 }
