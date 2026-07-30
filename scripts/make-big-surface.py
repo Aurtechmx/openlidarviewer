@@ -6,13 +6,22 @@ grid with sine-wave relief, varying intensity, and a few classification codes.
 Used to confirm the viewer renders a real multi-thousand-point cloud as a
 visible surface (not just the tiny bundled fixtures).
 
-Usage: python3 scripts/make-big-surface.py [out.las] [grid]
+Usage: python3 scripts/make-big-surface.py <out.las> [grid]
+
+The output path is required, with no default. A fixed name in a world-writable
+directory is a path any other account on the machine can create first, and the
+open() below follows a symlink planted there and writes through it. A fixed
+name also lets two runs overwrite each other silently.
 """
 import math
 import struct
 import sys
 
-out = sys.argv[1] if len(sys.argv) > 1 else "/tmp/big-surface.las"
+if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
+    print("usage: python3 scripts/make-big-surface.py <out.las> [grid]", file=sys.stderr)
+    raise SystemExit(2)
+
+out = sys.argv[1]
 grid = int(sys.argv[2]) if len(sys.argv) > 2 else 400  # grid x grid points
 
 SCALE = (0.001, 0.001, 0.001)

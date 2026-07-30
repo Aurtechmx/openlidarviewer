@@ -305,7 +305,7 @@ const check = (id, title, fn, opts = {}) => checks.push({ id, title, fn, ...opts
 const resolves = (c, target) => linkCandidates(target).some((p) => c.set.has(p) || existsSync(join(c.A, p)));
 
 function makeCtx(A) {
-  const files = listFiles(A).sort();
+  const files = listFiles(A).sort(compareCodeUnits);
   const set = new Set(files);
   const read = (p) => (set.has(p) ? readFileSync(join(A, p), 'utf8') : null);
   const pkg = JSON.parse(readFileSync(join(A, 'package.json'), 'utf8'));
@@ -444,7 +444,7 @@ check('no-internal-material', 'nothing internal or generated ships in the archiv
 check('no-dangling-references-to-excluded', 'nothing that ships references a file that does not', (c) => {
   const f = [];
   const tracked = git(['ls-files']).split('\n').filter(Boolean);
-  const excluded = tracked.filter((p) => !c.set.has(p)).sort();
+  const excluded = tracked.filter((p) => !c.set.has(p)).sort(compareCodeUnits);
   for (const md of c.markdown) {
     for (const { kind, target } of markdownTargets(c.read(md), md)) {
       if (resolves(c, target)) continue;
@@ -734,7 +734,7 @@ check('imports-declared', 'every package the archive imports is a declared depen
     }
     f.push({ level: 'warn', message: `runtime dependency "${name}" is declared but nothing in the archive imports it or reads it out of node_modules.` });
   }
-  return { findings: f, detail: { imported: [...used].sort(), readByPath: [...byPath].sort() } };
+  return { findings: f, detail: { imported: [...used].sort(compareCodeUnits), readByPath: [...byPath].sort(compareCodeUnits) } };
 });
 
 check('sbom-matches-manifest', 'the SBOM ships and covers the declared dependency set', (c) => {

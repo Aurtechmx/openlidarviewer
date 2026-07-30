@@ -105,7 +105,7 @@ export function evidenceReader(dir, index) {
 
 /** Write SHA256SUMS over every file in the directory except the manifest. */
 export function writeManifest(dir) {
-  const files = walk(dir, dir).filter((p) => p !== 'SHA256SUMS').sort();
+  const files = walk(dir, dir).filter((p) => p !== 'SHA256SUMS').sort(compareCodeUnits);
   const lines = files.map((p) => `${sha256(readFileSync(join(dir, p)))}  ${p}`);
   writeFileSync(join(dir, 'SHA256SUMS'), `${lines.join('\n')}\n`);
   return files.length;

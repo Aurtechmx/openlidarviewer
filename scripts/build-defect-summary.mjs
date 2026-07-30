@@ -170,8 +170,8 @@ const SUITE_LABEL = {
 /** Defect to evidence: what exposed each record, and what holds it fixed. */
 function mermaid() {
   const lines = ['```mermaid', 'flowchart LR'];
-  const mechanisms = [...new Set(defects.map((d) => d.detectingMechanism))].sort();
-  const files = [...new Set(defects.map((d) => d.regressionTest.file))].sort();
+  const mechanisms = [...new Set(defects.map((d) => d.detectingMechanism))].sort(compareCodeUnits);
+  const files = [...new Set(defects.map((d) => d.regressionTest.file))].sort(compareCodeUnits);
   const mId = (m) => `M_${m.replaceAll('-', '_')}`;
   const fId = (f) => `F_${f.replaceAll(/[^A-Za-z0-9]/g, '_')}`;
   for (const m of mechanisms) {

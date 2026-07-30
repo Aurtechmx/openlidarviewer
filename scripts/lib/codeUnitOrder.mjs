@@ -20,9 +20,11 @@
  * compares numbers as strings, is a real defect. This comparator does not
  * address it: it is for strings. Numeric arrays need `(a, b) => a - b`.
  *
- * The same reasoning is written out at the two TypeScript sites that predate
- * this module, `benchmarks/framework/artifacts.ts` and
- * `benchmarks/portability/compare.ts`.
+ * The TypeScript tree has its own copy of this comparator in
+ * `src/canonicalHash.ts`, exported as `compareCodeUnits`. The two are separate
+ * because a `.ts` module cannot import a `.mjs` script helper without pulling
+ * the scripts directory into the application build. They are three lines each
+ * and they must stay in agreement.
  */
 
 /** UTF-16 code-unit order. Locale-independent, so a committed order is stable. */
