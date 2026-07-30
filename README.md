@@ -531,15 +531,6 @@ terrain products, and how the browser workflow compares with ArcGIS, QGIS,
 CloudCompare or PDAL. It asks for the values you read in both tools, so have the
 reference open.
 
-Either one is worth sending on its own. Neither needs the other.
-
-[Submit a test report](https://lidar.aurtech.mx/test-report.html) is the general
-form, for anything the two above do not cover. It runs in your browser and
-builds one self-contained report file, screenshots included, which you read
-before anything is sent. Send it to the project server, or download it and email
-it yourself. Reports are kept privately for development and are not published or
-passed to any third party.
-
 ## Acknowledgements
 
 OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
