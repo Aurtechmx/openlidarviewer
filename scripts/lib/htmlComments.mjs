@@ -19,7 +19,60 @@
  *
  * An unterminated comment runs to the end of input, matching how a browser
  * treats it: everything after it is comment, not markup.
+ *
+ * `-->` is not the only terminator. The HTML tokenizer also closes a comment on
+ * `--!>`, and treats `<!-->` and `<!--->` as complete empty comments. Searching
+ * for `-->` alone finds no terminator in those three cases and marks the rest of
+ * the document as comment, which hides every later <script> and every later
+ * href from the checks built on this file. The end of a comment is therefore
+ * found by walking the tokenizer's comment states below.
  */
+
+/**
+ * Exclusive end offset of the comment whose `<!--` ends at `after`.
+ *
+ * State names follow the HTML Standard's comment states so the transitions can
+ * be read against the spec.
+ */
+function commentEnd(html, after) {
+  let state = 'start';
+  for (let i = after; i < html.length; i++) {
+    const ch = html[i];
+    switch (state) {
+      case 'start': // comment start: `>` here closes an empty comment
+        if (ch === '-') state = 'startDash';
+        else if (ch === '>') return i + 1;
+        else state = 'body';
+        break;
+      case 'startDash': // comment start dash: `>` here also closes
+        if (ch === '-') state = 'end';
+        else if (ch === '>') return i + 1;
+        else state = 'body';
+        break;
+      case 'body':
+        if (ch === '-') state = 'endDash';
+        break;
+      case 'endDash':
+        state = ch === '-' ? 'end' : 'body';
+        break;
+      case 'end':
+        if (ch === '>') return i + 1;
+        else if (ch === '!') state = 'endBang';
+        else if (ch === '-') state = 'end';
+        else state = 'body';
+        break;
+      case 'endBang': // reached on `--!`
+        if (ch === '>') return i + 1;
+        else if (ch === '-') state = 'endDash';
+        else state = 'body';
+        break;
+      /* c8 ignore next 2 */
+      default:
+        state = 'body';
+    }
+  }
+  return html.length;
+}
 
 /** Half-open [start, end) spans covering every comment in `html`. */
 export function commentRanges(html) {
@@ -28,13 +81,10 @@ export function commentRanges(html) {
   for (;;) {
     const open = html.indexOf('<!--', from);
     if (open === -1) break;
-    const close = html.indexOf('-->', open + 4);
-    if (close === -1) {
-      ranges.push([open, html.length]);
-      break;
-    }
-    ranges.push([open, close + 3]);
-    from = close + 3;
+    const end = commentEnd(html, open + 4);
+    ranges.push([open, end]);
+    if (end >= html.length) break;
+    from = end;
   }
   return ranges;
 }
