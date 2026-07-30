@@ -155,6 +155,83 @@ export function manifestInventoryPaths(text) {
   return [...out];
 }
 
+/**
+ * Every reference a markdown file makes, CLASSIFIED rather than filtered.
+ *
+ * `markdownTargets` above answers a narrower question and drops everything it
+ * cannot resolve to a path, which means an archive can be declared link-clean
+ * while nobody knows how many of its links were even looked at. This returns
+ * one record per reference so the caller can build a graph and state what it
+ * checked:
+ *
+ *   local     a repository-relative target, resolved against the extract;
+ *   external  a URI with a scheme, or protocol-relative, resolved by nobody
+ *             here because a deposit cannot vouch for another host;
+ *   deployed  a site-absolute path outside docs-site/, which addresses a
+ *             deployed URL and not a file in the archive;
+ *   anchor    a fragment inside the same document.
+ *
+ * Only `local` carries a target. The split matters because "every link
+ * resolves" over a set that silently excluded the externals is a weaker claim
+ * than it reads as, and the count is what makes the difference visible.
+ */
+export function classifyMarkdownReferences(text, fromRelPath) {
+  const dir = posix.dirname(fromRelPath);
+  const out = [];
+  const classify = (raw, via) => {
+    const t = raw.trim();
+    if (!t) return;
+    if (t.startsWith('#')) {
+      out.push({ via, raw: t, kind: 'anchor', target: null });
+      return;
+    }
+    if (t.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(t)) {
+      out.push({ via, raw: t, kind: 'external', target: null });
+      return;
+    }
+    let path = t.split('#')[0].split('?')[0];
+    if (!path) {
+      out.push({ via, raw: t, kind: 'anchor', target: null });
+      return;
+    }
+    let base = dir;
+    if (path.startsWith('/')) {
+      if (!fromRelPath.startsWith('docs-site/')) {
+        out.push({ via, raw: t, kind: 'deployed', target: null });
+        return;
+      }
+      base = 'docs-site';
+      path = path.slice(1);
+    }
+    out.push({ via, raw: t, kind: 'local', target: posix.normalize(posix.join(base, path)) });
+  };
+  for (const m of text.matchAll(/\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) classify(m[1], 'link');
+  for (const m of text.matchAll(/<!--\s*@include:\s*([^\s>]+?)\s*-->/g)) classify(m[1], 'include');
+  return out;
+}
+
+/**
+ * Root-level documents a text names as a path.
+ *
+ * The governing documents of the deposit sit at the archive root and are named
+ * in prose and in code spans far more often than they are linked: three shipped
+ * files tell a reader that CLAIMS_AND_LIMITATIONS.md is the canonical policy and
+ * not one of them wraps it in link syntax. A reference of that shape is still a
+ * promise the archive has to keep, so it is extracted here and required to
+ * resolve alongside the real links.
+ *
+ * A name preceded by a path separator, a word character, a dot or an @ is NOT a
+ * root-level reference: `docs/releases/RELEASE_NOTES_v0.6.0.md` names a document
+ * under docs/, and the root file of the same name is a different file.
+ */
+export function rootDocumentReferences(text) {
+  const out = new Set();
+  for (const m of text.matchAll(/(?<![\w./@-])([A-Z][A-Z0-9_]*(?:_v\d[\w.]*)?\.md)(?![\w])/g)) {
+    out.add(m[1]);
+  }
+  return [...out].sort();
+}
+
 // ── archive acquisition ──────────────────────────────────────────────────────
 
 function listFiles(root, base = root) {
@@ -451,6 +528,102 @@ check('doc-links-resolve', 'every relative link in shipping markdown resolves to
     }
   }
   return f;
+});
+
+/**
+ * The reference graph of everything that ships, against what the archive holds.
+ *
+ * `doc-links-resolve` above walks link syntax only, and it reports nothing about
+ * how much it skipped. That is how an export-ignore rule can delete a governing
+ * document while every check stays green: no shipped file LINKS to
+ * CLAIMS_AND_LIMITATIONS.md, they all name it as a path in prose or a code span,
+ * so the link walk never had an edge to follow and the prose scan in
+ * `no-dangling-references-to-excluded` only warns.
+ *
+ * This check builds the graph explicitly: nodes are the shipped markdown files
+ * plus every reference target they name, and each edge is classified. Local
+ * edges and root-document edges are REQUIRED and must resolve in the extract.
+ * External and deployed edges are counted and listed, never resolved, because
+ * this suite cannot vouch for another host and pretending otherwise would turn
+ * a network outage into a release failure.
+ *
+ * The root-document tier needs the repository, because only the tracked set
+ * distinguishes a document that was export-ignored out of the archive from a
+ * name that never existed. Without a repository that tier is recorded as
+ * unavailable rather than passed, and the local tier still runs.
+ *
+ * Both tiers carry a vacuity guard: a graph with no local edge, or a repository
+ * tier that found no tracked root document at all, means the extraction stopped
+ * matching and is reported as an error rather than as a clean run over nothing.
+ */
+check('markdown-link-graph', 'every required reference in the shipped markdown graph resolves in the extracted archive', (c) => {
+  const f = [];
+  const classes = { local: 0, external: 0, deployed: 0, anchor: 0 };
+  const via = { link: 0, include: 0 };
+  const localTargets = new Set();
+  const externalHosts = new Set();
+  const unresolved = [];
+  for (const md of c.markdown) {
+    for (const ref of classifyMarkdownReferences(c.read(md), md)) {
+      classes[ref.kind] += 1;
+      via[ref.via] += 1;
+      if (ref.kind === 'external') {
+        const host = /^([a-z][a-z0-9+.-]*):\/\/([^/]+)/i.exec(ref.raw);
+        externalHosts.add(host ? host[2].toLowerCase() : `${ref.raw.split(':')[0].toLowerCase()}:`);
+        continue;
+      }
+      if (ref.kind !== 'local') continue;
+      localTargets.add(ref.target);
+      if (resolves(c, ref.target)) continue;
+      unresolved.push({ from: md, via: ref.via, kind: 'local', target: ref.target });
+      f.push({ level: 'error', message: `${md}: required local ${ref.via} target ${ref.target} does not resolve in the extracted archive.` });
+    }
+  }
+  if (classes.local === 0) {
+    f.push({ level: 'error', message: 'the shipped markdown graph has no local reference at all; the extraction is no longer reading links.' });
+  }
+
+  let rootTier;
+  if (!hasRepo) {
+    rootTier = {
+      available: false,
+      reason: 'requires the repository to tell an export-ignored document from a name that never existed',
+    };
+  } else {
+    const tracked = new Set(git(['ls-files']).split('\n').filter(Boolean));
+    const referenced = new Set();
+    for (const md of c.markdown) {
+      for (const name of rootDocumentReferences(c.read(md))) {
+        // Untracked names are prose, not a promise: a document the repository
+        // never carried cannot have been export-ignored out of the archive.
+        if (!tracked.has(name)) continue;
+        referenced.add(name);
+        if (c.set.has(name)) continue;
+        unresolved.push({ from: md, via: 'named', kind: 'root-document', target: name });
+        f.push({ level: 'error', message: `${md} names the root document ${name}, which the repository tracks and the archive does not carry.` });
+      }
+    }
+    if (referenced.size === 0) {
+      f.push({ level: 'error', message: 'no shipped document names a tracked root-level document; the root-document tier verified nothing.' });
+    }
+    rootTier = { available: true, documents: [...referenced].sort() };
+  }
+
+  return {
+    findings: f,
+    detail: {
+      graph: {
+        markdownNodes: c.markdown.length,
+        localTargetNodes: localTargets.size,
+        archiveFiles: c.files.length,
+        edgesByClass: classes,
+        edgesBySyntax: via,
+        externalHosts: [...externalHosts].sort(),
+      },
+      rootDocuments: rootTier,
+      unresolved,
+    },
+  };
 });
 
 // ── 4. manifest accuracy, both directions ────────────────────────────────────

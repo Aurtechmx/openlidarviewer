@@ -47,6 +47,8 @@ jobs:
         run: npm run lint:claim-register
       - name: No source files git-ignored
         run: npm run lint:no-ignored-src
+      - name: No git-ignored path is tracked (local tooling committed by `git add -A`)
+        run: npm run lint:no-tracked-ignored
       - name: No tracked file names the build machine
         run: npm run lint:no-host-paths
       - name: Generated claim registry is committed (regenerate → no diff)
@@ -65,6 +67,46 @@ jobs:
         run: npm run lint:evidence
       - name: Dependency singletons (one copy of each critical package)
         run: npm run check:deps
+      # The gates below ran only inside the release gate (`npm run gate`, tags
+      # and manual dispatch only), so a pull request could not fail them. Each
+      # is cheap and catches a mistake a contributor makes in a pull request,
+      # which is why they belong here rather than only on a tag. Measured in
+      # this repository: the six lints are sub-second each, archive portability
+      # is 6 s. They sit after the tree-cleanliness checks above because
+      # archive portability writes its record into the gitignored release/.
+      - name: CSP lint (no inline script in a shipped page)
+        run: npm run lint:csp-html
+      - name: HTML asset lint (every local reference in a shipped page resolves)
+        run: npm run lint:html-assets
+      - name: Python version lint (.python-version and sonar agree)
+        run: npm run lint:python-version
+      - name: Upload-queue wiring lint (the streaming path still reaches the queue)
+        run: npm run lint:upload-queue-wired
+      - name: Claims-language lint (no comparative marketing claims in public docs)
+        run: npm run lint:claims-language
+      - name: Archive-vocab lint (shipped files stay in a product-facing voice)
+        run: npm run lint:archive-vocab
+      # 6 s measured, so it rides this job instead of paying npm ci and runner
+      # setup again in one of its own. Running only on a tag is how 22 files of
+      # `.agents/` plugin scaffolding merged through a green pull request and
+      # then failed a clean checkout of main with 18 unresolvable links.
+      - name: Archive portability (a release archive verifies with no repo around it)
+        run: npm run benchmark:archive-portability
+      # The PRESENCE leg only (0 s): every file the published scripts run is
+      # tracked. The expensive part of clean-clone.yml is its uncached `npm ci`
+      # against the registry, which this cannot and does not replicate; that
+      # leg stays weekly and on tags. Untracking a file an npm script invokes
+      # is a pull-request mistake, so the leg that catches it runs here.
+      - name: Clean-clone presence leg (every file the scripts run is tracked)
+        run: npm run benchmark:clean-clone
+      # docs.yml builds the site only on push to main, so a pull request that
+      # broke the docs build or published a forbidden document went green and
+      # failed after merging. 3 s measured. Placed after the claim-registry
+      # diff check above because docs:render rewrites a tracked file, and a
+      # drift here should be reported as a docs failure rather than as that
+      # step's diff.
+      - name: Docs site builds (renders the claim register, checks the allowlist)
+        run: npm run docs:build
       # Two DISTINCT size contracts, both enforced:
       #  • test:build  → PLAIN build + chunk-isolation (only vendor-three-webgpu
       #    may exceed the 500 KiB isolation threshold).
