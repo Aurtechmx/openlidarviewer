@@ -43,6 +43,10 @@
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$"
     },
+    "protocolRef": {
+      "description": "The frozen protocol this study runs under, in validation/protocols/. Required by rule R12 for any non-example manifest whose status asserts a measured outcome: protocolDigest alone is recomputed from the manifest, so it cannot witness a record rewritten whole, and a protocol record written before the study can. The verifier checks that the protocol exists, that its digest still matches, that it governs this claim, and that this manifest's metrics, datasets and parameter sets are the ones it admits.",
+      "$ref": "#/$defs/protocolRef"
+    },
     "candidate": { "$ref": "#/$defs/candidate" },
     "reference": { "$ref": "#/$defs/reference" },
     "datasets": {
@@ -98,6 +102,23 @@
     }
   },
   "$defs": {
+    "protocolRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocolId", "digest"],
+      "properties": {
+        "protocolId": {
+          "description": "The protocolId of a record in validation/protocols/, which is also its filename before .protocol.json.",
+          "type": "string",
+          "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+        },
+        "digest": {
+          "description": "The protocol record's own digest, as this study read it. Recomputed by the verifier from the record on disk, so a protocol edited after a study cited it stops matching.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
     "candidate": {
       "description": "The OpenLiDARViewer side of the comparison.",
       "type": "object",

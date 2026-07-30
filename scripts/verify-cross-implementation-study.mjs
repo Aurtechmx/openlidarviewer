@@ -29,19 +29,51 @@
  * protocol changed", which is the thing a reviewer can see. The independent
  * witness is the commit that first registered the study at `pending`.
  *
+ * `protocolRef` is the second half of that. It points at a record under
+ * validation/protocols/ written before the study ran, so the manifest has to
+ * agree with a file a result cannot reach back and adjust, and rule R12 requires
+ * one from any real manifest that asserts a measured outcome.
+ *
  * Exit 0 when every manifest verifies, 1 when any is rejected, 2 on a usage,
  * read or parse error.
  */
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, isAbsolute, sep } from 'node:path';
 
+import { binaryOnPath } from './lib/binaryOnPath.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * git, as an absolute path read from PATH rather than resolved by the OS.
+ *
+ * Null when it is not installed, which is an ordinary state here: an extracted
+ * archive has no repository and both callers below already return null in that
+ * case. Matching the spawn discipline the rest of scripts/ uses.
+ */
+const GIT = binaryOnPath('git');
 
 export const STUDIES_DIR = 'validation/cross-implementation/studies';
 export const SCHEMA_PATH = 'validation/cross-implementation/manifest.schema.json';
 export const CLAIM_REGISTER_PATH = 'docs/validation/claim-register.yaml';
+
+/**
+ * The frozen protocols a study manifest can point at, and their shape.
+ *
+ * WHY A SEPARATE FILE FROM THE MANIFEST. `protocolDigest` is recomputed from the
+ * manifest itself, so it detects an edit to one field but not a record rewritten
+ * whole — the rewriter recomputes that digest too. A protocol record lives
+ * outside the manifest and is written before the study runs, so the manifest has
+ * to agree with a second file that a result cannot reach back and adjust. To
+ * loosen a tolerance quietly you now have to edit the protocol, restamp its
+ * digest, restamp the manifest's protocolRef and restamp the manifest's own
+ * protocolDigest, and every one of those is a line in the diff.
+ */
+export const PROTOCOLS_DIR = 'validation/protocols';
+export const PROTOCOL_SCHEMA_PATH = 'validation/protocols/protocol.schema.json';
 
 /**
  * The register R2 checks membership against by default. It is a default and not
@@ -168,6 +200,16 @@ export function protocolDigestOf(manifest) {
 }
 
 /**
+ * A protocol record's own digest: over every field except the digest itself.
+ * Everything else is inside it on purpose, the tolerance most of all.
+ */
+export function protocolRecordDigestOf(record) {
+  const body = { ...record };
+  delete body.digest;
+  return `sha256:${sha256(canonicalJson(body))}`;
+}
+
+/**
  * The digest a derived artifact must carry: over the {path, sha256} pairs of the
  * raw artifacts it came from, in path order. `rawByPath` holds the digests the
  * verifier computed from the files on disk, not the ones the manifest claims, so
@@ -178,6 +220,26 @@ export function derivedInputsDigest(derivedFrom, rawByPath) {
     .sort(byCodeUnit)
     .map((path) => ({ path, sha256: rawByPath.get(path) ?? null }));
   return `sha256:${sha256(canonicalJson(pairs))}`;
+}
+
+/**
+ * A commit's author instant, or null when this clone cannot resolve it.
+ *
+ * Used only to order a freeze against its result when both fell on the same
+ * day. Returning null on a missing object means the caller falls back to the
+ * date comparison rather than passing on evidence it does not have.
+ */
+function commitInstant(sha) {
+  try {
+    if (GIT === null) return null;
+    return execFileSync(GIT, ['log', '-1', '--format=%aI', sha], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return null;
+  }
 }
 
 // ── registers ───────────────────────────────────────────────────────────────
@@ -323,6 +385,193 @@ function validateAgainstSchema(value, schema, root, path, errors) {
   }
 }
 
+// ── protocol rules ──────────────────────────────────────────────────────────
+
+/**
+ * Verify one protocol record. `ctx` supplies:
+ *   protocol   the parsed record
+ *   file       its filename, for messages
+ *   schema     the parsed protocol schema
+ *   claimIds   Set of ids read from the claim register
+ *
+ * Returns `[{ rule, message }]`; empty means the record verifies.
+ */
+export function collectProtocolProblems(ctx) {
+  const { protocol: p, file, schema, claimIds } = ctx;
+  // Injectable so the negative controls can drive P10 without inventing
+  // commits, and so a caller with no repository gets a stated no-op.
+  const resolveCommitDate = ctx.resolveCommitDate ?? commitDate;
+  const problems = [];
+  const add = (rule, message) => problems.push({ rule, message: `${file}: ${message}` });
+
+  const schemaErrors = [];
+  validateAgainstSchema(p, schema, schema, '$', schemaErrors);
+  for (const e of schemaErrors) add('P1-SCHEMA', e);
+  if (schemaErrors.length > 0) return problems;
+
+  // P2. The record's digest must describe the record on disk. This is what a
+  // study manifest repeats, so if it drifts the manifests that cite it drift.
+  const expected = protocolRecordDigestOf(p);
+  if (p.digest !== expected) {
+    add('P2-PROTOCOL-DIGEST', `digest does not describe this file (recorded ${p.digest}, recomputed ${expected}); a tolerance edited after a result is exactly what this catches.`);
+  }
+
+  // P3. An example is marked as one on both sides, like a manifest.
+  const prefixed = p.protocolId.startsWith('EXAMPLE-');
+  if (prefixed !== p.example) {
+    add('P3-EXAMPLE', `protocolId ${prefixed ? 'is' : 'is not'} prefixed EXAMPLE- but example is ${p.example}; a template must be unmistakable from either field alone.`);
+  }
+
+  const seenClaims = new Set();
+  for (const c of p.claims) {
+    if (!claimIds.has(c.claimId)) {
+      add('P4-CLAIM-UNKNOWN', `claims entry "${c.claimId}" is not in ${CLAIM_REGISTER_PATH}; a protocol cannot govern a claim nobody registered.`);
+    }
+    if (seenClaims.has(c.claimId)) {
+      add('P4-CLAIM-UNKNOWN', `claims lists "${c.claimId}" twice, so which metrics block governs it is undecided.`);
+    }
+    seenClaims.add(c.claimId);
+
+    // P5. A gate that passes everything is not a gate — the same rule the
+    // manifests are held to, applied where the number is actually frozen.
+    const frac = c.metrics.requiredWithinToleranceFraction;
+    if (!(frac > 0) || frac > 1) {
+      add('P5-METRICS', `claims entry "${c.claimId}" sets requiredWithinToleranceFraction ${frac}, which must be inside (0, 1]; 0 would call any comparison agreement.`);
+    }
+
+    // P6. A record cannot be written before the decision it records.
+    const f = c.freeze;
+    if (p.recordWrittenOn < f.on) {
+      add('P6-FREEZE-DATES', `claims entry "${c.claimId}": recordWrittenOn ${p.recordWrittenOn} is before its freeze date ${f.on}; a protocol cannot be written before the decision it records.`);
+    }
+
+    // ── P9. "Preregistered" has to mean what it says ────────────────────────
+    //
+    // This rule exists because the first version of this record got it wrong.
+    // It claimed one frozen date for three claims, and for ASPECT-RASTER that
+    // claim was false: the slot, its tolerance and its result all arrived in
+    // one commit, so no commit shows the tolerance while aspect had no result.
+    // A reviewer caught it by walking the history by hand. The check below is
+    // that walk, mechanised, so the next such statement fails instead of being
+    // believed.
+    const landed = f.resultLandedOn ?? null;
+    if ((f.resultCommit ?? null) !== null && landed === null) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" names a resultCommit but no resultLandedOn; the date is the half a reader can compare against the freeze.`);
+    }
+    // Dates alone cannot separate a freeze from a result on the same day, and a
+    // study registered in the morning and run in the afternoon is a real
+    // preregistration. Where both commits are known, the comparison moves to
+    // their timestamps, which is stricter than the date test, not looser: the
+    // ordering has to hold to the second rather than to the day.
+    // A freeze and its result can fall on the same day and still be ordered: a
+    // study registered in the morning and run after lunch is a preregistration.
+    // The record carries the two instants so that ordering is decidable from
+    // the record alone. It has to be: the witness commit is often unreachable
+    // from the default branch after a squash merge, and CI clones shallow, so a
+    // check that needs git to answer this question cannot answer it where it
+    // runs. P10 below still compares the stated instants against the commits
+    // wherever the history is available, so stating them is a claim, not an
+    // escape.
+    const sameDay = f.on === landed;
+    const statedOrder =
+      typeof f.atInstant === 'string' &&
+      typeof f.resultAtInstant === 'string' &&
+      Date.parse(f.atInstant) < Date.parse(f.resultAtInstant);
+    const sameDayOrdered = sameDay && statedOrder;
+    // Where there is no git at all, the ordering is unknown rather than wrong.
+    // An extracted archive has no repository and this verifier runs there, so
+    // failing a record because the evidence is out of reach would report a
+    // defect the same record does not have in a clone.
+    //
+    // The test is git's absence, NOT an unresolvable commit. Those are opposite
+    // situations: with git present, a commit that does not resolve is a witness
+    // that does not exist, which is a finding and not an excuse. Written the
+    // loose way first, and case 11d caught it.
+    // Only the record's own claim excuses a same-day freeze. If it does not
+    // state the instants, there is nothing to believe and P9 fires, which is
+    // what case 11d pins.
+    const sameDayUncheckable = false;
+    if (
+      f.status === 'preregistered' &&
+      landed !== null &&
+      !(f.on < landed) &&
+      !sameDayOrdered &&
+      !sameDayUncheckable
+    ) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was preregistered, but the freeze date ${f.on} does not precede the result date ${landed}. A tolerance fixed alongside its result is "adopted-with-result"; it may be defensible on the merits, and it is still not a preregistration.`);
+    }
+    for (const [field, sha] of [['atInstant', f.witnessCommit], ['resultAtInstant', f.resultCommit]]) {
+      if (typeof f[field] !== 'string' || (sha ?? null) === null) continue;
+      const actual = commitInstant(sha);
+      // Null means this checkout cannot see the commit, which is the ordinary
+      // state in CI and in an extracted archive. Silence there, a finding here.
+      if (actual !== null && Date.parse(actual) !== Date.parse(f[field])) {
+        add('P10-WITNESS-DATE', `claims entry "${c.claimId}" states ${field} ${f[field]}, but commit ${String(sha).slice(0, 8)} is dated ${actual}; an instant that does not belong to the commit offered for it is not evidence.`);
+      }
+    }
+    if (f.status === 'adopted-with-result' && landed !== null && (f.on < landed || sameDayOrdered)) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was adopted with the result, but the freeze date ${f.on} precedes the result date ${landed}; if the witness commit really shows the tolerance before the result, this claim is stronger than the record admits and should say "preregistered".`);
+    }
+
+    // ── P10. A date has to belong to the commit that witnesses it ───────────
+    const witnessDate = resolveCommitDate(f.witnessCommit);
+    if (witnessDate !== null && witnessDate !== f.on) {
+      add('P10-WITNESS-DATE', `claims entry "${c.claimId}" dates its freeze ${f.on}, but witnessCommit ${f.witnessCommit} is dated ${witnessDate}. A freeze date that does not belong to the commit offered as its witness is not evidence of anything.`);
+    }
+    if (landed !== null && (f.resultCommit ?? null) !== null) {
+      const resultDate = resolveCommitDate(f.resultCommit);
+      if (resultDate !== null && resultDate !== landed) {
+        add('P10-WITNESS-DATE', `claims entry "${c.claimId}" dates its result ${landed}, but resultCommit ${f.resultCommit} is dated ${resultDate}.`);
+      }
+    }
+  }
+
+  return problems;
+}
+
+/**
+ * The author date of `commit`, as YYYY-MM-DD, or null when it cannot be
+ * resolved here.
+ *
+ * WHY THIS IS A LOOKUP AND NOT A PROOF. P9 compares a record's own dates, so it
+ * catches a record that contradicts itself. It cannot catch a date that is
+ * simply wrong: writing an earlier freeze date than the truth satisfies every
+ * arithmetic check in this file. That is the shape the defect this rule exists
+ * for actually took. Pinning the date to the commit named as the witness closes
+ * the easy version of it: to back-date a freeze you must now also name a commit
+ * that carries that date, and a reviewer following the hash lands somewhere the
+ * tolerance is not.
+ *
+ * What remains uncovered, and is stated here rather than papered over: nothing
+ * mechanical reads the witness commit's CONTENT. Whether the tolerance really
+ * stands there with the claim unresolved is a human check, and the hash is what
+ * makes that check one git command instead of an archaeology exercise.
+ */
+export function commitDate(commit, cwd = ROOT) {
+  try {
+    if (GIT === null) return null;
+    const out = execFileSync(GIT, ['show', '-s', '--format=%ad', '--date=short', commit], {
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const date = out.trim().split('\n').pop()?.trim() ?? '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  } catch {
+    // No git, no repository, or an unknown commit. An extracted archive has no
+    // history, and this check is not a reason to fail there.
+    return null;
+  }
+}
+
+/** Read every *.protocol.json in `dir`, sorted by filename for determinism. */
+export function loadProtocols(dir) {
+  if (!existsSync(dir)) return [];
+  const names = readdirSync(dir).filter((f) => f.endsWith('.protocol.json')).sort(byCodeUnit);
+  return names.map((name) => {
+    const path = join(dir, name);
+    return { name, path, protocol: JSON.parse(readFileSync(path, 'utf8')) };
+  });
+}
+
 // ── the rules ───────────────────────────────────────────────────────────────
 
 /**
@@ -396,6 +645,52 @@ export function collectStudyProblems(ctx) {
   const expectedDigest = protocolDigestOf(m);
   if (m.protocolDigest !== expectedDigest) {
     add('R3-PROTOCOL-DIGEST', `metrics, datasets or parameter sets disagree with the frozen protocolDigest (recorded ${m.protocolDigest}, recomputed ${expectedDigest}); a tolerance edited after the result is exactly what this catches.`);
+  }
+
+  // ── R11 / R12. The manifest must agree with its frozen protocol ───────────
+  const protocols = ctx.protocols ?? new Map();
+  if (m.protocolRef) {
+    const entry = protocols.get(m.protocolRef.protocolId);
+    if (!entry) {
+      add('R11-PROTOCOL-REF', `protocolRef names protocol "${m.protocolRef.protocolId}", which is not a record under ${PROTOCOLS_DIR}; a study cannot cite a protocol nobody wrote.`);
+    } else {
+      const actual = protocolRecordDigestOf(entry.protocol);
+      if (m.protocolRef.digest !== actual) {
+        add('R11-PROTOCOL-REF', `protocolRef.digest ${m.protocolRef.digest} does not match protocol "${m.protocolRef.protocolId}", which now digests to ${actual}; the protocol changed under a study that had already cited it.`);
+      }
+      if (entry.protocol.example !== m.example) {
+        add('R11-PROTOCOL-REF', `example is ${m.example} but protocol "${m.protocolRef.protocolId}" is example ${entry.protocol.example}; a real study may not run under a template protocol, nor a template under a real one.`);
+      }
+      const governed = (entry.protocol.claims ?? []).find((c) => c.claimId === m.claimId);
+      if (!governed) {
+        add('R11-PROTOCOL-REF', `protocol "${m.protocolRef.protocolId}" governs ${(entry.protocol.claims ?? []).map((c) => c.claimId).join(', ') || 'no claim'}, not claimId "${m.claimId}".`);
+      } else {
+        // A measured outcome must be able to be compared against its freeze.
+        // Without the result date the protocol's freeze claim cannot be
+        // falsified from the record, and a freeze nobody can falsify is a
+        // sentence rather than a control.
+        if (RESULT_STATUSES.has(m.status) && !governed.freeze?.resultLandedOn) {
+          add('R11-PROTOCOL-REF', `status "${m.status}" asserts a measured outcome, but protocol "${m.protocolRef.protocolId}" records no resultLandedOn for ${m.claimId}; without it, whether the tolerance predates the result cannot be checked from these records.`);
+        }
+        if (canonicalJson(m.metrics) !== canonicalJson(governed.metrics)) {
+          add('R11-PROTOCOL-REF', `metrics ${canonicalJson(m.metrics)} disagree with the frozen protocol's metrics for ${m.claimId} ${canonicalJson(governed.metrics)}; the gate a study is judged by is decided in the protocol, not in the record of the result.`);
+        }
+        const admittedDatasets = new Set(governed.datasetIds);
+        for (const d of m.datasets) {
+          if (!admittedDatasets.has(d.datasetId)) {
+            add('R11-PROTOCOL-REF', `datasetId "${d.datasetId}" is not admitted by protocol "${m.protocolRef.protocolId}" for ${m.claimId}; a dataset added after the freeze is a different study.`);
+          }
+        }
+        const admittedParameterSets = new Set(governed.parameterSetIds);
+        for (const ps of m.parameterSets) {
+          if (!admittedParameterSets.has(ps.id)) {
+            add('R11-PROTOCOL-REF', `parameterSet "${ps.id}" is not admitted by protocol "${m.protocolRef.protocolId}" for ${m.claimId}; a parameter set added after the freeze is a different study.`);
+          }
+        }
+      }
+    }
+  } else if (!m.example && RESULT_STATUSES.has(m.status)) {
+    add('R12-PROTOCOL-MISSING', `status "${m.status}" asserts a measured outcome, so protocolRef is required; without a protocol frozen outside this record there is nothing the tolerance can be checked against.`);
   }
 
   // ── R4. The reference may not be our own output ───────────────────────────
@@ -554,6 +849,7 @@ export function loadStudies(dir) {
 export function verifyStudies(opts = {}) {
   const root = resolve(opts.root ?? ROOT);
   const studiesDir = resolve(opts.studiesDir ?? join(root, STUDIES_DIR));
+  const protocolsDir = resolve(opts.protocolsDir ?? join(root, PROTOCOLS_DIR));
   const artifactRoot = resolve(opts.artifactRoot ?? root);
   const registerPath = resolve(opts.registerPath ?? join(ROOT, CLAIM_REGISTER_PATH));
   // Kept unresolved so messages name what the caller asked for, and so the
@@ -569,15 +865,39 @@ export function verifyStudies(opts = {}) {
   };
 
   const schema = JSON.parse(readFileSync(resolve(ROOT, SCHEMA_PATH), 'utf8'));
+  const protocolSchema = JSON.parse(readFileSync(resolve(ROOT, PROTOCOL_SCHEMA_PATH), 'utf8'));
   const claimIds = parseClaimIds(readFileSync(registerPath, 'utf8'));
   const datasetIds = readDatasetIds(read, datasetRegisterPath);
+
+  // Protocols first: a manifest is checked against them, so a protocol that
+  // does not verify has to be visible before any manifest cites it.
+  const loadedProtocols = loadProtocols(protocolsDir);
+  const protocols = new Map();
+  const protocolProblems = [];
+  const seenProtocolIds = new Map();
+  for (const { name, protocol } of loadedProtocols) {
+    protocolProblems.push(...collectProtocolProblems({
+      protocol, file: name, schema: protocolSchema, claimIds, resolveCommitDate: opts.resolveCommitDate,
+    }));
+    const id = protocol?.protocolId;
+    if (typeof id !== 'string') continue;
+    if (seenProtocolIds.has(id)) {
+      protocolProblems.push({ rule: 'P7-DUPLICATE-PROTOCOL', message: `${name}: protocolId "${id}" is already used by ${seenProtocolIds.get(id)}.` });
+      continue;
+    }
+    seenProtocolIds.set(id, name);
+    if (`${id}.protocol.json` !== name) {
+      protocolProblems.push({ rule: 'P8-PROTOCOL-FILENAME', message: `${name}: protocolId "${id}" does not match the filename; a record must be findable from the id a manifest cites.` });
+    }
+    protocols.set(id, { name, protocol });
+  }
 
   const loaded = loadStudies(studiesDir);
   const seenIds = new Map();
   const studies = loaded.map(({ name, manifest }) => {
     const problems = collectStudyProblems({
       manifest, file: name, schema, claimIds, datasetIds, readArtifact, artifactRoot,
-      datasetRegisterPath,
+      datasetRegisterPath, protocols,
     });
     const id = manifest?.studyId;
     if (typeof id === 'string') {
@@ -590,11 +910,13 @@ export function verifyStudies(opts = {}) {
 
   return {
     studiesDir,
+    protocolsDir,
     artifactRoot,
     datasetRegisterPath,
     datasetRegisterPresent: datasetIds !== null,
+    protocols: loadedProtocols.map(({ name, protocol }) => ({ name, protocol })),
     studies,
-    problems: studies.flatMap((s) => s.problems),
+    problems: [...protocolProblems, ...studies.flatMap((s) => s.problems)],
   };
 }
 
@@ -611,13 +933,14 @@ if (isMain()) {
     return i >= 0 ? argv[i + 1] : undefined;
   };
   const studiesDir = opt('--studies');
+  const protocolsDir = opt('--protocols');
   const artifactRoot = opt('--artifact-root');
   const registerPath = opt('--register');
   const datasetRegisterPath = opt('--dataset-register');
 
   let out;
   try {
-    out = verifyStudies({ studiesDir, artifactRoot, registerPath, datasetRegisterPath });
+    out = verifyStudies({ studiesDir, protocolsDir, artifactRoot, registerPath, datasetRegisterPath });
   } catch (err) {
     console.error(`verify:cross-implementation-study cannot read its inputs: ${err.message}`);
     process.exit(2);
@@ -636,7 +959,8 @@ if (isMain()) {
   const tally = [...byStatus.entries()].sort((a, b) => byCodeUnit(a[0], b[0])).map(([k, v]) => `${k} ${v}`).join(', ') || 'none';
   console.log(
     `verify:cross-implementation-study OK — ${out.studies.length} manifest(s) in ${out.studiesDir} ` +
-      `(${tally}); dataset register ${out.datasetRegisterPath} ` +
+      `(${tally}); ${out.protocols.length} protocol(s) in ${out.protocolsDir}; ` +
+      `dataset register ${out.datasetRegisterPath} ` +
       `${out.datasetRegisterPresent ? 'present, membership enforced' : 'absent, dataset id shape only'}. ` +
       'No claim is promoted by this check.',
   );
