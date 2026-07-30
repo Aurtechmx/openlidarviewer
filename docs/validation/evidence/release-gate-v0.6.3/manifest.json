@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 2,
+  "kind": "release-validation-run",
+  "platformId": "darwin-arm64",
+  "commit": {
+    "status": "captured",
+    "value": "300cfbf82a65aaa9f352c4d782d571ef02fee4cd"
+  },
+  "startedAtUtc": "2026-07-30T22:17:20Z",
+  "completedAtUtc": "2026-07-30T22:22:00Z",
+  "command": "npm ci; npx tsc --noEmit; npm run -s test:release; npx playwright test tests/e2e/ --project=deterministic; npm run -s build",
+  "files": [
+    {
+      "path": "PROVENANCE.md",
+      "sha256": "5230c80c8d88003bd646dc022062485c567e7b26f0a40e44444eec07c40ca6d0",
+      "bytes": 2174
+    },
+    {
+      "path": "gate-logs/01-npm-ci.txt",
+      "sha256": "e57f4f711cc805ab82e347f1f55789e4d29a142dc91e3194f5e8e65888a73851",
+      "bytes": 176
+    },
+    {
+      "path": "gate-logs/02-tsc.txt",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "gate-logs/03-test-release.txt",
+      "sha256": "043bba54dc38b4be605e525863a6c90251c6532fcfa60791432ccfcd5150dbd9",
+      "bytes": 163012
+    },
+    {
+      "path": "gate-logs/04-playwright-e2e.txt",
+      "sha256": "2ffdffb414a377c0e075297c1ad6f9d435eda334b442b5c2b30c5c09b830a84d",
+      "bytes": 25620
+    },
+    {
+      "path": "gate-logs/05-build.txt",
+      "sha256": "094021de2c36eaea141d1336811e32e1b5cfcc69681d1bcf11475ba8f3fe3d88",
+      "bytes": 14901
+    },
+    {
+      "path": "gate-logs/runner.txt",
+      "sha256": "6df25393d2780a8ecbf9260868bf51104f968479b8b029ac676944d00501e4ac",
+      "bytes": 198
+    },
+    {
+      "path": "record.json",
+      "sha256": "cc2bfbcd54bc2e183d4e05c289f5c84d07c451bf6285776e480898537a1aaf5a",
+      "bytes": 14354
+    },
+    {
+      "path": "summary.md",
+      "sha256": "964638d87edcf5ccd62f3c039c40875d5a07c6273b6e1783af351f5aa40e142d",
+      "bytes": 9214
+    }
+  ]
+}

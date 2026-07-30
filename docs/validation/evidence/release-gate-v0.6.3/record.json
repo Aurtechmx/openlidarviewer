@@ -1,0 +1,335 @@
+{
+  "schemaVersion": 1,
+  "kind": "release-validation-run",
+  "project": "openlidarviewer",
+  "version": "0.6.3",
+  "tag": null,
+  "commit": "300cfbf82a65aaa9f352c4d782d571ef02fee4cd",
+  "treeSource": "git clone of the repository, checked out at the commit above, npm ci from the lockfile",
+  "startedAtUtc": "2026-07-30T22:17:20Z",
+  "wallClockSeconds": 280,
+  "outcome": "all-gates-passed",
+  "environment": {
+    "nodeVersion": "v26.0.0",
+    "npmVersion": "11.12.1",
+    "os": "macOS 26.5.2 (build 25F84)",
+    "kernel": "Darwin 25.5.0",
+    "arch": "arm64",
+    "python3": "Python 3.11.15",
+    "playwrightBrowsers": "chromium-1234 / chromium_headless_shell-1234, from the machine-level Playwright cache",
+    "dateUtc": "2026-07-30"
+  },
+  "packageLockSha256": "e35dbf8ed968bab60a86b8c01a584f9e04bd5beaabc63ff0120e0b4aaef1f2f5",
+  "gates": [
+    {
+      "id": "01-npm-ci",
+      "command": "npm ci --no-audit --no-fund",
+      "exitCode": 0,
+      "durationSeconds": 5,
+      "startedAtUtc": "2026-07-30T22:17:20Z",
+      "log": "gate-logs/01-npm-ci.txt"
+    },
+    {
+      "id": "02-tsc",
+      "command": "npx tsc --noEmit",
+      "exitCode": 0,
+      "durationSeconds": 2,
+      "startedAtUtc": "2026-07-30T22:17:25Z",
+      "log": "gate-logs/02-tsc.txt"
+    },
+    {
+      "id": "03-test-release",
+      "command": "npm run -s test:release",
+      "exitCode": 0,
+      "durationSeconds": 199,
+      "startedAtUtc": "2026-07-30T22:17:27Z",
+      "log": "gate-logs/03-test-release.txt"
+    },
+    {
+      "id": "04-playwright-e2e",
+      "command": "npx playwright test tests/e2e/ --project=deterministic",
+      "exitCode": 0,
+      "durationSeconds": 72,
+      "startedAtUtc": "2026-07-30T22:20:46Z",
+      "log": "gate-logs/04-playwright-e2e.txt"
+    },
+    {
+      "id": "05-build",
+      "command": "npm run -s build",
+      "exitCode": 0,
+      "durationSeconds": 2,
+      "startedAtUtc": "2026-07-30T22:21:58Z",
+      "log": "gate-logs/05-build.txt"
+    }
+  ],
+  "vitest": {
+    "buckets": {
+      "unit": {
+        "passed": 4282,
+        "skipped": 24,
+        "runs": 3
+      },
+      "export": {
+        "passed": 623,
+        "skipped": 0,
+        "runs": 1
+      },
+      "terrain": {
+        "passed": 1339,
+        "skipped": 0,
+        "runs": 2
+      },
+      "ui": {
+        "passed": 453,
+        "skipped": 0,
+        "runs": 1
+      },
+      "slow": {
+        "passed": 545,
+        "skipped": 0,
+        "runs": 2
+      }
+    },
+    "total": {
+      "passed": 7242,
+      "skipped": 24
+    }
+  },
+  "playwright": {
+    "deterministic": {
+      "passed": 161,
+      "skipped": 4,
+      "failed": 0,
+      "flaky": 0
+    }
+  },
+  "bundleBudgetLiveBuild": [
+    {
+      "chunk": "index",
+      "kib": 667,
+      "ceilingKiB": 720
+    },
+    {
+      "chunk": "vendor-three-webgpu",
+      "kib": 982,
+      "ceilingKiB": 1100
+    },
+    {
+      "chunk": "vendor-pdf",
+      "kib": 410,
+      "ceilingKiB": 512
+    }
+  ],
+  "skipped": {
+    "vitest": [
+      {
+        "file": "tests/benchmark/comparePlatforms.test.ts",
+        "title": "benchmark:compare-platforms compare the recorded platform legs and publish the result",
+        "status": "skipped",
+        "reason": "BENCHMARK_COMPARE=1 was not set; test.runIf(enabled)"
+      },
+      {
+        "file": "tests/benchmark/forcedGc.test.ts",
+        "title": "forced GC plumbing global.gc is a function in this worker when forced GC was requested",
+        "status": "skipped",
+        "reason": "forced GC was not requested; test.runIf(forcedGcRequested())"
+      },
+      {
+        "file": "tests/benchmark/runBackends.test.ts",
+        "title": "benchmark:backends record the CPU reference leg and whatever backend this host could actually run",
+        "status": "skipped",
+        "reason": "BENCHMARK_BACKENDS=1 was not set; test.runIf(enabled)"
+      },
+      {
+        "file": "tests/benchmark/runPortable.test.ts",
+        "title": "benchmark:repro:portable record this platform as a leg of the cross-platform comparison",
+        "status": "skipped",
+        "reason": "BENCHMARK_PORTABLE=1 was not set; test.runIf(enabled)"
+      },
+      {
+        "file": "tests/benchmark/runSuites.test.ts",
+        "title": "benchmark suites run the requested suites and write the result tree",
+        "status": "skipped",
+        "reason": "BENCHMARK_SUITES named no suite; test.runIf(requested.length > 0)"
+      },
+      {
+        "file": "tests/benchmark/runTier.test.ts",
+        "title": "one isolated scaling tier runs the requested tier and writes it out",
+        "status": "skipped",
+        "reason": "BENCHMARK_TIER / BENCHMARK_TIER_OUT / BENCHMARK_TIER_CONFIG were not set; test.runIf(...)"
+      },
+      {
+        "file": "tests/benchmark/verifyResults.test.ts",
+        "title": "benchmark:verify every archived result set is internally consistent",
+        "status": "skipped",
+        "reason": "BENCHMARK_VERIFY=1 and BENCHMARK_VERIFY_ARCHIVES=1 were not set; test.runIf(enabled) / test.runIf(archives)"
+      },
+      {
+        "file": "tests/benchmark/verifyResults.test.ts",
+        "title": "benchmark:verify the published result tree is internally consistent",
+        "status": "skipped",
+        "reason": "BENCHMARK_VERIFY=1 and BENCHMARK_VERIFY_ARCHIVES=1 were not set; test.runIf(enabled) / test.runIf(archives)"
+      },
+      {
+        "file": "tests/chunkIsolation.test.ts",
+        "title": "post-build chunk isolation contract every app-owned chunk except vendor-three-webgpu is under the warning threshold",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; it.skipIf(!distExists) — the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/chunkIsolation.test.ts",
+        "title": "post-build chunk isolation contract every required chunk is emitted by name",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; it.skipIf(!distExists) — the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/chunkIsolation.test.ts",
+        "title": "post-build chunk isolation contract the startup shell does not inline pdf-lib, laz-perf, WebGPU renderer, or TSL runtime",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; it.skipIf(!distExists) — the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/chunkIsolation.test.ts",
+        "title": "post-build chunk isolation contract vendor-three-webgpu is the only chunk over the 500 KB warning threshold",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; it.skipIf(!distExists) — the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/e57.test.ts",
+        "title": "parseE57 — bunnyFloat.e57 fixture (local only) decodes the bit-packed invalid-state column as 0/1 values",
+        "status": "skipped",
+        "reason": "tests/bunnyFloat.e57 is not in the repository (not redistributable) and is not on this machine; describe.skipIf(!hasBunny)"
+      },
+      {
+        "file": "tests/e57.test.ts",
+        "title": "parseE57 — bunnyFloat.e57 fixture (local only) decodes the first Float coordinates correctly",
+        "status": "skipped",
+        "reason": "tests/bunnyFloat.e57 is not in the repository (not redistributable) and is not on this machine; describe.skipIf(!hasBunny)"
+      },
+      {
+        "file": "tests/e57.test.ts",
+        "title": "parseE57 — bunnyFloat.e57 fixture (local only) finds the single \"bunny\" scan",
+        "status": "skipped",
+        "reason": "tests/bunnyFloat.e57 is not in the repository (not redistributable) and is not on this machine; describe.skipIf(!hasBunny)"
+      },
+      {
+        "file": "tests/e57.test.ts",
+        "title": "parseE57 — bunnyFloat.e57 fixture (local only) reads the prototype: three Float coordinates plus an Integer flag",
+        "status": "skipped",
+        "reason": "tests/bunnyFloat.e57 is not in the repository (not redistributable) and is not on this machine; describe.skipIf(!hasBunny)"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke OrbitControls start + end event listeners are wired (settle window)",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke Viewer chunk references three.js OrbitControls",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke damping factor 0.07 is inlined in the shipped chunk",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke dist/ not present — run `npm run build` first",
+        "status": "todo",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke public orbit-pivot APIs survive tree-shaking",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke rotate speed 0.95 is inlined in the shipped chunk",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke settle window 280 ms ships in the chunk",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      },
+      {
+        "file": "tests/orbitSmoke.test.ts",
+        "title": "orbit navigation — production build smoke soft-clamp + streaming-refinement lerp factors ship in the chunk",
+        "status": "skipped",
+        "reason": "BUILD_CONTRACT=1 was not set for this invocation; the same assertions do run inside test:build, which the gate executes"
+      }
+    ],
+    "playwright": [
+      {
+        "file": "tests/e2e/streaming.spec.ts:87:1",
+        "title": "autzen COPC fixture (skipped when the file is not on disk) › opens a real COPC file and streams it progressively",
+        "reason": "the autzen COPC fixture is not on disk; the spec titles say so and skip themselves rather than fail"
+      },
+      {
+        "file": "tests/e2e/streaming.spec.ts:116:1",
+        "title": "autzen COPC fixture (skipped when the file is not on disk) › inspects a per-point readout on a streaming COPC node",
+        "reason": "the autzen COPC fixture is not on disk; the spec titles say so and skip themselves rather than fail"
+      },
+      {
+        "file": "tests/e2e/streaming.spec.ts:156:1",
+        "title": "autzen COPC fixture (skipped when the file is not on disk) › closes a streaming COPC scan back to the empty state",
+        "reason": "the autzen COPC fixture is not on disk; the spec titles say so and skip themselves rather than fail"
+      },
+      {
+        "file": "tests/e2e/streamingCaveat.spec.ts:29:3",
+        "title": "streaming-resident caveat caption (autzen COPC required) › placing a Profile measurement on a streaming cloud surfaces the resident-only caveat",
+        "reason": "the autzen COPC fixture is not on disk; the spec titles say so and skip themselves rather than fail"
+      }
+    ]
+  },
+  "workingTreeAfterRun": {
+    "command": "git status --porcelain",
+    "output": "",
+    "ignoredPathsCreated": [
+      "benchmark-results/",
+      "dist/",
+      "node_modules/",
+      "release/",
+      "test-results/",
+      "validation/reachability/ledger/",
+      "validation/reachability/summary.json"
+    ]
+  },
+  "logRedaction": {
+    "note": "Committed logs are the raw output with two absolute prefixes replaced, so no tracked file names this machine.",
+    "substitutions": [
+      {
+        "from": "<the clean clone directory>",
+        "to": "<clean-clone>"
+      },
+      {
+        "from": "<the OS temp directory>",
+        "to": "<tmpdir>"
+      }
+    ],
+    "rawSha256": {
+      "gate-logs/01-npm-ci.txt": "e57f4f711cc805ab82e347f1f55789e4d29a142dc91e3194f5e8e65888a73851",
+      "gate-logs/02-tsc.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "gate-logs/03-test-release.txt": "25672614cddaf9760c637f448ae88f12d102d8cd3bc193178703ab233ed7dbf3",
+      "gate-logs/04-playwright-e2e.txt": "2ffdffb414a377c0e075297c1ad6f9d435eda334b442b5c2b30c5c09b830a84d",
+      "gate-logs/05-build.txt": "094021de2c36eaea141d1336811e32e1b5cfcc69681d1bcf11475ba8f3fe3d88",
+      "gate-logs/runner.txt": "6df25393d2780a8ecbf9260868bf51104f968479b8b029ac676944d00501e4ac"
+    },
+    "committedSha256": {
+      "gate-logs/01-npm-ci.txt": "e57f4f711cc805ab82e347f1f55789e4d29a142dc91e3194f5e8e65888a73851",
+      "gate-logs/02-tsc.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "gate-logs/03-test-release.txt": "043bba54dc38b4be605e525863a6c90251c6532fcfa60791432ccfcd5150dbd9",
+      "gate-logs/04-playwright-e2e.txt": "2ffdffb414a377c0e075297c1ad6f9d435eda334b442b5c2b30c5c09b830a84d",
+      "gate-logs/05-build.txt": "094021de2c36eaea141d1336811e32e1b5cfcc69681d1bcf11475ba8f3fe3d88",
+      "gate-logs/runner.txt": "6df25393d2780a8ecbf9260868bf51104f968479b8b029ac676944d00501e4ac"
+    }
+  }
+}
