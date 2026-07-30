@@ -35,6 +35,7 @@ import argparse
 import json
 import math
 import os
+import re
 import random
 import struct
 import sys
@@ -57,22 +58,44 @@ SCHEMA = [
 POINT_BYTES = sum(f["size"] for f in SCHEMA)  # 4+4+4+2+1 = 15
 
 
-def resolve_under_out_root(raw: str) -> Path:
-    """Resolve `raw` and refuse it if it lands outside the output root.
+# A dot is allowed inside a name, so this pattern alone accepts ".." and lets a
+# traversal through. The check below rejects the pure-dot components explicitly
+# before applying it, which is the whole point of building the path rather than
+# inspecting it afterwards.
+SAFE_PART = re.compile(r"^[A-Za-z0-9._-]+$")
+TRAVERSAL = {"..", "."}
 
-    Resolving before the prefix check is the point: it collapses `..` and
-    follows any symlink on the way, so neither one can redirect the fixture
-    into a directory the caller never named.
+
+def out_root() -> Path:
+    """The one directory this script may write under."""
+    return Path(os.environ.get("OLV_OUT_ROOT") or Path.cwd()).expanduser().resolve()
+
+
+def resolve_under_out_root(raw: str) -> Path:
+    """Build the output path from a trusted root, rather than checking one.
+
+    The earlier version resolved the argument and then compared the result
+    against the root. That is correct, and it still carries the caller's string
+    all the way to the file system, so nothing downstream can tell a checked
+    path from an unchecked one.
+
+    This builds instead: the root comes from the environment, every component
+    of the argument has to be an ordinary name, and the two are joined. A
+    traversal cannot survive that, because ".." is not an ordinary name and is
+    refused before anything is joined. An absolute path is refused for the same
+    reason, since it has no place under a root it did not come from.
     """
-    root = Path(os.environ.get("OLV_OUT_ROOT") or Path.cwd()).expanduser().resolve()
+    root = out_root()
     candidate = Path(raw).expanduser()
-    if not candidate.is_absolute():
-        candidate = root / candidate
-    resolved = candidate.resolve()
-    if resolved != root and root not in resolved.parents:
-        print(f"refusing to write outside {root}: {raw}", file=sys.stderr)
+    if candidate.is_absolute():
+        print(f"refusing an absolute output path; give one relative to {root}: {raw}", file=sys.stderr)
         raise SystemExit(2)
-    return resolved
+    parts = [p for p in candidate.parts if p not in (".", "")]
+    for part in parts:
+        if part in TRAVERSAL or not SAFE_PART.match(part):
+            print(f"refusing output path component {part!r}: only plain names are accepted", file=sys.stderr)
+            raise SystemExit(2)
+    return root.joinpath(*parts)
 
 
 def checked_write(out: Path) -> Path:
