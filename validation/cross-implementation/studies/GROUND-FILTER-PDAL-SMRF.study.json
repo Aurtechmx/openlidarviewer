@@ -1,0 +1,132 @@
+{
+  "schemaVersion": 1,
+  "studyId": "GROUND-FILTER-PDAL-SMRF-FIVE-SCENES",
+  "claimId": "GROUND-FILTER",
+  "example": false,
+  "notes": [
+    "Registered before anything ran. The tolerance and the required agreement fraction below are frozen by protocolDigest at this commit, so loosening either after seeing a number changes the digest and shows up in the diff as a changed protocol rather than as one moved number.",
+    "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched, and promotion is a separate human act.",
+    "The comparison is our SMRF against PDAL's filters.smrf on the same committed bytes, with cut disabled on the PDAL side and the threshold cap disabled on ours, so the two sides run the same published core with the same parameters."
+  ],
+  "protocolDigest": "sha256:7adc3f33407a860a15979a77c1ceb3872c7423fe1cbf647a70da11e15c5f86fb",
+  "candidate": {
+    "revision": "630845fb248f6902776ea8ec60d1d99ebe8d1811",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.3"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host these references were produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version PDAL reports and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/<fixture>__smrf.json",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+      "description": "50 m square, 5.4 % planar bare earth at 4 returns per square metre, three flat-roof buildings and 26 vegetation clumps. The baseline scene: a disagreement here is a disagreement about the morphological core.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+      "sha256": "2c637ecd6dfc90eb545c515fdc39139705bacafed4668d15f2c35a89bfef4b20"
+    },
+    {
+      "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+      "description": "The same scene over rolling terrain with two incommensurate wavelengths, so the progressive opening runs over curvature rather than a constant gradient.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+      "sha256": "bd8061653cca198f19aa660fe76730c0a61010c6bfe23c6158f4779747f1267a"
+    },
+    {
+      "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+      "description": "The same scene over a 30 % V ridge. Steep ground is where a slope-scaled threshold and any cap on it change the answer.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+      "sha256": "e95edbb37a3faac063bbe9e10cf6a6a43e83986d440ba3c361e9dd668deb539f"
+    },
+    {
+      "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+      "description": "The planar scene plus 30 gross returns 4 m below the surface. Our classification test is one-sided (anything at or under the opened surface is ground) and SMRF as published tests the magnitude of the difference, so this scene is where that divergence becomes visible instead of staying in a docstring.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+      "sha256": "fec9aa3c5e0ac1d2805dc8112f8bffcbf03a1c36b06f6bc782c71ea1c2ef742e"
+    },
+    {
+      "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+      "description": "The planar scene with a 12 m square hole with no returns. Both sides fill the minimum-elevation grid before opening it and they fill it differently, so the hole is where that shows.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+      "sha256": "6998a0bb0c451442ee3cca3a1f5b59d66f5da8ae3f0c843133cf4750c61cdfac"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-SMRF-CELL1-W16-S015-T05",
+      "description": "One metre cells, sixteen window steps, 0.15 expected slope, 0.5 m base elevation threshold, no slope-scaled term on either side, no net cutting, no threshold cap. The cell size is pinned at 1 because PDAL documents its window as a max window SIZE and our filter takes a count of CELLS; at one metre the two readings coincide, and a study at another cell size would have to settle that first.",
+      "candidateParameters": {
+        "function": "classifyGroundSmrf",
+        "cellSizeM": 1,
+        "maxWindowCells": 16,
+        "slope": 0.15,
+        "elevationThresholdM": 0.5,
+        "scalingFactorM": 0,
+        "maxElevationThresholdM": "Infinity",
+        "floorPercentile": 0,
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "stage": "filters.smrf",
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "ground_class": 2,
+        "other_class": 1
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "label (ground or non-ground; a return either carries the same label on both sides or it does not)",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.99
+  },
+  "status": "pending",
+  "statusReason": "Registered, not run. No PDAL output exists yet for any of the five scenes, and the gate above is frozen by protocolDigest at this commit so it cannot be adjusted once numbers exist.",
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+      "sha256": "2c637ecd6dfc90eb545c515fdc39139705bacafed4668d15f2c35a89bfef4b20",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+      "sha256": "bd8061653cca198f19aa660fe76730c0a61010c6bfe23c6158f4779747f1267a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+      "sha256": "e95edbb37a3faac063bbe9e10cf6a6a43e83986d440ba3c361e9dd668deb539f",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+      "sha256": "fec9aa3c5e0ac1d2805dc8112f8bffcbf03a1c36b06f6bc782c71ea1c2ef742e",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+      "sha256": "6998a0bb0c451442ee3cca3a1f5b59d66f5da8ae3f0c843133cf4750c61cdfac",
+      "role": "candidate-input"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [],
+    "unsupported": [
+      "Nothing. A pending study supports no statement about any dataset or parameter set, and scope.supported stays empty until a result exists.",
+      "Five synthetic scenes are not survey data. Returns are uniform-random in plan with no sensor geometry, no scan pattern, no range noise and no multiple returns, and the objects are boxes and clumps of points rather than structures.",
+      "One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the threshold cap that our filter applies by default and that this study switches off to match the reference.",
+      "Agreement with PDAL is not accuracy against ground truth. Ground membership in these scenes is known by construction, which is a comparison against a generator this project also wrote."
+    ]
+  }
+}

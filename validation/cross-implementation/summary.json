@@ -19,7 +19,7 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 1,
+  "studiesRead": 3,
   "countedStudies": 0,
   "byStatus": {},
   "byClaim": {},
@@ -31,10 +31,22 @@
   },
   "excludedFromCounts": [
     {
+      "studyId": "DTM-PDAL-WRITERS-GDAL-CELL-CENTRED",
+      "claimId": "DTM",
+      "status": "pending",
+      "why": "status \"pending\": nothing was measured, so there is nothing to count"
+    },
+    {
       "studyId": "EXAMPLE-SLOPE-RASTER-GDAL-HORN-TWO-PARAMETER-SETS",
       "claimId": "SLOPE-RASTER",
       "status": "pending",
       "why": "example manifest: a template, not a study"
+    },
+    {
+      "studyId": "GROUND-FILTER-PDAL-SMRF-FIVE-SCENES",
+      "claimId": "GROUND-FILTER",
+      "status": "pending",
+      "why": "status \"pending\": nothing was measured, so there is nothing to count"
     }
   ]
 }

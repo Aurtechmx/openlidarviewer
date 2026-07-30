@@ -1,0 +1,113 @@
+{
+  "schemaVersion": 1,
+  "studyId": "DTM-PDAL-WRITERS-GDAL-CELL-CENTRED",
+  "claimId": "DTM",
+  "example": false,
+  "notes": [
+    "Registered before anything ran. The tolerance below is frozen by protocolDigest at this commit.",
+    "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched.",
+    "What this study compares is the georeferencing of a DTM raster: grid origin, cell indexing and row order. It does NOT compare aggregation over a realistic cloud, and the reason is in the parameter set: PDAL's writers.gdal is a radius estimator and rasterizeDtm is a cell estimator, a disc is not a square, and on scattered returns over sloping ground the two cannot agree exactly however the parameters are set. One return per cell centre with a radius below half a cell removes that confound; the cost is that the input is a degenerate cloud, and the cost is stated rather than absorbed into a wider tolerance."
+  ],
+  "protocolDigest": "sha256:d4ce332da144f08cbc88fc3cc2d6e6c99bcb02023be4948de69963073525361e",
+  "candidate": {
+    "revision": "630845fb248f6902776ea8ec60d1d99ebe8d1811",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.3"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host these references were produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version PDAL reports and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/<fixture>__dtm-min.json, then gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 <fixture>__dtm-min.tif <fixture>__dtm-min.asc",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+      "description": "Bare earth on a 5.4 % plane, one return per 1 m cell at the cell centre, 50 by 50 cells. The plane falls in both x and y, so a transposed or mirrored grid moves cells by up to a metre.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
+      "sha256": "2bcb9132ce3e87bdec776068e225fde2ea9dd6781a405c23a947dcb53f116fdc"
+    },
+    {
+      "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+      "description": "The same layout over a rolling surface with two incommensurate wavelengths, so no translation of the grid maps the surface onto itself and a one-cell shift cannot cancel.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",
+      "sha256": "8db84cf15fbf5e0692e2b0fcdb777949eed1e02a52804df5356f8df8939145ca"
+    },
+    {
+      "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+      "description": "The same layout over a 30 % V ridge, where a half-cell offset costs 15 cm and is well clear of the tolerance.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
+      "sha256": "03bf9091125bb9d466081f37638f0daa1d0b139aee6e9d584dacbda9d05f52e2"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-DTM-MIN-CELL1-R045",
+      "description": "Lowest return per cell, 1 m cells, grid pinned to origin (0, 0) and 50 by 50 cells on both sides. The reference radius of 0.45 m is below half a cell, so each cell's disc holds exactly the one return that belongs to that cell and the radius estimator and the cell estimator compute the same quantity.",
+      "candidateParameters": {
+        "function": "rasterizeDtm",
+        "aggregation": "min",
+        "gridOriginH1": 0,
+        "gridOriginH2": 0,
+        "cols": 50,
+        "rows": 50,
+        "cellSizeM": 1,
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "stage": "writers.gdal",
+        "output_type": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "origin_x": 0,
+        "origin_y": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "data_type": "double",
+        "gdaldriver": "GTiff",
+        "transcode": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.00005,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "pending",
+  "statusReason": "Registered, not run. No PDAL raster exists yet for any of the three scenes, and the tolerance above is frozen by protocolDigest at this commit so it cannot be adjusted once numbers exist.",
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
+      "sha256": "2bcb9132ce3e87bdec776068e225fde2ea9dd6781a405c23a947dcb53f116fdc",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",
+      "sha256": "8db84cf15fbf5e0692e2b0fcdb777949eed1e02a52804df5356f8df8939145ca",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
+      "sha256": "03bf9091125bb9d466081f37638f0daa1d0b139aee6e9d584dacbda9d05f52e2",
+      "role": "candidate-input"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [],
+    "unsupported": [
+      "Nothing. A pending study supports no statement about any dataset or parameter set, and scope.supported stays empty until a result exists.",
+      "Aggregation over a realistic cloud. The input is one return per cell at the cell centre, chosen so the two estimators coincide; a scattered cloud would compare a disc against a square and is out of scope here.",
+      "Empty cells. Every cell in every fixture receives exactly one return, so nothing here says anything about how either side marks or fills a cell with no data.",
+      "One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m.",
+      "Agreement with PDAL is not accuracy against ground truth."
+    ]
+  }
+}
