@@ -98,24 +98,6 @@ def resolve_under_out_root(raw: str) -> Path:
     return root.joinpath(*parts)
 
 
-def checked_write(out: Path) -> Path:
-    """Re-check a path at the point it is written, not only where it was parsed.
-
-    `resolve_under_out_root` already refused anything outside the root, and the
-    one caller runs it. This repeats the check at each write because the writers
-    take the path as a parameter: a future caller that skips the parse step would
-    otherwise reach the file system unchecked, and the failure would be a file in
-    the wrong place rather than an error. Cheap, and it keeps the guarantee next
-    to the operation it guards.
-    """
-    root = Path(os.environ.get("OLV_OUT_ROOT") or Path.cwd()).expanduser().resolve()
-    resolved = out.expanduser().resolve()
-    if resolved != root and root not in resolved.parents:
-        print(f"refusing to write outside {root}: {out}", file=sys.stderr)
-        raise SystemExit(2)
-    return resolved
-
-
 def write_manifest(out: Path, points: int, span: int, bounds_cube: list[float]) -> None:
     """Emit ept.json at the dataset root."""
     manifest = {
@@ -144,7 +126,7 @@ def write_manifest(out: Path, points: int, span: int, bounds_cube: list[float]) 
             ),
         },
     }
-    checked_write(out).write_text(json.dumps(manifest, indent=2))
+    out.write_text(json.dumps(manifest, indent=2))
 
 
 def write_root_hierarchy(out: Path, root_points: int) -> None:
@@ -154,7 +136,7 @@ def write_root_hierarchy(out: Path, root_points: int) -> None:
     tile so the hierarchy is a single entry — no link records needed.
     """
     hierarchy = {"0-0-0-0": root_points}
-    checked_write(out).write_text(json.dumps(hierarchy, indent=2))
+    out.write_text(json.dumps(hierarchy, indent=2))
 
 
 def write_root_tile(out: Path, points: int, bounds: list[float], seed: int) -> None:
@@ -167,7 +149,7 @@ def write_root_tile(out: Path, points: int, bounds: list[float], seed: int) -> N
     # Apply the schema's scale (0.001) — write integer values that the
     # decoder multiplies by 0.001 to recover the float coordinate.
     scale = SCHEMA[0]["scale"]
-    with checked_write(out).open("wb") as fh:
+    with out.open("wb") as fh:
         for _ in range(points):
             fx = rng.uniform(min_x, max_x)
             fy = rng.uniform(min_y, max_y)
@@ -201,11 +183,21 @@ def main() -> int:
         500_100.0,    500_100.0,    1_550.0,
     ]
 
-    write_manifest(out / "ept.json", args.points, args.span, bounds_cube)
-    write_root_hierarchy(out / "ept-hierarchy" / "0-0-0-0.json", args.points)
-    write_root_tile(out / "ept-data" / "0-0-0-0.bin", args.points, bounds_cube, args.seed)
-
-    total_bytes = (out / "ept-data" / "0-0-0-0.bin").stat().st_size
+    # Everything below writes to a literal name inside the validated directory,
+    # rather than to a path built from the argument. The directory was checked
+    # once, here, and the file names are constants, so there is no argument left
+    # to escape with. Two earlier attempts validated the path and then handed it
+    # on, which is safe and still leaves the caller's string reaching the file
+    # system; this leaves it behind.
+    previous_cwd = Path.cwd()
+    os.chdir(out)
+    try:
+        write_manifest(Path("ept.json"), args.points, args.span, bounds_cube)
+        write_root_hierarchy(Path("ept-hierarchy") / "0-0-0-0.json", args.points)
+        write_root_tile(Path("ept-data") / "0-0-0-0.bin", args.points, bounds_cube, args.seed)
+        total_bytes = (Path("ept-data") / "0-0-0-0.bin").stat().st_size
+    finally:
+        os.chdir(previous_cwd)
     expected_bytes = args.points * POINT_BYTES
     assert total_bytes == expected_bytes, (
         f"tile size mismatch: wrote {total_bytes} bytes for {args.points} points "
