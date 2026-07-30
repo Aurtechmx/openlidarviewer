@@ -197,10 +197,16 @@ function analyticGrid(ncols: number, nrows: number): Float64Array {
  * border dropped.
  *
  * `gdaldem` leaves the border undefined and, on a Byte band, writes its nodata
- * value 0 there; our kernel edge-clamps and produces a real shade. Comparing
- * there would measure a difference in edge policy — a full 150 levels of it —
- * and report it as a difference in shading. Verified against the committed
- * reference: all 436 border cells are 0 and no interior cell is.
+ * value 0 there; our kernel answers for every cell and produces a real shade.
+ * Comparing there would measure a difference in edge policy — a full 150 levels
+ * of it — and report it as a difference in shading. Verified against the
+ * committed reference: all 436 border cells are 0 and no interior cell is.
+ *
+ * The shade itself is no longer suspect at the border: the slope and aspect it
+ * consumes are extrapolated the way `gdaldem -compute_edges` extrapolates, not
+ * edge-clamped as they were through v0.6.3. Nothing here can see that, because
+ * the reference has no shade to compare against on the ring — the border legs in
+ * tests/rasterAgreementMatrix.test.ts carry that evidence, and only for slope.
  *
  * HAZARD: FLAT GROUND — INCLUDED, deliberately, unlike the aspect check.
  *

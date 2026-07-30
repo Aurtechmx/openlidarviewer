@@ -785,8 +785,22 @@ describe('unit integrity: axis convention', () => {
    * Grid derivatives must not care which horizontal axis is rows and which is
    * columns: transposing the grid transposes the slope and leaves every slope
    * VALUE in place. A cell-size mix-up between the two axes shows up here.
+   *
+   * EXCEPT AT THE FOUR CORNERS, and the exception is deliberate rather than
+   * tolerated. `hornSlopeAspect` follows gdaldem's `-compute_edges` border
+   * policy: extrapolate PERPENDICULAR to an edge, clamp ALONG it, with the
+   * row-edge branch taking precedence. That precedence is what makes the corners
+   * asymmetric — the axis that gets clamped there is the column axis, and
+   * transposing swaps which physical axis that is. The four corners are
+   * therefore genuinely not transpose-equivariant, by construction, for exact
+   * agreement with the reference implementation.
+   *
+   * The exclusion is four cells out of GRID_N², it is enumerated rather than
+   * expressed as a widened tolerance, and the test asserts that nothing OUTSIDE
+   * those four cells moves — so the axis mix-up this case exists to catch (which
+   * would perturb the whole grid, not its corners) is still caught.
    */
-  test('transposing the grid transposes the slope without changing any value', () => {
+  test('transposing the grid transposes the slope, except at the four corners', () => {
     const z = elevationGrid(1);
     const t = new Float32Array(z.length);
     for (let r = 0; r < GRID_N; r++)
@@ -798,7 +812,25 @@ describe('unit integrity: axis convention', () => {
     for (let r = 0; r < GRID_N; r++)
       for (let c = 0; c < GRID_N; c++)
         untransposed[r * GRID_N + c] = transposed[c * GRID_N + r] as number;
-    expect(maxAbsDiff(direct, untransposed)).toBeLessThan(SLOPE_TANGENT_TOL);
+
+    const isCorner = (r: number, c: number): boolean =>
+      (r === 0 || r === GRID_N - 1) && (c === 0 || c === GRID_N - 1);
+    const movedCorners: string[] = [];
+    const movedElsewhere: string[] = [];
+    for (let r = 0; r < GRID_N; r++) {
+      for (let c = 0; c < GRID_N; c++) {
+        const i = r * GRID_N + c;
+        if (Math.abs((direct[i] as number) - (untransposed[i] as number)) < SLOPE_TANGENT_TOL) continue;
+        (isCorner(r, c) ? movedCorners : movedElsewhere).push(`(${r},${c})`);
+      }
+    }
+    // Nothing off the corners may move. This is the axis-convention assertion.
+    expect(movedElsewhere, 'slope changed under transpose away from the corners').toEqual([]);
+    // And the corner asymmetry is REAL, not a rounding artefact — asserted so
+    // this exclusion cannot quietly become unnecessary without the test saying
+    // so. If a future kernel extrapolates corners symmetrically too, this line
+    // fails and the exclusion above should be deleted rather than widened.
+    expect(movedCorners.length, 'the corner asymmetry vanished; drop the exclusion').toBe(4);
   });
 
   /**
