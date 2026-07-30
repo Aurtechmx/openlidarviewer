@@ -129,7 +129,7 @@ export function georefGlyphSvg(crsKnown: boolean, datumKnown: boolean): string {
   if (crsKnown) {
     // Planted pin (teardrop) — positioned on the map.
     parts.push(
-      `<path d="M12 ${markerY - 4} a4 4 0 0 1 4 4 c0 3 -4 ${datumKnown ? '5' : '5'} -4 ${datumKnown ? '5' : '5'} ` +
+      `<path d="M12 ${markerY - 4} a4 4 0 0 1 4 4 c0 3 -4 5 -4 5 ` +
         `c0 0 -4 -2 -4 -5 a4 4 0 0 1 4 -4 z" stroke="currentColor" stroke-width="1.4" fill="none"/>`,
       `<circle cx="12" cy="${markerY}" r="1.4" fill="currentColor"/>`,
     );
