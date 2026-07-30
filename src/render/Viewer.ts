@@ -977,12 +977,12 @@ export class Viewer {
    */
   private _edlPaintedAtRest = false;
   /** EDL strength, and the camera near/far, as live uniforms. */
-  private readonly _edlStrength = uniform(EDL_DEFAULTS.strength);
+  private readonly _edlLiveStrength = uniform(EDL_DEFAULTS.strength);
   private readonly _edlNear = uniform(0.1);
   private readonly _edlFar = uniform(5_000_000);
   /**
    * The user-facing base EDL strength — what the slider directly controls.
-   * The live `_edlStrength` uniform is `base × adaptive_factor` each frame
+   * The live `_edlLiveStrength` uniform is `base × adaptive_factor` each frame
    * (see `_updateAdaptiveEdl`), so a user who sets a strong base still
    * gets a stronger close-inspection effect than a user with a weak base.
    */
@@ -1270,7 +1270,7 @@ export class Viewer {
     this._post = new THREE.RenderPipeline(this._renderer);
     this._post.outputNode = buildEdlOutputNode(
       this._scenePass,
-      this._edlStrength,
+      this._edlLiveStrength,
       this._edlNear,
       this._edlFar,
       EDL_DEFAULTS.radiusPx,
@@ -3526,10 +3526,10 @@ export class Viewer {
   setEdlStrength(strength: number): void {
     this._edlBaseStrength = Math.max(0, strength);
     // Immediate apply for the frame — adaptive update will refine next tick.
-    this._edlStrength.value = this._edlBaseStrength;
+    this._edlLiveStrength.value = this._edlBaseStrength;
   }
 
-  /** The base the user set, NOT live `_edlStrength` — edlStrengthPersistence.test.ts. */
+  /** The base the user set, NOT live `_edlLiveStrength` — edlStrengthPersistence.test.ts. */
   get edlStrength(): number {
     return this._edlBaseStrength;
   }
@@ -5769,7 +5769,7 @@ export class Viewer {
 
     // Final strength — base × distance × density. Normalise the distance
     // factor by 0.7 so the slider's "1.0" base lands at neutral close-up.
-    this._edlStrength.value =
+    this._edlLiveStrength.value =
       this._edlBaseStrength * (distanceFactor / 0.7) * densityFactor;
   }
 
