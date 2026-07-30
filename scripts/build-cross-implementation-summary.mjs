@@ -6,8 +6,8 @@
  *   node scripts/build-cross-implementation-summary.mjs          write the summary
  *   node scripts/build-cross-implementation-summary.mjs --check  fail if it is stale
  *
- * Accepts --studies, --artifact-root, --register and --dataset-register and
- * passes them to the verification step unchanged.
+ * Accepts --studies, --protocols, --artifact-root, --register and
+ * --dataset-register and passes them to the verification step unchanged.
  *
  * Every number in validation/cross-implementation/summary.json comes from here.
  * Two properties matter more than the arithmetic:
@@ -178,6 +178,7 @@ if (isMain()) {
   try {
     verified = verifyStudies({
       studiesDir: opt('--studies'),
+      protocolsDir: opt('--protocols'),
       artifactRoot: opt('--artifact-root'),
       registerPath: opt('--register'),
       // Forwarded so a caller can name the dataset register the verification
