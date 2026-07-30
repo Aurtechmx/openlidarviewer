@@ -7,7 +7,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { cloudSupportsColorMode } from '../src/render/colorModeSupport';
+import {
+  classifyColorModeChanges,
+  cloudSupportsColorMode,
+  planColorModeChanges,
+} from '../src/render/colorModeSupport';
 
 const empty = {};
 
@@ -50,5 +54,43 @@ describe('cloudSupportsColorMode', () => {
     // Returning false here would silently disable a new mode until someone
     // remembered to edit this file.
     expect(cloudSupportsColorMode(empty, 'density' as never)).toBe(true);
+  });
+});
+
+/**
+ * The three outcomes have to stay distinguishable. "Already in the mode" and
+ * "cannot render the mode" both mean no mutation, and collapsing them would make
+ * a scene that is fully in the requested mode indistinguishable from one that
+ * refused it.
+ */
+describe('classifyColorModeChanges', () => {
+  const withClass = { classification: new Uint8Array([2]) };
+  const rgbOnly = { colors: new Uint8Array([1, 2, 3]) };
+
+  it('separates changed, unchanged and unsupported layers', () => {
+    const plan = classifyColorModeChanges(
+      [
+        ['a', { mode: 'rgb', cloud: withClass }],
+        ['b', { mode: 'classification', cloud: withClass }],
+        ['c', { mode: 'rgb', cloud: rgbOnly }],
+      ],
+      'classification',
+    );
+
+    expect(plan.changed).toEqual(['a']);
+    expect(plan.unchanged).toEqual(['b']);
+    expect(plan.unsupported).toEqual([{ id: 'c', keptMode: 'rgb' }]);
+  });
+
+  it('is the rule planColorModeChanges reports', () => {
+    // One rule, two views of it — the ids to mutate cannot drift from the
+    // classification a caller reports.
+    const entries = [
+      ['a', { mode: 'rgb', cloud: withClass }],
+      ['c', { mode: 'rgb', cloud: rgbOnly }],
+    ] as const;
+    expect(planColorModeChanges(entries, 'classification')).toEqual([
+      ...classifyColorModeChanges(entries, 'classification').changed,
+    ]);
   });
 });

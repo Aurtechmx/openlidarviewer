@@ -30,7 +30,8 @@
  */
 
 import * as THREE from 'three/webgpu';
-import { applyPresetColorMode, type ColorModeHost } from './colorModeSupport';
+import type { ColorModeHost } from './colorModeSupport';
+import { applyInspectionPreset, type PresetApplication, type PresetApplyHost } from './presetApplication';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
   instancedBufferAttribute,
@@ -208,11 +209,7 @@ import {
 } from './measure/classificationEditor';
 import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
 import { ClassificationEpochs } from './measure/classificationEpoch';
-import {
-  getPreset,
-  type PresetId,
-  type SkyPreset,
-} from './inspectionPresets';
+import type { PresetId, SkyPreset } from './inspectionPresets';
 import { applySkyPreset } from './skyPresetApply';
 import type { SkyPreset as SkyPresetId } from './inspectionPresets';
 import {
@@ -3837,29 +3834,29 @@ export class Viewer {
   private _presetId: PresetId = 'survey';
 
   /**
-   * AO strength last applied via a preset — used by the SSAO pass (A.1)
-   * once the pass is plumbed; for now the field is preserved so prefs
-   * round-trip an analyst's choice through the preset.
+   * Apply an inspection preset — Survey / Terrain / Foliage / Classification /
+   * QA. Bundles EDL + point size / mode + sky + colour mode into one call.
+   * Unknown ids fall back to the default preset, so this is safe to call from
+   * prefs / session imports carrying an older or third-party id. The returned
+   * report says whether the colour mode reached every layer: read `partial`
+   * before telling the user the preset is active.
    */
-  public lastPresetAoStrength = 0.35;
+  applyPreset(id: PresetId | string): PresetApplication {
+    const applied = applyInspectionPreset(this._presetApplyHost(), id);
+    this._presetId = applied.presetId;
+    return applied;
+  }
 
-  /**
-   * Apply a v0.3.7 inspection preset — Survey / Terrain / Foliage /
-   * Classification / QA. Bundles EDL + point size / mode + sky
-   * background into one call. Unknown preset ids fall back to the
-   * default preset, so this method is safe to call from prefs / session
-   * imports that may carry an older or third-party id.
-   */
-  applyPreset(id: PresetId | string): void {
-    const preset = getPreset(id);
-    this._presetId = preset.id;
-    this.setEdlEnabled(preset.edlEnabled);
-    this.setEdlStrength(preset.edlStrength);
-    this.setPointSize(preset.pointSize);
-    this.setPointSizeMode(preset.pointSizeMode);
-    this._applySkyPreset(preset.sky);
-    this.lastPresetAoStrength = preset.reserved.aoStrength;
-    applyPresetColorMode(this._colorModeHost(), preset.defaultColorMode);
+  /** Structural view of this Viewer for the preset applier. */
+  private _presetApplyHost(): PresetApplyHost {
+    return {
+      colorHost: this._colorModeHost(),
+      setEdlEnabled: (on) => this.setEdlEnabled(on),
+      setEdlStrength: (s) => this.setEdlStrength(s),
+      setPointSize: (px) => this.setPointSize(px),
+      setPointSizeMode: (m) => this.setPointSizeMode(m),
+      applySky: (s) => this._applySkyPreset(s),
+    };
   }
 
   /** Structural view of this Viewer for the colour-mode rule. */
