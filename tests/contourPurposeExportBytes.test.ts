@@ -55,17 +55,38 @@ import type { TerrainPoint } from '../src/terrain/TerrainContracts';
  * genuinely different vertex set — the distinctness this test is here to prove.
  * Dense + all-ground ⇒ solid confidence, so the honesty gates pin nothing but
  * the ring anchors and the simplifier is free to drop redundant vertices.
+ *
+ * DENSITY IS LOAD-BEARING, and `SUBSAMPLE` is why. Simplification never drops a
+ * vertex below the smoothing confidence floor (`EVIDENCE_THRESHOLDS.solid`, 66),
+ * so if confidence does not clear that floor every vertex is pinned, no tolerance
+ * removes anything, and all four purposes collapse to byte-identical geometry —
+ * this file's assertions read as a product regression when the real cause is a
+ * fixture too sparse to be trusted.
+ *
+ * At one point per 1 m cell this fixture peaked at confidence 66: exactly the
+ * floor, with nothing to spare. It survived on that margin until the Horn kernel
+ * stopped edge-clamping (terrainDerivatives.ts) — correcting the border slope
+ * upward legitimately lowered confidence on the outer ring, the peak fell to 63,
+ * every cell dropped below the floor and all four purposes collapsed. The kernel
+ * was right; the fixture was one point away from failing for any reason at all.
+ *
+ * Sampling the same surface at 1/3 m instead puts the peak at 93, a 27-point
+ * cushion, so the property under test survives an honest change in the
+ * confidence inputs. Do not thin this back out to save test time.
  */
+const SUBSAMPLE = 3;
 function roughHill(nx = 48, ny = 48, amplitude = 8): TerrainPoint[] {
   const pts: TerrainPoint[] = [];
   const cx = (nx - 1) / 2;
   const cy = (ny - 1) / 2;
   const sigma = (nx - 1) / 3;
   const twoS2 = 2 * sigma * sigma;
-  for (let j = 0; j < ny; j++) {
-    for (let i = 0; i < nx; i++) {
-      const x = i;
-      const y = j;
+  // The extent is unchanged; only the sampling interval shrinks, so the surface
+  // and its contours are the same terrain seen by a denser scan.
+  for (let j = 0; j < ny * SUBSAMPLE; j++) {
+    for (let i = 0; i < nx * SUBSAMPLE; i++) {
+      const x = i / SUBSAMPLE;
+      const y = j / SUBSAMPLE;
       const base = amplitude * Math.exp(-((x - cx) ** 2 + (y - cy) ** 2) / twoS2);
       const ripple =
         1.2 * Math.sin(x * 0.55) * Math.cos(y * 0.5) +
