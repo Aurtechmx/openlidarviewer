@@ -136,11 +136,19 @@ Reported here rather than papered over:
   directly. On POSIX it kills the whole process group, which also reclaims
   vitest's workers. Windows has no process groups, so a shard that hangs may
   leave workers behind.
-- `tests/releaseAssetVerifier.test.ts` builds its fixtures with the `zip` CLI
-  and fails with `spawnSync zip ENOENT`, which is why the unit bucket is red
-  on Windows. `npm run release:verify` itself needs `unzip`, and
-  `npm run validation:defects:replay` needs `ln`. None of the three ships
-  with Windows.
+- `tests/releaseAssetVerifier.test.ts` builds its fixtures with the `zip` CLI,
+  which Windows does not ship. Its eight suites now skip when `zip` is not on
+  PATH, so the leg is green rather than permanently red. They skip on the
+  missing tool, not on the platform: a Windows machine with `zip` installed
+  runs them, and a Linux machine without it does not pretend to.
+
+  The boundary that leaves: **the Windows leg does not cover release-asset
+  verification.** Nothing that ships is unverified, because the release gate
+  runs on Linux where `zip` is present, but a green Windows tick should not be
+  read as covering those 37 assertions.
+
+  `npm run release:verify` also needs `unzip`, and
+  `npm run validation:defects:replay` needs `ln`. Neither ships with Windows.
 - One case in `tests/defectChronology.test.ts` fails on Windows even with
   full history. The cause has not been traced.
 - `npm run benchmark:clean-clone` and `npm run benchmark:archive-portability`
