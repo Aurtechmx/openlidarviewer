@@ -113,9 +113,15 @@ function ourSlopeDegrees(dem: AsciiGrid): Float64Array {
 /**
  * Drop the one-cell border.
  *
- * Our kernel clamps at the edge; the documented GDAL command leaves edges
- * undefined. Comparing them there would measure a difference in edge policy
- * and report it as a difference in slope. Interior cells only.
+ * The documented GDAL command here omits `-compute_edges`, so gdaldem leaves the
+ * border undefined; comparing there would measure a difference in edge policy and
+ * report it as a difference in slope. Interior cells only.
+ *
+ * Not because our kernel is weaker there. It extrapolates the border the same way
+ * `gdaldem -compute_edges` does, and the two are checked against each other on the
+ * ring itself in tests/rasterAgreementMatrix.test.ts — the leg that caught this
+ * kernel reporting half the true slope on every border cell while interior-only
+ * comparisons like this one stayed green.
  */
 function interior(grid: Float64Array, ncols: number, nrows: number): number[] {
   const out: number[] = [];

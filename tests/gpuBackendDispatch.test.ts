@@ -152,6 +152,21 @@ describe('gpu dispatch helpers (pure)', () => {
     expect(HORN_DERIVATIVES_WGSL).toContain('atan2(-dzdy, -dzdx)'); // northing-up aspect
     expect(HILLSHADE_WGSL).toContain('floor(255.0 * hs + 0.5)'); // Math.round, not WGSL round()
   });
+
+  it('the Horn shader still EXTRAPOLATES the border rather than clamping it', () => {
+    // Pinned in the shader TEXT because nothing else can catch a regression here.
+    // `hornDerivativesF32Reference` is a separate transcription, so reverting the
+    // shader alone to edge-clamping would leave every Node test green while the
+    // real device silently went back to reporting roughly HALF the true slope on
+    // the outer ring (the finding recorded in rasterAgreementMatrix.test.ts).
+    // Only a GPU-backed probe run would notice, and that is not in the unit gate.
+    expect(HORN_DERIVATIVES_WGSL).toContain('fn virt(');
+    expect(HORN_DERIVATIVES_WGSL).toContain('return 2.0 * a - b;'); // the extrapolation
+    expect(HORN_DERIVATIVES_WGSL).toContain('fn okAt('); // validity, so a hole degrades to clamp
+    // Both border branches present: perpendicular extrapolation, along-edge clamp.
+    expect(HORN_DERIVATIVES_WGSL).toContain('row == 0 || row == nr - 1');
+    expect(HORN_DERIVATIVES_WGSL).toContain('col == 0 || col == nc - 1');
+  });
 });
 
 // ── derivatives dispatch ────────────────────────────────────────────────────

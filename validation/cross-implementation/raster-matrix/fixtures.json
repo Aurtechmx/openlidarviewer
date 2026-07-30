@@ -1,0 +1,761 @@
+{
+  "note": "Fixture matrix for the slope/aspect/hillshade agreement comparisons. An analytic fixture compared against its own closed form is E2, not E4; only the legs whose reference is GDAL are cross-implementation.",
+  "nodata": -9999,
+  "demDecimals": 6,
+  "suns": [
+    {
+      "id": "nw-default",
+      "azimuthDeg": 315,
+      "altitudeDeg": 45,
+      "zFactor": 1
+    },
+    {
+      "id": "ne-low",
+      "azimuthDeg": 45,
+      "altitudeDeg": 20,
+      "zFactor": 2
+    },
+    {
+      "id": "south-high",
+      "azimuthDeg": 180,
+      "altitudeDeg": 65,
+      "zFactor": 1
+    }
+  ],
+  "aspectMinSlopeDeg": 0.5,
+  "geographic": {
+    "centreLatitudeDeg": 45,
+    "metresPerDegLon": 78715.12688168648,
+    "metresPerDegLat": 110540
+  },
+  "fixtures": [
+    {
+      "id": "flat-plane",
+      "family": "flat plane",
+      "note": "zero gradient everywhere; aspect is undefined and the three tools represent that differently",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "constant",
+        "params": {
+          "k": 100
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-pct",
+        "slope-deg-edges",
+        "aspect",
+        "aspect-zero-flat",
+        "hillshade-nw-default",
+        "hillshade-ne-low",
+        "hillshade-south-high",
+        "hillshade-multi"
+      ]
+    },
+    {
+      "id": "slope-x-pos",
+      "family": "constant X slope",
+      "note": "z rises eastward; smallest cell size in the matrix",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 0.5,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 0.5,
+      "cellMetresY": 0.5,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 50,
+          "gx": 0.35,
+          "gy": 0
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-pct",
+        "slope-deg-edges",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low"
+      ]
+    },
+    {
+      "id": "slope-x-neg",
+      "family": "constant X slope",
+      "note": "the same magnitude with the sign reversed, on a different extent; a sign error that cancels on one is visible across the pair",
+      "cols": 96,
+      "rows": 72,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 50,
+          "gx": -0.35,
+          "gy": 0
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 6580,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-south-high"
+      ]
+    },
+    {
+      "id": "slope-y-pos",
+      "family": "constant Y slope",
+      "note": "z rises northward; largest cell size in the matrix",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 10,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 10,
+      "cellMetresY": 10,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 50,
+          "gx": 0,
+          "gy": 0.22
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-deg-edges",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "slope-y-neg",
+      "family": "constant Y slope",
+      "note": "north-south gradient reversed; this is the pair that a row-order flip mirrors",
+      "cols": 96,
+      "rows": 72,
+      "cellsize": 0.5,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 0.5,
+      "cellMetresY": 0.5,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 50,
+          "gx": 0,
+          "gy": -0.22
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 6580,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low"
+      ]
+    },
+    {
+      "id": "oblique-plane",
+      "family": "oblique plane",
+      "note": "both components non-zero and unequal, largest extent; an axis transpose changes every value",
+      "cols": 128,
+      "rows": 100,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 80,
+          "gx": 0.3,
+          "gy": -0.12
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 12348,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-pct",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low",
+        "hillshade-south-high",
+        "hillshade-multi"
+      ]
+    },
+    {
+      "id": "convex-hill",
+      "family": "convex quadratic hill",
+      "note": "curvature of one sign; Horn is a first-order estimator so the analytic leg carries a real O(cell squared) error here",
+      "cols": 96,
+      "rows": 72,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "quadratic",
+        "params": {
+          "k": 150,
+          "a": -0.004,
+          "b": -0.0026,
+          "c": -0.0009
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 6580,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-deg-edges",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-south-high",
+        "hillshade-multi"
+      ]
+    },
+    {
+      "id": "concave-pit",
+      "family": "concave pit",
+      "note": "curvature of the other sign at the coarsest cell size; aspect points inward everywhere, so it sweeps all 360 degrees",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 10,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 10,
+      "cellMetresY": 10,
+      "surface": {
+        "kind": "quadratic",
+        "params": {
+          "k": 20,
+          "a": 0.004,
+          "b": 0.0026,
+          "c": 0.0009
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low"
+      ]
+    },
+    {
+      "id": "ridge",
+      "family": "ridge",
+      "note": "sharp crest at x = 0 plus a north-south tilt; the crest has no derivative, so it is excluded from the analytic leg and kept in the GDAL leg",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 0.5,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 0.5,
+      "cellMetresY": 0.5,
+      "surface": {
+        "kind": "absridge",
+        "params": {
+          "k": 120,
+          "s": -0.4,
+          "t": 0.05
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-deg-edges",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low"
+      ]
+    },
+    {
+      "id": "valley",
+      "family": "valley",
+      "note": "the ridge inverted at a coarser cell size; a sign error in the gradient magnitude cannot cancel across the ridge/valley pair",
+      "cols": 96,
+      "rows": 72,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "absridge",
+        "params": {
+          "k": 60,
+          "s": 0.4,
+          "t": -0.05
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 6580,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "saddle",
+      "family": "saddle",
+      "note": "opposite curvature on the two axes at the finest cell size; the centre is a critical point where slope goes to zero and aspect turns over",
+      "cols": 128,
+      "rows": 100,
+      "cellsize": 0.5,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 0.5,
+      "cellMetresY": 0.5,
+      "surface": {
+        "kind": "quadratic",
+        "params": {
+          "k": 100,
+          "a": 0.006,
+          "b": -0.0035,
+          "c": 0.0004
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 12348,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-south-high"
+      ]
+    },
+    {
+      "id": "terrace-step",
+      "family": "terrace / step",
+      "note": "flat treads with vertical risers; the discontinuity is where a 3x3 estimator is least well defined and where two implementations most easily diverge",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "step",
+        "params": {
+          "k": 40,
+          "h": 3,
+          "w": 16,
+          "t": 0.02
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-pct",
+        "aspect",
+        "aspect-zero-flat",
+        "hillshade-nw-default",
+        "hillshade-multi"
+      ]
+    },
+    {
+      "id": "nodata-island",
+      "family": "nodata island",
+      "note": "oblique plane with a solid rectangular hole; the halo around the hole is where the nodata POLICIES differ, not the arithmetic",
+      "cols": 96,
+      "rows": 72,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 80,
+          "gx": 0.3,
+          "gy": -0.12
+        }
+      },
+      "nodataPattern": "island",
+      "nodataCells": 375,
+      "comparableCells": 6121,
+      "haloCells": 84,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "aspect-zero-flat",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "nodata-scatter",
+      "family": "nodata island",
+      "note": "second nodata pattern: sparse single-cell holes on a fixed lattice, so almost every cell is a halo cell",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "quadratic",
+        "params": {
+          "k": 150,
+          "a": -0.004,
+          "b": -0.0026,
+          "c": -0.0009
+        }
+      },
+      "nodataPattern": "scatter",
+      "nodataCells": 134,
+      "comparableCells": 1736,
+      "haloCells": 992,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "thin-corridor",
+      "family": "thin valid corridor",
+      "note": "five valid rows, so exactly one row of fully-valid 3x3 windows survives; the narrowest input a 3x3 estimator can answer at all",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 2,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 2,
+      "cellMetresY": 2,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 80,
+          "gx": 0.3,
+          "gy": -0.12
+        }
+      },
+      "nodataPattern": "corridor",
+      "nodataCells": 2752,
+      "comparableCells": 186,
+      "haloCells": 124,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "geographic-plane",
+      "family": "geographic grid, unequal metres per axis",
+      "note": "lat/lon cells at latitude 45, where one degree of longitude is ~0.71 of one degree of latitude in metres; slope and hillshade take -xscale/-yscale, aspect does not",
+      "cols": 64,
+      "rows": 48,
+      "cellsize": 0.001,
+      "crs": "geographic",
+      "horizontalUnit": "degree",
+      "cellMetresX": 78.71512688168647,
+      "cellMetresY": 110.54,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 300,
+          "gx": 0.3,
+          "gy": -0.12
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 2852,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "slope-pct",
+        "aspect",
+        "hillshade-nw-default",
+        "hillshade-ne-low"
+      ]
+    },
+    {
+      "id": "aspect-rose-000",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 0° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": 0,
+          "gy": -0.4
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-045",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 45° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": -0.282842712474619,
+          "gy": -0.28284271247461906
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-090",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 90° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": -0.4,
+          "gy": -2.4492935982947065e-17
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-135",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 135° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": -0.28284271247461906,
+          "gy": 0.282842712474619
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-180",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 180° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": -4.898587196589413e-17,
+          "gy": 0.4
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-225",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 225° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": 0.282842712474619,
+          "gy": 0.28284271247461906
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-270",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 270° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": 0.4,
+          "gy": 7.347880794884119e-17
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    },
+    {
+      "id": "aspect-rose-315",
+      "family": "aspect rosette",
+      "note": "plane whose downslope bearing is 315° (cardinal and intercardinal coverage, and the 0/360 wraparound at b=0)",
+      "cols": 48,
+      "rows": 40,
+      "cellsize": 1,
+      "crs": "projected",
+      "horizontalUnit": "metre",
+      "cellMetresX": 1,
+      "cellMetresY": 1,
+      "surface": {
+        "kind": "plane",
+        "params": {
+          "k": 200,
+          "gx": 0.28284271247461906,
+          "gy": -0.28284271247461895
+        }
+      },
+      "nodataPattern": "none",
+      "nodataCells": 0,
+      "comparableCells": 1748,
+      "haloCells": 0,
+      "products": [
+        "slope-deg",
+        "aspect",
+        "hillshade-nw-default"
+      ]
+    }
+  ]
+}
