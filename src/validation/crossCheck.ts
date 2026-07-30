@@ -208,6 +208,15 @@ export interface ReferenceSlot {
 }
 
 /**
+ * THIS LIST IS A SUMMARY, NOT THE RECORD. One slot per claim can hold one
+ * reference comparison, and a claim's evidence generally rests on more than one:
+ * several datasets, several parameter sets, sometimes more than one reference
+ * tool. Those live one per file under `validation/cross-implementation/studies/`
+ * and are checked by `scripts/verify-cross-implementation-study.mjs`; that set is
+ * the canonical record. What follows stays as the compact runtime view the UI
+ * badges and the release lints read, and it deliberately shows the strongest
+ * state reached per claim rather than the full study set behind it.
+ *
  * The reference-fixture manifest. SLOPE-RASTER, ASPECT-RASTER and HILLSHADE are
  * `supplied` (all three compared against GDAL 3.13.1 on the SAME analytic
  * fixture — one DEM, pinned by hash in each reference directory); the remaining

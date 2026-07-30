@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "scripts/build-cross-implementation-summary.mjs",
+  "source": "validation/cross-implementation/studies",
+  "evidenceEffect": "None. This file counts study outcomes. Evidence levels live in docs/validation/claim-register.yaml and move only by a human change to that file.",
+  "permittedStatuses": [
+    "pending",
+    "not-executed",
+    "unavailable",
+    "blocked-external",
+    "insufficient",
+    "agree",
+    "partial",
+    "disagree",
+    "invalid",
+    "inconclusive"
+  ],
+  "uncountedStatuses": [
+    "not-executed",
+    "pending"
+  ],
+  "studiesRead": 1,
+  "countedStudies": 0,
+  "byStatus": {},
+  "byClaim": {},
+  "agreement": {
+    "denominator": 0,
+    "denominatorMeaning": "studies whose status is agree, partial or disagree",
+    "agree": 0,
+    "fraction": null
+  },
+  "excludedFromCounts": [
+    {
+      "studyId": "EXAMPLE-SLOPE-RASTER-GDAL-HORN-TWO-PARAMETER-SETS",
+      "claimId": "SLOPE-RASTER",
+      "status": "pending",
+      "why": "example manifest: a template, not a study"
+    }
+  ]
+}
