@@ -1,10 +1,11 @@
 {
-  "baselineSuiteCaveat": "The registry records a full-suite run at the baseline tag that exited 0. That exit code is not read here and establishes nothing per defect: a green suite says the suite passed while the defective code was present, not that any test in it reached a given code path. Where a probe did not establish reachability at the baseline, the state is inconclusive and the reason says why.",
+  "baselineSuiteCaveat": "The registry records a full-suite run at the baseline tag that exited 0. That exit code is not read here and establishes nothing per defect: a green suite says the suite passed while the defective code was present, not that any test in it reached a given code path. Where a probe did not establish reachability at the baseline, its state says in which way it did not, and the reason beside it says why.",
   "defectStatePrecedence": [
     "reproduced-then-fixed",
     "component-absent-at-baseline",
     "environment-unavailable",
     "inconclusive",
+    "non-discriminating",
     "not-executed"
   ],
   "defects": [
@@ -15,7 +16,7 @@
       "probeStates": [
         "reproduced-then-fixed",
         "reproduced-then-fixed",
-        "inconclusive"
+        "non-discriminating"
       ],
       "probes": 3,
       "severity": "medium",
@@ -26,9 +27,9 @@
       "id": "OLV-DEF-002",
       "name": "Contour set reported the requested interval, not the emitted one",
       "probeStates": [
-        "inconclusive",
+        "non-discriminating",
         "reproduced-then-fixed",
-        "inconclusive",
+        "non-discriminating",
         "reproduced-then-fixed"
       ],
       "probes": 4,
@@ -51,7 +52,7 @@
       "id": "OLV-DEF-004",
       "name": "Contour deliverable GeoTIFF omitted the vertical-unit key",
       "probeStates": [
-        "reproduced-then-fixed",
+        "component-absent-at-baseline",
         "reproduced-then-fixed"
       ],
       "probes": 2,
@@ -89,11 +90,11 @@
       "name": "Hillshade convenience wrappers hard-coded square cells and no vertical scale",
       "probeStates": [
         "not-executed",
-        "inconclusive"
+        "non-discriminating"
       ],
       "probes": 2,
       "severity": "low",
-      "state": "inconclusive"
+      "state": "non-discriminating"
     },
     {
       "fixCommit": "ee0526b",
@@ -123,8 +124,8 @@
       "name": "Streaming density tier skipped the CRS unit conversion the static path applied",
       "probeStates": [
         "reproduced-then-fixed",
-        "inconclusive",
-        "inconclusive"
+        "non-discriminating",
+        "non-discriminating"
       ],
       "probes": 3,
       "severity": "high",
@@ -136,8 +137,8 @@
       "name": "LAS 1.4 vertical CRS discarded when a WKT record was present",
       "probeStates": [
         "reproduced-then-fixed",
-        "inconclusive",
-        "inconclusive"
+        "non-discriminating",
+        "non-discriminating"
       ],
       "probes": 3,
       "severity": "high",
@@ -149,8 +150,8 @@
       "name": "A declared linear unit that could not be resolved was answered as metre",
       "probeStates": [
         "reproduced-then-fixed",
-        "inconclusive",
-        "inconclusive"
+        "non-discriminating",
+        "non-discriminating"
       ],
       "probes": 3,
       "severity": "high",
@@ -213,7 +214,7 @@
       "name": "A LAS file could not name the build that produced it",
       "probeStates": [
         "reproduced-then-fixed",
-        "reproduced-then-fixed"
+        "component-absent-at-baseline"
       ],
       "probes": 2,
       "severity": "medium",
@@ -234,6 +235,7 @@
     }
   ],
   "derivedBy": "scripts/defect-replay-lib.mjs",
+  "discriminationCaveat": "A probe is evidence for a record only if it failed at the baseline and passed at the candidate. Two kinds of probe fail that test and are counted apart from it. A probe that passed on both trees is non-discriminating: it shows nothing about the old behaviour, whether it was written as a control for the case beside it or it exercises a sibling path the defect never touched. A probe whose baseline failure was an absent binding is component-absent-at-baseline: the call threw before it reached the code under test, so no behaviour was observed there. Neither group is counted under reproduced-then-fixed, at the probe level or the record level.",
   "environments": [
     {
       "commit": "f27163e00cfcb97f8e2919b4aec64172d35e72c8",
@@ -378,8 +380,8 @@
       "registryCase": "EPSG:4979 already in metres leaves the ordinate equal to the elevation",
       "regressionTest": "tests/benchmark/contourCorrectness.test.ts",
       "severity": "medium",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -418,8 +420,8 @@
       "registryCase": "the declared interval equals the actual spacing of adjacent levels",
       "regressionTest": "tests/benchmark/contourCorrectness.test.ts",
       "severity": "medium",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -498,8 +500,8 @@
       "registryCase": "the GeoJSON interval property matches the set interval on every feature",
       "regressionTest": "tests/benchmark/contourCorrectness.test.ts",
       "severity": "medium",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -618,8 +620,8 @@
       "registryCase": "maps a metres-per-unit factor to its GeoTIFF unit code, or to none",
       "regressionTest": "tests/demExport.test.ts",
       "severity": "medium",
-      "state": "reproduced-then-fixed",
-      "why": "the baseline run failed the assertion (TypeError: (0 , __vite_ssr_import_2__.verticalUnitGeoKeyCode) is not a function); the candidate run passes"
+      "state": "component-absent-at-baseline",
+      "why": "the probe called verticalUnitGeoKeyCode at the baseline and that binding did not exist in that tree, so it observed nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -916,8 +918,8 @@
       "registryCase": null,
       "regressionTest": "tests/terrainTruth.hillshade.test.ts",
       "severity": "low",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1076,8 +1078,8 @@
       "registryCase": "the density tier is the same for a metre and a foot bounding box",
       "regressionTest": "tests/benchmark/unitIntegrity.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1116,8 +1118,8 @@
       "registryCase": "an unconverted foot bounding box lands in a different density tier",
       "regressionTest": "tests/benchmark/unitIntegrity.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1196,8 +1198,8 @@
       "registryCase": "a compound CRS (metre horizontal, foot vertical) survives both axes",
       "regressionTest": "tests/benchmark/roundtripFidelity.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1236,8 +1238,8 @@
       "registryCase": "a foot horizontal CRS keeps its own unit and does not infect the vertical",
       "regressionTest": "tests/benchmark/roundtripFidelity.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1316,8 +1318,8 @@
       "registryCase": "an unrecognised WKT unit is tagged unknown, and the factor beside it is a no-op not a claim",
       "regressionTest": "tests/benchmark/failureRecovery.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1356,8 +1358,8 @@
       "registryCase": "a vertical unit the file does not state is left undefined, never defaulted to metres",
       "regressionTest": "tests/benchmark/failureRecovery.test.ts",
       "severity": "high",
-      "state": "inconclusive",
-      "why": "the probe passes on the baseline tree as well, so it does not establish the old behaviour"
+      "state": "non-discriminating",
+      "why": "the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1876,8 +1878,8 @@
       "registryCase": "a commit that cannot fit drops whole, leaving the product and version",
       "regressionTest": "tests/benchmark/provenanceIntegrity.test.ts",
       "severity": "medium",
-      "state": "reproduced-then-fixed",
-      "why": "the baseline run failed the assertion (TypeError: (0 , __vite_ssr_import_15__.composeGeneratingSoftware) is not a function); the candidate run passes"
+      "state": "component-absent-at-baseline",
+      "why": "the probe called composeGeneratingSoftware at the baseline and that binding did not exist in that tree, so it observed nothing about the old behaviour"
     },
     {
       "baseline": {
@@ -1960,9 +1962,10 @@
   "scope": "The 18 records in validation/defects/defect-registry.json and the regression artifacts those records name. It is not a statement about any other part of the repository.",
   "source": "validation/defects/replay/raw",
   "stateMeanings": {
-    "component-absent-at-baseline": "the probe could not load at the baseline because a module it needs did not exist in that tree",
+    "component-absent-at-baseline": "the probe could not observe the baseline at all, because a module it imports or a binding it calls did not exist in that tree",
     "environment-unavailable": "the probe needs a runtime this host does not offer",
-    "inconclusive": "the probe ran on both sides and did not establish the old behaviour",
+    "inconclusive": "the pair produced no readable result on one side or the other, so nothing can be read off it",
+    "non-discriminating": "the probe passed on both trees, so it demonstrates nothing about the old behaviour and is not evidence for this record",
     "not-executed": "the registry names no separately executable artifact for this entry, so nothing was run for it",
     "reproduced-then-fixed": "the probe failed at the baseline on the behaviour the record describes, and passes at the candidate"
   },
@@ -1970,16 +1973,18 @@
     "byDefectState": {
       "component-absent-at-baseline": 1,
       "environment-unavailable": 0,
-      "inconclusive": 1,
+      "inconclusive": 0,
+      "non-discriminating": 1,
       "not-executed": 0,
       "reproduced-then-fixed": 16
     },
     "byProbeState": {
-      "component-absent-at-baseline": 3,
+      "component-absent-at-baseline": 5,
       "environment-unavailable": 0,
-      "inconclusive": 10,
+      "inconclusive": 0,
+      "non-discriminating": 10,
       "not-executed": 3,
-      "reproduced-then-fixed": 28
+      "reproduced-then-fixed": 26
     },
     "defects": 18,
     "probes": 44,

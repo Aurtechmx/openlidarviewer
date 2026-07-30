@@ -17,6 +17,7 @@
 
 import { createHash } from 'node:crypto';
 import { escapeRegExp } from './regex-escape.mjs';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 /** The inputs the snapshot collects, in report order. */
 export const INPUTS = Object.freeze([
@@ -322,7 +323,7 @@ export function derivedComposition(registry) {
 export function tally(values) {
   const counts = new Map();
   for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
-  return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])));
+  return Object.fromEntries([...counts].sort((a, b) => b[1] - a[1] || compareCodeUnits(a[0], b[0])));
 }
 
 /**
@@ -341,7 +342,7 @@ export function jsonShape(text) {
   if (Array.isArray(value)) return { parsed: true, kind: 'array', length: value.length };
   if (value === null || typeof value !== 'object') return { parsed: true, kind: typeof value };
   const keys = {};
-  for (const k of Object.keys(value).sort()) {
+  for (const k of Object.keys(value).sort(compareCodeUnits)) {
     const v = value[k];
     if (Array.isArray(v)) keys[k] = `array[${v.length}]`;
     else if (v === null) keys[k] = 'null';
@@ -542,8 +543,8 @@ export function deriveSnapshot({ read, has, digest, listed, storedPathOf }) {
   for (const spec of INPUTS) {
     const paths = new Set(spec.files);
     if (spec.dir) for (const p of listed(spec.dir.path)) if (spec.dir.match.test(p)) paths.add(p);
-    const present = [...paths].filter((p) => has(p)).sort();
-    const missing = [...paths].filter((p) => !has(p)).sort();
+    const present = [...paths].filter((p) => has(p)).sort(compareCodeUnits);
+    const missing = [...paths].filter((p) => !has(p)).sort(compareCodeUnits);
 
     // Exactly one status, and the partial case is named rather than rounded to
     // either neighbour: a producer that left some of its declared records
