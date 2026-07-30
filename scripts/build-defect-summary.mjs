@@ -13,6 +13,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = resolve(ROOT, 'validation/defects');
@@ -56,7 +57,7 @@ function tally(pairs) {
   const counts = new Map();
   for (const key of pairs) counts.set(key, (counts.get(key) ?? 0) + 1);
   return Object.fromEntries(
-    [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    [...counts].sort((a, b) => b[1] - a[1] || compareCodeUnits(a[0], b[0])),
   );
 }
 

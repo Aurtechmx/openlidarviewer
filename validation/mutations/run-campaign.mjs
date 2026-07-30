@@ -37,6 +37,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import { compareCodeUnits } from '../../scripts/lib/codeUnitOrder.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');
@@ -346,7 +347,7 @@ function runVitest(files, env) {
   return {
     exitCode: res.status,
     durationMs,
-    failures: failures.sort(),
+    failures: failures.sort(compareCodeUnits),
     ran,
     parsed,
     stderrTail: (res.stderr ?? '').split('\n').slice(-8).join('\n'),
