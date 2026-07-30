@@ -1,0 +1,42 @@
+# Measures compliance with the five fair-software.eu recommendations: a public
+# repository, a licence, a registry entry, citation metadata, and a quality
+# checklist. It reports a score and suggests a badge.
+#
+# Two deliberate differences from the action's documented example.
+#
+# The action is pinned to a commit rather than the `0.2.1` tag. Every other
+# action in this repository is pinned the same way, because a tag can be moved
+# to different code by whoever owns it, and OpenSSF Scorecard scores pinned
+# dependencies. The tag this commit carried is in the trailing comment.
+#
+# The example runs on every push. This runs on request. The action is a Docker
+# action, so each run builds an image from a third-party Dockerfile, and the
+# score changes only when licensing, citation, registry or checklist metadata
+# changes. Running it on demand keeps that build off the path of every commit.
+#
+# The README already carries a fairsoftwarechecklist.net badge, which is a
+# self-assessment. This measures from evidence instead, so the two are not
+# interchangeable and the numbers can differ. Read a real score from a real run
+# before deciding what to display.
+name: fair-software
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    name: Measure fair-software.eu compliance
+    runs-on: ubuntu-latest
+    steps:
+      - name: Measure compliance with fair-software.eu recommendations
+        uses: fair-software/howfairis-github-action@4c11146488125aa6e1531184eed51d781bcd5871 # 0.2.1
+        env:
+          # The tool colours its output only when it believes a terminal is
+          # attached; this is the flag its own example uses to get colour in a
+          # runner log.
+          PYCHARM_HOSTED: "Trick colorama into displaying colored output"
+        with:
+          MY_REPO_URL: "https://github.com/${{ github.repository }}"

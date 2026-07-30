@@ -132,11 +132,20 @@ console.log(`raw records: ${records.length} in ${files.length} files`);
 console.log(`raw digest (recomputed): ${rawDigest}`);
 for (const state of STATES) console.log(`  ${state}: ${counts[state]}`);
 
-const unresolved = probeStates(probes, records).filter((s) => s.state === 'inconclusive');
-if (unresolved.length > 0) {
+// Printed apart from the tally above, and printed every run. These are the
+// probes the aggregate does NOT rest on, so a reader can see which ones they
+// are without opening the comparison files.
+const states = probeStates(probes, records);
+for (const [state, heading] of [
+  ['non-discriminating', 'probes that passed on both trees, so they show nothing about the old behaviour'],
+  ['component-absent-at-baseline', 'probes that could not observe the baseline'],
+  ['inconclusive', 'probes whose pair produced no readable result'],
+]) {
+  const group = states.filter((s) => s.state === state);
+  if (group.length === 0) continue;
   console.log('');
-  console.log(`probes that did not establish the old behaviour: ${unresolved.length}`);
-  for (const s of unresolved) console.log(`  ${s.probe.defect} probe ${s.probe.index}: ${s.why}`);
+  console.log(`${heading}: ${group.length}`);
+  for (const s of group) console.log(`  ${s.probe.defect} probe ${s.probe.index}: ${s.why}`);
 }
 
 if (problems.length > 0) {

@@ -35,6 +35,7 @@ import { dirname, resolve, join, relative } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { INPUTS, evidencePath, sha256, deriveSnapshot, renderSummary } from './validation-snapshot-lib.mjs';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -63,7 +64,7 @@ function plan() {
     if (spec.dir) {
       for (const p of walk(join(ROOT, spec.dir.path), ROOT)) if (spec.dir.match.test(p)) paths.add(p);
     }
-    for (const p of [...paths].sort()) jobs.push({ id: spec.id, path: p });
+    for (const p of [...paths].sort(compareCodeUnits)) jobs.push({ id: spec.id, path: p });
   }
   return jobs;
 }
@@ -97,14 +98,14 @@ export function evidenceReader(dir, index) {
       const buf = readFileSync(stored.get(p));
       return { sha256: sha256(buf), bytes: buf.length };
     },
-    listed: (prefix) => [...stored.keys()].filter((p) => p.startsWith(`${prefix}/`)).sort(),
+    listed: (prefix) => [...stored.keys()].filter((p) => p.startsWith(`${prefix}/`)).sort(compareCodeUnits),
     storedPathOf: (p) => index.find((e) => e.sourcePath === p)?.storedPath ?? null,
   };
 }
 
 /** Write SHA256SUMS over every file in the directory except the manifest. */
 export function writeManifest(dir) {
-  const files = walk(dir, dir).filter((p) => p !== 'SHA256SUMS').sort();
+  const files = walk(dir, dir).filter((p) => p !== 'SHA256SUMS').sort(compareCodeUnits);
   const lines = files.map((p) => `${sha256(readFileSync(join(dir, p)))}  ${p}`);
   writeFileSync(join(dir, 'SHA256SUMS'), `${lines.join('\n')}\n`);
   return files.length;

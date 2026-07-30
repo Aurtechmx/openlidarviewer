@@ -12,6 +12,7 @@
  * number a reader asked for and answers a different question.
  */
 
+import { compareCodeUnits } from '../../src/canonicalHash';
 import { summariseSeries, type SeriesSummary } from './stats';
 import { describeSeries, type RunSeries } from './series';
 
@@ -53,7 +54,7 @@ export function summariseRuns(
   const available: SeriesBlock[] = [];
   const unavailable: UnavailableSeries[] = [];
 
-  for (const key of [...keys].sort()) {
+  for (const key of [...keys].sort(compareCodeUnits)) {
     const values: number[] = [];
     const missing: string[] = [];
     runs.forEach((run, i) => {
@@ -125,7 +126,7 @@ export function diffJson(
   if (aIsObject && bIsObject) {
     const ao = a as Record<string, unknown>;
     const bo = b as Record<string, unknown>;
-    const keys = [...new Set([...Object.keys(ao), ...Object.keys(bo)])].sort();
+    const keys = [...new Set([...Object.keys(ao), ...Object.keys(bo)])].sort(compareCodeUnits);
     for (const key of keys) {
       if (out.length >= limit) break;
       const child = path === '' ? key : `${path}.${key}`;

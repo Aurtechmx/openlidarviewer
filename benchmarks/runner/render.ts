@@ -19,6 +19,7 @@
  * carried in the JSON the table points at.
  */
 
+import { compareCodeUnits } from '../../src/canonicalHash';
 import { UNAVAILABLE_LABEL, type EnvValue } from '../framework';
 import type { ForcedGcObservation } from './gcMode';
 import type { FirstRunCheck, SeriesSummary } from './stats';
@@ -92,6 +93,11 @@ export function csvField(value: string): string {
 
 function csvRow(fields: readonly string[]): string {
   return fields.map(csvField).join(',');
+}
+
+/** Hash-table entries in code-unit order of the artifact name. */
+function byName(hashes: Readonly<Record<string, string>>): [string, string][] {
+  return Object.entries(hashes).sort(([a], [b]) => compareCodeUnits(a, b));
 }
 
 /** Markdown table cell — a pipe would split the row into two columns. */
@@ -176,10 +182,12 @@ export function reproducibilityMarkdown(summary: ReproducibilitySummary): string
   lines.push('');
   lines.push('| artifact | scope | sha256 |');
   lines.push('| --- | --- | --- |');
-  for (const [name, hash] of Object.entries(summary.identity.referenceScienceHashes).sort()) {
+  // By artifact name. A default sort here would order the [name, hash] pairs
+  // by their comma-joined text, which folds the hash into the key.
+  for (const [name, hash] of byName(summary.identity.referenceScienceHashes)) {
     lines.push(`| ${cell(name)} | science | \`${cell(hash)}\` |`);
   }
-  for (const [name, hash] of Object.entries(summary.identity.referenceBuildScopedHashes).sort()) {
+  for (const [name, hash] of byName(summary.identity.referenceBuildScopedHashes)) {
     lines.push(`| ${cell(name)} | build | \`${cell(hash)}\` |`);
   }
   lines.push('');

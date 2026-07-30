@@ -49,7 +49,12 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: npm
-      - run: npm ci
+      # See the note on the same step in ci.yml for what was measured. The only
+      # install scripts in the lockfile belong to darwin-only fsevents and to
+      # vitepress's nested esbuild, neither of which this job uses. The job
+      # holds `contents: write` to push the evidence file, so install-time code
+      # execution is worth removing here in particular.
+      - run: npm ci --ignore-scripts
       - name: Lockfile is unchanged by a clean install
         run: git diff --exit-code -- package-lock.json
 
