@@ -62,8 +62,10 @@ jobs:
           fi
       - name: Every file the published scripts run is tracked
         run: node scripts/verify-clean-clone.mjs
+      # No dependency lifecycle script runs during install. The build and the
+      # docs site below are what prove the tree is complete without them.
       - name: Install from the lockfile
-        run: npm ci
+        run: npm ci --ignore-scripts
       - name: The install did not rewrite the lockfile
         run: git diff --exit-code -- package-lock.json
       - name: Typecheck
@@ -88,7 +90,7 @@ jobs:
         with:
           node-version: 22
           # No `cache: npm`. See the header.
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: The install did not rewrite the lockfile
         run: git diff --exit-code -- package-lock.json
       # The full battery. The GPU leg and the platform comparison report as

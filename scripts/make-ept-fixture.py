@@ -23,6 +23,10 @@ byte-identical output. CI can re-create it on demand without diffing.
 Usage:
     python3 scripts/make-ept-fixture.py --out tests/fixtures/ept-tiny \\
         --points 1000 --span 128 --seed 42
+
+`--out` must land inside the working directory, which is where fixtures belong.
+Set OLV_OUT_ROOT to generate somewhere else on purpose; nothing else escapes,
+including by way of `..` or a symlink planted in the target directory.
 """
 
 from __future__ import annotations
@@ -51,6 +55,24 @@ SCHEMA = [
 ]
 
 POINT_BYTES = sum(f["size"] for f in SCHEMA)  # 4+4+4+2+1 = 15
+
+
+def resolve_under_out_root(raw: str) -> Path:
+    """Resolve `raw` and refuse it if it lands outside the output root.
+
+    Resolving before the prefix check is the point: it collapses `..` and
+    follows any symlink on the way, so neither one can redirect the fixture
+    into a directory the caller never named.
+    """
+    root = Path(os.environ.get("OLV_OUT_ROOT") or Path.cwd()).expanduser().resolve()
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve()
+    if resolved != root and root not in resolved.parents:
+        print(f"refusing to write outside {root}: {raw}", file=sys.stderr)
+        raise SystemExit(2)
+    return resolved
 
 
 def write_manifest(out: Path, points: int, span: int, bounds_cube: list[float]) -> None:
@@ -125,7 +147,7 @@ def main() -> int:
     parser.add_argument("--seed", type=int, default=42, help="RNG seed for deterministic output.")
     args = parser.parse_args()
 
-    out = Path(args.out)
+    out = resolve_under_out_root(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "ept-hierarchy").mkdir(exist_ok=True)
     (out / "ept-data").mkdir(exist_ok=True)
