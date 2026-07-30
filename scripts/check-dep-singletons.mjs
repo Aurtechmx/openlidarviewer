@@ -29,6 +29,7 @@
 import { readdirSync, statSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const NODE_MODULES = join(ROOT, 'node_modules');
@@ -120,7 +121,7 @@ function main() {
 
   for (const pkg of CRITICAL) {
     const copies = findCopies(pkg, NODE_MODULES, new Map());
-    const dirs = [...copies.keys()].sort();
+    const dirs = [...copies.keys()].sort(compareCodeUnits);
 
     if (dirs.length === 0) {
       // A critical runtime package that is not installed at all is itself a
