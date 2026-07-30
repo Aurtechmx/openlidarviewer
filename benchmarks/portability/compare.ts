@@ -40,6 +40,7 @@
  * Pure. No I/O, no clock, no randomness.
  */
 
+import { compareCodeUnits } from '../../src/canonicalHash';
 import type { PlatformRecord } from './record';
 import { FIXTURE_DESCRIPTOR_ARTIFACT, PORTABILITY_SCHEMA_VERSION, SOURCE_CLOUD_ARTIFACT } from './record';
 import { SUPPORTED_ENDIANNESS, unsupportedEndiannessReason } from './preconditions';
@@ -494,23 +495,12 @@ function compareFixture(records: readonly PlatformRecord[]): FixtureComparison {
 function compareScience(records: readonly PlatformRecord[]): ScienceComparison {
   const mismatches: Mismatch[] = [];
 
-/**
-   * Ordering note for the three `.sort()` calls below.
-   *
-   * Static analysis reports each as a reliability bug and suggests
-   * `String.localeCompare`. Do not take it. Collation depends on the locale and
-   * on the ICU build behind the runtime, so darwin-arm64 and linux-x64 can order
-   * the same names differently. This file decides whether two platforms agree;
-   * an ordering that varies by platform would manufacture the disagreement it
-   * exists to detect. Default sort on strings is UTF-16 code-unit order, fixed
-   * by the language spec.
-   *
-   * The rule's other half, that default sort compares numbers as strings, does
-   * not apply: these are artifact, scalar and build-hash names.
-   */
+  // Code-unit order for the three orderings in this function, never collation.
+  // This file decides whether two platforms agree; an order that varies by
+  // locale or ICU build would manufacture the disagreement it exists to detect.
   const names = [
     ...new Set([...REQUIRED_SCIENCE_ARTIFACTS, ...records.flatMap((r) => Object.keys(r.science.hashes))]),
-  ].sort();
+  ].sort(compareCodeUnits);
   for (const name of names) {
     const values: Record<string, string> = {};
     let missing = false;
@@ -529,7 +519,7 @@ function compareScience(records: readonly PlatformRecord[]): ScienceComparison {
   // scalar added to the pipeline must be compared, not skipped.
   const scalarsOf = (r: PlatformRecord): Record<string, unknown> =>
     r.science.scalars as unknown as Record<string, unknown>;
-  const scalarKeys = [...new Set(records.flatMap((r) => Object.keys(scalarsOf(r))))].sort();
+  const scalarKeys = [...new Set(records.flatMap((r) => Object.keys(scalarsOf(r))))].sort(compareCodeUnits);
   for (const key of scalarKeys) {
     // Object.is, matching the single-platform suite: it separates a genuine
     // null from a NaN and does not equate +0 with -0.
@@ -579,7 +569,7 @@ function expectedDifferencesOf(records: readonly PlatformRecord[]): ExpectedDiff
   add('runtime', 'v8Version', 'V8 supplies the transcendental functions the generator uses. Recorded because a difference here is the first thing to check if the fixture ever stops matching.', (r) => envText(r.environment.v8Version));
   add('runtime', 'npmVersion', 'The npm version does not affect an installed tree that came from the committed lockfile.', (r) => envText(r.environment.npmVersion));
 
-  const buildNames = [...new Set(records.flatMap((r) => Object.keys(r.buildScopedHashes)))].sort();
+  const buildNames = [...new Set(records.flatMap((r) => Object.keys(r.buildScopedHashes)))].sort(compareCodeUnits);
   for (const name of buildNames) {
     add(
       'build-scoped-hash',

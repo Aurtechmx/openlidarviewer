@@ -270,7 +270,17 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: npm
-      - run: npm ci
+      # Four lockfile entries declare an install script: three copies of
+      # fsevents, which is darwin-only and is not installed on this runner, and
+      # vitepress's nested esbuild, which resolves its binary from a platform
+      # package and works without one. Nothing else can run code at install
+      # time, so disabling scripts removes that path at no cost. Measured on a
+      # full `npm ci --ignore-scripts` tree: the install succeeds, the
+      # typecheck, the laz-perf wasm tests and the production build all pass,
+      # and the resolved tree differs from the scripted install in nothing the
+      # suite reads. Playwright browsers come from an explicit
+      # `npx playwright install` step, which this flag does not touch.
+      - run: npm ci --ignore-scripts
       - name: Collect coverage
         run: npm run coverage
       - name: Upload to Codecov

@@ -22,6 +22,7 @@
  * and casual edits. For cryptographic tamper-evidence, inject a SHA-256 (e.g.
  * via SubtleCrypto, pre-hashing each body) — the chain logic is hash-agnostic.
  */
+import { compareCodeUnits } from '../../canonicalHash';
 
 export type HashFn = (input: string) => string;
 
@@ -44,7 +45,7 @@ export function canonicalize(value: unknown): string {
     return '[' + value.map(canonicalize).join(',') + ']';
   }
   const obj = value as Record<string, unknown>;
-  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort(compareCodeUnits);
   return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalize(obj[k])).join(',') + '}';
 }
 

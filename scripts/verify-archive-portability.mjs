@@ -32,6 +32,7 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs';
 import { escapeRegExp } from './regex-escape.mjs';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative, posix } from 'node:path';
@@ -229,7 +230,7 @@ export function rootDocumentReferences(text) {
   for (const m of text.matchAll(/(?<![\w./@-])([A-Z][A-Z0-9_]*(?:_v\d[\w.]*)?\.md)(?![\w])/g)) {
     out.add(m[1]);
   }
-  return [...out].sort();
+  return [...out].sort(compareCodeUnits);
 }
 
 // ── archive acquisition ──────────────────────────────────────────────────────
@@ -304,7 +305,7 @@ const check = (id, title, fn, opts = {}) => checks.push({ id, title, fn, ...opts
 const resolves = (c, target) => linkCandidates(target).some((p) => c.set.has(p) || existsSync(join(c.A, p)));
 
 function makeCtx(A) {
-  const files = listFiles(A).sort();
+  const files = listFiles(A).sort(compareCodeUnits);
   const set = new Set(files);
   const read = (p) => (set.has(p) ? readFileSync(join(A, p), 'utf8') : null);
   const pkg = JSON.parse(readFileSync(join(A, 'package.json'), 'utf8'));
@@ -443,7 +444,7 @@ check('no-internal-material', 'nothing internal or generated ships in the archiv
 check('no-dangling-references-to-excluded', 'nothing that ships references a file that does not', (c) => {
   const f = [];
   const tracked = git(['ls-files']).split('\n').filter(Boolean);
-  const excluded = tracked.filter((p) => !c.set.has(p)).sort();
+  const excluded = tracked.filter((p) => !c.set.has(p)).sort(compareCodeUnits);
   for (const md of c.markdown) {
     for (const { kind, target } of markdownTargets(c.read(md), md)) {
       if (resolves(c, target)) continue;
@@ -606,7 +607,7 @@ check('markdown-link-graph', 'every required reference in the shipped markdown g
     if (referenced.size === 0) {
       f.push({ level: 'error', message: 'no shipped document names a tracked root-level document; the root-document tier verified nothing.' });
     }
-    rootTier = { available: true, documents: [...referenced].sort() };
+    rootTier = { available: true, documents: [...referenced].sort(compareCodeUnits) };
   }
 
   return {
@@ -618,7 +619,7 @@ check('markdown-link-graph', 'every required reference in the shipped markdown g
         archiveFiles: c.files.length,
         edgesByClass: classes,
         edgesBySyntax: via,
-        externalHosts: [...externalHosts].sort(),
+        externalHosts: [...externalHosts].sort(compareCodeUnits),
       },
       rootDocuments: rootTier,
       unresolved,
@@ -733,7 +734,7 @@ check('imports-declared', 'every package the archive imports is a declared depen
     }
     f.push({ level: 'warn', message: `runtime dependency "${name}" is declared but nothing in the archive imports it or reads it out of node_modules.` });
   }
-  return { findings: f, detail: { imported: [...used].sort(), readByPath: [...byPath].sort() } };
+  return { findings: f, detail: { imported: [...used].sort(compareCodeUnits), readByPath: [...byPath].sort(compareCodeUnits) } };
 });
 
 check('sbom-matches-manifest', 'the SBOM ships and covers the declared dependency set', (c) => {

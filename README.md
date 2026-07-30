@@ -63,11 +63,27 @@ optional permission.
 A failed file, an unexpected warning or one confusing screenshot is worth
 sending. Negative results are the useful kind here.
 
-[Submit a test report](https://lidar.aurtech.mx/test-report.html). The form runs
-in your browser and builds one self-contained report file, screenshots included,
-which you read before anything is sent. Send it to the project server, or
-download it and email it yourself. Reports are kept privately for development
-and are not published or passed to any third party.
+There are two forms, and which one fits depends on what you scan.
+
+[Terrestrial LiDAR evaluation](https://lidar.aurtech.mx/testing.html) takes five
+to ten minutes. Use it for tripod and mobile scanners, indoor and building
+capture, and any work where scan stations, occlusion and coverage matter more
+than a coordinate reference system.
+
+[GIS comparison](https://lidar.aurtech.mx/terrain-test.html) is longer. Use it
+when you can put a number beside a number: metadata, CRS and units, elevations,
+terrain products, and how the browser workflow compares with ArcGIS, QGIS,
+CloudCompare or PDAL. It asks for the values you read in both tools, so have the
+reference open.
+
+Either one is worth sending on its own. Neither needs the other.
+
+[Submit a test report](https://lidar.aurtech.mx/test-report.html) is the general
+form, for anything the two above do not cover. It runs in your browser and
+builds one self-contained report file, screenshots included, which you read
+before anything is sent. Send it to the project server, or download it and email
+it yourself. Reports are kept privately for development and are not published or
+passed to any third party.
 
 ## Overview
 
