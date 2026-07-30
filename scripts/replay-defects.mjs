@@ -28,14 +28,16 @@
  *   reproduced-then-fixed        the probe failed at the baseline on the
  *                                behaviour the record describes, and passes at
  *                                the candidate
- *   component-absent-at-baseline the probe could not load at the baseline
- *                                because a module it needs did not exist there
+ *   component-absent-at-baseline the probe could not observe the baseline: a
+ *                                module it imports, or a binding it calls, did
+ *                                not exist in that tree
  *   environment-unavailable      the probe needs a runtime this host does not
  *                                offer, on either side
+ *   non-discriminating           the probe passed on both trees, so it shows
+ *                                nothing about the old behaviour
  *   not-executed                 the registry names no executable artifact for
  *                                this entry, so nothing was run
- *   inconclusive                 the probe ran on both sides and did not
- *                                establish the old behaviour
+ *   inconclusive                 one side produced no readable result
  *
  * Exit 0 when every run completed and the comparison files were written, 1 when
  * a run could not be launched, 2 on a usage, read or setup error.
