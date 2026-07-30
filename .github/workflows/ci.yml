@@ -47,6 +47,8 @@ jobs:
         run: npm run lint:claim-register
       - name: No source files git-ignored
         run: npm run lint:no-ignored-src
+      - name: No tracked file names the build machine
+        run: npm run lint:no-host-paths
       - name: Generated claim registry is committed (regenerate → no diff)
         run: npm run gen:claim-registry && git diff --exit-code
       - name: Bucket partition integrity (every test file in exactly one bucket)

@@ -21,8 +21,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -30,7 +30,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -46,8 +46,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc",
         "-alg",
         "Horn",
         "-p",
@@ -56,7 +56,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "percent rise",
@@ -72,8 +72,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc",
         "-alg",
         "Horn",
         "-compute_edges",
@@ -82,7 +82,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -98,8 +98,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -107,7 +107,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -123,8 +123,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc",
         "-alg",
         "Horn",
         "-zero_for_flat",
@@ -133,7 +133,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, 0 on flat",
@@ -149,8 +149,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -164,7 +164,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -180,8 +180,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -195,7 +195,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -211,8 +211,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc",
         "-az",
         "180",
         "-alt",
@@ -226,7 +226,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -242,8 +242,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc",
         "-alt",
         "45",
         "-z",
@@ -254,7 +254,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -270,8 +270,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -279,7 +279,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -295,8 +295,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc",
         "-alg",
         "Horn",
         "-p",
@@ -305,7 +305,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "percent rise",
@@ -321,8 +321,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc",
         "-alg",
         "Horn",
         "-compute_edges",
@@ -331,7 +331,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -347,8 +347,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -356,7 +356,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -372,8 +372,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -387,7 +387,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -403,8 +403,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -418,7 +418,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -434,8 +434,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -443,7 +443,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -459,8 +459,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -468,7 +468,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -484,8 +484,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -499,7 +499,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -515,8 +515,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc",
         "-az",
         "180",
         "-alt",
@@ -530,7 +530,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -546,8 +546,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -555,7 +555,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -571,8 +571,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc",
         "-alg",
         "Horn",
         "-compute_edges",
@@ -581,7 +581,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -597,8 +597,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -606,7 +606,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -622,8 +622,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -637,7 +637,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -653,8 +653,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -662,7 +662,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -678,8 +678,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -687,7 +687,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -703,8 +703,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -718,7 +718,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -734,8 +734,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc",
+        "validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -749,7 +749,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -765,8 +765,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -774,7 +774,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -790,8 +790,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc",
         "-alg",
         "Horn",
         "-p",
@@ -800,7 +800,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "percent rise",
@@ -816,8 +816,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -825,7 +825,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -841,8 +841,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -856,7 +856,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -872,8 +872,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -887,7 +887,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -903,8 +903,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc",
         "-az",
         "180",
         "-alt",
@@ -918,7 +918,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -934,8 +934,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc",
         "-alt",
         "45",
         "-z",
@@ -946,7 +946,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -962,8 +962,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -971,7 +971,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -987,8 +987,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc",
         "-alg",
         "Horn",
         "-compute_edges",
@@ -997,7 +997,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1013,8 +1013,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1022,7 +1022,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1038,8 +1038,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1053,7 +1053,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1069,8 +1069,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc",
         "-az",
         "180",
         "-alt",
@@ -1084,7 +1084,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1100,8 +1100,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc",
+        "validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc",
         "-alt",
         "45",
         "-z",
@@ -1112,7 +1112,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1128,8 +1128,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
+        "validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1137,7 +1137,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1153,8 +1153,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
+        "validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1162,7 +1162,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1178,8 +1178,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
+        "validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1193,7 +1193,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1209,8 +1209,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc",
+        "validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -1224,7 +1224,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1240,8 +1240,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
+        "validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1249,7 +1249,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1265,8 +1265,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
+        "validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc",
         "-alg",
         "Horn",
         "-compute_edges",
@@ -1275,7 +1275,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1291,8 +1291,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
+        "validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1300,7 +1300,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1316,8 +1316,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
+        "validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1331,7 +1331,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1347,8 +1347,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/ridge.asc",
+        "validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -1362,7 +1362,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1378,8 +1378,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/valley.asc",
+        "validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1387,7 +1387,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1403,8 +1403,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/valley.asc",
+        "validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1412,7 +1412,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1428,8 +1428,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/valley.asc",
+        "validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1443,7 +1443,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1459,8 +1459,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
+        "validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1468,7 +1468,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1484,8 +1484,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
+        "validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1493,7 +1493,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1509,8 +1509,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
+        "validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1524,7 +1524,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1540,8 +1540,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/saddle.asc",
+        "validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc",
         "-az",
         "180",
         "-alt",
@@ -1555,7 +1555,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1571,8 +1571,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1580,7 +1580,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1596,8 +1596,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc",
         "-alg",
         "Horn",
         "-p",
@@ -1606,7 +1606,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "percent rise",
@@ -1622,8 +1622,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1631,7 +1631,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1647,8 +1647,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc",
         "-alg",
         "Horn",
         "-zero_for_flat",
@@ -1657,7 +1657,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, 0 on flat",
@@ -1673,8 +1673,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1688,7 +1688,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1704,8 +1704,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc",
+        "validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc",
         "-alt",
         "45",
         "-z",
@@ -1716,7 +1716,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1732,8 +1732,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1741,7 +1741,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1757,8 +1757,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1766,7 +1766,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1782,8 +1782,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc",
         "-alg",
         "Horn",
         "-zero_for_flat",
@@ -1792,7 +1792,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, 0 on flat",
@@ -1808,8 +1808,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1823,7 +1823,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1839,8 +1839,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1848,7 +1848,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1864,8 +1864,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1873,7 +1873,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1889,8 +1889,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc",
+        "validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1904,7 +1904,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -1920,8 +1920,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
+        "validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1929,7 +1929,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -1945,8 +1945,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
+        "validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -1954,7 +1954,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -1970,8 +1970,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc",
+        "validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -1985,7 +1985,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2001,8 +2001,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2014,7 +2014,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2030,8 +2030,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc",
         "-alg",
         "Horn",
         "-p",
@@ -2044,7 +2044,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc -alg Horn -p -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc -alg Horn -p -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "percent rise",
@@ -2060,8 +2060,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2069,7 +2069,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2085,8 +2085,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2102,7 +2102,7 @@
         "-yscale",
         "110540"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2118,8 +2118,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc",
+        "validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc",
         "-az",
         "45",
         "-alt",
@@ -2135,7 +2135,7 @@
         "-yscale",
         "110540"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2151,8 +2151,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2160,7 +2160,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2176,8 +2176,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2185,7 +2185,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2201,8 +2201,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2216,7 +2216,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2232,8 +2232,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2241,7 +2241,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2257,8 +2257,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2266,7 +2266,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2282,8 +2282,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2297,7 +2297,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2313,8 +2313,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2322,7 +2322,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2338,8 +2338,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2347,7 +2347,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2363,8 +2363,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2378,7 +2378,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2394,8 +2394,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2403,7 +2403,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2419,8 +2419,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2428,7 +2428,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2444,8 +2444,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2459,7 +2459,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2475,8 +2475,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2484,7 +2484,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2500,8 +2500,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2509,7 +2509,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2525,8 +2525,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2540,7 +2540,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2556,8 +2556,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2565,7 +2565,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2581,8 +2581,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2590,7 +2590,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2606,8 +2606,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2621,7 +2621,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2637,8 +2637,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2646,7 +2646,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2662,8 +2662,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2671,7 +2671,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2687,8 +2687,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2702,7 +2702,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2718,8 +2718,8 @@
       "status": "ok",
       "argv": [
         "slope",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2727,7 +2727,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem slope /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "degree",
@@ -2743,8 +2743,8 @@
       "status": "ok",
       "argv": [
         "aspect",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc",
         "-alg",
         "Horn",
         "-of",
@@ -2752,7 +2752,7 @@
         "-co",
         "DECIMAL_PRECISION=6"
       ],
-      "commandLine": "gdaldem aspect /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "exitCode": 0,
       "stderr": null,
       "unit": "compass degree clockwise from north, -9999 on flat",
@@ -2768,8 +2768,8 @@
       "status": "ok",
       "argv": [
         "hillshade",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
-        "/private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc",
+        "validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc",
+        "validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc",
         "-az",
         "315",
         "-alt",
@@ -2783,7 +2783,7 @@
         "-of",
         "AAIGrid"
       ],
-      "commandLine": "gdaldem hillshade /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/claude-501/-Users-ssid02/b994c3d1-d6fb-4997-ad53-86f25becd8cd/scratchpad/wt/raster-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "exitCode": 0,
       "stderr": null,
       "unit": "Byte 0-255, nodata 0",
@@ -2791,5 +2791,6 @@
       "output": "gdal/aspect-rose-315__hillshade-nw-default.asc",
       "sha256": "425bc950ca892eda6cf810e6a741e4c5944f25f4f814c96c88289b29210cf0d4"
     }
-  ]
+  ],
+  "pathConvention": "Paths are relative to the repository root. The recorded argv is the invocation with that root as the working directory."
 }
