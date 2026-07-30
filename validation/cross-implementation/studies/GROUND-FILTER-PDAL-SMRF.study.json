@@ -283,5 +283,9 @@
       "One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the threshold cap that our filter applies by default and that this study switches off to match the reference.",
       "Agreement with PDAL is not accuracy against ground truth. Ground membership in these scenes is known by construction, which is a comparison against a generator this project also wrote."
     ]
+  },
+  "freeze": {
+    "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
+    "witness": "The commit that registered this study at pending, with the tolerance already frozen, before it was run. It is not an ancestor of the default branch because the pull request was squash-merged, which collapsed the preregistration and the result into one commit."
   }
 }

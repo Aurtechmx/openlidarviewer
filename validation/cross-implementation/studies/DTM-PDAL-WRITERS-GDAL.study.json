@@ -75,7 +75,7 @@
     }
   ],
   "metrics": {
-    "toleranceAbs": 0.00005,
+    "toleranceAbs": 5e-05,
     "toleranceUnit": "metre",
     "minimumComparableCells": 7500,
     "requiredWithinToleranceFraction": 1
@@ -86,7 +86,7 @@
     "comparableCells": 7500,
     "skippedCells": 0,
     "withinToleranceFraction": 1,
-    "maxAbsDiff": 0.000003784179682497779
+    "maxAbsDiff": 3.784179682497779e-06
   },
   "rawArtifacts": [
     {
@@ -216,5 +216,9 @@
       "One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m.",
       "Agreement with PDAL is not accuracy against ground truth."
     ]
+  },
+  "freeze": {
+    "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
+    "witness": "The commit that registered this study at pending, with the tolerance already frozen, before it was run. It is not an ancestor of the default branch because the pull request was squash-merged, which collapsed the preregistration and the result into one commit."
   }
 }
