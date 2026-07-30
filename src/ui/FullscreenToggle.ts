@@ -177,19 +177,17 @@ export class FullscreenToggle {
     const d = document as FsDoc;
     if (this._isFullscreen()) {
       const exit = document.exitFullscreen ?? d.webkitExitFullscreen;
-      const p = exit?.call(document);
-      if (p && typeof (p as Promise<void>).catch === 'function') {
-        (p as Promise<void>).catch(() => this._announce('Could not leave full screen.'));
+      const p = exit?.call(document) as Promise<void> | undefined;
+      if (typeof p?.catch === 'function') {
+        p.catch(() => this._announce('Could not leave full screen.'));
       }
       return;
     }
     const root = document.documentElement as FsEl;
     const request = root.requestFullscreen ?? root.webkitRequestFullscreen;
-    const p = request?.call(root);
-    if (p && typeof (p as Promise<void>).catch === 'function') {
-      (p as Promise<void>).catch(() =>
-        this._announce('The browser refused full screen for this page.'),
-      );
+    const p = request?.call(root) as Promise<void> | undefined;
+    if (typeof p?.catch === 'function') {
+      p.catch(() => this._announce('The browser refused full screen for this page.'));
     }
   }
 
