@@ -136,3 +136,9 @@ _private/
 # checkout with no run of its own should read as not-executed, not as green.
 /validation/reachability/ledger/
 /validation/reachability/summary.json
+
+# Agent-plugin scaffolding written into the working tree by tooling.
+# It is not part of the software and its internal links do not resolve
+# inside a source archive, which fails archive portability verification.
+.agents/
+skills-lock.json
