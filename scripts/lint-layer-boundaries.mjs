@@ -28,8 +28,14 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// `new URL(...).pathname` is a URL path, not a filesystem path. On Windows it
+// is `/C:/…` with percent-encoded spaces, which `readdirSync` cannot open —
+// and `walk` swallows that ENOENT by design (a layer directory is allowed not
+// to exist), so the lint would print success having read zero files. A gate
+// that passes vacuously is worse than one that fails, hence fileURLToPath.
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science'];
 
 /** A specifier that reaches into the UI layer or pulls in three.js. */

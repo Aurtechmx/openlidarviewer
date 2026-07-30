@@ -29,9 +29,16 @@ import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
 // picks up. See scripts/lib/binaryOnPath.mjs.
-const NPX = requireBinaryOnPath('npx');
+// …except on Windows, where `npx` on PATH is a .cmd shim that Node will not
+// spawn without `shell: true`. There the vitest entry module runs under this
+// process's own node instead: one process, no wrapper, and the watchdog below
+// therefore kills the thing that is actually running the tests. POSIX keeps
+// the npx invocation it has always used.
+const WINDOWS = process.platform === 'win32';
+const NPX = WINDOWS ? null : requireBinaryOnPath('npx');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const VITEST_ENTRY = resolve(ROOT, 'node_modules/vitest/vitest.mjs');
 
 const argv = process.argv.slice(2);
 // A generous default: a single file, even one that spins up the WASM decoder,
@@ -71,7 +78,9 @@ const vitestArgs = [
   ...passthrough,
 ];
 
-const child = spawn(NPX, vitestArgs, { cwd: ROOT, stdio: 'inherit' });
+const child = WINDOWS
+  ? spawn(process.execPath, [VITEST_ENTRY, ...vitestArgs.slice(1)], { cwd: ROOT, stdio: 'inherit' })
+  : spawn(NPX, vitestArgs, { cwd: ROOT, stdio: 'inherit' });
 
 let watchdogTripped = false;
 const watchdog = setTimeout(() => {

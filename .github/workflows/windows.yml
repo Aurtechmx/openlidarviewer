@@ -1,0 +1,92 @@
+name: Windows
+
+# This project asks the public to test it, and until now every job in CI ran
+# on ubuntu-latest. A contributor on Windows could not run the gates and had
+# no way to find out which of them even work there — the honest answer was
+# unknown, because nothing had ever measured it.
+#
+# This workflow measures it. It runs the checks that are pure Node or pure
+# browser on a real Windows runner, so the Windows notes in
+# docs/developer-manual.md are backed by a job rather than by assumption.
+#
+# What it deliberately does NOT run: `npm run gate`, `npm run package`,
+# `npm run package:source`, `npm run build:live` and `npm run evidence`. Those
+# five shell out to bash, so they need WSL or Git Bash. Making them work
+# natively is a separate change, and pretending they work here would be worse
+# than saying they do not.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    # ADVISORY, on purpose. This is a brand-new leg on a platform no check has
+    # ever covered, so its first failures will be discoveries about Windows,
+    # not regressions in the pull request that happens to be open. A new leg
+    # that can go red blocks every unrelated pull request while someone
+    # debugs a runner they may not have. Once it has been green across a run
+    # of merges, promote it: drop this line and add the job to `ci-green`'s
+    # `needs` in ci.yml. Until then the result is a report, not a gate.
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+
+      # ── Checks that are pure Node, so there is no reason they should differ ─
+      # Each of these is named in the Windows section of the developer manual
+      # as working natively. They run here so that claim is measured.
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Bucket partition integrity
+        run: npm run test:buckets:verify
+      - name: Position-access ratchet (baseline keys are path-separator sensitive)
+        run: npm run lint:position-access
+      - name: Layer-boundary lint (walks the layer directories from a file URL)
+        run: npm run lint:layer-boundaries
+      - name: Main-deferral lint
+        run: npm run lint:main-deferral
+      - name: Inline dynamic import lint
+        run: npm run lint:inline-imports
+      - name: unsafeHtml lint
+        run: npm run lint:unsafe-html
+      - name: No tracked file names the build machine
+        run: npm run lint:no-host-paths
+
+      # One shard of the largest bucket. The point is not coverage — the Linux
+      # matrix already runs every shard — it is that the bucket runner spawns
+      # vitest at all. On Windows `node_modules/.bin/vitest` is an sh script
+      # with no PE header, so the shard used to die before a single test ran.
+      - name: Test bucket — unit (shard 1/3)
+        run: npm run test:unit -- --shard=1/3 --reporter=dot
+
+      # ── The viewport-width leg ────────────────────────────────────────────
+      # `--with-deps` installs Linux system packages and is not supported on
+      # this runner, so the browser is installed without it.
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+      - name: Startup smoke at five viewport widths (320 / 375 / 767 / 768 / 1440)
+        # playwright.widths.config.ts reuses the base config's webServer, so
+        # the production build and the preview server are paid for once and
+        # all five widths share them. 767 and 768 straddle the mobile/desktop
+        # breakpoint in src/style.css, which is the boundary a layout
+        # regression actually crosses.
+        run: npm run test:smoke:widths
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-windows
+          path: playwright-report/
+          retention-days: 7

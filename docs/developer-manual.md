@@ -83,6 +83,70 @@ Scan Intelligence report, and export the result.
 - **Node.js 22+** and npm 10+.
 - A modern browser for development (Chrome or Edge recommended for WebGPU).
 
+### 4.1 Windows
+
+`.github/workflows/windows.yml` runs a subset of the checks on a
+`windows-latest` runner, so the first list below is measured rather than
+assumed. The job is advisory while the platform is new, so read its result as
+a report.
+
+#### Run natively, verified in CI on Windows
+
+| Command | |
+|---------|---|
+| `npm ci`, `npm install` | |
+| `npm run dev`, `npm run build`, `npm run preview` | |
+| `npm run typecheck` | |
+| `npm run test:buckets:verify` | |
+| `npm run test:unit` | shard 1/3 is the one CI exercises; the other buckets use the same runner |
+| `npm run lint:position-access`, `lint:layer-boundaries`, `lint:main-deferral`, `lint:inline-imports`, `lint:unsafe-html`, `lint:no-host-paths` | |
+| `npm run test:smoke:widths` | the startup smoke spec at 320, 375, 767, 768 and 1440 px |
+
+#### Need WSL or Git Bash
+
+These five npm scripts invoke `bash`, and `build:live` also uses
+`date +%s` and shell arithmetic:
+
+- `npm run gate` (`bash scripts/gate.sh`)
+- `npm run package` and `npm run package:source` (`bash scripts/package.sh`)
+- `npm run build:live`
+- `npm run evidence`
+
+`npm run test:release:execute` chains `build:live`, so the release gate needs
+bash too. With Git Bash on PATH they work as they do elsewhere; that
+combination has not been exercised in CI, only reasoned about from the scripts.
+
+#### What has not been tested on Windows
+
+Not known to be broken, just never run there:
+
+- The remaining test buckets (`test:export`, `test:terrain`, `test:ui`,
+  `test:slow`) and `npm run test:e2e`.
+- `npm run coverage`, `npm run test:build`, `npm run test:smoke:live` and the
+  other scripts that set an environment variable inline
+  (`VAR=1 command`). npm runs scripts through `cmd.exe` on Windows, which does
+  not parse that form.
+- `npm run docs:build`, `npm run mutation`, and everything under
+  `npm run benchmark:*`.
+
+#### Known Windows gaps in the tooling
+
+Reported here rather than papered over:
+
+- `scripts/test-bucket.mjs` kills a timed-out shard by killing the child
+  directly. On POSIX it kills the whole process group, which also reclaims
+  vitest's workers. Windows has no process groups, so a shard that hangs may
+  leave workers behind.
+- `npm run release:verify` needs `unzip`, and
+  `npm run validation:defects:replay` needs `ln`. Neither ships with Windows.
+- `npm run benchmark:clean-clone` and `npm run benchmark:archive-portability`
+  call `tar`. Windows 10 and later ship bsdtar under that name, so they may
+  work; nobody has checked.
+- There is no `text=auto` rule in `.gitattributes`, so `core.autocrlf=true`
+  gives you a CRLF working tree. Nothing in the gates is known to depend on
+  the line ending, but that is the configuration the checks above ran under
+  (a GitHub Windows runner defaults to `autocrlf=true`).
+
 ---
 
 ## 5. Getting started
@@ -215,6 +279,7 @@ See [`architecture.md`](architecture.md) for the full map.
 | `npm test` | Run the Vitest unit suite once. |
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
+| `npm run test:smoke:widths` | The startup smoke spec at five viewport widths — 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
 
 A `?debug=1` URL parameter logs a per-stage load-timing breakdown — read, decode, downsample, GPU upload, total — to the browser console. It is useful when profiling the load pipeline and is off in normal use.
 
