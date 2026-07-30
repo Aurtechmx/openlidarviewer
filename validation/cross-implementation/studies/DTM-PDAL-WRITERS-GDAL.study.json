@@ -219,6 +219,6 @@
   },
   "protocolRef": {
     "protocolId": "PROTO-PDAL-POINT-CLOUD-PRODUCTS",
-    "digest": "sha256:708ea2546f5fc241529605e11ce58ce50a5929a8d1c72e5fed08cfce4bd8eb8d"
+    "digest": "sha256:d2d3d50a44b66e499f36b6660e2eca94f9e842665ce08a040ac1c5ab61cdd852"
   }
 }

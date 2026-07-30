@@ -463,10 +463,21 @@ export function collectProtocolProblems(ctx) {
     // preregistration. Where both commits are known, the comparison moves to
     // their timestamps, which is stricter than the date test, not looser: the
     // ordering has to hold to the second rather than to the day.
-    const sameDay = f.on === landed && (f.witnessCommit ?? null) !== null && (f.resultCommit ?? null) !== null;
-    const witnessAt = sameDay ? commitInstant(f.witnessCommit) : null;
-    const resultAt = sameDay ? commitInstant(f.resultCommit) : null;
-    const sameDayOrdered = witnessAt !== null && resultAt !== null && witnessAt < resultAt;
+    // A freeze and its result can fall on the same day and still be ordered: a
+    // study registered in the morning and run after lunch is a preregistration.
+    // The record carries the two instants so that ordering is decidable from
+    // the record alone. It has to be: the witness commit is often unreachable
+    // from the default branch after a squash merge, and CI clones shallow, so a
+    // check that needs git to answer this question cannot answer it where it
+    // runs. P10 below still compares the stated instants against the commits
+    // wherever the history is available, so stating them is a claim, not an
+    // escape.
+    const sameDay = f.on === landed;
+    const statedOrder =
+      typeof f.atInstant === 'string' &&
+      typeof f.resultAtInstant === 'string' &&
+      Date.parse(f.atInstant) < Date.parse(f.resultAtInstant);
+    const sameDayOrdered = sameDay && statedOrder;
     // Where there is no git at all, the ordering is unknown rather than wrong.
     // An extracted archive has no repository and this verifier runs there, so
     // failing a record because the evidence is out of reach would report a
@@ -476,7 +487,10 @@ export function collectProtocolProblems(ctx) {
     // situations: with git present, a commit that does not resolve is a witness
     // that does not exist, which is a finding and not an excuse. Written the
     // loose way first, and case 11d caught it.
-    const sameDayUncheckable = sameDay && GIT === null;
+    // Only the record's own claim excuses a same-day freeze. If it does not
+    // state the instants, there is nothing to believe and P9 fires, which is
+    // what case 11d pins.
+    const sameDayUncheckable = false;
     if (
       f.status === 'preregistered' &&
       landed !== null &&
@@ -485,6 +499,15 @@ export function collectProtocolProblems(ctx) {
       !sameDayUncheckable
     ) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was preregistered, but the freeze date ${f.on} does not precede the result date ${landed}. A tolerance fixed alongside its result is "adopted-with-result"; it may be defensible on the merits, and it is still not a preregistration.`);
+    }
+    for (const [field, sha] of [['atInstant', f.witnessCommit], ['resultAtInstant', f.resultCommit]]) {
+      if (typeof f[field] !== 'string' || (sha ?? null) === null) continue;
+      const actual = commitInstant(sha);
+      // Null means this checkout cannot see the commit, which is the ordinary
+      // state in CI and in an extracted archive. Silence there, a finding here.
+      if (actual !== null && Date.parse(actual) !== Date.parse(f[field])) {
+        add('P10-WITNESS-DATE', `claims entry "${c.claimId}" states ${field} ${f[field]}, but commit ${String(sha).slice(0, 8)} is dated ${actual}; an instant that does not belong to the commit offered for it is not evidence.`);
+      }
     }
     if (f.status === 'adopted-with-result' && landed !== null && (f.on < landed || sameDayOrdered)) {
       add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was adopted with the result, but the freeze date ${f.on} precedes the result date ${landed}; if the witness commit really shows the tolerance before the result, this claim is stronger than the record admits and should say "preregistered".`);

@@ -19,7 +19,10 @@
     "digest"
   ],
   "properties": {
-    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
     "protocolId": {
       "description": "Stable identity, and the file's basename before .protocol.json. An example protocol must be prefixed EXAMPLE- and carry example: true.",
       "type": "string",
@@ -29,7 +32,10 @@
       "description": "True only for a template protocol, which may only be referenced by an example manifest.",
       "type": "boolean"
     },
-    "title": { "type": "string", "minLength": 1 },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
     "question": {
       "description": "What the study is trying to find out, in one sentence, written before it ran.",
       "type": "string",
@@ -40,13 +46,21 @@
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
     },
-    "referenceTool": { "type": "string", "minLength": 1 },
-    "referenceVersion": { "type": "string", "minLength": 1 },
+    "referenceTool": {
+      "type": "string",
+      "minLength": 1
+    },
+    "referenceVersion": {
+      "type": "string",
+      "minLength": 1
+    },
     "claims": {
       "description": "One entry per claim this protocol governs. A study manifest's claimId must appear here, and its metrics must equal the entry's metrics exactly.",
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/protocolClaim" }
+      "items": {
+        "$ref": "#/$defs/protocolClaim"
+      }
     },
     "decisionRule": {
       "description": "What outcome follows from what measurement, decided in advance. Written so that a reader can apply it to the numbers without consulting the author.",
@@ -55,7 +69,10 @@
     },
     "notes": {
       "type": "array",
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "digest": {
       "description": "sha256 over the canonical form of every field of this record except this one. The verifier recomputes it, and a study manifest repeats it in protocolRef.digest.",
@@ -67,7 +84,14 @@
     "protocolClaim": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claimId", "datasetIds", "parameterSetIds", "metrics", "toleranceDerivation", "freeze"],
+      "required": [
+        "claimId",
+        "datasetIds",
+        "parameterSetIds",
+        "metrics",
+        "toleranceDerivation",
+        "freeze"
+      ],
       "properties": {
         "claimId": {
           "description": "Must exist in docs/validation/claim-register.yaml.",
@@ -79,34 +103,52 @@
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
         },
         "parameterSetIds": {
           "description": "The parameter sets this protocol admits for the claim. A study manifest may not use a parameter set outside this list.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "type": "string", "pattern": "^PS-[A-Z0-9][A-Z0-9-]*$" }
+          "items": {
+            "type": "string",
+            "pattern": "^PS-[A-Z0-9][A-Z0-9-]*$"
+          }
         },
-        "metrics": { "$ref": "#/$defs/metrics" },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        },
         "toleranceDerivation": {
           "description": "Where the tolerance came from. 'It is what the comparison happened to reach' is not a derivation.",
           "type": "string",
           "minLength": 1
         },
-        "freeze": { "$ref": "#/$defs/freeze" }
+        "freeze": {
+          "$ref": "#/$defs/freeze"
+        }
       }
     },
     "freeze": {
       "description": "When this claim's tolerance was fixed, and whether that was before its result existed. Per claim, because one protocol can govern claims whose tolerances were fixed at different times: in this repository slope and hillshade were preregistered three weeks before their references were generated, and aspect was not.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "on", "witnessCommit", "witness"],
+      "required": [
+        "status",
+        "on",
+        "witnessCommit",
+        "witness"
+      ],
       "properties": {
         "status": {
           "description": "preregistered: the tolerance was on record while this claim had no result, so the result could not have chosen it. adopted-with-result: the tolerance was fixed in the same change that produced the result. The second is not necessarily wrong - a tolerance carried over from a sibling claim can be perfectly defensible - but it is a weaker thing and it may not be described as the first.",
           "type": "string",
-          "enum": ["preregistered", "adopted-with-result"]
+          "enum": [
+            "preregistered",
+            "adopted-with-result"
+          ]
         },
         "on": {
           "description": "The date the tolerance was fixed, as the witness commit shows it.",
@@ -132,6 +174,14 @@
           "description": "The commit that landed the result.",
           "type": "string",
           "pattern": "^[0-9a-f]{7,40}$"
+        },
+        "atInstant": {
+          "type": "string",
+          "description": "ISO instant of the freeze commit. Present when the freeze and its result fall on the same day, so the ordering is decidable from the record alone. CI clones shallow and a squashed witness is unreachable from the default branch, so a check that needs history to answer this cannot answer it where it runs."
+        },
+        "resultAtInstant": {
+          "type": "string",
+          "description": "ISO instant of the result commit, paired with atInstant. P10 compares both against their commits wherever the history is available."
         }
       }
     },
@@ -146,10 +196,22 @@
         "requiredWithinToleranceFraction"
       ],
       "properties": {
-        "toleranceAbs": { "type": "number", "minimum": 0 },
-        "toleranceUnit": { "type": "string", "minLength": 1 },
-        "minimumComparableCells": { "type": "integer", "minimum": 1 },
-        "requiredWithinToleranceFraction": { "type": "number", "minimum": 0 }
+        "toleranceAbs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "toleranceUnit": {
+          "type": "string",
+          "minLength": 1
+        },
+        "minimumComparableCells": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "requiredWithinToleranceFraction": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     }
   }

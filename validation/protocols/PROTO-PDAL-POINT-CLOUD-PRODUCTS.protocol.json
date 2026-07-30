@@ -33,7 +33,9 @@
         "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
         "witness": "The commit that registered both PDAL studies at pending with their tolerances already frozen, before either was run. It is not an ancestor of the default branch because the pull request was squash-merged.",
         "resultLandedOn": "2026-07-30",
-        "resultCommit": "1a6518a3"
+        "resultCommit": "1a6518a3",
+        "atInstant": "2026-07-30T10:17:08-06:00",
+        "resultAtInstant": "2026-07-30T11:37:50-06:00"
       }
     },
     {
@@ -59,7 +61,9 @@
         "witnessCommit": "d436ebf6f413a7a5d64f7f7952699ba16d491cc8",
         "witness": "The same registration commit as the ground-filter study above; both manifests were frozen in it before either ran.",
         "resultLandedOn": "2026-07-30",
-        "resultCommit": "1a6518a3"
+        "resultCommit": "1a6518a3",
+        "atInstant": "2026-07-30T10:17:08-06:00",
+        "resultAtInstant": "2026-07-30T11:37:50-06:00"
       }
     }
   ],
@@ -68,5 +72,5 @@
     "Written after the studies landed, transcribing the freeze recorded in the registration commit named under each claim. It does not create that freeze.",
     "Docker was not running on the host, so the reference tool was invoked from its installed path with the version, argv and exit code recorded rather than pinned to a container."
   ],
-  "digest": "sha256:708ea2546f5fc241529605e11ce58ce50a5929a8d1c72e5fed08cfce4bd8eb8d"
+  "digest": "sha256:d2d3d50a44b66e499f36b6660e2eca94f9e842665ce08a040ac1c5ab61cdd852"
 }
