@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "studyId": "OLV-XS-003-HILLSHADE-GDAL-HORN",
+  "claimId": "HILLSHADE",
+  "example": false,
+  "notes": [
+    "The record of the comparison HILLSHADE already sits at E4 on, written after the fact from artifacts committed at the time.",
+    "This is the weakest of the three legs and the record should say so. GDAL encodes the shared intensity as 1 + 254*h where this project writes 255*h, a fixed (1 - h) offset that consumes most of a one-level budget on its own, so the measured maximum difference of exactly 1.00 level is the encoding, not a shading error. What carries the claim is the other two legs: the unquantised intensity against the closed form differs by 0.0000643, and this project's intensity re-encoded in GDAL's own 1 + 254*h scale reproduces the reference exactly.",
+    "The reference was re-run on 2026-07-30 from the command in command.txt, with GDAL 3.13.1 at /opt/homebrew/bin/gdaldem, and reproduced hillshade-gdal.asc byte for byte. The original run recorded its version, platform and command but not its executable path; the path below is the one that reproduced the artifact."
+  ],
+  "protocolRef": {
+    "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
+    "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+  },
+  "protocolDigest": "sha256:c9c0916fd1716b56f97ab5b4b6804815781c734caf61cc32fbce777d9cf19f88",
+  "candidate": {
+    "revision": "b405ee04f5d8b0a7208d498cef596714a0141828",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container runtime was used for these references, so no image digest exists to record; the executable path, the reported version, the exact command line and the artifact's own sha256 stand in for it, and the reproduction on 2026-07-30 is what makes that substitution checkable.",
+    "executablePath": "/opt/homebrew/bin/gdaldem",
+    "commandLine": "gdaldem hillshade ../slope/input-dem.asc hillshade-gdal.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+      "description": "The frozen analytic DEM, shared with the slope and aspect studies.",
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2"
+    },
+    {
+      "datasetId": "OLV-DS-004-GDAL-HILLSHADE",
+      "description": "GDAL 3.13.1 single-direction hillshade on that DEM, azimuth 315, altitude 45, z-factor 1, the reference side of the comparison.",
+      "path": "tests/fixtures/reference/hillshade/hillshade-gdal.asc",
+      "sha256": "f916d7d5c1b78aa215509ea3d630d96a40c663cb969525bd06e3241b6b24f319"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-HORN-HILLSHADE-AZ315-ALT45",
+      "description": "Single-direction Lambert relief from a Horn gradient, sun azimuth 315 clockwise from north, altitude 45 above the horizon, z-factor 1, one-cell border excluded, compared on the shipped 8-bit level.",
+      "candidateParameters": {
+        "gradientAlgorithm": "Horn",
+        "azimuthDegrees": 315,
+        "altitudeDegrees": 45,
+        "zFactor": 1,
+        "model": "single-direction",
+        "encoding": "255*h rounded to a 0-255 level",
+        "includeEdges": false
+      },
+      "referenceParameters": {
+        "subcommand": "gdaldem hillshade",
+        "az": 315,
+        "alt": 45,
+        "z": 1,
+        "s": 1,
+        "alg": "Horn",
+        "encoding": "Byte 1 + 254*h, 0 reserved for nodata",
+        "computeEdges": false,
+        "format": "AAIGrid"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 1,
+    "toleranceUnit": "level on the 0-255 scale",
+    "minimumComparableCells": 1000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 11,564 interior cells are within the preregistered one-level tolerance, with a maximum difference of exactly 1.00 level and an RMSE of 0.536; the maximum sits on the tolerance because the two byte encodings differ by up to one level, which is why the claim rests on the closed-form leg and the exact re-encoding identity as well as on this one.",
+  "result": {
+    "comparableCells": 11564,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 1,
+    "rmse": 0.5358958530083363,
+    "meanDiff": -0.28718436527153235
+  },
+  "rawArtifacts": [
+    {
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "tests/fixtures/reference/hillshade/hillshade-gdal.asc",
+      "sha256": "f916d7d5c1b78aa215509ea3d630d96a40c663cb969525bd06e3241b6b24f319",
+      "role": "reference-output"
+    },
+    {
+      "path": "tests/fixtures/reference/hillshade/command.txt",
+      "sha256": "92792cd200ddfb33cda9b2c9b236731bee25d03e488fae19481da2c582d9ea77",
+      "role": "reference-command"
+    },
+    {
+      "path": "tests/fixtures/reference/hillshade/environment.json",
+      "sha256": "ddc8e31664711f4c6dbbfdf2e1aabf6ce2762de10795ee0ea3d870193d05b8a4",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+        "parameterSetId": "PS-HORN-HILLSHADE-AZ315-ALT45"
+      }
+    ],
+    "unsupported": [
+      "Byte-identical agreement under this project's own encoding. The two encodings differ by a fixed (1 - h) offset; the identity holds only after re-encoding into GDAL's 1 + 254*h scale.",
+      "Multidirectional relief, which is a different illumination model on each side and diverges by up to 50 of 255 levels; it coincides only at zero gradient.",
+      "Sun positions other than azimuth 315 and altitude 45, and z-factors other than 1.",
+      "The one-cell border, which the reference command leaves undefined.",
+      "The point-cloud-to-DTM pipeline. This study starts from a DEM.",
+      "Accuracy of any kind. Hillshade is a shading index, not a physical quantity, and this comparison carries no elevation-accuracy meaning."
+    ]
+  }
+}

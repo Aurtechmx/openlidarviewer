@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/validation-protocol.schema.json",
+  "title": "Frozen validation protocol",
+  "description": "One record per validation protocol: the decision taken BEFORE a study ran, including the tolerance that decides its outcome. A study manifest under validation/cross-implementation/studies/ points at one of these through protocolRef and carries the record's digest, so a tolerance loosened after a result appears stops matching and the diff says 'the frozen protocol changed' rather than 'one number moved'. Validated by scripts/verify-cross-implementation-study.mjs. Writing a protocol moves no claim's evidence level; promotion is a separate, human act recorded in docs/validation/claim-register.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "protocolId",
+    "example",
+    "title",
+    "question",
+    "frozenOn",
+    "recordWrittenOn",
+    "freezeWitness",
+    "referenceTool",
+    "referenceVersion",
+    "claims",
+    "decisionRule",
+    "digest"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "protocolId": {
+      "description": "Stable identity, and the file's basename before .protocol.json. An example protocol must be prefixed EXAMPLE- and carry example: true.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "example": {
+      "description": "True only for a template protocol, which may only be referenced by an example manifest.",
+      "type": "boolean"
+    },
+    "title": { "type": "string", "minLength": 1 },
+    "question": {
+      "description": "What the study is trying to find out, in one sentence, written before it ran.",
+      "type": "string",
+      "minLength": 1
+    },
+    "frozenOn": {
+      "description": "The date the decision below was fixed. For a protocol transcribed from an earlier freeze, this is the date of that earlier freeze, not the date this file was written.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "recordWrittenOn": {
+      "description": "The date this file was written. When it is later than frozenOn, the record is a transcription and freezeWitness must say where the original freeze can be read.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "freezeWitness": {
+      "description": "Where a reader can check that the tolerance predates the result, independently of this file. A file plus the commit that introduced it, not a promise.",
+      "type": "string",
+      "minLength": 1
+    },
+    "referenceTool": { "type": "string", "minLength": 1 },
+    "referenceVersion": { "type": "string", "minLength": 1 },
+    "claims": {
+      "description": "One entry per claim this protocol governs. A study manifest's claimId must appear here, and its metrics must equal the entry's metrics exactly.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/protocolClaim" }
+    },
+    "decisionRule": {
+      "description": "What outcome follows from what measurement, decided in advance. Written so that a reader can apply it to the numbers without consulting the author.",
+      "type": "string",
+      "minLength": 1
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "digest": {
+      "description": "sha256 over the canonical form of every field of this record except this one. The verifier recomputes it, and a study manifest repeats it in protocolRef.digest.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "protocolClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimId", "datasetIds", "parameterSetIds", "metrics", "toleranceDerivation"],
+      "properties": {
+        "claimId": {
+          "description": "Must exist in docs/validation/claim-register.yaml.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9-]*$"
+        },
+        "datasetIds": {
+          "description": "The registered datasets this protocol admits for the claim. A study manifest may not use a dataset outside this list.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "parameterSetIds": {
+          "description": "The parameter sets this protocol admits for the claim. A study manifest may not use a parameter set outside this list.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^PS-[A-Z0-9][A-Z0-9-]*$" }
+        },
+        "metrics": { "$ref": "#/$defs/metrics" },
+        "toleranceDerivation": {
+          "description": "Where the tolerance came from. 'It is what the comparison happened to reach' is not a derivation.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "metrics": {
+      "description": "The agreement gate. Same shape as a study manifest's metrics block, and a manifest that points here must match it field for field.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toleranceAbs",
+        "toleranceUnit",
+        "minimumComparableCells",
+        "requiredWithinToleranceFraction"
+      ],
+      "properties": {
+        "toleranceAbs": { "type": "number", "minimum": 0 },
+        "toleranceUnit": { "type": "string", "minLength": 1 },
+        "minimumComparableCells": { "type": "integer", "minimum": 1 },
+        "requiredWithinToleranceFraction": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

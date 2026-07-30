@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "EXAMPLE-PROTO-SLOPE-RASTER-GDAL-HORN",
+  "example": true,
+  "title": "EXAMPLE: Horn slope against GDAL over two parameter sets",
+  "question": "EXAMPLE. Does this project's Horn slope agree with GDAL's on the frozen analytic DEM both as a metre-vertical grid and as a foot-vertical grid, within a tolerance fixed before either comparison ran?",
+  "frozenOn": "2026-07-30",
+  "recordWrittenOn": "2026-07-30",
+  "freezeWitness": "This record's own commit. Nothing under it has been run, so the freeze and the record are the same act; a protocol transcribed from an earlier freeze must instead name where that earlier freeze can be read.",
+  "referenceTool": "GDAL",
+  "referenceVersion": "3.13.1",
+  "claims": [
+    {
+      "claimId": "SLOPE-RASTER",
+      "datasetIds": [
+        "OLV-DS-001-ANALYTIC-DEM"
+      ],
+      "parameterSetIds": [
+        "PS-HORN-DEG-METRE-NOEDGES",
+        "PS-HORN-DEG-FOOT-VERTICAL-NOEDGES"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.5,
+        "toleranceUnit": "degree",
+        "minimumComparableCells": 8000,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "EXAMPLE. 0.5 degree, carried over from the tolerance the existing slope comparison was frozen at, so the second parameter set is judged by the same gate as the first rather than by one chosen to fit it. The minimum of 8000 comparable cells is most of the interior of a 120 x 100 grid, so a study that silently lost half its cells cannot report agreement."
+    }
+  ],
+  "decisionRule": "EXAMPLE. Compare on both parameter sets. Agreement is recorded per parameter set and only where the cell count and within-tolerance fraction both reach the gate above; a claim's scope may then name that parameter set and no other. Disagreement on the foot-vertical set with agreement on the metre set is the expected signature of a vertical-unit error and is to be recorded as such, not averaged with the other set.",
+  "notes": [
+    "EXAMPLE PROTOCOL. It exists so the shape is readable, and so the manifest it governs can show what a protocolRef looks like on a study that has not been run. Nothing here has been executed.",
+    "The order matters: freeze the protocol, commit it, then run. A protocol written after the numbers is a description of a result, not a gate on it."
+  ],
+  "digest": "sha256:dd02d497702b915c236f5449afd88e1a9245715d5edcaa198f7412f705708b2e"
+}

@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "studyId": "OLV-XS-002-ASPECT-RASTER-GDAL-HORN",
+  "claimId": "ASPECT-RASTER",
+  "example": false,
+  "notes": [
+    "The record of the comparison ASPECT-RASTER already sits at E4 on, written after the fact from artifacts committed at the time.",
+    "Aspect is a bearing, so every difference here is a circular separation in 0..180: 359 and 1 are 2 apart, not 358. A plain subtraction would report a false disagreement at the wrap and hide a real one across it.",
+    "The comparison runs over the 10,932 interior cells whose slope exceeds 2 degrees. Aspect is undefined on flat ground and the two implementations mark that differently, so including those cells would measure a difference in convention rather than in aspect. The exclusion is part of the frozen protocol, not a filter chosen after the numbers.",
+    "The reference was re-run on 2026-07-30 from the command in command.txt, with GDAL 3.13.1 at /opt/homebrew/bin/gdaldem, and reproduced aspect-gdal.asc byte for byte. The original run recorded its version, platform and command but not its executable path; the path below is the one that reproduced the artifact."
+  ],
+  "protocolRef": {
+    "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
+    "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+  },
+  "protocolDigest": "sha256:e752c59d2b8bc2510e6cd122710836a11d9eae2926297af6e7543a7b48d995f0",
+  "candidate": {
+    "revision": "b405ee04f5d8b0a7208d498cef596714a0141828",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container runtime was used for these references, so no image digest exists to record; the executable path, the reported version, the exact command line and the artifact's own sha256 stand in for it, and the reproduction on 2026-07-30 is what makes that substitution checkable.",
+    "executablePath": "/opt/homebrew/bin/gdaldem",
+    "commandLine": "gdaldem aspect ../slope/input-dem.asc aspect-gdal.asc -alg Horn -of AAIGrid",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+      "description": "The frozen analytic DEM, shared with the slope and hillshade studies rather than copied, so a DEM that drifts invalidates all three at once.",
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2"
+    },
+    {
+      "datasetId": "OLV-DS-003-GDAL-ASPECT",
+      "description": "GDAL 3.13.1 Horn aspect in compass degrees on that DEM, the reference side of the comparison.",
+      "path": "tests/fixtures/reference/aspect/aspect-gdal.asc",
+      "sha256": "182086198a91918cd7909c26db94f18c2b6a2ea5db7a85b8f497be87f783c592"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-HORN-COMPASS-METRE-NOEDGES",
+      "description": "Horn gradient, downslope azimuth as a compass bearing, projected metre grid, one-cell border excluded, cells below 2 degrees of slope excluded because aspect is undefined there.",
+      "candidateParameters": {
+        "gradientAlgorithm": "Horn",
+        "outputConvention": "compass degrees clockwise from north, downslope",
+        "verticalUnit": "metre",
+        "cellSizeMetres": 1,
+        "includeEdges": false,
+        "minimumSlopeDegrees": 2
+      },
+      "referenceParameters": {
+        "subcommand": "gdaldem aspect",
+        "alg": "Horn",
+        "flatCells": "NODATA (-9999), the gdaldem default",
+        "computeEdges": false,
+        "format": "AAIGrid"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.5,
+    "toleranceUnit": "degree of circular separation",
+    "minimumComparableCells": 1000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 10,932 compared cells are within the preregistered 0.5 degree circular tolerance, with a maximum separation of 0.000163 degree; GDAL against the closed-form aspect agrees on the same cells.",
+  "result": {
+    "comparableCells": 10932,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.00016268708691313805,
+    "rmse": 0.000032883005712406856,
+    "meanDiff": 0.00002401982455444074
+  },
+  "rawArtifacts": [
+    {
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "tests/fixtures/reference/aspect/aspect-gdal.asc",
+      "sha256": "182086198a91918cd7909c26db94f18c2b6a2ea5db7a85b8f497be87f783c592",
+      "role": "reference-output"
+    },
+    {
+      "path": "tests/fixtures/reference/aspect/command.txt",
+      "sha256": "05f71ae8d5f0413223d5faaf7723a3684d7b7544642510c4a04e27011f81244e",
+      "role": "reference-command"
+    },
+    {
+      "path": "tests/fixtures/reference/aspect/environment.json",
+      "sha256": "27beb33c17a1ccc2febf0c3faa141398c76ce62fe2df60e6163c4b9e3cb29091",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+        "parameterSetId": "PS-HORN-COMPASS-METRE-NOEDGES"
+      }
+    ],
+    "unsupported": [
+      "Flat ground. Aspect is undefined below 2 degrees of slope and the two implementations disagree about how to say so: gdaldem writes -9999, or 0 under -zero_for_flat, while this project writes 0 radians in the math frame, which reads as compass 90 and carries no undefined marker.",
+      "The one-cell border, which the reference command leaves undefined.",
+      "Geographic grids. gdaldem aspect accepts neither -xscale nor -yscale, so an anisotropic aspect reference cannot be produced from the reference tool at all; the matrix run measured a 7.5 degree divergence at latitude 45 with no reference to arbitrate it.",
+      "The point-cloud-to-DTM pipeline. This study starts from a DEM.",
+      "Accuracy. Two implementations of Horn's method agreeing is not a measurement against ground truth."
+    ]
+  }
+}

@@ -30,7 +30,7 @@ import { fileURLToPath } from 'node:url';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { protocolDigestOf, STUDY_STATUSES, readDatasetIds, DATASET_REGISTER_PATH } from '../scripts/verify-cross-implementation-study.mjs';
+import { protocolDigestOf, protocolRecordDigestOf, STUDY_STATUSES, readDatasetIds, DATASET_REGISTER_PATH } from '../scripts/verify-cross-implementation-study.mjs';
 import { REFERENCE_SLOTS, allReferencesPending } from '../src/validation/crossCheck';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -90,6 +90,41 @@ function makeStudy(): { dir: string; manifest: Json } {
   const dir = mkdtempSync(join(tmpdir(), 'olv-xstudy-'));
   mkdirSync(join(dir, 'raw'), { recursive: true });
   mkdirSync(join(dir, 'derived'), { recursive: true });
+  mkdirSync(join(dir, 'protocols'), { recursive: true });
+
+  // The frozen protocol the manifest below runs under. It lives in its own file
+  // because that is the point of R11: the manifest has to agree with a record a
+  // result cannot reach back and edit.
+  const protocol: Json = {
+    schemaVersion: 1,
+    protocolId: 'TEST-PROTO-001',
+    example: false,
+    title: 'Test protocol for the study verifier fixture.',
+    question: 'Does the candidate agree with the reference on the test grid?',
+    frozenOn: '2026-07-01',
+    recordWrittenOn: '2026-07-01',
+    freezeWitness: 'This record’s own commit.',
+    referenceTool: 'GDAL',
+    referenceVersion: '3.13.1',
+    claims: [
+      {
+        claimId: 'SLOPE-RASTER',
+        datasetIds: ['TEST-DEM-A'],
+        parameterSetIds: ['PS-A'],
+        metrics: {
+          toleranceAbs: 0.5,
+          toleranceUnit: 'degree',
+          minimumComparableCells: 4,
+          requiredWithinToleranceFraction: 1,
+        },
+        toleranceDerivation: 'Fixed before the fixture was compared, so the gate cannot follow the result.',
+      },
+    ],
+    decisionRule: 'Agreement only when the cell count and the within-tolerance fraction both reach the gate above.',
+    digest: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+  };
+  protocol.digest = protocolRecordDigestOf(protocol);
+  writeFileSync(join(dir, 'protocols/TEST-PROTO-001.protocol.json'), `${JSON.stringify(protocol, null, 2)}\n`);
 
   const candidateBytes = 'ncols 2\nnrows 1\n1.0 2.0\n';
   const referenceBytes = 'ncols 2\nnrows 1\n1.0 2.0\n';
@@ -119,6 +154,7 @@ function makeStudy(): { dir: string; manifest: Json } {
     studyId: 'TEST-STUDY-001',
     claimId: 'SLOPE-RASTER',
     example: false,
+    protocolRef: { protocolId: 'TEST-PROTO-001', digest: protocol.digest },
     protocolDigest: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
     candidate: {
       revision: '1c5733c9ce79eb7ae023cde762e6124ee11ec895',
@@ -184,6 +220,7 @@ function verify(
   writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   return run(VERIFIER, [
     '--studies', dir,
+    '--protocols', join(dir, 'protocols'),
     '--artifact-root', dir,
     '--dataset-register', datasetRegister,
   ]);
@@ -272,7 +309,10 @@ describe('the study verifier rejects', () => {
       refreeze(m);
     }, 'R1-CLAIM-UNKNOWN');
     expect(r.out).toContain('docs/validation/claim-register.yaml');
-    expect(r.ruleIds).toEqual(['R1-CLAIM-UNKNOWN']);
+    // R11 fires alongside it, and should: a claim the register does not know is
+    // also a claim the frozen protocol does not govern. Both are the same defect
+    // seen from two records, and neither should be silent about it.
+    expect(r.ruleIds).toEqual(['R1-CLAIM-UNKNOWN', 'R11-PROTOCOL-REF']);
   });
 
   it('2. a datasetId that is free text, with no register supplied', () => {
@@ -286,7 +326,9 @@ describe('the study verifier rejects', () => {
       refreeze(m);
     }, 'R2-DATASET-ID');
     expect(r.out).toContain('free text');
-    expect(r.ruleIds).toEqual(['R2-DATASET-ID']);
+    // R11 fires too: a dataset swapped for prose is also a dataset the protocol
+    // never admitted, and a dataset added after the freeze is a different study.
+    expect(r.ruleIds).toEqual(['R2-DATASET-ID', 'R11-PROTOCOL-REF']);
   });
 
   it('2b. a well-shaped datasetId the supplied register does not list', () => {
@@ -315,7 +357,10 @@ describe('the study verifier rejects', () => {
       (m.metrics as { toleranceAbs: number }).toleranceAbs = 5;
     }, 'R3-PROTOCOL-DIGEST');
     expect(r.out).toContain('frozen protocolDigest');
-    expect(r.ruleIds).toEqual(['R3-PROTOCOL-DIGEST']);
+    // Two records catch it independently now: the manifest's own digest (R3) and
+    // the protocol file the manifest cites (R11). That is the point of keeping
+    // the protocol outside the manifest — restamping one no longer suffices.
+    expect(r.ruleIds).toEqual(['R3-PROTOCOL-DIGEST', 'R11-PROTOCOL-REF']);
   });
 
   it('4. our own output used as its own reference', () => {
@@ -423,6 +468,68 @@ describe('the study verifier rejects', () => {
     expect(bare.out).toContain('not a floating tag');
   });
 
+  it('11. a protocol edited after a study cited it', () => {
+    // The rule the protocol directory exists for. The manifest is untouched and
+    // internally consistent; the tolerance moved in the protocol file, which is
+    // exactly the edit a disappointing result invites.
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { metrics: { toleranceAbs: number } }[];
+        digest: string;
+      };
+      protocol.claims[0].metrics.toleranceAbs = 5;
+      // Restamped, so the protocol is self-consistent: only the manifest that
+      // already cited the old one can notice.
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toEqual(['R11-PROTOCOL-REF']);
+      expect(r.out).toContain('does not match protocol');
+      expect(r.out).toContain('the protocol changed under a study that had already cited it');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11b. a protocol whose own digest no longer describes it', () => {
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { metrics: { toleranceAbs: number } }[];
+      };
+      protocol.claims[0].metrics.toleranceAbs = 5;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toEqual(['P2-PROTOCOL-DIGEST', 'R11-PROTOCOL-REF']);
+      expect(r.out).toContain('digest does not describe this file');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11c. a protocolRef pointing at a protocol nobody wrote', () => {
+    const r = bend((m) => {
+      m.protocolRef = { protocolId: 'TEST-PROTO-404', digest: `sha256:${'b'.repeat(64)}` };
+    }, 'R11-PROTOCOL-REF');
+    expect(r.out).toContain('is not a record under');
+    expect(r.ruleIds).toEqual(['R11-PROTOCOL-REF']);
+  });
+
+  it('12. a measured outcome with no protocol behind it', () => {
+    const r = bend((m) => {
+      delete m.protocolRef;
+    }, 'R12-PROTOCOL-MISSING');
+    expect(r.out).toContain('protocolRef is required');
+    expect(r.ruleIds).toEqual(['R12-PROTOCOL-MISSING']);
+  });
+
   it('accepts a container digest as the stronger pin', () => {
     const { dir, manifest } = makeStudy();
     try {
@@ -511,7 +618,7 @@ describe('the summary counts only what was measured', () => {
 
       const out = join(dir, 'summary.json');
       const r = run(BUILDER, [
-        '--studies', dir, '--artifact-root', dir, '--out', out,
+        '--studies', dir, '--protocols', join(dir, 'protocols'), '--artifact-root', dir, '--out', out,
         '--dataset-register', absentRegister(dir),
       ]);
       expect(r.code).toBe(0);
@@ -542,7 +649,7 @@ describe('the summary counts only what was measured', () => {
       writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       const out = join(dir, 'summary.json');
       const built = run(BUILDER, [
-        '--studies', dir, '--artifact-root', dir, '--out', out,
+        '--studies', dir, '--protocols', join(dir, 'protocols'), '--artifact-root', dir, '--out', out,
         '--dataset-register', absentRegister(dir),
       ]);
       expect(built.code).toBe(0);
@@ -565,7 +672,7 @@ describe('the summary counts only what was measured', () => {
       manifest.claimId = 'SLOPE-RASTER-V2';
       writeFileSync(join(dir, 'study.json'), `${JSON.stringify(manifest, null, 2)}\n`);
       const r = run(BUILDER, [
-        '--studies', dir, '--artifact-root', dir, '--out', join(dir, 'summary.json'),
+        '--studies', dir, '--protocols', join(dir, 'protocols'), '--artifact-root', dir, '--out', join(dir, 'summary.json'),
         '--dataset-register', absentRegister(dir),
       ]);
       expect(r.code).toBe(1);

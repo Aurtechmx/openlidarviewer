@@ -19,15 +19,57 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 1,
-  "countedStudies": 0,
-  "byStatus": {},
-  "byClaim": {},
+  "studiesRead": 4,
+  "countedStudies": 3,
+  "byStatus": {
+    "agree": 3
+  },
+  "byClaim": {
+    "ASPECT-RASTER": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-001-ANALYTIC-DEM",
+        "OLV-DS-003-GDAL-ASPECT"
+      ],
+      "parameterSetIds": [
+        "PS-HORN-COMPASS-METRE-NOEDGES"
+      ]
+    },
+    "HILLSHADE": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-001-ANALYTIC-DEM",
+        "OLV-DS-004-GDAL-HILLSHADE"
+      ],
+      "parameterSetIds": [
+        "PS-HORN-HILLSHADE-AZ315-ALT45"
+      ]
+    },
+    "SLOPE-RASTER": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-001-ANALYTIC-DEM",
+        "OLV-DS-002-GDAL-SLOPE"
+      ],
+      "parameterSetIds": [
+        "PS-HORN-DEG-METRE-NOEDGES"
+      ]
+    }
+  },
   "agreement": {
-    "denominator": 0,
+    "denominator": 3,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 0,
-    "fraction": null
+    "agree": 3,
+    "fraction": 1
   },
   "excludedFromCounts": [
     {
