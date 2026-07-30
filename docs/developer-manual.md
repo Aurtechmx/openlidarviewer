@@ -98,7 +98,7 @@ a report.
 | `npm run dev`, `npm run build`, `npm run preview` | |
 | `npm run typecheck` | |
 | `npm run test:buckets:verify` | |
-| `npm run test:unit` | shard 1/3 is the one CI exercises; the other buckets use the same runner. Clone with full history, or the dataset-register and defect-chronology suites cannot resolve the commits their records name |
+| `npm run test:unit` | the runner starts and the suite runs; two suites still fail, see below. Shard 1/3 is the one CI exercises, and the other buckets use the same runner |
 | `npm run lint:position-access`, `lint:layer-boundaries`, `lint:main-deferral`, `lint:inline-imports`, `lint:unsafe-html`, `lint:no-host-paths` | |
 | `npm run test:smoke:widths` | the startup smoke spec at 320, 375, 767, 768 and 1440 px |
 
@@ -136,8 +136,13 @@ Reported here rather than papered over:
   directly. On POSIX it kills the whole process group, which also reclaims
   vitest's workers. Windows has no process groups, so a shard that hangs may
   leave workers behind.
-- `npm run release:verify` needs `unzip`, and
-  `npm run validation:defects:replay` needs `ln`. Neither ships with Windows.
+- `tests/releaseAssetVerifier.test.ts` builds its fixtures with the `zip` CLI
+  and fails with `spawnSync zip ENOENT`, which is why the unit bucket is red
+  on Windows. `npm run release:verify` itself needs `unzip`, and
+  `npm run validation:defects:replay` needs `ln`. None of the three ships
+  with Windows.
+- One case in `tests/defectChronology.test.ts` fails on Windows even with
+  full history. The cause has not been traced.
 - `npm run benchmark:clean-clone` and `npm run benchmark:archive-portability`
   call `tar`. Windows 10 and later ship bsdtar under that name, so they may
   work; nobody has checked.
