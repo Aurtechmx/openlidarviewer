@@ -284,6 +284,11 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     // test-file.mjs prints `usage: test-file.mjs <file.test.ts ...>` and exits
     // non-zero with no arguments; it is a runner, not a check.
     'scripts/test-file.mjs',
+    // integration-merge.mjs takes the branches to integrate and exits 2 with a
+    // usage message when given none. It also needs a repository with those
+    // branches in it, which an archive is not. Its pure logic is covered by
+    // tests/integrationMerge.test.ts.
+    'scripts/integration-merge.mjs',
   ]);
   const candidates = Object.entries(c.pkg.scripts)
     .filter(([, cmd]) => /^node scripts\/[\w.-]+\.mjs$/.test(cmd))

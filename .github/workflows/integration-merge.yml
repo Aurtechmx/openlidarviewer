@@ -1,0 +1,82 @@
+name: Integration merge
+
+# Runs the gate over the COMBINATION of several open pull requests.
+#
+# It has no `pull_request` trigger, and cannot have one. The question it answers
+# is "do these branches pass together", which needs the list of branches as
+# input; a single-PR trigger has one branch and no way to name the others. Eight
+# branches that each passed their own `pull_request` run once broke
+# `test:release:execute` when merged, because one added a file another's verifier
+# switches behaviour on. That failure is invisible to every per-PR run by
+# construction, no matter how much it runs.
+#
+# It is also not a required check. It is an operator action taken before arming
+# auto-merge on a set of branches. See docs/merging.md.
+on:
+  workflow_dispatch:
+    inputs:
+      refs:
+        description: 'PR numbers and/or branch names, space or comma separated (e.g. "126 127 wave2/stats-core")'
+        required: true
+        type: string
+      mode:
+        description: 'quick = typecheck + lints + vitest. full = npm run test:release:execute.'
+        required: true
+        default: quick
+        type: choice
+        options: [quick, full]
+
+permissions:
+  contents: read
+  # `gh pr view` resolves a PR number to its head branch.
+  pull-requests: read
+
+# One integration run at a time, queued rather than cancelled. Two runs are
+# harmless to each other, since each works in its own temporary worktree, but
+# they would compete for runners with the per-PR checks that gate the same
+# branches. The group is a constant because the run is rare and manual.
+concurrency:
+  group: integration-merge
+  cancel-in-progress: false
+
+jobs:
+  integration-merge:
+    runs-on: ubuntu-latest
+    # quick is about two minutes plus install. full is the release gate, which
+    # has measured over an hour; this is that with headroom.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The script merges other branches, so it needs their history and
+          # their remote refs. A shallow single-branch checkout has neither.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: '.nvmrc'
+          cache: npm
+      - run: npm ci
+
+      # Only the full gate reaches the browser suites. Installing chromium for a
+      # quick run would cost more than the run.
+      - name: Install chromium
+        if: inputs.mode == 'full'
+        run: npx playwright install --with-deps chromium
+
+      - name: Integration merge
+        # The inputs arrive as environment variables rather than being
+        # interpolated into the script text, so an input can only ever be data.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REFS: ${{ inputs.refs }}
+          MODE: ${{ inputs.mode }}
+        run: |
+          # Commas are accepted in the input for readability; the script takes
+          # separate arguments, so the unquoted expansion is the word splitting.
+          # shellcheck disable=SC2086
+          refs=$(printf '%s' "$REFS" | tr ',' ' ')
+          if [ "$MODE" = 'quick' ]; then
+            node scripts/integration-merge.mjs --quick $refs
+          else
+            node scripts/integration-merge.mjs $refs
+          fi
