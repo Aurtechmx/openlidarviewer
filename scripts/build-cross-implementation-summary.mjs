@@ -35,6 +35,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 
 import {
+  byCodeUnit,
   verifyStudies,
   UNCOUNTED_STATUSES,
   RESULT_STATUSES,
@@ -111,7 +112,7 @@ export function summarise(studies) {
     evidenceEffect:
       'None. This file counts study outcomes. Evidence levels live in docs/validation/claim-register.yaml and move only by a human change to that file.',
     permittedStatuses: [...STUDY_STATUSES],
-    uncountedStatuses: [...UNCOUNTED_STATUSES].sort(),
+    uncountedStatuses: [...UNCOUNTED_STATUSES].sort(byCodeUnit),
     studiesRead: studies.length,
     countedStudies: counted.length,
     byStatus: sorted(byStatus),
