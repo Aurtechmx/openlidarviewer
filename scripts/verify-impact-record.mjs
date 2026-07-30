@@ -83,8 +83,20 @@ const SOURCE_SHAPE = {
   'public-url': { test: (v) => /^https:\/\//.test(v), expected: 'an https URL' },
 };
 
-/** Locations nobody else can reach, so a URL on one is not a public source. */
-const PRIVATE_LOCATION = /^(file:|\/)|localhost|127\.0\.0\.1|\.local(\/|$)|192\.168\.|10\.\d+\.|intranet|(^|\W)internal(\W|$)/i;
+/**
+ * Locations nobody else can reach, so a URL on one is not a public source.
+ *
+ * Two rules rather than one pattern. The first matches only at the start,
+ * because a local scheme or an absolute path is a prefix. The second matches
+ * anywhere, because a private host can sit at any position. Written as one
+ * regex the `^` bound to the leading alternative alone, which reads as a
+ * mistake whether or not it is one.
+ */
+const PRIVATE_LOCATION_PREFIX = /^(?:file:|\/)/i;
+const PRIVATE_LOCATION_ANYWHERE =
+  /localhost|127\.0\.0\.1|\.local(?:\/|$)|192\.168\.|10\.\d+\.|intranet|(?:^|\W)internal(?:\W|$)/i;
+const isPrivateLocation = (value) =>
+  PRIVATE_LOCATION_PREFIX.test(value) || PRIVATE_LOCATION_ANYWHERE.test(value);
 
 /** Independent web archives. A snapshot elsewhere is not an independent one. */
 const ARCHIVE_HOST = /^https:\/\/(web\.archive\.org\/|archive\.(ph|today)\/|perma\.cc\/|www\.webcitation\.org\/)/;
@@ -133,7 +145,7 @@ export function collectImpactProblems(ctx) {
   if (shape && !shape.test(src.value)) {
     add('I3-SOURCE-UNVERIFIABLE', `source.value ${JSON.stringify(src.value)} is declared ${src.kind} but is not one (expected ${shape.expected}).`);
   }
-  if (src.kind === 'public-url' && PRIVATE_LOCATION.test(src.value)) {
+  if (src.kind === 'public-url' && isPrivateLocation(src.value)) {
     add('I3-SOURCE-UNVERIFIABLE', `source.value ${JSON.stringify(src.value)} points somewhere only this project can reach; that is not a public source.`);
   }
   if (r.status === 'verified' && r.verification.method === 'not-verified') {
