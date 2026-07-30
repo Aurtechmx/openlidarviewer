@@ -2,7 +2,7 @@
 
 This report states, soberly, what v0.6.3 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-v0.6.3 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.3.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](docs/releases/VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](docs/releases/VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.3 itself adds to the record.
+v0.6.3 is a validation-and-correction release on top of v0.6.1. It adds twelve runnable validation suites, fixes eighteen defects, and corrects four v0.6.1 statements or outputs in `docs/release/ERRATUM_v0.6.2.md`. The terrain and contour algorithms are still the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md); the reasoning behind the v0.6.0 evidence state remains in [VALIDATION_REPORT_v0.6.0.md](docs/releases/VALIDATION_REPORT_v0.6.0.md), and the v0.6.1 defect fixes in [VALIDATION_REPORT_v0.6.1.md](docs/releases/VALIDATION_REPORT_v0.6.1.md). This report covers what v0.6.3 itself adds to the record.
 
 ## Evidence ceiling
 
@@ -22,7 +22,7 @@ The composition, derived from `validation/defects/defect-registry.json` rather t
 
 - Twelve were exposed by one of the new validation suites; six came from code review. Five of the six were already recorded as open gaps by the v0.6.1 vertical-unit audit, and one was found while threading the vertical-unit factor through the fill and slope stages.
 - Nine are severity high, seven medium, two low.
-- Four reached output that v0.6.1 published. Each is stated in `docs/release/ERRATUM_v0.6.3.md` with who is affected and what recovers a correct figure.
+- Four reached output that v0.6.1 published. Each is stated in `docs/release/ERRATUM_v0.6.2.md` with who is affected and what recovers a correct figure.
 - Six have `detectingMechanism: none`, meaning no suite in this release would have found them either. They came from reading the code.
 
 Each record carries its own `whyNotDetected` field, and the answers repeat: a test pinned the defective behaviour as expected, or two paths were each checked against their own assumptions and never against each other, or the fixture used the unit in which the fault is invisible. The cross-path comparisons the new suites run are aimed at that shape.

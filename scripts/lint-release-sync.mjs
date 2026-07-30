@@ -110,6 +110,37 @@ try {
   if (!cffDate) problems.push('CITATION.cff has no "date-released:" field.');
   else if (!/^\d{4}-\d{2}-\d{2}$/.test(cffDate[1])) problems.push(`CITATION.cff date-released "${cffDate[1]}" is not an ISO date (YYYY-MM-DD).`);
   else if (changelogDate && cffDate[1] !== changelogDate) problems.push(`CITATION.cff date-released ${cffDate[1]} does not match CHANGELOG's ${changelogDate} for v${version}.`);
+
+  // 5c. codemeta.json, the other file a citation resolves through.
+  //
+  // It sat a release behind while the summary line below reported that
+  // everything agreed. That line lists the files it checked and codemeta was
+  // not among them, so it was accurate and still read as a statement about the
+  // repository. The cheapest fix for a guard people over-read is to widen what
+  // it actually covers.
+  try {
+    const codemeta = JSON.parse(read('codemeta.json'));
+    for (const field of ['version', 'softwareVersion']) {
+      if (codemeta[field] !== undefined && codemeta[field] !== version) {
+        problems.push(
+          `codemeta.json ${field} is "${codemeta[field]}", expected ${version}. ` +
+            'A citation resolved through codemeta would name the wrong release.',
+        );
+      }
+    }
+    for (const field of ['dateModified', 'datePublished']) {
+      const found = codemeta[field];
+      if (found !== undefined && cffDate && found !== cffDate[1]) {
+        problems.push(
+          `codemeta.json ${field} is "${found}", but CITATION.cff date-released is ` +
+            `"${cffDate[1]}". One release cannot have two published dates.`,
+        );
+      }
+    }
+  } catch {
+    // Absent or unreadable codemeta is not drift: not every checkout ships one,
+    // and a parse error is reported by the schema tooling that owns the file.
+  }
 } catch {
   problems.push('CITATION.cff missing or unreadable.');
 }
@@ -321,7 +352,7 @@ if (counted.length > 1) {
 }
 
 if (problems.length === 0) {
-  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, the service-worker cache, and the versioned evidence set all on v${version}.`);
+  console.log(`lint:release-sync OK — package, lock, README, changelog (dated ${changelogDate}), notes, CITATION.cff, codemeta.json, the service-worker cache, and the versioned evidence set all on v${version}.`);
   process.exit(0);
 }
 
