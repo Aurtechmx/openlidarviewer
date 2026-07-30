@@ -12,16 +12,41 @@ The output path is required, with no default. A fixed name in a world-writable
 directory is a path any other account on the machine can create first, and the
 open() below follows a symlink planted there and writes through it. A fixed
 name also lets two runs overwrite each other silently.
+
+The path must also land inside the working directory, which is where the
+fixtures this generates belong. Set OLV_OUT_ROOT to write somewhere else on
+purpose; nothing else escapes, including by way of `..` or a symlink.
 """
 import math
+import os
 import struct
 import sys
+from pathlib import Path
+
+
+def resolve_under_out_root(raw: str) -> Path:
+    """Resolve `raw` and refuse it if it lands outside the output root.
+
+    Resolving before the prefix check is the point: it collapses `..` and
+    follows any symlink on the way, so neither one can redirect the write to a
+    directory the caller never named.
+    """
+    root = Path(os.environ.get("OLV_OUT_ROOT") or Path.cwd()).expanduser().resolve()
+    candidate = Path(raw).expanduser()
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve()
+    if resolved != root and root not in resolved.parents:
+        print(f"refusing to write outside {root}: {raw}", file=sys.stderr)
+        raise SystemExit(2)
+    return resolved
+
 
 if len(sys.argv) < 2 or sys.argv[1].startswith("-"):
     print("usage: python3 scripts/make-big-surface.py <out.las> [grid]", file=sys.stderr)
     raise SystemExit(2)
 
-out = sys.argv[1]
+out = resolve_under_out_root(sys.argv[1])
 grid = int(sys.argv[2]) if len(sys.argv) > 2 else 400  # grid x grid points
 
 SCALE = (0.001, 0.001, 0.001)
