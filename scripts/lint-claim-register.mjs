@@ -124,8 +124,13 @@ export function parseRegister(yamlText) {
     if ((m = line.match(/^-?\s*claimId:\s*(\S+)/))) {
       cur = {
         id: m[1],
-        current: null,
-        required: null,
+        // Empty string, not null. The value is filled in from the line below
+        // this one, and static analysis that reads only the literal infers the
+        // field as null and calls every later comparison against a level name
+        // dead code. An empty string is not a valid level either, so the
+        // INVALID-LEVEL rule still catches a claim that never sets one.
+        current: '',
+        required: '',
         exportAllowed: null,
         supportingStudies: null,
         externalValidationRecords: null,

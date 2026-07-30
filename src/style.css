@@ -1873,7 +1873,6 @@ body.olv-theme-light .olv-empty::before {
   position: absolute;
   top: -22px;
   left: 50%;
-  transform: translateX(-50%);
   font-size: var(--text-2xs);
   font-weight: 700;
   letter-spacing: 0.12em;
