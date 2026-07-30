@@ -1,10 +1,10 @@
 /**
- * `Viewer.edlStrength` returns `_edlBaseStrength`, not `_edlStrength`. Static
+ * `Viewer.edlStrength` returns `_edlBaseStrength`, not `_edlLiveStrength`. Static
  * analysis reports that as a getter failing to refer to its matching field and
  * suggests "fixing" it. Doing so would introduce a real bug, which is why this
  * is a test rather than only a comment.
  *
- * The two fields hold different things. `_edlStrength` is the live uniform,
+ * The two fields hold different things. `_edlLiveStrength` is the live uniform,
  * recomputed each frame as the base times an adaptive factor that depends on
  * camera distance. `_edlBaseStrength` is what the user set.
  *
