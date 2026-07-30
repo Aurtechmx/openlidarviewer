@@ -163,8 +163,8 @@ function injectProbe(baselineDir, entryRel, codePath) {
     }
   }
   return {
-    injected: injected.sort((a, b) => a.path.localeCompare(b.path)),
-    withheld: withheld.sort(),
+    injected: injected.sort((a, b) => compareCodeUnits(a.path, b.path)),
+    withheld: withheld.sort(compareCodeUnits),
   };
 }
 
