@@ -16,6 +16,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = resolve(ROOT, 'validation/defects/defect-registry.json');
@@ -139,7 +140,7 @@ function crossChecks(registry) {
     }
   }
   const ordered = registry.defects.map((d) => d.id);
-  if ([...ordered].sort().join() !== ordered.join()) {
+  if ([...ordered].sort(compareCodeUnits).join() !== ordered.join()) {
     errors.push('defects are not in id order');
   }
   return errors;
