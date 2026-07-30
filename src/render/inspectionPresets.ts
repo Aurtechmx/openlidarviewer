@@ -15,6 +15,13 @@
  * live under `reserved` so the applied set and the aspirational set are
  * not read as one thing.
  *
+ * The `description` of each preset names ONLY the four applied fields. It used
+ * to advertise the reserved ones as well ("light AO", "hillshade + cividis
+ * ramp", "viridis ramp"), which put a promise in the tooltip that the renderer
+ * could not keep: a user reading "hillshade" and seeing none reasonably
+ * concludes the feature is broken rather than absent. Anything under `reserved`
+ * is documented in this file for developers and stays out of the descriptions.
+ *
  * Pure data — no DOM, no three.js — so it ships through the same seam
  * every other v0.3.7 module reads. The Viewer applies a preset by
  * reading these fields and calling its existing setters; persistence
@@ -85,7 +92,16 @@ export interface InspectionPreset {
   readonly id: PresetId;
   /** Human label shown in the chip / picker. */
   readonly label: string;
-  /** One-line description for the hover tooltip. */
+  /**
+   * One-line description for the hover tooltip.
+   *
+   * User-facing, so it may name only effects the applier actually performs:
+   * colour mode, EDL strength, point size and mode, background. The EDL and
+   * point-size figures are repeated here in words, and
+   * `tests/inspectionPresets.test.ts` reads them back out of the sentence and
+   * compares them with the fields, so a retuned preset with a stale sentence
+   * fails rather than shipping.
+   */
   readonly description: string;
   /** EDL strength 0..1.5. */
   readonly edlStrength: number;
@@ -123,7 +139,9 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
   survey: {
     id: 'survey',
     label: 'Survey',
-    description: 'Balanced default — colour + EDL + light AO for general drone / mobile scans',
+    description:
+      'General drone and mobile scans. RGB colour where the scan has it, EDL 0.7, '
+      + 'adaptive 2 px points, survey-blue background.',
     edlEnabled: true,
     edlStrength: 0.7,
     pointSize: 2,
@@ -135,7 +153,9 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
   terrain: {
     id: 'terrain',
     label: 'Terrain',
-    description: 'Bare-earth + DTM workflows — hillshade + cividis ramp + warm sky',
+    description:
+      'Bare-earth and DTM work. Elevation colour, EDL 0.55, adaptive 2 px points, '
+      + 'terrain-sand background.',
     edlEnabled: true,
     edlStrength: 0.55,
     pointSize: 2,
@@ -147,7 +167,9 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
   foliage: {
     id: 'foliage',
     label: 'Foliage',
-    description: 'Forestry + canopy work — soft EDL, deep teal sky, viridis ramp',
+    description:
+      'Forestry and canopy work. Elevation colour, EDL 0.5, adaptive 2 px points, '
+      + 'foliage-teal background.',
     edlEnabled: true,
     edlStrength: 0.5,
     pointSize: 2,
@@ -159,7 +181,9 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
   classification: {
     id: 'classification',
     label: 'Classification',
-    description: 'ASPRS class review — class palette, modest EDL so colours dominate',
+    description:
+      'ASPRS class review. Classification colour where the scan carries a class field, '
+      + 'EDL 0.45 so the class colours stay readable, adaptive 2.25 px points, deep background.',
     edlEnabled: true,
     edlStrength: 0.45,
     pointSize: 2.25,
@@ -171,7 +195,8 @@ const PRESETS: Readonly<Record<PresetId, InspectionPreset>> = {
   qa: {
     id: 'qa',
     label: 'QA Inspection',
-    description: 'Acceptance review — high EDL + AO, cool sky, density colouring',
+    description:
+      'Acceptance review. Density colour, EDL 0.85, fixed 2.5 px points, qa-cool background.',
     edlEnabled: true,
     edlStrength: 0.85,
     pointSize: 2.5,
