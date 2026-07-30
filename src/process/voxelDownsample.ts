@@ -222,6 +222,15 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
  * can detect "was it downsampled?" with a simple identity check.
  */
 export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointCloud {
+  // A budget that is not a positive number already fails, but it fails two
+  // calls down in `voxelDownsample` complaining about a voxel size the caller
+  // never chose. NaN is the one that matters: `pointCount <= NaN` is false, so
+  // a budget computed from a missing field walks past the early return and the
+  // error arrives from the wrong place. Rejecting it here names the argument
+  // that was actually wrong.
+  if (!Number.isFinite(maxPoints) || maxPoints < 1) {
+    throw new Error(`downsampleToBudget: maxPoints must be a finite number >= 1 (got ${maxPoints})`);
+  }
   if (cloud.pointCount <= maxPoints) return cloud;
 
   const MAX_PASSES = 12;
