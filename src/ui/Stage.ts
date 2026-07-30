@@ -2,6 +2,7 @@ import { el } from './dom';
 import { SOURCE_FORMATS, XYZ_ALIAS_EXTENSIONS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
+import { announcePolite } from './politeAnnounce';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { isMobileDevice } from './isMobileDevice';
 
@@ -162,6 +163,18 @@ export class Stage {
   private _topBarRight: HTMLElement | null = null;
   /** The GitHub link — the theme toggle inserts itself just before it. */
   private _githubLink: HTMLElement | null = null;
+  /**
+   * The header full-screen control. Held because it owns document-level
+   * listeners: dropping the reference left them attached for the page's
+   * lifetime with no way to reach them. Null in embed mode (no top bar).
+   */
+  private _fullscreen: FullscreenToggle | null = null;
+  /**
+   * Cleanups handed over by whoever composed the UI. The rail toggles and the
+   * other overlay chrome are wired after construction, so their disposers have
+   * nowhere else to live that survives until teardown.
+   */
+  private readonly _teardowns: Array<() => void> = [];
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
@@ -213,12 +226,26 @@ export class Stage {
     this._version.classList.add('olv-hidden');
   }
 
+  /**
+   * Hand a cleanup to the Stage so `dispose()` runs it. Lets the composition
+   * root wire overlay chrome (rail toggles, observers) without inventing its
+   * own place to remember the disposers.
+   */
+  addTeardown(cleanup: () => void): void {
+    this._teardowns.push(cleanup);
+  }
+
   /** Remove window-level listeners. Pair with viewer.dispose(). */
   dispose(): void {
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this._onOnline);
       window.removeEventListener('offline', this._onOffline);
     }
+    this._fullscreen?.dispose();
+    this._fullscreen = null;
+    // Drained rather than iterated in place: dispose must be safe to call
+    // twice, and a cleanup run a second time may not be.
+    while (this._teardowns.length) this._teardowns.pop()?.();
   }
 
   private _buildTopBar(): HTMLElement {
@@ -273,13 +300,21 @@ export class Stage {
     credits.rel = 'noreferrer';
 
     // Full-screen toggle — lives in the header cluster (just left of the
-    // theme toggle, which inserts itself before GitHub). Self-contained:
-    // it drives the Fullscreen API on the whole app and tracks F11/Esc too.
-    const fullscreen = new FullscreenToggle();
+    // theme toggle, which inserts itself before GitHub). Self-contained: it
+    // drives the ELEMENT Fullscreen API on the document root and follows
+    // `fullscreenchange`, so Esc and a second click both leave the glyph
+    // correct. It does not see F11, which is the browser's own window state:
+    // which fires no event and leaves `fullscreenElement` null (see
+    // FullscreenToggle.ts). Held so dispose() can detach its listeners.
+    // The refusal has to reach the application's one polite region; a second
+    // region would give a screen reader two competing queues.
+    const fullscreen = new FullscreenToggle({ announce: (m) => void announcePolite(m) });
+    this._fullscreen = fullscreen;
 
     const right = el('div', { className: 'olv-topbar-right' }, [
       privacy,
       fullscreen.element,
+      fullscreen.status,
       credits,
       guide,
       github,

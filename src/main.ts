@@ -4288,7 +4288,7 @@ void viewerLoaded.then(() => {
     wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
     // P11 — keep the column above the real dock height, and add the one-tap rail collapse.
     wireDockClearance(dock.dock, leftPanels);
-    wireRailToggle({
+    stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
       panels: [leftPanels],
       tabClass: 'olv-rail-tab',
@@ -4296,7 +4296,7 @@ void viewerLoaded.then(() => {
       collapsedClass: 'olv-rail-collapsed',
       storageKey: 'olv.leftRail.collapsed',
       ariaControls: 'olv-left-panels',
-    });
+    }));
     // Right column — each panel collapses on its own handle, centred on that
     // panel. The Streaming card (top, only while a COPC streams) and the
     // Inspector (bottom, or full-height when not streaming) are independent, so
@@ -4304,7 +4304,7 @@ void viewerLoaded.then(() => {
     // edge; the empty-state hide keeps only the visible panel's handle on screen.
     if (!inspector.element.id) inspector.element.id = 'olv-inspector';
     if (!streamingPanel.element.id) streamingPanel.element.id = 'olv-streaming-panel';
-    wireRailToggle({
+    stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
       panels: [streamingPanel.element],
       tabClass: 'olv-right-rail-tab',
@@ -4312,8 +4312,8 @@ void viewerLoaded.then(() => {
       collapsedClass: 'olv-right-collapsed',
       storageKey: 'olv.rightRail.streaming.collapsed',
       ariaControls: streamingPanel.element.id,
-    });
-    wireRailToggle({
+    }));
+    stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
       panels: [inspector.element],
       tabClass: 'olv-right-rail-tab',
@@ -4321,7 +4321,7 @@ void viewerLoaded.then(() => {
       collapsedClass: 'olv-right-collapsed',
       storageKey: 'olv.rightRail.inspector.collapsed',
       ariaControls: inspector.element.id,
-    });
+    }));
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
     stage.overlay.append(projectCard.element);
