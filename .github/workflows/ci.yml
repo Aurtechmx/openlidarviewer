@@ -90,6 +90,21 @@ jobs:
       # then failed a clean checkout of main with 18 unresolvable links.
       - name: Archive portability (a release archive verifies with no repo around it)
         run: npm run benchmark:archive-portability
+      # The PRESENCE leg only (0 s): every file the published scripts run is
+      # tracked. The expensive part of clean-clone.yml is its uncached `npm ci`
+      # against the registry, which this cannot and does not replicate; that
+      # leg stays weekly and on tags. Untracking a file an npm script invokes
+      # is a pull-request mistake, so the leg that catches it runs here.
+      - name: Clean-clone presence leg (every file the scripts run is tracked)
+        run: npm run benchmark:clean-clone
+      # docs.yml builds the site only on push to main, so a pull request that
+      # broke the docs build or published a forbidden document went green and
+      # failed after merging. 3 s measured. Placed after the claim-registry
+      # diff check above because docs:render rewrites a tracked file, and a
+      # drift here should be reported as a docs failure rather than as that
+      # step's diff.
+      - name: Docs site builds (renders the claim register, checks the allowlist)
+        run: npm run docs:build
       # Two DISTINCT size contracts, both enforced:
       #  • test:build  → PLAIN build + chunk-isolation (only vendor-three-webgpu
       #    may exceed the 500 KiB isolation threshold).
