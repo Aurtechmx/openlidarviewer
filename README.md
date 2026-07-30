@@ -4,10 +4,18 @@
      Each is set by a workflow run or an external registry, so none of them is
      a claim this repository makes about itself.
 
+     The fair-software.eu badge reads three of five, and the two it withholds
+     are real: this is not in a package registry, and it carries no OpenSSF
+     Best Practices badge. It sits next to the fairsoftwarechecklist.net badge
+     on purpose. That one is a self-assessment; this one is measured from the
+     repository by `.github/workflows/fair-software.yml`, and a reader can tell
+     them apart only if both are present.
+
      One slot is held open: OpenSSF Scorecard, between CI and Security audit.
      The workflow publishes (last run 6.1, transparency-log entry recorded) but
      api.scorecard.dev has not ingested the project and the badge still renders
-     "invalid repo path". It goes in when it renders a score, making ten.
+     "invalid repo path". Checked again on 2026-07-30, still invalid. It goes
+     in when it renders a score, making eleven.
 
      Rendering, privacy, status, Node and the live demo were badges here and
      are not any more: each restated something the paragraph below or the
@@ -20,6 +28,7 @@
 
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
 [![FAIR checklist](https://fairsoftwarechecklist.net/badge.svg)](https://fairsoftwarechecklist.net/v0.2?f=11&a=22113&i=22322&r=113)
+[![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
 [![License](https://img.shields.io/badge/license-MIT-lightgrey)](LICENSE)
