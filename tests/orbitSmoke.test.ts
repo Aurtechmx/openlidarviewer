@@ -130,8 +130,9 @@ describeOrSkip('orbit navigation — production build smoke', () => {
 
 if (!shouldRun) {
   describe('orbit navigation — production build smoke', () => {
-    it.skip('dist/ not present — run `npm run build` first', () => {
-      // Marker for the test reporter; intentional skip in dev.
-    });
+    // A marker for the reporter, not a test: there is nothing to assert until
+    // a build exists. `todo` takes no body, which says that better than a
+    // skipped test with an empty one, and the tally counts both the same way.
+    it.todo('dist/ not present — run `npm run build` first');
   });
 }
