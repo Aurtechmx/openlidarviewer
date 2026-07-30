@@ -1077,7 +1077,11 @@ export class StreamingScheduler {
     }
     store.setState(node, 'decoded', decoded.pointCount);
     queue.enqueue({
-      id: String(node.record.key),
+      // `record.id` ("depth-x-y-z"), not the key: `VoxelKey` is an object, so
+      // `String(key)` was "[object Object]" for every node in the scan. The
+      // queue keys its duplicate rule on (datasetId, generationId, id), and
+      // with one shared id it saw every second node as a repeat of the first.
+      id: node.record.id,
       datasetId: this._datasetId,
       generationId: this._generationId,
       estBytes: decodedChunkBytes(decoded),
