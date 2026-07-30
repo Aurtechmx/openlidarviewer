@@ -25,8 +25,8 @@
  * own machine rather than against whoever wrote the list.
  *
  * The hyphenated form matters as much as the slashed one. The leak that prompted
- * this appeared as `-Users-ssid02`, because that is how the scratch directory was
- * named, so a search for `/Users/` returned nothing.
+ * this appeared with the separators flattened to hyphens, because that is how the
+ * scratch directory was named, so a search for the slashed form found nothing.
  *
  * Not covered, deliberately, and stated so nobody reads a pass as more than it
  * is: a session or job identifier with no relation to this machine, a hostname,
@@ -39,7 +39,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { homedir, tmpdir, userInfo } from 'node:os';
-import { resolve, dirname, relative } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
