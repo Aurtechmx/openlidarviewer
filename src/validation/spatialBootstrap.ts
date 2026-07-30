@@ -501,7 +501,14 @@ export function leaveOneSiteOut(
     return refuse('non-finite-statistic', `statistic returned ${estimate} on the full sample`, null);
   }
 
-  const siteIds = [...groups.keys()].sort();
+  // A comparator rather than a bare sort(), and deliberately NOT localeCompare.
+  // Static analysis asks for localeCompare here; it is wrong for this file.
+  // localeCompare depends on the runtime locale and the ICU build, so the same
+  // keys can order differently on two machines and a study record stops being
+  // reproducible. Comparing by code unit is fixed by the language spec, which
+  // is what a deterministic record needs. Same rule as the benchmark artifact
+  // ordering.
+  const siteIds = [...groups.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const perSite: SiteOmission[] = [];
   for (const siteId of siteIds) {
     const kept: number[] = [];
