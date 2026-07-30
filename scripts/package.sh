@@ -34,7 +34,7 @@ cd "$ROOT"
 SOURCE_ONLY=0
 ARGS=()
 for arg in "$@"; do
-  if [ "$arg" = "--source-only" ]; then SOURCE_ONLY=1; else ARGS+=("$arg"); fi
+  if [[ "$arg" = "--source-only" ]]; then SOURCE_ONLY=1; else ARGS+=("$arg"); fi
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 
@@ -52,7 +52,7 @@ VERSION="$(node -p "require('./package.json').version")"
 # SOURCE_DATE_EPOCH (the reproducible-builds convention) is honoured when set;
 # otherwise it defaults to the commit's own timestamp. Both `date` dialects are
 # handled because this runs on macOS locally and GNU/Linux in CI.
-if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+if [[ -z "${SOURCE_DATE_EPOCH:-}" ]]; then
   SOURCE_DATE_EPOCH="$(git -C "$ROOT" show -s --format=%ct HEAD 2>/dev/null || date +%s)"
 fi
 export SOURCE_DATE_EPOCH
@@ -98,14 +98,14 @@ verify_zip() {
 # how the hosted site is minified.
 #
 # `--source-only` produces just that archive, for a Zenodo/archival cut.
-if [ "$SOURCE_ONLY" = "1" ]; then
+if [[ "$SOURCE_ONLY" = "1" ]]; then
   echo "→ Source-only packaging: skipping the live/obfuscated build."
 else
   echo "→ Building production (live) bundle…"
   npm run build:live
 fi
 
-if [ "$SOURCE_ONLY" != "1" ]; then
+if [[ "$SOURCE_ONLY" != "1" ]]; then
   # Guard against silent bundle growth before we ship the artifact.
   echo "→ Checking bundle budget…"
   node "$ROOT/scripts/check-bundle-budget.mjs"
@@ -159,7 +159,7 @@ find "$TMP/source" -type f -exec chmod 644 {} +
 # rules. A new internal document is caught the first time it is packaged.
 INTERNAL_PATTERNS='READINESS_REPORT|/_audit/|-plan\.md$|HANDOFF|ROADMAP-INTERNAL|_PRIVATE|GITHUB-PUBLISH-CHECKLIST'
 LEAKED="$(cd "$TMP/source" && find . -type f | sed 's|^\./||' | grep -E "$INTERNAL_PATTERNS" || true)"
-if [ -n "$LEAKED" ]; then
+if [[ -n "$LEAKED" ]]; then
   echo "✗ internal material in the source archive:" >&2
   echo "$LEAKED" | sed 's/^/    /' >&2
   echo "  Add an export-ignore rule in .gitattributes, or move the file under docs/_audit/." >&2
@@ -173,7 +173,7 @@ STALE="$(cd "$TMP/source" && ls 2>/dev/null \
   | grep -E '^(VALIDATION_REPORT|REPRODUCIBILITY)_v' \
   | grep -v -- "_v${VERSION}\.md$" \
   | grep -v '^VALIDATION_REPORT_v0\.5\.9\.md$' || true)"
-if [ -n "$STALE" ]; then
+if [[ -n "$STALE" ]]; then
   echo "✗ superseded release reports in the source archive:" >&2
   echo "$STALE" | sed 's/^/    /' >&2
   echo "  Add an export-ignore rule, or if a report is inherited evidence the" >&2
@@ -201,7 +201,7 @@ if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   # deploy bundle is built from the working tree while the source archive comes
   # from `git archive HEAD`, so an untracked file could ship in the deployment,
   # be absent from the scholarly source, and still report dirtyWorkingTree:false.
-  if [ -z "$(git status --porcelain --untracked-files=all 2>/dev/null)" ]; then DIRTY=false; else DIRTY=true; fi
+  if [[ -z "$(git status --porcelain --untracked-files=all 2>/dev/null)" ]]; then DIRTY=false; else DIRTY=true; fi
   SOURCE_KIND="git-checkout"
 else
   GIT_AVAILABLE=false
@@ -226,9 +226,9 @@ fi
 # committed record can never name the commit it ships in, and it is exactly
 # the ambiguity the release-mode gate removes. There is nothing left for an
 # ancestor exception to excuse, so there is none.
-if [ "${OLV_RELEASE_GATE:-0}" = "1" ]; then
+if [[ "${OLV_RELEASE_GATE:-0}" = "1" ]]; then
   fail=0
-  if [ "$DIRTY" != "false" ]; then
+  if [[ "$DIRTY" != "false" ]]; then
     echo "✗ release gate: working tree is not clean (tracked or untracked changes)." >&2
     fail=1
   fi
@@ -237,7 +237,7 @@ if [ "${OLV_RELEASE_GATE:-0}" = "1" ]; then
     fail=1
   fi
   EV="$ROOT/release/test-evidence-v${VERSION}.json"
-  if [ ! -f "$EV" ]; then
+  if [[ ! -f "$EV" ]]; then
     echo "✗ release gate: $EV is missing. Run OLV_GATE_MODE=release npm run gate at the tagged commit first." >&2
     fail=1
   else
@@ -255,7 +255,7 @@ if [ "${OLV_RELEASE_GATE:-0}" = "1" ]; then
       if (probs.length) { console.error(probs.map((p) => '✗ release gate: ' + p).join('\n')); process.exit(1); }
     "; then fail=1; fi
   fi
-  [ "$fail" = "0" ] || { echo "Release gate failed. Unset OLV_RELEASE_GATE for a development cut." >&2; exit 1; }
+  [[ "$fail" = "0" ]] || { echo "Release gate failed. Unset OLV_RELEASE_GATE for a development cut." >&2; exit 1; }
   echo "→ Release gate: clean tree, HEAD is tagged, authoritative evidence names this exact commit."
 fi
 
@@ -263,7 +263,7 @@ NODE_V="$(node -v 2>/dev/null || echo unknown)"
 (
   cd "$OUT_DIR"
   SOURCE_SHA="$(shasum -a 256 "$SOURCE" | cut -d' ' -f1)"
-  if [ "$SOURCE_ONLY" = "1" ]; then
+  if [[ "$SOURCE_ONLY" = "1" ]]; then
     # A source-only cut states plainly that no deploy artifact exists, rather
     # than leaving an empty field a reader could mistake for one.
     shasum -a 256 "$SOURCE" > SHA256SUMS
@@ -286,7 +286,7 @@ NODE_V="$(node -v 2>/dev/null || echo unknown)"
   "dirtyWorkingTree": ${DIRTY},
   "nodeVersion": "${NODE_V}",
   "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-  "packagedArtifacts": $([ "$SOURCE_ONLY" = "1" ] && echo '"source-only"' || echo '"deploy+source"'),
+  "packagedArtifacts": $([[ "$SOURCE_ONLY" = "1" ]] && echo '"source-only"' || echo '"deploy+source"'),
   "artifacts": {
     "deploy": ${DEPLOY_ENTRY},
     "source": { "file": "${SOURCE}", "sha256": "${SOURCE_SHA}" }
@@ -297,7 +297,7 @@ JSON
 
 echo
 echo "✓ Packaged v${VERSION}:"
-[ "$SOURCE_ONLY" = "1" ] || echo "    $OUT_DIR/$DEPLOY"
+[[ "$SOURCE_ONLY" = "1" ]] || echo "    $OUT_DIR/$DEPLOY"
 echo "    $OUT_DIR/$SOURCE"
 echo "    $OUT_DIR/SHA256SUMS"
 echo "    $OUT_DIR/package-build-metadata-v${VERSION}.json"
