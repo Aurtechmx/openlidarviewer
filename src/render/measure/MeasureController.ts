@@ -598,28 +598,72 @@ export class MeasureController {
     // the browser's native `title` bubble from doubling up, strip `title` while
     // a control is hovered/focused and restore it on leave — the rich `title`
     // text stays the canonical accessible/help string the rest of the time.
-    const stripNative = (e: Event): void => {
-      const btn = (e.target as HTMLElement | null)?.closest('button') as
-        | HTMLElement
-        | null;
-      if (btn && btn.title) {
+    //
+    // Hover and focus are tracked SEPARATELY. They used to share one flag, so
+    // whichever ended first restored `title` even though the other was still
+    // active. A click is exactly that case: the kind handler calls `btn.blur()`,
+    // the resulting `focusout` restored `title` while the pointer was still over
+    // the button, and the native bubble reappeared on top of the custom tip —
+    // the doubling this code exists to prevent. Chromium focuses a button on
+    // mousedown so it hit the bug on every click; WebKit does not focus buttons
+    // on mousedown, so it never fired the restore and behaved correctly. The
+    // cross-browser run is what surfaced the difference.
+    const hovered = new WeakSet<HTMLElement>();
+    const focused = new WeakSet<HTMLElement>();
+
+    const buttonFor = (e: Event): HTMLElement | null =>
+      ((e.target as HTMLElement | null)?.closest('button') as HTMLElement | null) ?? null;
+
+    /**
+     * True when the event leaves the button entirely. `pointerout` and
+     * `focusout` also fire when moving between a button's own children (the
+     * inline SVG icon and the label span), which would otherwise restore and
+     * re-strip `title` on every internal crossing.
+     */
+    const leavesButton = (e: Event, btn: HTMLElement): boolean => {
+      const to = (e as PointerEvent | FocusEvent).relatedTarget as Node | null;
+      return !(to && btn.contains(to));
+    };
+
+    const strip = (btn: HTMLElement): void => {
+      if (btn.title) {
         btn.dataset.nativeTitle = btn.title;
         btn.removeAttribute('title');
       }
     };
-    const restoreNative = (e: Event): void => {
-      const btn = (e.target as HTMLElement | null)?.closest('button') as
-        | HTMLElement
-        | null;
-      if (btn && btn.dataset.nativeTitle != null) {
+    /** Restore only once BOTH hover and focus have cleared. */
+    const restoreIfIdle = (btn: HTMLElement): void => {
+      if (hovered.has(btn) || focused.has(btn)) return;
+      if (btn.dataset.nativeTitle != null) {
         btn.title = btn.dataset.nativeTitle;
         delete btn.dataset.nativeTitle;
       }
     };
-    this.hint.addEventListener('pointerover', stripNative);
-    this.hint.addEventListener('pointerout', restoreNative);
-    this.hint.addEventListener('focusin', stripNative);
-    this.hint.addEventListener('focusout', restoreNative);
+
+    this.hint.addEventListener('pointerover', (e) => {
+      const btn = buttonFor(e);
+      if (!btn) return;
+      hovered.add(btn);
+      strip(btn);
+    });
+    this.hint.addEventListener('pointerout', (e) => {
+      const btn = buttonFor(e);
+      if (!btn || !leavesButton(e, btn)) return;
+      hovered.delete(btn);
+      restoreIfIdle(btn);
+    });
+    this.hint.addEventListener('focusin', (e) => {
+      const btn = buttonFor(e);
+      if (!btn) return;
+      focused.add(btn);
+      strip(btn);
+    });
+    this.hint.addEventListener('focusout', (e) => {
+      const btn = buttonFor(e);
+      if (!btn || !leavesButton(e, btn)) return;
+      focused.delete(btn);
+      restoreIfIdle(btn);
+    });
 
     this._renderKindButtons();
 

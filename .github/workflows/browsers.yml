@@ -1,0 +1,74 @@
+name: Cross-browser (advisory)
+
+# The deterministic Playwright set on the two engines that are not Chromium.
+# A viewer that renders through WebGPU with a WebGL 2 fallback cannot claim to
+# work in a browser nobody ran it in, so these legs run and are reported.
+#
+# WHY ADVISORY (`continue-on-error: true` on both jobs):
+# this is a brand-new leg. A leg that goes red on its first day would block
+# every unrelated pull request while its failures are being triaged, and the
+# failures it finds are engine differences, not regressions in the change under
+# review. Chromium keeps the blocking duty: `e2e-deterministic` in ci.yml is the
+# gate, and it is untouched by this workflow. Promote a job here to blocking by
+# deleting its `continue-on-error` line once it has been green for a while.
+#
+# Deliberately a separate file from ci.yml so `ci-green` — the required check —
+# has no dependency on anything here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege, matching ci.yml: each job only reads the checked-out code.
+# Declared per job rather than at workflow level so a job added later has to
+# state its own needs instead of inheriting a grant.
+jobs:
+  e2e-firefox:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Playwright Firefox
+        run: ./node_modules/.bin/playwright install --with-deps firefox
+      - name: Deterministic end-to-end tests on Firefox (advisory)
+        run: ./node_modules/.bin/playwright test --project=firefox
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-firefox
+          path: playwright-report/
+          retention-days: 7
+
+  e2e-webkit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Playwright WebKit
+        run: ./node_modules/.bin/playwright install --with-deps webkit
+      - name: Deterministic end-to-end tests on WebKit (advisory)
+        run: ./node_modules/.bin/playwright test --project=webkit
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report-webkit
+          path: playwright-report/
+          retention-days: 7

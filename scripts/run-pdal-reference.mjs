@@ -81,6 +81,7 @@ import { resolve, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { platform, arch } from 'node:process';
 import { FIXTURES, PIPELINE_DIR, EXTENT_M, DTM_CELL_M } from './generate-point-cloud-fixtures.mjs';
+import { binaryOnPath } from './lib/binaryOnPath.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT_DIR = resolve(PIPELINE_DIR, 'pdal');
@@ -153,29 +154,9 @@ function run(cmd, args) {
   };
 }
 
-/**
- * Where a binary sits on PATH, found by reading PATH rather than by asking a
- * shell. The provenance record names the executable that produced the
- * reference, so a symlink has to be followed to be worth recording, and a
- * shell would make every `spawnSync` in this file read as a shell command to a
- * scanner. Returns null when nothing on PATH is executable under that name.
- */
-function onPath(name) {
-  for (const dir of (process.env.PATH ?? '').split(':')) {
-    if (dir === '') continue;
-    const candidate = resolve(dir, name);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Not here, or not executable. Keep looking.
-    }
-  }
-  return null;
-}
 
 function resolvedPathOf(name) {
-  const found = onPath(name);
+  const found = binaryOnPath(name);
   if (found === null) return `unavailable: ${name} is not on PATH`;
   try {
     return realpathSync(found);

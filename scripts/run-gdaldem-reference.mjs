@@ -54,6 +54,7 @@ import { resolve, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { platform, arch } from 'node:process';
 import { FIXTURES, MATRIX_DIR, FIXTURE_DIR, SUNS, cellMetres } from './generate-raster-fixtures.mjs';
+import { binaryOnPath } from './lib/binaryOnPath.mjs';
 
 const OUT_DIR = resolve(MATRIX_DIR, 'gdal');
 const GDALDEM = 'gdaldem';
@@ -151,32 +152,6 @@ function buildArgs(spec, product, inPath, outPath) {
 
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
-/**
- * Where the binary sits on PATH, found by reading PATH rather than by asking a
- * shell.
- *
- * The provenance record names the executable that produced the reference
- * grids, so a symlink has to be followed to be worth recording. `sh -c
- * "command -v ..."` did that in one line and was the only shell in this file,
- * which made every `spawnSync` here read as a shell command to a scanner and
- * meant one dev-only lookup set the security posture of the whole script.
- *
- * Reading PATH gives the same answer with no shell. Returns null when nothing
- * on PATH is executable under that name.
- */
-function onPath(name) {
-  for (const dir of (process.env.PATH ?? '').split(':')) {
-    if (dir === '') continue;
-    const candidate = resolve(dir, name);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Not here, or not executable. Keep looking.
-    }
-  }
-  return null;
-}
 
 function main() {
   mkdirSync(OUT_DIR, { recursive: true });
@@ -191,7 +166,7 @@ function main() {
   }
 
   let resolvedPath;
-  const found = onPath(GDALDEM);
+  const found = binaryOnPath(GDALDEM);
   try {
     resolvedPath = found === null ? 'unavailable: not on PATH' : realpathSync(found);
   } catch {
