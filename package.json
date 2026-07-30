@@ -121,7 +121,8 @@
     "lint:csp-html": "node scripts/lint-csp-html.mjs",
     "lint:html-assets": "node scripts/lint-html-assets.mjs",
     "lint:python-version": "node scripts/lint-python-version.mjs",
-    "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs"
+    "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs",
+    "sonar:new-findings": "node scripts/sonar-new-findings.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
