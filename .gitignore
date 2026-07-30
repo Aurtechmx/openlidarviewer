@@ -152,3 +152,10 @@ skills-lock.json
 .claude/
 .vscode/
 .idea/
+
+# Python bytecode. scripts/__pycache__/make-ept-fixture.cpython-311.pyc was
+# tracked, so every run of the fixture generator showed up as a change to a
+# compiled artifact nobody reads. It also pins one interpreter version into a
+# tree that states 3.11 in .python-version and checks it in CI.
+__pycache__/
+*.py[cod]
