@@ -8,9 +8,12 @@ name: Mutation
 # and this workflow run.
 #
 # So the committed record is the product of this workflow, not a side effect:
-# `docs/validation/mutation-evidence.json` is written here and pushed back to
-# the default branch, which is where `collect-evidence.mjs` reads it from when
-# the gate did not run the stage itself.
+# `docs/validation/mutation-evidence.json` is written here and opened as a
+# pull request against the default branch, which is where `collect-evidence.mjs`
+# reads it from when the gate did not run the stage itself. A ruleset requires
+# pull requests on that branch, so the workflow cannot push to it directly; run
+# 30532907233 scored 96.81, retried a rejected push three times, and lost the
+# measurement to a red run that had passed its own threshold.
 #
 # This fails, it does not merely report. `stryker.conf.json` sets break: 75
 # against a measured 87.23; the runner breaks on it and
@@ -41,8 +44,9 @@ jobs:
     # used to have to carry.
     timeout-minutes: 180
     permissions:
-      # Only to push the evidence file back to the default branch.
+      # A branch for the evidence file, and a pull request to carry it.
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -82,12 +86,14 @@ jobs:
       # A dispatch against a feature branch still produces the artifact above;
       # what it must not do is publish a measurement of that branch as the one
       # every release cites.
-      - name: Commit the evidence to the default branch
+      - name: Open a pull request carrying the evidence
         if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ -z "$(git status --porcelain -- docs/validation/mutation-evidence.json)" ]; then
-            echo "Mutation evidence is unchanged; nothing to commit."
+            echo "Mutation evidence is unchanged; nothing to record."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
@@ -95,21 +101,12 @@ jobs:
           git add docs/validation/mutation-evidence.json
           SCORE="$(node -p "require('./docs/validation/mutation-evidence.json').score")"
           git commit -m "Record mutation score ${SCORE} from run ${GITHUB_RUN_ID}"
-          # The campaign takes over two hours, so the branch has almost always
-          # moved by the time it finishes. A plain push is rejected and the
-          # measurement is lost with it — which is what happened to run
-          # 30414720675, whose 96.81 had to be recovered from the artifact.
-          # Rebase and retry: the evidence file is written by this job alone,
-          # so a conflict on it is not possible, and the record names the
-          # commit it was measured at rather than wherever the branch has got
-          # to, so replaying it onto a newer tip changes nothing it asserts.
-          for attempt in 1 2 3; do
-            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-              echo "pushed on attempt ${attempt}"
-              exit 0
-            fi
-            echo "push rejected; rebasing onto the current tip (attempt ${attempt})"
-            git pull --rebase --autostash origin "${GITHUB_REF_NAME}"
-          done
-          echo "::error::could not push the mutation evidence after three attempts"
-          exit 1
+          # A branch per run, so a second run never rewrites the first one's
+          # record and two open records are visible as two pull requests.
+          BRANCH="evidence/mutation-${GITHUB_RUN_ID}"
+          git push origin "HEAD:refs/heads/${BRANCH}"
+          gh pr create \
+            --base "${GITHUB_REF_NAME}" \
+            --head "${BRANCH}" \
+            --title "Record mutation score ${SCORE}" \
+            --body "Written by run ${GITHUB_RUN_ID} of the mutation workflow. The record names the commit it was measured at, so merging it onto a newer tip changes nothing it asserts."
