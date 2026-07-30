@@ -1,0 +1,11 @@
+fedddbb28f21a6a575a9af82b40081879f32fc668099956b4231b984b4bcc3c3  validation/cross-implementation/pdal-pipeline/pdal/pc-01-plane-buildings__smrf.csv
+481b145465b13b7bc321c00c057baff8e607d78741e59aeb6eb10b81b0a0e76c  validation/cross-implementation/pdal-pipeline/pdal/pc-02-rolling-buildings__smrf.csv
+c9b355ee129c7f8ff89047210dfc3a329620f1b1d7610f6a93e11023f6955c09  validation/cross-implementation/pdal-pipeline/pdal/pc-03-ridge-buildings__smrf.csv
+2ad4ba740a92217d4f8746d72ab37f504d346f5abeb2d36322da9a2c3eacb676  validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv
+9d716505709055ca75835d66a6a353e61eff707b83461312bda11c2926560828  validation/cross-implementation/pdal-pipeline/pdal/pc-05-plane-gap__smrf.csv
+eac413b4218c234d1dfcaad7f40616a3e9d088b761a07933d503c21b3883de7a  validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif
+0da399e0c050001576a2b57b2747862b7c375179120570f35b7c215200785512  validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc
+025ea7ac17f176073ba1b1da9cbb6552ba3ab9c2571561bf875954bf381ae349  validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif
+e80a44425b51be4d98beb2bfb9cbee558484c66bb1555b7f68e634c4a4ce5fc9  validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc
+c4bec5f17c3dd210566a8d9d55b1209e5bb95f5157dbbd86b8bca897b8fd4bf1  validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif
+d276951a5f30a6a420cb3ac9b7940c8b959dccca73e6d52cdf6c271430fbf37c  validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc
