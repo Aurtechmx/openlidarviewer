@@ -11,7 +11,7 @@
   ],
   "protocolRef": {
     "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
-    "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+    "digest": "sha256:4f2ae21a6fa36fff2acbf054d014f392cd4d4666d16c3d4550ef62a1df006c8f"
   },
   "protocolDigest": "sha256:78f3b776191687fb6e1337074b0f91088e5372772c27cdf8e9601acbef1e9f8f",
   "candidate": {
@@ -77,9 +77,9 @@
     "comparableCells": 11564,
     "skippedCells": 0,
     "withinToleranceFraction": 1,
-    "maxAbsDiff": 0.000036755931315468615,
-    "rmse": 0.000005306111487991648,
-    "meanDiff": -1.3754723791540856e-7
+    "maxAbsDiff": 3.6755931315468615e-05,
+    "rmse": 5.306111487991648e-06,
+    "meanDiff": -1.3754723791540856e-07
   },
   "rawArtifacts": [
     {

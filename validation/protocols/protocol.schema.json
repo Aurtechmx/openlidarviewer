@@ -11,9 +11,7 @@
     "example",
     "title",
     "question",
-    "frozenOn",
     "recordWrittenOn",
-    "freezeWitness",
     "referenceTool",
     "referenceVersion",
     "claims",
@@ -37,20 +35,10 @@
       "type": "string",
       "minLength": 1
     },
-    "frozenOn": {
-      "description": "The date the decision below was fixed. For a protocol transcribed from an earlier freeze, this is the date of that earlier freeze, not the date this file was written.",
-      "type": "string",
-      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-    },
     "recordWrittenOn": {
-      "description": "The date this file was written. When it is later than frozenOn, the record is a transcription and freezeWitness must say where the original freeze can be read.",
+      "description": "The date this file was written. Freeze provenance is per claim, not per record: see claims[].freeze. A record-level frozen date used to live here and it was wrong, because one protocol can govern claims whose tolerances were fixed at different times and under different conditions.",
       "type": "string",
       "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-    },
-    "freezeWitness": {
-      "description": "Where a reader can check that the tolerance predates the result, independently of this file. A file plus the commit that introduced it, not a promise.",
-      "type": "string",
-      "minLength": 1
     },
     "referenceTool": { "type": "string", "minLength": 1 },
     "referenceVersion": { "type": "string", "minLength": 1 },
@@ -79,7 +67,7 @@
     "protocolClaim": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["claimId", "datasetIds", "parameterSetIds", "metrics", "toleranceDerivation"],
+      "required": ["claimId", "datasetIds", "parameterSetIds", "metrics", "toleranceDerivation", "freeze"],
       "properties": {
         "claimId": {
           "description": "Must exist in docs/validation/claim-register.yaml.",
@@ -105,6 +93,45 @@
           "description": "Where the tolerance came from. 'It is what the comparison happened to reach' is not a derivation.",
           "type": "string",
           "minLength": 1
+        },
+        "freeze": { "$ref": "#/$defs/freeze" }
+      }
+    },
+    "freeze": {
+      "description": "When this claim's tolerance was fixed, and whether that was before its result existed. Per claim, because one protocol can govern claims whose tolerances were fixed at different times: in this repository slope and hillshade were preregistered three weeks before their references were generated, and aspect was not.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "on", "witnessCommit", "witness"],
+      "properties": {
+        "status": {
+          "description": "preregistered: the tolerance was on record while this claim had no result, so the result could not have chosen it. adopted-with-result: the tolerance was fixed in the same change that produced the result. The second is not necessarily wrong - a tolerance carried over from a sibling claim can be perfectly defensible - but it is a weaker thing and it may not be described as the first.",
+          "type": "string",
+          "enum": ["preregistered", "adopted-with-result"]
+        },
+        "on": {
+          "description": "The date the tolerance was fixed, as the witness commit shows it.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "witnessCommit": {
+          "description": "The commit a reader checks. For preregistered, the earliest commit that shows this tolerance while the claim had no result; a later commit that also shows it proves less. Required as a hash and not as prose so that checking it is a git command, not an interpretation.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
+        },
+        "witness": {
+          "description": "What that commit contains, in enough detail to look up. A promise that the freeze happened is not a witness.",
+          "type": "string",
+          "minLength": 1
+        },
+        "resultLandedOn": {
+          "description": "The date this claim's result first existed. Required by rule R11 before any manifest asserting a measured outcome may cite this protocol, so the freeze cannot be left unfalsifiable by omitting the other half of the comparison.",
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "resultCommit": {
+          "description": "The commit that landed the result.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{7,40}$"
         }
       }
     },

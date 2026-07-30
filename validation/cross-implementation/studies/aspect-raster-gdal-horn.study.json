@@ -5,13 +5,14 @@
   "example": false,
   "notes": [
     "The record of the comparison ASPECT-RASTER already sits at E4 on, written after the fact from artifacts committed at the time.",
+    "Its tolerance was NOT preregistered. The ASPECT-RASTER slot, its 0.5 degree tolerance, the below-2-degree exclusion and the reference raster all arrived in one commit (40e2ca1), so no commit shows the gate while this comparison had no result. Carrying slope's tolerance over is defensible - same estimator, same fixture, same unit - and it is a weaker thing than a preregistration. The protocol's freeze block for this claim records that as adopted-with-result, with the commit to check.",
     "Aspect is a bearing, so every difference here is a circular separation in 0..180: 359 and 1 are 2 apart, not 358. A plain subtraction would report a false disagreement at the wrap and hide a real one across it.",
     "The comparison runs over the 10,932 interior cells whose slope exceeds 2 degrees. Aspect is undefined on flat ground and the two implementations mark that differently, so including those cells would measure a difference in convention rather than in aspect. The exclusion is part of the frozen protocol, not a filter chosen after the numbers.",
     "The reference was re-run on 2026-07-30 from the command in command.txt, with GDAL 3.13.1 at /opt/homebrew/bin/gdaldem, and reproduced aspect-gdal.asc byte for byte. The original run recorded its version, platform and command but not its executable path; the path below is the one that reproduced the artifact."
   ],
   "protocolRef": {
     "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
-    "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+    "digest": "sha256:4f2ae21a6fa36fff2acbf054d014f392cd4d4666d16c3d4550ef62a1df006c8f"
   },
   "protocolDigest": "sha256:e752c59d2b8bc2510e6cd122710836a11d9eae2926297af6e7543a7b48d995f0",
   "candidate": {
@@ -77,8 +78,8 @@
     "skippedCells": 0,
     "withinToleranceFraction": 1,
     "maxAbsDiff": 0.00016268708691313805,
-    "rmse": 0.000032883005712406856,
-    "meanDiff": 0.00002401982455444074
+    "rmse": 3.2883005712406856e-05,
+    "meanDiff": 2.401982455444074e-05
   },
   "rawArtifacts": [
     {

@@ -11,7 +11,7 @@
   ],
   "protocolRef": {
     "protocolId": "EXAMPLE-PROTO-SLOPE-RASTER-GDAL-HORN",
-    "digest": "sha256:dd02d497702b915c236f5449afd88e1a9245715d5edcaa198f7412f705708b2e"
+    "digest": "sha256:af0634ebc741c18ff62a65be73a303d7398b4d472bc16e7ba1fa58a1d61009b0"
   },
   "protocolDigest": "sha256:0a8b2ea9c633c1b81a2e6ee6a0d8ebe1559b88b9e62e61b694c2d73484569daf",
   "candidate": {

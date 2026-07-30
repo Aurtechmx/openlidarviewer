@@ -3,10 +3,8 @@
   "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
   "example": false,
   "title": "Horn slope, aspect and hillshade against GDAL 3.13.1 on the frozen analytic DEM",
-  "question": "On one frozen analytic DEM, does this project's Horn slope, Horn aspect and single-direction hillshade agree cell for cell with GDAL's, within a tolerance fixed before any reference raster existed?",
-  "frozenOn": "2026-07-21",
+  "question": "On one frozen analytic DEM, does this project's Horn slope, Horn aspect and single-direction hillshade agree cell for cell with GDAL's, within the tolerance recorded for each?",
   "recordWrittenOn": "2026-07-30",
-  "freezeWitness": "REFERENCE_SLOTS in src/validation/crossCheck.ts, which carries these three tolerances and carried them while all three slots still read \"pending\". This file transcribes that freeze; it does not create it. The commit that introduced each slot with its tolerance, before the matching reference raster was committed, is the record a reader should check, and tests/fixtures/reference/*/README.md states the same numbers under a heading that forbids widening them.",
   "referenceTool": "GDAL",
   "referenceVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
   "claims": [
@@ -25,7 +23,15 @@
         "minimumComparableCells": 1000,
         "requiredWithinToleranceFraction": 1
       },
-      "toleranceDerivation": "0.5 degree is the slope difference that would change a reading at the resolution slope is used at, and it is coarse enough that a real coding error cannot hide under it while being far tighter than the differences an actual algorithm mismatch produces. It was fixed in REFERENCE_SLOTS before any GDAL output existed. The minimum of 1000 comparable cells is the minCells the cross-check is called with in tests/slopeCrossCheck.test.ts, chosen so that a handful of lucky matches cannot read as agreement."
+      "toleranceDerivation": "0.5 degree is the slope difference that would change a reading at the resolution slope is used at, and it is coarse enough that a real coding error cannot hide under it while being far tighter than the differences an actual algorithm mismatch produces. The minimum of 1000 comparable cells is the minCells the cross-check is called with in tests/slopeCrossCheck.test.ts, chosen so that a handful of lucky matches cannot read as agreement.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-05",
+        "witnessCommit": "a78b0f9a9ca84802cd9e2de9af57598e46cc1288",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at a78b0f9 reads { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'pending' }. That is the harness commit, sixteen days before any GDAL slope output existed: git show a78b0f9:src/validation/crossCheck.ts shows the tolerance with the slot pending, and tests/fixtures/reference/slope/slope-gdal.asc is not added until 0d54fdc.",
+        "resultLandedOn": "2026-07-21",
+        "resultCommit": "0d54fdc0b5d96a20e7aa08bc397c7eb9e2ae5551"
+      }
     },
     {
       "claimId": "ASPECT-RASTER",
@@ -42,7 +48,15 @@
         "minimumComparableCells": 1000,
         "requiredWithinToleranceFraction": 1
       },
-      "toleranceDerivation": "0.5 degree, matching slope deliberately: same estimator, same fixture, same unit. Aspect is a bearing, so the 0.5 is read as a circular separation in 0..180 and never as a subtraction, which is why 359 and 1 are 2 apart and not 358. Cells below 2 degrees of slope are outside the comparison because aspect is not defined there; that exclusion is part of the frozen decision, not a filter chosen after seeing the numbers."
+      "toleranceDerivation": "0.5 degree, ADOPTED FROM SLOPE AND NOT PREREGISTERED FOR ASPECT. Carrying slope's number over is defensible on the merits - same estimator, same fixture, same unit, with the 0.5 read as a circular separation in 0..180 so that 359 and 1 are 2 apart - but it was not on record before the aspect result existed, and this record must not be read as though it were. The same applies to the exclusion of cells at or below 2 degrees of slope: aspect is undefined on flat ground and excluding those cells is right on the merits, but MIN_SLOPE_DEG = 2 first appears in tests/aspectCrossCheck.test.ts in 40e2ca1, the commit that also carries the numbers. Neither decision is preregistered.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-07-26",
+        "witnessCommit": "40e2ca1f68493e376502174787362f9483f4d599",
+        "witness": "The ASPECT-RASTER slot does not exist before 40e2ca1: git log -S 'ASPECT-RASTER' finds no earlier commit in any file, and every commit touching src/validation/crossCheck.ts that contains the slot has it at status 'supplied'. In 40e2ca1 the slot, its tolerance, the 2-degree exclusion and tests/fixtures/reference/aspect/aspect-gdal.asc all arrive together, so no commit shows this tolerance while aspect had no result. An earlier version of this file gave all three claims one frozen date of 2026-07-21; for aspect that was false twice over, since the slot did not exist on that date and its tolerance was never on record before its result. A reviewer found it by walking the history, and rule P9 now performs that walk.",
+        "resultLandedOn": "2026-07-26",
+        "resultCommit": "40e2ca1f68493e376502174787362f9483f4d599"
+      }
     },
     {
       "claimId": "HILLSHADE",
@@ -59,14 +73,23 @@
         "minimumComparableCells": 1000,
         "requiredWithinToleranceFraction": 1
       },
-      "toleranceDerivation": "1.0 is one quantisation step of the shipped product, which is the smallest tolerance the 8-bit output can be judged at. It is proportionally far tighter than the 0.5 degree on slope and aspect, and it is also a weak instrument here: GDAL encodes the shared intensity as 1 + 254*h where this project writes 255*h, a fixed (1 - h) offset that consumes most of the budget on its own. The decision rule below is written knowing that."
+      "toleranceDerivation": "1.0 is one quantisation step of the shipped product, which is the smallest tolerance the 8-bit output can be judged at. It is proportionally far tighter than the 0.5 degree on slope and aspect, and it is also a weak instrument here: GDAL encodes the shared intensity as 1 + 254*h where this project writes 255*h, a fixed (1 - h) offset that consumes most of the budget on its own. The decision rule below is written knowing that.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-05",
+        "witnessCommit": "a78b0f9a9ca84802cd9e2de9af57598e46cc1288",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at a78b0f9 reads { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'pending' }, in the same harness commit as the slope slot and three weeks before any hillshade reference existed. The slot is still pending as late as 40e2ca1 on 2026-07-26, and tests/fixtures/reference/hillshade/hillshade-gdal.asc lands with f586642 later that day.",
+        "resultLandedOn": "2026-07-26",
+        "resultCommit": "f586642d1b0265e8c60e54346a21525da98a3ac0"
+      }
     }
   ],
   "decisionRule": "For each claim, compare this project's raster to the GDAL raster over the interior cells the parameter set names, using the metric the tolerance is stated in. A claim's comparison is recorded as agree when the comparable-cell count reaches minimumComparableCells and the fraction within toleranceAbs reaches requiredWithinToleranceFraction; anything short of that is recorded as partial or disagree with the numbers that produced it. A comparison that misses its tolerance is a finding about the implementation. The tolerance is not to be widened, the cell set is not to be narrowed, and the grids are not to be resampled onto each other, because each of those manufactures the agreement being measured.",
   "notes": [
+    "Freeze provenance is per claim, and the three claims here do not share it. Slope and hillshade were preregistered in the harness commit, weeks before their references were generated. Aspect was not: its tolerance, its flat-ground exclusion and its result arrived in one commit. Reading this record as three equally frozen protocols is exactly the error the first version of this file invited, and the freeze block on each claim is what stops it.",
     "Two implementations of one algorithm can agree while both being wrong the same way, so each comparison is run as a triangle: ours against the closed-form gradient, GDAL against the closed-form gradient, and ours against GDAL. Only the last is cross-implementation evidence; the middle leg is what shows the operator ran the command this protocol names.",
     "Agreement with GDAL is not accuracy against ground truth, and this DEM is not terrain. Everything this protocol can establish stops at the E4 boundary; E5 needs external ground truth and cannot be reached from inside a repository.",
     "This protocol governs the frozen-DEM comparisons only. The 24-fixture GDAL matrix under validation/cross-implementation/raster-matrix/ is a separate body of work with its own, tighter tolerances, and it is not registered as a study under this protocol."
   ],
-  "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+  "digest": "sha256:4f2ae21a6fa36fff2acbf054d014f392cd4d4666d16c3d4550ef62a1df006c8f"
 }

@@ -10,7 +10,7 @@
   ],
   "protocolRef": {
     "protocolId": "PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM",
-    "digest": "sha256:f6a31269b2ea9b2e8d8d1aeacfb1a50b4f3d3bd96b089d8270cc20c68cc84608"
+    "digest": "sha256:4f2ae21a6fa36fff2acbf054d014f392cd4d4666d16c3d4550ef62a1df006c8f"
   },
   "protocolDigest": "sha256:c9c0916fd1716b56f97ab5b4b6804815781c734caf61cc32fbce777d9cf19f88",
   "candidate": {

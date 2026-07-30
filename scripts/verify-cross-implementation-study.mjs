@@ -38,6 +38,7 @@
  * read or parse error.
  */
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, isAbsolute, sep } from 'node:path';
@@ -366,6 +367,9 @@ function validateAgainstSchema(value, schema, root, path, errors) {
  */
 export function collectProtocolProblems(ctx) {
   const { protocol: p, file, schema, claimIds } = ctx;
+  // Injectable so the negative controls can drive P10 without inventing
+  // commits, and so a caller with no repository gets a stated no-op.
+  const resolveCommitDate = ctx.resolveCommitDate ?? commitDate;
   const problems = [];
   const add = (rule, message) => problems.push({ rule, message: `${file}: ${message}` });
 
@@ -403,16 +407,79 @@ export function collectProtocolProblems(ctx) {
     if (!(frac > 0) || frac > 1) {
       add('P5-METRICS', `claims entry "${c.claimId}" sets requiredWithinToleranceFraction ${frac}, which must be inside (0, 1]; 0 would call any comparison agreement.`);
     }
-  }
 
-  // P6. A transcription must say where the original freeze can be read. The
-  // dates are the honest signal: a record written the day it was frozen needs
-  // no witness beyond its own commit, and one written later does.
-  if (p.recordWrittenOn < p.frozenOn) {
-    add('P6-FREEZE-DATES', `recordWrittenOn ${p.recordWrittenOn} is before frozenOn ${p.frozenOn}; a protocol cannot be written before the decision it records.`);
+    // P6. A record cannot be written before the decision it records.
+    const f = c.freeze;
+    if (p.recordWrittenOn < f.on) {
+      add('P6-FREEZE-DATES', `claims entry "${c.claimId}": recordWrittenOn ${p.recordWrittenOn} is before its freeze date ${f.on}; a protocol cannot be written before the decision it records.`);
+    }
+
+    // ── P9. "Preregistered" has to mean what it says ────────────────────────
+    //
+    // This rule exists because the first version of this record got it wrong.
+    // It claimed one frozen date for three claims, and for ASPECT-RASTER that
+    // claim was false: the slot, its tolerance and its result all arrived in
+    // one commit, so no commit shows the tolerance while aspect had no result.
+    // A reviewer caught it by walking the history by hand. The check below is
+    // that walk, mechanised, so the next such statement fails instead of being
+    // believed.
+    const landed = f.resultLandedOn ?? null;
+    if ((f.resultCommit ?? null) !== null && landed === null) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" names a resultCommit but no resultLandedOn; the date is the half a reader can compare against the freeze.`);
+    }
+    if (f.status === 'preregistered' && landed !== null && !(f.on < landed)) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was preregistered, but the freeze date ${f.on} does not precede the result date ${landed}. A tolerance fixed alongside its result is "adopted-with-result"; it may be defensible on the merits, and it is still not a preregistration.`);
+    }
+    if (f.status === 'adopted-with-result' && landed !== null && f.on < landed) {
+      add('P9-FREEZE-PROVENANCE', `claims entry "${c.claimId}" says its tolerance was adopted with the result, but the freeze date ${f.on} precedes the result date ${landed}; if the witness commit really shows the tolerance before the result, this claim is stronger than the record admits and should say "preregistered".`);
+    }
+
+    // ── P10. A date has to belong to the commit that witnesses it ───────────
+    const witnessDate = resolveCommitDate(f.witnessCommit);
+    if (witnessDate !== null && witnessDate !== f.on) {
+      add('P10-WITNESS-DATE', `claims entry "${c.claimId}" dates its freeze ${f.on}, but witnessCommit ${f.witnessCommit} is dated ${witnessDate}. A freeze date that does not belong to the commit offered as its witness is not evidence of anything.`);
+    }
+    if (landed !== null && (f.resultCommit ?? null) !== null) {
+      const resultDate = resolveCommitDate(f.resultCommit);
+      if (resultDate !== null && resultDate !== landed) {
+        add('P10-WITNESS-DATE', `claims entry "${c.claimId}" dates its result ${landed}, but resultCommit ${f.resultCommit} is dated ${resultDate}.`);
+      }
+    }
   }
 
   return problems;
+}
+
+/**
+ * The author date of `commit`, as YYYY-MM-DD, or null when it cannot be
+ * resolved here.
+ *
+ * WHY THIS IS A LOOKUP AND NOT A PROOF. P9 compares a record's own dates, so it
+ * catches a record that contradicts itself. It cannot catch a date that is
+ * simply wrong: writing an earlier freeze date than the truth satisfies every
+ * arithmetic check in this file. That is the shape the defect this rule exists
+ * for actually took. Pinning the date to the commit named as the witness closes
+ * the easy version of it: to back-date a freeze you must now also name a commit
+ * that carries that date, and a reviewer following the hash lands somewhere the
+ * tolerance is not.
+ *
+ * What remains uncovered, and is stated here rather than papered over: nothing
+ * mechanical reads the witness commit's CONTENT. Whether the tolerance really
+ * stands there with the claim unresolved is a human check, and the hash is what
+ * makes that check one git command instead of an archaeology exercise.
+ */
+export function commitDate(commit, cwd = ROOT) {
+  try {
+    const out = execFileSync('git', ['show', '-s', '--format=%ad', '--date=short', commit], {
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const date = out.trim().split('\n').pop()?.trim() ?? '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+  } catch {
+    // No git, no repository, or an unknown commit. An extracted archive has no
+    // history, and this check is not a reason to fail there.
+    return null;
+  }
 }
 
 /** Read every *.protocol.json in `dir`, sorted by filename for determinism. */
@@ -518,6 +585,13 @@ export function collectStudyProblems(ctx) {
       if (!governed) {
         add('R11-PROTOCOL-REF', `protocol "${m.protocolRef.protocolId}" governs ${(entry.protocol.claims ?? []).map((c) => c.claimId).join(', ') || 'no claim'}, not claimId "${m.claimId}".`);
       } else {
+        // A measured outcome must be able to be compared against its freeze.
+        // Without the result date the protocol's freeze claim cannot be
+        // falsified from the record, and a freeze nobody can falsify is a
+        // sentence rather than a control.
+        if (RESULT_STATUSES.has(m.status) && !governed.freeze?.resultLandedOn) {
+          add('R11-PROTOCOL-REF', `status "${m.status}" asserts a measured outcome, but protocol "${m.protocolRef.protocolId}" records no resultLandedOn for ${m.claimId}; without it, whether the tolerance predates the result cannot be checked from these records.`);
+        }
         if (canonicalJson(m.metrics) !== canonicalJson(governed.metrics)) {
           add('R11-PROTOCOL-REF', `metrics ${canonicalJson(m.metrics)} disagree with the frozen protocol's metrics for ${m.claimId} ${canonicalJson(governed.metrics)}; the gate a study is judged by is decided in the protocol, not in the record of the result.`);
         }
@@ -722,7 +796,9 @@ export function verifyStudies(opts = {}) {
   const protocolProblems = [];
   const seenProtocolIds = new Map();
   for (const { name, protocol } of loadedProtocols) {
-    protocolProblems.push(...collectProtocolProblems({ protocol, file: name, schema: protocolSchema, claimIds }));
+    protocolProblems.push(...collectProtocolProblems({
+      protocol, file: name, schema: protocolSchema, claimIds, resolveCommitDate: opts.resolveCommitDate,
+    }));
     const id = protocol?.protocolId;
     if (typeof id !== 'string') continue;
     if (seenProtocolIds.has(id)) {

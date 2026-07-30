@@ -101,9 +101,7 @@ function makeStudy(): { dir: string; manifest: Json } {
     example: false,
     title: 'Test protocol for the study verifier fixture.',
     question: 'Does the candidate agree with the reference on the test grid?',
-    frozenOn: '2026-07-01',
-    recordWrittenOn: '2026-07-01',
-    freezeWitness: 'This record’s own commit.',
+    recordWrittenOn: '2026-07-10',
     referenceTool: 'GDAL',
     referenceVersion: '3.13.1',
     claims: [
@@ -118,6 +116,14 @@ function makeStudy(): { dir: string; manifest: Json } {
           requiredWithinToleranceFraction: 1,
         },
         toleranceDerivation: 'Fixed before the fixture was compared, so the gate cannot follow the result.',
+        freeze: {
+          status: 'preregistered',
+          on: '2026-07-01',
+          witnessCommit: 'abc1234',
+          witness: 'A test commit that carries the tolerance with the slot pending.',
+          resultLandedOn: '2026-07-08',
+          resultCommit: 'def5678',
+        },
       },
     ],
     decisionRule: 'Agreement only when the cell count and the within-tolerance fraction both reach the gate above.',
@@ -520,6 +526,145 @@ describe('the study verifier rejects', () => {
     }, 'R11-PROTOCOL-REF');
     expect(r.out).toContain('is not a record under');
     expect(r.ruleIds).toEqual(['R11-PROTOCOL-REF']);
+  });
+
+  it('11d. a freeze called preregistered that did not precede its result', () => {
+    // The rule a reviewer had to apply by hand. The first version of the
+    // committed protocol claimed one frozen date for three claims, and for
+    // ASPECT-RASTER no commit showed the tolerance before the result: the slot,
+    // the tolerance and the numbers arrived together. A record that says
+    // "preregistered" while its own dates say otherwise must fail here.
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { freeze: { on: string; resultLandedOn: string } }[];
+        digest: string;
+      };
+      // The tolerance was fixed the day the result landed, and the record still
+      // calls it preregistered.
+      protocol.claims[0].freeze.on = protocol.claims[0].freeze.resultLandedOn;
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toContain('P9-FREEZE-PROVENANCE');
+      expect(r.out).toContain('does not precede the result date');
+      expect(r.out).toContain('it is still not a preregistration');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11e. a freeze whose result date is missing, under a measured outcome', () => {
+    // Without the result date the freeze claim cannot be falsified from the
+    // records, so omitting it would be the way around 11d.
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { freeze: Record<string, unknown> }[];
+        digest: string;
+      };
+      delete protocol.claims[0].freeze.resultLandedOn;
+      delete protocol.claims[0].freeze.resultCommit;
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toContain('R11-PROTOCOL-REF');
+      expect(r.out).toContain('records no resultLandedOn');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11f. accepts an honest adopted-with-result freeze', () => {
+    // The aspect case. Not a preregistration, said so, and therefore fine.
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { freeze: { status: string; on: string; resultLandedOn: string } }[];
+        digest: string;
+      };
+      protocol.claims[0].freeze.status = 'adopted-with-result';
+      protocol.claims[0].freeze.on = protocol.claims[0].freeze.resultLandedOn;
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+      manifest.protocolRef = { protocolId: 'TEST-PROTO-001', digest: protocol.digest };
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(0);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11g. an adopted-with-result freeze that understates a real preregistration', () => {
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { freeze: { status: string } }[];
+        digest: string;
+      };
+      protocol.claims[0].freeze.status = 'adopted-with-result';
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+      manifest.protocolRef = { protocolId: 'TEST-PROTO-001', digest: protocol.digest };
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toContain('P9-FREEZE-PROVENANCE');
+      expect(r.out).toContain('stronger than the record admits');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11h. a freeze date that does not belong to its witness commit', () => {
+    // P9 compares a record against itself, so a back-dated freeze satisfies it.
+    // That is the shape the original defect took, and this is what closes the
+    // easy version: the date must belong to the commit offered as the witness.
+    const { dir, manifest } = makeStudy();
+    try {
+      const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
+      const protocol = JSON.parse(readFileSync(path, 'utf8')) as {
+        claims: { freeze: { on: string; witnessCommit: string } }[];
+        digest: string;
+      };
+      // A real commit in this repository, dated 2026-07-05, offered as the
+      // witness for a freeze claimed four days earlier.
+      protocol.claims[0].freeze.witnessCommit = 'a78b0f9';
+      protocol.claims[0].freeze.on = '2026-07-01';
+      protocol.digest = protocolRecordDigestOf(protocol) as string;
+      writeFileSync(path, `${JSON.stringify(protocol, null, 2)}\n`);
+      manifest.protocolRef = { protocolId: 'TEST-PROTO-001', digest: protocol.digest };
+
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(1);
+      expect(rules(r.out)).toContain('P10-WITNESS-DATE');
+      expect(r.out).toContain('is not evidence of anything');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('11i. P10 stays silent when the commit cannot be resolved', () => {
+    // An extracted archive has no history. The check degrades to a no-op there
+    // rather than failing records it cannot read, and the base fixture (whose
+    // witness is a made-up hash) is the case that proves it.
+    const { dir, manifest } = makeStudy();
+    try {
+      const r = verify(dir, manifest);
+      expect(r.code).toBe(0);
+      expect(r.out).not.toContain('P10-WITNESS-DATE');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('12. a measured outcome with no protocol behind it', () => {

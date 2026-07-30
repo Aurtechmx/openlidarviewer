@@ -7,10 +7,17 @@
 #   - currentEvidence must reflect evidence that EXISTS today. Three claims
 #     currently reach E4: SLOPE-RASTER, ASPECT-RASTER and HILLSHADE, each
 #     cross-implemented against GDAL 3.13.1 on the same frozen analytic fixture
-#     within the tolerance registered before its reference was generated (0.5
-#     degree for slope and aspect, 1.0 8-bit level for hillshade). No claim
-#     reaches E5 (no field validation has been run). Synthetic known-truth
-#     fixtures alone remain E3, not accuracy.
+#     (0.5 degree for slope and aspect, 1.0 8-bit level for hillshade). Two of
+#     those three tolerances were registered before the reference was generated:
+#     slope and hillshade were fixed in the harness commit a78b0f9 on 2026-07-05,
+#     weeks ahead of their results. ASPECT-RASTER was NOT. Its slot, its
+#     tolerance, its flat-ground exclusion and its reference raster all landed in
+#     40e2ca1 on 2026-07-26, so no commit shows its gate while it had no result;
+#     carrying slope's number over is defensible, and it is not a preregistration
+#     and must not be written as one. Per-claim freeze provenance, with the
+#     commit to check, is in validation/protocols/. No claim reaches E5 (no field
+#     validation has been run). Synthetic known-truth fixtures alone remain E3,
+#     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
 #     and unavailable. Three independent GDAL reference slots are supplied; all
 #     remaining independent-reference slots are pending. Never infer it from
@@ -478,7 +485,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Horn aspect agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within the preregistered 0.5 degree circular tolerance (max separation under 0.001 degree over 10,932 cells with slope above 2 degrees)."
+    approvedClaim: "Horn aspect agreed with GDAL 3.13.1 and with the closed-form gradient on the frozen validation fixture, within a 0.5 degree circular tolerance (max separation under 0.001 degree over 10,932 cells with slope above 2 degrees). That tolerance was carried over from slope in the same change that produced this result, not preregistered ahead of it."
     prohibitedClaim: ["field-validated aspect accuracy", "aspect defined on flat ground", "all terrain products independently validated", "point-cloud-to-DTM pipeline validated"]
     scope:
       supported:
