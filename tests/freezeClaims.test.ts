@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 const SCRIPT = resolve(__dirname, '../scripts/verify-freeze-claims.mjs');
+const HELPER = resolve(__dirname, '../scripts/lib/binaryOnPath.mjs');
 
 function git(cwd: string, ...argv: string[]): void {
   execFileSync('git', argv, {
@@ -31,9 +32,13 @@ function study(status: string, digest: string) {
 function newRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'olv-freeze-'));
   git(dir, 'init', '-q');
-  mkdirSync(join(dir, 'scripts'), { recursive: true });
+  mkdirSync(join(dir, 'scripts/lib'), { recursive: true });
   mkdirSync(join(dir, 'validation/cross-implementation/studies'), { recursive: true });
   copyFileSync(SCRIPT, join(dir, 'scripts/verify-freeze-claims.mjs'));
+  // The verifier resolves git through the shared helper so it reads PATH with
+  // the platform's separator rather than assuming ':'. The throwaway repo needs
+  // that sibling too, or the import fails before any assertion runs.
+  copyFileSync(HELPER, join(dir, 'scripts/lib/binaryOnPath.mjs'));
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'scaffold');
   return dir;

@@ -38,9 +38,17 @@ export default defineConfig({
   // runner happens to expose. Tag a spec into the advisory set by putting
   // `@gpu` in its describe/test title — untagged specs block, which is the safe
   // default (a new spec gates until proven GPU-variable).
+  //
+  // `firefox` and `webkit` run the same deterministic set on the other two
+  // engines. A viewer that renders through WebGPU with a WebGL2 fallback cannot
+  // claim to work in a browser nobody ran it in, and this project tested one.
+  // They are ADVISORY in CI, not required: a new leg that goes red would
+  // otherwise block every unrelated change while its failures are triaged.
   projects: [
     { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu/ },
     { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/ },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@gpu/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/ },
   ],
   webServer: {
     // SMOKE_LIVE boots the OBFUSCATED live artifact (the build users actually

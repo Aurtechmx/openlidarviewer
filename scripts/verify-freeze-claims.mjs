@@ -52,8 +52,10 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, accessSync, constants } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
+
+import { binaryOnPath } from './lib/binaryOnPath.mjs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -67,26 +69,7 @@ const RECORD_DIRS = [
   'validation/field/studies',
 ];
 
-/**
- * git, found by reading PATH rather than by asking a shell.
- *
- * Nothing here needs a shell, and not spawning one keeps the argv exact.
- */
-function gitPath() {
-  for (const dir of (process.env.PATH ?? '').split(':')) {
-    if (dir === '') continue;
-    const candidate = resolve(dir, 'git');
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      // Not here. Keep looking.
-    }
-  }
-  return null;
-}
-
-const GIT = gitPath();
+const GIT = binaryOnPath('git');
 
 function git(...argv) {
   return execFileSync(GIT, argv, { cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });

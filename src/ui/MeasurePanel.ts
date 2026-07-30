@@ -1206,6 +1206,30 @@ export class MeasurePanel {
         });
         vexStrip.append(chip);
       }
+
+      // A named control for the focus view, sitting where the eye already is.
+      //
+      // Expanding was reachable before this: the chart wrapper carries
+      // role="button" and opens on click or Enter. Nobody found it. The only
+      // hints were a hover tooltip and a corner glyph that is decorative and
+      // pointer-events: none, and it shares that corner with the native resize
+      // grip the CSS `resize` puts there, so the one mark people did see was
+      // the one that changes the height. A result worth reading full-screen
+      // should say so in words.
+      //
+      // The whole-chart click stays. This adds a second, unambiguous way in
+      // rather than moving the first.
+      const expandBtn = el('button', {
+        className: 'olv-mp-chart-expand-btn',
+        unsafeHtml: `${ICON_EXPAND}<span>Expand</span>`,
+        title: `Open ${s.name} full size, with the station table and export`,
+        ariaLabel: `Expand profile ${s.name} to a focus view`,
+      });
+      expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this._openProfileFocus(s, expandBtn);
+      });
+      vexStrip.append(expandBtn);
       // The profile chart is resizable
       // (CSS `resize` on `.olv-mp-chart`). Restore the
       // user's last chosen height from localStorage and persist any
