@@ -43,7 +43,18 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, isAbsolute, sep } from 'node:path';
 
+import { binaryOnPath } from './lib/binaryOnPath.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * git, as an absolute path read from PATH rather than resolved by the OS.
+ *
+ * Null when it is not installed, which is an ordinary state here: an extracted
+ * archive has no repository and both callers below already return null in that
+ * case. Matching the spawn discipline the rest of scripts/ uses.
+ */
+const GIT = binaryOnPath('git');
 
 export const STUDIES_DIR = 'validation/cross-implementation/studies';
 export const SCHEMA_PATH = 'validation/cross-implementation/manifest.schema.json';
@@ -220,7 +231,8 @@ export function derivedInputsDigest(derivedFrom, rawByPath) {
  */
 function commitInstant(sha) {
   try {
-    return execFileSync('git', ['log', '-1', '--format=%aI', sha], {
+    if (GIT === null) return null;
+    return execFileSync(GIT, ['log', '-1', '--format=%aI', sha], {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -501,7 +513,8 @@ export function collectProtocolProblems(ctx) {
  */
 export function commitDate(commit, cwd = ROOT) {
   try {
-    const out = execFileSync('git', ['show', '-s', '--format=%ad', '--date=short', commit], {
+    if (GIT === null) return null;
+    const out = execFileSync(GIT, ['show', '-s', '--format=%ad', '--date=short', commit], {
       cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     });
     const date = out.trim().split('\n').pop()?.trim() ?? '';
