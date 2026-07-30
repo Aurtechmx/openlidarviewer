@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "studyId": "EXAMPLE-SLOPE-RASTER-GDAL-HORN-TWO-PARAMETER-SETS",
+  "claimId": "SLOPE-RASTER",
+  "example": true,
+  "notes": [
+    "EXAMPLE MANIFEST. It is a filled-in template, not a study: nothing here has been run, and the verifier refuses to let an example carry a result or reach a summary count.",
+    "It is written out in full because the shape is the point. SLOPE-RASTER is at E4 on one GDAL run over one dataset with one parameter set; REFERENCE_SLOTS can hold exactly that and no more. This record registers two datasets and two parameter sets for the same claim, which is what a validation programme actually looks like.",
+    "Copy it, change studyId (drop the EXAMPLE- prefix and set example to false), and recompute protocolDigest with protocolDigestOf() from scripts/verify-cross-implementation-study.mjs BEFORE running anything."
+  ],
+  "protocolDigest": "sha256:0a8b2ea9c633c1b81a2e6ee6a0d8ebe1559b88b9e62e61b694c2d73484569daf",
+  "candidate": {
+    "revision": "1c5733c9ce79eb7ae023cde762e6124ee11ec895",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "3.13.1",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. Docker is not running on the workstation the existing GDAL references were produced on, so no image was pulled and no digest exists to record; the executable path, the version GDAL reports, and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/gdal",
+    "commandLine": "gdal raster slope <input>.asc <output>.asc --gradient-alg Horn --unit degree --xscale 1 --yscale 1 --no-edges --of AAIGrid",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-001-ANALYTIC-DEM",
+      "description": "The frozen analytic DEM behind the existing slope, aspect and hillshade references: z = a.x^2 + b.y^2 + c.x.y + d.x + e.y, 120 x 100 cells at 1 m, slope about 0.05 to 16.4 degrees. Registered in validation/datasets/dataset-register.yaml.",
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-HORN-DEG-METRE-NOEDGES",
+      "description": "Horn gradient, degrees, projected metre grid, edge cells excluded on both sides.",
+      "candidateParameters": {
+        "gradientAlgorithm": "Horn",
+        "outputUnit": "degree",
+        "verticalUnit": "metre",
+        "cellSizeMetres": 1,
+        "includeEdges": false
+      },
+      "referenceParameters": {
+        "subcommand": "gdal raster slope",
+        "gradientAlg": "Horn",
+        "unit": "degree",
+        "xscale": 1,
+        "yscale": 1,
+        "noEdges": true,
+        "format": "AAIGrid"
+      }
+    },
+    {
+      "id": "PS-HORN-DEG-FOOT-VERTICAL-NOEDGES",
+      "description": "The same surface read as a foot-vertical grid, where the candidate applies a vertical scale and GDAL takes the reciprocal as a z factor. This is the parameter axis the single-slot model has nowhere to record, and the axis a unit error hides on.",
+      "candidateParameters": {
+        "gradientAlgorithm": "Horn",
+        "outputUnit": "degree",
+        "verticalUnit": "foot",
+        "verticalScaleToMetres": 0.3048,
+        "cellSizeMetres": 1,
+        "includeEdges": false
+      },
+      "referenceParameters": {
+        "subcommand": "gdal raster slope",
+        "gradientAlg": "Horn",
+        "unit": "degree",
+        "zfactor": 0.3048,
+        "xscale": 1,
+        "yscale": 1,
+        "noEdges": true,
+        "format": "AAIGrid"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.5,
+    "toleranceUnit": "degree",
+    "minimumComparableCells": 8000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "pending",
+  "statusReason": "Registered, not run. DEM-ANALYTIC-STEEP-120X100 has not been generated, and no GDAL output exists for either parameter set. The tolerance is frozen by protocolDigest at registration so it cannot be adjusted once numbers exist.",
+  "rawArtifacts": [
+    {
+      "path": "tests/fixtures/reference/slope/input-dem.asc",
+      "sha256": "8fa70115256a3b357c02750d6a697be39263076e58fa84607f2e94fe54dd1cb2",
+      "role": "candidate-input"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [],
+    "unsupported": [
+      "Nothing. A pending study supports no statement about any dataset or parameter set, which is why scope.supported is empty and stays empty until a result exists.",
+      "Even when run, this study would compare rasters produced from a DEM. It would say nothing about the point-cloud-to-DTM pipeline that produces a DEM in the field.",
+      "Agreement with GDAL is not accuracy against ground truth. That boundary is E5 and cannot be crossed from inside a repository."
+    ]
+  }
+}
