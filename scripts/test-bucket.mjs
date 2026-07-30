@@ -177,6 +177,22 @@ const TIMEOUT_GRACE_MS = 2000;
 // the run still never returned.
 const VITEST_BIN = resolve(ROOT, 'node_modules/.bin/vitest');
 
+// On Windows that path is not runnable. npm writes three files into
+// node_modules/.bin: an extensionless sh script (no PE header, CreateProcess
+// refuses it), a .cmd and a .ps1. Spawning the .cmd instead is not a fix
+// either — since the CVE-2024-27980 change, Node refuses to spawn .cmd/.bat
+// without `shell: true`, and turning the shell on would put every test path
+// through cmd.exe quoting.
+//
+// So on Windows the shard runs the vitest ENTRY MODULE under this process's
+// own node. That keeps the property the comment above is about: one process,
+// no wrapper, so a kill reaches the real runner. On POSIX nothing changes —
+// the same .bin path is spawned as before.
+const WINDOWS = process.platform === 'win32';
+const VITEST_ENTRY = resolve(ROOT, 'node_modules/vitest/vitest.mjs');
+const SPAWN_CMD = WINDOWS ? process.execPath : VITEST_BIN;
+const SPAWN_PREFIX = WINDOWS ? [VITEST_ENTRY] : [];
+
 /**
  * Run one vitest invocation over this bucket's files.
  *
@@ -220,14 +236,20 @@ function runVitest(extra, label) {
     const started = Date.now();
     const tallyFile = join(tmpdir(), `olv-tally-${arg}-${process.pid}-${tallySeq++}.json`);
     const child = spawn(
-      VITEST_BIN,
+      SPAWN_CMD,
       [
+        ...SPAWN_PREFIX,
         'run', ...files, ...bucketArgs, ...extra, ...passthrough,
         // default keeps the human console output; json feeds the file the
         // parent reads for the GATE TALLY line.
         '--reporter=default', '--reporter=json', `--outputFile.json=${tallyFile}`,
       ],
-      { cwd: ROOT, stdio: 'inherit', detached: true },
+      // `detached` is what makes the shard a process-group leader so the
+      // timeout below can kill the group. Windows has no process groups —
+      // there `detached` only means "own console window", which would hide the
+      // shard's output — so it stays off and the watchdog kills the child
+      // directly (see the kill site).
+      { cwd: ROOT, stdio: 'inherit', detached: !WINDOWS },
     );
 
     let timedOut = false;
@@ -252,7 +274,12 @@ function runVitest(extra, label) {
       try {
         // Negative pid = the whole group. The group may already be gone (the
         // race between the timer firing and a normal exit), hence the guard.
-        process.kill(-child.pid, 'SIGKILL');
+        // Windows rejects a negative pid outright and has no group to signal,
+        // so there the child is killed directly. That is weaker — vitest's
+        // worker processes can outlive it — and the Windows note in
+        // docs/developer-manual.md says so rather than implying parity.
+        if (WINDOWS) child.kill('SIGKILL');
+        else process.kill(-child.pid, 'SIGKILL');
       } catch {
         /* group already reaped */
       }

@@ -76,6 +76,7 @@
     "test:smoke": "playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:live": "SMOKE_LIVE=1 playwright test --project=deterministic tests/e2e/smoke.spec.ts tests/e2e/lazyChunkLoad.spec.ts",
     "test:smoke:mobile": "playwright test --project=deterministic tests/e2e/visualsStudioMobile.spec.ts",
+    "test:smoke:widths": "playwright test --config=playwright.widths.config.ts tests/e2e/smoke.spec.ts",
     "test:release": "npm run test:release:execute && npm run lint:evidence",
     "lint:main-deferral": "node scripts/lint-main-deferral.mjs",
     "lint:inline-imports": "node scripts/lint-inline-imports.mjs",

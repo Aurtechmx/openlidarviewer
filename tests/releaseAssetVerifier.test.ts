@@ -14,6 +14,9 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
+
+// The same resolver the scripts use, so 'is zip installed' is answered one way.
+import { binaryOnPath } from '../scripts/lib/binaryOnPath.mjs';
 // @ts-expect-error — plain .mjs script, no types
 import { verifyStagedRelease } from '../scripts/verify-release-assets.mjs';
 
@@ -25,6 +28,25 @@ const sha = (p: string) => createHash('sha256').update(readFileSync(p)).digest('
 let dir: string;
 
 /** Build a zip from a { path: contents } map, rooted at the zip root. */
+/**
+ * These suites build real archives with the `zip` command, because what they
+ * verify is the bytes a release actually ships, not a library's idea of them.
+ *
+ * GitHub's Windows runners carry no `zip`, so every case here died with ENOENT
+ * and the new Windows leg was red from its first run. A permanently failing
+ * advisory check is one people stop reading, which costs more than the coverage
+ * it pretends to give.
+ *
+ * So the suites skip when the tool is absent, naming it. They are NOT skipped by
+ * platform: a Windows machine with `zip` on PATH runs them, and a Linux machine
+ * without it does not pretend to. The release gate itself runs on Linux where
+ * `zip` is present, so nothing that ships is unverified. The Windows leg simply
+ * does not cover release-asset verification, and that boundary is stated in the
+ * developer manual rather than implied by a green tick.
+ */
+const HAS_ZIP = binaryOnPath('zip') !== null;
+const describeZip = describe.skipIf(!HAS_ZIP);
+
 function makeZip(zipPath: string, files: Record<string, string>) {
   const staging = mkdtempSync(join(tmpdir(), 'zipsrc-'));
   for (const [rel, body] of Object.entries(files)) {
@@ -171,7 +193,7 @@ const failsWith = (needle: string) => {
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'olv-stage-')); });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-describe('release:verify — the happy path', () => {
+describeZip('release:verify — the happy path', () => {
   it('accepts a complete, self-consistent asset set', () => {
     stageRelease();
     const r = verify();
@@ -180,7 +202,7 @@ describe('release:verify — the happy path', () => {
   });
 });
 
-describe('release:verify — completeness', () => {
+describeZip('release:verify — completeness', () => {
   it('rejects a missing gate log', () => {
     stageRelease();
     rmSync(join(dir, 'gate.log'));
@@ -199,7 +221,7 @@ describe('release:verify — completeness', () => {
   });
 });
 
-describe('release:verify — provenance', () => {
+describeZip('release:verify — provenance', () => {
   it('rejects a manifest whose commit differs from the evidence', () => {
     stageRelease({ manifest: (m) => { m.gitCommit = 'd'.repeat(40); } });
     failsWith('!= evidence commit');
@@ -236,7 +258,7 @@ describe('release:verify — provenance', () => {
   });
 });
 
-describe('release:verify — versioned evidence documents in the source zip', () => {
+describeZip('release:verify — versioned evidence documents in the source zip', () => {
   for (const doc of [
     `RELEASE_NOTES_v${VERSION}.md`,
     `KNOWN_LIMITATIONS_v${VERSION}.md`,
@@ -252,7 +274,7 @@ describe('release:verify — versioned evidence documents in the source zip', ()
   }
 });
 
-describe('release:verify — mandatory stage record', () => {
+describeZip('release:verify — mandatory stage record', () => {
   it('rejects evidence with no stage record at all', () => {
     stageRelease({ evidence: { stages: null } });
     failsWith('mandatory stage');
@@ -309,7 +331,7 @@ describe('release:verify — mandatory stage record', () => {
   });
 });
 
-describe('release:verify — scientific scope', () => {
+describeZip('release:verify — scientific scope', () => {
   it('rejects an E4 claim count that disagrees with the register', () => {
     stageRelease({
       evidence: { science: { e4ClaimCount: 3, e4Claims: [...EXPECTED_E4, 'DTM'] } },
@@ -323,7 +345,7 @@ describe('release:verify — scientific scope', () => {
   });
 });
 
-describe('release:verify — integrity', () => {
+describeZip('release:verify — integrity', () => {
   it('rejects a manifest hash that does not match the file', () => {
     stageRelease({ manifest: (m) => { m.artifacts.sbom.sha256 = 'f'.repeat(64); } });
     failsWith('sha256 mismatch');
@@ -355,7 +377,7 @@ describe('release:verify — integrity', () => {
   });
 });
 
-describe('release:verify — archive contents', () => {
+describeZip('release:verify — archive contents', () => {
   it('rejects a source zip containing node_modules', () => {
     stageRelease({ sourceFiles: { ...SOURCE_FILES, 'node_modules/three/index.js': 'x' } });
     failsWith('forbidden path');

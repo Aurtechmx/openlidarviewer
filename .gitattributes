@@ -1,3 +1,33 @@
+# Line endings: LF in the working tree on every platform.
+#
+# Without this a Windows checkout with core.autocrlf=true (the default on a
+# GitHub Windows runner) gets CRLF, and vitest then fails to parse the
+# scripts/*.mjs modules the lint tests import: five suites died with
+# "SyntaxError: Invalid or unexpected token" before this rule existed.
+# Reproduced by converting one of those files to CRLF on macOS and running
+# its test. bash also refuses a CRLF script, so gate.sh and package.sh
+# depend on this too.
+#
+# Nothing in the tree changes on macOS or Linux: every file is already LF,
+# and `git add --renormalize .` produces no diff.
+* text=auto eol=lf
+
+# Binary fixtures and assets, so the rule above never touches them.
+*.png binary
+*.jpg binary
+*.ico binary
+*.wasm binary
+*.zip binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.las binary
+*.laz binary
+*.e57 binary
+*.ply binary
+*.glb binary
+*.tif binary
+*.bin binary
 # Exclude generated release artifacts from `git archive` source exports.
 # The release/ tree is npm-run-package output (checksums, manifest, deploy/
 # source zips); it must never ship inside the source zip.

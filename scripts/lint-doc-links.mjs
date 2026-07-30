@@ -80,6 +80,9 @@ function looksRepoRelative(ref) {
  * either ends in a directory slash or carries a file extension. `npm run x` and
  * `--flag` are not paths and must not be read as broken ones.
  */
+// Directories written by a run rather than committed. Kept explicit: each one
+// is a place a wrong path could hide, so the list is short and named.
+const GENERATED = /^(?:release|dist|test-results|benchmarks\/out|validation\/reachability)\//;
 const ROOTS = 'docs|validation|release|scripts|src|tests|public|benchmarks|\\.github';
 const DOC_EXT = 'md|json|ya?ml|ts|mjs|cjs|js|css|html|csv|asc|cff|txt|sh|py|svg|toml';
 const CODE_PATH = new RegExp(
@@ -116,10 +119,15 @@ for (const file of markdownFiles()) {
     // A glob names a set, not a file. Expanding one here would need the same
     // matcher the shell uses and would still not say which member was meant.
     if (ref.includes('*')) continue;
-    // Artifacts a release run produces. They are absent in a clean checkout by
-    // design, so their absence is not a broken citation. Narrow on purpose: an
-    // entry here is a hole, and a wrong path under release/ would hide in it.
-    if (/^release\/[A-Za-z0-9._-]+\.json$/.test(ref)) continue;
+    // Paths a run produces. They are absent in a clean checkout by design, so
+    // their absence is not a broken citation.
+    //
+    // This started as `release/*.json` alone, and the check then passed or
+    // failed depending on whether the machine happened to have run the
+    // benchmarks: `benchmarks/out/` existed in one checkout and not in a fresh
+    // worktree. A lint whose answer depends on local build state is worse than
+    // no lint, because it teaches people the failure is noise.
+    if (GENERATED.test(ref)) continue;
     if (seen.has(ref)) continue;
     seen.add(ref);
     checked++;
