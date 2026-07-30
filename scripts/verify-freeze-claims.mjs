@@ -141,6 +141,36 @@ function recordFiles() {
   return files;
 }
 
+/**
+ * The freeze the study's protocol states for this study's claim, or null.
+ *
+ * Only the presence of the statement is read here. Whether it is true is the
+ * study verifier's job, which compares it against the commits it names.
+ */
+function protocolFreeze(record) {
+  const ref = record.protocolRef ?? null;
+  if (ref === null || typeof ref.protocolId !== 'string') return null;
+  const dir = resolve(ROOT, 'validation/protocols');
+  if (!existsSync(dir)) return null;
+  for (const name of readdirSync(dir)) {
+    if (!name.endsWith('.protocol.json')) continue;
+    let doc;
+    try {
+      doc = JSON.parse(readFileSync(resolve(dir, name), 'utf8'));
+    } catch {
+      continue;
+    }
+    if (doc.protocolId !== ref.protocolId) continue;
+    for (const claim of doc.claims ?? []) {
+      if (claim.claimId !== record.claimId) continue;
+      const status = claim.freeze?.status ?? null;
+      if (status === null) return null;
+      return { protocolId: doc.protocolId, claimId: claim.claimId, status };
+    }
+  }
+  return null;
+}
+
 const problems = [];
 const witnessed = [];
 const skipped = [];
@@ -220,6 +250,25 @@ for (const file of recordFiles()) {
   if (priorFreeze === null) {
     // No reachable history. A named witness is the fallback a squash merge
     // leaves available; it is checked, not taken on trust.
+    // A study manifest may transcribe a comparison whose protocol was frozen
+    // elsewhere. That is the case the raster studies are in: the comparisons ran
+    // in July, the manifests were written afterwards to record them, and the
+    // freeze lives in the protocol they cite. Demanding the manifest have its
+    // own pending commit would ask it to carry provenance it never held.
+    //
+    // Deferring is not waiving. The protocol has to exist, name this claim, and
+    // state that claim's freeze, and verify-cross-implementation-study.mjs
+    // checks that statement against the commits it offers (P9, P10) and refuses
+    // a measured study with no protocol at all (R12).
+    const viaProtocol = protocolFreeze(current);
+    if (viaProtocol !== null) {
+      witnessed.push(
+        `${id}: freeze recorded in protocol ${viaProtocol.protocolId} for claim ` +
+          `${viaProtocol.claimId} (${viaProtocol.status}), measured in ` +
+          `${firstMeasured.sha.slice(0, 8)} (${firstMeasured.date})`,
+      );
+      continue;
+    }
     const witness = current.freeze?.witnessCommit ?? current.preregisteredIn ?? null;
     if (witness !== null) {
       const at = recordAt(witness, file);
