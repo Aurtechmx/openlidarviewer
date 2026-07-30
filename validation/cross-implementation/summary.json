@@ -20,33 +20,55 @@
     "pending"
   ],
   "studiesRead": 3,
-  "countedStudies": 0,
-  "byStatus": {},
-  "byClaim": {},
+  "countedStudies": 2,
+  "byStatus": {
+    "agree": 1,
+    "partial": 1
+  },
+  "byClaim": {
+    "DTM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-012-PC-BARE-PLANE",
+        "OLV-DS-013-PC-BARE-ROLLING",
+        "OLV-DS-014-PC-BARE-RIDGE"
+      ],
+      "parameterSetIds": [
+        "PS-DTM-MIN-CELL1-R045"
+      ]
+    },
+    "GROUND-FILTER": {
+      "studies": 1,
+      "byStatus": {
+        "partial": 1
+      },
+      "datasetIds": [
+        "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "OLV-DS-008-PC-ROLLING-BUILDINGS",
+        "OLV-DS-009-PC-RIDGE-BUILDINGS",
+        "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+        "OLV-DS-011-PC-PLANE-GAP"
+      ],
+      "parameterSetIds": [
+        "PS-SMRF-CELL1-W16-S015-T05"
+      ]
+    }
+  },
   "agreement": {
-    "denominator": 0,
+    "denominator": 2,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 0,
-    "fraction": null
+    "agree": 1,
+    "fraction": 0.5
   },
   "excludedFromCounts": [
-    {
-      "studyId": "DTM-PDAL-WRITERS-GDAL-CELL-CENTRED",
-      "claimId": "DTM",
-      "status": "pending",
-      "why": "status \"pending\": nothing was measured, so there is nothing to count"
-    },
     {
       "studyId": "EXAMPLE-SLOPE-RASTER-GDAL-HORN-TWO-PARAMETER-SETS",
       "claimId": "SLOPE-RASTER",
       "status": "pending",
       "why": "example manifest: a template, not a study"
-    },
-    {
-      "studyId": "GROUND-FILTER-PDAL-SMRF-FIVE-SCENES",
-      "claimId": "GROUND-FILTER",
-      "status": "pending",
-      "why": "status \"pending\": nothing was measured, so there is nothing to count"
     }
   ]
 }

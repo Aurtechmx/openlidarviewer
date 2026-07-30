@@ -4,7 +4,7 @@
   "claimId": "DTM",
   "example": false,
   "notes": [
-    "Registered before anything ran. The tolerance below is frozen by protocolDigest at this commit.",
+    "The tolerance below was registered at pending in an earlier commit, before anything ran, and is unchanged. protocolDigest covers it.",
     "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched.",
     "What this study compares is the georeferencing of a DTM raster: grid origin, cell indexing and row order. It does NOT compare aggregation over a realistic cloud, and the reason is in the parameter set: PDAL's writers.gdal is a radius estimator and rasterizeDtm is a cell estimator, a disc is not a square, and on scattered returns over sloping ground the two cannot agree exactly however the parameters are set. One return per cell centre with a radius below half a cell removes that confound; the cost is that the input is a degenerate cloud, and the cost is stated rather than absorbed into a wider tolerance."
   ],
@@ -80,8 +80,14 @@
     "minimumComparableCells": 7500,
     "requiredWithinToleranceFraction": 1
   },
-  "status": "pending",
-  "statusReason": "Registered, not run. No PDAL raster exists yet for any of the three scenes, and the tolerance above is frozen by protocolDigest at this commit so it cannot be adjusted once numbers exist.",
+  "status": "agree",
+  "statusReason": "All 7500 cells across the three scenes are within the registered 0.00005 m, and the largest single difference is 3.78e-6 m, which is about half a float32 step at these elevations. Nothing was widened: the largest observed difference is more than an order of magnitude inside the tolerance registered at pending.",
+  "result": {
+    "comparableCells": 7500,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.000003784179682497779
+  },
   "rawArtifacts": [
     {
       "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
@@ -97,13 +103,114 @@
       "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
       "sha256": "03bf9091125bb9d466081f37638f0daa1d0b139aee6e9d584dacbda9d05f52e2",
       "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-06-bare-plane__dtm-min.json",
+      "sha256": "fa4b41ff1df0f6b51c2625a8af3d2bce7e98e2154f878f602dac70307712aa69",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-07-bare-rolling__dtm-min.json",
+      "sha256": "74f4c186e39df11ba7ace05944ca1132a153d7ae3f67d1e017e210808eac8fa0",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-08-bare-ridge__dtm-min.json",
+      "sha256": "f01d91ee8836af1105c204dc1f3bebc9d120ca0836f419a63e391de30513718b",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif",
+      "sha256": "eac413b4218c234d1dfcaad7f40616a3e9d088b761a07933d503c21b3883de7a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif",
+      "sha256": "025ea7ac17f176073ba1b1da9cbb6552ba3ab9c2571561bf875954bf381ae349",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif",
+      "sha256": "c4bec5f17c3dd210566a8d9d55b1209e5bb95f5157dbbd86b8bca897b8fd4bf1",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc",
+      "sha256": "0da399e0c050001576a2b57b2747862b7c375179120570f35b7c215200785512",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc",
+      "sha256": "e80a44425b51be4d98beb2bfb9cbee558484c66bb1555b7f68e634c4a4ce5fc9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc",
+      "sha256": "d276951a5f30a6a420cb3ac9b7940c8b959dccca73e6d52cdf6c271430fbf37c",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-06-bare-plane__dtm-min.asc",
+      "sha256": "54bcd1c922b87ab6510361cc57e9360abc12360d5bf80211e37eb0d96046517e",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-07-bare-rolling__dtm-min.asc",
+      "sha256": "11e76ff12989ccfaba3b7509f16a167c9853aecabd5703fc8a1cb3329e446fee",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-08-bare-ridge__dtm-min.asc",
+      "sha256": "63e4ea6ff5bd1b7b7663ed868ae70d5118787ffe8f5f7ff7d65e2adc096a962d",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/reference-runs.json",
+      "sha256": "98c91c1eb8c34b4ccc5443947280978bcf26798109614d28b92a092fef0a0ec6",
+      "role": "reference-environment"
     }
   ],
-  "derivedArtifacts": [],
+  "derivedArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/results-dtm.json",
+      "sha256": "2d4867f4a32cd5d49ac570f3484c92538aa9c2bd7ac1187b8ce0819011c1fd35",
+      "derivedFrom": [
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-06-bare-plane__dtm-min.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-07-bare-rolling__dtm-min.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-08-bare-ridge__dtm-min.json",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-06-bare-plane__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-07-bare-rolling__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-08-bare-ridge__dtm-min.asc",
+        "validation/cross-implementation/pdal-pipeline/reference-runs.json"
+      ],
+      "inputsDigest": "sha256:2a72c9995c65494e94887e3734404f6d13a75bc1f4b5cbb865a879679bf0f837"
+    }
+  ],
   "scope": {
-    "supported": [],
+    "supported": [
+      {
+        "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+        "parameterSetId": "PS-DTM-MIN-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+        "parameterSetId": "PS-DTM-MIN-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+        "parameterSetId": "PS-DTM-MIN-CELL1-R045"
+      }
+    ],
     "unsupported": [
-      "Nothing. A pending study supports no statement about any dataset or parameter set, and scope.supported stays empty until a result exists.",
       "Aggregation over a realistic cloud. The input is one return per cell at the cell centre, chosen so the two estimators coincide; a scattered cloud would compare a disc against a square and is out of scope here.",
       "Empty cells. Every cell in every fixture receives exactly one return, so nothing here says anything about how either side marks or fills a cell with no data.",
       "One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m.",

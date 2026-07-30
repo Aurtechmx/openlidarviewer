@@ -4,7 +4,8 @@
   "claimId": "GROUND-FILTER",
   "example": false,
   "notes": [
-    "Registered before anything ran. The tolerance and the required agreement fraction below are frozen by protocolDigest at this commit, so loosening either after seeing a number changes the digest and shows up in the diff as a changed protocol rather than as one moved number.",
+    "The gate below was registered at pending in an earlier commit, before anything ran, and is unchanged. protocolDigest covers it, so loosening it after seeing the numbers would show up in the diff as a changed protocol rather than as one moved number. The result did not meet it and the record says so.",
+    "The disagreement is one-directional and concentrated. Of the 9813 returns the two sides labelled differently across the five scenes, 9812 are bare earth as the scene was built and 9810 are returns only the reference called ground; the two agree completely about every building and vegetation return in every scene. The planar scenes agree exactly, and the three that do not are the ones carrying curvature, a 30 % gradient, or gross low returns. Where that difference comes from is not settled by this study and is not asserted here.",
     "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched, and promotion is a separate human act.",
     "The comparison is our SMRF against PDAL's filters.smrf on the same committed bytes, with cut disabled on the PDAL side and the threshold cap disabled on ours, so the two sides run the same published core with the same parameters."
   ],
@@ -90,8 +91,14 @@
     "minimumComparableCells": 50000,
     "requiredWithinToleranceFraction": 0.99
   },
-  "status": "pending",
-  "statusReason": "Registered, not run. No PDAL output exists yet for any of the five scenes, and the gate above is frozen by protocolDigest at this commit so it cannot be adjusted once numbers exist.",
+  "status": "partial",
+  "statusReason": "Ran on all five scenes. The two planar scenes agree with PDAL on every return; the rolling, ridge and low-blunder scenes fall well below the registered 0.99, at 0.607, 0.773 and 0.740, and the pooled figure is 0.822 over 55151 returns. The gate is the one registered at pending and is unchanged.",
+  "result": {
+    "comparableCells": 55151,
+    "skippedCells": 0,
+    "withinToleranceFraction": 0.8220703160414136,
+    "maxAbsDiff": 1
+  },
   "rawArtifacts": [
     {
       "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
@@ -117,13 +124,161 @@
       "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
       "sha256": "6998a0bb0c451442ee3cca3a1f5b59d66f5da8ae3f0c843133cf4750c61cdfac",
       "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.truth",
+      "sha256": "4191c118c0b105e64acf9f02f1ef0215abcf24b3c0cf4176a36cdf6fc5d90580",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.truth",
+      "sha256": "4c00bcb62e7efca7d643e40bde8ba5d7d482e11350a6094079ace446b869a23d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.truth",
+      "sha256": "debd3d622fecdcee36f8a89c00222d9adb00b77863709e7f97b9236595dea9d0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.truth",
+      "sha256": "279f5c4921b90bfa7037d6fd762b0a23879b4947edf94e37d56fdf6f21925b44",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.truth",
+      "sha256": "fcca577c95a628b1f1462b29ff00548fb8e7099ecc4450934643fdfd70addc47",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-01-plane-buildings__smrf.json",
+      "sha256": "9e90c039efb583d2977859085e26106a7e6aaa13dbc0a89ea116d98c6b66e903",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-02-rolling-buildings__smrf.json",
+      "sha256": "ae21222b38ba52793a3fdfcd2d5821080c025876118ebc707bbfdc6a781f8d2e",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-03-ridge-buildings__smrf.json",
+      "sha256": "32f378a4b5ee4eaac5b439d713d19bed1fcf74f1f37922b2ac098986f7976343",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-04-plane-lowblunders__smrf.json",
+      "sha256": "5e8ea73676073a90b94b8fd7bf25c916f362f4313877b5a1269a91b85bff86bc",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-05-plane-gap__smrf.json",
+      "sha256": "c0ecb03eb95a4b53ed0082a3b6a227086274f222533baef4bd544597e45c5f75",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-01-plane-buildings__smrf.csv",
+      "sha256": "fedddbb28f21a6a575a9af82b40081879f32fc668099956b4231b984b4bcc3c3",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-02-rolling-buildings__smrf.csv",
+      "sha256": "481b145465b13b7bc321c00c057baff8e607d78741e59aeb6eb10b81b0a0e76c",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-03-ridge-buildings__smrf.csv",
+      "sha256": "c9b355ee129c7f8ff89047210dfc3a329620f1b1d7610f6a93e11023f6955c09",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv",
+      "sha256": "2ad4ba740a92217d4f8746d72ab37f504d346f5abeb2d36322da9a2c3eacb676",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-05-plane-gap__smrf.csv",
+      "sha256": "9d716505709055ca75835d66a6a353e61eff707b83461312bda11c2926560828",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-01-plane-buildings__smrf.labels",
+      "sha256": "4191c118c0b105e64acf9f02f1ef0215abcf24b3c0cf4176a36cdf6fc5d90580",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-02-rolling-buildings__smrf.labels",
+      "sha256": "12e434e6f96d49d6644d6df348af69cafb10db39881c5d7b53ca3e58da44ee1d",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-03-ridge-buildings__smrf.labels",
+      "sha256": "56c29c5ccbd7dad3f11979ddff1dd40b0ff402c5379b923972c8f5720feb6fa5",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-04-plane-lowblunders__smrf.labels",
+      "sha256": "8118916882d8eb7cada10133a051ef34ee5ea4721a41f2e46d2595f802e619d5",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-05-plane-gap__smrf.labels",
+      "sha256": "fcca577c95a628b1f1462b29ff00548fb8e7099ecc4450934643fdfd70addc47",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/reference-runs.json",
+      "sha256": "98c91c1eb8c34b4ccc5443947280978bcf26798109614d28b92a092fef0a0ec6",
+      "role": "reference-environment"
     }
   ],
-  "derivedArtifacts": [],
+  "derivedArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/results-ground-filter.json",
+      "sha256": "18686e241e8ba1bff975b47c33953e0857c7fdb00cc26c2cbfe2a6f123efea87",
+      "derivedFrom": [
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.truth",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.truth",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-01-plane-buildings__smrf.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-02-rolling-buildings__smrf.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-03-ridge-buildings__smrf.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-04-plane-lowblunders__smrf.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-05-plane-gap__smrf.json",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-01-plane-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-02-rolling-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-03-ridge-buildings__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-05-plane-gap__smrf.csv",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-01-plane-buildings__smrf.labels",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-02-rolling-buildings__smrf.labels",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-03-ridge-buildings__smrf.labels",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-04-plane-lowblunders__smrf.labels",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-05-plane-gap__smrf.labels",
+        "validation/cross-implementation/pdal-pipeline/reference-runs.json"
+      ],
+      "inputsDigest": "sha256:d5fa9f48bef27ea8eb5ab52e256a7be178bee0debf92f3ce1f595c54c0cad9c4"
+    }
+  ],
   "scope": {
-    "supported": [],
+    "supported": [
+      {
+        "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "parameterSetId": "PS-SMRF-CELL1-W16-S015-T05"
+      },
+      {
+        "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+        "parameterSetId": "PS-SMRF-CELL1-W16-S015-T05"
+      }
+    ],
     "unsupported": [
-      "Nothing. A pending study supports no statement about any dataset or parameter set, and scope.supported stays empty until a result exists.",
+      "The rolling, ridge and low-blunder scenes. On those three the two implementations disagree about 4384, 2532 and 2897 returns, and every disagreeing return but one is bare earth as the scene was built: our filter rejects ground that the reference accepts. Nothing about those datasets is approved by this study.",
       "Five synthetic scenes are not survey data. Returns are uniform-random in plan with no sensor geometry, no scan pattern, no range noise and no multiple returns, and the objects are boxes and clumps of points rather than structures.",
       "One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the threshold cap that our filter applies by default and that this study switches off to match the reference.",
       "Agreement with PDAL is not accuracy against ground truth. Ground membership in these scenes is known by construction, which is a comparison against a generator this project also wrote."
