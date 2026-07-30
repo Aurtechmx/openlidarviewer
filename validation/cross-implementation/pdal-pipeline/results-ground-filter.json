@@ -1,0 +1,165 @@
+{
+  "generatedBy": "tests/groundFilterPdalAgreement.test.ts",
+  "manifest": "validation/cross-implementation/studies/GROUND-FILTER-PDAL-SMRF.study.json",
+  "evidenceNote": "The agreement figure is cross-implementation (E4). disagreementByTruth and truthLeg compare each side against labels this project assigned when generating the scene, which is E3 and is not ground truth.",
+  "promotes": "nothing",
+  "gate": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "label (ground or non-ground; a return either carries the same label on both sides or it does not)",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.99
+  },
+  "pooled": {
+    "evaluatedReturns": 55151,
+    "agreeingReturns": 45338,
+    "agreementFraction": 0.8220703160414136
+  },
+  "legs": [
+    {
+      "fixtureId": "pc-01-plane-buildings",
+      "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "returns": 11138,
+      "evaluated": 11138,
+      "agreeingReturns": 11138,
+      "agreementFraction": 1,
+      "onlyOlvGround": 0,
+      "onlyPdalGround": 0,
+      "groundIoU": 1,
+      "mcc": 1,
+      "unexpectedClassifications": 0,
+      "disagreementByTruth": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "truthGround": 0,
+        "truthNonGround": 0
+      },
+      "truthLeg": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "olvBalancedAccuracy": 1,
+        "pdalBalancedAccuracy": 1
+      }
+    },
+    {
+      "fixtureId": "pc-02-rolling-buildings",
+      "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "returns": 11156,
+      "evaluated": 11156,
+      "agreeingReturns": 6772,
+      "agreementFraction": 0.6070276084618142,
+      "onlyOlvGround": 2,
+      "onlyPdalGround": 4382,
+      "groundIoU": 0.4477893941302431,
+      "mcc": 0.43485943305173447,
+      "unexpectedClassifications": 0,
+      "disagreementByTruth": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "truthGround": 4384,
+        "truthNonGround": 0
+      },
+      "truthLeg": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "olvBalancedAccuracy": 0.692728651928912,
+        "pdalBalancedAccuracy": 0.9300498482878197
+      }
+    },
+    {
+      "fixtureId": "pc-03-ridge-buildings",
+      "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "returns": 11176,
+      "evaluated": 11176,
+      "agreeingReturns": 8644,
+      "agreementFraction": 0.7734430923407302,
+      "onlyOlvGround": 0,
+      "onlyPdalGround": 2532,
+      "groundIoU": 0.7162707306140744,
+      "mcc": 0.5806670864883533,
+      "unexpectedClassifications": 0,
+      "disagreementByTruth": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "truthGround": 2532,
+        "truthNonGround": 0
+      },
+      "truthLeg": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "olvBalancedAccuracy": 0.8461121940654104,
+        "pdalBalancedAccuracy": 0.9832142083604072
+      }
+    },
+    {
+      "fixtureId": "pc-04-plane-lowblunders",
+      "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "returns": 11137,
+      "evaluated": 11137,
+      "agreeingReturns": 8240,
+      "agreementFraction": 0.739876088713298,
+      "onlyOlvGround": 1,
+      "onlyPdalGround": 2896,
+      "groundIoU": 0.009911141490088858,
+      "mcc": 0.08314446932594088,
+      "unexpectedClassifications": 0,
+      "disagreementByTruth": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "truthGround": 2896,
+        "truthNonGround": 1
+      },
+      "truthLeg": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "olvBalancedAccuracy": 0.49228395061728397,
+        "pdalBalancedAccuracy": 0.6500523020512565
+      }
+    },
+    {
+      "fixtureId": "pc-05-plane-gap",
+      "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "returns": 10544,
+      "evaluated": 10544,
+      "agreeingReturns": 10544,
+      "agreementFraction": 1,
+      "onlyOlvGround": 0,
+      "onlyPdalGround": 0,
+      "groundIoU": 1,
+      "mcc": 1,
+      "unexpectedClassifications": 0,
+      "disagreementByTruth": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "truthGround": 0,
+        "truthNonGround": 0
+      },
+      "truthLeg": {
+        "reference": "by-construction",
+        "evidenceLevel": "E3",
+        "olvBalancedAccuracy": 1,
+        "pdalBalancedAccuracy": 1
+      }
+    }
+  ],
+  "boundaries": [
+    "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
+    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "One parameter set. Nothing here says anything about a different cell size, a different window ladder, a non-zero slope-scaled term, or the 2.5 m threshold cap our filter applies by default and that this study switches off to match the reference.",
+    "floorPercentile is 0, matching the reference's per-cell minimum. The pipeline orchestrator enables a small despike floor by default, so the low-blunder scene here exercises the leaf as the reference runs it and not as the product ships it."
+  ]
+}
