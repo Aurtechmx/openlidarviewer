@@ -81,8 +81,49 @@ function references(html) {
   return [...found];
 }
 
+/**
+ * References a page makes from script rather than from markup.
+ *
+ * The testing form POSTs to an endpoint named in a constant, and imports its
+ * formatting from a second module. Neither is an href, so neither is checked
+ * by the sweep above, and both fail the same silent way: the page loads, the
+ * button appears, and nothing works.
+ *
+ * Each entry names the file that must exist and what breaks without it, so a
+ * failure says more than that a string did not match.
+ */
+const SCRIPT_REFERENCES = [
+  {
+    in: 'public/test-report.js',
+    pattern: /const ENDPOINT\s*=\s*"([^"]+)"/,
+    what: 'the address the form POSTs the report to',
+  },
+  {
+    in: 'public/test-report.js',
+    pattern: /from\s+'\.\/([^']+)'/,
+    what: 'the module holding the report formatting',
+  },
+];
+
 const problems = [];
 const allowed = [];
+
+for (const { in: file, pattern, what } of SCRIPT_REFERENCES) {
+  const full = resolve(ROOT, file);
+  if (!existsSync(full)) {
+    problems.push(`${file} is missing — it holds ${what}.`);
+    continue;
+  }
+  const match = pattern.exec(readFileSync(full, 'utf8'));
+  if (!match) {
+    problems.push(`${file} no longer names ${what}; this check cannot see what it points at.`);
+    continue;
+  }
+  if (!existsSync(resolve(PUBLIC, match[1]))) {
+    problems.push(`${file} points at ${match[1]} (${what}), which does not ship.`);
+  }
+}
+
 for (const { file, bases } of shippedPages()) {
   const html = readFileSync(resolve(ROOT, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
   for (const ref of references(html)) {

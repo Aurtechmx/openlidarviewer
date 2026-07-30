@@ -23,7 +23,7 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
-import { resolve, dirname, relative } from 'node:path';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -95,6 +95,26 @@ function inlineHandlerCount(html) {
     .length;
 }
 
+/**
+ * The policy is written twice, once per host: .htaccess for Apache, _headers
+ * for Netlify-style hosts. A comment in _headers says it matches .htaccess,
+ * which was true when written and is exactly the kind of claim that quietly
+ * stops being true.
+ *
+ * Drift here is worse than an ordinary duplicate, because whichever copy is
+ * wrong only misbehaves on the host that reads it. The check below would keep
+ * passing against .htaccess while the deployed pages broke somewhere else.
+ */
+function readMirroredPolicy() {
+  const file = resolve(ROOT, 'public/_headers');
+  if (!existsSync(file)) return { present: false, policy: null };
+  const line = readFileSync(file, 'utf8')
+    .split('\n')
+    .find((l) => /^\s*Content-Security-Policy:/i.test(l));
+  if (!line) return { present: true, policy: null };
+  return { present: true, policy: line.replace(/^\s*Content-Security-Policy:\s*/i, '').trim() };
+}
+
 const policy = readPolicy();
 if (!policy) {
   console.error('lint:csp-html FAILED\n');
@@ -109,6 +129,19 @@ const scriptInlineOk = allowsInline(directives, 'script-src');
 const styleInlineOk = allowsInline(directives, 'style-src');
 
 const problems = [];
+
+const mirrored = readMirroredPolicy();
+if (mirrored.present && mirrored.policy === null) {
+  problems.push('public/_headers exists but sets no Content-Security-Policy.');
+} else if (mirrored.present && mirrored.policy !== policy) {
+  problems.push(
+    'public/.htaccess and public/_headers send different policies. Whichever is ' +
+      'wrong only misbehaves on the host that reads it.\n' +
+      `      .htaccess: ${policy}\n` +
+      `      _headers:  ${mirrored.policy}`,
+  );
+}
+
 for (const file of shippedHtml()) {
   const html = withoutComments(readFileSync(resolve(ROOT, file), 'utf8'));
 
@@ -148,5 +181,6 @@ const checked = shippedHtml();
 console.log(
   `lint:csp-html OK — ${checked.length} shipped page(s) match the enforced policy ` +
     `(script inline ${scriptInlineOk ? 'allowed' : 'refused'}, ` +
-    `style inline ${styleInlineOk ? 'allowed' : 'refused'}).`,
+    `style inline ${styleInlineOk ? 'allowed' : 'refused'})` +
+    `${mirrored.present ? ', and .htaccess matches _headers' : ''}.`,
 );

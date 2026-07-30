@@ -12,6 +12,8 @@
  * form again on the live site and nowhere else.
  */
 
+import { buildHtmlReport } from './test-report-format.js';
+
 const SUBMISSION_EMAIL="info@aurtech.mx";
 
 /* ── Screenshots ───────────────────────────────────────────────────────────
@@ -58,32 +60,6 @@ if (shotInput) shotInput.onchange = async () => {
   }
 };
 
-/* Escapes quotes as well as angle brackets, because the result is used in an
-   attribute as well as in text. Without the quote cases a filename containing
-   one closes alt="..." early and everything after it is parsed as markup. The
-   name comes from the tester's own file picker, so the risk is not to them: it
-   is to whoever opens the report they email, which is the maintainer. */
-function escapeHtml(t){
-  return String(t).replace(/[&<>"']/g, c => ({
-    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;",
-  }[c]));
-}
-
-/** A self-contained HTML report: the text, then each screenshot inline. */
-function buildHtmlReport(text){
-  const imgs = shots.map(s =>
-    `<figure><img alt="${escapeHtml(s.name)}" src="${s.dataUrl}">`
-    + `<figcaption>${escapeHtml(s.name)} (${s.w}x${s.h})</figcaption></figure>`).join("\n");
-  return `<!doctype html><meta charset="utf-8">
-<title>OpenLiDARViewer external test report</title>
-<style>body{font:14px/1.5 system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem}
-pre{white-space:pre-wrap;background:#f5f5f7;padding:1rem;border-radius:8px}
-img{max-width:100%;border:1px solid #ccc;border-radius:6px}
-figcaption{color:#555;font-size:12px;margin:.35rem 0 1.5rem}</style>
-<pre>${escapeHtml(text)}</pre>
-${imgs}`;
-}
-
 const form=document.getElementById("form"),preview=document.getElementById("preview"),statusBox=document.getElementById("status");
 const credit=document.getElementById("creditConsent"),creditFields=document.getElementById("creditFields");
 const research=document.getElementById("researchConsent"),adultRow=document.getElementById("adultRow"),adult=document.getElementById("adultConfirm");
@@ -113,7 +89,7 @@ document.getElementById("download").onclick=()=>{
   // With screenshots, one self-contained HTML file beats a .txt the tester has
   // to remember to send several images alongside.
   const withShots = shots.length > 0;
-  const body = withShots ? buildHtmlReport(r) : r;
+  const body = withShots ? buildHtmlReport(r, shots) : r;
   const blob = new Blob([body], { type: withShots ? "text/html;charset=utf-8" : "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url;
@@ -150,7 +126,7 @@ sendBtn.onclick = async () => {
   // an .html name means whoever opens it reads one collapsed paragraph, and the
   // <pre> in the wrapper is what keeps the report's line breaks.
   const withShots = shots.length > 0;
-  const blob = new Blob([buildHtmlReport(r)], { type: "text/html;charset=utf-8" });
+  const blob = new Blob([buildHtmlReport(r, shots)], { type: "text/html;charset=utf-8" });
 
   if (blob.size > 12 * 1024 * 1024) {
     say("This report is over the 12 MB limit. Remove a screenshot, or download it and email it instead.", true);
