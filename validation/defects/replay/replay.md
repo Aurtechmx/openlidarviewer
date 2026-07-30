@@ -14,7 +14,11 @@ The 18 records in validation/defects/defect-registry.json and the regression art
 
 Each probe is the regression artifact the registry names for the record. The same probe text and the same fixture run in two trees, the baseline tag and the candidate working tree, sharing one node_modules so the runtime is identical on both sides. Probe files missing from the baseline tree are copied in from the candidate. The baseline tree is returned to the tag before each record, and no file on that record code path is copied, so a probe is never handed the fix it is meant to detect.
 
-The registry records a full-suite run at the baseline tag that exited 0. That exit code is not read here and establishes nothing per defect: a green suite says the suite passed while the defective code was present, not that any test in it reached a given code path. Where a probe did not establish reachability at the baseline, the state is inconclusive and the reason says why.
+The registry records a full-suite run at the baseline tag that exited 0. That exit code is not read here and establishes nothing per defect: a green suite says the suite passed while the defective code was present, not that any test in it reached a given code path. Where a probe did not establish reachability at the baseline, its state says in which way it did not, and the reason beside it says why.
+
+## What counts as evidence
+
+A probe is evidence for a record only if it failed at the baseline and passed at the candidate. Two kinds of probe fail that test and are counted apart from it. A probe that passed on both trees is non-discriminating: it shows nothing about the old behaviour, whether it was written as a control for the case beside it or it exercises a sibling path the defect never touched. A probe whose baseline failure was an absent binding is component-absent-at-baseline: the call threw before it reached the code under test, so no behaviour was observed there. Neither group is counted under reproduced-then-fixed, at the probe level or the record level.
 
 | side | ref | commit | node | vitest | platform |
 | --- | --- | --- | --- | --- | --- |
@@ -26,23 +30,25 @@ The registry records a full-suite run at the baseline tag that exited 0. That ex
 | state | meaning |
 | --- | --- |
 | reproduced-then-fixed | the probe failed at the baseline on the behaviour the record describes, and passes at the candidate |
-| component-absent-at-baseline | the probe could not load at the baseline because a module it needs did not exist in that tree |
+| component-absent-at-baseline | the probe could not observe the baseline at all, because a module it imports or a binding it calls did not exist in that tree |
 | environment-unavailable | the probe needs a runtime this host does not offer |
+| non-discriminating | the probe passed on both trees, so it demonstrates nothing about the old behaviour and is not evidence for this record |
 | not-executed | the registry names no separately executable artifact for this entry, so nothing was run for it |
-| inconclusive | the probe ran on both sides and did not establish the old behaviour |
+| inconclusive | the pair produced no readable result on one side or the other, so nothing can be read off it |
 
 ## Records by state
 
 | state | records | probe runs |
 | --- | --- | --- |
-| reproduced-then-fixed | 16 | 28 |
-| component-absent-at-baseline | 1 | 3 |
+| reproduced-then-fixed | 16 | 26 |
+| component-absent-at-baseline | 1 | 5 |
 | environment-unavailable | 0 | 0 |
+| non-discriminating | 1 | 10 |
 | not-executed | 0 | 3 |
-| inconclusive | 1 | 10 |
+| inconclusive | 0 | 0 |
 
 A record with more than one probe takes the first state its probes reach in
-this order: reproduced-then-fixed, component-absent-at-baseline, environment-unavailable, inconclusive, not-executed. The probe column above counts every run pair, so the two columns do not sum alike.
+this order: reproduced-then-fixed, component-absent-at-baseline, environment-unavailable, inconclusive, non-discriminating, not-executed. The probe column above counts every run pair, so the two columns do not sum alike.
 
 ## Record by record
 
@@ -54,7 +60,7 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 | OLV-DEF-004 | reproduced-then-fixed | 2 | ee0526b |
 | OLV-DEF-005 | reproduced-then-fixed | 3 | ee0526b |
 | OLV-DEF-006 | reproduced-then-fixed | 2 | ee0526b |
-| OLV-DEF-007 | inconclusive | 2 | ee0526b |
+| OLV-DEF-007 | non-discriminating | 2 | ee0526b |
 | OLV-DEF-008 | reproduced-then-fixed | 1 | ee0526b |
 | OLV-DEF-009 | reproduced-then-fixed | 1 | 1003377 |
 | OLV-DEF-010 | reproduced-then-fixed | 3 | 1003377 |
@@ -73,13 +79,13 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 | --- | --- | --- | --- | --- | --- | --- |
 | OLV-DEF-001 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-001 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-001 | 2 | inconclusive | 0 | passed | 0 | passed |
-| OLV-DEF-002 | 0 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-001 | 2 | non-discriminating | 0 | passed | 0 | passed |
+| OLV-DEF-002 | 0 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-002 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-002 | 2 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-002 | 2 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-002 | 3 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-003 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-004 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
+| OLV-DEF-004 | 0 | component-absent-at-baseline | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-004 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-005 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-005 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
@@ -87,18 +93,18 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 | OLV-DEF-006 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-006 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-007 | 0 | not-executed | n/a | not run | n/a | not run |
-| OLV-DEF-007 | 1 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-007 | 1 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-008 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-009 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-010 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-010 | 1 | inconclusive | 0 | passed | 0 | passed |
-| OLV-DEF-010 | 2 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-010 | 1 | non-discriminating | 0 | passed | 0 | passed |
+| OLV-DEF-010 | 2 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-011 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-011 | 1 | inconclusive | 0 | passed | 0 | passed |
-| OLV-DEF-011 | 2 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-011 | 1 | non-discriminating | 0 | passed | 0 | passed |
+| OLV-DEF-011 | 2 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-012 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-012 | 1 | inconclusive | 0 | passed | 0 | passed |
-| OLV-DEF-012 | 2 | inconclusive | 0 | passed | 0 | passed |
+| OLV-DEF-012 | 1 | non-discriminating | 0 | passed | 0 | passed |
+| OLV-DEF-012 | 2 | non-discriminating | 0 | passed | 0 | passed |
 | OLV-DEF-013 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-013 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-013 | 2 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
@@ -111,7 +117,7 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 | OLV-DEF-016 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-016 | 2 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-017 | 0 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
-| OLV-DEF-017 | 1 | reproduced-then-fixed | 1 | failed-assertion | 0 | passed |
+| OLV-DEF-017 | 1 | component-absent-at-baseline | 1 | failed-assertion | 0 | passed |
 | OLV-DEF-018 | 0 | reproduced-then-fixed | 1 | failed | 0 | passed |
 | OLV-DEF-018 | 1 | not-executed | n/a | not run | n/a | not run |
 | OLV-DEF-018 | 2 | not-executed | n/a | not run | n/a | not run |
@@ -144,8 +150,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-001 probe 2
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/contourCorrectness.test.ts`, case "EPSG:4979 already in metres leaves the ordinate equal to the elevation"
 - baseline: `npx vitest run tests/benchmark/contourCorrectness.test.ts -t "EPSG:4979 already in metres leaves the ordinate equal to the elevation" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:996bc3847940128a7da8ec3641611879b6d9af2128f0d04c1b740ae464304321
@@ -156,8 +162,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-002 probe 0
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/contourCorrectness.test.ts`, case "the declared interval equals the actual spacing of adjacent levels"
 - baseline: `npx vitest run tests/benchmark/contourCorrectness.test.ts -t "the declared interval equals the actual spacing of adjacent levels" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:1a041f8ac9f3464d4eaf82a9ca0aab2af52060922a98e5bca6a6e8b3f85b12e6
@@ -180,8 +186,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-002 probe 2
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/contourCorrectness.test.ts`, case "the GeoJSON interval property matches the set interval on every feature"
 - baseline: `npx vitest run tests/benchmark/contourCorrectness.test.ts -t "the GeoJSON interval property matches the set interval on every feature" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:d08004b515e03dc39627888c7b64d1057c855f4293e198427b79e25928b3bafe
@@ -216,8 +222,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-004 probe 0
 
-- state: reproduced-then-fixed
-- why: the baseline run failed the assertion (TypeError: (0 , __vite_ssr_import_2__.verticalUnitGeoKeyCode) is not a function); the candidate run passes
+- state: component-absent-at-baseline
+- why: the probe called verticalUnitGeoKeyCode at the baseline and that binding did not exist in that tree, so it observed nothing about the old behaviour
 - probe: vitest-case, `tests/demExport.test.ts`, case "maps a metres-per-unit factor to its GeoTIFF unit code, or to none"
 - baseline: `npx vitest run tests/demExport.test.ts -t "maps a metres-per-unit factor to its GeoTIFF unit code, or to none" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 1, failed-assertion: TypeError: (0 , __vite_ssr_import_2__.verticalUnitGeoKeyCode) is not a function
 - baseline transcript digest: sha256:6d3a30bea92c95cc306fff6767ce5f45f7fc87ee456ace3c7c11c53cb2955b82
@@ -309,8 +315,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-007 probe 1
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-file, `tests/terrainTruth.hillshade.test.ts`
 - baseline: `npx vitest run tests/terrainTruth.hillshade.test.ts --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 6 cases passed
 - baseline transcript digest: sha256:d5cae1ef449f0b4eeed0d8c5637a53c7416b53259b4d29cf856f8076151bf1f5
@@ -357,8 +363,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-010 probe 1
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/unitIntegrity.test.ts`, case "the density tier is the same for a metre and a foot bounding box"
 - baseline: `npx vitest run tests/benchmark/unitIntegrity.test.ts -t "the density tier is the same for a metre and a foot bounding box" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:211169508fe7795a4e852d7b0f6480ffbb6c88208b57b01833ccfc202864ab97
@@ -369,8 +375,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-010 probe 2
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/unitIntegrity.test.ts`, case "an unconverted foot bounding box lands in a different density tier"
 - baseline: `npx vitest run tests/benchmark/unitIntegrity.test.ts -t "an unconverted foot bounding box lands in a different density tier" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:982f1e550718578ba1574c9a0f914fb5ffaae0bfbd934e94995cd4aec78033ce
@@ -393,8 +399,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-011 probe 1
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/roundtripFidelity.test.ts`, case "a compound CRS (metre horizontal, foot vertical) survives both axes"
 - baseline: `npx vitest run tests/benchmark/roundtripFidelity.test.ts -t "a compound CRS (metre horizontal, foot vertical) survives both axes" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:a8ccd85d4324f3af7060e37a6d2fd1dc48ec991ae1562e6c7d02ba058167709b
@@ -405,8 +411,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-011 probe 2
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/roundtripFidelity.test.ts`, case "a foot horizontal CRS keeps its own unit and does not infect the vertical"
 - baseline: `npx vitest run tests/benchmark/roundtripFidelity.test.ts -t "a foot horizontal CRS keeps its own unit and does not infect the vertical" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:6ff9e485ecbef1fb8047b653414b12bbb2694ef2eeac660651b9c8f1bd84495a
@@ -429,8 +435,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-012 probe 1
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/failureRecovery.test.ts`, case "an unrecognised WKT unit is tagged unknown, and the factor beside it is a no-op not a claim"
 - baseline: `npx vitest run tests/benchmark/failureRecovery.test.ts -t "an unrecognised WKT unit is tagged unknown, and the factor beside it is a no-op not a claim" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:9792b9fdb401864097c9ab9fed2a21b1019e3ae0df34285e313d242411e119af
@@ -441,8 +447,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-012 probe 2
 
-- state: inconclusive
-- why: the probe passes on the baseline tree as well, so it does not establish the old behaviour
+- state: non-discriminating
+- why: the probe passes on the baseline tree as well, so it demonstrates nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/failureRecovery.test.ts`, case "a vertical unit the file does not state is left undefined, never defaulted to metres"
 - baseline: `npx vitest run tests/benchmark/failureRecovery.test.ts -t "a vertical unit the file does not state is left undefined, never defaulted to metres" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 0, passed: 1 case passed
 - baseline transcript digest: sha256:3891f0bc2caf7ee3168fa52996b3ee814410924ac5e4160bb816e58eaeaadef7
@@ -597,8 +603,8 @@ this order: reproduced-then-fixed, component-absent-at-baseline, environment-una
 
 ### OLV-DEF-017 probe 1
 
-- state: reproduced-then-fixed
-- why: the baseline run failed the assertion (TypeError: (0 , __vite_ssr_import_15__.composeGeneratingSoftware) is not a function); the candidate run passes
+- state: component-absent-at-baseline
+- why: the probe called composeGeneratingSoftware at the baseline and that binding did not exist in that tree, so it observed nothing about the old behaviour
 - probe: vitest-case, `tests/benchmark/provenanceIntegrity.test.ts`, case "a commit that cannot fit drops whole, leaving the product and version"
 - baseline: `npx vitest run tests/benchmark/provenanceIntegrity.test.ts -t "a commit that cannot fit drops whole, leaving the product and version" --reporter=json --outputFile=<reporter-output> --reporter=default --testTimeout=600000` exit 1, failed-assertion: TypeError: (0 , __vite_ssr_import_15__.composeGeneratingSoftware) is not a function
 - baseline transcript digest: sha256:bc91c0849e4f2652d15cb26bef4d40185e82b52d48d777691d89553c43d54895
