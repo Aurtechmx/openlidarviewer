@@ -22,7 +22,7 @@ Every leg in `results.json` carries `reference` and `evidenceLevel`. Only the
 | item | value |
 | --- | --- |
 | `gdalinfo --version` | `GDAL 3.13.1 "Iowa City", released 2026/06/01` |
-| resolved `gdaldem` | `/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdaldem` |
+| resolved `gdaldem` | `gdaldem (GDAL 3.13.1_4, host-installed; see reference-runs.json)` |
 | container pinning | `not-executed` — Docker is installed on this host but the daemon is not running, so GDAL was invoked from the host PATH |
 | PROJ version | `not-recorded` — `projinfo` on this host has no `--version` flag and `gdaldem` does not report it |
 

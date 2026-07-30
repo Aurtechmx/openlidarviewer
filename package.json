@@ -82,6 +82,7 @@
     "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs",
     "lint:layer-boundaries": "node scripts/lint-layer-boundaries.mjs",
     "lint:no-ignored-src": "node scripts/lint-no-ignored-src.mjs",
+    "lint:no-tracked-ignored": "node scripts/lint-no-tracked-ignored.mjs",
     "lint:claim-register": "node scripts/lint-claim-register.mjs",
     "gen:claim-registry": "node scripts/generate-claim-registry.mjs",
     "lint:release-sync": "node scripts/lint-release-sync.mjs",
@@ -105,7 +106,7 @@
     "validation:defects:replay": "node scripts/replay-defects.mjs",
     "validation:defects:replay:verify": "node scripts/verify-defect-replay.mjs",
     "package:source": "bash scripts/package.sh --source-only",
-    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:upload-queue-wired && npm run lint:monolith-size && npm run lint:claim-register && npm run lint:release-truth && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:upload-queue-wired && npm run lint:monolith-size && npm run lint:claim-register && npm run lint:release-truth && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
@@ -114,7 +115,8 @@
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",
     "lint:csp-html": "node scripts/lint-csp-html.mjs",
     "lint:html-assets": "node scripts/lint-html-assets.mjs",
-    "lint:python-version": "node scripts/lint-python-version.mjs"
+    "lint:python-version": "node scripts/lint-python-version.mjs",
+    "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",
