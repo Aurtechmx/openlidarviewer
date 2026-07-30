@@ -2,7 +2,7 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
-## [0.6.3] - 2026-07-29
+## [0.6.3] - 2026-07-30
 
 ### Added
 
