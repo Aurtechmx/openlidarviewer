@@ -23,6 +23,12 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 import {
   OUT_JSON,
   OUT_CSV,
@@ -103,7 +109,7 @@ const COMMIT_FIELDS = [
 function historyIsShallow() {
   try {
     return (
-      execFileSync('git', ['rev-parse', '--is-shallow-repository'], {
+      execFileSync(GIT, ['rev-parse', '--is-shallow-repository'], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
       }).trim() === 'true'

@@ -30,6 +30,12 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const NPM = requireBinaryOnPath('npm');
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -242,7 +248,7 @@ export function renderBattery(report) {
 
 function runScript(script, cwd) {
   const started = Date.now();
-  const r = spawnSync('npm', ['run', '--silent', script], {
+  const r = spawnSync(NPM, ['run', '--silent', script], {
     cwd,
     stdio: 'inherit',
     env: process.env,

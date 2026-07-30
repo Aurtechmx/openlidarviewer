@@ -31,9 +31,15 @@
  * Exit 0 = clean; exit 1 = a tracked path that .gitignore already excludes.
  */
 import { execFileSync } from 'node:child_process';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 function git(args) {
-  return execFileSync('git', args, { encoding: 'utf8' });
+  return execFileSync(GIT, args, { encoding: 'utf8' });
 }
 
 // Only meaningful inside a git working tree. A reviewer running the gate from
@@ -42,7 +48,7 @@ function git(args) {
 // satisfied there and must SKIP rather than report a failure the archive can
 // never fix. Same contract as lint:no-ignored-src.
 try {
-  execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' });
+  execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' });
 } catch {
   console.log(
     'lint:no-tracked-ignored SKIPPED — no git repository (source archive); an archive contains only tracked files by construction.'

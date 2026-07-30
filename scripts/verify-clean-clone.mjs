@@ -43,6 +43,13 @@ import { existsSync, mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:f
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const TAR = requireBinaryOnPath('tar');
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -73,7 +80,7 @@ export const REQUIRED_PATHS = Object.freeze({
 
 /** Tracked paths at HEAD. The exact contents a stranger's clone would have. */
 export function trackedPaths(root = REPO_ROOT) {
-  const out = execFileSync('git', ['ls-tree', '-r', '--name-only', 'HEAD'], {
+  const out = execFileSync(GIT, ['ls-tree', '-r', '--name-only', 'HEAD'], {
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
@@ -99,11 +106,11 @@ export function satisfiedByPrefix(path, present) {
 /** Materialise HEAD into `dest` using git archive: tracked content, nothing else. */
 export function materialise(dest, root = REPO_ROOT) {
   mkdirSync(dest, { recursive: true });
-  const archive = execFileSync('git', ['archive', '--format=tar', 'HEAD'], {
+  const archive = execFileSync(GIT, ['archive', '--format=tar', 'HEAD'], {
     cwd: root,
     maxBuffer: 512 * 1024 * 1024,
   });
-  execFileSync('tar', ['-x', '-C', dest], { input: archive, maxBuffer: 512 * 1024 * 1024 });
+  execFileSync(TAR, ['-x', '-C', dest], { input: archive, maxBuffer: 512 * 1024 * 1024 });
   return dest;
 }
 

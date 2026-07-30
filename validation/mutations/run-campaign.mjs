@@ -38,6 +38,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { compareCodeUnits } from '../../scripts/lib/codeUnitOrder.mjs';
+import { requireBinaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const NPX = requireBinaryOnPath('npx');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..', '..');
@@ -251,7 +258,7 @@ const gateArg = args.find((a) => a === '--gate' || a.startsWith('--gate='));
 const gateMode = gateArg == null ? 'off' : gateArg === '--gate' ? 'survivors' : gateArg.slice('--gate='.length);
 
 function git(...argv) {
-  return execFileSync('git', argv, { cwd: ROOT, encoding: 'utf8' });
+  return execFileSync(GIT, argv, { cwd: ROOT, encoding: 'utf8' });
 }
 
 function readFile(rel) {
@@ -320,7 +327,7 @@ function runVitest(files, env) {
   rmSync(outFile, { force: true });
   const argv = ['vitest', 'run', ...files, '--reporter=json', `--outputFile=${outFile}`];
   const t0 = now();
-  const res = spawnSync('npx', argv, {
+  const res = spawnSync(NPX, argv, {
     cwd: ROOT,
     encoding: 'utf8',
     env: { ...process.env, ...(env ?? {}), CI: '1' },

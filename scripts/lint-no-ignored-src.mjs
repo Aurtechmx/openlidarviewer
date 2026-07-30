@@ -11,7 +11,13 @@
  *
  * Exit 0 = clean; exit 1 = an ignored source file (prints the paths).
  */
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 // This gate is only meaningful inside a git working tree. The published source
 // archive is produced by `git archive`, which by construction contains only
@@ -21,7 +27,7 @@ import { execSync } from 'node:child_process';
 // SKIP gracefully rather than fail, otherwise `test:release` reports a false
 // failure the archive can never fix.
 try {
-  execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
+  execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], { stdio: 'ignore' });
 } catch {
   console.log('lint:no-ignored-src SKIPPED — no git repository (source archive); the archive only contains tracked files by construction.');
   process.exit(0);
@@ -34,7 +40,7 @@ try {
   // happened. The same unanchored-pattern bug then hid scripts/verify-release-assets.mjs
   // and docs/release/, so `npm run release:verify` pointed at a script the
   // repository did not contain. Anything that SHIPS or RUNS is in scope now.
-  ignored = execSync('git ls-files --others --ignored --exclude-standard -- src scripts tests docs .github', {
+  ignored = execFileSync(GIT, ['ls-files', '--others', '--ignored', '--exclude-standard', '--', 'src', 'scripts', 'tests', 'docs', '.github'], {
     encoding: 'utf8',
   }).trim();
 } catch (e) {
