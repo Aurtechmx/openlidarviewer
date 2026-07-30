@@ -48,7 +48,7 @@ run_stage() {
   "$@" 2>&1 | tee -a "$LOG"
   stage_code=${PIPESTATUS[0]}
   echo "GATE STAGE ${stage_name} EXIT: ${stage_code}" | tee -a "$LOG"
-  if [ "$stage_code" -ne 0 ]; then OVERALL=$stage_code; fi
+  if [[ "$stage_code" -ne 0 ]]; then OVERALL=$stage_code; fi
 }
 
 fixture_checksums() {
@@ -77,8 +77,8 @@ mutation_with_evidence() {
 
 run_stage staticGate npm run test:release
 
-if [ "$MODE" = "release" ]; then
-  if [ "$OVERALL" -eq 0 ]; then
+if [[ "$MODE" = "release" ]]; then
+  if [[ "$OVERALL" -eq 0 ]]; then
     run_stage e2e npm run test:e2e
     run_stage docsBuild npm run docs:build
     run_stage productionAudit production_audit
@@ -90,7 +90,7 @@ if [ "$MODE" = "release" ]; then
     # everything-in-one-pass local path available; when set, the stage runs here
     # and its result is written where collect-evidence prefers it, so the record
     # cites THIS commit rather than the last scheduled one.
-    if [ "${OLV_GATE_MUTATION:-0}" = "1" ]; then
+    if [[ "${OLV_GATE_MUTATION:-0}" = "1" ]]; then
       run_stage mutation mutation_with_evidence
     else
       echo "mutation: deferred to the scheduled workflow; the record cites its last result." | tee -a "$LOG"
@@ -104,12 +104,12 @@ fi
 echo "" | tee -a "$LOG"
 echo "GATE EXIT: ${OVERALL}" | tee -a "$LOG"
 
-if [ "$OVERALL" -ne 0 ]; then
+if [[ "$OVERALL" -ne 0 ]]; then
   echo "Gate failed — evidence NOT regenerated; the figures still describe the last passing run." >&2
   exit "$OVERALL"
 fi
 
-if [ "$MODE" = "release" ]; then
+if [[ "$MODE" = "release" ]]; then
   # The docsBuild stage re-renders docs-site/validation/claim-register.generated.md,
   # a tracked file. The render is deterministic and a drift test inside
   # staticGate asserts the committed copy already byte-equals it, so the tree
@@ -117,7 +117,7 @@ if [ "$MODE" = "release" ]; then
   # a future nondeterministic render fails HERE, in the same run that caused
   # it, for local runs and CI alike.
   if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    if [ -n "$(git status --porcelain)" ]; then
+    if [[ -n "$(git status --porcelain)" ]]; then
       echo "Release gate refused: the run left the working tree dirty:" >&2
       git status --porcelain >&2
       echo "A release gate must leave the checkout byte-identical; packaging would reject it anyway." >&2
