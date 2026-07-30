@@ -1,0 +1,74 @@
+{
+  "generatedBy": "tests/groundFilterPdalAgreement.test.ts",
+  "manifest": "validation/cross-implementation/studies/DTM-PDAL-WRITERS-GDAL.study.json",
+  "evidenceNote": "Cross-implementation (E4). Every cell value on the reference side came from PDAL.",
+  "promotes": "nothing",
+  "gate": {
+    "toleranceAbs": 0.00005,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "pooled": {
+    "comparableCells": 7500,
+    "withinToleranceFraction": 1,
+    "maxAbsErrorM": 0.000003784179682497779
+  },
+  "legs": [
+    {
+      "fixtureId": "pc-06-bare-plane",
+      "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003662109378410605,
+      "rmseM": 0.0000022006538538650567,
+      "meanSignedErrorM": 0
+    },
+    {
+      "fixtureId": "pc-07-bare-rolling",
+      "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003784179682497779,
+      "rmseM": 0.0000021704060367951673,
+      "meanSignedErrorM": 0
+    },
+    {
+      "fixtureId": "pc-08-bare-ridge",
+      "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003662109378410605,
+      "rmseM": 0.0000022006538538650546,
+      "meanSignedErrorM": 0
+    }
+  ],
+  "boundaries": [
+    "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
+    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "The input is one return per cell at the cell centre, because PDAL writes rasters with a radius estimator and rasterizeDtm is a cell estimator. This study therefore tests grid origin, cell indexing and row order, and not aggregation over a realistic cloud.",
+    "Every cell receives exactly one return, so nothing here says anything about how either side marks or fills a cell with no data.",
+    "One aggregation and one cell size. Nothing here says anything about mean, median, percentile or robust aggregation, or about any cell size other than 1 m."
+  ]
+}

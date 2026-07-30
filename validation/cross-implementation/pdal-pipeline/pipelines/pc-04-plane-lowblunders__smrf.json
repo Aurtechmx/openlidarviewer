@@ -1,0 +1,26 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.text",
+      "filename": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv"
+    },
+    {
+      "type": "filters.smrf",
+      "cell": 1,
+      "window": 16,
+      "slope": 0.15,
+      "threshold": 0.5,
+      "scalar": 0,
+      "cut": 0,
+      "ground_class": 2,
+      "other_class": 1
+    },
+    {
+      "type": "writers.text",
+      "filename": "validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv",
+      "order": "X,Y,Z,Classification",
+      "keep_unspecified": "false",
+      "precision": 6
+    }
+  ]
+}
