@@ -169,9 +169,11 @@ function circularDiff(a: number, b: number): number {
  * The set of interior cells the comparison runs over: the one-cell border
  * dropped, plus the near-flat exclusion.
  *
- * The border goes because our kernel clamps at the edge while `gdaldem` leaves
- * edge cells undefined; comparing there would measure a difference in edge
- * policy and report it as a difference in aspect.
+ * The border goes because `gdaldem` leaves edge cells undefined without
+ * `-compute_edges`; comparing there would measure a difference in edge policy and
+ * report it as a difference in aspect. Our kernel does answer for those cells,
+ * extrapolating the way `-compute_edges` does; the ring is compared directly in
+ * tests/rasterAgreementMatrix.test.ts rather than here.
  */
 function comparableCells(ncols: number, nrows: number): number[] {
   const idx: number[] = [];

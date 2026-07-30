@@ -79,11 +79,13 @@ import {
   GEO_METRES_PER_DEG_LON,
   GEO_CENTRE_LATITUDE_DEG,
   cellMetres,
+  analyticGradient,
   analyticSlopeDegrees,
   analyticAspectDegrees,
   straddlesKink,
   windowFullyValid,
   isHaloCell,
+  isNodata,
 } from '../scripts/generate-raster-fixtures.mjs';
 import type { FixtureSpec, FixtureSun } from '../scripts/generate-raster-fixtures.mjs';
 
@@ -381,6 +383,89 @@ function interiorIndices(spec: FixtureSpec): number[] {
   return idx;
 }
 
+/**
+ * Border cells for the ANALYTIC legs, split into the edge ring and the corners.
+ *
+ * WHY THIS EXISTS. `interiorIndices` — and so `analyticIndices` — excludes every
+ * border cell by construction, because a border cell's 3x3 window is not fully
+ * in-grid. The consequence went unnoticed: the outer ring had NO closed-form
+ * check, only agreement with gdaldem. That is a circularity precisely where it
+ * matters most, because the kernel's border policy was deliberately copied FROM
+ * gdaldem, corner asymmetry included (terrainDerivatives.ts). Agreement there is
+ * therefore not independent corroboration — the two implementations are running
+ * the same edge rule by construction, which is the exact failure mode this
+ * file's three-way design exists to prevent. These selections restore the
+ * missing third edge of the triangle: ours against a formula.
+ *
+ * Edge and corner are separate because the policy treats them differently. An
+ * edge cell extrapolates the one axis that leaves the grid. A corner ALSO clamps
+ * the along-edge axis, so a gradient component along that axis is halved there.
+ *
+ * Exclusions match `analyticIndices` in spirit: kink-straddling cells, because
+ * no 3x3 estimator should reproduce a closed form across a discontinuity, and
+ * anything within reach of a hole, because the closed form does not model hole
+ * filling. The nodata exclusion is a deliberately conservative radius-2
+ * neighbourhood — it covers both the window and the cells the extrapolation
+ * reads — and the count is reported rather than absorbed.
+ */
+function analyticBorderIndices(spec: FixtureSpec): {
+  edge: number[];
+  corner: number[];
+  excluded: Record<string, number>;
+} {
+  const edge: number[] = [];
+  const corner: number[] = [];
+  const excluded = { kink: 0, nearNodata: 0 };
+  const clampR = (r: number) => (r < 0 ? 0 : r >= spec.rows ? spec.rows - 1 : r);
+  const clampC = (c: number) => (c < 0 ? 0 : c >= spec.cols ? spec.cols - 1 : c);
+  const nearNodata = (r: number, c: number): boolean => {
+    for (let dr = -2; dr <= 2; dr++) {
+      for (let dc = -2; dc <= 2; dc++) {
+        if (isNodata(spec, clampR(r + dr), clampC(c + dc))) return true;
+      }
+    }
+    return false;
+  };
+  for (let r = 0; r < spec.rows; r++) {
+    for (let c = 0; c < spec.cols; c++) {
+      const onBorder = r === 0 || c === 0 || r === spec.rows - 1 || c === spec.cols - 1;
+      if (!onBorder) continue;
+      if (straddlesKink(spec, r, c)) {
+        excluded.kink++;
+        continue;
+      }
+      if (nearNodata(r, c)) {
+        excluded.nearNodata++;
+        continue;
+      }
+      const isCorner = (r === 0 || r === spec.rows - 1) && (c === 0 || c === spec.cols - 1);
+      (isCorner ? corner : edge).push(r * spec.cols + c);
+    }
+  }
+  return { edge, corner, excluded };
+}
+
+/**
+ * True where the surface is LOCALLY LINEAR, so linear extrapolation of the
+ * virtual neighbour reconstructs it exactly and the extrapolated border is
+ * predicted to reproduce the closed form. Derived before the run, not fitted to
+ * it: 2a−b is exact for an affine function, Horn is exact on a plane, and the
+ * piecewise-planar families are affine away from their kink (which is excluded).
+ *
+ * A quadratic is NOT locally linear, and the error is derivable. For z = a·x²
+ * with cell h, the virtual cell is 2z(x₀) − z(x₀+h) = a(x₀² − 2x₀h − h²) against
+ * a true a(x₀ − h)² = a(x₀² − 2x₀h + h²), so it is low by 2ah². Carrying that
+ * through the 1-2-1 weighting gives an edge dz/dx of 2a·x₀ + a·h against a true
+ * 2a·x₀ — an error of a·h, where the interior central difference is EXACT on a
+ * quadratic. So a curved fixture is predicted to diverge, by roughly a·h in
+ * rise/run: 0.008 for convex-hill (a = −0.004, h = 2), 0.04 for concave-pit
+ * (a = 0.004, h = 10), 0.003 for saddle (a = 0.006, h = 0.5). All far outside the
+ * 0.01° tolerance, and none of it visible in the gdaldem leg.
+ */
+function locallyLinearSurface(spec: FixtureSpec): boolean {
+  return spec.surface.kind !== 'quadratic';
+}
+
 /** Border cells. Only meaningful for a `-compute_edges` run. */
 function borderIndices(spec: FixtureSpec): number[] {
   const idx: number[] = [];
@@ -471,9 +556,15 @@ interface Leg {
   reason?: string;
   /**
    * True where `expectation` was corrected AFTER the first run of this file
-   * rather than derived before it. Only the `-compute_edges` border legs carry
-   * it, and the record says so rather than letting a corrected prediction read
-   * as a prediction that was right all along.
+   * rather than derived before it, so the record says so rather than letting a
+   * corrected prediction read as a prediction that was right all along.
+   *
+   * No leg carries it today. The `-compute_edges` border legs did: they were
+   * declared "agree", disagreed by 6 to 16 degrees, and were re-declared a
+   * divergence. That divergence was then FIXED in `hornSlopeAspect` rather than
+   * characterised, so those legs are back to expecting agreement and no longer
+   * need the flag. It stays because the next such correction should be labelled
+   * the same way — it is the mechanism, not a record of that one finding.
    */
   expectationRevisedAfterFirstRun?: boolean;
 }
@@ -530,6 +621,27 @@ function olvFor(spec: FixtureSpec): OlvGrids {
 
 const legs: Leg[] = [];
 const notes: string[] = [];
+
+/**
+ * Corner samples pooled ACROSS fixtures, for the analytic corner legs.
+ *
+ * Pooled because there are only four corners per fixture and `MIN_CELLS` is 24 —
+ * statistics over four cells are not a measurement, and this file already refuses
+ * to record them as one. Pooling absolute ours-vs-closed-form differences across
+ * fixtures is legitimate: every sample is the same quantity, a slope error in
+ * degrees, and no fixture's truth leaks into another's.
+ *
+ * Split into a TREATMENT and a CONTROL group by a prediction made from the policy
+ * alone, before any measurement. A corner clamps the along-edge (column, x) axis,
+ * so it is predicted wrong exactly where the closed-form gradient has a non-zero
+ * dz/dx component, and predicted EXACT where dz/dx is zero — halving zero is
+ * still zero. The control group is what makes the treatment group's divergence
+ * attributable to the along-edge clamp rather than to being a corner.
+ */
+const cornerAnalytic = {
+  alongEdgeGradient: { ours: [] as number[], truth: [] as number[], fixtures: new Set<string>() },
+  noAlongEdgeGradient: { ours: [] as number[], truth: [] as number[], fixtures: new Set<string>() },
+};
 
 function pushLeg(base: Omit<Leg, 'maxAbsDiff' | 'rmse' | 'meanBias' | 'withinTolFraction' | 'verdict' | 'status' | 'cells'>, report: CrossCheckReport | null, cells: number, reason?: string): void {
   if (!report) {
@@ -656,38 +768,82 @@ if (REF_RECORD) {
         tolerance: FROZEN_TOLERANCES.slopeDeg, expectation: 'agree' },
         linearAgreement(g.slopeDeg, ref.values, interior, FROZEN_TOLERANCES.slopeDeg), interior.length);
 
+      if (!edges) {
+        // ANALYTIC border legs — the closed form, not gdaldem. Built on the
+        // plain `slope-deg` run so they appear once per fixture, and they need no
+        // reference output at all: the truth is a formula, so every fixture can
+        // carry them, not just the five with a `-compute_edges` reference.
+        //
+        // These exist because the border was, until now, checked ONLY against
+        // gdaldem — whose edge rule this kernel deliberately copies. See
+        // `analyticBorderIndices` for why that is circular and what it hid.
+        const ab = analyticBorderIndices(spec);
+        const linear = locallyLinearSurface(spec);
+        pushLeg({ ...common, product: 'slope-deg [border edge, analytic]', unit: 'degree',
+          reference: 'analytic (closed form)', evidenceLevel: 'E2 (formula)', metric: 'absolute',
+          cellSet: 'border ring minus corners, off-kink, clear of nodata', excluded: ab.excluded,
+          tolerance: FROZEN_TOLERANCES.slopeDeg,
+          // Predicted from the estimator, not fitted to the result: linear
+          // extrapolation reconstructs an affine neighbour exactly, so a locally
+          // linear surface must reproduce the closed form. A quadratic must not —
+          // the edge dz/dx carries an a·h error the interior does not.
+          expectation: linear ? 'agree' : 'documented-divergence' },
+          linearAgreement(g.slopeDeg, truth, ab.edge, FROZEN_TOLERANCES.slopeDeg), ab.edge.length);
+
+        // Corners are pooled across fixtures (four per fixture is below
+        // MIN_CELLS), split by the a-priori prediction that only an along-edge
+        // gradient component is damaged.
+        for (const i of ab.corner) {
+          const r = Math.floor(i / spec.cols);
+          const c = i % spec.cols;
+          const { dzdx } = analyticGradient(spec, r, c);
+          const bucket = Math.abs(dzdx) > 1e-12
+            ? cornerAnalytic.alongEdgeGradient
+            : cornerAnalytic.noAlongEdgeGradient;
+          bucket.ours.push(g.slopeDeg[i]);
+          bucket.truth.push(truth[i]);
+          bucket.fixtures.add(spec.id);
+        }
+      }
+
       if (edges) {
-        // The `-compute_edges` boundary, isolated from the interior. gdaldem
-        // EXTRAPOLATES a virtual ring (2*v[i+1] - v[i+2]); hornSlopeAspect
-        // CLAMPS (replicates the edge). Those agree exactly on a locally linear
-        // surface and cannot both be right on a curved one, so the border is its
-        // own leg rather than being averaged into the interior figure.
+        // The `-compute_edges` boundary, isolated from the interior. Kept as its
+        // own leg even though it now agrees: it is a different estimator regime
+        // (a synthesised neighbour rather than a measured one), and folding it
+        // into the interior figure would hide the next regression here the way
+        // the interior-only checks hid the last one.
+        //
+        // THE HISTORY, because this leg is where the project's largest raster
+        // defect was found and it should not read as a leg that always agreed.
+        //
+        // The a-priori expectation was "extrapolation and clamping coincide on a
+        // locally linear surface, so only the curved fixture should diverge".
+        // That was WRONG and the first run said so: every sloped border leg
+        // disagreed, by 6 to 16 degrees. Mechanism, read off the two kernels
+        // afterwards — gdaldem builds a virtual ring by linear extrapolation
+        // (2*v[1] − v[2]), which on a plane reconstructs the true neighbour;
+        // `hornSlopeAspect` CLAMPED, replicating the edge row/column, which left
+        // the rise unchanged while halving the run. Our border slope was
+        // therefore roughly HALVED — 9.9 degrees on a 19.3 degree plane — over
+        // the 2*(cols+rows)−4 cells of every slope, aspect and hillshade raster.
+        //
+        // The kernel was then fixed to gdaldem's policy, which is why this leg
+        // now expects agreement. Two details of that policy are worth stating,
+        // because they are the reason agreement is EXACT rather than close:
+        // gdaldem extrapolates PERPENDICULAR to an edge and CLAMPS ALONG it, so
+        // at the four corners the along-edge gradient is still halved (its
+        // first/last-line branch takes `jmin = j` at j = 0). We reproduce that
+        // asymmetry deliberately; extrapolating symmetrically would be the
+        // better estimator there but would diverge from the reference by up to
+        // 12.7 degrees at those 4 cells. The tolerance was never widened — it is
+        // the same frozen 0.01 degree the interior leg carries, and the residual
+        // is now ~9e-4 degree, dominated by the 6-decimal ASCII round-trip.
         const border = borderIndices(spec);
         pushLeg({ ...common, product: `${run.product} [border only]`, unit: 'degree', reference: 'GDAL 3.13.1',
           evidenceLevel: 'E4 (cross-implementation)', metric: 'absolute',
-          cellSet: 'border ring only (gdaldem extrapolates, ours clamps)', excluded: {},
+          cellSet: 'border ring only (both extrapolate perpendicular, clamp along)', excluded: {},
           tolerance: FROZEN_TOLERANCES.slopeDeg,
-          // REVISED AFTER THE FIRST RUN, and the revision is the finding.
-          //
-          // The a-priori expectation written here was "extrapolation and clamping
-          // coincide on a locally linear surface, so only the curved fixture
-          // should diverge". That was WRONG, and the run said so: every sloped
-          // border leg disagrees, by 6 to 16 degrees.
-          //
-          // The mechanism, read off the two kernels afterwards: gdaldem builds a
-          // virtual ring by linear extrapolation (2*v[1] − v[2]), which on a
-          // plane reconstructs the true neighbour and recovers the true gradient.
-          // `hornSlopeAspect` CLAMPS, replicating the edge column, which makes
-          // the run across the window half as long while the rise stays the same
-          // — so our border slope is roughly HALVED. On a 19.3 degree plane we
-          // report 9.9 degrees. The tolerance is untouched; the expectation is
-          // corrected to what the two implementations actually do, and the
-          // measured gap is reported as a boundary rather than absorbed.
-          //
-          // A constant surface is the one exception, and it is derivable: half of
-          // zero is still zero, so `flat-plane` agrees.
-          expectation: spec.surface.kind === 'constant' ? 'agree' : 'documented-divergence',
-          expectationRevisedAfterFirstRun: true },
+          expectation: 'agree' },
           linearAgreement(g.slopeDeg, ref.values, border, FROZEN_TOLERANCES.slopeDeg), border.length);
       }
       writeOlv(`${spec.id}__${run.product}`, spec, g.slopeDeg, 6);
@@ -826,6 +982,27 @@ if (REF_RECORD) {
       `gdaldem hillshade do accept them and were given ${GEO_METRES_PER_DEG_LON.toFixed(1)} m/deg ` +
       `longitude and ${GEO_METRES_PER_DEG_LAT} m/deg latitude at latitude ${GEO_CENTRE_LATITUDE_DEG}.`,
     );
+  }
+
+  // The two pooled analytic CORNER legs. Treatment and control, declared before
+  // the run: a corner clamps the along-edge (column) axis, so it must diverge
+  // from the closed form wherever dz/dx is non-zero and must reproduce it exactly
+  // wherever dz/dx is zero. If the control group diverged too, the explanation
+  // would be wrong — it would mean something other than the along-edge clamp is
+  // damaging corners.
+  for (const [key, group] of [
+    ['along-edge gradient present', cornerAnalytic.alongEdgeGradient],
+    ['no along-edge gradient (control)', cornerAnalytic.noAlongEdgeGradient],
+  ] as const) {
+    const idx = group.ours.map((_, k) => k);
+    pushLeg({
+      fixtureId: `pooled (${group.fixtures.size} fixtures)`, family: 'border corner',
+      product: `slope-deg [border corner, analytic: ${key}]`, unit: 'degree',
+      reference: 'analytic (closed form)', evidenceLevel: 'E2 (formula)', metric: 'absolute',
+      cellSet: `four corners per fixture, pooled; ${key}`, excluded: {},
+      tolerance: FROZEN_TOLERANCES.slopeDeg,
+      expectation: key === 'along-edge gradient present' ? 'documented-divergence' : 'agree',
+    }, linearAgreement(group.ours, group.truth, idx, FROZEN_TOLERANCES.slopeDeg), idx.length);
   }
 
   writeFileSync(resolve(MATRIX_DIR, 'olv-SHA256SUMS'), olvHashes.sort().join('\n') + '\n', 'utf8');
@@ -1208,41 +1385,126 @@ describe('raster agreement matrix', () => {
     );
   });
 
-  it('reports the -compute_edges border as its own leg, where our slope is roughly halved', () => {
-    // THE LARGEST FINDING IN THIS MATRIX, and the one the single-fixture checks
-    // could not see because they compare interior cells only.
+  it('agrees with GDAL on the -compute_edges border ring, the matrix\'s largest closed finding', () => {
+    // THE LARGEST FINDING THIS MATRIX PRODUCED, now closed. The single-fixture
+    // checks could not see it because they compare interior cells only.
     //
-    // Under `-compute_edges` gdaldem synthesises a virtual ring outside the grid
-    // by linear extrapolation (2*v[1] − v[2]), so on a plane it reconstructs the
-    // true neighbour and the border slope equals the interior slope.
-    // `hornSlopeAspect` clamps instead, replicating the edge row or column. The
-    // rise across the window is unchanged but the run is half as long, so OUR
-    // BORDER SLOPE IS ROUGHLY HALVED: on the 19.3 degree `slope-x-pos` plane we
-    // report 9.9 degrees, a 9.4 degree shortfall on the whole outer ring.
+    // What it was: under `-compute_edges` gdaldem synthesises a virtual ring
+    // outside the grid by linear extrapolation (2*v[1] − v[2]), so on a plane it
+    // reconstructs the true neighbour. `hornSlopeAspect` CLAMPED instead,
+    // replicating the edge row or column, leaving the rise unchanged while
+    // halving the run — so our border slope came out roughly HALVED, 9.9 degrees
+    // on the 19.3 degree `slope-x-pos` plane, biased low over the whole outer
+    // ring of every slope, aspect and hillshade raster: 2*(cols+rows)−4 cells,
+    // whether or not a caller ever asked for computed edges.
     //
-    // Two consequences worth stating. Our border slope is biased LOW, not merely
-    // different, so the sign of the bias is asserted below rather than left to
-    // the reader. And the outer ring is not a rounding artefact of edge policy —
-    // it is 2*(cols+rows)−4 cells of systematically wrong slope in every raster
-    // product, whether or not a caller ever asked for computed edges.
+    // What changed: the kernel now uses gdaldem's policy, so this leg asserts
+    // AGREEMENT. The assertions cover the whole ring rather than the verdict
+    // alone: a fix that repaired the edges and left the corners wrong would still
+    // pass a max- or mean-based figure over 220 cells.
     const ls = legsFor((l) => l.product.includes('border only'));
     expect(ls.length, 'no border legs were built').toBeGreaterThanOrEqual(4);
-    console.log(`\n-compute_edges BORDER ring, ours (clamp) vs GDAL (extrapolate) — E4:\n${summarise(ls)}`);
+    console.log(`\n-compute_edges BORDER ring, both extrapolating — E4:\n${summarise(ls)}`);
 
     const sloped = ls.filter((l) => specById.get(l.fixtureId)!.surface.kind !== 'constant');
     expect(sloped.length, 'no sloped surface was tested at the border').toBeGreaterThanOrEqual(3);
-    for (const l of sloped) {
-      expect(l.verdict, `${l.fixtureId}: edge clamping and edge extrapolation now agree`).toBe('disagree');
-      // Biased LOW. A symmetric spread would be a different, milder story.
-      expect(l.meanBias!, `${l.fixtureId}: border bias is not negative`).toBeLessThan(0);
-      // And large: this is degrees, against a 0.01 degree tolerance.
-      expect(l.maxAbsDiff!, `${l.fixtureId}: border gap is smaller than reported`).toBeGreaterThan(1);
+    for (const l of ls) {
+      expect(l.verdict, `${l.fixtureId}: the border ring disagrees again`).toBe('agree');
+      // EVERY ring cell, not a fraction of them. This is what pins the four
+      // corners, where gdaldem clamps along the edge and we reproduce that: a
+      // symmetric-extrapolation kernel would diverge there by up to 12.7 degrees
+      // and would fail here while still looking fine on max/rmse alone.
+      expect(l.withinTolFraction, `${l.fixtureId}: some border cells are outside tolerance`).toBe(1);
+      expect(l.maxAbsDiff!, `${l.fixtureId}: border gap exceeds the frozen tolerance`)
+        .toBeLessThanOrEqual(l.tolerance);
     }
-    // Half of zero is still zero, so the constant surface agrees. Checked so the
-    // halving explanation is supported by the case that should NOT show it.
+    // The halving was a factor-of-two error in DEGREES. Assert the residual is
+    // now three orders of magnitude smaller, so a regression that reinstated
+    // clamping could not pass by sitting just inside the tolerance.
+    for (const l of sloped) {
+      expect(l.maxAbsDiff!, `${l.fixtureId}: border residual is far larger than round-trip noise`)
+        .toBeLessThan(0.01);
+    }
+    // The flat fixture agreed even while clamped (half of zero is zero), so it is
+    // the control: it must still agree, and it proves nothing on its own.
     const flat = ls.filter((l) => specById.get(l.fixtureId)!.surface.kind === 'constant');
     expect(flat.length).toBeGreaterThanOrEqual(1);
     expect(failing(flat), 'the flat border should agree exactly').toEqual([]);
+  });
+
+  it('checks the border against the CLOSED FORM, not only against gdaldem', () => {
+    // Closes the circularity in the leg above. That one compares our border to
+    // gdaldem's, but the kernel's border rule was copied from gdaldem — so
+    // agreement there is two implementations of one edge policy agreeing with
+    // each other, which this file's three-way design exists to distrust. These
+    // legs supply the missing edge of the triangle: ours against a formula.
+    //
+    // The finding, and it is not that everything is fine:
+    //
+    //  - On a LOCALLY LINEAR surface the extrapolated edge reproduces the closed
+    //    form. Extrapolation is exact for an affine function, so this is the
+    //    result the estimator entitles us to, and it is now measured rather than
+    //    assumed.
+    //  - On a QUADRATIC surface it does NOT. The edge dz/dx carries an a·h error
+    //    (derivation in `locallyLinearSurface`) where the interior central
+    //    difference is exact. The gdaldem leg cannot see this, because gdaldem
+    //    makes the identical error.
+    //  - At the CORNERS the along-edge axis is clamped, so the closed form is
+    //    missed wherever the gradient has a component along that axis — and hit
+    //    exactly where it does not. Both halves are asserted, because the control
+    //    group is what pins the explanation to the clamp.
+    const edgeLegs = legsFor((l) => l.product.includes('border edge, analytic'));
+    expect(edgeLegs.length, 'no analytic border-edge legs were built').toBeGreaterThanOrEqual(10);
+    console.log(`\nBORDER vs CLOSED FORM (E2) — the leg the gdaldem comparison cannot provide:\n${summarise(edgeLegs)}`);
+
+    const linearEdge = edgeLegs.filter((l) => locallyLinearSurface(specById.get(l.fixtureId)!));
+    const curvedEdge = edgeLegs.filter((l) => !locallyLinearSurface(specById.get(l.fixtureId)!));
+    expect(linearEdge.length, 'no locally linear fixture reached the border-edge leg').toBeGreaterThanOrEqual(8);
+    expect(curvedEdge.length, 'no curved fixture reached the border-edge leg').toBeGreaterThanOrEqual(2);
+    // Locally linear: extrapolation is exact, so the closed form must be met.
+    expect(failing(linearEdge), 'a locally linear border edge missed the closed form').toEqual([]);
+    // Curved: it must NOT be met, and the gap is the cost of extrapolating.
+    for (const l of curvedEdge) {
+      expect(l.verdict, `${l.fixtureId}: curved border edge unexpectedly matches the closed form`).toBe('disagree');
+    }
+
+    const treat = legs.find((l) => l.product.includes('border corner, analytic: along-edge gradient present'))!;
+    const ctrl = legs.find((l) => l.product.includes('border corner, analytic: no along-edge gradient'))!;
+    expect(treat, 'the treatment corner leg was not built').toBeDefined();
+    expect(ctrl, 'the control corner leg was not built').toBeDefined();
+    console.log(`\nBORDER CORNERS vs CLOSED FORM (E2) — treatment and control:\n${summarise([treat, ctrl])}`);
+    // The TREATMENT group is a genuine statistical leg: it diverges, and biased
+    // LOW, the same direction the whole ring used to be, because clamping still
+    // halves that one component.
+    expect(treat.status, `treatment corners: ${treat.reason ?? ''}`).toBe('ok');
+    expect(treat.verdict, 'the along-edge clamp stopped costing anything at the corners').toBe('disagree');
+    expect(treat.meanBias!, 'corner bias is not negative').toBeLessThan(0);
+
+    // The CONTROL group is asserted PER CELL rather than as a leg verdict. Only a
+    // handful of fixtures have a zero along-edge gradient at their corners, so the
+    // pooled control lands under MIN_CELLS and its leg is recorded as
+    // `insufficient` with the count. The control claim is not statistical anyway:
+    // it is that these specific cells are EXACT, which a cell-by-cell check states
+    // more strongly than any pooled figure and without relaxing MIN_CELLS.
+    const ctrlGroup = cornerAnalytic.noAlongEdgeGradient;
+    expect(ctrlGroup.ours.length, 'no control corners were collected').toBeGreaterThanOrEqual(8);
+    const ctrlOff = ctrlGroup.ours
+      .map((v, k) => ({ k, d: Math.abs(v - ctrlGroup.truth[k]) }))
+      .filter((x) => x.d > FROZEN_TOLERANCES.slopeDeg);
+    expect(ctrlOff, 'a corner with no along-edge gradient missed the closed form').toEqual([]);
+    // And the two groups must genuinely differ, or the split explains nothing.
+    expect(treat.maxAbsDiff!, 'treatment corners are no worse than the control')
+      .toBeGreaterThan(FROZEN_TOLERANCES.slopeDeg);
+
+    notes.push(
+      'Border vs closed form (E2): the extrapolated border edge reproduces the analytic slope on locally ' +
+      'linear surfaces and diverges on quadratic ones by roughly a*cell in rise/run, an error the gdaldem ' +
+      'leg cannot detect because gdaldem extrapolates identically. At the four corners the along-edge axis ' +
+      'is clamped, so the analytic slope is missed wherever the gradient has an along-edge component ' +
+      `(pooled max ${treat.maxAbsDiff?.toFixed(4)} deg, bias ${treat.meanBias?.toFixed(4)}) and met exactly ` +
+      'where it does not. Both are consequences of matching gdaldem cell-for-cell and are the price of that ' +
+      'choice, not defects in the extrapolation itself.',
+    );
   });
 
   it('measures the geographic anisotropy gdaldem aspect cannot express', () => {

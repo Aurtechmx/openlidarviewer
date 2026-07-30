@@ -43,6 +43,7 @@ import {
   type VerticalAxis,
 } from '../ground/groundFilter';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
+import { synthesisedNeighbourMask } from '../ground/terrainDerivatives';
 import type { DtmGrid } from '../ground/cellConfidence';
 import { buildSurfaceFromRaster, LIVE_INTERPOLATION } from '../ground/surfaceFromRaster';
 import { computeCellMetrics, type CellMetricsSummary } from '../quality/cellMetrics';
@@ -213,6 +214,20 @@ export interface TerrainCoreParams {
 const LIVE_DTM_AGGREGATION: DtmAggregation = 'median';
 
 /**
+ * Fraction of derivative cells built on a synthesised neighbour above which the
+ * surface stage says so out loud.
+ *
+ * Not zero, deliberately. EVERY raster has an outer ring, so an unconditional
+ * warning would fire on every scan and carry no information; on a 1000x1000 grid
+ * the ring really is 0.4% and saying so would be noise. It stops being noise on a
+ * small or void-riddled grid, where a visible share of the slope, aspect and
+ * hillshade is estimated rather than measured. 5% is the point at which the ring
+ * (or a hole halo) is a twentieth of the product — roughly a grid under 80 cells
+ * on a side, or any grid with appreciable voids.
+ */
+const SYNTHESISED_WARN_FRACTION = 0.05;
+
+/**
  * Interval-dependent options for {@link contoursFromCore}. Re-picking any of
  * these is cheap because the core is reused unchanged.
  */
@@ -328,7 +343,13 @@ export interface TerrainCore {
     readonly hillshade: HillshadeResult;
     /** Cached Horn gradient grids (slope tangent + aspect in radians) on the
      *  DTM grid, for interactive re-lighting and point sampling. */
-    readonly relief: { readonly slope: Float32Array; readonly aspect: Float32Array };
+    readonly relief: {
+      readonly slope: Float32Array;
+      readonly aspect: Float32Array;
+      /** 1 where the Horn window used a synthesised neighbour (outer ring, or a
+       *  hole halo). See `synthesisedNeighbourMask` in ground/terrainDerivatives. */
+      readonly synthesised: Uint8Array;
+    };
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
@@ -416,7 +437,13 @@ export interface AnalyseContoursResult {
     readonly hillshade: HillshadeResult;
     /** Cached Horn gradient grids (slope tangent + aspect in radians) on the
      *  DTM grid, for interactive re-lighting and point sampling. */
-    readonly relief: { readonly slope: Float32Array; readonly aspect: Float32Array };
+    readonly relief: {
+      readonly slope: Float32Array;
+      readonly aspect: Float32Array;
+      /** 1 where the Horn window used a synthesised neighbour (outer ring, or a
+       *  hole halo). See `synthesisedNeighbourMask` in ground/terrainDerivatives. */
+      readonly synthesised: Uint8Array;
+    };
   };
   /** Per-status cell counts (measured / interpolated / empty / lowConfidence / edgeRisk). */
   readonly cellStatusTally: CellStatusTally;
@@ -900,6 +927,23 @@ export function computeTerrainCore(
   for (let i = 0; i < sa.slope.length; i++) {
     slopeDegField[i] = (Math.atan(sa.slope[i]) * 180) / Math.PI;
   }
+  // Which derivative cells leaned on a value that was not measured there: the
+  // outer ring, where a neighbour is extrapolated, plus any hole halo, where a
+  // non-finite neighbour was replaced by the centre.
+  const synthesised = synthesisedNeighbourMask(dtm.z, dtm.cols, dtm.rows);
+  let synthesisedCount = 0;
+  for (let i = 0; i < synthesised.length; i++) synthesisedCount += synthesised[i];
+  // Reported only when it is a material share of the grid — see
+  // SYNTHESISED_WARN_FRACTION for why the threshold is not zero.
+  if (synthesised.length > 0 && synthesisedCount / synthesised.length >= SYNTHESISED_WARN_FRACTION) {
+    const pct = ((100 * synthesisedCount) / synthesised.length).toFixed(1);
+    warnings.push(
+      `Slope, aspect and hillshade on ${synthesisedCount} cell(s) (${pct}% of the grid) were computed ` +
+      `using at least one synthesised neighbour — the raster's outer ring, where a neighbour is ` +
+      `extrapolated, and any cell beside a void, where a missing neighbour falls back to the centre ` +
+      `height. Those values are estimates, not measurements.`,
+    );
+  }
   const surface = {
     dsm: surfaceStats(dsm),
     canopy: heightAboveGround(dsm, dtm.z, dtm.coverage),
@@ -907,7 +951,10 @@ export function computeTerrainCore(
     hillshade: engine.hillshadeSync(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),
     // Cached gradient grids (slope tangent + aspect, radians) so the panel can
     // re-light a multi-directional or single-direction relief interactively.
-    relief: { slope: sa.slope, aspect: sa.aspect },
+    // `synthesised` rides along so a consumer can tell a derivative computed
+    // entirely from measured neighbours from one that leaned on an extrapolated
+    // or substituted value — the products themselves make those the same float.
+    relief: { slope: sa.slope, aspect: sa.aspect, synthesised },
   };
 
   // Terrain-complexity summary (VRM per Sappington et al. 2007, TPI per
