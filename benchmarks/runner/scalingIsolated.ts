@@ -26,8 +26,9 @@
 
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ScalingConfig, ScalingTier } from './config';
 import { runScalingSuite, type ScalingResult, type ScalingTierResult } from './scaling';
@@ -38,6 +39,20 @@ const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const CHILD_SPEC = 'tests/benchmark/runTier.test.ts';
 /** Generous: the top tier is seconds of real terrain work per run, times eight. */
 const CHILD_TIMEOUT_MS = 1_800_000;
+
+/**
+ * The installed vitest entry point, as an absolute path.
+ *
+ * Spawning `npx vitest` would resolve the name through `PATH`, which is the one
+ * input to a measurement run that nobody records and anybody can prepend to.
+ * Node's own resolver answers the same question from this file's location, so
+ * the child is launched as `process.execPath` plus a path — no lookup, and the
+ * binary that runs is the one this checkout installed.
+ */
+function vitestEntryPoint(): string {
+  const resolve = createRequire(import.meta.url).resolve('vitest/package.json');
+  return join(dirname(resolve), 'vitest.mjs');
+}
 
 /** A tier that could not be run at all, with the observed reason. */
 function deadTier(config: ScalingConfig, tier: ScalingTier, reason: string): ScalingTierResult {
@@ -73,25 +88,29 @@ function runTierInChildProcess(config: ScalingConfig, tier: ScalingTier): Scalin
   const dir = mkdtempSync(join(tmpdir(), 'olv-tier-'));
   const outPath = join(dir, `${tier.id}.json`);
   try {
-    execFileSync('npx', ['vitest', 'run', CHILD_SPEC, `--testTimeout=${CHILD_TIMEOUT_MS}`], {
-      cwd: REPO_ROOT,
-      timeout: CHILD_TIMEOUT_MS,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // The whole parent environment, deliberately. The child re-reads
-      // `vitest.config.ts` in a fresh process, and that is where
-      // `BENCHMARK_FORCE_GC` becomes an `--expose-gc` on the worker — so
-      // narrowing this to an allowlist of BENCHMARK_TIER_* would leave the
-      // parent GC-controlled and every tier measured in the other mode, in one
-      // result tree, with nothing to show for it but a shifted curve.
-      env: {
-        ...process.env,
-        BENCHMARK_TIER: tier.id,
-        BENCHMARK_TIER_POINTS: String(tier.pointCount),
-        BENCHMARK_TIER_CONFIG: JSON.stringify(config),
-        BENCHMARK_TIER_OUT: outPath,
+    execFileSync(
+      process.execPath,
+      [vitestEntryPoint(), 'run', CHILD_SPEC, `--testTimeout=${CHILD_TIMEOUT_MS}`],
+      {
+        cwd: REPO_ROOT,
+        timeout: CHILD_TIMEOUT_MS,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // The whole parent environment, deliberately. The child re-reads
+        // `vitest.config.ts` in a fresh process, and that is where
+        // `BENCHMARK_FORCE_GC` becomes an `--expose-gc` on the worker — so
+        // narrowing this to an allowlist of BENCHMARK_TIER_* would leave the
+        // parent GC-controlled and every tier measured in the other mode, in one
+        // result tree, with nothing to show for it but a shifted curve.
+        env: {
+          ...process.env,
+          BENCHMARK_TIER: tier.id,
+          BENCHMARK_TIER_POINTS: String(tier.pointCount),
+          BENCHMARK_TIER_CONFIG: JSON.stringify(config),
+          BENCHMARK_TIER_OUT: outPath,
+        },
       },
-    });
+    );
     if (!existsSync(outPath)) {
       return deadTier(config, tier, 'the child process exited without writing a tier result');
     }

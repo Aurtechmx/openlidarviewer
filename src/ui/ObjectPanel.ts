@@ -397,7 +397,9 @@ export class ObjectPanel {
     seg.setAttribute('role', 'radiogroup');
     seg.setAttribute('aria-label', 'Wall axis snapping');
     // Unique group name so multiple panel instances don't share radio state.
-    const groupName = `olv-fp-walls-${Math.random().toString(36).slice(2, 8)}`;
+    const nonce = new Uint32Array(1);
+    globalThis.crypto.getRandomValues(nonce);
+    const groupName = `olv-fp-walls-${nonce[0].toString(36).padStart(7, '0')}`;
     for (const segDef of WALL_SEGMENTS) {
       const id = `${groupName}-${segDef.mode}`;
       const input = document.createElement('input');
