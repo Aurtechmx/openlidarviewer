@@ -80,8 +80,15 @@ function references(html) {
   //
   // Commented-out references are skipped by offset rather than by deleting the
   // comments, for the reasons in scripts/lib/htmlComments.mjs.
-  for (const m of matchesOutsideComments(html, /\b(?:src|href)\s*=\s*"([^"]*)"/gi)) {
-    found.add(m[1]);
+  //
+  // All three attribute-value forms, because HTML accepts all three and a check
+  // that reads only double quotes passes href='typo.pdf' unread. The unquoted
+  // form stops at whitespace and at the characters HTML forbids in it.
+  for (const m of matchesOutsideComments(
+    html,
+    /\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi,
+  )) {
+    found.add(m[1] ?? m[2] ?? m[3]);
   }
   return [...found];
 }
