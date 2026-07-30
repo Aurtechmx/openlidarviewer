@@ -49,6 +49,8 @@ jobs:
         run: npm run lint:no-ignored-src
       - name: No git-ignored path is tracked (local tooling committed by `git add -A`)
         run: npm run lint:no-tracked-ignored
+      - name: No tracked file names the build machine
+        run: npm run lint:no-host-paths
       - name: Generated claim registry is committed (regenerate → no diff)
         run: npm run gen:claim-registry && git diff --exit-code
       - name: Bucket partition integrity (every test file in exactly one bucket)
