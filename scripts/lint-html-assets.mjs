@@ -25,6 +25,8 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { matchesOutsideComments } from './lib/htmlComments.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLIC = resolve(ROOT, 'public');
 
@@ -75,7 +77,10 @@ function references(html) {
   // src and href only. srcset carries descriptors and is not used here; adding
   // it later means parsing the comma-separated form properly rather than
   // pretending each entry is a plain path.
-  for (const m of html.matchAll(/\b(?:src|href)\s*=\s*"([^"]*)"/gi)) {
+  //
+  // Commented-out references are skipped by offset rather than by deleting the
+  // comments, for the reasons in scripts/lib/htmlComments.mjs.
+  for (const m of matchesOutsideComments(html, /\b(?:src|href)\s*=\s*"([^"]*)"/gi)) {
     found.add(m[1]);
   }
   return [...found];
@@ -125,7 +130,7 @@ for (const { in: file, pattern, what } of SCRIPT_REFERENCES) {
 }
 
 for (const { file, bases } of shippedPages()) {
-  const html = readFileSync(resolve(ROOT, file), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+  const html = readFileSync(resolve(ROOT, file), 'utf8');
   for (const ref of references(html)) {
     if (isExternal(ref)) continue;
     // Strip a query or fragment; neither is part of the filename on disk.

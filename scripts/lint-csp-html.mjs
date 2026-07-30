@@ -26,6 +26,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { matchesOutsideComments } from './lib/htmlComments.mjs';
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HTACCESS = resolve(ROOT, 'public/.htaccess');
 
@@ -79,20 +81,27 @@ function shippedHtml() {
   return files;
 }
 
-/** Comments are stripped first so a commented-out example is not a finding. */
-function withoutComments(html) {
-  return html.replace(/<!--[\s\S]*?-->/g, '');
-}
-
+/**
+ * Commented-out markup is ignored by offset, never by deleting it. Deleting can
+ * expose markup that was not previously there, which would let a page hide an
+ * inline script from this count. See scripts/lib/htmlComments.mjs.
+ */
 function inlineScriptCount(html) {
-  const opens = html.match(/<script\b[^>]*>/gi) ?? [];
-  return opens.filter((tag) => !/\bsrc\s*=/i.test(tag)).length;
+  return matchesOutsideComments(html, /<script\b[^>]*>/gi).filter(
+    (m) => !/\bsrc\s*=/i.test(m[0]),
+  ).length;
 }
 
 function inlineHandlerCount(html) {
   // Attributes only: `\son...=` inside a tag. Prose containing "on" is not a match.
-  return (html.match(/<[^>]*?\son(?:click|load|error|change|input|submit|focus|blur)\s*=/gi) ?? [])
-    .length;
+  return matchesOutsideComments(
+    html,
+    /<[^>]*?\son(?:click|load|error|change|input|submit|focus|blur)\s*=/gi,
+  ).length;
+}
+
+function hasInlineStyle(html) {
+  return matchesOutsideComments(html, /<style\b/gi).length > 0;
 }
 
 /**
@@ -143,7 +152,7 @@ if (mirrored.present && mirrored.policy === null) {
 }
 
 for (const file of shippedHtml()) {
-  const html = withoutComments(readFileSync(resolve(ROOT, file), 'utf8'));
+  const html = readFileSync(resolve(ROOT, file), 'utf8');
 
   if (!scriptInlineOk) {
     const inline = inlineScriptCount(html);
@@ -162,7 +171,7 @@ for (const file of shippedHtml()) {
     }
   }
 
-  if (!styleInlineOk && /<style\b/i.test(html)) {
+  if (!styleInlineOk && hasInlineStyle(html)) {
     problems.push(
       `${file}: inline <style>, which style-src refuses. Move it to a stylesheet.`,
     );
