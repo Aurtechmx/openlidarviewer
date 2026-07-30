@@ -321,6 +321,46 @@ matching `tests/myModule.test.ts`.
 Where WebGPU is unavailable the viewer automatically uses WebGL 2 — a fully
 tested path, not a degraded one. The active backend is shown in the UI.
 
+### Cross-browser end-to-end results
+
+The deterministic Playwright set (`grepInvert: /@gpu/`, 165 specs) runs on all
+three engines. Chromium is the blocking gate in `ci.yml`; Firefox and WebKit run
+in `browsers.yml` and are advisory, so a new engine difference is reported
+rather than blocking unrelated work.
+
+| Engine | Passed | Skipped |
+|--------|--------|---------|
+| Chromium | 161 | 4 |
+| Firefox | 158 | 7 |
+| WebKit | 156 | 9 |
+
+Every engine skips the same four. The extra skips are all one capability:
+**clipboard read**. Five specs check that the camera moved by copying the "Copy
+view link" share link and reading the pose back out of the clipboard. Only
+Chromium implements the clipboard permission in Playwright — Firefox and WebKit
+both reject `grantPermissions(['clipboard-read'])` with "Unknown permission",
+and WebKit's `navigator.clipboard.readText()` additionally resolves to an empty
+string instead of the copied text. Three of the five ask for the permission and
+so skip on both engines; the other two read the clipboard without asking and
+skip on WebKit only, since Firefox's failed `writeText` makes the app fall back
+to putting the state in the address bar, which the oracle can still read.
+
+The skips name that capability rather than loosening the assertion, and the
+maths underneath stays covered engine-independently by `tests/navMath.test.ts`,
+`tests/panMath.test.ts`, and `tests/touchGesture.test.ts`.
+
+WebKit is also much slower than the other two here, because its WebGPU runs on a
+software backend. A local WebKit run can show a few `page.goto` timeouts under
+CPU pressure; they land on a different spec each run and pass when that spec runs
+on its own, and CI's `retries: 1` absorbs them. Firefox finishes the same 165
+specs in about a minute with none.
+
+One backend difference is worth knowing when reading a failure: on a Mac,
+Playwright's WebKit returns a real WebGPU adapter, while headless Chromium and
+Firefox return none and fall back to WebGL 2. `edlDefaultEnabled` turns Eye Dome
+Lighting on for desktop WebGPU only, so EDL starts **on** under WebKit and
+**off** under the other two. Specs must not assume either starting state.
+
 ---
 
 ## 15. Deployment

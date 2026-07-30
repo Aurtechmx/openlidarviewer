@@ -47,23 +47,43 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
   const edl = page.locator('.olv-chip', { hasText: 'Eye Dome Lighting' });
   await expect(edl).toBeVisible();
 
-  // Turn EDL on — the render loop switches to the post-processing pipeline and
-  // the EDL shader compiles on the active GPU backend.
-  await edl.click();
-  await expect(edl).toHaveClass(/olv-chip-active/);
-  // The strength slider is revealed once EDL is on.
-  await expect(page.locator('.olv-render-row')).toBeVisible();
+  // The STARTING state is not fixed, so do not assume it. `edlDefaultEnabled`
+  // turns EDL on for desktop WebGPU and leaves it off on the WebGL 2 fallback,
+  // so the default follows whatever adapter the runner exposes: off on a
+  // headless Chromium or Firefox with no adapter, on in WebKit on a Mac, where
+  // `requestAdapter()` really does hand back a Metal-backed device. This spec
+  // used to hard-code "starts off", which quietly encoded the fallback path and
+  // would fail on any Chrome runner that grew a working adapter.
+  //
+  // What the spec actually cares about is the TRANSITION: driving the render
+  // loop onto the post-processing pipeline and back off again, cleanly, in
+  // whichever order this backend starts in.
+  const startedOn = await edl.evaluate((n) => n.classList.contains('olv-chip-active'));
 
-  // Let many frames render through the EDL pipeline.
+  /** Flip EDL and assert both the chip and the strength row settle. */
+  const toggleTo = async (on: boolean): Promise<void> => {
+    await edl.click();
+    if (on) {
+      await expect(edl).toHaveClass(/olv-chip-active/);
+      // The strength slider is revealed once EDL is on.
+      await expect(page.locator('.olv-render-row')).toBeVisible();
+    } else {
+      await expect(edl).not.toHaveClass(/olv-chip-active/);
+      await expect(page.locator('.olv-render-row')).toBeHidden();
+    }
+  };
+
+  // First flip: away from wherever this backend started.
+  await toggleTo(!startedOn);
+  // Let many frames render through the pipeline the flip selected.
   await page.waitForTimeout(1500);
-
   // The canvas is still rendering and nothing threw or errored.
   await expect(page.locator('.olv-canvas')).toBeVisible();
   expect(errors).toEqual([]);
 
-  // Turning EDL back off returns to the direct render path, also cleanly.
-  await edl.click();
-  await expect(edl).not.toHaveClass(/olv-chip-active/);
+  // Second flip: back to the starting state, also cleanly. Between them both
+  // the EDL post-processing path and the direct render path have been driven.
+  await toggleTo(startedOn);
   await page.waitForTimeout(500);
   expect(errors).toEqual([]);
 });

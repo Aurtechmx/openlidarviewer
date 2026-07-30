@@ -77,7 +77,21 @@ test.describe('hand tool — pan mode surfaces', () => {
     await expect(pan).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('a primary drag in pan mode moves the camera without errors', async ({ page }) => {
+  test('a primary drag in pan mode moves the camera without errors', async ({
+    page,
+    browserName,
+  }) => {
+    // CAPABILITY GAP — clipboard read. `readPose` reads the copied share link,
+    // and on Playwright's WebKit `navigator.clipboard.readText()` resolves to
+    // an empty string instead of the copied text (the engine exposes no
+    // clipboard-read permission to grant). Both reads come back "", so the
+    // pose comparison below would be comparing the harness with itself.
+    // Chromium and Firefox keep the coverage, and the pan geometry itself is
+    // pinned engine-independently by tests/panMath.test.ts.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read',
+    );
     await loadSample(page);
     let pageError: Error | null = null;
     page.on('pageerror', (e) => (pageError = e));
@@ -99,7 +113,17 @@ test.describe('hand tool — pan mode surfaces', () => {
     expect(pageError).toBeNull();
   });
 
-  test('middle-mouse drag pans in orbit mode and the mode is untouched', async ({ page }) => {
+  test('middle-mouse drag pans in orbit mode and the mode is untouched', async ({
+    page,
+    browserName,
+  }) => {
+    // CAPABILITY GAP — clipboard read, same as the primary-drag test above:
+    // WebKit's `readText()` resolves empty, so the share-link pose oracle
+    // cannot see whether the camera moved.
+    test.skip(
+      browserName === 'webkit',
+      'WebKit (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read',
+    );
     await loadSample(page);
     const orbit = page.locator('.olv-mode-orbit');
     await expect(orbit).toHaveAttribute('aria-pressed', 'true');

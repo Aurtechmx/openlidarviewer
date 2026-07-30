@@ -223,7 +223,23 @@ test('the start screen offers an open-from-URL field for remote COPC', async ({
   await expect(toast).toContainText(/https?:\/\//);
 });
 
-test('arrow keys orbit the camera in orbit mode', async ({ page, context }) => {
+test('arrow keys orbit the camera in orbit mode', async ({
+  page,
+  context,
+  browserName,
+}) => {
+  // CAPABILITY GAP — clipboard-read permission. Only Chromium implements it in
+  // Playwright; Firefox and WebKit both reject `grantPermissions` outright with
+  // "Unknown permission: clipboard-read", and WebKit's
+  // `navigator.clipboard.readText()` additionally resolves to an empty string
+  // rather than the copied text. The camera oracle below IS the clipboard, so
+  // off Chromium there is nothing to read and the assertion would be measuring
+  // the harness, not the viewer. The orbit maths itself is pinned
+  // engine-independently by tests/navMath.test.ts.
+  test.skip(
+    browserName !== 'chromium',
+    `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
+  );
   // The Share link encodes the camera pose; reading it before and after a
   // keyboard orbit proves the arrow keys actually moved the camera.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

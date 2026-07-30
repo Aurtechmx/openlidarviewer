@@ -67,6 +67,15 @@ test.describe('polygon completion paths', () => {
     }) => {
       await openMeasureBarWithKind(page, kind);
       const activeBtn = page.locator('.olv-mkind-active');
+      // Selecting a kind leaves the pointer resting on that button, and the
+      // toolbar deliberately strips `title` while a control is hovered so the
+      // native bubble does not double up with the custom `data-tip` tooltip.
+      // Move the pointer off the toolbar first — a user reading the native
+      // tooltip is not mid-click on the control. Without this the read races
+      // the hover state, which is why it only ever passed on engines that
+      // focus a button on mousedown.
+      await page.mouse.move(0, 0);
+      await expect(activeBtn).toHaveAttribute('title', /./);
       const title = await activeBtn.getAttribute('title');
       expect(
         title,

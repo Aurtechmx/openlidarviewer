@@ -89,7 +89,16 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
   test('a 2-finger twist moves the camera (share-link pose changes)', async ({
     page,
     context,
+    browserName,
   }) => {
+    // CAPABILITY GAP — clipboard-read permission. Only Chromium implements it
+    // in Playwright; Firefox and WebKit both reject `grantPermissions` with
+    // "Unknown permission: clipboard-read". This test's camera oracle is the
+    // copied share link, so off Chromium there is nothing to read.
+    test.skip(
+      browserName !== 'chromium',
+      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
+    );
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/');
     await dropTinyPly(page);
@@ -122,7 +131,17 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', () => 
   test('a sub-dead-zone wobble does NOT move the camera', async ({
     page,
     context,
+    browserName,
   }) => {
+    // CAPABILITY GAP — clipboard-read permission. Same reason as the twist test
+    // above, and it matters more here: a blind oracle would make the "did NOT
+    // move" assertion pass for the wrong reason, which is worse than not
+    // running it. The dead-zone threshold itself is pinned engine-independently
+    // by tests/touchGesture.test.ts.
+    test.skip(
+      browserName !== 'chromium',
+      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
+    );
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await page.goto('/');
     await dropTinyPly(page);
