@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/cross-implementation-study.schema.json",
+  "title": "Cross-implementation study manifest",
+  "description": "One record per cross-implementation study: one claim, one candidate revision, one pinned reference implementation, and the datasets and parameter sets the comparison actually covered. REFERENCE_SLOTS in src/validation/crossCheck.ts holds one reference per claim, which cannot express several datasets or parameter sets per claim; these manifests are the canonical record and the slots stay as the compact runtime summary. Validated by scripts/verify-cross-implementation-study.mjs, which implements the subset of JSON Schema used here without a runtime dependency and adds the cross-checks a schema cannot express. Writing a manifest does not move any claim's evidence level; promotion is a separate, human act recorded in docs/validation/claim-register.yaml.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "studyId",
+    "claimId",
+    "example",
+    "protocolDigest",
+    "candidate",
+    "reference",
+    "datasets",
+    "parameterSets",
+    "metrics",
+    "status",
+    "statusReason",
+    "rawArtifacts",
+    "derivedArtifacts",
+    "scope"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "studyId": {
+      "description": "Stable identity. An example manifest must be prefixed EXAMPLE- and carry example: true, so a reader and the verifier agree about what is real.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "claimId": {
+      "description": "Must exist in docs/validation/claim-register.yaml. The verifier reads that register and never writes it.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9-]*$"
+    },
+    "example": {
+      "description": "True only for a template manifest. An example is excluded from every summary count whatever its status, and may not carry a result.",
+      "type": "boolean"
+    },
+    "protocolDigest": {
+      "description": "sha256 over the canonical protocol object (claimId, dataset ids, parameter sets, metrics) as registered BEFORE the study ran. The verifier recomputes it, so a tolerance loosened after seeing the result no longer matches. See the WHY note in the verifier for what this does and does not prove.",
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "candidate": { "$ref": "#/$defs/candidate" },
+    "reference": { "$ref": "#/$defs/reference" },
+    "datasets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/dataset" }
+    },
+    "parameterSets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/parameterSet" }
+    },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "status": {
+      "description": "See STUDY_STATUSES in scripts/verify-cross-implementation-study.mjs for what each value means and why blocked-external is separate from unavailable.",
+      "type": "string",
+      "enum": [
+        "pending",
+        "not-executed",
+        "unavailable",
+        "blocked-external",
+        "insufficient",
+        "agree",
+        "partial",
+        "disagree",
+        "invalid",
+        "inconclusive"
+      ]
+    },
+    "statusReason": {
+      "description": "Why the status is what it is, in one sentence. Required for every status, including agree.",
+      "type": "string",
+      "minLength": 1
+    },
+    "result": {
+      "description": "Present only when the study produced numbers. A status of pending or not-executed with a result block is rejected: a count can only come from a study that ran.",
+      "$ref": "#/$defs/result"
+    },
+    "rawArtifacts": {
+      "description": "The primary records: candidate output, reference output, the command, the environment capture. Each path is repo-relative and each sha256 is recomputed from the file on disk.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/rawArtifact" }
+    },
+    "derivedArtifacts": {
+      "description": "Anything computed FROM the raw artifacts. Each one names the raw artifacts it came from and carries the digest of that input set, so a derived summary that no longer follows from the raw records is rejected.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/derivedArtifact" }
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "candidate": {
+      "description": "The OpenLiDARViewer side of the comparison.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "version", "algorithmVersion"],
+      "properties": {
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "version": { "type": "string", "minLength": 1 },
+        "algorithmVersion": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reference": {
+      "description": "The independent implementation. A container digest is the ideal pin; when there is none, the executable path, the reported version and the exact command line are all required, and containerPinning must say not-executed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "version", "containerPinning", "executablePath", "commandLine"],
+      "properties": {
+        "tool": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "containerDigest": { "type": ["string", "null"] },
+        "containerPinning": { "type": "string", "enum": ["pinned", "not-executed"] },
+        "containerPinningNote": { "type": "string", "minLength": 1 },
+        "executablePath": { "type": ["string", "null"] },
+        "commandLine": { "type": ["string", "null"] },
+        "platform": { "type": "string", "minLength": 1 }
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datasetId", "description"],
+      "properties": {
+        "datasetId": {
+          "description": "A registered identifier, not prose. The shape rule lives in the verifier (DATASET_ID_PATTERN) rather than here, so a free-text dataset id is rejected by the named R2 rule with an explanation instead of a generic pattern failure; membership is checked against validation/datasets/dataset-register.yaml once that register exists.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "parameterSet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "candidateParameters", "referenceParameters"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^PS-[A-Z0-9][A-Z0-9-]*$" },
+        "description": { "type": "string", "minLength": 1 },
+        "candidateParameters": { "type": "object" },
+        "referenceParameters": { "type": "object" }
+      }
+    },
+    "metrics": {
+      "description": "The agreement gate, registered before the study ran and covered by protocolDigest.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "toleranceAbs",
+        "toleranceUnit",
+        "minimumComparableCells",
+        "requiredWithinToleranceFraction"
+      ],
+      "properties": {
+        "toleranceAbs": { "type": "number", "minimum": 0 },
+        "toleranceUnit": { "type": "string", "minLength": 1 },
+        "minimumComparableCells": { "type": "integer", "minimum": 1 },
+        "requiredWithinToleranceFraction": { "type": "number", "minimum": 0 }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparableCells", "withinToleranceFraction", "maxAbsDiff"],
+      "properties": {
+        "comparableCells": { "type": "integer", "minimum": 0 },
+        "skippedCells": { "type": "integer", "minimum": 0 },
+        "withinToleranceFraction": { "type": "number", "minimum": 0 },
+        "maxAbsDiff": { "type": "number", "minimum": 0 },
+        "rmse": { "type": "number", "minimum": 0 },
+        "meanDiff": { "type": "number" }
+      }
+    },
+    "rawArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "role"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "role": {
+          "type": "string",
+          "enum": [
+            "candidate-input",
+            "candidate-output",
+            "reference-output",
+            "reference-command",
+            "reference-environment"
+          ]
+        }
+      }
+    },
+    "derivedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "derivedFrom", "inputsDigest"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "derivedFrom": {
+          "description": "Paths of the rawArtifacts entries this was computed from. Every path must be one of them.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "inputsDigest": {
+          "description": "sha256 over the canonical {path, sha256} list of derivedFrom, recomputed by the verifier from the files on disk.",
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "scope": {
+      "description": "What this study supports and what it does not. A supported entry names one dataset and one parameter set that the study actually listed; nothing broader may be approved.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["supported", "unsupported"],
+      "properties": {
+        "supported": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/scopeEntry" }
+        },
+        "unsupported": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "scopeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["datasetId", "parameterSetId"],
+      "properties": {
+        "datasetId": { "type": "string", "minLength": 1 },
+        "parameterSetId": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
