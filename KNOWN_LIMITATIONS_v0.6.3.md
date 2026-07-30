@@ -2,7 +2,7 @@
 
 This is a validation-and-correction release. Twelve validation suites were added, eighteen defects were fixed, and four defects that reached published v0.6.1 output are corrected. Twelve of the eighteen were exposed by a validation suite and six by code review. The limits below are the v0.6.1 limits with the closed items removed, plus what the new suites named as uncovered.
 
-Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.3.md`. One of them is a correction to the previous version of this file: its scope statement for the `geodesicFill` unit-mixing defect was wrong.
+Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.2.md`. One of them is a correction to the previous version of this file: its scope statement for the `geodesicFill` unit-mixing defect was wrong.
 
 ## The two monoliths are still monoliths
 
@@ -162,7 +162,7 @@ An earlier build derived nothing, so a scan georeferenced by GeoKeys alone -
 what LAS 1.2 carries, and what PDAL commonly writes - came back out as a 1.4
 file with the right code in the wrong encoding.
 
-The read side matched the write side only from v0.6.3. Until then `parseCrsFromVlrs` returned the WKT and discarded the GeoKeyDirectory, so the vertical keys the v0.6.1 writer had just started emitting were dropped again on load. `docs/release/ERRATUM_v0.6.3.md` states which output that reached.
+The read side matched the write side only from v0.6.3. Until then `parseCrsFromVlrs` returned the WKT and discarded the GeoKeyDirectory, so the vertical keys the v0.6.1 writer had just started emitting were dropped again on load. `docs/release/ERRATUM_v0.6.2.md` states which output that reached.
 
 ## Evidence ceiling: three cross-implemented products, no field validation
 
@@ -257,7 +257,7 @@ A wide-area cloud is the case to watch.
 
 ## Cross-platform reproducibility covers two little-endian platforms
 
-The two-platform result is tracked at `docs/validation/evidence/portability-v0.6.3/`: `status: reproduced`, `claimEstablished: true`, platforms darwin-arm64 and linux-x64, from workflow run 30221805663 at commit 50e76d2. The two legs produced identical science-scoped output from the same seeded fixture, with 15 artifact hashes and 18 scalars compared at a tolerance of exactly zero and none differing. Host, timing and build-identity fields differ and are published per platform.
+The two-platform result is tracked at `docs/validation/evidence/portability-v0.6.2/`: `status: reproduced`, `claimEstablished: true`, platforms darwin-arm64 and linux-x64, from workflow run 30221805663 at commit 50e76d2. The two legs produced identical science-scoped output from the same seeded fixture, with 15 artifact hashes and 18 scalars compared at a tolerance of exactly zero and none differing. Host, timing and build-identity fields differ and are published per platform.
 
 The scope is two platforms, both little-endian, one commit, one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data is in the comparison. What holds is that the same arithmetic returns the same values on a second architecture.
 
