@@ -38,6 +38,13 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative, posix } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const TAR = requireBinaryOnPath('tar');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -247,14 +254,14 @@ function listFiles(root, base = root) {
 
 const hasRepo = (() => {
   try {
-    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: REPO, stdio: 'pipe' });
+    execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], { cwd: REPO, stdio: 'pipe' });
     return true;
   } catch {
     return false;
   }
 })();
 
-const git = (args, opts = {}) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8', maxBuffer: 1 << 28, ...opts });
+const git = (args, opts = {}) => execFileSync(GIT, args, { cwd: REPO, encoding: 'utf8', maxBuffer: 1 << 28, ...opts });
 
 /**
  * Produce the directory the checks run against, and refuse anything that could
@@ -273,7 +280,7 @@ function resolveArchive(explicit, keep) {
     const tmp = mkdtempSync(join(tmpdir(), 'olv-archive-'));
     const tar = git(['archive', '--format=tar', '--prefix=archive/', 'HEAD'], { encoding: 'buffer' });
     writeFileSync(join(tmp, 'src.tar'), tar);
-    execFileSync('tar', ['-xf', join(tmp, 'src.tar'), '-C', tmp]);
+    execFileSync(TAR, ['-xf', join(tmp, 'src.tar'), '-C', tmp]);
     rmSync(join(tmp, 'src.tar'));
     dir = join(tmp, 'archive');
     built = true;
@@ -672,7 +679,7 @@ check('archive-determinism', 'building the archive twice from the same commit yi
   const f = [];
   const digest = () => createHash('sha256').update(git(['archive', '--format=tar', '--prefix=archive/', 'HEAD'], { encoding: 'buffer' })).digest('hex');
   const a = digest();
-  const b = execFileSync('git', ['archive', '--format=tar', '--prefix=archive/', 'HEAD'], {
+  const b = execFileSync(GIT, ['archive', '--format=tar', '--prefix=archive/', 'HEAD'], {
     cwd: REPO,
     encoding: 'buffer',
     maxBuffer: 1 << 28,

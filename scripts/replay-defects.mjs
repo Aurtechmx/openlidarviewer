@@ -48,6 +48,13 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import os from 'node:os';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const LN = requireBinaryOnPath('ln');
 
 import {
   RAW_DIR, REPLAY_DIR, REGISTRY_PATH, BASELINE_REF,
@@ -68,7 +75,7 @@ function fail(message, code = 2) {
 const candidateDir = ROOT;
 
 function gitOut(args, cwd = ROOT) {
-  return execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
+  return execFileSync(GIT, args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 }).trim();
 }
 
 /**
@@ -84,13 +91,13 @@ function materializeBaseline() {
     : join(tmpdir(), `olv-replay-baseline-${process.pid}`);
   if (!existsSync(join(dir, '.git'))) {
     rmSync(dir, { recursive: true, force: true });
-    execFileSync('git', ['worktree', 'add', '--detach', dir, BASELINE_REF], {
+    execFileSync(GIT, ['worktree', 'add', '--detach', dir, BASELINE_REF], {
       cwd: ROOT, stdio: 'pipe',
     });
   }
   const mods = join(dir, 'node_modules');
   if (!existsSync(mods)) {
-    execFileSync('ln', ['-s', join(candidateDir, 'node_modules'), mods]);
+    execFileSync(LN, ['-s', join(candidateDir, 'node_modules'), mods]);
   }
   return dir;
 }
@@ -263,8 +270,8 @@ if (process.argv.includes('--render-only')) {
 
 /** Return the baseline tree to the tag exactly, keeping the shared modules. */
 function resetBaseline(dir) {
-  execFileSync('git', ['checkout', '--force', 'HEAD', '--', '.'], { cwd: dir, stdio: 'pipe' });
-  execFileSync('git', ['clean', '-fdq', '-e', 'node_modules'], { cwd: dir, stdio: 'pipe' });
+  execFileSync(GIT, ['checkout', '--force', 'HEAD', '--', '.'], { cwd: dir, stdio: 'pipe' });
+  execFileSync(GIT, ['clean', '-fdq', '-e', 'node_modules'], { cwd: dir, stdio: 'pipe' });
 }
 
 const baselineDir = materializeBaseline();

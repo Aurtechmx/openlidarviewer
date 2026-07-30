@@ -24,10 +24,17 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const NPM = requireBinaryOnPath('npm');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -397,7 +404,7 @@ function main() {
   const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
   let commit = null;
   try {
-    commit = execSync('git rev-parse HEAD', { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
+    commit = execFileSync(GIT, ['rev-parse', 'HEAD'], { cwd: ROOT, stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim();
   } catch { /* building without git is legitimate */ }
@@ -434,7 +441,7 @@ function main() {
   // needs to bind this record to one specific build.
   let tag = null;
   try {
-    tag = execSync('git describe --exact-match --tags HEAD', {
+    tag = execFileSync(GIT, ['describe', '--exact-match', '--tags', 'HEAD'], {
       cwd: ROOT,
       stdio: ['ignore', 'pipe', 'ignore'],
     }).toString().trim();
@@ -442,7 +449,7 @@ function main() {
 
   let npmVersion = null;
   try {
-    npmVersion = execSync('npm --version', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    npmVersion = execFileSync(NPM, ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
   } catch { /* npm not on PATH is survivable */ }
 
   const sha256Of = (rel) => {

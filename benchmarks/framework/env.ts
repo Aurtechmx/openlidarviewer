@@ -24,6 +24,12 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { capturedEnv, unavailableEnv, type BenchmarkEnvironment, type EnvValue } from './types';
+import { requireBinaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 /** The repo root, two levels up from `benchmarks/framework/`. */
 const DEFAULT_REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -56,7 +62,7 @@ function capture(what: string, read: () => string | null): EnvValue {
 
 /** Run a git command in `repoRoot`, letting the caller's try/catch see failures. */
 function git(repoRoot: string, args: readonly string[]): string {
-  return execFileSync('git', [...args], {
+  return execFileSync(GIT, [...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     timeout: GIT_TIMEOUT_MS,
