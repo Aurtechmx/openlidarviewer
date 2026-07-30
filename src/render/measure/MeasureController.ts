@@ -2096,8 +2096,17 @@ function centroid(points: Vec3[]): Vec3 {
   return [x / n, y / n, z / n];
 }
 
-/** A reasonably unique id — `crypto.randomUUID` when available, else a fallback. */
+/**
+ * A unique id — `crypto.randomUUID` when available, else random bytes.
+ *
+ * `randomUUID` needs a secure context, which a viewer served over plain http on
+ * a field laptop does not have. `getRandomValues` works there, so the fallback
+ * keeps full entropy instead of leaving two tabs able to mint the same id.
+ */
 function freshId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  return c?.randomUUID ? c.randomUUID() : `m_${Math.random().toString(36).slice(2, 11)}`;
+  const c = globalThis.crypto;
+  if (typeof c.randomUUID === 'function') return c.randomUUID();
+  const bytes = new Uint32Array(2);
+  c.getRandomValues(bytes);
+  return `m_${bytes[0].toString(36).padStart(7, '0')}${bytes[1].toString(36).padStart(7, '0')}`;
 }
