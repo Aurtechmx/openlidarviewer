@@ -22,10 +22,9 @@ on:
   # inputs to dispatch.
   workflow_dispatch:
 
-# Least privilege by default. Only the publication job is granted write, and
-# only after every blocking job has passed.
-permissions:
-  contents: read
+# Least privilege, declared per job rather than once for the workflow, so a job
+# added later starts with nothing until someone names what it needs. Only the
+# publication job is granted write, and only after every blocking job passed.
 
 # A release run must never be replaced mid-flight: cancelling one during
 # packaging would leave half a staged asset set behind.
@@ -38,6 +37,8 @@ jobs:
   # Everything knowable in a second, checked before spending forty minutes.
   validate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -69,6 +70,8 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     needs: validate
+    permissions:
+      contents: read
     # Measured basis: the v0.6.2 release gate took 2 h 20 m wall clock, of
     # which the mutation stage — 188 mutants over the numeric core at ~174
     # tests each — was roughly 2 h. Removing it leaves about 20 minutes of
@@ -85,11 +88,14 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: npm
-      - run: npm ci
+      # No dependency lifecycle script runs during install. The browsers the
+      # e2e stages need are not a side effect of the install either; the step
+      # below fetches them explicitly, from the version the lockfile pinned.
+      - run: npm ci --ignore-scripts
       - name: Lockfile is unchanged by a clean install
         run: git diff --exit-code -- package-lock.json
       - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+        run: ./node_modules/.bin/playwright install --with-deps chromium
 
       - name: Release-mode gate (all mandatory stages)
         env:
@@ -142,6 +148,8 @@ jobs:
   stage:
     runs-on: ubuntu-latest
     needs: gate
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -206,6 +214,8 @@ jobs:
   release-ready:
     runs-on: ubuntu-latest
     needs: [validate, gate, stage]
+    # This job only reports a status, so it needs no access to the repository.
+    permissions: {}
     steps:
       - run: echo "Every blocking job passed for ${{ github.ref_name }}."
 
