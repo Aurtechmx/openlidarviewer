@@ -26,6 +26,12 @@ import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFECT_DIR = resolve(ROOT, 'validation/defects');
@@ -75,7 +81,7 @@ const KNOWN_LIMITATIONS = 'KNOWN_LIMITATIONS_v0.6.1.md';
 function git(args) {
   // git's own stderr is discarded: a rev that does not resolve is a result
   // this script reports itself, not a message to leak into the caller's log.
-  return execFileSync('git', args, {
+  return execFileSync(GIT, args, {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -111,7 +117,7 @@ function firstAddCommit(path) {
 /** True when `ancestor` is reachable from `descendant`. */
 export function isAncestor(ancestor, descendant) {
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
+    execFileSync(GIT, ['merge-base', '--is-ancestor', ancestor, descendant], {
       cwd: ROOT,
       stdio: ['ignore', 'ignore', 'ignore'],
     });

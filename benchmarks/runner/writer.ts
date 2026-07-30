@@ -42,6 +42,12 @@ import { BENCHMARK_PACKAGE_VERSION, BENCHMARK_SCHEMA_VERSION } from './config';
 import { forcedGcRequested, summariseForcedGc } from './gcMode';
 import type { ReproducibilityResult } from './reproducibility';
 import type { ScalingResult } from './scaling';
+import { requireBinaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const NPM = requireBinaryOnPath('npm');
 import {
   overviewHtml,
   overviewInputFrom,
@@ -110,7 +116,7 @@ export function captureHostExtras(): HostExtras {
       return `${one.toFixed(2)} ${five.toFixed(2)} ${fifteen.toFixed(2)}`;
     }),
     npmVersion: captureOne('npm version', () =>
-      execFileSync('npm', ['--version'], {
+      execFileSync(NPM, ['--version'], {
         encoding: 'utf8',
         timeout: 10_000,
         stdio: ['ignore', 'pipe', 'ignore'],

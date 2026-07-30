@@ -24,6 +24,12 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const NPX = requireBinaryOnPath('npx');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -65,7 +71,7 @@ const vitestArgs = [
   ...passthrough,
 ];
 
-const child = spawn('npx', vitestArgs, { cwd: ROOT, stdio: 'inherit' });
+const child = spawn(NPX, vitestArgs, { cwd: ROOT, stdio: 'inherit' });
 
 let watchdogTripped = false;
 const watchdog = setTimeout(() => {

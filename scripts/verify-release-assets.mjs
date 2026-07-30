@@ -25,6 +25,13 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // eslint-disable-next-line import/no-relative-packages — same repo, ships in the archive
 import { MANDATORY_RELEASE_STAGES, DEFERRED_RELEASE_STAGES, STAGE_STATES } from './collect-evidence.mjs';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
+const UNZIP = requireBinaryOnPath('unzip');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -118,7 +125,7 @@ function zipEntries(zipPath) {
   // essay, and the useful signal is the throw, which the caller turns into one
   // clear line. Leaking that essay into a verification report buries the
   // findings a reader is actually scanning for.
-  const out = execFileSync('unzip', ['-Z1', zipPath], {
+  const out = execFileSync(UNZIP, ['-Z1', zipPath], {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     stdio: ['ignore', 'pipe', 'ignore'],
@@ -399,7 +406,7 @@ if (isMain()) {
   let tagCommit = null;
   try {
     const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
-    tagCommit = execFileSync('git', ['rev-list', '-n1', `v${version}`], {
+    tagCommit = execFileSync(GIT, ['rev-list', '-n1', `v${version}`], {
       cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   } catch { /* no tag locally: the identity checks that do not need it still run */ }
