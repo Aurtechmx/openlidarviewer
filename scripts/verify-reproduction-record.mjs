@@ -82,8 +82,18 @@ export const EVIDENCE_LEVEL = 'E6_INDEPENDENTLY_REPRODUCED';
 /** Names that mean this project. A reproducer carrying one is not independent. */
 export const SELF_NAMES = /openlidar|openlidarviewer|(^|[^a-z])olv([^a-z]|$)|aurtech/i;
 
-/** Hosts nobody else can reach, so a location on one is not published. */
-const PRIVATE_LOCATION = /^(file:|\/)|localhost|127\.0\.0\.1|0\.0\.0\.0|\.local(\/|$)|192\.168\.|10\.\d+\.|intranet|(^|\W)internal(\W|$)/i;
+/**
+ * Hosts nobody else can reach, so a location on one is not published.
+ *
+ * Two rules rather than one pattern, for the reason given in
+ * verify-impact-record.mjs: the `^` applied to the leading alternative only,
+ * and a reader cannot tell a deliberate mixed anchor from a typo.
+ */
+const PRIVATE_LOCATION_PREFIX = /^(?:file:|\/)/i;
+const PRIVATE_LOCATION_ANYWHERE =
+  /localhost|127\.0\.0\.1|0\.0\.0\.0|\.local(?:\/|$)|192\.168\.|10\.\d+\.|intranet|(?:^|\W)internal(?:\W|$)/i;
+const isPrivateLocation = (value) =>
+  PRIVATE_LOCATION_PREFIX.test(value) || PRIVATE_LOCATION_ANYWHERE.test(value);
 
 /** A DOI, in the only form that resolves. */
 const DOI = /^10\.\d{4,9}\/\S+$/;
@@ -185,7 +195,7 @@ export function collectReproductionProblems(ctx) {
 
   // ── P6. What they ran has to be pinned ────────────────────────────────────
   const art = r.artifactUnderTest;
-  if (!/^https:\/\//.test(art.downloadUrl) || PRIVATE_LOCATION.test(art.downloadUrl)) {
+  if (!/^https:\/\//.test(art.downloadUrl) || isPrivateLocation(art.downloadUrl)) {
     add('P6-ARTIFACT-UNPINNED', `artifactUnderTest.downloadUrl ${JSON.stringify(art.downloadUrl)} is not a public https location; a reader cannot fetch what the reproducer ran.`);
   }
   if (/^0{40}$/.test(art.revision) && r.example !== true) {
@@ -223,7 +233,7 @@ export function collectReproductionProblems(ctx) {
     add('P8-RAW-OUTPUT-MISSING', `rawOutput.location ${JSON.stringify(raw.location)} is declared a DOI but is not one (expected 10.NNNN/suffix).`);
   }
   if (raw.locationKind !== 'doi' && raw.locationKind !== 'none') {
-    if (!/^https:\/\//.test(raw.location) || PRIVATE_LOCATION.test(raw.location)) {
+    if (!/^https:\/\//.test(raw.location) || isPrivateLocation(raw.location)) {
       add('P8-RAW-OUTPUT-MISSING', `rawOutput.location ${JSON.stringify(raw.location)} is not a public https location; "on file with the author" is not published output.`);
     }
   }
