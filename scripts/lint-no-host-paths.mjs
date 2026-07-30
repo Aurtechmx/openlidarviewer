@@ -41,6 +41,12 @@ import { readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Spawned programs are resolved to an absolute path by reading PATH, so the
+// path that runs is a value this script can name rather than whatever the OS
+// picks up. See scripts/lib/binaryOnPath.mjs.
+const GIT = requireBinaryOnPath('git');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -103,7 +109,7 @@ function hostPatterns() {
 
 /** Every tracked file, since anything tracked can reach the source archive. */
 function trackedFiles() {
-  return execFileSync('git', ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8' })
+  return execFileSync(GIT, ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8' })
     .split('\0')
     .filter(Boolean);
 }

@@ -1,6 +1,6 @@
 {
-  "runAt": "2026-07-27T16:46:57.966Z",
-  "commit": "c9ee6a0552c6fbabe29f5493445e68b7d93e5df2",
+  "runAt": "2026-07-30T17:03:09.455Z",
+  "commit": "9d03bd097dc9365f0ca3756a419ad33b5ad5772d",
   "machine": {
     "os": "Darwin 25.5.0 arm64",
     "cpu": "Apple M3 Max",
@@ -43,7 +43,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24373,
+        "durationMs": 25555,
         "exitCode": 1,
         "newFailures": []
       },
@@ -52,8 +52,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 3932,
-        "baselineDurationMs": 4139,
+        "durationMs": 3900,
+        "baselineDurationMs": 4016,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/unitIntegrity.test.ts :: unit integrity: vertical-unit independence analyseContours agrees between an all-metre frame and a foot-vertical frame",
@@ -61,11 +61,9 @@
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 56356,
-        "exitCode": 1,
-        "tail": " Test Files  1 failed | 94 passed | 2 skipped (97)\n      Tests  2 failed | 1104 passed | 16 skipped (1122)\n   Start at  10:56:15\n   Duration  7.95s (transform 1.11s, setup 0ms, import 2.61s, tests 3.28s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-2450-2.json\n[unit shard 3/3] pid=7932 elapsed=8.5s code=1 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M02": {
@@ -77,7 +75,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 24415,
+        "durationMs": 25507,
         "exitCode": 1,
         "newFailures": [
           "tests/canonicalFrame.test.ts :: canonicalZUpToYUp inverts in the other order too",
@@ -96,8 +94,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 883,
-        "baselineDurationMs": 879,
+        "durationMs": 837,
+        "baselineDurationMs": 853,
         "exitCode": 1,
         "newFailures": [
           "tests/canonicalFrame.test.ts :: canonicalZUpToYUp inverts in the other order too",
@@ -112,11 +110,9 @@
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 54355,
-        "exitCode": 1,
-        "tail": " Test Files  1 failed | 94 passed | 2 skipped (97)\n      Tests  7 failed | 1099 passed | 16 skipped (1122)\n   Start at  10:57:09\n   Duration  8.02s (transform 1.06s, setup 0ms, import 2.48s, tests 3.43s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-9546-2.json\n[unit shard 3/3] pid=14813 elapsed=8.5s code=1 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M03": {
@@ -128,7 +124,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 25039,
+        "durationMs": 33563,
         "exitCode": 1,
         "newFailures": []
       },
@@ -137,19 +133,17 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 1343,
-        "baselineDurationMs": 1349,
+        "durationMs": 1352,
+        "baselineDurationMs": 1323,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/contourCorrectness.test.ts :: contour correctness — declared properties match the geometry an over-fine interval thins the levels and the declared interval follows"
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 54634,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  10:58:03\n   Duration  8.18s (transform 1.09s, setup 0ms, import 2.56s, tests 3.44s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-16433-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=21666 elapsed=8.7s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M04": {
@@ -159,28 +153,33 @@
       "file": "src/terrain/contour/contoursAt.ts",
       "effect": "a saddle exactly at the level takes the other pairing, relinking contour topology at the ambiguous cell",
       "conventional": {
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 33589,
+        "durationMs": 44730,
         "exitCode": 1,
-        "newFailures": []
+        "newFailures": [
+          "tests/terrainRunnerDensityWiring.test.ts :: terrainAnalysisRunner density wiring (samplePointScale) a strided gather reports the SCAN density, 4× the unscaled run"
+        ]
       },
       "specialized": {
-        "command": "vitest run tests/benchmark/contourCorrectness.test.ts",
+        "command": "vitest run tests/benchmark/contourCorrectness.test.ts tests/contourSaddleExactLevel.test.ts",
         "env": {},
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 1310,
-        "baselineDurationMs": 1349,
-        "exitCode": 0,
-        "newFailures": []
+        "durationMs": 1384,
+        "baselineDurationMs": 1324,
+        "exitCode": 1,
+        "newFailures": [
+          "tests/benchmark/contourCorrectness.test.ts :: contour correctness — topological invariants an ambiguous cell whose saddle value equals the level joins the high corners",
+          "tests/contourSaddleExactLevel.test.ts :: a bilinear saddle exactly on the traced level brackets the transition: the tie resolves with the below-z* side",
+          "tests/contourSaddleExactLevel.test.ts :: a bilinear saddle exactly on the traced level joins the two high corners: the low corners are the ones cut off",
+          "tests/contourSaddleExactLevel.test.ts :: connectivity through a cell whose saddle sits on the level runs the neighbour contour on through the bottom crossing, not the top one"
+        ]
       },
       "gate": {
-        "state": "survived",
-        "detail": "",
-        "durationMs": 117404,
-        "exitCode": 0,
-        "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M05": {
@@ -192,7 +191,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 29880,
+        "durationMs": 28951,
         "exitCode": 1,
         "newFailures": []
       },
@@ -201,8 +200,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 1333,
-        "baselineDurationMs": 1349,
+        "durationMs": 1318,
+        "baselineDurationMs": 1323,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/contourCorrectness.test.ts :: contour correctness — declared properties match the geometry the emitted level set covers the data range and nothing beyond it",
@@ -210,11 +209,9 @@
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 53469,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:00:54\n   Duration  8.19s (transform 1.09s, setup 0ms, import 2.62s, tests 3.45s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-31468-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=36694 elapsed=8.7s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M06": {
@@ -226,7 +223,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24495,
+        "durationMs": 26276,
         "exitCode": 1,
         "newFailures": []
       },
@@ -235,19 +232,17 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 936,
-        "baselineDurationMs": 926,
+        "durationMs": 1114,
+        "baselineDurationMs": 1109,
         "exitCode": 1,
         "newFailures": [
           "tests/terrainRasterEngine.test.ts :: the equivalence gate + auto-fallback (probe at init) a later dispatch failure demotes the session and recomputes on CPU"
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 81006,
-        "exitCode": 1,
-        "tail": " Test Files  1 failed | 53 passed (54)\n      Tests  1 failed | 718 passed (719)\n   Start at  11:02:08\n   Duration  15.71s (transform 711ms, setup 0ms, import 2.52s, tests 18.94s, environment 3ms)\n\nJSON report written to <temp>/olv-tally-terrain-43990-1.json\n[terrain shard 2/2] pid=44048 elapsed=16.1s code=1 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M07": {
@@ -264,21 +259,26 @@
         "newFailures": []
       },
       "specialized": {
-        "command": "vitest run tests/benchmark/runnerOutput.test.ts tests/benchmark/provenanceIntegrity.test.ts",
+        "command": "vitest run tests/benchmark/runnerOutput.test.ts tests/benchmark/provenanceIntegrity.test.ts tests/benchmark/requiredArtifactInventory.test.ts",
         "env": {},
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 10110,
-        "baselineDurationMs": 10275,
-        "exitCode": 0,
-        "newFailures": []
+        "durationMs": 10655,
+        "baselineDurationMs": 10607,
+        "exitCode": 1,
+        "newFailures": [
+          "tests/benchmark/requiredArtifactInventory.test.ts :: the required-artifact inventory is not satisfied by a copy of the page sitting elsewhere on disk",
+          "tests/benchmark/requiredArtifactInventory.test.ts :: the required-artifact inventory names every top-level file a published tree actually carries",
+          "tests/benchmark/requiredArtifactInventory.test.ts :: the required-artifact inventory names the rendered overview page whatever suites the manifest claims",
+          "tests/benchmark/requiredArtifactInventory.test.ts :: the required-artifact inventory reports its own diagnosis when the overview page is removed",
+          "tests/benchmark/runnerOutput.test.ts :: the verifier catches summary.html removed from the tree and from the listing",
+          "tests/benchmark/runnerOutput.test.ts :: the verifier the required-file list covers every top-level artifact the writer emits"
+        ]
       },
       "gate": {
-        "state": "survived",
-        "detail": "",
-        "durationMs": 122734,
-        "exitCode": 0,
-        "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M08": {
@@ -290,7 +290,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 24357,
+        "durationMs": 27925,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/artifacts.test.ts :: hash sensitivity — the strip is not over-broad a __proto__ key is a real own property in the canonical form",
@@ -302,8 +302,8 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 10005,
-        "baselineDurationMs": 9764,
+        "durationMs": 9854,
+        "baselineDurationMs": 10131,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/artifacts.test.ts :: hash sensitivity — the strip is not over-broad a __proto__ key is a real own property in the canonical form",
@@ -312,11 +312,9 @@
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 56804,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:05:14\n   Duration  8.51s (transform 1.14s, setup 0ms, import 2.75s, tests 3.45s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-53344-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=58585 elapsed=9.1s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M09": {
@@ -326,28 +324,30 @@
       "file": ".gitattributes",
       "effect": "a document the shipped markdown links to is dropped from the archive",
       "conventional": {
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 25438,
+        "durationMs": 46727,
         "exitCode": 1,
-        "newFailures": []
+        "newFailures": [
+          "tests/terrainRunnerDensityWiring.test.ts :: terrainAnalysisRunner density wiring (samplePointScale) a strided gather reports the SCAN density, 4× the unscaled run"
+        ]
       },
       "specialized": {
         "command": "node scripts/verify-archive-portability.mjs",
         "env": {},
-        "state": "survived",
+        "state": "detected",
         "detail": "",
-        "durationMs": 5219,
-        "baselineDurationMs": 6056,
-        "exitCode": 0,
-        "newFailures": []
+        "durationMs": 8040,
+        "baselineDurationMs": 7746,
+        "exitCode": 1,
+        "newFailures": [
+          "exit 1"
+        ]
       },
       "gate": {
-        "state": "survived",
-        "detail": "",
-        "durationMs": 124894,
-        "exitCode": 0,
-        "tail": "  ✓ witnessed     platform-portability\n      detectEndianness×1 platformId×3 comparisonMarkdown×14 comparisonCsv×13\n  ✓ witnessed     archive-verification\n      12 checks executed, 0 skipped\n\n✓ 9 witnessed, 0 unreached, 1 unwitnessed, 0 not executed\n  result: <repo>/validation/reachability/summary.json\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M10": {
@@ -359,7 +359,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 26550,
+        "durationMs": 25478,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/reporters.test.ts :: the CSV reporter an unavailable row says unavailable in the value column and carries the reason"
@@ -372,19 +372,17 @@
         },
         "state": "detected",
         "detail": "",
-        "durationMs": 952,
-        "baselineDurationMs": 1166,
+        "durationMs": 1320,
+        "baselineDurationMs": 1381,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/reporters.test.ts :: the CSV reporter an unavailable row says unavailable in the value column and carries the reason"
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 55868,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:08:15\n   Duration  8.32s (transform 1.17s, setup 0ms, import 2.72s, tests 3.39s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-68355-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=73579 elapsed=8.9s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M11": {
@@ -396,7 +394,7 @@
       "conventional": {
         "state": "detected",
         "detail": "",
-        "durationMs": 23993,
+        "durationMs": 26443,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/schema.test.ts :: the unavailable contract measured() rejects a non-finite value rather than serialising NaN as null"
@@ -409,8 +407,8 @@
         },
         "state": "detected",
         "detail": "",
-        "durationMs": 949,
-        "baselineDurationMs": 954,
+        "durationMs": 1289,
+        "baselineDurationMs": 1291,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/failureRecovery.test.ts :: a measurement the runtime cannot supply the metric constructors refuse to build a measurement out of a non-value",
@@ -418,11 +416,9 @@
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 55750,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:09:11\n   Duration  8.18s (transform 1.08s, setup 0ms, import 2.53s, tests 3.41s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-75226-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=80456 elapsed=8.7s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     },
     "M12": {
@@ -434,7 +430,7 @@
       "conventional": {
         "state": "survived",
         "detail": "",
-        "durationMs": 24033,
+        "durationMs": 25629,
         "exitCode": 1,
         "newFailures": []
       },
@@ -443,41 +439,48 @@
         "env": {},
         "state": "detected",
         "detail": "",
-        "durationMs": 727,
-        "baselineDurationMs": 709,
+        "durationMs": 1014,
+        "baselineDurationMs": 991,
         "exitCode": 1,
         "newFailures": [
           "tests/benchmark/roundtripFidelity.test.ts :: CRS survival — what is written reads back as the same CRS LAS 1.4 WKT survives, coexisting with the vertical GeoKeys"
         ]
       },
       "gate": {
-        "state": "detected",
-        "detail": "",
-        "durationMs": 57380,
-        "exitCode": 1,
-        "tail": "      Tests  1106 passed | 16 skipped (1122)\n   Start at  11:10:08\n   Duration  8.78s (transform 1.49s, setup 0ms, import 3.04s, tests 3.44s, environment 5ms)\n\nJSON report written to <temp>/olv-tally-unit-82063-2.json\nGATE TALLY bucket=unit passed=1106 skipped=16\n[unit shard 3/3] pid=87294 elapsed=9.3s code=0 signal=-\n"
+        "state": "not-executed",
+        "detail": "another configuration already detected it; the gate was reserved for survivors",
+        "durationMs": 0
       }
     }
   },
   "conventional": {
     "ref": "v0.6.1",
     "baselineExitCode": 1,
-    "baselineDurationMs": 23587,
+    "baselineDurationMs": 26668,
     "baselineTestsRun": 6198,
     "baselineFailures": [
       "tests/analyseContours.test.ts :: analyseContours exposes ASPRS accuracy and index-contour labels",
       "tests/analyseRailBanner.test.ts :: AnalysePanel — consolidated not-survey-grade banner fully georeferenced full-coverage result renders NO caveat banner",
       "tests/analyseRailBanner.test.ts :: AnalysePanel — consolidated not-survey-grade banner preview readiness renders ONE caveat stating both facts, not two stacked banners",
+      "tests/contourPurposeExportBytes.test.ts :: purpose selection changes the exported contour bytes (release-notes contract) stronger generalization yields fewer vertices (monotonic within the generalized style)",
+      "tests/contourPurposeExportBytes.test.ts :: purpose selection changes the exported contour bytes (release-notes contract) the four distinct-purpose exports are PAIRWISE-DISTINCT GeoJSON geometry",
       "tests/crossCheck.test.ts :: reference manifest honesty supplies only SLOPE-RASTER, and ships every other slot as pending",
+      "tests/evidenceRecord.test.ts :: buildEvidenceRecord — release mode accepts a complete, canonical, tagged, green run",
+      "tests/evidenceRecord.test.ts :: buildEvidenceRecord — release mode records every stage as passed in the release record",
       "tests/evidenceRecord.test.ts :: buildEvidenceRecord — release mode refuses a scientific scope that is not exactly one E4 claim",
+      "tests/evidenceRecord.test.ts :: buildEvidenceRecord — release mode refuses when a mandatory stage never ran",
+      "tests/evidenceRecord.test.ts :: buildEvidenceRecord — release mode requires the exact canonical Node when one is pinned",
       "tests/exportUnits.test.ts :: formatLinear metre and unknown use the metre formatter (km/m/cm grouping)",
       "tests/exportUnits.test.ts :: linearUnitLabel ft for foot, m for metre and unknown (the standing default)",
       "tests/gpuBackendDispatch.test.ts :: gpuBackend.derivatives — dispatch plumbing on a mock device uploads grid + mask, dispatches the right workgroup grid, reads both outputs",
       "tests/holdoutRmse.test.ts :: holdoutValidateDtm reports RMSE in metres via verticalUnitToMetres (feet source data)",
+      "tests/inspectionPresets.test.ts :: listPresets — the catalogue each preset has every required field with a sensible value",
+      "tests/inspectionPresets.test.ts :: listPresets — the catalogue hillshade is only on in the Terrain preset",
       "tests/provenanceConsistency.test.ts :: provenance consistency — export-ready run GeoJSON metadata mirrors the shared provenance field-by-field",
       "tests/releaseAssetVerifier.test.ts :: release:verify — scientific scope rejects a different E4 claim identity",
       "tests/releaseAssetVerifier.test.ts :: release:verify — scientific scope rejects more than one E4 claim",
       "tests/releaseAssetVerifier.test.ts :: release:verify — the happy path accepts a complete, self-consistent asset set",
+      "tests/releaseTruthLint.test.ts :: lint:release-truth fails on a stale dependency-audit version heading",
       "tests/reliefShading.test.ts :: shadeFromSlopeAspect matches computeHillshade for a derived surface (delegation is faithful)",
       "tests/reportFindings.test.ts :: buildInspectionSummary — density tier gating asserts USGS QL2 (below QL1) for airborne ALS between 2 and 8",
       "tests/reportFindings.test.ts :: buildInspectionSummary — density tier gating flags below-QL2 as caution for airborne ALS under 2 pts/m²",
@@ -506,7 +509,7 @@
   },
   "gate": {
     "baselineExitCode": 0,
-    "baselineDurationMs": 124569,
-    "policy": "every mutation"
+    "baselineDurationMs": 201178,
+    "policy": "mutations that survived both other configurations"
   }
 }
