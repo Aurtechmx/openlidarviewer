@@ -168,6 +168,65 @@ describe('compareGrids statistics', () => {
     expect(r.value.withinToleranceFraction).toBe(1);
   });
 
+  it('matches a nodata sentinel that float32 cannot hold exactly', () => {
+    // -9999.9 is a real GeoTIFF sentinel and is not representable in float32:
+    // a Float32 band stores it as -9999.900390625. Comparing the stored cell
+    // against the float64 tag value with === leaves the sentinel in the sample.
+    const nd = -9999.9;
+    expect(Math.fround(nd)).not.toBe(nd);
+    const spec: GridSpec = { originX: 0, originY: 0, cellSize: 1, width: 3, height: 1 };
+    // Cells 0 and 1 hold equal measurements; cell 2 is nodata in A and a real 0
+    // in B. Masking cell 2 leaves two cells that agree exactly, so rmse is 0 by
+    // definition. Reading the sentinel as a measurement instead contributes a
+    // single error of fround(9999.9), giving rmse = fround(9999.9)/sqrt(3).
+    const a: Raster = { spec, values: new Float32Array([1, 2, nd]), nodata: nd };
+    const b: Raster = { spec, values: new Float32Array([1, 2, 0]), nodata: nd };
+    const r = compareGrids(a, b, { tolerance: 0 });
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(r.value.n).toBe(2);
+    expect(r.value.rmse).toBe(0);
+    expect(r.value.rmse).not.toBeCloseTo(Math.fround(9999.9) / Math.sqrt(3), 3);
+    expect(r.mask.onlyB).toBe(1);
+    expect(r.mask.bothValid).toBe(2);
+  });
+
+  it('leaves a float64 grid comparing against the sentinel as stated', () => {
+    // The float32 rounding must not leak into a Float64Array, where the tag
+    // value is held exactly and a cell equal to fround(nodata) is a measurement.
+    const nd = -9999.9;
+    const spec: GridSpec = { originX: 0, originY: 0, cellSize: 1, width: 3, height: 1 };
+    const a: Raster = { spec, values: new Float64Array([1, 2, Math.fround(nd)]), nodata: nd };
+    const b: Raster = { spec, values: new Float64Array([1, 2, Math.fround(nd)]), nodata: nd };
+    const r = compareGrids(a, b, { tolerance: 0 });
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(r.value.n).toBe(3);
+  });
+
+  it('matches the sentinel in a slope gate stored as float32', () => {
+    // A large positive sentinel, as float rasters written by GDAL often carry.
+    // It is not float32-exact, so a === against the tag value fails and the
+    // sentinel reads as a slope of 3.4e38, which clears any gate. Both cells
+    // would then enter the headline statistics as steep ground.
+    const nd = 3.402823466e38;
+    expect(Math.fround(nd)).not.toBe(nd);
+    const a = raster([100, 200, 0, 90]);
+    const b = raster([101, 199, 180, 180]);
+    const r = compareGridsCircular(a, b, {
+      tolerance: 2,
+      slopeGate: { values: new Float32Array([12, 8, nd, nd]), minSlope: 2, nodata: nd },
+    });
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(r.value.n).toBe(2);
+    expect(r.flatExcluded).toBe(2);
+    expect(r.slopeUnknownExcluded).toBe(2);
+    // Cells 2 and 3 disagree by 180 and 90 degrees, which is what would have
+    // polluted the headline figure.
+    expect(r.flat?.maxAbsError).toBeCloseTo(180, 12);
+  });
+
   it('reports mask agreement separately from value agreement', () => {
     const nd = -9999;
     // Cells 0 and 1 hold data on both sides and agree exactly. Cell 2 is nodata
@@ -331,6 +390,36 @@ describe('compareGridsCircular', () => {
     if (r.status !== 'compared') return;
     expect(r.value.n).toBe(2);
     expect(r.flatExcluded).toBe(2);
+    // Both exclusions are unknown slope, not measured flat ground.
+    expect(r.slopeUnknownExcluded).toBe(2);
+  });
+
+  it('separates cells measured flat from cells with no slope reading', () => {
+    // Cell 2 is measured at 0.1, below the gate. Cell 3 has no slope reading.
+    const a = raster([100, 200, 0, 90]);
+    const b = raster([101, 199, 180, 180]);
+    const r = compareGridsCircular(a, b, {
+      tolerance: 2,
+      slopeGate: { values: [12, 8, 0.1, -9999], minSlope: 2, nodata: -9999 },
+    });
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(r.flatExcluded).toBe(2);
+    expect(r.slopeUnknownExcluded).toBe(1);
+  });
+
+  it('does not call an all-nodata slope raster flat ground', () => {
+    // Every slope cell is a sentinel, so nothing was measured as flat. Saying
+    // these cells "fell below the slope gate" asserts terrain nobody surveyed.
+    const r = compareGridsCircular(raster([0, 90, 180, 270]), raster([10, 80, 190, 260]), {
+      tolerance: 5,
+      slopeGate: { values: [-9999, -9999, -9999, -9999], minSlope: 2, nodata: -9999 },
+    });
+    expect(r.status).toBe('refused');
+    if (r.status !== 'refused') return;
+    expect(r.reason).toBe('no-comparable-cells');
+    expect(r.detail).toContain('0 below the minimum');
+    expect(r.detail).toContain('4 with no slope reading');
   });
 
   it('reports no flat bucket when every cell clears the gate', () => {
@@ -353,6 +442,9 @@ describe('compareGridsCircular', () => {
     if (r.status !== 'refused') return;
     expect(r.reason).toBe('no-comparable-cells');
     expect(r.detail).toContain('slope gate');
+    // All four were measured at 0 and found flat, none had a missing reading.
+    expect(r.detail).toContain('4 below the minimum');
+    expect(r.detail).toContain('0 with no slope reading');
   });
 
   it('refuses a slope raster of the wrong length', () => {

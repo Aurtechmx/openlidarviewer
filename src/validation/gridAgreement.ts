@@ -41,7 +41,14 @@ export type NumericGrid = readonly number[] | Float32Array | Float64Array;
 export interface Raster {
   readonly spec: GridSpec;
   readonly values: NumericGrid;
-  /** Sentinel for an empty cell, or null when only non-finite counts as empty. */
+  /**
+   * Sentinel for an empty cell, or null when only non-finite counts as empty.
+   *
+   * Stated at full float64 precision, as a GeoTIFF nodata tag gives it. When
+   * `values` is a Float32Array the sentinel is matched at float32 precision,
+   * because that is the precision the cells were stored at. See
+   * `effectiveNodata`.
+   */
   readonly nodata: number | null;
 }
 
@@ -153,11 +160,26 @@ export interface CircularCompareOptions extends GridCompareOptions {
 }
 
 export interface CircularGridAgreement extends GridAgreement {
-  /** Cells excluded because slope fell below the gate. */
+  /**
+   * Cells the slope gate excluded, for either reason: slope below the minimum,
+   * or no slope reading at all.
+   */
   readonly flatExcluded: number;
   /**
-   * The excluded cells measured anyway, so a reader can see whether the flat
-   * ground merely disagreed or disagreed wildly. Never pooled into `value`.
+   * How many of `flatExcluded` were excluded because the slope raster held
+   * nodata there rather than a slope below the minimum.
+   *
+   * Kept apart because the two say different things. A cell below the gate is
+   * flat ground where aspect is undefined; a cell with no slope reading is
+   * ground of unknown steepness that could not be shown to qualify. Without the
+   * split, an all-nodata slope raster is indistinguishable from genuinely flat
+   * terrain.
+   */
+  readonly slopeUnknownExcluded: number;
+  /**
+   * The excluded cells measured anyway, so a reader can see whether the
+   * excluded ground merely disagreed or disagreed wildly. Never pooled into
+   * `value`. Covers both exclusion reasons, as `flatExcluded` does.
    */
   readonly flat: ErrorStats | null;
   readonly minSlope: number | null;
@@ -177,6 +199,35 @@ function maskAt(mask: InterpolatedMask, i: number): boolean {
   // A Uint8Array mask is the shape a worker or a WASM pass hands back; treat
   // any non-zero as "interpolated" rather than requiring exactly 1.
   return mask instanceof Uint8Array ? mask[i] !== 0 : mask[i] === true;
+}
+
+/**
+ * The nodata sentinel expressed in the precision the values are actually stored
+ * in.
+ *
+ * `nodata` arrives as a float64 `number`, but a Float32Array holds the float32
+ * rounding of whatever was written to it. A GeoTIFF whose nodata tag reads
+ * -9999.9 stores -9999.900390625 in a Float32 band, so a plain `v === nodata`
+ * is false on every sentinel cell and the sentinel is read as a measurement.
+ * On a three-cell grid that turns an rmse of 0 over two comparable cells into
+ * an rmse of 5773.445 over three.
+ *
+ * Rounding the sentinel is the comparison, not a tolerance around it: whoever
+ * wrote the band applied exactly this rounding to exactly this value, so
+ * `Math.fround(nodata)` is the bit pattern the file uses to mean "empty", and
+ * matching it is exact rather than approximate. The alternative considered was
+ * refusing a sentinel that is not float32-exact. That was rejected because
+ * -9999.9 in a Float32 band is a correct, common raster rather than a
+ * misleading one; refusing it would withhold a comparison this module can make
+ * exactly, and this module's refusals are reserved for numbers that would be
+ * wrong.
+ *
+ * Widening to a near-equality would be the wrong fix: it would also swallow
+ * genuine measurements that land close to the sentinel.
+ */
+function effectiveNodata(values: NumericGrid, nodata: number | null): number | null {
+  if (nodata === null) return null;
+  return values instanceof Float32Array ? Math.fround(nodata) : nodata;
 }
 
 function isEmptyCell(v: number, nodata: number | null): boolean {
@@ -342,9 +393,11 @@ function tallyMask(a: Raster, b: Raster, cells: number): MaskAgreement {
   let bothNodata = 0;
   let onlyA = 0;
   let onlyB = 0;
+  const na = effectiveNodata(a.values, a.nodata);
+  const nb = effectiveNodata(b.values, b.nodata);
   for (let i = 0; i < cells; i++) {
-    const ea = isEmptyCell(a.values[i], a.nodata);
-    const eb = isEmptyCell(b.values[i], b.nodata);
+    const ea = isEmptyCell(a.values[i], na);
+    const eb = isEmptyCell(b.values[i], nb);
     if (!ea && !eb) bothValid++;
     else if (ea && eb) bothNodata++;
     else if (eb) onlyA++;
@@ -376,10 +429,12 @@ export function compareGrids(
   const mask = tallyMask(a, b, cells);
   const buckets = emptyBuckets();
   const im = options.interpolatedMask;
+  const na = effectiveNodata(a.values, a.nodata);
+  const nb = effectiveNodata(b.values, b.nodata);
   for (let i = 0; i < cells; i++) {
     const va = a.values[i];
     const vb = b.values[i];
-    if (isEmptyCell(va, a.nodata) || isEmptyCell(vb, b.nodata)) continue;
+    if (isEmptyCell(va, na) || isEmptyCell(vb, nb)) continue;
     const d = va - vb;
     buckets.all.push(d);
     if (im) {
@@ -387,7 +442,7 @@ export function compareGrids(
       else buckets.covered.push(d);
     }
   }
-  return finish(buckets, mask, options, cells, null);
+  return finish(buckets, mask, options, cells, null, 0);
 }
 
 /**
@@ -445,16 +500,24 @@ export function compareGridsCircular(
   const mask = tallyMask(a, b, cells);
   const buckets = emptyBuckets();
   const im = options.interpolatedMask;
+  const na = effectiveNodata(a.values, a.nodata);
+  const nb = effectiveNodata(b.values, b.nodata);
+  const ns = gate ? effectiveNodata(gate.values, gate.nodata ?? null) : null;
+  let slopeUnknown = 0;
   for (let i = 0; i < cells; i++) {
     const va = a.values[i];
     const vb = b.values[i];
-    if (isEmptyCell(va, a.nodata) || isEmptyCell(vb, b.nodata)) continue;
+    if (isEmptyCell(va, na) || isEmptyCell(vb, nb)) continue;
     const d = signedAngularDifferenceDeg(va, vb);
     if (gate) {
       const s = gate.values[i];
       // A cell with no slope reading cannot be shown to be steep enough, so it
-      // is excluded rather than assumed usable.
-      if (isEmptyCell(s, gate.nodata ?? null) || s < gate.minSlope) {
+      // is excluded rather than assumed usable. Counted apart from the cells
+      // that were measured and found flat, because "we know it is flat" and "we
+      // do not know how steep it is" are different claims about the terrain.
+      const unknownSlope = isEmptyCell(s, ns);
+      if (unknownSlope || s < gate.minSlope) {
+        if (unknownSlope) slopeUnknown++;
         buckets.flat.push(d);
         continue;
       }
@@ -465,7 +528,7 @@ export function compareGridsCircular(
       else buckets.covered.push(d);
     }
   }
-  return finish(buckets, mask, options, cells, gate ? gate.minSlope : null);
+  return finish(buckets, mask, options, cells, gate ? gate.minSlope : null, slopeUnknown);
 }
 
 /** Shared tail: apply the empty/min-cells refusals, then build the result. */
@@ -475,14 +538,21 @@ function finish(
   options: GridCompareOptions,
   cells: number,
   minSlope: number | null,
+  slopeUnknownExcluded: number,
 ): CircularGridComparison {
   const minCells = options.minCells ?? 1;
   const n = buckets.all.length;
   if (n === 0) {
+    // The two exclusion reasons are named separately. Reporting an all-nodata
+    // slope raster as "fell below the slope gate" asserts the terrain is flat,
+    // which is a measurement nobody made.
+    const excluded = buckets.flat.length;
+    const belowGate = excluded - slopeUnknownExcluded;
     const because =
-      buckets.flat.length > 0
-        ? `all ${buckets.flat.length} comparable cells fell below the ` +
-          `${String(minSlope)} slope gate`
+      excluded > 0
+        ? `all ${excluded} comparable cells were excluded by the ` +
+          `${String(minSlope)} slope gate (${belowGate} below the minimum, ` +
+          `${slopeUnknownExcluded} with no slope reading)`
         : 'no cell holds a value on both sides';
     return refuse('no-comparable-cells', `${because}; a zero-cell comparison is not reported`);
   }
@@ -500,6 +570,7 @@ function finish(
     covered: hasMask ? statsOf(buckets.covered, tol) : null,
     interpolated: hasMask ? statsOf(buckets.interpolated, tol) : null,
     flatExcluded: buckets.flat.length,
+    slopeUnknownExcluded,
     flat: buckets.flat.length > 0 ? statsOf(buckets.flat, tol) : null,
     minSlope,
   };

@@ -181,6 +181,51 @@ describe('checkpointAccuracy leakage refusal', () => {
     expect(dirty.status).toBe('refused');
   });
 
+  it('refuses a usage string it does not recognise instead of assuming independence', () => {
+    // Checkpoints come from survey CSV and JSON, where usage is free text and
+    // the parse boundary asserts the type. 'Control' is the registration
+    // control points the leakage rule exists to keep out; capitalised, it slips
+    // past a filter that only tests the four leaking spellings.
+    const r = checkpointAccuracy(
+      [...FIVE, { id: 'ctrl', measured: 100.01, reference: 100, usage: 'Control' as CheckpointUsage }],
+      { minSample: 3 },
+    );
+    expect(r.status).toBe('refused');
+    if (r.status !== 'refused') return;
+    expect(r.reason).toBe('unknown-usage');
+    expect(r.offendingIds).toEqual(['ctrl']);
+    expect(r.detail).toContain('Control');
+  });
+
+  it('refuses an unreadable usage before it can be classified as leaking', () => {
+    // The set holds nothing else wrong, and the five independent checkpoints
+    // would clear minSample, so a filtering implementation returns a number.
+    for (const usage of ['', 'INDEPENDENT', 'independent ', 'check', 'Registration']) {
+      const r = checkpointAccuracy(
+        [...FIVE, { id: 'u', measured: 100, reference: 100, usage: usage as CheckpointUsage }],
+        { minSample: 5 },
+      );
+      expect(r.status).toBe('refused');
+      if (r.status !== 'refused') continue;
+      expect(r.reason).toBe('unknown-usage');
+    }
+  });
+
+  it('names every unrecognised usage in one refusal', () => {
+    const r = checkpointAccuracy(
+      [
+        { id: 'p', measured: 100.1, reference: 100, usage: 'Control' as CheckpointUsage },
+        cp('q', 0.1),
+        { id: 'r', measured: 100.1, reference: 100, usage: 'gcp' as CheckpointUsage },
+      ],
+      { minSample: 1 },
+    );
+    expect(r.status).toBe('refused');
+    if (r.status !== 'refused') return;
+    expect(r.reason).toBe('unknown-usage');
+    expect(r.offendingIds).toEqual(['p', 'r']);
+  });
+
   it('accepts checkpoints explicitly marked independent', () => {
     const usage: CheckpointUsage = 'independent';
     const r = checkpointAccuracy([cp('i1', 0.1, { usage }), cp('i2', -0.1, { usage })], {
@@ -219,6 +264,30 @@ describe('checkpointAccuracy sample-size and input refusals', () => {
     if (r.status !== 'refused') return;
     expect(r.reason).toBe('duplicate-id');
     expect(r.offendingIds).toEqual(['dup']);
+  });
+
+  it('names the checkpoints it dropped for non-finite values', () => {
+    const r = checkpointAccuracy(
+      [
+        ...FIVE,
+        { id: 'nan-measured', measured: Number.NaN, reference: 100, usage: 'independent' },
+        { id: 'inf-reference', measured: 100, reference: Number.POSITIVE_INFINITY, usage: 'independent' },
+      ],
+      { minSample: 5 },
+    );
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    // The statistics are over the five usable checkpoints only, and the report
+    // says so rather than leaving n to imply the sample was the whole set.
+    expect(r.pooled.n).toBe(5);
+    expect(r.excludedNonFiniteIds).toEqual(['nan-measured', 'inf-reference']);
+  });
+
+  it('reports an empty exclusion list when every checkpoint was usable', () => {
+    const r = checkpointAccuracy(FIVE, { minSample: 5 });
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    expect(r.excludedNonFiniteIds).toEqual([]);
   });
 
   it('refuses when no checkpoint carries usable numbers', () => {
@@ -269,6 +338,43 @@ describe('checkpointAccuracy reference uncertainty', () => {
       12,
     );
     expect(r.pooled.uncertaintyCombinationId).toBe('test-quadrature-sum-v1');
+  });
+
+  it('refuses a negative reference sigma rather than squaring the sign away', () => {
+    // referenceRmse is the quadratic mean of the sigmas, so -0.5 and 0.5 both
+    // yield 0.5 and the sign error becomes a plausible number.
+    const r = checkpointAccuracy(
+      [cp('a', 0.1, { referenceSigma: -0.5 }), cp('b', -0.1, { referenceSigma: 0.03 })],
+      { minSample: 2 },
+    );
+    expect(r.status).toBe('refused');
+    if (r.status !== 'refused') return;
+    expect(r.reason).toBe('invalid-reference-sigma');
+    expect(r.offendingIds).toEqual(['a']);
+  });
+
+  it('refuses a non-finite reference sigma', () => {
+    for (const referenceSigma of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      const r = checkpointAccuracy(
+        [cp('a', 0.1, { referenceSigma }), cp('b', -0.1, { referenceSigma: 0.03 })],
+        { minSample: 2 },
+      );
+      expect(r.status).toBe('refused');
+      if (r.status !== 'refused') continue;
+      expect(r.reason).toBe('invalid-reference-sigma');
+    }
+  });
+
+  it('accepts a zero reference sigma as a stated perfect reference', () => {
+    // Zero says the survey claimed no uncertainty; null says it stated none.
+    // Only the second leaves referenceRmse null.
+    const r = checkpointAccuracy(
+      [cp('a', 0.1, { referenceSigma: 0 }), cp('b', -0.1, { referenceSigma: 0 })],
+      { minSample: 2 },
+    );
+    expect(r.status).toBe('reported');
+    if (r.status !== 'reported') return;
+    expect(r.pooled.referenceRmse).toBe(0);
   });
 
   it('leaves the combined figure null when no reference sigma was stated', () => {

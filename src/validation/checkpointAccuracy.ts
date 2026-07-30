@@ -11,7 +11,9 @@
  * ends up in a log while the number ends up in a report. The refusal names the
  * offending checkpoints so the caller can drop them deliberately and say so,
  * rather than this module silently filtering them and producing a figure whose
- * sample nobody can reconstruct.
+ * sample nobody can reconstruct. A usage string this module does not recognise
+ * is refused on the same grounds: checkpoints arrive from survey CSV and JSON,
+ * and a value that cannot be read cannot be shown to be independent.
  *
  * The second rule is that reference uncertainty is not silently disposed of.
  * Some standards subtract the reference survey's error from the observed error;
@@ -32,6 +34,9 @@
  *
  * The four leaking values are listed separately rather than collapsed into one
  * `leaked` flag so a refusal can say which kind of leakage happened.
+ *
+ * This is also the runtime whitelist: anything outside it is refused as
+ * `unknown-usage` rather than defaulting to independent.
  */
 export const CHECKPOINT_USAGES = [
   'independent',
@@ -110,17 +115,22 @@ export const CI_ASSUMPTION = 'normal-approximation-independent-samples';
 
 export type CheckpointRefusalReason =
   | 'leakage'
+  | 'unknown-usage'
   | 'insufficient'
   | 'no-valid-residuals'
   | 'invalid-min-sample'
   | 'invalid-ci-z'
+  | 'invalid-reference-sigma'
   | 'duplicate-id';
 
 export interface CheckpointRefusal {
   readonly status: 'refused';
   readonly reason: CheckpointRefusalReason;
   readonly detail: string;
-  /** Checkpoint ids responsible, for `leakage` and `duplicate-id`. */
+  /**
+   * Checkpoint ids responsible, for `leakage`, `unknown-usage`,
+   * `invalid-reference-sigma` and `duplicate-id`.
+   */
   readonly offendingIds?: readonly string[];
 }
 
@@ -170,6 +180,14 @@ export interface CheckpointAccuracy {
   readonly residuals: readonly Residual[];
   readonly ciZ: number;
   readonly ciAssumption: typeof CI_ASSUMPTION;
+  /**
+   * Checkpoints dropped because `measured` or `reference` was not finite.
+   *
+   * Reported rather than dropped quietly: `pooled.n` alone cannot tell a reader
+   * whether the sample is the whole set of checkpoints or a survivor subset, and
+   * a sample nobody can reconstruct is the thing this module refuses to produce.
+   */
+  readonly excludedNonFiniteIds: readonly string[];
 }
 
 export type CheckpointResult = CheckpointAccuracy | CheckpointRefusal;
@@ -183,6 +201,18 @@ function refuse(
   offendingIds?: readonly string[],
 ): CheckpointRefusal {
   return offendingIds ? { status: 'refused', reason, detail, offendingIds } : { status: 'refused', reason, detail };
+}
+
+/**
+ * Runtime check that a `usage` is one this module understands.
+ *
+ * The static type cannot carry this. A checkpoint set is normally parsed from a
+ * survey CSV or JSON, where `usage` is whatever string the surveyor typed, and
+ * an assertion at the parse boundary makes `'Control'` a `CheckpointUsage` as
+ * far as the compiler is concerned.
+ */
+function isUsage(v: string): v is CheckpointUsage {
+  return (CHECKPOINT_USAGES as readonly string[]).includes(v);
 }
 
 /** Nearest-rank quantile, so every reported value is an observed residual. */
@@ -292,6 +322,22 @@ export function checkpointAccuracy(
     return refuse('invalid-ci-z', `ciZ must be finite and > 0, got ${ciZ}`);
   }
 
+  // Checked before leakage, because leakage cannot be decided over a usage this
+  // module cannot read. Treating an unrecognised usage as independent is the
+  // failure mode that matters: 'Control' with a capital C would pass the leakage
+  // filter below and put registration control points into an accuracy figure.
+  const unknown = checkpoints.filter((c) => !isUsage(c.usage));
+  if (unknown.length > 0) {
+    const detail = unknown.map((c) => `${c.id} ("${String(c.usage)}")`).join(', ');
+    return refuse(
+      'unknown-usage',
+      `${unknown.length} checkpoint(s) state a usage that is not one of ` +
+        `${CHECKPOINT_USAGES.join(', ')}: ${detail}. ` +
+        'An unreadable usage cannot be shown to be independent.',
+      unknown.map((c) => c.id),
+    );
+  }
+
   const leaked = checkpoints.filter((c) => LEAKING_USAGES.includes(c.usage));
   if (leaked.length > 0) {
     const detail = leaked.map((c) => `${c.id} (${c.usage})`).join(', ');
@@ -319,28 +365,51 @@ export function checkpointAccuracy(
     );
   }
 
+  // A stated sigma that is negative or non-finite is refused rather than used.
+  // Every consumer of sigma squares it, so -0.5 and 0.5 produce the same
+  // referenceRmse and the sign error disappears into a plausible number. An
+  // absent sigma (null or undefined) is a different thing and stays legal: it
+  // means the survey stated no uncertainty.
+  const badSigma = checkpoints.filter((c) => {
+    const s = c.referenceSigma;
+    return s !== undefined && s !== null && !(Number.isFinite(s) && s >= 0);
+  });
+  if (badSigma.length > 0) {
+    return refuse(
+      'invalid-reference-sigma',
+      'referenceSigma must be finite and >= 0 when stated: ' +
+        badSigma.map((c) => `${c.id} (${String(c.referenceSigma)})`).join(', '),
+      badSigma.map((c) => c.id),
+    );
+  }
+
   const residuals: Residual[] = [];
   const pooled: number[] = [];
   const pooledSigmas: number[] = [];
+  const excludedNonFiniteIds: string[] = [];
   const byStratum = new Map<string, { residuals: number[]; sigmas: number[] }>();
 
   for (const c of checkpoints) {
-    if (!Number.isFinite(c.measured) || !Number.isFinite(c.reference)) continue;
+    if (!Number.isFinite(c.measured) || !Number.isFinite(c.reference)) {
+      excludedNonFiniteIds.push(c.id);
+      continue;
+    }
     const r = c.measured - c.reference;
     const stratum = c.stratum ?? UNSTRATIFIED;
     residuals.push({ id: c.id, stratum, residual: r });
     pooled.push(r);
     const sigma = c.referenceSigma;
-    if (sigma !== undefined && sigma !== null && Number.isFinite(sigma)) {
-      pooledSigmas.push(sigma);
-    }
     let bucket = byStratum.get(stratum);
     if (!bucket) {
       bucket = { residuals: [], sigmas: [] };
       byStratum.set(stratum, bucket);
     }
     bucket.residuals.push(r);
-    if (sigma !== undefined && sigma !== null && Number.isFinite(sigma)) bucket.sigmas.push(sigma);
+    // Validated above, so anything not null/undefined here is a usable sigma.
+    if (sigma !== undefined && sigma !== null) {
+      pooledSigmas.push(sigma);
+      bucket.sigmas.push(sigma);
+    }
   }
 
   if (pooled.length === 0) {
@@ -392,5 +461,6 @@ export function checkpointAccuracy(
     residuals,
     ciZ,
     ciAssumption: CI_ASSUMPTION,
+    excludedNonFiniteIds,
   };
 }
