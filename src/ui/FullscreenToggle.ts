@@ -5,7 +5,10 @@
  * (document root). The glyph swaps between an "expand to corners" enter mark
  * and an "arrows inward" exit mark, and stays in sync with the actual
  * Fullscreen API state, so Esc and a second click both leave the button
- * correct. Self-contained: no host wiring needed.
+ * correct. The host owes it three things: mount `element`, mount `status`
+ * beside it (the live region for a refused request), and call `dispose()` on
+ * teardown. The change listeners live on the document, which outlives any one
+ * host, so an undisposed instance never goes away.
  *
  * It does NOT track F11. F11 is the browser's own fullscreen, which is a
  * window state rather than an element one: it fires no `fullscreenchange` and
@@ -64,8 +67,33 @@ export function fullscreenSupported(doc: Document = document): boolean {
   return canRequest && enabled !== false;
 }
 
+/**
+ * How long a refusal message stays in the live region. Long enough for a
+ * polite announcement to be picked up, short enough that a stale sentence is
+ * not still sitting in the DOM when the user tries again.
+ */
+const STATUS_LINGER_MS = 6000;
+
 export class FullscreenToggle {
   readonly element: HTMLButtonElement;
+  /**
+   * Polite live region for a refused request. A separate node rather than the
+   * button's own text: anything inside the button becomes part of its
+   * accessible name, and the name has to keep saying what the button does.
+   * The host mounts it next to `element`.
+   */
+  readonly status: HTMLElement;
+
+  /**
+   * Handlers held so `dispose()` can detach them. The click one is on the
+   * button, which the host owns and may keep; the change ones are on the
+   * document, which outlives every Stage, so leaving them attached keeps this
+   * instance (and the button it closes over) alive for the page's lifetime.
+   */
+  private readonly _onClick: () => void;
+  private readonly _onFullscreenChange: () => void;
+  private readonly _supported: boolean;
+  private _statusTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.element = el('button', {
@@ -76,18 +104,48 @@ export class FullscreenToggle {
     }) as HTMLButtonElement;
     this.element.type = 'button';
     this.element.setAttribute('aria-pressed', 'false');
-    // No element-level Fullscreen API: the control has no effect, so it is not rendered.
-    if (!fullscreenSupported()) this.element.hidden = true;
+    this.status = el('div', { className: 'olv-fs-status olv-visually-hidden' });
+    this.status.setAttribute('role', 'status');
+    this.status.setAttribute('aria-live', 'polite');
 
-    this.element.addEventListener('click', () => {
+    this._supported = fullscreenSupported();
+    // No element-level Fullscreen API: the control has no effect, so it is not rendered.
+    if (!this._supported) {
+      this.element.hidden = true;
+      this.status.hidden = true;
+    }
+
+    this._onClick = () => {
       this.element.blur();
       this._toggle();
-    });
-    document.addEventListener('fullscreenchange', () => this._sync());
-    // Safari prefixed event.
-    document.addEventListener(
+    };
+    this._onFullscreenChange = () => this._sync();
+    // A hidden button cannot be clicked and an absent API fires no change
+    // event, so registering on an unsupported platform would only leave
+    // document listeners behind on behalf of a control nobody can reach.
+    if (this._supported) {
+      this.element.addEventListener('click', this._onClick);
+      document.addEventListener('fullscreenchange', this._onFullscreenChange);
+      // Safari prefixed event.
+      document.addEventListener(
+        'webkitfullscreenchange' as 'fullscreenchange',
+        this._onFullscreenChange,
+      );
+    }
+  }
+
+  /** Detach every listener. Pair with the host's own teardown. */
+  dispose(): void {
+    if (this._statusTimer !== null) {
+      clearTimeout(this._statusTimer);
+      this._statusTimer = null;
+    }
+    if (!this._supported) return;
+    this.element.removeEventListener('click', this._onClick);
+    document.removeEventListener('fullscreenchange', this._onFullscreenChange);
+    document.removeEventListener(
       'webkitfullscreenchange' as 'fullscreenchange',
-      () => this._sync(),
+      this._onFullscreenChange,
     );
   }
 
@@ -97,12 +155,13 @@ export class FullscreenToggle {
   }
 
   private _toggle(): void {
+    if (!this._supported) return;
     const d = document as FsDoc;
     if (this._isFullscreen()) {
       const exit = document.exitFullscreen ?? d.webkitExitFullscreen;
       const p = exit?.call(document);
       if (p && typeof (p as Promise<void>).catch === 'function') {
-        (p as Promise<void>).catch(() => {});
+        (p as Promise<void>).catch(() => this._announce('Could not leave full screen.'));
       }
       return;
     }
@@ -110,8 +169,31 @@ export class FullscreenToggle {
     const request = root.requestFullscreen ?? root.webkitRequestFullscreen;
     const p = request?.call(root);
     if (p && typeof (p as Promise<void>).catch === 'function') {
-      (p as Promise<void>).catch(() => {});
+      (p as Promise<void>).catch(() =>
+        this._announce('The browser refused full screen for this page.'),
+      );
     }
+  }
+
+  /**
+   * Report a refused request. Rejection stays non-fatal (the page is fine and
+   * the button is still correct), but silence read as a dead control, because
+   * a permissions-policy or iframe-sandbox refusal looks identical to nothing
+   * happening. Both the live region and the tooltip carry it so the message
+   * reaches a screen reader and a pointer user alike.
+   */
+  private _announce(message: string): void {
+    // The control is hidden where the API is missing, so there is no
+    // user-initiated request to report on and nothing is emitted.
+    if (!this._supported) return;
+    this.status.textContent = message;
+    this.element.title = message;
+    if (this._statusTimer !== null) clearTimeout(this._statusTimer);
+    this._statusTimer = setTimeout(() => {
+      this._statusTimer = null;
+      this.status.textContent = '';
+      this._sync(); // restores the title the refusal borrowed
+    }, STATUS_LINGER_MS);
   }
 
   private _sync(): void {

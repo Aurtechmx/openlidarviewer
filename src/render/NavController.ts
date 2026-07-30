@@ -249,11 +249,6 @@ export class NavController {
     window.addEventListener('keydown', this._onKeyDown);
     window.addEventListener('keydown', this._onCtrlKeyChange);
     window.addEventListener('keyup', this._onCtrlKeyChange);
-    // A tab switch mid-chord never delivers the keyup, which would leave the
-    // flag stuck and hand every later pinch to the browser.
-    window.addEventListener('blur', () => {
-      this._ctrlHeld = false;
-    });
     window.addEventListener('keyup', this._onKeyUp);
     canvas.addEventListener('click', this._onCanvasClick);
     document.addEventListener('pointerlockchange', this._onPointerLockChange);
@@ -855,6 +850,11 @@ export class NavController {
   private _handleBlur(): void {
     this._clearMovementKeys();
     this._clearOrbitKeys();
+    // A tab switch mid-chord never delivers the Ctrl keyup, which would leave
+    // the flag stuck and hand every later trackpad pinch to the browser. This
+    // reset used to be its own anonymous blur listener, which dispose() had no
+    // reference to remove, so it survived teardown and kept the controller alive.
+    this._ctrlHeld = false;
     // A grab in flight when focus is lost would never see its pointerup —
     // cancel it (and restore the idle cursor) rather than strand it.
     this._cancelPanGesture();
