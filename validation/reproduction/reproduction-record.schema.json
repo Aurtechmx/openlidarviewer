@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/reproduction-record.schema.json",
+  "title": "Independent reproduction record",
+  "description": "One record per independent reproduction: someone unaffiliated with this project took a released artifact, ran it on their own hardware, and published what they got. That is E6_INDEPENDENTLY_REPRODUCED, the top of the ladder in src/validation/evidenceLevel.ts, and the one level this project can never award itself. Validated by scripts/verify-reproduction-record.mjs, which refuses a record whose reproducer turns out to be us. NOTHING IN THIS DIRECTORY IS A REPRODUCTION: it holds one EXAMPLE record and nobody outside this project has reproduced anything.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordId",
+    "example",
+    "evidenceLevelClaimed",
+    "claimIds",
+    "reproducer",
+    "independence",
+    "artifactUnderTest",
+    "executed",
+    "environment",
+    "status",
+    "statusReason",
+    "rawOutput",
+    "scope"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "recordId": {
+      "description": "Stable identity. An example must be prefixed EXAMPLE- and carry example: true.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "example": { "type": "boolean" },
+    "evidenceLevelClaimed": {
+      "description": "This container is E6 and holds nothing else. A run by this project, however careful, is not a reproduction and belongs nowhere in here.",
+      "type": "string",
+      "enum": ["E6_INDEPENDENTLY_REPRODUCED"]
+    },
+    "claimIds": {
+      "description": "The claims this reproduction bears on. Each must exist in docs/validation/claim-register.yaml, which the verifier reads and never writes.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*$" }
+    },
+    "reproducer": { "$ref": "#/$defs/reproducer" },
+    "independence": { "$ref": "#/$defs/independence" },
+    "artifactUnderTest": { "$ref": "#/$defs/artifactUnderTest" },
+    "executed": { "$ref": "#/$defs/executed" },
+    "environment": { "$ref": "#/$defs/environment" },
+    "status": {
+      "description": "See REPRODUCTION_STATUSES in scripts/verify-reproduction-record.mjs.",
+      "type": "string",
+      "enum": [
+        "pending",
+        "not-executed",
+        "blocked-external",
+        "reproduced",
+        "partially-reproduced",
+        "not-reproduced",
+        "invalid",
+        "inconclusive"
+      ]
+    },
+    "statusReason": { "type": "string", "minLength": 1 },
+    "outcome": {
+      "description": "Present only when the reproducer actually ran something and reported numbers.",
+      "$ref": "#/$defs/outcome"
+    },
+    "rawOutput": { "$ref": "#/$defs/rawOutput" },
+    "scope": { "$ref": "#/$defs/scope" },
+    "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "reproducer": {
+      "description": "Who did it, in a form a third party can look up. A name alone is not identity: an ORCID, a ROR, or another persistent identifier is what lets a reader check that the reproducer exists and is not us.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "identifier", "affiliation"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "identifier": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "value"],
+          "properties": {
+            "scheme": { "type": "string", "enum": ["ORCID", "ROR", "ISNI", "ARK"] },
+            "value": { "type": "string", "minLength": 1 }
+          }
+        },
+        "affiliation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["organisation"],
+          "properties": {
+            "organisation": { "type": "string", "minLength": 1 },
+            "rorId": { "type": "string", "minLength": 1 },
+            "country": { "type": "string", "minLength": 1 }
+          }
+        },
+        "contact": {
+          "description": "How the reproducer can be reached to confirm the record. Optional, because a persistent identifier already carries that, and because a record should not force a private address into a public file.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "independence": {
+      "description": "The three ways a reproduction stops being one. All three are stated, all three are checked, and any of them being true is a refusal rather than a caveat.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["affiliatedWithProject", "fundedByProject", "contributedCode", "statement"],
+      "properties": {
+        "affiliatedWithProject": { "type": "boolean" },
+        "fundedByProject": { "type": "boolean" },
+        "contributedCode": { "type": "boolean" },
+        "statement": {
+          "description": "In the reproducer's own words: their relationship to this project, or the absence of one.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "artifactUnderTest": {
+      "description": "Exactly what they ran, pinned. A reproduction of an unspecified build reproduces nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "revision", "sourceArchiveSha256", "downloadUrl"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "revision": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "sourceArchiveSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "downloadUrl": {
+          "description": "Where they got it. https, and a host somebody else can reach.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "executed": {
+      "description": "What they actually ran, as commands, not as a description of what they intended.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commands", "startedAt", "completedAt"],
+      "properties": {
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "procedureUrl": { "type": "string", "minLength": 1 },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["datasetId", "sha256"],
+            "properties": {
+              "datasetId": { "type": "string", "minLength": 1 },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
+        "startedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "completedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "environment": {
+      "description": "The hardware and runtime it ran on. Different hardware is most of what a reproduction is for: a result that only appears on the author's laptop is not a result.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "cpu", "runtime"],
+      "properties": {
+        "os": { "type": "string", "minLength": 1 },
+        "cpu": { "type": "string", "minLength": 1 },
+        "ramGb": { "type": "number", "minimum": 0 },
+        "gpu": { "type": "string", "minLength": 1 },
+        "runtime": {
+          "description": "Node version, browser build, or whatever executed the code.",
+          "type": "string",
+          "minLength": 1
+        },
+        "containerDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparedAgainst", "agreementSummary", "deviations"],
+      "properties": {
+        "comparedAgainst": {
+          "description": "What their numbers were held against: a published figure, a release manifest digest, a claim register entry.",
+          "type": "string",
+          "minLength": 1
+        },
+        "agreementSummary": { "type": "string", "minLength": 1 },
+        "deviations": {
+          "description": "Every place their result differed. An empty array is a positive statement that there were none, and is only credible next to a raw output someone can read.",
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "rawOutput": {
+      "description": "Where the reproducer's own output lives, under their control, not ours. A reproduction whose evidence exists only inside this repository is a claim about a third party that the third party cannot be checked against.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["locationKind", "location", "publishedBy"],
+      "properties": {
+        "locationKind": {
+          "type": "string",
+          "enum": ["doi", "zenodo", "software-heritage", "public-repository", "public-url", "none"]
+        },
+        "location": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "retrievedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "publishedBy": {
+          "description": "Who controls the location. A reproduction published by this project is a copy of someone's claim, not their record.",
+          "type": "string",
+          "enum": ["reproducer", "third-party-archive", "this-project"]
+        }
+      }
+    },
+    "scope": {
+      "description": "What was reproduced and what was not. notReproduced may never be empty: a reproduction that states no boundary reads as covering the whole product.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reproduced", "notReproduced"],
+      "properties": {
+        "reproduced": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["claimId", "statement"],
+            "properties": {
+              "claimId": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*$" },
+              "statement": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "notReproduced": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
