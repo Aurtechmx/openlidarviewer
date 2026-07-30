@@ -32,6 +32,7 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs';
 import { escapeRegExp } from './regex-escape.mjs';
+import { compareCodeUnits } from './lib/codeUnitOrder.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative, posix } from 'node:path';
@@ -229,7 +230,7 @@ export function rootDocumentReferences(text) {
   for (const m of text.matchAll(/(?<![\w./@-])([A-Z][A-Z0-9_]*(?:_v\d[\w.]*)?\.md)(?![\w])/g)) {
     out.add(m[1]);
   }
-  return [...out].sort();
+  return [...out].sort(compareCodeUnits);
 }
 
 // ── archive acquisition ──────────────────────────────────────────────────────
@@ -606,7 +607,7 @@ check('markdown-link-graph', 'every required reference in the shipped markdown g
     if (referenced.size === 0) {
       f.push({ level: 'error', message: 'no shipped document names a tracked root-level document; the root-document tier verified nothing.' });
     }
-    rootTier = { available: true, documents: [...referenced].sort() };
+    rootTier = { available: true, documents: [...referenced].sort(compareCodeUnits) };
   }
 
   return {
@@ -618,7 +619,7 @@ check('markdown-link-graph', 'every required reference in the shipped markdown g
         archiveFiles: c.files.length,
         edgesByClass: classes,
         edgesBySyntax: via,
-        externalHosts: [...externalHosts].sort(),
+        externalHosts: [...externalHosts].sort(compareCodeUnits),
       },
       rootDocuments: rootTier,
       unresolved,
