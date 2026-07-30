@@ -31,7 +31,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # No dependency lifecycle script runs during install. The audit reads the
+      # resolved tree, so nothing here needs a package's postinstall to have run.
+      - run: npm ci --ignore-scripts
       # Fail the job only on high/critical advisories in shipped (non-dev) deps;
       # lower-severity transitive dev noise is reported but not blocking.
       - name: Audit production dependencies

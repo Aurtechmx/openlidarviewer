@@ -28,7 +28,7 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join } from 'node:path';
+import { dirname, resolve, join, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -337,7 +337,33 @@ function resolveExit(r, label) {
 // vitest sees it, so `npm run test:unit -- --shard=1/3` does the right thing too.
 const singleShard = rest.some((a) => a === '--shard' || a.startsWith('--shard='));
 const multiShard = rest.find((a) => a === '--shards' || a.startsWith('--shards='));
-const passthrough = rest.filter((a) => a !== multiShard);
+/**
+ * Extra arguments reach vitest untouched, so they are checked before they do.
+ *
+ * `spawn` is called without a shell, so nothing here can be a shell injection.
+ * What it can be is a path: this script is run by agents and CI as well as by
+ * hand, and an argument naming a file outside the repository would have vitest
+ * read or write somewhere nobody intended. A flag or a test-name pattern is
+ * left alone; anything shaped like a path has to resolve inside the tree.
+ */
+function checkedPassthrough(args) {
+  for (const a of args) {
+    if (a.includes('\0')) {
+      console.error('test-bucket: an argument contains a null byte.');
+      process.exit(2);
+    }
+    if (!a.startsWith('-') && /[/\\]/.test(a)) {
+      const target = resolve(ROOT, a);
+      if (target !== ROOT && !target.startsWith(ROOT + sep)) {
+        console.error(`test-bucket: "${a}" points outside the repository.`);
+        process.exit(2);
+      }
+    }
+  }
+  return args;
+}
+
+const passthrough = checkedPassthrough(rest.filter((a) => a !== multiShard));
 
 if (multiShard && !singleShard) {
   const n = Number(multiShard.includes('=') ? multiShard.split('=')[1] : NaN);
