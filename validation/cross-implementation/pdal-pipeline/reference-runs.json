@@ -1,0 +1,319 @@
+{
+  "generatedBy": "scripts/run-pdal-reference.mjs",
+  "reference": "PDAL",
+  "evidenceNote": "These outputs are the ONLY cross-implementation (E4) reference in the PDAL pipeline studies. The by-construction ground labels in fixtures/*.truth are E3 and are labelled as such wherever they are compared.",
+  "environment": {
+    "pdalVersion": "--------------------------------------------------------------------------------\npdal 2.10.2 (git-version: Release)\n--------------------------------------------------------------------------------",
+    "pdalResolvedPath": "/opt/homebrew/Cellar/pdal/2.10.2_1/bin/pdal",
+    "gdalTranslateVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "gdalTranslateResolvedPath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdal_translate",
+    "containerPinning": "not-executed",
+    "containerPinningReason": "The Docker daemon is not running on this host, so no pinned image was pulled and no digest exists to record; PDAL was invoked from the host PATH.",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v26.0.0"
+  },
+  "parameters": {
+    "smrf": {
+      "cell": 1,
+      "window": 16,
+      "slope": 0.15,
+      "threshold": 0.5,
+      "scalar": 0,
+      "cut": 0,
+      "groundClass": 2,
+      "otherClass": 1
+    },
+    "dtm": {
+      "outputType": "min",
+      "resolution": 1,
+      "radius": 0.45,
+      "originX": 0,
+      "originY": 0,
+      "width": 50,
+      "height": 50,
+      "nodata": -9999,
+      "dataType": "double",
+      "decimalPrecision": 6
+    }
+  },
+  "runs": [
+    {
+      "runId": "pc-01-plane-buildings__smrf",
+      "fixtureId": "pc-01-plane-buildings",
+      "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+      "kind": "ground",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-01-plane-buildings__smrf.json",
+      "pipelineSha256": "9e90c039efb583d2977859085e26106a7e6aaa13dbc0a89ea116d98c6b66e903",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-01-plane-buildings__smrf.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-01-plane-buildings__smrf.json",
+      "exitCode": 0,
+      "stderr": "(pdal pipeline filters.smrf Warning) SMRF running with a small number of cells (2500).  Consider changing cell size.",
+      "status": "ok",
+      "parameters": {
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "groundClass": 2,
+        "otherClass": 1
+      },
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-01-plane-buildings__smrf.csv",
+      "sha256": "fedddbb28f21a6a575a9af82b40081879f32fc668099956b4231b984b4bcc3c3"
+    },
+    {
+      "runId": "pc-02-rolling-buildings__smrf",
+      "fixtureId": "pc-02-rolling-buildings",
+      "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+      "kind": "ground",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-02-rolling-buildings__smrf.json",
+      "pipelineSha256": "ae21222b38ba52793a3fdfcd2d5821080c025876118ebc707bbfdc6a781f8d2e",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-02-rolling-buildings__smrf.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-02-rolling-buildings__smrf.json",
+      "exitCode": 0,
+      "stderr": "(pdal pipeline filters.smrf Warning) SMRF running with a small number of cells (2500).  Consider changing cell size.",
+      "status": "ok",
+      "parameters": {
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "groundClass": 2,
+        "otherClass": 1
+      },
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-02-rolling-buildings__smrf.csv",
+      "sha256": "481b145465b13b7bc321c00c057baff8e607d78741e59aeb6eb10b81b0a0e76c"
+    },
+    {
+      "runId": "pc-03-ridge-buildings__smrf",
+      "fixtureId": "pc-03-ridge-buildings",
+      "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+      "kind": "ground",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-03-ridge-buildings__smrf.json",
+      "pipelineSha256": "32f378a4b5ee4eaac5b439d713d19bed1fcf74f1f37922b2ac098986f7976343",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-03-ridge-buildings__smrf.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-03-ridge-buildings__smrf.json",
+      "exitCode": 0,
+      "stderr": "(pdal pipeline filters.smrf Warning) SMRF running with a small number of cells (2500).  Consider changing cell size.",
+      "status": "ok",
+      "parameters": {
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "groundClass": 2,
+        "otherClass": 1
+      },
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-03-ridge-buildings__smrf.csv",
+      "sha256": "c9b355ee129c7f8ff89047210dfc3a329620f1b1d7610f6a93e11023f6955c09"
+    },
+    {
+      "runId": "pc-04-plane-lowblunders__smrf",
+      "fixtureId": "pc-04-plane-lowblunders",
+      "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+      "kind": "ground",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-04-plane-lowblunders__smrf.json",
+      "pipelineSha256": "5e8ea73676073a90b94b8fd7bf25c916f362f4313877b5a1269a91b85bff86bc",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-04-plane-lowblunders__smrf.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-04-plane-lowblunders__smrf.json",
+      "exitCode": 0,
+      "stderr": "(pdal pipeline filters.smrf Warning) SMRF running with a small number of cells (2500).  Consider changing cell size.",
+      "status": "ok",
+      "parameters": {
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "groundClass": 2,
+        "otherClass": 1
+      },
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-04-plane-lowblunders__smrf.csv",
+      "sha256": "2ad4ba740a92217d4f8746d72ab37f504d346f5abeb2d36322da9a2c3eacb676"
+    },
+    {
+      "runId": "pc-05-plane-gap__smrf",
+      "fixtureId": "pc-05-plane-gap",
+      "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+      "kind": "ground",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-05-plane-gap__smrf.json",
+      "pipelineSha256": "c0ecb03eb95a4b53ed0082a3b6a227086274f222533baef4bd544597e45c5f75",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-05-plane-gap__smrf.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-05-plane-gap__smrf.json",
+      "exitCode": 0,
+      "stderr": "(pdal pipeline filters.smrf Warning) SMRF running with a small number of cells (2500).  Consider changing cell size.",
+      "status": "ok",
+      "parameters": {
+        "cell": 1,
+        "window": 16,
+        "slope": 0.15,
+        "threshold": 0.5,
+        "scalar": 0,
+        "cut": 0,
+        "groundClass": 2,
+        "otherClass": 1
+      },
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-05-plane-gap__smrf.csv",
+      "sha256": "9d716505709055ca75835d66a6a353e61eff707b83461312bda11c2926560828"
+    },
+    {
+      "runId": "pc-06-bare-plane__dtm-min",
+      "fixtureId": "pc-06-bare-plane",
+      "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+      "kind": "dtm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-06-bare-plane__dtm-min.json",
+      "pipelineSha256": "fa4b41ff1df0f6b51c2625a8af3d2bce7e98e2154f878f602dac70307712aa69",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-06-bare-plane__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-06-bare-plane__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif",
+      "rasterSha256": "eac413b4218c234d1dfcaad7f40616a3e9d088b761a07933d503c21b3883de7a",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-06-bare-plane__dtm-min.asc",
+      "sha256": "0da399e0c050001576a2b57b2747862b7c375179120570f35b7c215200785512"
+    },
+    {
+      "runId": "pc-07-bare-rolling__dtm-min",
+      "fixtureId": "pc-07-bare-rolling",
+      "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+      "kind": "dtm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-07-bare-rolling__dtm-min.json",
+      "pipelineSha256": "74f4c186e39df11ba7ace05944ca1132a153d7ae3f67d1e017e210808eac8fa0",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-07-bare-rolling__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-07-bare-rolling__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif",
+      "rasterSha256": "025ea7ac17f176073ba1b1da9cbb6552ba3ab9c2571561bf875954bf381ae349",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.asc",
+      "sha256": "e80a44425b51be4d98beb2bfb9cbee558484c66bb1555b7f68e634c4a4ce5fc9"
+    },
+    {
+      "runId": "pc-08-bare-ridge__dtm-min",
+      "fixtureId": "pc-08-bare-ridge",
+      "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+      "kind": "dtm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-08-bare-ridge__dtm-min.json",
+      "pipelineSha256": "f01d91ee8836af1105c204dc1f3bebc9d120ca0836f419a63e391de30513718b",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-08-bare-ridge__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-08-bare-ridge__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif",
+      "rasterSha256": "c4bec5f17c3dd210566a8d9d55b1209e5bb95f5157dbbd86b8bca897b8fd4bf1",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-08-bare-ridge__dtm-min.asc",
+      "sha256": "d276951a5f30a6a420cb3ac9b7940c8b959dccca73e6d52cdf6c271430fbf37c"
+    }
+  ]
+}

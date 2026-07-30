@@ -1,0 +1,22 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.text",
+      "filename": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv"
+    },
+    {
+      "type": "writers.gdal",
+      "filename": "validation/cross-implementation/pdal-pipeline/pdal/pc-07-bare-rolling__dtm-min.tif",
+      "gdaldriver": "GTiff",
+      "output_type": "min",
+      "resolution": 1,
+      "radius": 0.45,
+      "origin_x": 0,
+      "origin_y": 0,
+      "width": 50,
+      "height": 50,
+      "nodata": -9999,
+      "data_type": "double"
+    }
+  ]
+}
