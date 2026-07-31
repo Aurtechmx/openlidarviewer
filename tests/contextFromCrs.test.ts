@@ -10,7 +10,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { contextFactsFrom, lonLatTransformFrom } from '../src/geo/context/fromCrs';
+import { decideContextEligibility } from '../src/geo/context/contextEligibility';
+import { CONTEXT_STATUS } from '../src/geo/context/statusVocabulary';
 import type { CoordinateConverter, ConversionResult } from '../src/geo/CoordinateConverter';
+import { localCrs, unknownCrs } from '../src/geo/CoordinateTypes';
 import type { GeographicPoint, ResolvedCrs, Vec3 } from '../src/geo/CoordinateTypes';
 
 /** A converter scripted per-test: `answer` decides every toGeographic call. */
@@ -126,17 +129,25 @@ describe('contextFactsFrom', () => {
     expect(called).toBe(0);
   });
 
-  it('treats local and unknown CRS kinds as not placeable', () => {
-    for (const kind of ['local', 'unknown'] as const) {
+  it('treats local and unknown CRS kinds as not placeable, but only unknown as unknown', () => {
+    for (const [kind, crsKnown] of [
+      ['local', true],
+      ['unknown', false],
+    ] as const) {
       const facts = contextFactsFrom(
         crsOf({ kind }),
         fakeConverter(() => okAt(0, 0)),
         centre,
         true,
       );
-      expect(facts.crsKnown).toBe(false);
+      // A local frame IS declared — calling it unknown would make the decision
+      // say the scan carries no CRS, which is a different (wrong) statement.
+      expect(facts.crsKnown).toBe(kind === 'local' ? true : false);
+      expect(facts.crsKnown).toBe(crsKnown);
       expect(facts.geographic).toBe(false);
       expect(facts.projected).toBe(false);
+      // Neither kind may claim a transform, however plausible the converter is.
+      expect(facts.toWgs84Available).toBe(false);
     }
   });
 
@@ -159,5 +170,60 @@ describe('contextFactsFrom', () => {
   it('reports an undeclared horizontal datum as unknown, not defaulted', () => {
     const facts = contextFactsFrom(crsOf({}), fakeConverter(() => okAt(0, 0)), centre, true);
     expect(facts.horizontalDatumKnown).toBe(false);
+  });
+});
+
+/**
+ * The refusals the REAL bridge can produce, end to end. Hand-built facts can
+ * describe combinations `contextFactsFrom` never emits, so a decision test that
+ * skips the bridge can pass while the shipped path says something else. These
+ * go through `contextFactsFrom` for exactly that reason, and they use the real
+ * `localCrs()` / `unknownCrs()` builders rather than a hand-set `kind`.
+ */
+describe('contextFactsFrom → decideContextEligibility (real bridge)', () => {
+  const centre = { x: 10, y: 20 };
+  const decideFor = (
+    crs: ResolvedCrs | null,
+    converter: CoordinateConverter,
+    boundsFinite = true,
+  ) => decideContextEligibility(contextFactsFrom(crs, converter, centre, boundsFinite));
+
+  it('refuses a local site grid as LOCAL coordinates, not as a missing CRS', () => {
+    const d = decideFor(localCrs(), fakeConverter(() => FAIL));
+    expect(d.eligible).toBe(false);
+    expect(d.eligible === false && d.reasons).toEqual([
+      CONTEXT_STATUS.localCoordinates,
+      CONTEXT_STATUS.transformUnavailable,
+    ]);
+    // The specific wrong statement this bug produced.
+    expect(d.eligible === false && d.reasons).not.toContain(CONTEXT_STATUS.crsUnknown);
+    // A local frame has no geodetic datum to identify; localCoordinates says it.
+    expect(d.eligible === false && d.reasons).not.toContain(CONTEXT_STATUS.datumUnknown);
+  });
+
+  it('still refuses an unresolved CRS as an unknown CRS', () => {
+    const d = decideFor(unknownCrs(), fakeConverter(() => FAIL));
+    expect(d.eligible === false && d.reasons).toEqual([
+      CONTEXT_STATUS.crsUnknown,
+      CONTEXT_STATUS.transformUnavailable,
+    ]);
+  });
+
+  it('refuses a layer with no CRS at all as an unknown CRS', () => {
+    const d = decideFor(null, fakeConverter(() => okAt(0, 0)));
+    expect(d.eligible === false && d.reasons).toEqual([
+      CONTEXT_STATUS.crsUnknown,
+      CONTEXT_STATUS.transformUnavailable,
+    ]);
+  });
+
+  it('accepts a projected CRS with a known datum and a probing transform', () => {
+    const d = decideFor(crsOf({ horizontalDatum: 'WGS 84' }), fakeConverter(() => okAt(5, 46)));
+    expect(d).toEqual({ eligible: true });
+  });
+
+  it('refuses a projected CRS whose datum is undeclared', () => {
+    const d = decideFor(crsOf({}), fakeConverter(() => okAt(5, 46)));
+    expect(d.eligible === false && d.reasons).toEqual([CONTEXT_STATUS.datumUnknown]);
   });
 });

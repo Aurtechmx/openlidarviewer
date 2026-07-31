@@ -59,8 +59,10 @@ export function decideContextEligibility(facts: ContextLayerFacts): ContextEligi
   if (!facts.crsKnown) {
     reasons.push(CONTEXT_STATUS.crsUnknown);
   }
-  if (facts.crsKnown && !facts.horizontalDatumKnown) {
-    // Only meaningful once a CRS exists; without one, crsUnknown already covers it.
+  if (facts.crsKnown && (facts.geographic || facts.projected) && !facts.horizontalDatumKnown) {
+    // Only meaningful for an earth-referenced frame: without a CRS, crsUnknown
+    // already covers it, and a local frame has no geodetic datum to identify —
+    // localCoordinates below is the accurate refusal there.
     reasons.push(CONTEXT_STATUS.datumUnknown);
   }
   if (facts.crsKnown && !facts.geographic && !facts.projected) {

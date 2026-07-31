@@ -59,13 +59,22 @@ export function contextFactsFrom(
   const kind = crs?.kind ?? 'unknown';
   const geographic = kind === 'geographic';
   const projected = kind === 'projected';
-  const crsKnown = crs !== null && (geographic || projected);
+  // `crsKnown` answers "does this layer declare an identified frame at all?",
+  // NOT "is that frame placeable on Earth". A `local` CRS is a declared frame:
+  // reporting it as unknown here would make the eligibility decision say the
+  // scan "carries no coordinate reference system", when the honest refusal is
+  // that its frame is local. Only a missing CRS, or one resolved as `unknown`,
+  // is genuinely unknown.
+  const crsKnown = crs !== null && kind !== 'unknown';
+  // Placeability is the separate question, and it gates the probe: a local
+  // frame has no route to WGS84 to probe for.
+  const placeable = geographic || projected;
   // Probe with the real transform rather than trusting a capability flag:
   // an `ok` + finite answer at the layer's own centre is the only evidence
   // that footprint corners will convert too. Skipped (false) when the CRS is
   // already unusable, so a local layer never reports a spurious capability.
   const toWgs84Available =
-    crsKnown && boundsFinite
+    placeable && boundsFinite
       ? lonLatTransformFrom(converter, crs as ResolvedCrs)(probePoint.x, probePoint.y) !== null
       : false;
   return {
