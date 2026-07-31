@@ -71,6 +71,7 @@ import { buildPointFilterAccept } from './pointFilterAccept';
 import { PHI_CONJUGATE } from './streaming/fadeDither';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
+import { ElevationFilterGpu } from './elevationFilterGpu';
 import {
   GpuErrorLedger,
   wireGpuDeviceErrors,
@@ -1053,21 +1054,17 @@ export class Viewer {
   private readonly _materialsWithClass = new WeakSet<THREE.PointsNodeMaterial>();
 
   // ── Elevation filter (v0.5.6) ────────────────────────────────────────────
-  // Shared uniforms driving a per-point size multiply, mirroring the class
-  // mask. `enabled` gates the whole test (0 → identity, so the unfiltered scene
-  // is pixel-identical); `axisIsZ` selects the up-axis component (1 = z / Z-up,
-  // 0 = y / Y-up); `min`/`max` are the inclusive window in ATTRIBUTE space
-  // (origin-shifted), converted from the world window by `elevationFilterUniform`.
-  private readonly _elevFilterEnabled = uniform(0);
-  private readonly _elevFilterAxisIsZ = uniform(1);
-  private readonly _elevFilterMin = uniform(0);
-  private readonly _elevFilterMax = uniform(0);
+  // Elevation filter: the GPU state (shared enabled gate + per-material window +
+  // mask node builder) lives in `ElevationFilterGpu`, extracted so this monolith
+  // does not grow to hold it. The pure world→attribute conversion is still
+  // `elevationFilterUniform`.
+  private readonly _elevGpu = new ElevationFilterGpu();
   /**
    * Materials whose mesh carries the named `aPos` instance-position attribute —
    * only these fold the elevation multiply into their size node. Both static
    * clouds and streaming nodes get `aPos` (they share `buildPointMesh`), so both
-   * are filtered by the shared uniforms; any mesh built without it keeps the
-   * prior graph and never references a missing attribute.
+   * can fold; any mesh built without it keeps the prior graph and never
+   * references a missing attribute.
    */
   private readonly _materialsWithElev = new WeakSet<THREE.PointsNodeMaterial>();
 
@@ -3550,14 +3547,16 @@ export class Viewer {
    * — that only moves uniform values and needs no rebuild.
    */
   private _reapplyAllSizeModes(): void {
-    for (const { material } of this._clouds.values()) {
+    for (const material of this._allPointMaterials()) {
       this._applySizeMode(material);
       material.needsUpdate = true;
     }
-    for (const material of this._streamingMaterials()) {
-      this._applySizeMode(material);
-      material.needsUpdate = true;
-    }
+  }
+
+  /** Every live point material — static clouds then streaming nodes. */
+  private *_allPointMaterials(): Generator<THREE.PointsNodeMaterial> {
+    for (const { material } of this._clouds.values()) yield material;
+    yield* this._streamingMaterials();
   }
 
   /**
@@ -3666,11 +3665,12 @@ export class Viewer {
         ? staticCloud.origin[axisIdx]
         : 0;
     const u = elevationFilterUniform(range, axis, origin);
-    const wasActive = this._elevFilterEnabled.value !== 0;
-    this._elevFilterEnabled.value = u.enabled;
-    this._elevFilterAxisIsZ.value = axisIsZ ? 1 : 0;
-    this._elevFilterMin.value = u.min;
-    this._elevFilterMax.value = u.max;
+    const wasActive = this._elevGpu.isActive();
+    // Push the window into the shared gate + every live material's own uniforms.
+    // A material not yet folded seeds from the same record when it first folds,
+    // so it still matches. (Stage A: one window for all — Stage B converts per
+    // cloud before this call.)
+    this._elevGpu.writeWindow(u.enabled, axisIsZ ? 1 : 0, u.min, u.max, this._allPointMaterials());
     // Turning the filter on or off changes the size graph's SHAPE (the elevation
     // fold enters or leaves the compiled shader), so rebuild the affected
     // pipelines. Merely moving the window while it stays active only changes
@@ -5418,7 +5418,7 @@ export class Viewer {
     // when the user actually turns a filter on (which re-runs this via
     // `_reapplyAllSizeModes`, rebuilding the pipeline for that transition).
     const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
-    const foldElev = this._materialsWithElev.has(material) && this._elevFilterEnabled.value !== 0;
+    const foldElev = this._materialsWithElev.has(material) && this._elevGpu.isActive();
     const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
     // A streaming node mid-dissolve folds a per-point opaque dither (same
     // size×mask shape as the filters); dropped again the moment it settles.
@@ -5433,7 +5433,7 @@ export class Viewer {
     // `materialPointSize` (the node form of `material.size`) so the pixel size is
     // preserved while the mask(s) multiply it, then fold each active multiplier.
     let node: TslNode = adaptive ? this._adaptiveSizeNode : materialPointSize;
-    if (foldElev) node = node.mul(this._elevMaskMultiplier());
+    if (foldElev) node = node.mul(this._elevGpu.maskMultiplier(material));
     if (foldClass) node = node.mul(this._classMaskMultiplier());
     if (foldInten) node = node.mul(this._intenMaskMultiplier());
     if (foldFade) node = node.mul(this._fadeMaskMultiplier(material));
@@ -5510,29 +5510,6 @@ export class Viewer {
     const aClass: TslNode = attribute('aClass');
     const code: TslNode = int(aClass);
     return (this._classMaskUniform as TslNode).element(code);
-  }
-
-  /**
-   * The per-point elevation-mask multiplier (v0.5.6): reads the up-axis
-   * component of the instanced position (`aPos`), tests it against the inclusive
-   * `[min, max]` window, and resolves to `1` (in range or filter off) or `0`
-   * (out of range) — multiplying an out-of-range point's size by 0 collapses its
-   * sprite to nothing, exactly like the class mask.
-   *
-   * Built from `step` + `mix` only (no boolean nodes): `lo = step(min, elev)` is
-   * 1 when `elev >= min`; `hi = step(elev, max)` is 1 when `elev <= max`; their
-   * product is the inclusive in-range flag. `mix(1, inRange, enabled)` yields the
-   * identity `1` when the filter is disabled, so the graph is a no-op until a
-   * window is set. `axisIsZ` picks z (Z-up) or y (Y-up) without a rebuild.
-   */
-  private _elevMaskMultiplier(): TslNode {
-    const pos: TslNode = attribute('aPos');
-    const axisIsZ: TslNode = this._elevFilterAxisIsZ;
-    const elev: TslNode = pos.z.mul(axisIsZ).add(pos.y.mul(axisIsZ.oneMinus()));
-    const lo: TslNode = step(this._elevFilterMin as TslNode, elev); // elev >= min
-    const hi: TslNode = step(elev, this._elevFilterMax as TslNode); // elev <= max
-    const inRange: TslNode = lo.mul(hi);
-    return mix(float(1), inRange, this._elevFilterEnabled as TslNode);
   }
 
   /**
@@ -6205,10 +6182,10 @@ export class Viewer {
     return {
       classActive: this._classFiltered,
       classMask: this._classMaskUniform.array as ArrayLike<number>,
-      elevActive: this._elevFilterEnabled.value !== 0,
-      elevAxisIdx: this._elevFilterAxisIsZ.value === 1 ? 2 : 1,
-      elevMin: this._elevFilterMin.value as number,
-      elevMax: this._elevFilterMax.value as number,
+      elevActive: this._elevGpu.isActive(),
+      elevAxisIdx: this._elevGpu.axisIsZ === 1 ? 2 : 1,
+      elevMin: this._elevGpu.min,
+      elevMax: this._elevGpu.max,
       intenActive: this._intenFilterEnabled.value !== 0,
       intenMin: this._intenFilterMin.value as number,
       intenMax: this._intenFilterMax.value as number,
