@@ -113,7 +113,7 @@
     "validation:impact:summary": "node scripts/build-impact-summary.mjs",
     "validation:impact:summary:check": "node scripts/build-impact-summary.mjs --check",
     "package:source": "bash scripts/package.sh --source-only",
-    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:upload-queue-wired && npm run lint:monolith-size && npm run lint:claim-register && npm run lint:release-truth && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:upload-queue-wired && npm run lint:monolith-size && npm run lint:claim-register && npm run validation:datasets:verify && npm run lint:release-truth && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
@@ -125,7 +125,9 @@
     "lint:python-version": "node scripts/lint-python-version.mjs",
     "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs",
     "validation:freeze:verify": "node scripts/verify-freeze-claims.mjs",
+    "validation:datasets:verify": "node scripts/verify-dataset-register.mjs",
     "validation:study:verify": "node scripts/verify-cross-implementation-study.mjs",
+    "validation:matrix:verify": "MATRIX_VERIFY=1 vitest run tests/rasterAgreementMatrix.test.ts",
     "lint:doc-links": "node scripts/lint-doc-links.mjs"
   },
   "dependencies": {

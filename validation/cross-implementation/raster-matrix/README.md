@@ -55,6 +55,17 @@ The third step recomputes the OLV side, rewrites `olv/` and `results.json`, and
 asserts the comparisons. Tolerances live in `FROZEN_TOLERANCES` in the test, with
 the derivation each was fixed from before any result was seen.
 
+To check the committed evidence instead of replacing it:
+
+```
+MATRIX_VERIFY=1 npx vitest run tests/rasterAgreementMatrix.test.ts
+```
+
+Same computation, opposite direction. `results.json` and `olv-SHA256SUMS` become
+the expectation rather than the output, and a mismatch fails instead of landing
+in a diff. Regenerating a record on every run makes it unfalsifiable by its own
+procedure, so this is the mode the release gate uses.
+
 ## Metrics
 
 Slope uses plain absolute error, which is what a magnitude takes. Aspect uses
