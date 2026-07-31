@@ -1152,6 +1152,12 @@ export class MeasurePanel {
       const openProfileFocus = (): void => this._openProfileFocus(s, chartWrap);
       chartWrap.addEventListener('click', openProfileFocus);
       chartWrap.addEventListener('keydown', (e) => {
+        // Only when the wrapper itself has focus. The expand button sits inside
+        // it, and a bubbling Enter used to be preventDefault()ed here before the
+        // browser could synthesise the button's click: the view still opened,
+        // but through the wrapper, so focus returned to the wrapper instead of
+        // the control the user actually activated.
+        if (e.target !== chartWrap) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           openProfileFocus();

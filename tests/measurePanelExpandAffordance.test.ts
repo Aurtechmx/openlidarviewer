@@ -67,6 +67,15 @@ describe('the profile chart offers a working way into the focus view', () => {
     expect(CSS).toMatch(/\.olv-mp-chart-expand:hover/);
   });
 
+  it('lets the button own its own keyboard activation', () => {
+    // The wrapper is role="button" with its own Enter/Space handler. Without
+    // the target check, a bubbling Enter from the nested button was
+    // preventDefault()ed before the browser could synthesise the button's
+    // click: the view opened through the wrapper, so focus returned there
+    // rather than to the control the user activated.
+    expect(PANEL).toMatch(/if \(e\.target !== chartWrap\) return;/);
+  });
+
   it('leaves no second expand control in the chip strip', () => {
     // The strip holds zoom chips. A second control there is what overflowed the
     // panel, so its absence is the regression this file guards.
