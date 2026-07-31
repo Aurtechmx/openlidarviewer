@@ -73,6 +73,12 @@ import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import { ElevationFilterGpu } from './elevationFilterGpu';
 import {
+  elevWindowFor,
+  elevWindowForMaterial,
+  type ElevFallback,
+  type ElevLayer,
+} from './elevationWindowResolver';
+import {
   GpuErrorLedger,
   wireGpuDeviceErrors,
   type GpuDeviceLike,
@@ -1059,6 +1065,8 @@ export class Viewer {
   // does not grow to hold it. The pure world→attribute conversion is still
   // `elevationFilterUniform`.
   private readonly _elevGpu = new ElevationFilterGpu();
+  /** Elevation window in WORLD units (undefined = off); each cloud converts it. */
+  private _elevFilterWorld: readonly [number, number] | undefined;
   /**
    * Materials whose mesh carries the named `aPos` instance-position attribute —
    * only these fold the elevation multiply into their size node. Both static
@@ -1199,6 +1207,16 @@ export class Viewer {
    * @param canvas - The `<canvas>` element to render into.
    */
   constructor(canvas: HTMLCanvasElement) {
+    // The resolver closes over the cloud registry, which only the Viewer owns.
+    this._elevGpu.setWindowResolver((material) =>
+      elevWindowForMaterial(
+        this._elevFilterWorld,
+        this._elevLayers(),
+        material,
+        this._primaryElevLayer(),
+      ),
+    );
+
     // ── Renderer ──────────────────────────────────────────────────────────
     this._renderer = new THREE.WebGPURenderer({
       canvas,
@@ -3641,42 +3659,42 @@ export class Viewer {
 
   /**
    * Set the elevation filter window in world/source units, or clear it with
-   * `undefined`. Points whose up-axis coordinate falls outside the inclusive
-   * window collapse to zero size (hidden) on the next frame; the unfiltered
-   * scene is pixel-identical. The window is converted to the primary cloud's
-   * attribute space (origin-shifted along the up-axis) by the pure
-   * `elevationFilterUniform` core. Applies to static clouds and streaming nodes
-   * alike, since both come from the shared `buildPointMesh`.
+   * `undefined`. Out-of-window points collapse to zero size on the next frame;
+   * the unfiltered scene is pixel-identical. Each cloud converts the window with
+   * its OWN origin and up-axis (`elevationWindowResolver.ts`), so layers at
+   * different origins clip at the same true height.
    */
   setElevationFilter(range: readonly [number, number] | undefined): void {
-    const axisIsZ = this._worldUp.z === 1;
-    const axis: UpAxis = axisIsZ ? 2 : 1;
-    const axisIdx = axisIsZ ? 2 : 1;
-    // The world-space origin that was subtracted from the positions, along the
-    // up-axis. Static clouds record it as `origin`; the streaming source as
-    // `renderOrigin`. Prefer the streaming source when present, else the first
-    // static cloud. Clouds that share an origin (the common case) convert
-    // identically.
-    const streamingCloud = this._streaming?.cloud;
-    const staticCloud = this._clouds.values().next().value?.cloud;
-    const origin = streamingCloud
-      ? streamingCloud.renderOrigin[axisIdx]
-      : staticCloud
-        ? staticCloud.origin[axisIdx]
-        : 0;
-    const u = elevationFilterUniform(range, axis, origin);
+    this._elevFilterWorld = range ? [range[0], range[1]] : undefined;
     const wasActive = this._elevGpu.isActive();
-    // Push the window into the shared gate + every live material's own uniforms.
-    // A material not yet folded seeds from the same record when it first folds,
-    // so it still matches. (Stage A: one window for all — Stage B converts per
-    // cloud before this call.)
-    this._elevGpu.writeWindow(u.enabled, axisIsZ ? 1 : 0, u.min, u.max, this._allPointMaterials());
-    // Turning the filter on or off changes the size graph's SHAPE (the elevation
-    // fold enters or leaves the compiled shader), so rebuild the affected
-    // pipelines. Merely moving the window while it stays active only changes
-    // uniform values and needs no rebuild — the mask node re-reads them per frame.
-    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
+    const enabled = elevationFilterUniform(range, 2, 0).enabled;
+    this._elevGpu.apply(enabled, this._allPointMaterials());
+    // On/off changes the size graph's SHAPE, so rebuild pipelines on that
+    // transition only; moving the window while active is a uniform-only change.
+    if (wasActive !== (enabled !== 0)) this._reapplyAllSizeModes();
     this._bumpRenderActivity();
+  }
+
+  /** Each static layer with the two facts that decide its own conversion. */
+  private *_elevLayers(): Generator<ElevLayer<THREE.PointsNodeMaterial>> {
+    for (const entry of this._clouds.values()) {
+      const axis: UpAxis = isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1;
+      yield { material: entry.material, originAlongAxis: entry.cloud.origin[axis], axis };
+    }
+  }
+
+  /**
+   * Scene-level origin and axis: streaming source if open, else the first static
+   * cloud. Streaming nodes share it, an unregistered mesh falls back to it, and
+   * the CPU pick predicate speaks it — the pre-gate2 choice, unchanged for one
+   * cloud.
+   */
+  private _primaryElevLayer(): ElevFallback {
+    const axis: UpAxis = this._worldUp.z === 1 ? 2 : 1;
+    const streaming = this._streaming?.cloud;
+    if (streaming) return { originAlongAxis: streaming.renderOrigin[axis], axis };
+    const staticCloud = this._clouds.values().next().value?.cloud;
+    return { originAlongAxis: staticCloud ? staticCloud.origin[axis] : 0, axis };
   }
 
   /**
@@ -6179,13 +6197,20 @@ export class Viewer {
    * pick and shared across every candidate buffer.
    */
   private _currentFilterWindow(): PointFilterWindow {
+    // Elevation still resolves against the PRIMARY cloud: correct for one cloud,
+    // and unchanged from before. With several layers at different origins the GPU
+    // now clips each correctly while this predicate speaks only the primary
+    // cloud's space, so pick and screen can disagree on a secondary layer. Stage C
+    // of docs/gate2-per-cloud-filter-plan.md makes this per-cloud too.
+    const p = this._primaryElevLayer();
+    const primary = elevWindowFor(this._elevFilterWorld, p.originAlongAxis, p.axis);
     return {
       classActive: this._classFiltered,
       classMask: this._classMaskUniform.array as ArrayLike<number>,
       elevActive: this._elevGpu.isActive(),
-      elevAxisIdx: this._elevGpu.axisIsZ === 1 ? 2 : 1,
-      elevMin: this._elevGpu.min,
-      elevMax: this._elevGpu.max,
+      elevAxisIdx: primary.axisIsZ === 1 ? 2 : 1,
+      elevMin: primary.min,
+      elevMax: primary.max,
       intenActive: this._intenFilterEnabled.value !== 0,
       intenMin: this._intenFilterMin.value as number,
       intenMax: this._intenFilterMax.value as number,
