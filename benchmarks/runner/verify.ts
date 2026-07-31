@@ -32,6 +32,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { compareCodeUnits } from '../../src/canonicalHash';
 import { nodeSha256Hex } from '../framework/node';
@@ -335,6 +336,22 @@ function treeFiles(dir: string, prefix = ''): string[] {
 /** Fields that must never carry private machine information. */
 const PRIVACY_FORBIDDEN = /(?:\/Users\/|\/home\/|C:\\Users\\|\b(?:\d{1,3}\.){3}\d{1,3}\b)/;
 
+// The fixed prefixes cover the standard macOS/Linux/Windows homes. A runner
+// whose home lives elsewhere (`/root` in a container, a CI runner's custom
+// home) would otherwise publish its own path unseen, so the machine's real
+// home directory joins the scan — the same derive-don't-list reasoning as
+// scripts/lint-no-host-paths.mjs. Homes shorter than four characters (`/`)
+// would flag ordinary slashes, so they are left to the fixed prefixes.
+const RUNNER_HOME = homedir();
+
+/** The first private-machine string in `text`, or null when it is clean. */
+function privacyLeak(text: string): string | null {
+  const match = PRIVACY_FORBIDDEN.exec(text);
+  if (match) return match[0];
+  if (RUNNER_HOME.length >= 4 && text.includes(RUNNER_HOME)) return RUNNER_HOME;
+  return null;
+}
+
 export function verifyResultsDir(dir: string): VerifyOutcome {
   const checked: string[] = [];
   const problems: string[] = [];
@@ -368,8 +385,8 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
   for (const relPath of scanned) {
     const full = join(dir, relPath);
     if (!existsSync(full)) continue;
-    const match = PRIVACY_FORBIDDEN.exec(readFileSync(full, 'utf8'));
-    if (match) leaking.push(`${relPath} (matched ${JSON.stringify(match[0])})`);
+    const leak = privacyLeak(readFileSync(full, 'utf8'));
+    if (leak) leaking.push(`${relPath} (matched ${JSON.stringify(leak)})`);
   }
   if (leaking.length > 0) {
     problems.push(`published files carry a home-directory path or an IP address: ${leaking.join(', ')}`);

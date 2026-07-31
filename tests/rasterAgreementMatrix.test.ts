@@ -90,6 +90,38 @@ import {
 import type { FixtureSpec, FixtureSun } from '../scripts/generate-raster-fixtures.mjs';
 
 /**
+ * Write a committed evidence artifact, or in verify mode prove the committed
+ * one is what this run produces.
+ *
+ * The reproduce instructions recomputed the OLV side and rewrote `olv/`,
+ * `olv-SHA256SUMS` and `results.json` every time. That makes the committed
+ * evidence unfalsifiable by its own procedure: whatever the code does today
+ * becomes the record, and a change in the OLV side rewrites the file it was
+ * supposed to be checked against. The hashes pin both sides and nothing
+ * compared against them.
+ *
+ * With `MATRIX_VERIFY=1` the run recomputes exactly as before and asserts the
+ * bytes match what is committed instead of overwriting them. Same computation,
+ * opposite direction: the tree becomes the expectation rather than the output.
+ * Neither the file nor the hash list moves, so a drift fails rather than
+ * disappearing into a diff nobody reads.
+ */
+const MATRIX_VERIFY = process.env.MATRIX_VERIFY === '1';
+
+function writeOrVerify(path: string, content: string, what: string): void {
+  if (!MATRIX_VERIFY) {
+    writeFileSync(path, content, 'utf8');
+    return;
+  }
+  const committed = existsSync(path) ? readFileSync(path, 'utf8') : null;
+  expect(committed, `${what} is missing; MATRIX_VERIFY cannot check what is not committed`).not.toBeNull();
+  expect(
+    committed,
+    `${what} does not match what this run produces. Re-run without MATRIX_VERIFY to regenerate, then commit the result.`,
+  ).toBe(content);
+}
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  * FROZEN TOLERANCES
  *
@@ -1005,7 +1037,7 @@ if (REF_RECORD) {
     }, linearAgreement(group.ours, group.truth, idx, FROZEN_TOLERANCES.slopeDeg), idx.length);
   }
 
-  writeFileSync(resolve(MATRIX_DIR, 'olv-SHA256SUMS'), olvHashes.sort().join('\n') + '\n', 'utf8');
+  writeOrVerify(resolve(MATRIX_DIR, 'olv-SHA256SUMS'), olvHashes.sort().join('\n') + '\n', 'olv-SHA256SUMS');
 }
 
 const legsFor = (predicate: (l: Leg) => boolean): Leg[] => legs.filter(predicate);
@@ -1642,7 +1674,7 @@ describe('raster agreement matrix', () => {
       boundaries,
     };
     mkdirSync(MATRIX_DIR, { recursive: true });
-    writeFileSync(resolve(MATRIX_DIR, 'results.json'), JSON.stringify(record, null, 2) + '\n', 'utf8');
+    writeOrVerify(resolve(MATRIX_DIR, 'results.json'), JSON.stringify(record, null, 2) + '\n', 'results.json');
 
     // The record has to describe a real run: every ok leg carries measured
     // statistics, and every unavailable leg carries a reason instead of a zero.

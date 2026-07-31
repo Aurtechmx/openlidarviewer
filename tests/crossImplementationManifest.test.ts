@@ -629,6 +629,14 @@ describe('the study verifier rejects', () => {
     // P9 compares a record against itself, so a back-dated freeze satisfies it.
     // That is the shape the original defect took, and this is what closes the
     // easy version: the date must belong to the commit offered as the witness.
+    //
+    // The rule needs the real commit's authored date from git. A source
+    // archive carries no history — unavailable environment, not a mismatch.
+    try {
+      execFileSync('git', ['cat-file', '-e', 'a78b0f9^{commit}'], { stdio: 'ignore' });
+    } catch {
+      return;
+    }
     const { dir, manifest } = makeStudy();
     try {
       const path = join(dir, 'protocols/TEST-PROTO-001.protocol.json');
