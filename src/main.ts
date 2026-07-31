@@ -6642,6 +6642,11 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     revealStreamingScanChrome({
       dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
     });
+    // The COPC path refreshes here too. Leaving it out is how this path lost the
+    // tool dock once already: the two streaming opens are written separately, so
+    // anything one does and the other does not is a defect waiting to be found
+    // by a user rather than by a test.
+    refreshContextView();
     startStreamingStatusPolling();
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
