@@ -31,8 +31,36 @@
 
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { resolve, dirname, basename } from 'node:path';
+import { resolve, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+/**
+ * A record's sourceUrl is data — it comes from the register file — and this
+ * script fetches it and (with --out) writes the response to disk. Both are
+ * classic SSRF / path-injection sinks, so the data is validated before it
+ * reaches either.
+ *
+ * Reject anything that is not public https. The `169.254.` and `[::1]`/`fc00::`
+ * cases are the ones the sibling verifiers' guard omits and the ones that
+ * matter most here: `169.254.169.254` is the cloud metadata endpoint, the
+ * canonical SSRF target. This mirrors verify-reproduction-record.mjs's
+ * isPrivateLocation and extends it for a tool that actually makes the request.
+ */
+const PRIVATE_HOST =
+  /^(?:localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00:|\[?fd00:|.*\.local)$/i;
+function urlProblem(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch {
+    return `sourceUrl ${JSON.stringify(url)} is not a valid URL`;
+  }
+  if (u.protocol !== 'https:') return `sourceUrl ${JSON.stringify(url)} is not https`;
+  if (PRIVATE_HOST.test(u.hostname) || /intranet|(?:^|\W)internal(?:\W|$)/i.test(u.hostname)) {
+    return `sourceUrl host ${JSON.stringify(u.hostname)} is private/loopback/link-local; refusing to fetch it`;
+  }
+  return null;
+}
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTER = resolve(ROOT, 'validation/datasets/dataset-register.yaml');
@@ -124,6 +152,14 @@ for (const rec of selected) {
     continue;
   }
 
+  // Validate the URL before it reaches fetch() (SSRF sink). A private/loopback/
+  // metadata host is refused loudly rather than requested.
+  const badUrl = urlProblem(rec.url);
+  if (badUrl) {
+    problems.push(`${rec.id}: ${badUrl}.`);
+    continue;
+  }
+
   process.stdout.write(`${rec.id} … `);
   let buf;
   try {
@@ -158,7 +194,18 @@ for (const rec of selected) {
   if (outDir) {
     const dir = resolve(ROOT, outDir);
     mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, `${rec.id}__${basename(new URL(rec.url).pathname)}`), buf);
+    // The filename is built from record data (path-injection sink). Reduce both
+    // parts to a safe charset, then resolve the target and assert it stays
+    // inside `dir` — so a record id or url basename carrying `..` or a
+    // separator cannot write outside the requested directory.
+    const safe = (s) => s.replace(/[^A-Za-z0-9._-]/g, '_');
+    const name = `${safe(rec.id)}__${safe(basename(new URL(rec.url).pathname))}`;
+    const target = resolve(dir, name);
+    if (target !== dir && !target.startsWith(dir + sep)) {
+      problems.push(`${rec.id}: refusing to write outside ${outDir} (resolved to ${target}).`);
+      continue;
+    }
+    writeFileSync(target, buf);
   }
 }
 
