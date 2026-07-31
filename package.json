@@ -89,6 +89,7 @@
     "gen:claim-registry": "node scripts/generate-claim-registry.mjs",
     "lint:release-sync": "node scripts/lint-release-sync.mjs",
     "lint:release-truth": "node scripts/lint-release-truth.mjs",
+    "gen:provenance": "node scripts/sync-provenance.mjs",
     "lint:sbom": "node scripts/lint-sbom.mjs",
     "release:verify": "node scripts/verify-release-assets.mjs",
     "release:manifest": "node scripts/create-release-manifest.mjs",
