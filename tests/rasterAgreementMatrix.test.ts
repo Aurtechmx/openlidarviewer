@@ -100,24 +100,29 @@ import type { FixtureSpec, FixtureSun } from '../scripts/generate-raster-fixture
  * supposed to be checked against. The hashes pin both sides and nothing
  * compared against them.
  *
- * With `MATRIX_VERIFY=1` the run recomputes exactly as before and asserts the
- * bytes match what is committed instead of overwriting them. Same computation,
- * opposite direction: the tree becomes the expectation rather than the output.
- * Neither the file nor the hash list moves, so a drift fails rather than
- * disappearing into a diff nobody reads.
+ * So verifying is the DEFAULT and regenerating is the opt-in. The first version
+ * of this helper had it the other way round, behind `MATRIX_VERIFY=1`, and that
+ * was worse than useless: this file sits in the `terrain` bucket, `test:terrain`
+ * is in `test:release:execute`, and nothing set the variable. Every release run
+ * therefore rewrote the record it was supposed to check, while a verify mode
+ * existed to say the record was checked. A guard that is off unless you
+ * remember a variable is a guard that is off.
+ *
+ * `MATRIX_WRITE=1` regenerates, for the one case that needs it: a deliberate
+ * change to the OLV side, reviewed as a diff to the committed evidence.
  */
-const MATRIX_VERIFY = process.env.MATRIX_VERIFY === '1';
+const MATRIX_WRITE = process.env.MATRIX_WRITE === '1';
 
 function writeOrVerify(path: string, content: string, what: string): void {
-  if (!MATRIX_VERIFY) {
+  if (MATRIX_WRITE) {
     writeFileSync(path, content, 'utf8');
     return;
   }
   const committed = existsSync(path) ? readFileSync(path, 'utf8') : null;
-  expect(committed, `${what} is missing; MATRIX_VERIFY cannot check what is not committed`).not.toBeNull();
+  expect(committed, `${what} is missing. Run with MATRIX_WRITE=1 to generate it, then commit it.`).not.toBeNull();
   expect(
     committed,
-    `${what} does not match what this run produces. Re-run without MATRIX_VERIFY to regenerate, then commit the result.`,
+    `${what} does not match what this run produces. If the change is intended, re-run with MATRIX_WRITE=1 and commit the diff.`,
   ).toBe(content);
 }
 
