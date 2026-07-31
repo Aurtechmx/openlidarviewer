@@ -9,9 +9,9 @@
  *   ?handPan=off             hand (Pan) tool unavailable
  *   ?adaptiveDpr=off         motion-adaptive device-pixel-ratio off
  *   ?refinementPhase=off     post-motion refinement phases off
- *   ?streamingScore=legacy   pixel-space node scoring → v0.5.4 scoring
- *   ?uploadQueue=off         time-budgeted GPU upload queue off
- *   ?angularPrediction=off   angular-velocity motion model off
+ *   ?streamingScore=legacy   parse-only, see Staged below
+ *   ?uploadQueue=off         parse-only, see Staged below
+ *   ?angularPrediction=off   parse-only, see Staged below
  *
  * Consumer status, kept honest — a flag with no consumer changes nothing:
  *   - Live: `handPan` (NavController pan mode, the G/Digit4 bindings, the
@@ -45,7 +45,11 @@ export interface DevFlags {
   refinementPhase: boolean;
   /** P5 adaptive DPR active. */
   adaptiveDpr: boolean;
-  /** P7 time-budgeted GPU upload queue active. */
+  /**
+   * P7 time-budgeted GPU upload queue active. Parsed and reported, never read
+   * by a controller: the Viewer constructs no upload queue. Reading `true`
+   * here does not mean a queue is running.
+   */
   uploadQueue: boolean;
   /** P3 angular-velocity prediction active. */
   angularPrediction: boolean;
