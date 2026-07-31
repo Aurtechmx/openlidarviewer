@@ -159,3 +159,6 @@ skills-lock.json
 # tree that states 3.11 in .python-version and checks it in CI.
 __pycache__/
 *.py[cod]
+
+# Brainstorming companion mockups — local only.
+.superpowers/

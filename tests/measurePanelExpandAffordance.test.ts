@@ -1,30 +1,50 @@
 /**
  * The profile focus view existed and nobody found it.
  *
- * Opening was already possible: the chart wrapper carries role="button" and
- * responds to click and Enter. But the only hints were a hover tooltip and a
- * corner glyph that is decorative and pointer-events: none, sharing that corner
- * with the native resize grip. The one mark people saw was the one that changes
- * the height, so a full-page chart, its station table and its PDF export sat
- * behind an affordance that announced nothing.
+ * Opening was always possible: the chart wrapper carries role="button" and
+ * responds to click and Enter. The only hints were a hover tooltip and a corner
+ * mark that was `pointer-events: none` — shaped like a control, unable to be
+ * one. The first fix added a labelled Expand button to the chip strip below the
+ * chart. That button needed 233px inside a panel whose content box is 192px, so
+ * it clipped every row it shared the panel with, and the report came back as
+ * "the profile panel is cut on the right side".
+ *
+ * The corner mark is the control now: one affordance, where people already
+ * look, doing what it looks like it does.
  *
  * These read the source rather than the DOM, because the panel needs a live
- * viewer to render. They pin the two properties that made it undiscoverable, so
- * a later edit cannot quietly take the label away again.
+ * viewer to render. Reading source has a trap this file already fell into. The
+ * previous version asserted `/\.olv-mp-chart-expand \{[^}]*pointer-events: none/`
+ * and kept passing after the property was deleted, because the comment that
+ * replaced it mentions the property by name. Assertions here strip comments
+ * first, so prose cannot satisfy them.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const PANEL = readFileSync(resolve(__dirname, '../src/ui/MeasurePanel.ts'), 'utf8');
-const CSS = readFileSync(resolve(__dirname, '../src/style.css'), 'utf8');
+const CSS_RAW = readFileSync(resolve(__dirname, '../src/style.css'), 'utf8');
 
-describe('the profile chart offers a named way into the focus view', () => {
-  it('has a control whose visible text says what it does', () => {
-    // A glyph is not a label. The word is the point of this test.
-    expect(PANEL).toMatch(/olv-mp-chart-expand-btn[\s\S]{0,400}<span>Expand<\/span>/);
+/** Stylesheet with every comment removed, so prose cannot satisfy an assertion. */
+const CSS = CSS_RAW.replace(/\/\*[\s\S]*?\*\//g, '');
+/** The declarations of one rule, comments already gone. */
+const rule = (selector: string): string => {
+  const m = new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(CSS);
+  return m?.[1] ?? '';
+};
+
+describe('the profile chart offers a working way into the focus view', () => {
+  it('makes the corner mark a button rather than a decorated span', () => {
+    expect(PANEL).toMatch(/const chartExpand = el\('button', \{/);
   });
 
-  it('gives that control an accessible name naming the measurement', () => {
+  it('lets the pointer reach it', () => {
+    // The whole defect in one property.
+    expect(rule('.olv-mp-chart-expand')).not.toMatch(/pointer-events:\s*none/);
+    expect(rule('.olv-mp-chart-expand')).toMatch(/cursor:\s*pointer/);
+  });
+
+  it('gives it an accessible name that names the measurement', () => {
     expect(PANEL).toMatch(/ariaLabel: `Expand profile \$\{s\.name\} to a focus view`/);
   });
 
@@ -36,14 +56,37 @@ describe('the profile chart offers a named way into the focus view', () => {
 
   it('stops the click reaching the chart wrapper underneath', () => {
     // Both are clickable; without this the focus view would open twice.
-    expect(PANEL).toMatch(/expandBtn\.addEventListener\('click', \(e\) => \{\s*e\.stopPropagation\(\);/);
+    expect(PANEL).toMatch(
+      /chartExpand\.addEventListener\('click', \(e\) => \{\s*e\.stopPropagation\(\);/,
+    );
   });
 
-  it('keeps the corner glyph decorative, so it is not a second control', () => {
-    expect(CSS).toMatch(/\.olv-mp-chart-expand \{[^}]*pointer-events: none/);
+  it('shows itself without waiting for hover', () => {
+    // An affordance you can only see once you are already over it is not one.
+    expect(CSS).not.toMatch(/\.olv-mp-chart-wrap:hover\s+\.olv-mp-chart-expand\s*\{/);
+    expect(CSS).toMatch(/\.olv-mp-chart-expand:hover/);
   });
 
-  it('styles the control as focusable, since keyboard users reach it first', () => {
-    expect(CSS).toMatch(/\.olv-mp-chart-expand-btn:focus-visible \{[^}]*outline: var\(--focus-ring\)/);
+  it('leaves no second expand control in the chip strip', () => {
+    // The strip holds zoom chips. A second control there is what overflowed the
+    // panel, so its absence is the regression this file guards.
+    expect(PANEL).not.toMatch(/olv-mp-chart-expand-btn/);
+    expect(CSS).not.toMatch(/olv-mp-chart-expand-btn/);
+  });
+
+  it('sizes the panel from the widest row it has to hold', () => {
+    // Measured in the running app: widest row 193px, chrome 26px. 218 left the
+    // content box at 192 and clipped the last label by a pixel.
+    expect(rule('.olv-measure-panel')).toMatch(/width:\s*222px/);
+    expect(rule('.olv-measure-panel')).toMatch(/min-width:\s*222px/);
+  });
+
+  it('keeps the left stack aligned', () => {
+    // Annotations, Export/Convert and Clip box sit under Measurements in one
+    // column. A panel 4px wider than its neighbours reads as broken, so the
+    // width change is a stack-wide change or it is a new defect.
+    for (const sel of ['.olv-anno-panel', '.olv-export-panel', '.olv-clip-panel']) {
+      expect(rule(sel), `${sel} must match the measure panel width`).toMatch(/width:\s*222px/);
+    }
   });
 });
