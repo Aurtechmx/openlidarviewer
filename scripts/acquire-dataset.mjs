@@ -58,12 +58,29 @@ function acquiredRecords() {
   const text = readFileSync(REGISTER, 'utf8');
   const out = [];
   for (const block of text.split(/^ {2}- datasetId:/m).slice(1)) {
-    if (!/^\s*storage:\s*acquired\s*$/m.test(block)) continue;
     const id = block.split('\n')[0].trim();
+    // Read a 4-space-indented scalar the way the canonical verify-dataset-
+    // register.mjs does: trim, then strip a matched surrounding quote pair.
     const field = (name) => {
       const m = new RegExp(`^\\s{4}${name}:\\s*(.+?)\\s*$`, 'm').exec(block);
-      return m ? m[1].replace(/^["']|["']$/g, '') : null;
+      if (!m) return null;
+      const v = m[1].trim();
+      if (v.length > 1 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'")))) {
+        return v.slice(1, -1);
+      }
+      return v;
     };
+    // Classify by the PARSED storage value, not a raw-line regex. The detector
+    // used to be `/^\s*storage:\s*acquired\s*$/m`, which matches only the bare
+    // token — so a schema-valid `storage: "acquired"` was silently dropped:
+    // never fetched, never hashed, while the script still printed OK. Quoting
+    // is an established convention in this register (title, citation are
+    // quoted), and the canonical gate counts the quoted record as acquired via
+    // its parseScalar, so the two tools disagreed about what a record IS. A
+    // dropped record also slips past the empty-selection guard as long as one
+    // other record matches. Keying off the same parsed value the gate uses
+    // closes that.
+    if (field('storage') !== 'acquired') continue;
     out.push({
       id,
       url: field('sourceUrl'),
