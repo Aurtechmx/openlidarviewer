@@ -13,7 +13,15 @@
  * them that way (the boundary was previously self-discipline, not a gate).
  *
  * Scanned layers (must stay UI/three-free):
- *   src/terrain, src/validation, src/analysis, src/science (when present)
+ *   src/terrain, src/validation, src/analysis, src/science (when present),
+ *   src/geo/context
+ *
+ * A new pure layer has to be added to LAYERS or this lint says nothing about
+ * it, and says it in the same words it uses for a clean tree. src/geo/context
+ * arrived describing itself as a pure core that never imports proj4, and the
+ * lint reported the same 135 files before and after, because it read none of
+ * the new ones. An unchanged count reads like confirmation and was the absence
+ * of a check. Adding the directory is the whole fix.
  *
  * Banned import specifiers from within those layers:
  *   - anything under a `ui/` path (UI adapters / views)
@@ -36,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 // to exist), so the lint would print success having read zero files. A gate
 // that passes vacuously is worse than one that fails, hence fileURLToPath.
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science'];
+const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science', 'src/geo/context'];
 
 /** A specifier that reaches into the UI layer or pulls in three.js. */
 function isBanned(spec) {
