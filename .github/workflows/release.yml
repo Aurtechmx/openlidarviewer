@@ -193,7 +193,13 @@ jobs:
           set -euo pipefail
           V="$(node -p "require('./package.json').version")"
           cd "release/staged-v${V}"
-          shasum -a 256 * > SHA256SUMS.tmp || true
+          # `--` ends option parsing. Without it a staged file whose name began
+          # with a dash would be read as a flag: shasum exits 1 having written
+          # nothing, `|| true` hides that, and the failure only resurfaces at
+          # the verify step below as an unexplained mismatch. `./*` would also
+          # work but would prefix every name in SHA256SUMS, which the release
+          # asset verifier parses.
+          shasum -a 256 -- * > SHA256SUMS.tmp || true
           grep -v ' SHA256SUMS' SHA256SUMS.tmp > SHA256SUMS
           rm SHA256SUMS.tmp
           shasum -a 256 -c SHA256SUMS
