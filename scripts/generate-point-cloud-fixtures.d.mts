@@ -9,8 +9,8 @@
  */
 
 export type PointCloudSurface = 'plane' | 'rolling' | 'ridge';
-export type PointCloudRole = 'classification' | 'bare-earth';
-export type PointCloudLayout = 'scattered' | 'cell-centred';
+export type PointCloudRole = 'classification' | 'bare-earth' | 'surface';
+export type PointCloudLayout = 'scattered' | 'cell-centred' | 'cell-centred-structured';
 
 export interface PointCloudFixtureSpec {
   readonly id: string;

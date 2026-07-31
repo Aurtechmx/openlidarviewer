@@ -8,7 +8,9 @@
     "slopePercentPoints": 0.05,
     "aspectCircularDeg": 0.25,
     "hillshadeIntensity": 0.0025,
-    "hillshadeByteLevels": 2
+    "hillshadeByteLevels": 2,
+    "tpiVsGdalZUnits": 0.00001,
+    "tpiVsAnalyticZUnits": 0.0002
   },
   "toleranceProvenance": "Every tolerance was fixed from a stated derivation before any comparison in this file was run, and none was widened afterwards. Derivations are in the FROZEN_TOLERANCES comments.",
   "aspectMinSlopeDeg": 0.5,
@@ -27,707 +29,784 @@
     {
       "runId": "flat-plane__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__slope-pct",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "percent rise",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__slope-deg-edges",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__aspect-zero-flat",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, 0 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__hillshade-south-high",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "flat-plane__hillshade-multi",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "flat-plane__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/flat-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/flat-plane__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "slope-x-pos__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-pos__slope-pct",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "percent rise",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-pos__slope-deg-edges",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-pos__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-pos__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-pos__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-pos__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-neg__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-neg__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-neg__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-x-neg__hillshade-south-high",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-x-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-x-neg__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-pos__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-pos__slope-deg-edges",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-pos__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-pos__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-pos.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-pos__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-neg__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-neg__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-neg__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "slope-y-neg__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/slope-y-neg.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/slope-y-neg__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__slope-pct",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "percent rise",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__hillshade-south-high",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "oblique-plane__hillshade-multi",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "oblique-plane__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/oblique-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/oblique-plane__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "convex-hill__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "convex-hill__slope-deg-edges",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "convex-hill__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "convex-hill__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "convex-hill__hillshade-south-high",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "convex-hill__hillshade-multi",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "convex-hill__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/convex-hill.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/convex-hill__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "concave-pit__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "concave-pit__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "concave-pit__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "concave-pit__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "concave-pit__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/concave-pit.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/concave-pit__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "ridge__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "ridge__slope-deg-edges",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__slope-deg-edges.asc -alg Horn -compute_edges -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "ridge__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "ridge__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "ridge__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/ridge.asc validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "ridge__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/ridge.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/ridge__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "valley__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/valley__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "valley__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/valley__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "valley__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/valley.asc validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/valley.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/valley__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "saddle__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "saddle__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "saddle__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "saddle__hillshade-south-high",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/saddle.asc validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__hillshade-south-high.asc -az 180 -alt 65 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "saddle__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/saddle.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/saddle__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "terrace-step__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "terrace-step__slope-pct",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__slope-pct.asc -alg Horn -p -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "percent rise",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "terrace-step__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "terrace-step__aspect-zero-flat",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, 0 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "terrace-step__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "terrace-step__hillshade-multi",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__hillshade-multi.asc -alt 45 -z 1 -alg Horn -multidirectional -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "terrace-step__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/terrace-step.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/terrace-step__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "nodata-island__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "nodata-island__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "nodata-island__aspect-zero-flat",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__aspect-zero-flat.asc -alg Horn -zero_for_flat -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, 0 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "nodata-island__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "nodata-island__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-island.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-island__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "nodata-scatter__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "nodata-scatter__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "nodata-scatter__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "nodata-scatter__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/nodata-scatter.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/nodata-scatter__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "thin-corridor__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "thin-corridor__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "thin-corridor__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
+      "runId": "thin-corridor__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/thin-corridor.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/thin-corridor__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none (raw-Z neighbourhood; no horizontal scaling)"
+    },
+    {
       "runId": "geographic-plane__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-deg.asc -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "xscale/yscale in metres per degree"
     },
     {
       "runId": "geographic-plane__slope-pct",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc -alg Horn -p -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__slope-pct.asc -alg Horn -p -of AAIGrid -xscale 78715.12688168648 -yscale 110540 -co DECIMAL_PRECISION=6",
       "unit": "percent rise",
       "axisScaling": "xscale/yscale in metres per degree"
     },
     {
       "runId": "geographic-plane__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "UNSUPPORTED by gdaldem aspect: computed on equal degree spacing"
     },
     {
       "runId": "geographic-plane__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "xscale/yscale in metres per degree"
     },
     {
       "runId": "geographic-plane__hillshade-ne-low",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__hillshade-ne-low.asc -az 45 -alt 20 -z 2 -alg Horn -of AAIGrid -xscale 78715.12688168648 -yscale 110540",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "xscale/yscale in metres per degree"
     },
     {
+      "runId": "geographic-plane__tpi",
+      "status": "ok",
+      "commandLine": "gdaldem TPI /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/geographic-plane.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/geographic-plane__tpi.asc -of AAIGrid -co DECIMAL_PRECISION=6",
+      "unit": "Z unit (grid elevation unit)",
+      "axisScaling": "none: gdaldem TPI has no -xscale/-yscale and none is needed — TPI is a raw-Z neighbourhood, independent of the horizontal unit"
+    },
+    {
       "runId": "aspect-rose-000__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-000__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-000__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-000.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-000__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-045__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-045__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-045__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-045.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-045__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-090__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-090__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-090__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-090.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-090__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-135__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-135__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-135__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-135.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-135__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-180__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-180__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-180__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-180.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-180__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-225__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-225__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-225__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-225.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-225__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-270__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-270__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-270__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-270.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-270__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-315__slope-deg",
       "status": "ok",
-      "commandLine": "gdaldem slope validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem slope /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__slope-deg.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "degree",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-315__aspect",
       "status": "ok",
-      "commandLine": "gdaldem aspect validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
+      "commandLine": "gdaldem aspect /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__aspect.asc -alg Horn -of AAIGrid -co DECIMAL_PRECISION=6",
       "unit": "compass degree clockwise from north, -9999 on flat",
       "axisScaling": "none (metre grid)"
     },
     {
       "runId": "aspect-rose-315__hillshade-nw-default",
       "status": "ok",
-      "commandLine": "gdaldem hillshade validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
+      "commandLine": "gdaldem hillshade /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/fixtures/aspect-rose-315.asc /private/tmp/wt3-roughness-matrix/validation/cross-implementation/raster-matrix/gdal/aspect-rose-315__hillshade-nw-default.asc -az 315 -alt 45 -z 1 -s 1 -alg Horn -of AAIGrid",
       "unit": "Byte 0-255, nodata 0",
       "axisScaling": "none (metre grid)"
     }
@@ -735,6 +814,7 @@
   "notes": [
     "gdaldem aspect accepts neither -xscale nor -yscale on GDAL 3.13.1, so an anisotropic geographic aspect reference is unavailable from the reference tool. gdaldem slope and gdaldem hillshade do accept them and were given 78715.1 m/deg longitude and 110540 m/deg latitude at latitude 45.",
     "Undefined aspect: gdaldem writes -9999 by default and 0 (due north) under -zero_for_flat. hornSlopeAspect writes 0 radians in the math frame, which is compass 90 (due EAST), and carries no undefined marker; the caller must consult the slope grid to tell a flat cell from an easterly one.",
+    "TPI (centre − mean of 8 neighbours): OLV and gdaldem share the definition, the Float32 DEM and the summation order, but gdaldem accumulates the eight-neighbour sum in FLOAT32 (GDALTPIAlg operates on const float*) while computeTPI accumulates in double. They agree exactly on a constant surface (the sum is exact) and diverge by gdaldem's float32-accumulation error elsewhere, growing with elevation to ~1.3e-4 Z-units on the ~1300 m geographic plane. A float32-accumulation reference reproduces gdaldem to result-rounding, and OLV's double-accumulated TPI matches the exact closed form (E2), so OLV is the more precise side; the divergence is a reference-tool precision limit, recorded as a boundary, not a defect. TPI carries no horizontal unit, so — unlike aspect — the geographic fixture is fully expressible and is included.",
     "Nodata halo: gdaldem propagates nodata through the 3x3 window; hornSlopeAspect substitutes the centre value for a non-finite neighbour and returns a value. Around a hole our slope is therefore biased toward zero and the output carries no marker distinguishing those cells from fully-supported ones.",
     "Border vs closed form (E2): the extrapolated border edge reproduces the analytic slope on locally linear surfaces and diverges on quadratic ones by roughly a*cell in rise/run, an error the gdaldem leg cannot detect because gdaldem extrapolates identically. At the four corners the along-edge axis is clamped, so the analytic slope is missed wherever the gradient has an along-edge component (pooled max 13.0421 deg, bias -8.1915) and met exactly where it does not. Both are consequences of matching gdaldem cell-for-cell and are the price of that choice, not defects in the extrapolation itself."
   ],
@@ -1154,6 +1234,48 @@
       "maxAbsDiff": 1,
       "rmse": 1,
       "meanBias": -1,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "flat-plane",
+      "family": "flat plane",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "agree",
+      "cells": 2852,
+      "maxAbsDiff": 0,
+      "rmse": 0,
+      "meanBias": 0,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "flat-plane",
+      "family": "flat plane",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 2852,
+      "maxAbsDiff": 0,
+      "rmse": 0,
+      "meanBias": 0,
       "withinTolFraction": 1,
       "verdict": "agree",
       "status": "ok"
@@ -2383,6 +2505,49 @@
       "status": "ok"
     },
     {
+      "fixtureId": "oblique-plane",
+      "family": "oblique plane",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 12348,
+      "maxAbsDiff": 0.00000895367431640625,
+      "rmse": 0.000003707828401615564,
+      "meanBias": 6.110826497870353e-7,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "oblique-plane",
+      "family": "oblique plane",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 12348,
+      "maxAbsDiff": 0.00000667572021484375,
+      "rmse": 0.000002020762833043168,
+      "meanBias": -1.0812633972859978e-9,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
       "fixtureId": "convex-hill",
       "family": "convex quadratic hill",
       "product": "slope-deg",
@@ -2664,6 +2829,49 @@
       "status": "ok"
     },
     {
+      "fixtureId": "convex-hill",
+      "family": "convex quadratic hill",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 6580,
+      "maxAbsDiff": 0.00002137145996093659,
+      "rmse": 0.0000063417912800205775,
+      "meanBias": -9.677637906070443e-8,
+      "withinTolFraction": 0.8975683890577507,
+      "verdict": "disagree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "convex-hill",
+      "family": "convex quadratic hill",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 6580,
+      "maxAbsDiff": 0.000009722900390626843,
+      "rmse": 0.000004079082756507642,
+      "meanBias": 6.400343151028486e-10,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
       "fixtureId": "concave-pit",
       "family": "concave pit",
       "product": "slope-deg",
@@ -2858,6 +3066,49 @@
       "maxAbsDiff": 1,
       "rmse": 0.7973043644991346,
       "meanBias": -0.6356942496493688,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "concave-pit",
+      "family": "concave pit",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 2852,
+      "maxAbsDiff": 0.000057302490234389936,
+      "rmse": 0.000010819181627655737,
+      "meanBias": -4.120592114472118e-7,
+      "withinTolFraction": 0.738429172510519,
+      "verdict": "disagree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "concave-pit",
+      "family": "concave pit",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 2852,
+      "maxAbsDiff": 0.00002777099609374556,
+      "rmse": 0.000005851103721174399,
+      "meanBias": -4.740282998121158e-8,
       "withinTolFraction": 1,
       "verdict": "agree",
       "status": "ok"
@@ -3121,6 +3372,27 @@
       "meanBias": -0.9838709677419355,
       "withinTolFraction": 1,
       "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "ridge",
+      "family": "ridge",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 2852,
+      "maxAbsDiff": 0.000011814697265625,
+      "rmse": 0.0000054637534010749395,
+      "meanBias": -3.17230438617064e-8,
+      "withinTolFraction": 0.9032258064516129,
+      "verdict": "disagree",
       "status": "ok"
     },
     {
@@ -3480,6 +3752,49 @@
       "status": "ok"
     },
     {
+      "fixtureId": "saddle",
+      "family": "saddle",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 12348,
+      "maxAbsDiff": 0.000015393066406250012,
+      "rmse": 0.000004590546273001854,
+      "meanBias": -2.3664435314674904e-7,
+      "withinTolFraction": 0.9789439585357953,
+      "verdict": "disagree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "saddle",
+      "family": "saddle",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 12348,
+      "maxAbsDiff": 0.000005264282226562483,
+      "rmse": 0.0000023414024864871075,
+      "meanBias": 7.414377579654976e-11,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
       "fixtureId": "terrace-step",
       "family": "terrace / step",
       "product": "slope-deg",
@@ -3749,6 +4064,27 @@
       "status": "ok"
     },
     {
+      "fixtureId": "terrace-step",
+      "family": "terrace / step",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 2852,
+      "maxAbsDiff": 0.000008000000000008,
+      "rmse": 0.000002534798752662499,
+      "meanBias": -2.503506311363463e-7,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
       "fixtureId": "nodata-island",
       "family": "nodata island",
       "product": "slope-deg",
@@ -3956,6 +4292,49 @@
       "status": "ok"
     },
     {
+      "fixtureId": "nodata-island",
+      "family": "nodata island",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 6121,
+      "maxAbsDiff": 0.00000895367431640625,
+      "rmse": 0.0000038119164155642788,
+      "meanBias": 6.374147711499729e-7,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "nodata-island",
+      "family": "nodata island",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 6121,
+      "maxAbsDiff": 0.000003814697265625,
+      "rmse": 0.000002073241903230151,
+      "meanBias": -3.8950919637569433e-10,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
       "fixtureId": "nodata-scatter",
       "family": "nodata island",
       "product": "slope-deg",
@@ -4108,6 +4487,49 @@
       "maxAbsDiff": 1,
       "rmse": 0.5755181996745907,
       "meanBias": -0.33122119815668205,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "nodata-scatter",
+      "family": "nodata island",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 1736,
+      "maxAbsDiff": 0.00001946411132812409,
+      "rmse": 0.000006970364483777403,
+      "meanBias": -3.4596009847774436e-7,
+      "withinTolFraction": 0.8623271889400922,
+      "verdict": "disagree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "nodata-scatter",
+      "family": "nodata island",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 1736,
+      "maxAbsDiff": 0.000009722900390626843,
+      "rmse": 0.0000046952159124099695,
+      "meanBias": -5.390940723146996e-8,
       "withinTolFraction": 1,
       "verdict": "agree",
       "status": "ok"
@@ -4266,6 +4688,49 @@
       "maxAbsDiff": 0,
       "rmse": 0,
       "meanBias": 0,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "thin-corridor",
+      "family": "thin valid corridor",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 186,
+      "maxAbsDiff": 0.00000895367431640625,
+      "rmse": 0.000004190911885550433,
+      "meanBias": 0.0000016495113577893986,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "thin-corridor",
+      "family": "thin valid corridor",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 186,
+      "maxAbsDiff": 0.000003814697265625,
+      "rmse": 0.0000022972308679561355,
+      "meanBias": 1.8714576639154905e-7,
       "withinTolFraction": 1,
       "verdict": "agree",
       "status": "ok"
@@ -4507,6 +4972,49 @@
       "maxAbsDiff": 1,
       "rmse": 1,
       "meanBias": -1,
+      "withinTolFraction": 1,
+      "verdict": "agree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "geographic-plane",
+      "family": "geographic grid, unequal metres per axis",
+      "product": "tpi",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "GDAL 3.13.1",
+      "evidenceLevel": "E4 (cross-implementation)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window",
+      "excluded": {},
+      "tolerance": 0.00001,
+      "expectation": "documented-divergence",
+      "expectationRevisedAfterFirstRun": true,
+      "cells": 2852,
+      "maxAbsDiff": 0.00012962939453124998,
+      "rmse": 0.000026232794909101527,
+      "meanBias": -0.0000012957595760449453,
+      "withinTolFraction": 0.4838709677419355,
+      "verdict": "disagree",
+      "status": "ok"
+    },
+    {
+      "fixtureId": "geographic-plane",
+      "family": "geographic grid, unequal metres per axis",
+      "product": "tpi [analytic]",
+      "unit": "Z unit (grid elevation unit)",
+      "reference": "analytic (closed form)",
+      "evidenceLevel": "E2 (formula)",
+      "metric": "absolute",
+      "cellSet": "interior, full 3x3 window, off-kink",
+      "excluded": {
+        "kink": 0
+      },
+      "tolerance": 0.0002,
+      "expectation": "agree",
+      "cells": 2852,
+      "maxAbsDiff": 0.00006103515625,
+      "rmse": 0.00001424101792407141,
+      "meanBias": -6.4888888079187145e-9,
       "withinTolFraction": 1,
       "verdict": "agree",
       "status": "ok"
@@ -5903,6 +6411,20 @@
       "kind": "model divergence declared before the run"
     },
     {
+      "fixtureId": "convex-hill",
+      "family": "convex quadratic hill",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.00002137145996093659,
+      "rmse": 0.0000063417912800205775,
+      "meanBias": -9.677637906070443e-8,
+      "withinTolFraction": 0.8975683890577507,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
+    },
+    {
       "fixtureId": "concave-pit",
       "family": "concave pit",
       "product": "slope-deg [border edge, analytic]",
@@ -5917,6 +6439,34 @@
       "kind": "model divergence declared before the run"
     },
     {
+      "fixtureId": "concave-pit",
+      "family": "concave pit",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.000057302490234389936,
+      "rmse": 0.000010819181627655737,
+      "meanBias": -4.120592114472118e-7,
+      "withinTolFraction": 0.738429172510519,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
+    },
+    {
+      "fixtureId": "ridge",
+      "family": "ridge",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.000011814697265625,
+      "rmse": 0.0000054637534010749395,
+      "meanBias": -3.17230438617064e-8,
+      "withinTolFraction": 0.9032258064516129,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
+    },
+    {
       "fixtureId": "saddle",
       "family": "saddle",
       "product": "slope-deg [border edge, analytic]",
@@ -5929,6 +6479,20 @@
       "withinTolFraction": 0,
       "expected": "documented-divergence",
       "kind": "model divergence declared before the run"
+    },
+    {
+      "fixtureId": "saddle",
+      "family": "saddle",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.000015393066406250012,
+      "rmse": 0.000004590546273001854,
+      "meanBias": -2.3664435314674904e-7,
+      "withinTolFraction": 0.9789439585357953,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
     },
     {
       "fixtureId": "terrace-step",
@@ -5959,6 +6523,20 @@
       "kind": "model divergence declared before the run"
     },
     {
+      "fixtureId": "nodata-scatter",
+      "family": "nodata island",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.00001946411132812409,
+      "rmse": 0.000006970364483777403,
+      "meanBias": -3.4596009847774436e-7,
+      "withinTolFraction": 0.8623271889400922,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
+    },
+    {
       "fixtureId": "geographic-plane",
       "family": "geographic grid, unequal metres per axis",
       "product": "aspect",
@@ -5971,6 +6549,20 @@
       "withinTolFraction": 0,
       "expected": "documented-divergence",
       "kind": "model divergence declared before the run"
+    },
+    {
+      "fixtureId": "geographic-plane",
+      "family": "geographic grid, unequal metres per axis",
+      "product": "tpi",
+      "reference": "GDAL 3.13.1",
+      "unit": "Z unit (grid elevation unit)",
+      "tolerance": 0.00001,
+      "maxAbsDiff": 0.00012962939453124998,
+      "rmse": 0.000026232794909101527,
+      "meanBias": -0.0000012957595760449453,
+      "withinTolFraction": 0.4838709677419355,
+      "expected": "documented-divergence",
+      "kind": "divergence found by this matrix (expectation corrected after the first run)"
     },
     {
       "fixtureId": "geographic-plane",

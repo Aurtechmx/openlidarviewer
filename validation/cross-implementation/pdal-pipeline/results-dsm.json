@@ -1,0 +1,80 @@
+{
+  "generatedBy": "tests/groundFilterPdalAgreement.test.ts",
+  "manifest": "validation/cross-implementation/studies/DSM-PDAL-WRITERS-GDAL.study.json",
+  "evidenceNote": "Cross-implementation (E4). Every cell value on the reference side came from PDAL writers.gdal output_type=max.",
+  "promotes": "nothing",
+  "gate": {
+    "toleranceAbs": 0.00005,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "pooled": {
+    "comparableCells": 7500,
+    "withinToleranceFraction": 1,
+    "maxAbsErrorM": 0.000003784179682497779,
+    "cellsAboveGround": 1273
+  },
+  "legs": [
+    {
+      "fixtureId": "pc-09-plane-structures",
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "cellsAboveGround": 445,
+      "maxHeightAboveGroundM": 7.916999816894531,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003784179682497779,
+      "rmseM": 0.000002183820831363381,
+      "meanSignedErrorM": 1.5744628892093716e-7
+    },
+    {
+      "fixtureId": "pc-10-rolling-structures",
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "cellsAboveGround": 414,
+      "maxHeightAboveGroundM": 8.271003723144531,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003784179682497779,
+      "rmseM": 0.0000021470998586194545,
+      "meanSignedErrorM": -1.3818359235528988e-8
+    },
+    {
+      "fixtureId": "pc-11-ridge-structures",
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "cells": 2500,
+      "comparableCells": 2500,
+      "bothNodata": 0,
+      "onlyPdal": 0,
+      "onlyOlv": 0,
+      "cellsAboveGround": 414,
+      "maxHeightAboveGroundM": 8.944999694824219,
+      "withinToleranceFraction": 1,
+      "maxAbsErrorM": 0.000003784179682497779,
+      "rmseM": 0.000002148685786946998,
+      "meanSignedErrorM": -1.420898401534032e-8
+    }
+  ],
+  "boundaries": [
+    "Agreement with PDAL is not accuracy against ground truth. Both implementations take the maximum of the same returns; that they agree says the two compute the same quantity, not that the top surface is correct.",
+    "Every return is placed AT a cell centre, so PDAL's radius estimator and buildDsm's cell estimator hold the same set and the maximum is comparable at float32 spacing. On a scattered cloud a disc is not a square and the two maxima could not agree; that case is out of scope here, exactly as it is for the DTM study.",
+    "Every cell receives a ground return, so every cell is covered on both sides and nothing here says anything about how either side marks or fills a cell with no data.",
+    "One aggregation (maximum) and one cell size. Nothing here says anything about first/last-return selection, percentile-of-top surfaces, or any cell size other than 1 m."
+  ]
+}
