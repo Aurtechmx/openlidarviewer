@@ -86,7 +86,15 @@ export function validateAgainstSchema(value, schema, root, path, errors) {
   }
 
   if (typeof value === 'string') {
-    if (node.minLength !== undefined && value.length < node.minLength) {
+    // Trim before the length check. A minLength:1 field exists to require a
+    // substantive value, and `"   "` has length 3 but says nothing — it passed
+    // every register's minLength:1 guards, so a generalisation record could
+    // name a whitespace-only `boundary.doesNotExtendTo` and satisfy the schema's
+    // own "a reach with no boundary reads as universal" invariant on a
+    // technicality. Empty string and empty array were already rejected; only
+    // deliberately-typed whitespace slipped. Shared by every record register
+    // (field, reproduction, impact, generalization), so this hardens all four.
+    if (node.minLength !== undefined && value.trim().length < node.minLength) {
       errors.push(`${path}: shorter than minLength ${node.minLength}`);
     }
     if (node.pattern !== undefined && !new RegExp(node.pattern).test(value)) {
