@@ -70,6 +70,11 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
   private _nextJobId = 0;
   private _disposed = false;
 
+  /** In-flight job count. Diagnostic — asserted by the settlement tests. */
+  get pendingCount(): number {
+    return this._pending.size;
+  }
+
   classify(
     positions: Float32Array,
     n: number,
@@ -104,10 +109,19 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
       // copy's buffer it can own zero-copy. The transient ~2× memory during the
       // call is deliberate — correctness over saving one buffer.
       const copy = positions.slice();
-      worker.postMessage(
-        { jobId, positions: copy.buffer, n, options },
-        [copy.buffer],
-      );
+      try {
+        worker.postMessage(
+          { jobId, positions: copy.buffer, n, options },
+          [copy.buffer],
+        );
+      } catch (err) {
+        // A synchronous post failure (e.g. DataCloneError, or posting to a
+        // worker that just died) would otherwise strand this job in `_pending`
+        // with its abort listener still attached. Settle it and surface the
+        // error to the caller.
+        this._settle(jobId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -129,24 +143,28 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
       this._onMessage(event.data);
     };
     worker.onerror = (): void => {
+      // The worker died. Reject the in-flight job and DROP the dead worker so
+      // the next job respawns a fresh one — leaving it installed would post
+      // into a corpse that never replies, hanging the promise (this client has
+      // no timeout) and defeating any fallback.
       this._failAll(new Error('The classifier worker failed.'));
+      worker.terminate();
+      if (this._worker === worker) this._worker = null;
     };
     this._worker = worker;
     return worker;
   }
 
   private _onMessage(reply: WorkerReply): void {
-    const pending = this._pending.get(reply.jobId);
-    if (!pending) return;
-    // Progress messages report a phase and do NOT settle the job.
+    // Progress messages report a phase and do NOT settle the job — peek
+    // without removing so a later real reply for the same job still lands.
     if (!('ok' in reply)) {
-      pending.onProgress?.(reply.phase);
+      const pending = this._pending.get(reply.jobId);
+      pending?.onProgress?.(reply.phase);
       return;
     }
-    this._pending.delete(reply.jobId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
+    const pending = this._settle(reply.jobId);
+    if (!pending) return; // aborted or already settled — drop the stale reply
     if (reply.ok) {
       pending.resolve({
         codes: reply.codes,
@@ -163,6 +181,22 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
     } else {
       pending.reject(new Error(reply.error));
     }
+  }
+
+  /**
+   * Remove a job from `_pending` and detach its abort listener, returning it
+   * (or undefined if already gone). The single teardown path, so a reply, a
+   * sync post failure, and a fail-all all clean up identically — no map entry
+   * or signal listener is ever left behind.
+   */
+  private _settle(jobId: number): PendingRequest | undefined {
+    const pending = this._pending.get(jobId);
+    if (!pending) return undefined;
+    this._pending.delete(jobId);
+    if (pending.onAbort && pending.signal) {
+      pending.signal.removeEventListener('abort', pending.onAbort);
+    }
+    return pending;
   }
 
   private _failAll(error: Error): void {
