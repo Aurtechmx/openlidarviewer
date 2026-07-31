@@ -1,8 +1,8 @@
-# PDAL pipeline studies — ground filtering and DTM
+# PDAL pipeline studies — ground filtering, DTM and DSM
 
 Extends the cross-implementation evidence from rasters to the point-cloud end of
 the pipeline. The raster matrix next door starts from a DEM and compares kernels
-against GDAL; these two studies start from returns.
+against GDAL; these three studies start from returns.
 
 This directory **promotes nothing**. `docs/validation/claim-register.yaml` and
 `REFERENCE_SLOTS` in `src/validation/crossCheck.ts` are untouched.
@@ -17,15 +17,27 @@ the reference, which is PDAL, recorded in `reference-runs.json`. Every leg in
 `results.json` carries `reference` and `evidenceLevel`. **Eight fixtures is not
 E4 breadth, and a synthetic cloud is not a survey.**
 
-## The two studies
+## The three studies
 
 | study | manifest | what it compares |
 | --- | --- | --- |
 | ground filtering | `../studies/GROUND-FILTER-PDAL-SMRF.study.json` | our `classifyGroundSmrf` against `filters.smrf`, per return, on five scenes |
-| DTM | `../studies/DTM-PDAL-WRITERS-GDAL.study.json` | our `rasterizeDtm` against `writers.gdal`, per cell, on three scenes |
+| DTM | `../studies/DTM-PDAL-WRITERS-GDAL.study.json` | our `rasterizeDtm` (min) against `writers.gdal` `output_type: min`, per cell, on three scenes |
+| DSM | `../studies/DSM-PDAL-WRITERS-GDAL.study.json` | our `buildDsm` (max) against `writers.gdal` `output_type: max`, per cell, on three scenes |
 
-Both tolerances were registered at `pending` before either study ran, and both
-are covered by the manifest's `protocolDigest`.
+Every tolerance was registered at `pending` before its study ran, and each is
+covered by the manifest's `protocolDigest`.
+
+The DSM study is the DTM study with min → max. It uses its own cell-centred
+scenes (`pc-09..11`) that stack roof, facade and canopy returns above the ground
+return, so the per-cell maximum (the top surface) sits above the minimum (the
+bare earth) and the study tests upper-surface selection rather than re-running
+the DTM grid check. The scenes are cell-centred for the same estimator reason
+the DTM scenes are: every above-ground return is placed at the cell centre so
+`writers.gdal`'s radius disc and `buildDsm`'s square cell hold the same set and
+their maxima are comparable at float32 spacing. A scattered scene with structure
+(`pc-01..05`) could not be used — a disc is not a square, and no tolerance near
+float32 spacing would hold.
 
 ## Reference pinning
 
@@ -81,25 +93,34 @@ cannot pass.
 | `pdal/` | the PDAL outputs |
 | `pdal-SHA256SUMS` | hash per PDAL output |
 | `olv/` | the same products computed by this project, for side-by-side diffing |
-| `olv-SHA256SUMS` | hash per OLV output |
-| `reference-runs.json` | environment, argv, exit code and stderr for every invocation |
+| `olv-SHA256SUMS` | hash per OLV output for the ground-filter and DTM studies |
+| `olv-dsm-SHA256SUMS` | hash per OLV output for the DSM study |
+| `reference-runs.json` | environment, argv, exit code and stderr for the ground-filter and DTM invocations |
+| `reference-runs-dsm.json` | the same, for the DSM invocations, kept separate so the DSM study never rewrites the older studies' provenance |
+| `pdal-dsm-SHA256SUMS` | hash per PDAL DSM output |
 | `results-ground-filter.json` | the five ground legs, with the boundaries found |
 | `results-dtm.json` | the three DTM legs, with the boundaries found |
+| `results-dsm.json` | the three DSM legs, with the boundaries found |
 
-Two results files rather than one: a manifest names the raw artifacts a derived
-summary came from and carries a digest over them, and a combined file could not
-be true to both derivations.
+One results file per study rather than one for all: a manifest names the raw
+artifacts a derived summary came from and carries a digest over them, and a
+combined file could not be true to every derivation. The DSM reference is written
+into its own `reference-runs-dsm.json` for the same reason — the ground-filter
+and DTM manifests already froze the exact bytes of `reference-runs.json`, and a
+new study may not rewrite an old study's provenance to record its own.
 
 ## Reproducing
 
 ```
 node scripts/generate-point-cloud-fixtures.mjs
 node scripts/run-pdal-reference.mjs
+node scripts/run-pdal-dsm-reference.mjs
 npx vitest run tests/groundFilterPdalAgreement.test.ts
 ```
 
-The third step recomputes the OLV side, rewrites `olv/` and both results files,
-and asserts the comparisons. Re-running any step rewrites byte-identical files.
+The last step recomputes the OLV side, rewrites `olv/` and all three results
+files, and asserts the comparisons. Re-running any step rewrites byte-identical
+files.
 
 ## What the studies found
 
@@ -107,6 +128,13 @@ and asserts the comparisons. Re-running any step rewrites byte-identical files.
 registered 0.00005 m and the largest single difference is 3.78e-6 m, about half
 a float32 step at these elevations. Grid origin, cell indexing and row order line
 up with PDAL.
+
+**DSM: `agree`.** All 7500 cells across the three scenes are within the same
+registered 0.00005 m and the largest single difference is 3.78e-6 m, the same
+float32 magnitude as the DTM. 1273 of those cells carry a maximum above their
+minimum — a roof or a canopy — so the run tests the top-surface selection and not
+only the grid. `buildDsm` and `writers.gdal` `output_type: max` pick the same
+highest return per cell.
 
 **Ground filtering: `partial`.** The two planar scenes agree with PDAL on every
 one of their 21682 returns. The rolling, ridge and low-blunder scenes do not:
@@ -143,7 +171,12 @@ Recorded per study in `results-ground-filter.json` and `results-dtm.json` under
   per-cell minimum. The pipeline orchestrator enables a small despike floor by
   default, so the low-blunder scene exercises the leaf as the reference runs it
   and not as the product ships it.
-- **The DTM study cannot speak for a realistic cloud.** See above on why the
-  fixtures are gridded.
-- **Every DTM cell receives exactly one return**, so nothing here says anything
-  about how either side marks or fills a cell with no data.
+- **The DTM and DSM studies cannot speak for a realistic cloud.** See above on
+  why the fixtures are gridded; the DSM scenes stack returns at the cell centre
+  for the same reason.
+- **Every DTM cell receives exactly one return, and every DSM cell receives a
+  ground return**, so nothing here says anything about how either side marks or
+  fills a cell with no data.
+- **The DSM study covers one aggregation, the maximum.** It says nothing about
+  first- or last-return selection, a percentile-of-top surface, or any cell size
+  other than 1 m.
