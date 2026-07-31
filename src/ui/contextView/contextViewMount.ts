@@ -20,6 +20,7 @@ import { decideContextEligibility } from '../../geo/context/contextEligibility';
 import { buildContextFootprint, type ContextFootprint } from '../../geo/context/footprintModel';
 import { contextFactsFrom, lonLatTransformFrom } from '../../geo/context/fromCrs';
 import { createConsentState } from '../../geo/context/consent';
+import { CONTEXT_STATUS } from '../../geo/context/statusVocabulary';
 import { renderContextViewPanel, type ContextViewPanelState } from './ContextViewPanel';
 
 /** The XY footprint bounds of one loaded layer, in its native CRS. */
@@ -44,13 +45,28 @@ export interface ContextViewHost {
   readonly converter: () => CoordinateConverter;
 }
 
+/** True when all four XY bounds of a layer are finite numbers. */
+function hasFiniteBounds(layer: ContextLayerDescriptor): boolean {
+  const b = layer.bounds;
+  return [b.minX, b.minY, b.maxX, b.maxY].every(Number.isFinite);
+}
+
 /**
  * Assemble the panel state from the host — pure given the host's answers.
- * Eligibility is decided once for the app's single resolved CRS, probing the
- * converter at the FIRST layer's bounds centre (the layers share the CRS, so
- * one honest probe answers for all). Layers whose corners fail to transform
- * are omitted from the footprint list rather than drawn at guessed positions;
- * the panel's canvas label carries the count that made it.
+ *
+ * Bounds-finiteness is judged PER LAYER, never inherited from whichever layer
+ * happens to be first: one poisoned layer must not refuse its placeable
+ * siblings. The converter is probed at the centre of the first layer that
+ * actually has finite bounds (the layers share the app's single resolved CRS,
+ * so one honest probe answers for all of them), and layers whose corners fail
+ * to transform are omitted from the footprint list rather than drawn at guessed
+ * positions; the panel's canvas label carries the count that made it.
+ *
+ * Two states exist that are NOT transform refusals, and neither may borrow the
+ * transform vocabulary:
+ *   - no layers at all → the `empty` state, which says exactly that;
+ *   - layers present but none with finite bounds → a bounds refusal with no
+ *     transform claim, because no probe was attempted.
  */
 export function buildContextViewState(
   host: ContextViewHost,
@@ -60,19 +76,31 @@ export function buildContextViewState(
   const crs = host.currentCrs();
   const converter = host.converter();
 
-  const first = layers[0];
-  const boundsFinite =
-    first !== undefined &&
-    [first.bounds.minX, first.bounds.minY, first.bounds.maxX, first.bounds.maxY].every(
-      Number.isFinite,
-    );
-  const probe = first
-    ? {
-        x: (first.bounds.minX + first.bounds.maxX) / 2,
-        y: (first.bounds.minY + first.bounds.maxY) / 2,
-      }
-    : { x: 0, y: 0 };
-  const facts = contextFactsFrom(crs, converter, probe, boundsFinite);
+  // (1) Nothing loaded: the panel has no scan to make any claim about.
+  if (layers.length === 0) {
+    return { consent, eligible: false, empty: true, reasons: [], footprints: [] };
+  }
+
+  const placeable = layers.filter(hasFiniteBounds);
+
+  // (2) Layers present, none with usable bounds. No probe point exists, so the
+  // probe is not attempted — and the state must not report a probe result.
+  if (placeable.length === 0) {
+    const facts = contextFactsFrom(crs, converter, { x: 0, y: 0 }, false);
+    const decision = decideContextEligibility(facts);
+    const reasons = decision.eligible
+      ? [CONTEXT_STATUS.boundsNotFinite]
+      : decision.reasons.filter((r) => r !== CONTEXT_STATUS.transformUnavailable);
+    return { consent, eligible: false, reasons, footprints: [] };
+  }
+
+  // (3) At least one layer can be placed: probe at its centre, for real.
+  const probeLayer = placeable[0];
+  const probe = {
+    x: (probeLayer.bounds.minX + probeLayer.bounds.maxX) / 2,
+    y: (probeLayer.bounds.minY + probeLayer.bounds.maxY) / 2,
+  };
+  const facts = contextFactsFrom(crs, converter, probe, true);
   const decision = decideContextEligibility(facts);
   if (!decision.eligible) {
     return { consent, eligible: false, reasons: decision.reasons, footprints: [] };
@@ -80,10 +108,8 @@ export function buildContextViewState(
 
   const transform = lonLatTransformFrom(converter, crs as ResolvedCrs);
   const footprints: ContextFootprint[] = [];
-  for (const layer of layers) {
-    const b = layer.bounds;
-    if (![b.minX, b.minY, b.maxX, b.maxY].every(Number.isFinite)) continue;
-    const built = buildContextFootprint(layer.id, layer.name, b, transform);
+  for (const layer of placeable) {
+    const built = buildContextFootprint(layer.id, layer.name, layer.bounds, transform);
     if ('failed' in built) continue; // refusal, never a guessed outline
     footprints.push(built);
   }

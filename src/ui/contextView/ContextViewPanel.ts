@@ -49,6 +49,12 @@ export interface ContextViewPanelState {
   readonly eligible: boolean;
   readonly reasons: readonly string[];
   readonly footprints: readonly ContextFootprint[];
+  /**
+   * No layer is loaded at all. Distinct from a refusal: there is no scan to
+   * refuse, so the panel says only that, and never a word about CRS, datum, or
+   * a transform probe it never ran. Absent/false means the normal states apply.
+   */
+  readonly empty?: boolean;
 }
 
 /** Callbacks + optional camera marker. Grant/deny fire only from real button clicks. */
@@ -99,12 +105,25 @@ export function renderContextViewPanel(
   state: ContextViewPanelState,
   opts: ContextViewPanelOptions = {},
 ): HTMLElement {
-  const status = state.eligible ? state.consent : 'ineligible';
+  const status = state.empty === true ? 'empty' : state.eligible ? state.consent : 'ineligible';
   const panel = el('div', { className: `olv-context-panel is-${status}` });
   panel.setAttribute('role', 'region');
   panel.setAttribute('aria-label', 'World context');
 
   panel.append(el('div', { className: 'olv-context-head', text: 'World context' }));
+
+  // (a0) Nothing loaded: say so and stop. No refusal card, because there is no
+  // scan to refuse, and no claim about a CRS or a transform that was never
+  // examined.
+  if (state.empty === true) {
+    panel.append(
+      el('p', {
+        className: 'olv-context-empty',
+        text: 'No scan is loaded, so there is nothing to place on a world map.',
+      }),
+    );
+    return panel;
+  }
 
   // (a) Ineligible: the refusal reasons, nothing else — no consent UI, no canvas.
   if (!state.eligible) {

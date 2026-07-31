@@ -13,6 +13,7 @@ import { buildContextViewState } from '../src/ui/contextView/contextViewMount';
 import type { ContextViewHost } from '../src/ui/contextView/contextViewMount';
 import type { CoordinateConverter, ConversionResult } from '../src/geo/CoordinateConverter';
 import type { GeographicPoint, ResolvedCrs } from '../src/geo/CoordinateTypes';
+import { CONTEXT_STATUS } from '../src/geo/context/statusVocabulary';
 
 const PROJECTED = {
   kind: 'projected',
@@ -121,5 +122,59 @@ describe('buildContextViewState', () => {
     const state = buildContextViewState(hostOf({ listLayers: () => [] }), 'unasked');
     expect(state.eligible).toBe(false);
     expect(state.footprints).toEqual([]);
+  });
+
+  // --- honesty of the refusal itself -------------------------------------
+
+  it('judges bounds per layer: a non-finite FIRST layer does not refuse its placeable siblings', () => {
+    const state = buildContextViewState(
+      hostOf({
+        listLayers: () => [
+          { id: 'bad', name: 'Poisoned first', bounds: { minX: Number.NaN, minY: 0, maxX: 1, maxY: 1 } },
+          { id: 'good', name: 'Perfectly placeable', bounds: { minX: 0, minY: 0, maxX: 1000, maxY: 1000 } },
+        ],
+      }),
+      'granted',
+    );
+    expect(state.eligible).toBe(true);
+    expect(state.reasons).toEqual([]);
+    expect(state.footprints.map((f: { layerId: string }) => f.layerId)).toEqual(['good']);
+  });
+
+  it('does not claim a transform is unavailable when no probe was attempted', () => {
+    // Every layer has non-finite bounds, so there is no honest probe point.
+    // The state may say the bounds are not finite; it may NOT report a probe
+    // result it never obtained.
+    const state = buildContextViewState(
+      hostOf({
+        listLayers: () => [
+          { id: 'bad', name: 'Poisoned', bounds: { minX: Number.NaN, minY: 0, maxX: 1, maxY: 1 } },
+          { id: 'worse', name: 'Also poisoned', bounds: { minX: 0, minY: 0, maxX: Number.POSITIVE_INFINITY, maxY: 1 } },
+        ],
+      }),
+      'unasked',
+    );
+    expect(state.eligible).toBe(false);
+    expect(state.empty).not.toBe(true);
+    expect(state.reasons).toContain(CONTEXT_STATUS.boundsNotFinite);
+    expect(state.reasons).not.toContain(CONTEXT_STATUS.transformUnavailable);
+    expect(state.footprints).toEqual([]);
+  });
+
+  it('gives an empty layer list its own state, with no transform claim at all', () => {
+    const state = buildContextViewState(hostOf({ listLayers: () => [] }), 'unasked');
+    expect(state.empty).toBe(true);
+    expect(state.eligible).toBe(false);
+    expect(state.reasons).toEqual([]);
+    expect(state.reasons).not.toContain(CONTEXT_STATUS.transformUnavailable);
+    expect(state.reasons).not.toContain(CONTEXT_STATUS.boundsNotFinite);
+    expect(state.footprints).toEqual([]);
+  });
+
+  it('still refuses honestly when the CRS itself is unusable and bounds are fine', () => {
+    const state = buildContextViewState(hostOf({ currentCrs: () => null }), 'unasked');
+    expect(state.empty).not.toBe(true);
+    expect(state.reasons).toContain(CONTEXT_STATUS.crsUnknown);
+    expect(state.reasons).toContain(CONTEXT_STATUS.transformUnavailable);
   });
 });
