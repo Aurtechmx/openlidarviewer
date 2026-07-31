@@ -5637,6 +5637,12 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
     // is nothing to rebase against; keep the verbatim geometry (the missing-
     // scan toast below already tells the user to drop the scan).
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // Capture the scan this import matches against, re-checked before we attach
+    // state. A session restore routes ahead of the loading guard, so a scan
+    // swapped in mid-import must not inherit another scan's measurements.
+    const targetId = scans.activeId;
+    const targetStreamingCloud = viewer.streamingCloud;
+    const targetStaticCloud = targetId ? viewer.getCloud(targetId) : undefined;
     // Guard the rebase: a session's geometry is local to the scan it was
     // captured over, so realigning it onto the loaded cloud is only correct when
     // that IS its scan. Compare the session's stored fingerprint (built the same
@@ -5706,6 +5712,18 @@ async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {
           delta: [0, 0, 0] as const,
         };
     const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
+    // The scan could have been swapped in under us since we matched (this import
+    // routes ahead of the loading guard). Refuse to attach the session's state
+    // to a scan it was never matched against. (mirrors the 1723/1808 guard.)
+    if (
+      haveCloud &&
+      (scans.activeId !== targetId ||
+        viewer.streamingCloud !== targetStreamingCloud ||
+        (targetId ? viewer.getCloud(targetId) : undefined) !== targetStaticCloud)
+    ) {
+      showLassoToast('Session not applied — the active scan changed while it was importing.');
+      return;
+    }
     viewer.measure.loadMeasurements(geo.measurements);
     viewer.annotate.loadAnnotations(geo.annotations);
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
