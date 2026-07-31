@@ -75,6 +75,15 @@
  * at the cell CENTRE. They are the input to the DTM study, and the regular
  * layout is the whole point of them.
  *
+ * The three DSM scenes (`role: surface`) keep that cell-centred layout for the
+ * same estimator reason, but stack returns ABOVE the ground return on a subset
+ * of cells — a flat roof and a facade midpoint over building footprints, a
+ * canopy over vegetation clumps. Every above-ground return is still placed at
+ * the cell centre, so the disc and the square hold the same set and the cell
+ * MAXIMUM (the DSM) is comparable at the same tolerance as the minimum (the
+ * DTM). The stacking is what makes DSM differ from DTM; without it the two
+ * products coincide and the max study would only re-test the min study's grid.
+ *
  * WHY THE DTM FIXTURES ARE GRIDDED, AND WHAT THAT COSTS. PDAL's `writers.gdal`
  * is a RADIUS estimator: a cell takes its value from every point within
  * `radius` of the cell centre, default `resolution * sqrt(2)`. `rasterizeDtm`
@@ -211,6 +220,23 @@ export const FIXTURES = [
   { id: 'pc-06-bare-plane', datasetId: 'OLV-DS-012-PC-BARE-PLANE', surface: 'plane', role: 'bare-earth', layout: 'cell-centred', objects: false, gap: false, blunders: false, seed: 1006 },
   { id: 'pc-07-bare-rolling', datasetId: 'OLV-DS-013-PC-BARE-ROLLING', surface: 'rolling', role: 'bare-earth', layout: 'cell-centred', objects: false, gap: false, blunders: false, seed: 1007 },
   { id: 'pc-08-bare-ridge', datasetId: 'OLV-DS-014-PC-BARE-RIDGE', surface: 'ridge', role: 'bare-earth', layout: 'cell-centred', objects: false, gap: false, blunders: false, seed: 1008 },
+  // ── DSM (top-surface) scenes ────────────────────────────────────────────────
+  // These feed the DSM study, which mirrors the DTM study with min -> max. They
+  // are cell-centred like the bare-earth scenes, for the SAME reason: PDAL's
+  // writers.gdal is a radius estimator and buildDsm is a cell estimator, and a
+  // disc only equals a square when every cell's returns sit inside a disc smaller
+  // than the cell. So every return is placed AT the cell centre (`objects: true`,
+  // `layout: cell-centred-structured`), with a subset of cells carrying returns
+  // ABOVE the ground return — a flat roof, a facade midpoint, or a canopy — so
+  // the cell's maximum is genuinely above its minimum and the study exercises the
+  // upper-surface selection rather than re-testing the bare-earth georeferencing.
+  // A scattered scene with structure (pc-01..05) could NOT be used here: on
+  // scattered returns the disc and the square disagree and no tolerance near
+  // float32 spacing could hold, which is the same reason the DTM fixtures are
+  // gridded.
+  { id: 'pc-09-plane-structures', datasetId: 'OLV-DS-015-PC-PLANE-STRUCTURES', surface: 'plane', role: 'surface', layout: 'cell-centred-structured', objects: true, gap: false, blunders: false, seed: 1009 },
+  { id: 'pc-10-rolling-structures', datasetId: 'OLV-DS-016-PC-ROLLING-STRUCTURES', surface: 'rolling', role: 'surface', layout: 'cell-centred-structured', objects: true, gap: false, blunders: false, seed: 1010 },
+  { id: 'pc-11-ridge-structures', datasetId: 'OLV-DS-017-PC-RIDGE-STRUCTURES', surface: 'ridge', role: 'surface', layout: 'cell-centred-structured', objects: true, gap: false, blunders: false, seed: 1011 },
 ];
 
 /**
@@ -247,6 +273,63 @@ export function buildFixture(spec) {
         const y = (row + 0.5) * DTM_CELL_M;
         points.push({ x: q(x), y: q(y), z: q(surface(x, y)) });
         truth.push(1);
+      }
+    }
+    return { points, truth };
+  }
+
+  if (spec.layout === 'cell-centred-structured') {
+    // The DSM scenes. Every return is placed AT a cell centre so a disc of
+    // radius < half a cell and the square cell hold the SAME returns, exactly as
+    // the bare-earth scenes arrange it. What differs is that some cells stack
+    // returns ABOVE the ground return, so the cell maximum (the DSM) sits above
+    // the cell minimum (the DTM) and the study tests upper-surface selection.
+    const n = Math.round(EXTENT_M / DTM_CELL_M);
+    // Vegetation clumps are drawn first, so the LCG sequence that fixes the
+    // committed bytes does not depend on the cell iteration below.
+    const clumps = [];
+    for (let c = 0; c < VEG_CLUMPS; c++) {
+      clumps.push({
+        cx: 2 + rnd() * (EXTENT_M - 4),
+        cy: 2 + rnd() * (EXTENT_M - 4),
+        h: VEG_MIN_H + rnd() * (VEG_MAX_H - VEG_MIN_H),
+      });
+    }
+    const r2 = VEG_RADIUS_M * VEG_RADIUS_M;
+    for (let row = 0; row < n; row++) {
+      for (let col = 0; col < n; col++) {
+        const x = (col + 0.5) * DTM_CELL_M;
+        const y = (row + 0.5) * DTM_CELL_M;
+        const g = surface(x, y);
+        // Ground return — ALWAYS, so every cell is covered on both sides and the
+        // study never speaks to empty-cell handling, which it does not test.
+        points.push({ x: q(x), y: q(y), z: q(g) });
+        truth.push(1);
+        const b = BUILDINGS.find((bb) => inBuilding(x, y, bb));
+        if (b) {
+          // A flat roof at a constant height above the building corner's ground
+          // (as a roof follows the building, not the terrain), plus a facade
+          // return halfway between ground and roof. Three returns in the cell, so
+          // the maximum must be selected rather than being the only value.
+          const roof = surface(b.x0, b.y0) + b.h;
+          const mid = (g + roof) / 2;
+          points.push({ x: q(x), y: q(y), z: q(mid) });
+          truth.push(0);
+          points.push({ x: q(x), y: q(y), z: q(roof) });
+          truth.push(0);
+          continue;
+        }
+        // A canopy return where a vegetation clump covers this cell centre.
+        // Squared distance so the boundary test needs no sqrt and stays exact.
+        const clump = clumps.find((cl) => {
+          const dx = x - cl.cx;
+          const dy = y - cl.cy;
+          return dx * dx + dy * dy <= r2;
+        });
+        if (clump) {
+          points.push({ x: q(x), y: q(y), z: q(g + clump.h) });
+          truth.push(0);
+        }
       }
     }
     return { points, truth };
