@@ -628,8 +628,8 @@
     {
       "type": "library",
       "name": "proj4",
-      "version": "2.20.9",
-      "bom-ref": "openlidarviewer@0.6.3|proj4@2.20.9",
+      "version": "2.21.0",
+      "bom-ref": "openlidarviewer@0.6.3|proj4@2.21.0",
       "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
       "licenses": [
         {
@@ -639,7 +639,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/proj4@2.20.9",
+      "purl": "pkg:npm/proj4@2.21.0",
       "externalReferences": [
         {
           "url": "git://github.com/proj4js/proj4js.git",
@@ -657,7 +657,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/proj4/-/proj4-2.20.9.tgz",
+          "url": "https://registry.npmjs.org/proj4/-/proj4-2.21.0.tgz",
           "type": "distribution",
           "hashes": [
             {
@@ -3169,7 +3169,7 @@
         "openlidarviewer@0.6.3|@loaders.gl/ply@4.4.3",
         "openlidarviewer@0.6.3|laz-perf@0.0.7",
         "openlidarviewer@0.6.3|pdf-lib@1.17.1",
-        "openlidarviewer@0.6.3|proj4@2.20.9",
+        "openlidarviewer@0.6.3|proj4@2.21.0",
         "openlidarviewer@0.6.3|three@0.184.0"
       ]
     },
@@ -3238,7 +3238,7 @@
       "ref": "openlidarviewer@0.6.3|pdf-lib@1.17.1|tslib@1.14.1"
     },
     {
-      "ref": "openlidarviewer@0.6.3|proj4@2.20.9",
+      "ref": "openlidarviewer@0.6.3|proj4@2.21.0",
       "dependsOn": [
         "openlidarviewer@0.6.3|mgrs@1.0.0",
         "openlidarviewer@0.6.3|wkt-parser@1.5.5"
