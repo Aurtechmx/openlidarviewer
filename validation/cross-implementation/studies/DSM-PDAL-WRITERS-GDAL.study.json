@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "studyId": "DSM-PDAL-WRITERS-GDAL-CELL-CENTRED",
+  "claimId": "DSM",
+  "example": false,
+  "notes": [
+    "The tolerance below was registered at pending in an earlier commit, before anything ran, and is unchanged. protocolDigest covers it.",
+    "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched.",
+    "This is the DTM study with min -> max. The maximum, like the minimum, selects an input Z rather than combining several returns, so on the same points the two implementations differ only by float32 storage against a double transcoded at six decimals. The scenes stack returns above the ground on a subset of cells so the maximum genuinely sits above the minimum; on a scattered cloud a disc is not a square and the two maxima could not agree, which is why the fixtures are cell-centred exactly as the DTM fixtures are."
+  ],
+  "protocolDigest": "sha256:db1e504b5f116522a53a6a22902dd635cda048aa9ba3e28db7090eaae3d7297f",
+  "candidate": {
+    "revision": "e8065730c71712fc900f0211e60943b7e501087c",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.3"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host these references were produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version PDAL reports and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/<fixture>__dsm-max.json, then gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 <fixture>__dsm-max.tif <fixture>__dsm-max.asc",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "description": "Cell-centred cloud on a 5.4 % plane, one ground return per 1 m cell plus stacked roof, facade and canopy returns above a subset of cells. 50 by 50 cells; the top surface sits above the ground on the structured cells and equals it elsewhere.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+      "sha256": "2149eddfde164d97dd9e519c04bee90fdf2447661ae2c944e3abe87511928371"
+    },
+    {
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "description": "The same structured cell-centred layout over a rolling surface with two incommensurate wavelengths, so no translation of the grid maps the surface onto itself and a row flip cannot pass.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+      "sha256": "3c3919f1c51b179bd00196996f3d221b57d2f86125fcea4775d5f2c0a989bebb"
+    },
+    {
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "description": "The same structured cell-centred layout over a 30 % V ridge, where a half-cell offset costs 15 cm and is well clear of the tolerance.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+      "sha256": "96f474b7e40d7a87baf73cf6519ddd1adb7aecf90c350a8338de114c9976ce2d"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-DSM-MAX-CELL1-R045",
+      "description": "Highest return per cell, 1 m cells, grid pinned to origin (0, 0) and 50 by 50 cells. The reference radius of 0.45 m is below half a cell, so each cell disc holds exactly the returns placed at that cell centre and the radius estimator and the cell estimator compute the same maximum.",
+      "candidateParameters": {
+        "function": "buildDsm",
+        "aggregation": "max",
+        "gridOriginH1": 0,
+        "gridOriginH2": 0,
+        "cols": 50,
+        "rows": 50,
+        "cellSizeM": 1,
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "stage": "writers.gdal",
+        "output_type": "max",
+        "resolution": 1,
+        "radius": 0.45,
+        "origin_x": 0,
+        "origin_y": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "data_type": "double",
+        "gdaldriver": "GTiff",
+        "transcode": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.00005,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 7500 cells across the three scenes are within the registered 0.00005 m, and the largest single difference is 3.784180e-6 m, about a float32 step at these elevations. Nothing was widened: the largest observed difference is more than an order of magnitude inside the tolerance registered at pending.",
+  "result": {
+    "comparableCells": 7500,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.000003784179682497779,
+    "rmse": 0.0000021599353259922987,
+    "meanDiff": 4.313964855668928e-8
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+      "sha256": "2149eddfde164d97dd9e519c04bee90fdf2447661ae2c944e3abe87511928371",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+      "sha256": "3c3919f1c51b179bd00196996f3d221b57d2f86125fcea4775d5f2c0a989bebb",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+      "sha256": "96f474b7e40d7a87baf73cf6519ddd1adb7aecf90c350a8338de114c9976ce2d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dsm-max.json",
+      "sha256": "0928f8be3ee3e0ffd7edb17a4b297b2b0286a63bed2fe6a24746186547e17c1c",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dsm-max.json",
+      "sha256": "5fb791977ce5cfdc3d1e9d2b2f2640d75a92b0a774410527a5d8f5392b201ee5",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dsm-max.json",
+      "sha256": "93a874024cd7ea2bb7c2a4c9c356a3db1f061fe3170c8963dad813ebe45950f6",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.tif",
+      "sha256": "cb739a0f50523ecb0a6c9143b6df1b258e3cbd7560960466e027a42cb732f3da",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.tif",
+      "sha256": "054f4bca99a7b5e92a70dce3ddff09f3d78bbd03ad601a34b54339a2ce6791f8",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.tif",
+      "sha256": "f74991f3d47e93f02b97162b55ee0e0e9bad4ea53ffca05b38de56ee04911ae1",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc",
+      "sha256": "aaee26058bf7361c1fffcacd63c1298ef5b03dd81360ecd3b8aa14dfbdbcf126",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc",
+      "sha256": "9f2d22cc1cc6efe3717ff92e520328b4eabdf0d98d475a27fcafc018eccbc805",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc",
+      "sha256": "32c8b08abf33704e6a9c4913af4288e48eddc8f05fc094ae574344d8ce58cf1a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-09-plane-structures__dsm-max.asc",
+      "sha256": "13bedab770e26d3eb0de3b81f8b88af6cca8c5c645b857d76084a6d9bc0da001",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-10-rolling-structures__dsm-max.asc",
+      "sha256": "f4a16fff566660bdbffc0ba774d23dd79ead60a9fab13e4a63c4b0e198a2f9ae",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/olv/pc-11-ridge-structures__dsm-max.asc",
+      "sha256": "084242b6a5b9caf006ec924271aa2bb5d5318ce64b5627a7a990b7d2b8e4450d",
+      "role": "candidate-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/reference-runs-dsm.json",
+      "sha256": "68aea090a6506dba0ce60761f811e264b00841fd5649714208791256a8590ab5",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/results-dsm.json",
+      "sha256": "0f4136c9742e9675911d40f1d4c67684574c48b67ccb560b8577e25d8c5844ad",
+      "derivedFrom": [
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+        "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dsm-max.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dsm-max.json",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dsm-max.json",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-09-plane-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-10-rolling-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/olv/pc-11-ridge-structures__dsm-max.asc",
+        "validation/cross-implementation/pdal-pipeline/reference-runs-dsm.json"
+      ],
+      "inputsDigest": "sha256:cb0c80976cad22974a73242454aa74300e9581efd165a8e2d7c847746909cd3a"
+    }
+  ],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "parameterSetId": "PS-DSM-MAX-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "parameterSetId": "PS-DSM-MAX-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+        "parameterSetId": "PS-DSM-MAX-CELL1-R045"
+      }
+    ],
+    "unsupported": [
+      "Aggregation over a scattered cloud. Every return is at a cell centre so the disc and the square coincide; a scattered cloud would compare a disc against a square and is out of scope here, as it is for the DTM study.",
+      "Empty cells. Every cell receives a ground return, so nothing here says anything about how either side marks or fills a cell with no data.",
+      "One aggregation (maximum) and one cell size. Nothing here says anything about first/last-return selection, percentile-of-top surfaces, or any cell size other than 1 m.",
+      "Agreement with PDAL is not accuracy against ground truth."
+    ]
+  },
+  "protocolRef": {
+    "protocolId": "PROTO-PDAL-DSM-TOP-SURFACE",
+    "digest": "sha256:446a51438d107b6ba75054dc1954ab28fbcd80f5c7dde7eeeafad93ef2d17421"
+  },
+  "freeze": {
+    "witnessCommit": "1dba4140c144fc1ba5c46b8cec8a8ee502df1c6e",
+    "witness": "The commit that registered this study at pending with its tolerance frozen, before it was run. Named here because a squash merge would collapse the preregistration and the result into one commit."
+  }
+}
