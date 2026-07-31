@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "recordId": "EXAMPLE-REACH-BEYOND-A-STUDY",
+  "example": true,
+  "source": {
+    "kind": "cross-implementation-study",
+    "id": "EXAMPLE-SLOPE-RASTER-GDAL-HORN-TWO-PARAMETER-SETS",
+    "measured": "EXAMPLE. In a real record this is what the source ACTUALLY measured, in its own terms: the data it ran on, the parameters it fixed, the tolerance it was held to, and the conditions it never left. The reach below is only meaningful against this sentence, and writing it out is what stops a record from quietly widening the base it reasons from. This one points at an EXAMPLE study, which measured nothing at all."
+  },
+  "dimension": {
+    "axis": "point-density",
+    "measuredRange": "EXAMPLE: the span the source covered along this one axis, as a range or an enumeration and never as an adjective. A number with a unit, or a list.",
+    "extrapolatedTo": "EXAMPLE: how far this record reaches along the same axis, and no further. One axis per record: a reach that stretches density and sensor and terrain at once hides which of the three it is weakest on."
+  },
+  "assertion": "EXAMPLE. One sentence a reader can disagree with, naming the result and the conditions it is being carried into. \"Behaves well at other densities\" is not one, because there is nothing in it to be wrong about.",
+  "basis": {
+    "kind": "measured-second-dataset",
+    "statement": "EXAMPLE. The reason to believe the reach, or the admission that there is none. Five bases exist and they are not interchangeable: measured-second-dataset and measured-parameter-sweep rest on a measurement, mechanism and analogy rest on an argument, and assumed rests on nothing. All five are writable, because an inference nothing supports still has to be recordable somewhere other than a reader's head. Only the measured two can reach status \"supported\".",
+    "measurement": {
+      "sourceKind": "field-study",
+      "sourceIds": ["EXAMPLE-DTM-FIELD-CHECK"],
+      "datasetIds": ["EXAMPLE-DS-001-ACQUIRED-COPC"],
+      "summary": "EXAMPLE. What the second measurement found along this axis, including the parts that went the wrong way. A summary with no disagreement anywhere in it is a summary of one result. The ids above are EXAMPLE records that measured nothing; the verifier permits that here only because this record is itself an example, and refuses it on a real one.",
+      "retrievedAt": "2026-07-30"
+    }
+  },
+  "status": "proposed",
+  "statusReason": "Template only. It asserts no generalisation: an example may sit at \"proposed\" or \"untested\" and nowhere else, so the shape of a measured basis is visible here without a template ever reporting that a reach was carried. A real record with this basis would be assessed and moved to \"supported\" or to \"refused\" by what the second measurement said.",
+  "boundary": {
+    "doesNotExtendTo": [
+      "EXAMPLE: the first thing this reach still does not cover, stated plainly enough that somebody could catch you exceeding it.",
+      "EXAMPLE: every other axis. A record about density says nothing about sensors, terrain, CRS or scale, and silence on an axis is not permission."
+    ],
+    "wouldBeSettledBy": "EXAMPLE: the measurement that would move this record off its current status, named concretely enough that somebody could go and run it."
+  },
+  "reviewedAt": "2026-07-31",
+  "reviewedBy": "EXAMPLE. Who last read this record and agreed it still says what it says.",
+  "notes": [
+    "EXAMPLE RECORD. It is a filled-in template, not an inference this project makes. No second dataset was measured, and the ids it cites are themselves EXAMPLE records.",
+    "Every field is written out because the shape is the point: what a generalisation has to state before anyone can judge it, and in particular where the measurement stopped.",
+    "To file a real record: copy this, drop the EXAMPLE- prefix, set example to false, name a source that resolves in the register its kind points at, and pick the basis that is honestly yours. An assumption filed as an assumption is a contribution; an assumption filed as a measurement is the failure this container was built to catch."
+  ]
+}
