@@ -18,6 +18,8 @@ import { Inspector } from './ui/Inspector';
 import { ThemeToggle } from './ui/ThemeToggle';
 import { mountHeaderControls } from './ui/headerControls';
 import { ToolDock } from './ui/toolDock';
+import { revealStreamingScanChrome } from './ui/streamingScanReveal';
+import { createCompassController } from './ui/compassController';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
 import { el } from './ui/dom';
@@ -215,7 +217,6 @@ import {
   loadLasLoader,
   loadReclassifyUi,
   loadContextMenu,
-  loadViewCube,
   loadReportVerifier,
   loadWorkflowConfigPanel,
   loadCommandPalette,
@@ -833,86 +834,14 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // the app's left and right edges are full-height panel columns (left panels and
 // the Inspector), so a persistent gizmo has no free corner to occupy without
 // overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. The pure heading/face math is unit-tested (viewCubeMath)
-// and the widget routes through lazyChunks so its specifier can't be scrambled by
-// the live obfuscator. A bounded rAF loop spins the rose and pauses while the tab
-// is hidden.
-const COMPASS_PREF_KEY = 'olv.compass';
-let compassEnabled = ((): boolean => {
-  if (urlParams.get('viewcube') === '0') return false;
-  if (urlParams.has('viewcube')) return true;
-  try {
-    return localStorage.getItem(COMPASS_PREF_KEY) === 'on';
-  } catch {
-    return false;
-  }
-})();
-let compassViewer: typeof viewer | null = null;
-let compassHandle: { readonly update: () => void; readonly dispose: () => void } | null = null;
-let compassRaf = 0;
-let compassVisHandler: (() => void) | null = null;
-
-function startCompass(): void {
-  if (!compassEnabled || compassHandle || !compassViewer) return;
-  // Nothing to orient until a scan is open — don't float the compass over the
-  // empty drop state.
-  if (compassViewer.clouds().length === 0) return;
-  const v = compassViewer;
-  void loadViewCube().then(({ mountViewCube }) => {
-    // Re-validate at mount time: the lazy chunk load is async, so the scan may
-    // have been closed (or the compass toggled off, or one already mounted)
-    // while it loaded. Without the clouds() recheck the compass would mount over
-    // the empty state after a fast open-then-close.
-    if (!compassEnabled || compassHandle || v.clouds().length === 0) return;
-    const cube = mountViewCube({
-      host: stage.overlay,
-      getHeading: () => v.cameraHeadingDeg(),
-      onView: (view) => void v.setStandardView(view),
-    });
-    compassHandle = cube;
-    const tick = (): void => {
-      cube.update();
-      compassRaf = window.requestAnimationFrame(tick);
-    };
-    const resume = (): void => {
-      if (compassRaf === 0 && !document.hidden) compassRaf = window.requestAnimationFrame(tick);
-    };
-    const pause = (): void => {
-      if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
-    };
-    compassVisHandler = (): void => (document.hidden ? pause() : resume());
-    document.addEventListener('visibilitychange', compassVisHandler);
-    resume();
-  });
-}
-
-function stopCompass(): void {
-  if (compassRaf !== 0) { window.cancelAnimationFrame(compassRaf); compassRaf = 0; }
-  if (compassVisHandler) { document.removeEventListener('visibilitychange', compassVisHandler); compassVisHandler = null; }
-  if (compassHandle) { compassHandle.dispose(); compassHandle = null; }
-}
-
-/** Start or stop the compass to match the preference AND scan presence. */
-function refreshCompass(): void {
-  if (compassEnabled && compassViewer && compassViewer.clouds().length > 0) startCompass();
-  else stopCompass();
-}
-
-/** Show or hide the compass and persist the choice. */
-function setCompassEnabled(on: boolean): void {
-  compassEnabled = on;
-  try {
-    localStorage.setItem(COMPASS_PREF_KEY, on ? 'on' : 'off');
-  } catch {
-    /* private mode — honour for this session only */
-  }
-  refreshCompass();
-}
-
-void viewerLoaded.then((v) => {
-  compassViewer = v;
-  refreshCompass();
+// on, `?viewcube=0` off. The life cycle — preference, lazy mount, rAF loop,
+// tab-visibility pausing — lives in ui/compassController.ts; see that file for
+// why it is not four module-scope `let`s here.
+const compass = createCompassController({
+  host: () => stage.overlay,
+  urlParams,
 });
+void viewerLoaded.then((v) => compass.attachViewer(v));
 
 // v0.5.3 — PWA: register the offline service worker. Production + secure-context
 // only, and skipped under `?test=1` so it never interferes with e2e or dev. The
@@ -1277,7 +1206,7 @@ const layerService = createLayerService({
   getViewer: () => viewer,
   getInspector: () => inspector,
   context: runtime.context,
-  refreshCompass,
+  refreshCompass: () => compass.refresh(),
   projectFrame,
 });
 
@@ -2242,7 +2171,7 @@ function buildActionRegistry(): Action[] {
     section: 'View',
     hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
     keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
-    run: () => setCompassEnabled(!compassEnabled),
+    run: () => compass.setEnabled(!compass.isEnabled()),
   });
 
   // v7 sessions — named view states from the palette. Both handlers already
@@ -6368,21 +6297,9 @@ async function openStreamingCopc(
   bookmarks.clear();
   refreshViewsUI();
 
-  // Measure, annotate, inspect, probe and close all work on a streaming scan:
-  // each resident COPC node keeps its full decoded per-point attributes.
-  // Reveal the dock the same way the static-load path does.
-  dock.setEmpty(false);
-  inspector.setEmpty(false);
-  dock.setMeasureEnabled(true);
-  dock.setAnnotateEnabled(true);
-  dock.setInspectEnabled(true);
-  dock.setProbeEnabled(true);
-  dock.setCloseEnabled(true);
-  dock.setBackend(viewer.activeBackend());
-  navBar.element.classList.remove('olv-hidden');
-  navBar.setMode('orbit');
-  navBar.flashHelp();
-  document.body.classList.add('olv-has-scan');
+  revealStreamingScanChrome({
+    dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
+  });
 
   startStreamingStatusPolling();
   dropZone.setProgress(null);
@@ -6653,9 +6570,11 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       schemaSummary,
     });
 
-    document.body.classList.add('olv-has-scan');
-    navBar.element.classList.remove('olv-hidden');
-    navBar.setMode('orbit');
+    // Was: body class + navBar only, which left the dock hidden — so an EPT
+    // scan loaded with no measure, inspect, probe, annotate or close.
+    revealStreamingScanChrome({
+      dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
+    });
     startStreamingStatusPolling();
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
@@ -7014,7 +6933,7 @@ function resetToEmptyState(): void {
   viewer.setInspectMode(false);
   viewer.clearMeasurements();
   // No scan open → take the compass down (nothing to orient).
-  refreshCompass();
+  compass.refresh();
   // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
   clipPanel.setVisible(false);
   // Hide + clear the Analyse panel so it doesn't linger with stale

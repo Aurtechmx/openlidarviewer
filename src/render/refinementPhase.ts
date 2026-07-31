@@ -53,10 +53,23 @@ export interface PhaseInput {
 
 /**
  * The next phase. Motion always resets to `moving` (coarse-first on any nudge).
- * When parked, the machine enters at `coverage` and advances ONLY on the
- * readiness signals — never on elapsed time alone — with the settle window as a
- * lower bound so a brief pause cannot skip coverage. Monotonic while parked: it
- * never steps backward without motion.
+ * When parked, the machine enters at `coverage` and advances on the readiness
+ * signals it is given, with the settle window as a lower bound so a brief pause
+ * cannot skip coverage. Monotonic while parked: it never steps backward without
+ * motion.
+ *
+ * What this function does NOT guarantee, despite an earlier version of this
+ * comment saying it does: that phases advance on anything other than elapsed
+ * time. This is a pure function of its inputs, and `coverageComplete` and
+ * `centralRefined` are declared above as accepting a proxy. The only production
+ * caller supplies both as exactly that — `Viewer.ts` passes
+ * `msSinceSettle >= SETTLE_MS` and `msSinceSettle >= PHASE_CENTER_PROXY_MS` —
+ * so as shipped the machine is driven by a clock and by nothing else.
+ *
+ * The claim was not wrong about the contract, it was wrong about the system: a
+ * signal-shaped parameter fed a timer. `refinementReadiness.ts` derives the two
+ * signals from scheduler state and is what makes the original sentence true.
+ * Until its output reaches this call site, read the phases as timing.
  */
 export function nextRefinementPhase(current: RefinementPhase, input: PhaseInput): RefinementPhase {
   if (input.moving) return 'moving';

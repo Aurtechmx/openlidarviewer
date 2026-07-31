@@ -37,7 +37,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,11 +107,49 @@ function hostPatterns() {
   return patterns.sort((a, b) => b.value.length - a.value.length);
 }
 
-/** Every tracked file, since anything tracked can reach the source archive. */
+/** Directories a filesystem walk must not enter: never tracked, or generated. */
+const WALK_SKIP = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'release',
+  'test-results',
+  'coverage',
+  'playwright-report',
+  '.claude',
+  '.venv',
+  '__pycache__',
+]);
+
+/** True when the file list came from a filesystem walk rather than git. */
+let archiveMode = false;
+
+/**
+ * Every tracked file, since anything tracked can reach the source archive.
+ * A source archive carries no `.git`, and a check that cannot run must not
+ * report success — but an archive's files ARE the shipped set, so the walk
+ * below scans exactly what the archive ships and the verdict stays earned.
+ */
 function trackedFiles() {
-  return execFileSync(GIT, ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8' })
-    .split('\0')
-    .filter(Boolean);
+  try {
+    return execFileSync(GIT, ['-C', ROOT, 'ls-files', '-z'], { encoding: 'utf8' })
+      .split('\0')
+      .filter(Boolean);
+  } catch {
+    archiveMode = true;
+    const files = [];
+    const walk = (rel) => {
+      for (const entry of readdirSync(resolve(ROOT, rel === '' ? '.' : rel), { withFileTypes: true })) {
+        if (entry.isSymbolicLink()) continue;
+        if (WALK_SKIP.has(entry.name)) continue;
+        const next = rel === '' ? entry.name : `${rel}/${entry.name}`;
+        if (entry.isDirectory()) walk(next);
+        else files.push(next);
+      }
+    };
+    walk('');
+    return files;
+  }
 }
 
 /** Skip anything that is not text; a binary match would be unreadable anyway. */
@@ -160,6 +198,6 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `lint:no-host-paths OK — ${scanned} tracked text file(s) name none of this ` +
-    `machine’s ${patterns.length} identifier(s).`,
+  `lint:no-host-paths OK — ${scanned} ${archiveMode ? 'walked (archive mode: no git history)' : 'tracked'} ` +
+    `text file(s) name none of this machine’s ${patterns.length} identifier(s).`,
 );

@@ -13,7 +13,15 @@
  * them that way (the boundary was previously self-discipline, not a gate).
  *
  * Scanned layers (must stay UI/three-free):
- *   src/terrain, src/validation, src/analysis, src/science (when present)
+ *   src/terrain, src/validation, src/analysis, src/science (when present),
+ *   src/geo/context
+ *
+ * A new pure layer has to be added to LAYERS or this lint says nothing about
+ * it, and says it in the same words it uses for a clean tree. src/geo/context
+ * arrived describing itself as a pure core that never imports proj4, and the
+ * lint reported the same 135 files before and after, because it read none of
+ * the new ones. An unchanged count reads like confirmation and was the absence
+ * of a check. Adding the directory is the whole fix.
  *
  * Banned import specifiers from within those layers:
  *   - anything under a `ui/` path (UI adapters / views)
@@ -36,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 // to exist), so the lint would print success having read zero files. A gate
 // that passes vacuously is worse than one that fails, hence fileURLToPath.
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science'];
+const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science', 'src/geo/context'];
 
 /** A specifier that reaches into the UI layer or pulls in three.js. */
 function isBanned(spec) {
@@ -61,8 +69,36 @@ function walk(dir, out) {
   }
 }
 
+// `walk` returns silently when a directory cannot be read, which is correct for
+// a layer that does not exist yet and wrong for every other cause. On Windows
+// the path bug above made all four unreadable at once and the lint reported
+// success over zero files. Counting per layer is what catches that: a total
+// would still pass while three of the four layers went unread.
+//
+// A layer with files today is a layer that must keep having them. Deleting one
+// is a real change and should fail here rather than quietly shrink the gate.
+const POPULATED_LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science'];
+
 const files = [];
-for (const layer of LAYERS) walk(join(ROOT, layer), files);
+const perLayer = new Map();
+for (const layer of LAYERS) {
+  const found = [];
+  walk(join(ROOT, layer), found);
+  perLayer.set(layer, found.length);
+  files.push(...found);
+}
+
+const unread = POPULATED_LAYERS.filter((layer) => (perLayer.get(layer) ?? 0) === 0);
+if (unread.length > 0) {
+  console.error('lint:layer-boundaries FAILED — read no files in a layer that has them');
+  console.error('');
+  for (const layer of unread) console.error(`  ${layer} contributed 0 files`);
+  console.error('');
+  console.error('This lint inspects import specifiers, so a layer it cannot read is a layer it');
+  console.error('cannot check. Either the path resolution is broken or the layer was removed.');
+  console.error('If a layer is genuinely gone, drop it from POPULATED_LAYERS in this script.');
+  process.exit(1);
+}
 
 // Match `import ... from '<spec>'`, `export ... from '<spec>'`, and dynamic
 // `import('<spec>')`.

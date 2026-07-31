@@ -1,10 +1,22 @@
 # OpenLiDARViewer
 
-<!-- Nine badges in two rows. The first row is whether the code works, the
-     second is whether the work can be found and reused. Every one is set by a
+<!-- Ten badges in three rows of three, three and four. Two rows put six
+     badges on one line, which wrapped and stranded the last one on a line of
+     its own; three groups also say more. Building and running is one
+     question, being measured by an outside service is another, and being
+     findable is a third. Every one is set by a
      workflow run or an external service, so none of them is a claim this
      repository makes about itself. That is the only rule this block follows,
      and it is why the list keeps getting shorter rather than longer.
+
+     The quality gate badge went in when it began reporting a score, which is
+     the rule above. It reads passed on reliability, security, maintainability,
+     duplication and reviewed hotspots. Five findings behind it are resolved
+     rather than fixed, and the distinction is on the issues: two are marked
+     false positive, because the rule reported path injection on a flow that
+     carries an argparse integer into JSON content while the path beside it is
+     a literal; three are accepted, because the code is deliberate, a seeded
+     generator a fixture test depends on and a spawn that runs no shell.
 
      fair-software.eu reads three of five. Both of the ones it withholds are
      real: this is not in a package registry, and it carries no OpenSSF Best
@@ -25,12 +37,15 @@
      "invalid repo path". Rechecked 2026-07-30, still invalid. It goes in when
      it renders a score, making ten. -->
 
-<!-- Does the code work -->
+<!-- Does it build and run, everywhere it claims to -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
-[![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
-[![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
+
+<!-- Is it measured, and by whom -->
+[![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
+[![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
+[![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Aurtechmx_openlidarviewer&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Aurtechmx_openlidarviewer)
 
 <!-- Can the work be found and reused -->
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)

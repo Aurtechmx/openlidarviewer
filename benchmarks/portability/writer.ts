@@ -465,8 +465,13 @@ export function verifyPortabilityDir(dir: string, compare: CompareOptions = {}):
   for (const relPath of ['manifest.json', ...manifest.files.map((f) => f.path)]) {
     const full = join(dir, relPath);
     if (!existsSync(full)) continue;
-    const match = PRIVACY_FORBIDDEN.exec(readFileSync(full, 'utf8'));
-    if (match) problems.push(`${relPath} carries a home-directory path or an IP address (${JSON.stringify(match[0])})`);
+    const text = readFileSync(full, 'utf8');
+    // Fixed prefixes plus this machine's real home directory — a runner homed
+    // outside /Users, /home or C:\Users (a container's /root, a CI runner)
+    // must still catch its own path. Same reasoning as runner/verify.ts.
+    const home = os.homedir();
+    const match = PRIVACY_FORBIDDEN.exec(text)?.[0] ?? (home.length >= 4 && text.includes(home) ? home : null);
+    if (match) problems.push(`${relPath} carries a home-directory path or an IP address (${JSON.stringify(match)})`);
   }
   checked.push('no home-directory path or IP address in any published file');
 

@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
- * lint-upload-queue-wired.mjs — the upload queue must stay on the streaming path.
+ * lint-upload-queue-seam.mjs — the seam the upload queue plugs into must stay.
+ *
+ * Named for what it proves. It was lint:upload-queue-wired, and "wired" reads as
+ * "the queue runs", which it does not: the Viewer constructs no queue and the
+ * option is off. This asserts the call site still exists, so that wiring it later
+ * is a decision rather than an archaeology exercise.
  *
  * `GpuUploadQueue` and `pipelineLimits` were written, tested, and then left
  * unconnected: a v0.6.3 audit of the shipped v0.6.2 source found no live
@@ -57,7 +62,7 @@ for (const { file, symbol, why } of REQUIRED) {
 }
 
 if (problems.length > 0) {
-  console.error('lint:upload-queue-wired FAILED\n');
+  console.error('lint:upload-queue-seam FAILED\n');
   for (const p of problems) console.error(`  • ${p}`);
   console.error('\nThe queue was dormant for a whole release once. Re-wire it, or');
   console.error('remove it and say so, rather than leaving tested code nothing calls.');
@@ -65,5 +70,5 @@ if (problems.length > 0) {
 }
 
 console.log(
-  `lint:upload-queue-wired OK — ${REQUIRED.length} seam(s) present; the queue is reachable from the streaming path.`,
+  `lint:upload-queue-seam OK — ${REQUIRED.length} seam(s) present. The seam exists; nothing here says the queue runs.`,
 );

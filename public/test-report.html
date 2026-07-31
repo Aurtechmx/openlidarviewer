@@ -39,7 +39,9 @@
     <label>Operating system <span class="required">*</span><input name="os" required maxlength="120"></label>
     <label>Browser + version <span class="required">*</span><input name="browser" required maxlength="120"></label>
     <label>Reference software<input name="reference" maxlength="160" placeholder="ArcGIS, QGIS, CloudCompare, PDAL…"></label>
+    <label>Reference software version<span class="hint">A comparison against an unnamed version cannot be repeated.</span><input name="referenceVersion" maxlength="80" placeholder="3.34.2, 2.10.2, 3.13.1…"></label>
     <label>Dataset description<span class="hint">Avoid private paths and confidential names.</span><input name="dataset" maxlength="220" placeholder="Format, approximate size, source type"></label>
+    <label>Registered dataset ID<span class="hint">Optional. If you used a dataset from the project register, its id ties your numbers to known bytes.</span><input name="datasetId" maxlength="80" placeholder="e.g. DS-ANALYTIC-DEM-01"></label>
   </div>
   <label style="margin-top:15px">What did you test? <span class="required">*</span><textarea name="tested" required maxlength="2200"></textarea></label>
   <div class="grid">
@@ -86,6 +88,8 @@
   <label>Anything else you are attaching separately<textarea name="attachments" maxlength="1500" placeholder="terrain-notes.pdf, exported-contours.geojson…"></textarea></label>
 
   <label class="check"><input type="checkbox" name="coreConsent" required><span><strong>I confirm that my contribution is voluntary and unpaid.</strong> I have the right to share the material, it contains no confidential or restricted information, and I allow the project to store, summarize, reproduce, and use this technical feedback for open-source development, documentation, validation records, and issue investigation. <span class="required">*</span></span></label>
+
+  <label class="check"><input type="checkbox" id="independent" name="independent"><span>I am not a maintainer of this project and was not asked to reach a particular conclusion. Leave this unchecked if you contribute to OpenLiDARViewer; an internal report is still useful and is simply not independent evidence.</span></label>
 
   <label class="check"><input type="checkbox" id="creditConsent" name="creditConsent"><span>I allow public acknowledgment using the name and professional information I provide. I understand that acknowledgment does not guarantee authorship, endorsement, payment, publication, or use of the submission.</span></label>
   <div id="creditFields" class="grid hidden">

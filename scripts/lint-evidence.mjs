@@ -15,8 +15,12 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+const GIT = requireBinaryOnPath('git');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
@@ -44,6 +48,43 @@ if (evidence.version !== version) {
   problems.push(
     `${EVIDENCE} records v${evidence.version}, but package.json is v${version} — the figures describe a different release. Re-run "npm run evidence".`,
   );
+}
+
+// A record that claims to be authoritative names the commit it measured. That
+// commit has to be reachable from this tree, or the figures describe something
+// a reader cannot check out.
+//
+// The development record is deliberately exempt. It is generated on a branch,
+// so it names a branch tip that a squash merge replaces with a different sha —
+// unreachable by construction and not a defect. Requiring ancestry there would
+// fail every development run, which is how a check gets weakened until it
+// catches nothing. Requiring it on the authoritative record costs nothing and
+// catches the case that matters: shipping figures pinned to a commit that was
+// never on the release branch.
+if (evidence.releaseAuthoritative === true) {
+  if (typeof evidence.commit !== 'string' || !/^[0-9a-f]{40}$/.test(evidence.commit)) {
+    problems.push(
+      `${EVIDENCE} is release-authoritative but records commit ${JSON.stringify(evidence.commit)}, which is not a full sha.`,
+    );
+  } else {
+    const seen = spawnSync(GIT, ['cat-file', '-e', `${evidence.commit}^{commit}`], {
+      cwd: ROOT,
+      stdio: 'ignore',
+    });
+    const reachable = spawnSync(GIT, ['merge-base', '--is-ancestor', evidence.commit, 'HEAD'], {
+      cwd: ROOT,
+      stdio: 'ignore',
+    });
+    if (seen.status !== 0) {
+      problems.push(
+        `${EVIDENCE} is release-authoritative and names commit ${evidence.commit}, which does not resolve in this repository.`,
+      );
+    } else if (reachable.status !== 0) {
+      problems.push(
+        `${EVIDENCE} is release-authoritative and names commit ${evidence.commit}, which is not an ancestor of HEAD — the figures describe a commit that is not in this history.`,
+      );
+    }
+  }
 }
 
 // The arithmetic, checked independently of the documents. This is the exact

@@ -514,6 +514,78 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  # ── Compressed and streamed point-cloud formats ───────────────────────────
+  # The register carried no LAZ record and no EPT record, so every entry in it
+  # was a raster, a CSV or an uncompressed LAS. Both formats are on the primary
+  # read path, and neither had its provenance written down anywhere. These two
+  # close that, and both are deliberately modest: one is a 12-point fixture and
+  # the other records a manifest rather than the points it indexes. Registering
+  # a dataset asserts provenance, not a result.
+  - datasetId: OLV-DS-018-TINY-LAZ
+    title: "12-point LAZ 1.4 PDRF 6 fixture, laszip-compressed"
+    sourceUrl: tests/fixtures/tiny.laz
+    landingPage: tests/eptLaszipDecode.test.ts
+    licence: MIT
+    licenceUrl: https://github.com/Aurtechmx/openlidarviewer/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-07-31
+    sourceSha256: ea6d0f16677c2d2a940964771845ed351d3455c746e0344bbadfdd78604a04fb
+    sourceBytes: 663
+    format: laz
+    pointCount: 12
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: OpenLiDARViewer contributors
+    citation: "OpenLiDARViewer laszip decode fixture tests/fixtures/tiny.laz."
+    knownLimitations: "Twelve points. It exercises the laszip chunk path, the LAS 1.4 header and PDRF 6 field layout, and nothing else. It says nothing about decode throughput, about chunk tables spanning more than one chunk, or about any real capture. Bounds span roughly 11 m in X and Y and 4.75 m in Z. No CRS is written into the file, so the axes are metres on an arbitrary origin and the record says so rather than guessing a projection."
+    storage: committed
+    localPath: tests/fixtures/tiny.laz
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-019-EPT-GOLDEN-GATE-2010
+    title: "ARRA CA Golden Gate 2010, EPT manifest for an 8.78 billion point index"
+    sourceUrl: https://s3-us-west-2.amazonaws.com/usgs-lidar-public/ARRA-CA_GoldenGate_2010/ept.json
+    landingPage: https://registry.opendata.aws/usgs-lidar/
+    licence: public-domain
+    licenceUrl: https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+    redistribution: permitted
+    acquisitionDate: 2026-07-31
+    sourceSha256: a9577cbad5436ba5293a533dc4ae34c7f119f0167a1bcece9f39231cc0d82ec8
+    sourceBytes: 2433
+    format: ept
+    pointCount: 8777987577
+    sensorType: als-linear
+    capturePlatform: fixed-wing
+    captureDate: unknown
+    horizontalCrs: EPSG:3857
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [coastal, urban, water]
+    landCoverClasses: [unknown]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: United States Geological Survey
+    citation: "USGS 3DEP, ARRA-CA_GoldenGate_2010, published via the AWS Open Data usgs-lidar-public bucket as an Entwine Point Tile index."
+    knownLimitations: "The recorded hash covers ept.json, the 2,433-byte manifest, not the 8.78 billion points it indexes. Those live in the same bucket as laszip tiles at span 256 and were not fetched, so this record fixes which index was read and cannot fix which bytes were decoded from it. The manifest declares EPSG:3857 horizontally and no vertical datum, so elevations are unreferenced. Point count, bounds and span are the manifest's own claims, not measurements taken here. Storage is acquired: nothing from this dataset is in the tree. sensorType and capturePlatform are inferred from the campaign era, not read from any source: the manifest carries neither field, and the enum has no unknown value to record that with. Linear-mode is safe for 2010, since photon-counting ALS was not in production use then; fixed-wing is the usual platform for an ARRA coastal block and is a guess. Do not cite either field. captureDate is unknown: the campaign year is in the title, and the manifest records no acquisition dates."
+    storage: acquired
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Worked examples ───────────────────────────────────────────────────────
   # Neither of these describes data this project has used. They exist so the
   # required shape for an external dataset and for a restricted checkpoint set

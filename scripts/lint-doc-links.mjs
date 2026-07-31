@@ -23,7 +23,7 @@
  * Exit 0 when every path resolves, 1 when any does not, 2 on a read error.
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -57,10 +57,45 @@ const RELEASE_FACING = [
   /^validation\//,
 ];
 
+/** Directories a filesystem walk must not enter: never tracked, or generated. */
+const WALK_SKIP = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'release',
+  'test-results',
+  'coverage',
+  'playwright-report',
+  '.claude',
+  '.venv',
+  '__pycache__',
+]);
+
+/**
+ * The markdown files under check. Git enumerates them in a checkout; a source
+ * archive carries no `.git`, so there the walk below enumerates the same
+ * shipped set from the filesystem. Returning `[]` without git would make the
+ * lint report success over nothing, which it must not.
+ */
 function markdownFiles() {
-  if (GIT === null) return [];
-  const out = execFileSync(GIT, ['ls-files', '*.md'], { cwd: ROOT, encoding: 'utf8' });
-  const all = out.split('\n').filter(Boolean);
+  let all;
+  try {
+    if (GIT === null) throw new Error('git unavailable');
+    const out = execFileSync(GIT, ['ls-files', '*.md'], { cwd: ROOT, encoding: 'utf8' });
+    all = out.split('\n').filter(Boolean);
+  } catch {
+    all = [];
+    const walk = (rel) => {
+      for (const entry of readdirSync(resolve(ROOT, rel === '' ? '.' : rel), { withFileTypes: true })) {
+        if (entry.isSymbolicLink()) continue;
+        if (WALK_SKIP.has(entry.name)) continue;
+        const next = rel === '' ? entry.name : `${rel}/${entry.name}`;
+        if (entry.isDirectory()) walk(next);
+        else if (next.endsWith('.md')) all.push(next);
+      }
+    };
+    walk('');
+  }
   if (process.argv.includes('--all')) return all;
   return all.filter((f) => RELEASE_FACING.some((re) => re.test(f)));
 }

@@ -96,12 +96,11 @@ const ALLOWLIST: readonly string[] = [
   'src/ui/NavBar.ts::olv-mode-pan-icon',
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
   'src/ui/MeasurePanel.ts::svg + overlay',
-  // The profile row's expand-to-focus control: `ICON_EXPAND`, a module-level
-  // literal SVG string from `dockIcons.svg()`, same house style as the dock.
-  'src/ui/MeasurePanel.ts::ICON_EXPAND}<span>',
-  // The decorative corner glyph on the chart wrapper. Distinct from the entry
-  // above, which is the named button in the stretch strip: the glyph carries no
-  // text after the icon, the button appends its own label.
+  // The chart's expand-to-focus button: `ICON_EXPAND`, a module-level literal
+  // SVG string from `dockIcons.svg()`, same house style as the dock. There were
+  // two entries here while a labelled duplicate sat in the chip strip below the
+  // chart; that duplicate overflowed the panel and is gone, and this guard is
+  // what noticed the allowlist had outlived it.
   'src/ui/MeasurePanel.ts::ICON_EXPAND,',
   'src/ui/Stage.ts::olv-capture-chip-icon',
   // v0.4.6 icon-system pass (hand-verified 2026-06-14). Every entry below
