@@ -3859,7 +3859,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-panel,
 .olv-class-panel,
 .olv-export-panel,
-.olv-object-panel {
+.olv-object-panel,
+.olv-context-panel {
   background: var(--panel-recessive);
   box-shadow: none;
   transition: background var(--dur-base) var(--ease-standard),
@@ -3869,13 +3870,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-anno-panel:hover, .olv-anno-panel:focus-within,
 .olv-class-panel:hover, .olv-class-panel:focus-within,
 .olv-export-panel:hover, .olv-export-panel:focus-within,
-.olv-object-panel:hover, .olv-object-panel:focus-within {
+.olv-object-panel:hover, .olv-object-panel:focus-within,
+.olv-context-panel:hover, .olv-context-panel:focus-within {
   background: var(--panel);
   border-color: var(--hairline-strong);
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-measure-panel, .olv-anno-panel, .olv-class-panel,
-  .olv-export-panel, .olv-object-panel { transition: none; }
+  .olv-export-panel, .olv-object-panel, .olv-context-panel { transition: none; }
 }
 
 /* The Inspector is the active control rail (Color By / Quality /
@@ -5034,6 +5036,77 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-ap-action:disabled { opacity: 0.4; cursor: default; }
 .olv-ap-action-armed { color: var(--rating-weak); border-color: color-mix(in srgb, var(--rating-weak) 60%, transparent); }
 
+/* ── Context View panel ──────────────────────────────────────────────────────
+ * Where the scan sits in the world — or the reasons it cannot be placed. It is
+ * reference context, not a control surface, so it takes the stacked left-column
+ * chrome unchanged (222px design width, hairline border, --space-xl inset) and
+ * adds no vocabulary of its own. The mount container is a plain block; it holds
+ * nothing until the controller's first refresh, and an empty one generates no
+ * box so the column's gap never opens for a slot with nothing in it.
+ */
+.olv-context-mount { display: block; }
+.olv-context-mount:empty { display: none; }
+.olv-context-panel {
+  width: 222px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
+  display: flex; flex-direction: column; gap: var(--space-md);
+}
+.olv-context-head { font-size: var(--text-sm); font-weight: 500; color: var(--text); }
+
+/* "Nothing is loaded" and "this cannot be placed" are different statements, and
+ * they are styled apart on purpose: the first is a quiet caption about an empty
+ * session, the second a bordered card carrying the eligibility core's reasons.
+ * Neither is dressed as an error — a refusal to place a local-frame scan is the
+ * panel working, not failing. */
+.olv-context-empty { margin: 0; font-size: var(--text-xs); color: var(--text-faint); line-height: 1.45; }
+.olv-context-refusal {
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-md);
+}
+.olv-context-refusal-title { margin: 0; font-size: var(--text-xs); color: var(--text); }
+.olv-context-reasons {
+  margin: var(--space-sm) 0 0; padding-left: var(--space-xl);
+  font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.45;
+}
+.olv-context-reasons li + li { margin-top: var(--space-2xs); }
+
+/* Consent gate. Allow and decline are the same chip at the same weight: the
+ * offline footprint view renders either way, so declining costs the user
+ * nothing and must not be styled as the lesser option. */
+.olv-context-consent { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-context-consent-prompt {
+  margin: 0; font-size: var(--text-xs); color: var(--text-dim); line-height: 1.45;
+}
+.olv-context-grant, .olv-context-deny, .olv-context-change {
+  width: 100%; font-size: var(--text-xs); color: var(--text-dim); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm); cursor: pointer;
+}
+.olv-context-grant:hover, .olv-context-deny:hover, .olv-context-change:hover {
+  color: var(--text); border-color: var(--accent);
+}
+.olv-context-denied, .olv-context-attribution, .olv-context-staged {
+  margin: 0; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.45;
+}
+
+/* Offline footprint canvas. `drawFootprints` strokes with the canvas's COMPUTED
+ * `color`, so the declaration below is what picks the outline colour — the
+ * renderer's constant is only the fallback for a DOM with no computed style.
+ * The drawing surface is a fixed 480×260 bitmap; the aspect-ratio keeps that
+ * shape while the box scales down to the rail width. */
+.olv-context-offline { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-context-offline-label {
+  font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.45;
+}
+.olv-context-canvas {
+  display: block; width: 100%; height: auto; aspect-ratio: 480 / 260;
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.02);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+}
+
 /* Touch sizing for the measurement controls on phones */
 @media (max-width: 767px) {
   .olv-mkind, .olv-measure-undo, .olv-units-toggle, .olv-mp-action {
@@ -5069,15 +5142,21 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent 100%);
     padding-bottom: var(--space-md);
   }
-  .olv-measure-panel, .olv-anno-panel { width: auto; }
+  .olv-measure-panel, .olv-anno-panel, .olv-context-panel { width: auto; }
   /* Phones: the panel spans the row, so disable horizontal resize. */
   .olv-measure-panel { resize: none; min-width: 0; max-width: none; }
   /* Over the 3D canvas, the recessive translucent fill is too see-through to
      read — restore an opaque panel fill on phones so text stays legible while
      keeping the desktop two-tier rank. */
   .olv-measure-panel, .olv-anno-panel, .olv-class-panel,
-  .olv-export-panel, .olv-object-panel {
+  .olv-export-panel, .olv-object-panel, .olv-context-panel {
     background: var(--panel);
+  }
+
+  /* Context View consent controls — 44 px touch targets. */
+  .olv-context-grant, .olv-context-deny, .olv-context-change {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
   }
 
   /* Annotation editor — 44 px touch targets for every control. */
@@ -7765,7 +7844,8 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet .olv-class-panel,
   .olv-mobile-sheet .olv-measure-panel,
   .olv-mobile-sheet .olv-anno-panel,
-  .olv-mobile-sheet .olv-export-panel {
+  .olv-mobile-sheet .olv-export-panel,
+  .olv-mobile-sheet .olv-context-panel {
     position: static;
     inset: auto;
     width: 100%;

@@ -237,6 +237,7 @@ import {
   loadColorbarOverlay,
   loadAnalysePanel,
   loadObjectPanel,
+  loadContextViewMount,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -282,6 +283,8 @@ import { createViewBookmarks } from './app/viewBookmarks';
 import { createScanService } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService } from './app/projectFrame';
+import { createContextViewHost } from './app/contextViewHost';
+import type { ContextViewController } from './ui/contextView/contextViewMount';
 
 /**
  * The centralised CRS service. Owns the active scan's resolved CRS
@@ -3503,6 +3506,50 @@ function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
  * projected easting/northing that the UTM converter takes to WGS84.
  */
 
+// ── Context View ────────────────────────────────────────────────────────────
+// The panel that places the scan's footprint on a world map, or states plainly
+// why it cannot. Its whole chunk — panel, footprint canvas, eligibility core,
+// refusal vocabulary — loads on the first scan attach; an empty-state session
+// never fetches it. `createContextViewHost` answers the three accessors the
+// controller wants from services already declared above, so nothing below is
+// new CRS plumbing. `refresh()` re-derives the state from those accessors, so
+// every layer / CRS change is a single call.
+const contextViewHost = createContextViewHost({
+  getViewer: () => viewer,
+  isViewerReady: () => viewerReady,
+  getCrs: () => crsService.current(),
+});
+let contextView: ContextViewController | null = null;
+let contextViewLoading = false;
+/** Places the controller's element in the left column; set once that column exists. */
+let mountContextViewElement: ((el: HTMLElement) => void) | null = null;
+
+/** Mount the panel on first call, then refresh it on every later one. */
+function refreshContextView(): void {
+  if (contextView) { contextView.refresh(); return; }
+  if (contextViewLoading || !viewerReady) return;
+  contextViewLoading = true;
+  void loadContextViewMount()
+    .then(({ createContextViewController }) => {
+      contextView = createContextViewController(contextViewHost);
+      mountContextViewElement?.(contextView.element);
+      contextView.refresh();
+    })
+    .catch((err) => {
+      // Additive panel: a chunk-load failure must not sink the scan that
+      // triggered it. Retryable — the flag is released.
+      contextViewLoading = false;
+      if (debug) console.warn('[context] Context View mount failed', err);
+    });
+}
+
+/** Drop the panel with the scan it described — including its session consent. */
+function disposeContextView(): void {
+  contextView?.dispose();
+  contextView = null;
+  contextViewLoading = false;
+}
+
 // Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
 // an ungeoreferenced (local / unknown) scan has no real-world CRS to keep /
 // assign / reproject, so the step collapses to a one-line note. A georeferenced
@@ -3510,6 +3557,12 @@ function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
+  // A CRS override is exactly the event that can make a scan placeable — or
+  // stop it being placed — so the panel re-derives here. Refresh only, never
+  // mount: putting the panel on screen belongs to the scan lifecycle, and this
+  // listener also fires on `crsService.clear()` during the reset that just
+  // disposed it.
+  contextView?.refresh();
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
@@ -4293,6 +4346,7 @@ void viewerLoaded.then(() => {
           annotationPanel.element,
           exportPanel.element,
         );
+      if (contextView) mobileSheet.slot('layers').append(contextView.element);
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
       analysePanel?.element.classList.remove('olv-collapsed');
@@ -4324,6 +4378,7 @@ void viewerLoaded.then(() => {
       desktopPanels.push(classLegendPanel.element);
       if (analysePanel) desktopPanels.push(analysePanel.element);
       desktopPanels.push(exportPanel.element);
+      if (contextView) desktopPanels.push(contextView.element);
       leftPanels.append(...desktopPanels);
     };
 
@@ -4383,10 +4438,18 @@ void viewerLoaded.then(() => {
         leftPanels.append(el);
       }
     };
-    // If either panel already mounted before this wiring ran (possible only if a
-    // scan's import resolved between column build and here), place it now.
+    // The lazy Context View joins the same column, at the bottom of the stack —
+    // it is reference context for the scan, not a control surface, so it sits
+    // below the panels the user acts through.
+    mountContextViewElement = (el: HTMLElement): void => {
+      if (mobileApplied) mobileSheet.slot('layers').append(el);
+      else leftPanels.append(el);
+    };
+    // If any of the three already mounted before this wiring ran (possible only
+    // if a scan's import resolved between column build and here), place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
+    if (contextView) mountContextViewElement(contextView.element);
 
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
@@ -5962,6 +6025,7 @@ async function handleFile(file: File): Promise<void> {
       inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
       layerVisible.set(id, true);
       layerService.refreshCrsFlags();
+      refreshContextView();
       inspector.setColorModes(availableModes(result.cloud), mode);
       inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
       inspector.setElevationExtent(viewer.elevationExtent());
@@ -6235,6 +6299,9 @@ async function openStreamingCopc(
   );
   viewer.setMode('orbit');
   viewer.frameAll();
+  // The streaming path never goes through `inspector.addCloud`, so the Context
+  // View has to be told here too — the CRS above is already resolved.
+  refreshContextView();
 
   streamingPanel.setColorModes(
     streamingColors.availableStreamingModes(cloud.metadata),
@@ -6954,6 +7021,10 @@ function resetToEmptyState(): void {
   objectPanel?.setVisible(false);
   objectDesiredVisible = false;
   objectContent = null;
+  // Take the Context View down with the scan it described. Reached by both the
+  // Close action and the removal of the last layer; disposing rather than
+  // refreshing also drops the session consent, so the next scan asks again.
+  disposeContextView();
   // No scan → hide the phone bottom-sheet (no-op on desktop).
   syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
@@ -7186,6 +7257,7 @@ function removeCloud(id: string): void {
   else {
     layerService.refreshCrsFlags();
     layerService.applyVisibility();
+    refreshContextView();
     inspector.setElevationExtent(viewer.elevationExtent());
     inspector.setIntensityExtent(viewer.intensityExtent());
   }

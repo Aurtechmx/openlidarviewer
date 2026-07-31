@@ -48,6 +48,15 @@ export const loadViewer = () => import('./render/Viewer');
 export const loadContourStudioMount = () => import('./ui/contourStudioMount');
 
 /**
+ * Load the Context View controller (the panel, its footprint canvas, and the
+ * eligibility / consent core behind it) on the first scan attach — never in the
+ * startup shell. The panel has nothing to say until a scan exists: with no layer
+ * loaded its only honest state is "no scan is loaded", so the whole chunk,
+ * including its refusal vocabulary, stays out of the empty-state boot.
+ */
+export const loadContextViewMount = () => import('./ui/contextView/contextViewMount');
+
+/**
  * Load the Contour Studio export ORCHESTRATION (the permit gate + dispatch) on
  * the first export click. The permit resolver pulls the evidence registry, so
  * keeping it here — not eager in AnalysePanel — holds that whole chain out of the
