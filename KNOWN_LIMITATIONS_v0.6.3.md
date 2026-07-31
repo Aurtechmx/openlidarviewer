@@ -128,7 +128,7 @@ The live entry chunk measures 664 KiB against a hard 720 KiB ceiling, so 56 KiB 
 
 ## Mutation and coverage evidence is advisory, not archived
 
-`npm run coverage` and `npm run mutation` both pass (numeric-core mutation score 87.23 % at the time of writing). The release-mode gate runs both as blocking stages, records them in the attached evidence, and ships their output inside `gate.log`; ordinary branch CI still runs neither, so between releases treat the figures as a working measurement rather than a preserved claim. `terrainRunnerDensityWiring.test.ts` is excluded from the coverage run only — v8 instrumentation makes it take about 75 s per test — and still runs in the release buckets.
+`npm run coverage` and `npm run mutation` both pass (numeric-core mutation score 96.81 % at the time of writing). Coverage is a blocking stage of the release-mode gate. Mutation is not: it runs on its own schedule, and the release record cites that run, its score and the commit it was measured at, refusing the release outright when no result exists. Coverage output ships inside `gate.log`; ordinary branch CI still runs neither, so between releases treat the figures as a working measurement rather than a preserved claim. `terrainRunnerDensityWiring.test.ts` is excluded from the coverage run only — v8 instrumentation makes it take about 75 s per test — and still runs in the release buckets.
 
 ## LAS 1.4 CRS encoding depends on the source
 

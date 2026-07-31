@@ -253,7 +253,7 @@
       ],
       "properties": {
         "datasetId": {
-          "description": "A registered identifier, not prose. The shape rule lives in the verifier (DATASET_ID_PATTERN) rather than here, so a free-text dataset id is rejected by the named R2 rule with an explanation instead of a generic pattern failure; membership is checked against validation/datasets/dataset-register.yaml once that register exists.",
+          "description": "A registered identifier, not prose. The shape rule lives in the verifier (DATASET_ID_PATTERN) rather than here, so a free-text dataset id is rejected by the named R2 rule with an explanation instead of a generic pattern failure; membership is checked against validation/datasets/dataset-register.yaml and that register now exists.",
           "type": "string",
           "minLength": 1
         },
