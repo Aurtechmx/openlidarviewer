@@ -47,7 +47,38 @@ export default defineConfig({
   projects: [
     { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu/ },
     { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/ },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'] }, grepInvert: /@gpu/ },
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        // Firefox's HEADLESS widget on Linux has no GL compositor, so
+        // `canvas.getContext('webgl2')` returns null no matter how much of
+        // Mesa is installed. That single fact caused every one of the 111
+        // failures this leg reported: the viewer logs "GPU backend
+        // initialisation failed. Neither WebGPU nor WebGL 2 produced a
+        // usable context", the smoke specs trip their no-console-error
+        // assertion, and everything that loads a scan waits for a frame
+        // that never arrives.
+        //
+        // Measured on ubuntu 24.04 with a full Mesa stack present:
+        //   headless, default prefs .................. webgl2 = null
+        //   headless + webgl.force-enabled ........... webgl2 = null
+        //   headless + LIBGL_ALWAYS_SOFTWARE=1 ....... webgl2 = null
+        //   HEADFUL under Xvfb, default prefs ........ webgl2 = llvmpipe ✓
+        // No pref makes headless work, and no pref is needed once it is
+        // headful — so the fix is the window, not the configuration. Adding
+        // Mesa packages on their own does nothing either; that was measured
+        // too, and headless stayed null with the full stack installed.
+        //
+        // Only Linux is switched: macOS and Windows produce a context in
+        // headless mode already, and going headful there would just pop a
+        // real window open on a developer's desktop for every test. CI
+        // wraps this leg in `xvfb-run` (see .github/workflows/browsers.yml),
+        // which is what supplies the display.
+        headless: process.platform !== 'linux',
+      },
+      grepInvert: /@gpu/,
+    },
     { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/ },
   ],
   webServer: {

@@ -5,12 +5,19 @@ name: Cross-browser (advisory)
 # work in a browser nobody ran it in, so these legs run and are reported.
 #
 # WHY ADVISORY (`continue-on-error: true` on both jobs):
-# this is a brand-new leg. A leg that goes red on its first day would block
-# every unrelated pull request while its failures are being triaged, and the
-# failures it finds are engine differences, not regressions in the change under
-# review. Chromium keeps the blocking duty: `e2e-deterministic` in ci.yml is the
-# gate, and it is untouched by this workflow. Promote a job here to blocking by
-# deleting its `continue-on-error` line once it has been green for a while.
+# a leg that goes red would otherwise block every unrelated pull request while
+# its failures are being triaged. Chromium keeps the blocking duty:
+# `e2e-deterministic` in ci.yml is the gate, and it is untouched by this
+# workflow. Promote a job here to blocking by deleting its `continue-on-error`
+# line once it has been green for a while.
+#
+# The firefox job reported 111 failures on every run from the day it was added,
+# and the note that used to sit here guessed they were "engine differences".
+# They were not, and none of the 111 involved Firefox behaviour at all: the job
+# ran Firefox headless, and Firefox's headless widget on Linux cannot produce a
+# WebGL 2 context, so the viewer had nothing to render into. The webkit job was
+# the control that gave it away — same runner, same 165 tests, green
+# throughout. See the comments on the test step below.
 #
 # Deliberately a separate file from ci.yml so `ci-green` — the required check —
 # has no dependency on anything here.
@@ -39,8 +46,27 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Install Playwright Firefox
         run: ./node_modules/.bin/playwright install --with-deps firefox
+      # Rounds out Mesa's DRI drivers. Measured on ubuntu 24.04: the leg gets a
+      # WebGL 2 context without this (xvfb depends on libgl1, so `--with-deps`
+      # already drags in libGLX_mesa), but with only that much the context
+      # advertises 16 extensions instead of 17. This step is here so the job
+      # runs the same GL feature set the fix was validated against, not because
+      # the missing packages were the cause. llvmpipe is a software rasteriser,
+      # which is fine at this size: the e2e fixtures are a 10-point PLY, a small
+      # LAS, and a 3,600-point synthesised grid.
+      - name: Round out the software OpenGL stack for Firefox
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2
+      # THIS is the fix. `xvfb-run` supplies the display that lets Firefox start
+      # headful, and headful is the only configuration in which it produces a
+      # WebGL 2 context on Linux — no pref substitutes for it. See the note on
+      # the `firefox` project in playwright.config.ts for the measurements.
+      # xvfb itself already comes from `--with-deps` (Playwright's shared tools
+      # list installs it), so nothing extra is needed to get the binary.
       - name: Deterministic end-to-end tests on Firefox (advisory)
-        run: ./node_modules/.bin/playwright test --project=firefox
+        run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
