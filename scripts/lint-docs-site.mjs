@@ -26,7 +26,15 @@
 
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join, relative } from 'node:path';
+import { dirname, resolve, join, relative, sep } from 'node:path';
+
+/**
+ * Every FORBIDDEN pattern below is anchored on `/`. A path from
+ * `path.relative` uses `\` on Windows, so none of them could match and the
+ * publication guard would pass while an internal audit document went to the
+ * site. Normalising first is a no-op on POSIX.
+ */
+const posix = (p) => p.split(sep).join('/');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SITE = resolve(ROOT, 'docs-site');
@@ -79,7 +87,7 @@ function run() {
     while ((m = INCLUDE_RE.exec(text)) !== null) {
       const target = m[1].split('#')[0]; // strip a region anchor
       const abs = resolve(dirname(page), target);
-      const rel = relative(ROOT, abs);
+      const rel = posix(relative(ROOT, abs));
       if (!existsSync(abs)) {
         problems.push(`${relative(ROOT, page)} includes missing file ${rel}`);
       }
@@ -92,7 +100,7 @@ function run() {
   // ── 3. Built output: no forbidden document, raw include, or visible comment ─
   if (existsSync(DIST)) {
     for (const file of walk(DIST, /./)) {
-      const rel = relative(DIST, file);
+      const rel = posix(relative(DIST, file));
       for (const f of FORBIDDEN) {
         // The dist tree mirrors page paths, so a forbidden doc that somehow
         // became a page shows up under its own name.
