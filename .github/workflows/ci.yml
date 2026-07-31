@@ -82,7 +82,7 @@ jobs:
       - name: Python version lint (.python-version and sonar agree)
         run: npm run lint:python-version
       - name: Upload-queue wiring lint (the streaming path still reaches the queue)
-        run: npm run lint:upload-queue-wired
+        run: npm run lint:upload-queue-seam
       - name: Claims-language lint (no comparative marketing claims in public docs)
         run: npm run lint:claims-language
       - name: Archive-vocab lint (shipped files stay in a product-facing voice)
