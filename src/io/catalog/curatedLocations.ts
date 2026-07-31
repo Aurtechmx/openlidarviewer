@@ -135,15 +135,6 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CA_LosAngeles_2_B23/ept.json',
   },
   {
-    id: 'denver-2008-co',
-    label: 'Denver, Colorado (2008)',
-    sizeLabel: '4.2B pts',
-    hint: 'Legacy 2008 Denver campaign · EPT streamed.',
-    bbox: [-105.10, 39.65, -104.80, 39.85],
-    displayName: 'Denver, CO (2008)',
-    streamUrl: 'https://s3-us-west-2.amazonaws.com/usgs-lidar-public/CO_Denver_2008/ept.json',
-  },
-  {
     id: 'golden-gate-ca',
     label: 'Golden Gate / SF Bay (2010)',
     sizeLabel: '8.8B pts',
