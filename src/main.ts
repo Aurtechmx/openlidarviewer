@@ -1424,6 +1424,7 @@ const inspector = new Inspector({
     const cloud = viewer.getCloud(id);
     if (!cloud || !cloud.colors) return;
     void loadRgbAutoNormalize().then(({ rgbAutoNormalize }) => {
+      if (scans.activeId !== id) return; // scan changed while we waited
       const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
       if (!suggestion) return;
       viewer.setRgbAppearance(suggestion.settings);
@@ -5975,8 +5976,10 @@ async function handleFile(file: File): Promise<void> {
       // geo path.
       {
         const profileCloud = result.cloud;
+        const targetId = id;
         void loadApplyDisplayProfile()
           .then(({ applyDisplayProfile }) => {
+            if (scans.activeId !== targetId) return; // scan changed while we waited
             applyDisplayProfile(profileCloud, inspector);
           })
           // The card is additive and no-op on absence; a chunk-load or
