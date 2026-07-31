@@ -63,13 +63,32 @@ function verifyMutated(mutate: (model: Chronology) => void) {
  * A depth-1 clone cannot, and the generator and verifier both degrade to
  * reporting commit resolution as unverified rather than failed. The negative
  * controls below assert that a bad commit is REFUSED, which only holds where
- * the commits are visible in the first place. Asserting the strict contract in
- * a shallow clone tests the environment, not the code.
+ * the commits are visible in the first place. Asserting the strict contract
+ * against commits this checkout cannot read tests the environment, not the
+ * code.
  *
- * The coverage job runs this suite over a shallow clone, which is how these
- * assertions first failed. Both are fixed: that job now fetches full history,
- * and these tests state which contract they are checking either way.
+ * The shallow flag is the wrong question to ask. The Windows job fetches full
+ * history and still reports the repository as shallow, so a test that branched
+ * on that flag skipped the strict path on Linux and took the lenient path on
+ * Windows while the commits were right there — it failed because the verifier
+ * did its job. Ask git what it can resolve instead.
  */
+function canResolve(...commits: string[]): boolean {
+  return commits.every((c) => {
+    if (c === 'unknown') return false;
+    try {
+      execFileSync('git', ['rev-parse', '--verify', '--quiet', `${c}^{commit}`], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  });
+}
+
 function historyIsShallow(): boolean {
   try {
     return (
@@ -131,8 +150,9 @@ describe('defect chronology', () => {
       m.records[0]!.fixCommit = '0'.repeat(40);
     });
     if (SHALLOW) {
-      // Every commit is invisible here, so refusing this one specifically is
-      // not something this environment can demonstrate.
+      // The verifier suppresses the whole resolution check on a shallow
+      // repository, so a planted bad commit passes here no matter how much
+      // history the clone actually carries.
       expect(status).toBe(0);
       return;
     }
@@ -141,16 +161,17 @@ describe('defect chronology', () => {
   });
 
   it('rejects a fix that precedes its own first failing validation', () => {
+    const record = baseline.records.find((r) => r.firstFailingValidation.commit !== 'unknown')!;
     const { status, stderr } = verifyMutated((m) => {
-      const record = m.records.find((r) => r.firstFailingValidation.commit !== 'unknown')!;
+      const target = m.records.find((r) => r.defectId === record.defectId)!;
       // Swap the two ends of the interval: the fix now sits before the run it
       // is meant to answer.
-      const fix = record.fixCommit;
-      record.fixCommit = record.firstFailingValidation.commit;
-      record.firstFailingValidation.commit = fix;
+      const fix = target.fixCommit;
+      target.fixCommit = target.firstFailingValidation.commit;
+      target.firstFailingValidation.commit = fix;
     });
-    if (SHALLOW) {
-      // The ordering check needs both commits resolvable to compare them.
+    if (!canResolve(record.fixCommit, record.firstFailingValidation.commit)) {
+      // The ordering check compares two commits, so it needs both of them.
       expect(status).toBe(0);
       return;
     }
