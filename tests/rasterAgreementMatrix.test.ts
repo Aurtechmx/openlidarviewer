@@ -66,6 +66,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
+import { computeTPI } from '../src/terrain/complexity/terrainPositionIndex';
 import { shadeFromSlopeAspect, computeMultiHillshade, azimuthToMathRad } from '../src/terrain/surface/hillshade';
 import { crossCheck } from '../src/validation/crossCheck';
 import type { CrossCheckReport } from '../src/validation/crossCheck';
@@ -111,9 +112,10 @@ import type { FixtureSpec, FixtureSun } from '../scripts/generate-raster-fixture
  * `MATRIX_WRITE=1` regenerates, for the one case that needs it: a deliberate
  * change to the OLV side, reviewed as a diff to the committed evidence.
  *
- * Verification is SEMANTIC, not byte-for-byte. `results.json` stores 569
- * full-precision doubles derived from `atan2`, and a byte compare of those
- * turns a libm ulp difference on another CPU into a red release gate with no
+ * Verification is SEMANTIC, not byte-for-byte. `results.json` stores hundreds of
+ * full-precision doubles derived from `atan2` (slope/aspect) and from
+ * float32-accumulated neighbourhood means (hillshade/TPI), and a byte compare of
+ * those turns a libm ulp difference on another CPU into a red release gate with no
  * way to tell it from a regression. Numbers compare within a relative epsilon
  * far tighter than any real change and far looser than rounding noise;
  * everything else compares exactly. A guard that fails on the wrong machine
@@ -266,6 +268,59 @@ const FROZEN_TOLERANCES = {
    * proves the separation instead of asserting it in prose.
    */
   hillshadeByteLevels: 2.0,
+  /**
+   * TPI against GDAL, in the grid's Z unit. 1e-5.
+   *
+   * DERIVED (before the run) as the RESULT-ROUNDING floor. TPI is not an
+   * estimator: the interior value is the identical discrete operation on both
+   * sides — the centre cell minus the arithmetic mean of the same eight
+   * neighbours. Both read the SAME AAIGrid DEM as Float32 (verified: `gdalinfo`
+   * reports `Band 1 ... Type=Float32`, and the OLV side casts the parsed heights
+   * to Float32, which is also the type the shipped `DtmGrid.z` carries) and sum
+   * the eight neighbours in the SAME raster order. So — IF both accumulated that
+   * sum in double — the only residual would be (1) storage of the TPI result as
+   * Float32 on each side (≤ ~5e-7 at the matrix's |TPI| magnitudes) and (2) the
+   * independent 6-decimal ASCII rounding (≤ 1e-6), summing to under ~2e-6; 1e-5
+   * is that with ~5x headroom, and it stays three orders of magnitude below the
+   * smallest non-trivial TPI signal (saddle, 4.7e-4) so a wrong neighbourhood
+   * cannot hide in it (the 4-neighbour cross differs by 6.6e-3 on convex-hill).
+   *
+   * WHAT THE FIRST RUN REVEALED, and why this tolerance stays FROZEN at 1e-5
+   * rather than being widened. The premise above — that both accumulate in double
+   * — is FALSE for gdaldem. GDAL's `GDALTPIAlg` receives the window as
+   * `const float *afWin` and forms `afWin[4] − (afWin[0]+…+afWin[8]) / 8` in
+   * FLOAT32 arithmetic, so its neighbourhood sum is rounded to float32 at every
+   * step; `computeTPI` accumulates in double. The two therefore differ by
+   * gdaldem's float32-accumulation error, which is EXACTLY ZERO on a constant
+   * surface (all eight neighbours equal, the sum is exact) and GROWS WITH the
+   * neighbourhood elevation, reaching ~1.3e-4 Z-units on the ~1300 m geographic
+   * plane. That gap is a property of the REFERENCE tool's precision, not of OLV:
+   * a float32-accumulation reference reproduces gdaldem to ~5e-7 on every fixture,
+   * and OLV's double-accumulated TPI agrees with the EXACT closed form (the E2 leg
+   * below). So 1e-5 is kept as the derived result-rounding tolerance and the
+   * varying-surface fixtures that cross it are RECORDED AS DOCUMENTED-DIVERGENCE
+   * boundaries (constant → agree, varying → divergence, the same split the
+   * multidirectional-relief leg makes), never absorbed by a widened tolerance.
+   */
+  tpiVsGdalZUnits: 1e-5,
+  /**
+   * TPI against the closed form, in the grid's Z unit. 2e-4.
+   *
+   * Unlike slope, the discrete "centre minus mean of eight" has an EXACT closed
+   * form on these surfaces — 0 on a plane or constant, and −0.75·(a·hx² + b·hy²)
+   * on a quadratic, the c·xy and linear terms cancelling by neighbourhood
+   * symmetry — so this leg is exact E2, not an O(cell²) derivative approximation.
+   * The only error against the noise-free formula is the Float32 storage of the
+   * DEM (and OLV's double accumulation adds nothing above that), which the gdaldem
+   * leg does NOT isolate but this one does. Propagated through TPI = z_c −
+   * mean(8 z_j), the worst case is |δ_c| + mean|δ_j| ≤ one Float32 ULP at the
+   * largest interior elevation. That maximum is the geographic plane's interior
+   * corner at ~1.3e3 m, where one ULP is 2^-13 ≈ 1.22e-4; 2e-4 rounds that up with
+   * a small margin, and is still ~2500x below concave-pit's 0.495 signal, so a
+   * real modelling error stays visible. (The measured worst case is 6.1e-5, about
+   * half the bound, because the half-ULP errors average rather than align.)
+   */
+  tpiVsAnalyticZUnits: 2e-4,
 } as const;
 
 /**
@@ -472,6 +527,79 @@ function olvMultiHillshade(g: OlvGrids, spec: FixtureSpec, sun: FixtureSun): Flo
   const out = new Float64Array(spec.cols * spec.rows);
   for (let i = 0; i < out.length; i++) out[i] = result.shade[i];
   return out;
+}
+
+/**
+ * Euclidean neighbourhood radius, in CELLS, that makes `computeTPI` use the
+ * 8-neighbour MOORE window gdaldem TPI averages over.
+ *
+ * `computeTPI` builds its window as the discrete circle of cells within
+ * Euclidean distance ≤ radius of the centre (centre excluded). At radius √2 that
+ * is exactly the four orthogonal neighbours (distance 1) AND the four diagonals
+ * (distance √2) — eight cells — and NOTHING at distance 2. Any radius in [√2, 2)
+ * selects the same eight; √2 is the principled lower end. Radius 1 would select
+ * only the four orthogonal neighbours (the von Neumann cross), a DIFFERENT
+ * quantity: −0.5·(a·hx²+b·hy²) on a quadratic instead of gdaldem's
+ * −0.75·(a·hx²+b·hy²). The comparison against gdaldem — and the
+ * `computes TPI on the 8-neighbour Moore window` test below — both refuse the
+ * wrong window rather than trusting this constant.
+ */
+const TPI_MOORE_RADIUS = Math.SQRT2;
+
+/**
+ * gdaldem TPI, computed by the SHIPPED `computeTPI`, in ASCII-Grid order.
+ *
+ * TPI is a SYMMETRIC neighbourhood operator (centre minus the mean of the eight
+ * surrounding cells), so — unlike aspect — it is invariant to the north/south
+ * row flip: computing it directly on the ASCII-Grid-order DEM aligns cell-for-cell
+ * with gdaldem's output with NO flip. (A flip would be harmless here, which is
+ * exactly why the row-order hazard that shipped the v0.4.3 aspect defect cannot
+ * touch this product; there is no directional convention to get backwards.)
+ *
+ * The DEM is cast to Float32 first — via a Float32Array — because that is both
+ * what gdaldem reads (AAIGrid `Type=Float32`, verified) and what OLV's shipped
+ * `DtmGrid.z` carries, so the two sides consume the identical quantised surface
+ * and the DEM rounding cancels in the gdaldem comparison. Nodata becomes NaN, the
+ * DTM's honest "no data" state, which `computeTPI` skips as centre and neighbour
+ * alike — matching gdaldem's nodata propagation on the interior cells the
+ * comparison uses (every one has a full valid window, so neither side shrinks).
+ */
+function olvTpi(spec: FixtureSpec, dem: AsciiGrid): Float64Array {
+  const n = spec.cols * spec.rows;
+  const z = new Float32Array(n);
+  for (let i = 0; i < n; i++) z[i] = dem.values[i] === dem.nodata ? Number.NaN : dem.values[i];
+  const result = computeTPI(z, spec.cols, spec.rows, { radiusCells: TPI_MOORE_RADIUS });
+  const out = new Float64Array(n);
+  for (let i = 0; i < n; i++) out[i] = result.tpi[i];
+  return out;
+}
+
+/**
+ * Closed-form interior TPI, or null where the surface has no single-valued one.
+ *
+ * TPI is a DISCRETE definition, not a derivative, so on the surfaces below it is
+ * exact — no O(cell²) estimator error like slope. For the centre minus the mean
+ * of the eight Moore neighbours:
+ *  - constant / plane: 0. A linear surface's neighbourhood mean equals its centre.
+ *  - quadratic z = k + a·x² + b·y² + c·xy: −0.75·(a·hx² + b·hy²), position-
+ *    independent. Over the eight neighbours the x² term averages to x² + 0.75·hx²
+ *    (three cells at ±hx, two at 0), so it contributes −0.75·a·hx²; likewise
+ *    −0.75·b·hy². The c·xy term and both linear terms sum to zero by the window's
+ *    point symmetry.
+ * absridge and step have kinks (the crest, the risers), so their interior TPI is
+ * piecewise and has no single closed-form constant — null, and only the gdaldem
+ * leg covers them.
+ */
+function analyticTpi(spec: FixtureSpec): number | null {
+  const k = spec.surface.kind;
+  if (k === 'constant' || k === 'plane') return 0;
+  if (k === 'quadratic') {
+    const m = cellMetres(spec);
+    const a = spec.surface.params.a ?? 0;
+    const b = spec.surface.params.b ?? 0;
+    return -0.75 * (a * m.x * m.x + b * m.y * m.y);
+  }
+  return null;
 }
 
 // ── comparison ──────────────────────────────────────────────────────────────
@@ -1041,6 +1169,50 @@ if (REF_RECORD) {
         tolerance: FROZEN_TOLERANCES.hillshadeByteLevels, expectation: 'agree' },
         linearAgreement(ours.byte, ref.values, interior, FROZEN_TOLERANCES.hillshadeByteLevels), interior.length);
       writeOlv(`${spec.id}__${run.product}`, spec, ours.byte, 0);
+    } else if (run.product === 'tpi') {
+      // TOPOGRAPHIC POSITION INDEX — centre minus the mean of the eight Moore
+      // neighbours, in the grid's Z unit. gdaldem TPI blanks the border ring and
+      // the whole nodata halo (no -compute_edges; nodata propagated through the
+      // window), and `interior` is exactly the full-3x3-window set, so the two
+      // comparison sets line up on the same interior-only basis every other leg
+      // here uses — no special handling.
+      const ours = olvTpi(spec, demFor(spec));
+
+      // E4 — ours vs gdaldem. Same discrete operation on the same Float32 DEM in
+      // the same summation order, BUT gdaldem accumulates the eight-neighbour sum
+      // in float32 (`GDALTPIAlg(const float*)`) while `computeTPI` accumulates in
+      // double. So the two agree exactly only where that float32 sum is itself
+      // exact — a CONSTANT surface, whose eight neighbours are identical — and
+      // diverge by gdaldem's float32-accumulation error, which grows with the
+      // neighbourhood elevation, on every varying surface. That split is declared
+      // from the mechanism, and the divergence was found by this matrix on the
+      // first run (the tolerance derivation had assumed double accumulation on
+      // both sides), so it is flagged rather than read as a prediction that held.
+      const constantSurface = spec.surface.kind === 'constant';
+      pushLeg({ ...common, unit: 'Z unit (grid elevation unit)', reference: 'GDAL 3.13.1',
+        evidenceLevel: 'E4 (cross-implementation)', metric: 'absolute',
+        cellSet: 'interior, full 3x3 window', excluded: {},
+        tolerance: FROZEN_TOLERANCES.tpiVsGdalZUnits,
+        expectation: constantSurface ? 'agree' : 'documented-divergence',
+        ...(constantSurface ? {} : { expectationRevisedAfterFirstRun: true }) },
+        linearAgreement(ours, ref.values, interior, FROZEN_TOLERANCES.tpiVsGdalZUnits), interior.length);
+
+      // E2 — ours vs the EXACT closed form, where the surface has one. NOT a
+      // derivative estimate: the discrete TPI is exact on plane/quadratic/constant
+      // surfaces, so the only residual is the Float32 DEM the formula does not
+      // share. absridge and step have kinks and no closed-form constant, so they
+      // carry the E4 leg only.
+      const truthVal = analyticTpi(spec);
+      if (truthVal != null) {
+        const an = analyticIndices(spec);
+        const truth = new Float64Array(spec.cols * spec.rows).fill(truthVal);
+        pushLeg({ ...common, product: 'tpi [analytic]', unit: 'Z unit (grid elevation unit)',
+          reference: 'analytic (closed form)', evidenceLevel: 'E2 (formula)', metric: 'absolute',
+          cellSet: 'interior, full 3x3 window, off-kink', excluded: an.excluded,
+          tolerance: FROZEN_TOLERANCES.tpiVsAnalyticZUnits, expectation: 'agree' },
+          linearAgreement(ours, truth, an.idx, FROZEN_TOLERANCES.tpiVsAnalyticZUnits), an.idx.length);
+      }
+      writeOlv(`${spec.id}__${run.product}`, spec, ours, 6);
     }
   }
 
@@ -1158,7 +1330,16 @@ describe('raster agreement matrix', () => {
       aspectCircularDeg: 0.25,
       hillshadeIntensity: 0.0025,
       hillshadeByteLevels: 2.0,
+      tpiVsGdalZUnits: 1e-5,
+      tpiVsAnalyticZUnits: 2e-4,
     });
+    // The gdaldem leg is tighter than the analytic one BY DESIGN, and that
+    // ordering is the finding, not an accident: gdaldem shares the exact Float32
+    // DEM, so its quantisation cancels and only result rounding is left; the
+    // closed form does not, so it must absorb the DEM's Float32 noise. Pinned so a
+    // later edit cannot quietly invert it and make the cross-check look looser than
+    // the formula check.
+    expect(FROZEN_TOLERANCES.tpiVsGdalZUnits).toBeLessThan(FROZEN_TOLERANCES.tpiVsAnalyticZUnits);
     // The byte tolerance MUST be too coarse to see a half-level error, and the
     // intensity tolerance MUST be fine enough to see one. That relationship is
     // what makes the two legs independent, so it is asserted, not described.
@@ -1188,6 +1369,7 @@ describe('raster agreement matrix', () => {
     const products = new Set(FIXTURES.flatMap((f) => f.products));
     expect(products.has('slope-deg')).toBe(true);
     expect(products.has('slope-deg-edges')).toBe(true);
+    expect(products.has('tpi')).toBe(true);
     // Thirteen named families, all present.
     const families = new Set(FIXTURES.map((f) => f.family));
     expect(families.size).toBeGreaterThanOrEqual(12);
@@ -1438,6 +1620,149 @@ describe('raster agreement matrix', () => {
     expect(flat, 'the flat fixture produced no multidirectional leg').toBeDefined();
     expect(flat!.verdict, 'the two models should coincide at zero gradient').toBe('agree');
     expect(flat!.maxAbsDiff!, 'a flat-ground gap larger than the encoding offset').toBeLessThanOrEqual(1);
+  });
+
+  it('records TPI against GDAL: exact on constant terrain, a float32-accumulation divergence elsewhere', () => {
+    // A FOURTH terrain product, cross-implementation (E4). TPI = centre minus the
+    // mean of the eight Moore neighbours, the same discrete DEFINITION in gdaldem
+    // and in the shipped `computeTPI`. What the matrix surfaced is not a modelling
+    // difference but a PRECISION one: gdaldem forms the eight-neighbour sum in
+    // float32 (`GDALTPIAlg(const float*)`), `computeTPI` in double. So the two
+    // agree exactly only where the float32 sum is itself exact — the constant
+    // surface, whose neighbours are identical — and diverge by gdaldem's
+    // float32-accumulation error, which grows with elevation, everywhere else.
+    const ls = legsFor((l) => l.product === 'tpi' && l.reference === 'GDAL 3.13.1');
+    expect(ls.length, 'no GDAL TPI legs were built').toBeGreaterThanOrEqual(8);
+    for (const l of ls) expect(l.unit).toBe('Z unit (grid elevation unit)');
+    console.log(`\nTPI (centre − mean of 8 neighbours) ours vs GDAL 3.13.1 — E4:\n${summarise(ls)}`);
+    // No leg here was declared 'agree' and then disagreed: the constant fixture is
+    // the only one expected to agree, and it does, exactly.
+    expect(failing(ls), 'a TPI leg expected to agree disagreed').toEqual([]);
+    // Every surface family reaches this leg, so a shape-specific defect cannot
+    // hide behind the planes.
+    const kinds = new Set(ls.map((l) => specById.get(l.fixtureId)!.surface.kind));
+    expect(kinds, `TPI surface kinds: ${[...kinds].join(', ')}`).toEqual(
+      new Set(['constant', 'plane', 'quadratic', 'absridge', 'step']),
+    );
+
+    // The CONSTANT surface is the coincidence case: identical neighbours, an exact
+    // float32 sum, TPI exactly 0 on both sides. It agrees, and to the byte.
+    const flat = ls.find((l) => specById.get(l.fixtureId)!.surface.kind === 'constant')!;
+    expect(flat.expectation, 'constant TPI should expect agreement').toBe('agree');
+    expect(flat.verdict).toBe('agree');
+    expect(flat.maxAbsDiff, 'constant-surface TPI is not exact between the two').toBe(0);
+
+    // Every VARYING surface is a documented divergence declared from the mechanism,
+    // and flagged as a first-run correction (the tolerance had assumed double
+    // accumulation on both sides).
+    const varying = ls.filter((l) => specById.get(l.fixtureId)!.surface.kind !== 'constant');
+    expect(varying.length).toBeGreaterThanOrEqual(7);
+    for (const l of varying) {
+      expect(l.expectation, `${l.fixtureId}`).toBe('documented-divergence');
+      expect(l.expectationRevisedAfterFirstRun, `${l.fixtureId}`).toBe(true);
+    }
+    // The divergence GROWS WITH ELEVATION — the signature of a float32-accumulated
+    // sum whose ULP scales with magnitude. The ~1300 m geographic plane is the
+    // largest gap in the matrix, and it dwarfs the ~150 m fixtures.
+    const geo = ls.find((l) => specById.get(l.fixtureId)!.crs === 'geographic')!;
+    const conv = ls.find((l) => l.fixtureId === 'convex-hill')!;
+    expect(geo.maxAbsDiff!, 'geographic TPI gap is not the largest').toBeGreaterThan(conv.maxAbsDiff!);
+    // And it stays within one float32 ULP of the largest neighbour sum — i.e. it is
+    // bounded by the reference's accumulation precision, not unbounded. zmax≈1.3e3,
+    // ULP≈1.22e-4; 2·ULP is a safe ceiling for the whole matrix.
+    expect(geo.maxAbsDiff!, 'geographic TPI gap exceeds gdaldem float32 accumulation ceiling')
+      .toBeLessThan(2.5e-4);
+
+    // PROOF, not assertion, that the gap is gdaldem's float32 accumulation and NOT
+    // an OLV error: a float32-accumulation reference reproduces gdaldem to
+    // result-rounding on the worst fixture, while OLV's double accumulation is what
+    // diverges — and OLV is the one that matches the exact closed form (E2 leg).
+    const gspec = specById.get('geographic-plane')!;
+    const dem = demFor(gspec);
+    const z = new Float32Array(gspec.cols * gspec.rows);
+    for (let i = 0; i < z.length; i++) z[i] = dem.values[i] === dem.nodata ? Number.NaN : dem.values[i];
+    const gref = readAsciiGrid(resolve(GDAL_DIR, 'geographic-plane__tpi.asc'));
+    const moore = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]] as const;
+    let maxF32Accum = 0;
+    for (const i of interiorIndices(gspec)) {
+      const r = Math.floor(i / gspec.cols);
+      const c = i % gspec.cols;
+      let s = Math.fround(0);
+      for (const [dr, dc] of moore) s = Math.fround(s + z[(r + dr) * gspec.cols + (c + dc)]);
+      const tpiF32 = Math.fround(z[i] - Math.fround(s / 8));
+      if (gref.values[i] !== gref.nodata) maxF32Accum = Math.max(maxF32Accum, Math.abs(tpiF32 - gref.values[i]));
+    }
+    expect(maxF32Accum, 'a float32-accumulation reference does NOT reproduce gdaldem TPI')
+      .toBeLessThan(FROZEN_TOLERANCES.tpiVsGdalZUnits);
+    notes.push(
+      'TPI (centre − mean of 8 neighbours): OLV and gdaldem share the definition, the Float32 DEM and the ' +
+      'summation order, but gdaldem accumulates the eight-neighbour sum in FLOAT32 (GDALTPIAlg operates on ' +
+      'const float*) while computeTPI accumulates in double. They agree exactly on a constant surface (the ' +
+      'sum is exact) and diverge by gdaldem\'s float32-accumulation error elsewhere, growing with elevation ' +
+      'to ~1.3e-4 Z-units on the ~1300 m geographic plane. A float32-accumulation reference reproduces ' +
+      'gdaldem to result-rounding, and OLV\'s double-accumulated TPI matches the exact closed form (E2), so ' +
+      'OLV is the more precise side; the divergence is a reference-tool precision limit, recorded as a ' +
+      'boundary, not a defect. TPI carries no horizontal unit, so — unlike aspect — the geographic fixture ' +
+      'is fully expressible and is included.',
+    );
+    console.log(
+      `\nTPI divergence is gdaldem's float32 accumulation: a float32-accum reference reproduces ` +
+        `gdaldem to ${maxF32Accum.toExponential(2)} Z-units on the ~1300 m geographic plane, where OLV's ` +
+        `double accumulation differs by ${geo.maxAbsDiff!.toExponential(2)}. OLV is the more precise side.`,
+    );
+  });
+
+  it('agrees with the closed form on TPI, which is EXACT E2, not a derivative estimate', () => {
+    // The independent (non-gdaldem) edge of the triangle. For slope on a quadratic
+    // the closed-form leg carries a real O(cell²) error because Horn is a
+    // first-order estimator; TPI has no such error, because the discrete
+    // "centre − mean of 8" IS the definition and has an exact closed form
+    // (0 on a plane, −0.75·(a·hx²+b·hy²) on a quadratic). So this leg is expected
+    // to agree, and its residual is the Float32 DEM noise the gdaldem leg cancels.
+    const ls = legsFor((l) => l.product === 'tpi [analytic]');
+    expect(ls.length, 'no analytic TPI legs were built').toBeGreaterThanOrEqual(4);
+    for (const l of ls) expect(l.evidenceLevel).toBe('E2 (formula)');
+    console.log(`\nTPI ours vs closed form −0.75(a·hx²+b·hy²) — E2, EXACT:\n${summarise(ls)}`);
+    expect(failing(ls), 'TPI disagreements against the closed form').toEqual([]);
+    // The formula (E2) residual is TIGHTER than the gdaldem (E4) residual for the
+    // same fixture, and that ordering is the mechanism made observable: OLV
+    // accumulates in double, so against the noise-free formula only the Float32 DEM
+    // storage shows; gdaldem ADDS its float32-accumulation error on top of the same
+    // DEM, so the cross-implementation gap is always the larger of the two. (My
+    // first pass asserted the opposite from a derivation that wrongly assumed
+    // gdaldem accumulated in double; the first run corrected it.)
+    for (const a of ls) {
+      const e4 = legs.find((l) => l.fixtureId === a.fixtureId && l.product === 'tpi' && l.reference === 'GDAL 3.13.1');
+      if (!e4 || e4.status !== 'ok' || a.status !== 'ok') continue;
+      expect(a.maxAbsDiff!, `${a.fixtureId}: formula residual is not ≤ the gdaldem residual`)
+        .toBeLessThanOrEqual(e4.maxAbsDiff! + 1e-12);
+    }
+  });
+
+  it('computes TPI on the 8-neighbour Moore window gdaldem uses, not the 4-neighbour cross', () => {
+    // The window is the whole product. gdaldem TPI averages the EIGHT surrounding
+    // cells; `computeTPI` reaches exactly those at Euclidean radius √2. A radius of
+    // 1 would take only the four orthogonal neighbours and compute a DIFFERENT
+    // quantity — −0.5·(a·hx²+b·hy²) instead of −0.75·(a·hx²+b·hy²) on a quadratic.
+    // Demonstrated on convex-hill, where the two closed forms are far apart and
+    // ours lands on the Moore one.
+    const spec = specById.get('convex-hill')!;
+    const ours = olvTpi(spec, demFor(spec));
+    const interior = interiorIndices(spec);
+    const m = cellMetres(spec);
+    const a = spec.surface.params.a ?? 0;
+    const b = spec.surface.params.b ?? 0;
+    const moore = -0.75 * (a * m.x * m.x + b * m.y * m.y);
+    const cross = -0.5 * (a * m.x * m.x + b * m.y * m.y);
+    // The two windows are genuinely distinguishable at this cell size — the gap is
+    // orders of magnitude above both tolerances, so landing on the right one means
+    // something.
+    expect(Math.abs(moore - cross), 'the two windows are indistinguishable on this fixture')
+      .toBeGreaterThan(FROZEN_TOLERANCES.tpiVsAnalyticZUnits * 10);
+    let maxOffMoore = 0;
+    for (const i of interior) maxOffMoore = Math.max(maxOffMoore, Math.abs(ours[i] - moore));
+    expect(maxOffMoore, `ours departs from the 8-neighbour Moore closed form by ${maxOffMoore}`)
+      .toBeLessThan(FROZEN_TOLERANCES.tpiVsAnalyticZUnits);
   });
 
   it('separates the nodata halo, where the two implementations differ by POLICY', () => {

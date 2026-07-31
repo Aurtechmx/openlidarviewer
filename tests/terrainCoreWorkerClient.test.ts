@@ -106,6 +106,46 @@ describe('TerrainCoreWorkerClient — recovery after onerror', () => {
   });
 });
 
+describe('TerrainCoreWorkerClient — synchronous postMessage failure', () => {
+  test('rejects and leaves no pending state', async () => {
+    instances = [];
+    // The worker is constructed lazily inside computeCore()'s own call stack,
+    // so there's no handle to override postMessage on before the first post —
+    // the fake throws itself, driven by this closed-over flag.
+    let throwOnPost = true;
+    class ThrowingFakeWorker extends FakeWorker {
+      override postMessage(message: unknown): void {
+        if (throwOnPost) throw new Error('DataCloneError: could not be cloned');
+        super.postMessage(message);
+      }
+    }
+    vi.stubGlobal('Worker', ThrowingFakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+    const ctrl = new AbortController();
+    const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
+
+    await expect(client.computeCore(pos, n, PARAMS, undefined, ctrl.signal)).rejects.toThrow(
+      /DataCloneError/,
+    );
+    // The worker is constructed lazily, so it only exists after the call above.
+    const worker = instances[0] as FakeWorker;
+    expect(client.pendingCount).toBe(0);
+    expect(removeSpy).toHaveBeenCalled();
+    expect(() => ctrl.abort()).not.toThrow();
+
+    // Not wedged: a later job still completes.
+    throwOnPost = false;
+    const sentinel = { __ok: true } as unknown as TerrainCore;
+    const ok = client.computeCore(pos, n, PARAMS, undefined);
+    const id = (worker.posted[worker.posted.length - 1] as { jobId: number }).jobId;
+    worker.onmessage?.({ data: { jobId: id, ok: true, core: sentinel } } as MessageEvent);
+    await expect(ok).resolves.toBe(sentinel);
+    expect(client.pendingCount).toBe(0);
+  });
+});
+
 describe('computeTerrainCoreAsync — fallback survives a dead worker', () => {
   test('falls back to the main thread after a worker crash, on the crash run and the run after it', async () => {
     instances = [];
