@@ -194,6 +194,34 @@ describe('renderContextViewPanel — ineligible', () => {
   });
 });
 
+describe('renderContextViewPanel — empty (no layers)', () => {
+  const EMPTY: ContextViewPanelState = {
+    consent: 'unasked',
+    eligible: false,
+    empty: true,
+    reasons: [],
+    footprints: [],
+  };
+
+  it('says nothing is loaded, and makes no claim about CRS, datum, or a transform', () => {
+    const panel = render(EMPTY);
+    const text = panel.allText();
+    expect(text).toContain('No scan is loaded');
+    expect(text).not.toContain(CONTEXT_STATUS.transformUnavailable);
+    expect(text).not.toContain(CONTEXT_STATUS.boundsNotFinite);
+    expect(text).not.toContain(CONTEXT_STATUS.crsUnknown);
+    expect(text).not.toContain(CONTEXT_STATUS.datumUnknown);
+    expect(text).not.toContain('This scan cannot be shown on a world map.');
+  });
+
+  it('shows no refusal list, no consent buttons, and no canvas', () => {
+    const panel = render(EMPTY);
+    expect(panel.byClass('olv-context-reasons').length).toBe(0);
+    expect(panel.querySelectorAll('button').length).toBe(0);
+    expect(panel.querySelectorAll('canvas').length).toBe(0);
+  });
+});
+
 describe('renderContextViewPanel — consent gate (unasked)', () => {
   it('renders the consent prompt, both buttons, and the offline canvas', () => {
     const panel = render(UNASKED);
