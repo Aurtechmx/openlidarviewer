@@ -112,6 +112,24 @@ function buildArgs(spec, product, inPath, outPath) {
     return { argv: ['slope', inPath, outPath, '-alg', 'Horn', '-compute_edges', '-of', 'AAIGrid', ...scale, ...floatCo],
       unit: 'degree', axisScaling: geo ? 'xscale/yscale in metres per degree' : 'none (metre grid)' };
   }
+  if (product === 'tpi') {
+    // gdaldem TPI is the Topographic Position Index: centre minus the mean of the
+    // eight surrounding cells, in the DEM's own Z unit. It accepts NEITHER -alg
+    // (there is one algorithm) NOR -xscale/-yscale/-s (verified from
+    // `gdaldem TPI --help` on GDAL 3.13.1: the only options are -compute_edges,
+    // -b, -co, -of, -q). It operates on the raw Z neighbourhood and is therefore
+    // independent of cell size and CRS. No -compute_edges: the border ring is left
+    // as nodata, exactly the interior-only set the comparison uses, matching the
+    // no-edges convention of the plain `slope-deg` run.
+    return { argv: ['TPI', inPath, outPath, '-of', 'AAIGrid', ...floatCo],
+      unit: 'Z unit (grid elevation unit)',
+      // Recorded as a fact, not a workaround: for aspect the missing -xscale/-yscale
+      // was a limit of the reference tool; for TPI it is the definition — TPI carries
+      // no horizontal unit — so the geographic fixture is compared with no caveat.
+      axisScaling: geo
+        ? 'none: gdaldem TPI has no -xscale/-yscale and none is needed — TPI is a raw-Z neighbourhood, independent of the horizontal unit'
+        : 'none (raw-Z neighbourhood; no horizontal scaling)' };
+  }
   if (product === 'aspect') {
     return { argv: ['aspect', inPath, outPath, '-alg', 'Horn', '-of', 'AAIGrid', ...floatCo],
       unit: 'compass degree clockwise from north, -9999 on flat',
