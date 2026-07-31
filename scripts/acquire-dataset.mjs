@@ -34,37 +34,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname, basename, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/**
- * A record's sourceUrl is data — it comes from the register file — and this
- * script fetches it and (with --out) writes the response to disk. Both are
- * classic SSRF / path-injection sinks, so the data is validated before it
- * reaches either.
- *
- * Reject anything that is not public https. The `169.254.` and `[::1]`/`fc00::`
- * cases are the ones the sibling verifiers' guard omits and the ones that
- * matter most here: `169.254.169.254` is the cloud metadata endpoint, the
- * canonical SSRF target. This mirrors verify-reproduction-record.mjs's
- * isPrivateLocation and extends it for a tool that actually makes the request.
- */
-const PRIVATE_HOST =
-  /^(?:localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00:|\[?fd00:|.*\.local)$/i;
-function checkUrl(url) {
-  let u;
-  try {
-    u = new URL(url);
-  } catch {
-    return { problem: `sourceUrl ${JSON.stringify(url)} is not a valid URL` };
-  }
-  if (u.protocol !== 'https:') return { problem: `sourceUrl ${JSON.stringify(url)} is not https` };
-  if (PRIVATE_HOST.test(u.hostname) || /intranet|(?:^|\W)internal(?:\W|$)/i.test(u.hostname)) {
-    return { problem: `sourceUrl host ${JSON.stringify(u.hostname)} is private/loopback/link-local; refusing to fetch it` };
-  }
-  // Return the validated URL object, and fetch THAT rather than the raw string,
-  // so the value reaching the network sink has flowed through this host check —
-  // the guard is a barrier on the actual tainted value, not a separate branch
-  // the analyzer has to correlate with the call.
-  return { url: u };
-}
+import { checkUrl, fetchValidated } from './lib/fetchGuard.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTER = resolve(ROOT, 'validation/datasets/dataset-register.yaml');
@@ -168,7 +138,13 @@ for (const rec of selected) {
   process.stdout.write(`${rec.id} … `);
   let buf;
   try {
-    const res = await fetch(checked.url, { redirect: 'follow' });
+    const fetched = await fetchValidated(checked.url);
+    if (fetched.problem) {
+      problems.push(`${rec.id}: ${fetched.problem}.`);
+      console.log('refused');
+      continue;
+    }
+    const res = fetched.res;
     if (!res.ok) {
       problems.push(`${rec.id}: ${rec.url} returned HTTP ${res.status}.`);
       console.log(`HTTP ${res.status}`);
