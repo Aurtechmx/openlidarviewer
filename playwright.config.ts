@@ -45,8 +45,8 @@ export default defineConfig({
   // They are ADVISORY in CI, not required: a new leg that goes red would
   // otherwise block every unrelated change while its failures are triaged.
   projects: [
-    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu/ },
-    { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/ },
+    { name: 'deterministic', use: { ...devices['Desktop Chrome'] }, grepInvert: /@gpu/, testIgnore: /firefoxWebglPreflight/ },
+    { name: 'gpu', use: { ...devices['Desktop Chrome'] }, grep: /@gpu/, testIgnore: /firefoxWebglPreflight/ },
     {
       name: 'firefox',
       use: {
@@ -78,8 +78,13 @@ export default defineConfig({
         headless: process.platform !== 'linux',
       },
       grepInvert: /@gpu/,
+      testIgnore: /firefoxWebglPreflight/,
     },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/ },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/, testIgnore: /firefoxWebglPreflight/ },
+    // The graphics preflight is its own project so it can be run before the
+    // suite without joining any project's default set. `deterministic` is a
+    // required check, and an advisory leg must not move its test count.
+    { name: 'firefox-preflight', use: { ...devices['Desktop Firefox'], headless: process.platform !== 'linux' }, testMatch: /firefoxWebglPreflight/ },
   ],
   webServer: {
     // SMOKE_LIVE boots the OBFUSCATED live artifact (the build users actually

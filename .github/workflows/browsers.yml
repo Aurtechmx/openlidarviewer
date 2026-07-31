@@ -65,6 +65,23 @@ jobs:
       # the `firefox` project in playwright.config.ts for the measurements.
       # xvfb itself already comes from `--with-deps` (Playwright's shared tools
       # list installs it), so nothing extra is needed to get the binary.
+      # Fail fast, and fail legibly. Without this the leg's failure mode is 111
+      # timeouts across 40 minutes, every one of them downstream of a missing
+      # WebGL context and none of them saying so. `glxinfo` answers before
+      # Playwright starts; the preflight spec answers before the suite does.
+      - name: Verify the runner has a software OpenGL renderer
+        run: |
+          set -o pipefail
+          sudo apt-get install -y --no-install-recommends mesa-utils
+          xvfb-run -a glxinfo -B | tee /tmp/glxinfo.txt
+          if ! grep -Eiq "llvmpipe|softpipe|software rasterizer" /tmp/glxinfo.txt; then
+            echo "::error::No Mesa software renderer on this runner. Everything below would fail as a timeout."
+            exit 1
+          fi
+      - name: Verify Firefox gets a WebGL 2 context
+        run: |
+          xvfb-run -a ./node_modules/.bin/playwright test \
+            --project=firefox-preflight
       - name: Deterministic end-to-end tests on Firefox (advisory)
         run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox
       - name: Upload Playwright report on failure
