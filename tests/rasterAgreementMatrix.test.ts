@@ -1723,7 +1723,14 @@ describe('raster agreement matrix', () => {
 
     const record = {
       generatedBy: 'tests/rasterAgreementMatrix.test.ts',
-      promotes: 'nothing — docs/validation/claim-register.yaml and REFERENCE_SLOTS are untouched',
+      promotes:
+        'nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS are untouched. '
+        + 'OLV-XS-001 through 003 are registered studies under frozen protocols now, which was '
+        + 'the blocker the register named, and each of their scopes is still the single analytic '
+        + 'DEM the claim already cites: registering them changed the paperwork, not the breadth. '
+        + 'This matrix is broader and is not one of those studies. Its tolerances were fixed for '
+        + 'this exercise rather than for any claim, and what it produced was six documented '
+        + 'boundaries. Evidence that narrows a claim is not grounds to raise it.',
       evidenceNote:
         'Legs whose reference is "analytic (closed form)" are E2: one implementation against a formula, ' +
         'however many fixtures they span. Only the "GDAL 3.13.1" legs are cross-implementation (E4). ' +
