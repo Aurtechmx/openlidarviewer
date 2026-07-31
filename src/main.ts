@@ -5865,9 +5865,6 @@ async function handleFile(file: File): Promise<void> {
       );
       return;
     }
-    // A static load replaces any open streaming scan.
-    if (viewer.hasStreamingCloud) closeStreaming();
-
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
     // The dropped file is wrapped in a LocalFileSource — the source
     // abstraction; v0.3 streaming sources slot in beside it.
@@ -5899,6 +5896,11 @@ async function handleFile(file: File): Promise<void> {
 
     dropZone.setProgress(formatProgress({ stage: 'uploading' }));
     stage.hideEmptyState();
+    // A static load replaces any open streaming scan — but only now that the
+    // file parsed. A failed or cancelled parse above must leave the current
+    // scene intact rather than clearing it for a scan that never arrived.
+    if (controller.signal.aborted) throw new LoadCancelledError();
+    if (viewer.hasStreamingCloud) closeStreaming();
     const uploadStartedAt = performance.now();
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
@@ -6225,8 +6227,6 @@ async function openStreamingCopc(
     ? (ms) => streamingBenchmark?.recordDecodeMs(ms)
     : undefined;
 
-  // A streaming scan is exclusive — clear any open static layers first.
-  clearOpenStaticLayers();
   stage.hideEmptyState();
   // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
   recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
@@ -6247,6 +6247,11 @@ async function openStreamingCopc(
   } catch (err) {
     if (debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
   }
+  // A streaming scan is exclusive — clear open static layers at the last
+  // moment, after the source opened above and just before its replacement
+  // attaches, so a failed open left the current scene intact. The abort check
+  // at the open still guards this; nothing yields between it and here.
+  clearOpenStaticLayers();
   await viewer.attachStreamingCloud(
     cloud,
     copcDecoder,
@@ -6254,6 +6259,9 @@ async function openStreamingCopc(
     isPhone(),
     streamingBenchmark,
   );
+  // attachStreamingCloud takes no signal; if the user cancelled while it ran,
+  // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
+  if (signal.aborted) { closeStreaming(); throw new LoadCancelledError(); }
   viewer.setMode('orbit');
   viewer.frameAll();
 
@@ -6471,7 +6479,6 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
     }
 
-    if (viewer.hasStreamingCloud) closeStreaming();
     await viewer.ready;
     streamingPanel.setPhase('Building hierarchy…');
     streamingPanel.show();
@@ -6508,8 +6515,6 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
     );
     if (controller.signal.aborted) throw new LoadCancelledError();
 
-    // A streaming scan is exclusive — clear any open static layers first.
-    clearOpenStaticLayers();
     stage.hideEmptyState();
 
     // Laszip tiles are CPU-heavy (laz-perf decompress + coordinate transform);
@@ -6524,6 +6529,12 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       cloud,
       cloud.dataType === 'laszip' ? eptLaszipDecoder : null,
     );
+    // A streaming scan is exclusive — replace any prior streaming/static scene
+    // at the last moment, after the EPT source opened and the decoder is ready,
+    // so a failed or cancelled step above left the current scene intact.
+    if (controller.signal.aborted) throw new LoadCancelledError();
+    if (viewer.hasStreamingCloud) closeStreaming();
+    clearOpenStaticLayers();
     await viewer.attachStreamingCloud(
       cloud,
       decoder,
@@ -6531,6 +6542,9 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       isPhone(),
       null,
     );
+    // attachStreamingCloud takes no signal; if the user cancelled while it ran,
+    // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
+    if (controller.signal.aborted) { closeStreaming(); throw new LoadCancelledError(); }
     viewer.setMode('orbit');
     viewer.frameAll();
 
@@ -6680,6 +6694,11 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // a host that cannot stream reports a precise reason instead of stalling.
     await range.probe(controller.signal);
     if (controller.signal.aborted) throw new LoadCancelledError();
+    // TODO(gate F4): closes the prior scan before openStreamingCopc's own fetch,
+    // so a malformed COPC that passes the range probe still blanks the scene.
+    // Deferring needs the teardown moved into the shared openStreamingCopc (the
+    // local path relies on attach's internal detach) — a larger refactor. The
+    // probe above already guards the common remote failures (CORS / ranges / 404).
     if (viewer.hasStreamingCloud) closeStreaming();
     await openStreamingCopc(range, remoteCopcName(url), controller.signal);
     dropZone.setCancelHandler(null);
