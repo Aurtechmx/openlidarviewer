@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "studyId": "DSM-PDAL-WRITERS-GDAL-CELL-CENTRED",
+  "claimId": "DSM",
+  "example": false,
+  "notes": [
+    "The tolerance below was registered at pending in an earlier commit, before anything ran, and is unchanged. protocolDigest covers it.",
+    "This record promotes nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts are untouched.",
+    "This is the DTM study with min -> max. The maximum, like the minimum, selects an input Z rather than combining several returns, so on the same points the two implementations differ only by float32 storage against a double transcoded at six decimals. The scenes stack returns above the ground on a subset of cells so the maximum genuinely sits above the minimum; on a scattered cloud a disc is not a square and the two maxima could not agree, which is why the fixtures are cell-centred exactly as the DTM fixtures are."
+  ],
+  "protocolDigest": "sha256:db1e504b5f116522a53a6a22902dd635cda048aa9ba3e28db7090eaae3d7297f",
+  "candidate": {
+    "revision": "72f7109111494f660149665f90d0f6a00d5dc43f",
+    "version": "0.6.3",
+    "algorithmVersion": "v0.4.3"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host these references were produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version PDAL reports and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/<fixture>__dsm-max.json, then gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 <fixture>__dsm-max.tif <fixture>__dsm-max.asc",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "description": "Cell-centred cloud on a 5.4 % plane, one ground return per 1 m cell plus stacked roof, facade and canopy returns above a subset of cells. 50 by 50 cells; the top surface sits above the ground on the structured cells and equals it elsewhere.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+      "sha256": "2149eddfde164d97dd9e519c04bee90fdf2447661ae2c944e3abe87511928371"
+    },
+    {
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "description": "The same structured cell-centred layout over a rolling surface with two incommensurate wavelengths, so no translation of the grid maps the surface onto itself and a row flip cannot pass.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+      "sha256": "3c3919f1c51b179bd00196996f3d221b57d2f86125fcea4775d5f2c0a989bebb"
+    },
+    {
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "description": "The same structured cell-centred layout over a 30 % V ridge, where a half-cell offset costs 15 cm and is well clear of the tolerance.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+      "sha256": "96f474b7e40d7a87baf73cf6519ddd1adb7aecf90c350a8338de114c9976ce2d"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-DSM-MAX-CELL1-R045",
+      "description": "Highest return per cell, 1 m cells, grid pinned to origin (0, 0) and 50 by 50 cells. The reference radius of 0.45 m is below half a cell, so each cell disc holds exactly the returns placed at that cell centre and the radius estimator and the cell estimator compute the same maximum.",
+      "candidateParameters": {
+        "function": "buildDsm",
+        "aggregation": "max",
+        "gridOriginH1": 0,
+        "gridOriginH2": 0,
+        "cols": 50,
+        "rows": 50,
+        "cellSizeM": 1,
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "stage": "writers.gdal",
+        "output_type": "max",
+        "resolution": 1,
+        "radius": 0.45,
+        "origin_x": 0,
+        "origin_y": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "data_type": "double",
+        "gdaldriver": "GTiff",
+        "transcode": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.00005,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "pending",
+  "statusReason": "Registered with the tolerance frozen and derived from the cell arithmetic, before the comparison was run. No result is recorded here.",
+  "rawArtifacts": [],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [],
+    "unsupported": [
+      "Aggregation over a scattered cloud. Every return is at a cell centre so the disc and the square coincide; a scattered cloud would compare a disc against a square and is out of scope here, as it is for the DTM study.",
+      "Empty cells. Every cell receives a ground return, so nothing here says anything about how either side marks or fills a cell with no data.",
+      "One aggregation (maximum) and one cell size. Nothing here says anything about first/last-return selection, percentile-of-top surfaces, or any cell size other than 1 m.",
+      "Agreement with PDAL is not accuracy against ground truth."
+    ]
+  }
+}
