@@ -47,6 +47,11 @@ export class TerrainCoreWorkerClient {
   private _nextJobId = 0;
   private _disposed = false;
 
+  /** In-flight job count. Diagnostic — asserted by the settlement tests. */
+  get pendingCount(): number {
+    return this._pending.size;
+  }
+
   /**
    * Compute a terrain core in the worker. The `positions` array is COPIED (its
    * buffer is never detached), so the caller may keep using it after the call.
@@ -105,16 +110,25 @@ export class TerrainCoreWorkerClient {
       // the worker can re-attach it (avoids cloning it twice).
       const { classification: _drop, ...paramsNoClass } = coreParams;
       void _drop;
-      worker.postMessage(
-        {
-          jobId,
-          positions: copy.buffer,
-          n: nClamped,
-          coreParams: paramsNoClass,
-          classification,
-        },
-        [copy.buffer],
-      );
+      try {
+        worker.postMessage(
+          {
+            jobId,
+            positions: copy.buffer,
+            n: nClamped,
+            coreParams: paramsNoClass,
+            classification,
+          },
+          [copy.buffer],
+        );
+      } catch (err) {
+        // A synchronous post failure (e.g. DataCloneError, or posting to a
+        // worker that just died) would otherwise strand this job in `_pending`
+        // with its abort listener still attached. Settle it and surface the
+        // error so the async wrapper's fallback path runs.
+        this._settle(jobId);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      }
     });
   }
 
@@ -151,17 +165,29 @@ export class TerrainCoreWorkerClient {
   }
 
   private _onMessage(reply: WorkerReply): void {
-    const pending = this._pending.get(reply.jobId);
+    const pending = this._settle(reply.jobId);
     if (!pending) return; // aborted or already settled — drop the stale reply
-    this._pending.delete(reply.jobId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
     if (reply.ok) {
       pending.resolve(reply.core);
     } else {
       pending.reject(new Error(reply.error));
     }
+  }
+
+  /**
+   * Remove a job from `_pending` and detach its abort listener, returning it
+   * (or undefined if already gone). The single teardown path, so a reply, a
+   * sync post failure, and a fail-all all clean up identically — no map entry
+   * or signal listener is ever left behind.
+   */
+  private _settle(jobId: number): PendingRequest | undefined {
+    const pending = this._pending.get(jobId);
+    if (!pending) return undefined;
+    this._pending.delete(jobId);
+    if (pending.onAbort && pending.signal) {
+      pending.signal.removeEventListener('abort', pending.onAbort);
+    }
+    return pending;
   }
 
   private _failAll(error: Error): void {
