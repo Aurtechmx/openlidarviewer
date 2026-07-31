@@ -48,18 +48,22 @@ import { fileURLToPath } from 'node:url';
  */
 const PRIVATE_HOST =
   /^(?:localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|172\.(?:1[6-9]|2\d|3[01])\.|\[?::1\]?|\[?fc00:|\[?fd00:|.*\.local)$/i;
-function urlProblem(url) {
+function checkUrl(url) {
   let u;
   try {
     u = new URL(url);
   } catch {
-    return `sourceUrl ${JSON.stringify(url)} is not a valid URL`;
+    return { problem: `sourceUrl ${JSON.stringify(url)} is not a valid URL` };
   }
-  if (u.protocol !== 'https:') return `sourceUrl ${JSON.stringify(url)} is not https`;
+  if (u.protocol !== 'https:') return { problem: `sourceUrl ${JSON.stringify(url)} is not https` };
   if (PRIVATE_HOST.test(u.hostname) || /intranet|(?:^|\W)internal(?:\W|$)/i.test(u.hostname)) {
-    return `sourceUrl host ${JSON.stringify(u.hostname)} is private/loopback/link-local; refusing to fetch it`;
+    return { problem: `sourceUrl host ${JSON.stringify(u.hostname)} is private/loopback/link-local; refusing to fetch it` };
   }
-  return null;
+  // Return the validated URL object, and fetch THAT rather than the raw string,
+  // so the value reaching the network sink has flowed through this host check —
+  // the guard is a barrier on the actual tainted value, not a separate branch
+  // the analyzer has to correlate with the call.
+  return { url: u };
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -153,17 +157,18 @@ for (const rec of selected) {
   }
 
   // Validate the URL before it reaches fetch() (SSRF sink). A private/loopback/
-  // metadata host is refused loudly rather than requested.
-  const badUrl = urlProblem(rec.url);
-  if (badUrl) {
-    problems.push(`${rec.id}: ${badUrl}.`);
+  // metadata host is refused loudly rather than requested, and the validated
+  // URL object is what gets fetched.
+  const checked = checkUrl(rec.url);
+  if (checked.problem) {
+    problems.push(`${rec.id}: ${checked.problem}.`);
     continue;
   }
 
   process.stdout.write(`${rec.id} … `);
   let buf;
   try {
-    const res = await fetch(rec.url, { redirect: 'follow' });
+    const res = await fetch(checked.url, { redirect: 'follow' });
     if (!res.ok) {
       problems.push(`${rec.id}: ${rec.url} returned HTTP ${res.status}.`);
       console.log(`HTTP ${res.status}`);
