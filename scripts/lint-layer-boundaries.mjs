@@ -69,8 +69,36 @@ function walk(dir, out) {
   }
 }
 
+// `walk` returns silently when a directory cannot be read, which is correct for
+// a layer that does not exist yet and wrong for every other cause. On Windows
+// the path bug above made all four unreadable at once and the lint reported
+// success over zero files. Counting per layer is what catches that: a total
+// would still pass while three of the four layers went unread.
+//
+// A layer with files today is a layer that must keep having them. Deleting one
+// is a real change and should fail here rather than quietly shrink the gate.
+const POPULATED_LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science'];
+
 const files = [];
-for (const layer of LAYERS) walk(join(ROOT, layer), files);
+const perLayer = new Map();
+for (const layer of LAYERS) {
+  const found = [];
+  walk(join(ROOT, layer), found);
+  perLayer.set(layer, found.length);
+  files.push(...found);
+}
+
+const unread = POPULATED_LAYERS.filter((layer) => (perLayer.get(layer) ?? 0) === 0);
+if (unread.length > 0) {
+  console.error('lint:layer-boundaries FAILED — read no files in a layer that has them');
+  console.error('');
+  for (const layer of unread) console.error(`  ${layer} contributed 0 files`);
+  console.error('');
+  console.error('This lint inspects import specifiers, so a layer it cannot read is a layer it');
+  console.error('cannot check. Either the path resolution is broken or the layer was removed.');
+  console.error('If a layer is genuinely gone, drop it from POPULATED_LAYERS in this script.');
+  process.exit(1);
+}
 
 // Match `import ... from '<spec>'`, `export ... from '<spec>'`, and dynamic
 // `import('<spec>')`.
