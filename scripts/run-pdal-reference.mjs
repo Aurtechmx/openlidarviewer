@@ -245,6 +245,12 @@ function main() {
   const runs = [];
 
   for (const spec of FIXTURES) {
+    // The DSM (`role: surface`) scenes are produced by scripts/run-pdal-dsm-reference.mjs
+    // into their own reference-runs-dsm.json. Keeping them out of here means this
+    // file's reference-runs.json stays byte-for-byte the record the ground-filter
+    // and DTM study manifests already froze; a new study never rewrites an old
+    // study's provenance.
+    if (spec.role === 'surface') continue;
     const isGround = spec.role === 'classification';
     const runId = `${spec.id}__${isGround ? 'smrf' : 'dtm-min'}`;
     const pipeline = isGround ? groundPipeline(spec.id) : dtmPipeline(spec.id);

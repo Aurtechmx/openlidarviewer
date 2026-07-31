@@ -59,6 +59,7 @@ import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { classifyGroundSmrf } from '../src/terrain/ground/groundFilter';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
+import { buildDsm } from '../src/terrain/surface/buildDsm';
 import { classificationAgreement } from '../src/validation/classificationAgreement';
 import type { ClassLabel } from '../src/validation/classificationAgreement';
 import { compareGrids } from '../src/validation/gridAgreement';
@@ -74,6 +75,7 @@ import {
 } from '../scripts/generate-point-cloud-fixtures.mjs';
 import type { PointCloudFixtureSpec, FixturePoint } from '../scripts/generate-point-cloud-fixtures.mjs';
 import { PARAMS } from '../scripts/run-pdal-reference.mjs';
+import { PARAMS_DSM } from '../scripts/run-pdal-dsm-reference.mjs';
 
 const FIXTURE_DIR = resolve(PIPELINE_DIR, 'fixtures');
 const PDAL_DIR = resolve(PIPELINE_DIR, 'pdal');
@@ -82,6 +84,7 @@ const STUDIES_DIR = resolve(PIPELINE_DIR, '../studies');
 
 const GROUND_STUDY = 'GROUND-FILTER-PDAL-SMRF.study.json';
 const DTM_STUDY = 'DTM-PDAL-WRITERS-GDAL.study.json';
+const DSM_STUDY = 'DSM-PDAL-WRITERS-GDAL.study.json';
 
 const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex');
 
@@ -102,6 +105,7 @@ function studyMetrics(file: string): StudyMetrics {
 
 const GROUND_GATE = studyMetrics(GROUND_STUDY);
 const DTM_GATE = studyMetrics(DTM_STUDY);
+const DSM_GATE = studyMetrics(DSM_STUDY);
 
 /**
  * How far a reference coordinate may sit from the fixture coordinate it is
@@ -495,10 +499,154 @@ function runDtmLeg(spec: PointCloudFixtureSpec): { leg: DtmLeg; olvSouthFirst?: 
   };
 }
 
+// ── the DSM study ───────────────────────────────────────────────────────────
+//
+// The mirror of the DTM study with min -> max. `buildDsm` takes the HIGHEST
+// return in each cell over ALL returns; `writers.gdal output_type=max` does the
+// same. The fixtures stack returns above the ground return, so the maximum sits
+// above the minimum and this leg tests upper-surface selection, not just the
+// grid the DTM leg already covers. Cell semantics are identical: `buildDsm`
+// indexes row 0 at the minimum of the second horizontal axis (south), exactly as
+// `rasterizeDtm` does, so the same row flip aligns the PDAL grid.
+
+interface DsmLeg {
+  fixtureId: string;
+  datasetId: string;
+  status: LegStatus;
+  reason?: string;
+  reference: 'PDAL';
+  evidenceLevel: 'E4';
+  cells?: number;
+  comparableCells?: number;
+  bothNodata?: number;
+  onlyPdal?: number;
+  onlyOlv?: number;
+  /** Cells whose maximum sits above the ground return — the DSM-specific cells. */
+  cellsAboveGround?: number;
+  maxHeightAboveGroundM?: number;
+  withinToleranceFraction?: number | null;
+  maxAbsErrorM?: number | null;
+  rmseM?: number | null;
+  meanSignedErrorM?: number | null;
+}
+
+const DSM_CELLS = Math.round(EXTENT_M / DTM_CELL_M);
+
+const DSM_SPEC: GridSpec = {
+  originX: PARAMS_DSM.originX,
+  originY: PARAMS_DSM.originY,
+  cellSize: PARAMS_DSM.resolution,
+  width: DSM_CELLS,
+  height: DSM_CELLS,
+};
+
+/** Our DSM (top surface, all returns) for one fixture, in south-first row order. */
+function olvDsm(points: readonly FixturePoint[]): Float64Array {
+  const g = buildDsm(points as readonly TerrainPoint[], {
+    grid: {
+      originH1: PARAMS_DSM.originX,
+      originH2: PARAMS_DSM.originY,
+      cols: DSM_CELLS,
+      rows: DSM_CELLS,
+      cellSizeM: PARAMS_DSM.resolution,
+    },
+    verticalAxis: 'z',
+  });
+  return Float64Array.from(g.z);
+}
+
+function runDsmLeg(spec: PointCloudFixtureSpec): { leg: DsmLeg; olvSouthFirst?: Float64Array; grid?: AsciiGrid } {
+  const base: DsmLeg = {
+    fixtureId: spec.id,
+    datasetId: spec.datasetId,
+    status: 'ok',
+    reference: 'PDAL',
+    evidenceLevel: 'E4',
+  };
+  const refPath = resolve(PDAL_DIR, `${spec.id}__dsm-max.asc`);
+  if (!existsSync(refPath)) {
+    return {
+      leg: {
+        ...base,
+        status: 'unavailable',
+        reason: `no PDAL raster at pdal/${spec.id}__dsm-max.asc; run scripts/run-pdal-dsm-reference.mjs`,
+      },
+    };
+  }
+  const grid = parseAsciiGrid(readFileSync(refPath, 'utf8'));
+  if (grid.ncols !== DSM_CELLS || grid.nrows !== DSM_CELLS || grid.cellsize !== PARAMS_DSM.resolution) {
+    return {
+      leg: {
+        ...base,
+        status: 'invalid',
+        reason: `PDAL raster is ${grid.ncols}x${grid.nrows} at ${grid.cellsize} m, expected ${DSM_CELLS}x${DSM_CELLS} at ${PARAMS_DSM.resolution} m`,
+      },
+    };
+  }
+
+  const points = parseFixtureCsv(readFileSync(resolve(FIXTURE_DIR, `${spec.id}.csv`), 'utf8'));
+  const dsm = olvDsm(points);
+  // The DTM (per-cell minimum) on the SAME points, used only to count how many
+  // cells the DSM actually lifts above the ground — the DSM-specific work. It is
+  // NOT part of the reference comparison, which is DSM against PDAL.
+  const all = new Uint8Array(points.length).fill(1);
+  const dtm = Float64Array.from(
+    rasterizeDtm(points as readonly TerrainPoint[], all, {
+      aggregation: 'min',
+      grid: {
+        originH1: PARAMS_DSM.originX,
+        originH2: PARAMS_DSM.originY,
+        cols: DSM_CELLS,
+        rows: DSM_CELLS,
+        cellSizeM: PARAMS_DSM.resolution,
+      },
+      verticalAxis: 'z',
+    }).z,
+  );
+  let cellsAboveGround = 0;
+  let maxHeight = 0;
+  for (let i = 0; i < dsm.length; i++) {
+    if (!Number.isFinite(dsm[i]) || !Number.isFinite(dtm[i])) continue;
+    const h = dsm[i] - dtm[i];
+    if (h > 1e-6) {
+      cellsAboveGround++;
+      if (h > maxHeight) maxHeight = h;
+    }
+  }
+
+  const theirs = flipRows(grid.values, grid.ncols, grid.nrows);
+  const a: Raster = { spec: DSM_SPEC, values: theirs, nodata: PARAMS_DSM.nodata };
+  const b: Raster = { spec: DSM_SPEC, values: dsm, nodata: null };
+  const cmp = compareGrids(a, b, { tolerance: DSM_GATE.toleranceAbs, minCells: 1 });
+  if (cmp.status === 'refused') {
+    return { leg: { ...base, status: 'invalid', reason: `grid comparison refused: ${cmp.reason} — ${cmp.detail}` } };
+  }
+
+  return {
+    leg: {
+      ...base,
+      cells: cmp.cells,
+      comparableCells: cmp.mask.bothValid,
+      bothNodata: cmp.mask.bothNodata,
+      onlyPdal: cmp.mask.onlyA,
+      onlyOlv: cmp.mask.onlyB,
+      cellsAboveGround,
+      maxHeightAboveGroundM: maxHeight,
+      withinToleranceFraction: cmp.value.withinToleranceFraction,
+      maxAbsErrorM: cmp.value.maxAbsError,
+      rmseM: cmp.value.rmse,
+      meanSignedErrorM: cmp.value.meanSignedError,
+    },
+    olvSouthFirst: dsm,
+    grid,
+  };
+}
+
 // ── run everything once, then assert over the result ────────────────────────
 
 const CLASSIFICATION_FIXTURES = FIXTURES.filter((f) => f.role === 'classification');
 const BARE_FIXTURES = FIXTURES.filter((f) => f.role === 'bare-earth');
+const SURFACE_FIXTURES = FIXTURES.filter((f) => f.role === 'surface');
 
 mkdirSync(OLV_DIR, { recursive: true });
 
@@ -547,8 +695,27 @@ for (const spec of BARE_FIXTURES) {
   }
 }
 
+// The DSM outputs go to their OWN checksum file, so olv-SHA256SUMS stays the
+// exact record the ground-filter and DTM manifests were derived against.
+const olvDsmSums: string[] = [];
+const dsmLegs: DsmLeg[] = [];
+for (const spec of SURFACE_FIXTURES) {
+  const { leg, olvSouthFirst, grid } = runDsmLeg(spec);
+  dsmLegs.push(leg);
+  if (leg.status === 'ok' && olvSouthFirst && grid) {
+    const northFirst = flipRows(olvSouthFirst, grid.ncols, grid.nrows);
+    for (let i = 0; i < northFirst.length; i++) {
+      if (!Number.isFinite(northFirst[i])) northFirst[i] = PARAMS_DSM.nodata;
+    }
+    const out = `${spec.id}__dsm-max.asc`;
+    const text = writeAsciiGrid(resolve(OLV_DIR, out), grid, northFirst);
+    olvDsmSums.push(`${sha256(text)}  olv/${out}`);
+  }
+}
+
 const okGround = groundLegs.filter((l) => l.status === 'ok');
 const okDtm = dtmLegs.filter((l) => l.status === 'ok');
+const okDsm = dsmLegs.filter((l) => l.status === 'ok');
 
 const groundEvaluated = okGround.reduce((a, l) => a + (l.evaluated ?? 0), 0);
 const groundAgreeing = okGround.reduce((a, l) => a + (l.agreeingReturns ?? 0), 0);
@@ -562,8 +729,20 @@ const dtmWithin = okDtm.reduce(
 const dtmPooledFraction = dtmComparable === 0 ? null : dtmWithin / dtmComparable;
 const dtmMaxAbs = okDtm.reduce((a, l) => Math.max(a, l.maxAbsErrorM ?? 0), 0);
 
+const dsmComparable = okDsm.reduce((a, l) => a + (l.comparableCells ?? 0), 0);
+const dsmWithin = okDsm.reduce(
+  (a, l) => a + (l.withinToleranceFraction ?? 0) * (l.comparableCells ?? 0),
+  0,
+);
+const dsmPooledFraction = dsmComparable === 0 ? null : dsmWithin / dsmComparable;
+const dsmMaxAbs = okDsm.reduce((a, l) => Math.max(a, l.maxAbsErrorM ?? 0), 0);
+const dsmAboveGround = okDsm.reduce((a, l) => a + (l.cellsAboveGround ?? 0), 0);
+
 olvSums.sort(byCodeUnit);
 writeFileSync(resolve(PIPELINE_DIR, 'olv-SHA256SUMS'), olvSums.join('\n') + '\n', 'utf8');
+
+olvDsmSums.sort(byCodeUnit);
+writeFileSync(resolve(PIPELINE_DIR, 'olv-dsm-SHA256SUMS'), olvDsmSums.join('\n') + '\n', 'utf8');
 
 /**
  * One results file per study, not one for both.
@@ -624,6 +803,30 @@ writeResults('results-dtm.json', {
   ],
 });
 
+writeResults('results-dsm.json', {
+  generatedBy: 'tests/groundFilterPdalAgreement.test.ts',
+  manifest: `validation/cross-implementation/studies/${DSM_STUDY}`,
+  evidenceNote: 'Cross-implementation (E4). Every cell value on the reference side came from PDAL writers.gdal output_type=max.',
+  promotes: 'nothing',
+  gate: DSM_GATE,
+  pooled: {
+    comparableCells: dsmComparable,
+    withinToleranceFraction: dsmPooledFraction,
+    maxAbsErrorM: dsmMaxAbs,
+    // Not part of the gate: how many comparable cells the DSM actually lifted
+    // above the per-cell minimum. It is the count that separates this study from
+    // the DTM study, whose scenes leave every cell at its ground return.
+    cellsAboveGround: dsmAboveGround,
+  },
+  legs: dsmLegs,
+  boundaries: [
+    'Agreement with PDAL is not accuracy against ground truth. Both implementations take the maximum of the same returns; that they agree says the two compute the same quantity, not that the top surface is correct.',
+    'Every return is placed AT a cell centre, so PDAL\'s radius estimator and buildDsm\'s cell estimator hold the same set and the maximum is comparable at float32 spacing. On a scattered cloud a disc is not a square and the two maxima could not agree; that case is out of scope here, exactly as it is for the DTM study.',
+    'Every cell receives a ground return, so every cell is covered on both sides and nothing here says anything about how either side marks or fills a cell with no data.',
+    'One aggregation (maximum) and one cell size. Nothing here says anything about first/last-return selection, percentile-of-top surfaces, or any cell size other than 1 m.',
+  ],
+});
+
 describe('PDAL cross-implementation studies', () => {
   it('the frozen gates match the registered manifests', () => {
     // The manifests were committed at `pending` before any of this ran, and
@@ -636,10 +839,17 @@ describe('PDAL cross-implementation studies', () => {
     expect(DTM_GATE.requiredWithinToleranceFraction).toBe(1);
     expect(DTM_GATE.minimumComparableCells).toBe(7500);
     expect(DTM_GATE.toleranceAbs).toBe(0.00005);
+    // The DSM gate is the DTM gate with min -> max: the maximum, like the
+    // minimum, selects an input Z rather than combining several, so the only
+    // difference between the two sides is float32 storage against a double
+    // transcoded at six decimals. Same 5e-5 m tolerance, same all-cells rule.
+    expect(DSM_GATE.requiredWithinToleranceFraction).toBe(1);
+    expect(DSM_GATE.minimumComparableCells).toBe(7500);
+    expect(DSM_GATE.toleranceAbs).toBe(0.00005);
   });
 
   it('every leg reached a definite status, and none was inferred', () => {
-    for (const leg of [...groundLegs, ...dtmLegs]) {
+    for (const leg of [...groundLegs, ...dtmLegs, ...dsmLegs]) {
       expect(['ok', 'unavailable', 'invalid']).toContain(leg.status);
       if (leg.status !== 'ok') {
         // The point of the rule: a leg that did not run carries a reason and
@@ -655,6 +865,7 @@ describe('PDAL cross-implementation studies', () => {
     // asserts we are not in that state.
     expect(groundLegs.every((l) => l.status === 'ok')).toBe(true);
     expect(dtmLegs.every((l) => l.status === 'ok')).toBe(true);
+    expect(dsmLegs.every((l) => l.status === 'ok')).toBe(true);
   });
 
   it('PDAL emitted only the two classification values it was told to emit', () => {
@@ -667,6 +878,18 @@ describe('PDAL cross-implementation studies', () => {
 
   it('the DTM study compared enough cells to conclude anything', () => {
     expect(dtmComparable).toBeGreaterThanOrEqual(DTM_GATE.minimumComparableCells);
+  });
+
+  it('the DSM study compared enough cells to conclude anything', () => {
+    expect(dsmComparable).toBeGreaterThanOrEqual(DSM_GATE.minimumComparableCells);
+  });
+
+  it('the DSM scenes actually lift cells above the ground, or the study is a re-run of the DTM one', () => {
+    // Without cells whose maximum sits above the minimum, `output_type: max`
+    // would agree with the DTM study for the trivial reason that max == min. This
+    // asserts the scenes exercise the difference the study exists to test.
+    for (const leg of okDsm) expect(leg.cellsAboveGround ?? 0).toBeGreaterThan(0);
+    expect(dsmAboveGround).toBeGreaterThan(0);
   });
 
   it('reports the ground-filter agreement against the preregistered gate', () => {
@@ -699,6 +922,22 @@ describe('PDAL cross-implementation studies', () => {
     process.stdout.write(
       `dtm pooled: ${((dtmPooledFraction ?? 0) * 100).toFixed(4)} % over ${dtmComparable} cells, ` +
         `max |Δ| ${dtmMaxAbs.toExponential(3)} m (gate ${DTM_GATE.toleranceAbs} m)\n`,
+    );
+  });
+
+  it('reports the DSM agreement against the preregistered gate', () => {
+    expect(dsmPooledFraction).not.toBeNull();
+    for (const leg of okDsm) {
+      process.stdout.write(
+        `dsm ${leg.fixtureId}: ${((leg.withinToleranceFraction ?? 0) * 100).toFixed(4)} % within ` +
+          `${DSM_GATE.toleranceAbs} m, max |Δ| ${(leg.maxAbsErrorM ?? 0).toExponential(3)} m, ` +
+          `${leg.cellsAboveGround} cells above ground (max +${(leg.maxHeightAboveGroundM ?? 0).toFixed(2)} m)\n`,
+      );
+    }
+    process.stdout.write(
+      `dsm pooled: ${((dsmPooledFraction ?? 0) * 100).toFixed(4)} % over ${dsmComparable} cells, ` +
+        `max |Δ| ${dsmMaxAbs.toExponential(3)} m (gate ${DSM_GATE.toleranceAbs} m); ` +
+        `${dsmAboveGround} cells lifted above ground\n`,
     );
   });
 
@@ -781,6 +1020,59 @@ describe('PDAL cross-implementation studies', () => {
         nodata: null,
       },
       { tolerance: DTM_GATE.toleranceAbs },
+    );
+    expect(out.status).toBe('refused');
+    if (out.status === 'refused') expect(out.reason).toBe('grid-origin-differs');
+  });
+
+  it('catches a row-order flip in the DSM comparison', () => {
+    const spec = SURFACE_FIXTURES.find((f) => f.surface === 'rolling') ?? SURFACE_FIXTURES[0];
+    const grid = parseAsciiGrid(readFileSync(resolve(PDAL_DIR, `${spec.id}__dsm-max.asc`), 'utf8'));
+    const points = parseFixtureCsv(readFileSync(resolve(FIXTURE_DIR, `${spec.id}.csv`), 'utf8'));
+    const ours = olvDsm(points);
+    const correct = flipRows(grid.values, grid.ncols, grid.nrows);
+    const b: Raster = { spec: DSM_SPEC, values: ours, nodata: null };
+    const good = compareGrids({ spec: DSM_SPEC, values: correct, nodata: PARAMS_DSM.nodata }, b, {
+      tolerance: DSM_GATE.toleranceAbs,
+    });
+    // The defect the flip in the leg exists to prevent: hand the comparison the
+    // file's own north-first order. Roofs vary from cell to cell, so a mirrored
+    // surface disagrees rather than coincidentally lining up.
+    const flipped = compareGrids({ spec: DSM_SPEC, values: grid.values, nodata: PARAMS_DSM.nodata }, b, {
+      tolerance: DSM_GATE.toleranceAbs,
+    });
+    expect(good.status).toBe('compared');
+    expect(flipped.status).toBe('compared');
+    if (good.status !== 'compared' || flipped.status !== 'compared') return;
+    expect(good.value.withinToleranceFraction).toBe(1);
+    expect(flipped.value.withinToleranceFraction).toBeLessThan(1);
+  });
+
+  it('catches a half-cell shift in the DSM comparison', () => {
+    const spec = SURFACE_FIXTURES.find((f) => f.surface === 'ridge') ?? SURFACE_FIXTURES[0];
+    const grid = parseAsciiGrid(readFileSync(resolve(PDAL_DIR, `${spec.id}__dsm-max.asc`), 'utf8'));
+    const points = parseFixtureCsv(readFileSync(resolve(FIXTURE_DIR, `${spec.id}.csv`), 'utf8'));
+    const correct = flipRows(grid.values, grid.ncols, grid.nrows);
+    // Our side rasterised onto a grid offset by half a cell. `compareGrids`
+    // REFUSES rather than resampling one side to fit the other.
+    const shifted = buildDsm(points as readonly TerrainPoint[], {
+      grid: {
+        originH1: PARAMS_DSM.originX + PARAMS_DSM.resolution / 2,
+        originH2: PARAMS_DSM.originY,
+        cols: DSM_CELLS,
+        rows: DSM_CELLS,
+        cellSizeM: PARAMS_DSM.resolution,
+      },
+      verticalAxis: 'z',
+    });
+    const out = compareGrids(
+      { spec: DSM_SPEC, values: correct, nodata: PARAMS_DSM.nodata },
+      {
+        spec: { ...DSM_SPEC, originX: DSM_SPEC.originX + PARAMS_DSM.resolution / 2 },
+        values: Float64Array.from(shifted.z),
+        nodata: null,
+      },
+      { tolerance: DSM_GATE.toleranceAbs },
     );
     expect(out.status).toBe('refused');
     if (out.status === 'refused') expect(out.reason).toBe('grid-origin-differs');

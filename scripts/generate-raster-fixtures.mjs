@@ -233,6 +233,13 @@ const NODATA_PATTERNS = {
 // fixture. Every fixture gets slope-degree, aspect and the baseline hillshade;
 // the more expensive variants are spread across the matrix rather than run
 // everywhere, so the committed output tree stays reviewable.
+//
+// `tpi` (gdaldem TPI = centre minus the mean of the 8 neighbours) is added to a
+// cross-section of the matrix: every surface shape (constant, plane, quadratic,
+// absridge, step), all four nodata patterns, and both the projected and the
+// geographic grid. TPI takes no horizontal scaling — it is a raw-Z neighbourhood
+// operation — so the geographic fixture, which `gdaldem aspect` could not express,
+// is fully expressible for TPI and is included to record exactly that.
 
 const PROJ = { xll: 500000, yll: 4600000 };
 
@@ -287,6 +294,7 @@ export const FIXTURES = [
       'hillshade-ne-low',
       'hillshade-south-high',
       'hillshade-multi',
+      'tpi',
     ],
   },
   {
@@ -360,6 +368,7 @@ export const FIXTURES = [
       'hillshade-ne-low',
       'hillshade-south-high',
       'hillshade-multi',
+      'tpi',
     ],
   },
   {
@@ -379,7 +388,7 @@ export const FIXTURES = [
     // clamp happen to give the same answer because a linear surface extrapolates
     // exactly. On a quadratic they cannot both be right, so this is where the
     // edge-policy boundary is measured rather than assumed away.
-    products: ['slope-deg', 'slope-deg-edges', 'aspect', 'hillshade-nw-default', 'hillshade-south-high', 'hillshade-multi'],
+    products: ['slope-deg', 'slope-deg-edges', 'aspect', 'hillshade-nw-default', 'hillshade-south-high', 'hillshade-multi', 'tpi'],
   },
   {
     id: 'concave-pit',
@@ -392,7 +401,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'quadratic', params: { k: 20, a: 0.004, b: 0.0026, c: 0.0009 } },
     nodata: 'none',
-    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low'],
+    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low', 'tpi'],
   },
   {
     id: 'ridge',
@@ -405,7 +414,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'absridge', params: { k: 120, s: -0.4, t: 0.05 } },
     nodata: 'none',
-    products: ['slope-deg', 'slope-deg-edges', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low'],
+    products: ['slope-deg', 'slope-deg-edges', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low', 'tpi'],
   },
   {
     id: 'valley',
@@ -431,7 +440,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'quadratic', params: { k: 100, a: 0.006, b: -0.0035, c: 0.0004 } },
     nodata: 'none',
-    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'hillshade-south-high'],
+    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'hillshade-south-high', 'tpi'],
   },
   {
     id: 'terrace-step',
@@ -444,7 +453,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'step', params: { k: 40, h: 3, w: 16, t: 0.02 } },
     nodata: 'none',
-    products: ['slope-deg', 'slope-pct', 'aspect', 'aspect-zero-flat', 'hillshade-nw-default', 'hillshade-multi'],
+    products: ['slope-deg', 'slope-pct', 'aspect', 'aspect-zero-flat', 'hillshade-nw-default', 'hillshade-multi', 'tpi'],
   },
   {
     id: 'nodata-island',
@@ -457,7 +466,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'plane', params: { k: 80, gx: 0.3, gy: -0.12 } },
     nodata: 'island',
-    products: ['slope-deg', 'aspect', 'aspect-zero-flat', 'hillshade-nw-default'],
+    products: ['slope-deg', 'aspect', 'aspect-zero-flat', 'hillshade-nw-default', 'tpi'],
   },
   {
     id: 'nodata-scatter',
@@ -470,7 +479,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'quadratic', params: { k: 150, a: -0.004, b: -0.0026, c: -0.0009 } },
     nodata: 'scatter',
-    products: ['slope-deg', 'aspect', 'hillshade-nw-default'],
+    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'tpi'],
   },
   {
     id: 'thin-corridor',
@@ -483,7 +492,7 @@ export const FIXTURES = [
     ...PROJ,
     surface: { kind: 'plane', params: { k: 80, gx: 0.3, gy: -0.12 } },
     nodata: 'corridor',
-    products: ['slope-deg', 'aspect', 'hillshade-nw-default'],
+    products: ['slope-deg', 'aspect', 'hillshade-nw-default', 'tpi'],
   },
   {
     id: 'geographic-plane',
@@ -499,7 +508,7 @@ export const FIXTURES = [
     yll: GEO_CENTRE_LATITUDE_DEG - (48 * 0.001) / 2,
     surface: { kind: 'plane', params: { k: 300, gx: 0.3, gy: -0.12 } },
     nodata: 'none',
-    products: ['slope-deg', 'slope-pct', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low'],
+    products: ['slope-deg', 'slope-pct', 'aspect', 'hillshade-nw-default', 'hillshade-ne-low', 'tpi'],
   },
   ...aspectRose(),
 ];
