@@ -1979,17 +1979,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg);
-  /* Tighter than it was, and narrower. At 640px with the roomier padding the
-     legend covered the middle of the view, which is where the scan is. */
-  padding: var(--space-md) var(--space-lg);
-  max-width: 460px;
+  /* Kept compact so it doesn't cover the middle of the view, where the scan is.
+     The navbar is bottom-anchored, so the HUD's height is what reaches up into
+     the scan; the tight vertical spacing below matters as much as the width. */
+  padding: var(--space-sm) var(--space-md);
+  max-width: 360px;
 }
 /* v0.3.10 — Header row carries the title + X close button.
    Flex layout keeps the title flush-left and the X flush-right so the
    panel reads as a normal closable card. */
 .olv-nav-hud-header {
   display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-xl); margin-bottom: var(--space-md);
+  gap: var(--space-xl); margin-bottom: var(--space-sm);
 }
 .olv-nav-hud-title {
   font-size: var(--text-xs); color: var(--text-faint);
@@ -2018,8 +2019,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  *   .olv-legend-group keeps items inside a cluster tight — 6 px row,
  *   14 px column — reinforcing "these belong together."
  */
-.olv-legend { display: flex; flex-direction: column; gap: var(--space-lg); }
-.olv-legend-group { display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-2xl); }
+.olv-legend { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-legend-group { display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-xl); }
 .olv-legend-item { display: inline-flex; align-items: center; gap: var(--space-sm); }
 .olv-legend-text { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-key {
@@ -2037,8 +2038,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * Gestalt typography used by other section labels.
  */
 .olv-cam-presets-row {
-  margin-top: var(--space-xl);
-  padding-top: var(--space-lg);
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
   border-top: 0.5px solid rgba(255, 255, 255, 0.05);
 }
 .olv-cam-presets-label {
