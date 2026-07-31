@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlidarviewer.invalid/schema/generalization-record.schema.json",
+  "title": "Generalization record",
+  "description": "One record per inference that carries a result BEYOND the conditions it was measured under. Every study in this repository ran on specific data with specific parameters; the sentence a reader wants next is \"and does it hold anywhere else?\". Today that step is taken in prose, if at all, and it is invisible: nothing marks where a measurement stopped and an extrapolation began. A record here names the study it reasons from, the one dimension it reaches along, the sentence it asserts, and the basis for asserting it — and the basis vocabulary keeps \"measured on a second dataset\", \"argued from mechanism\" and \"assumed\" strictly apart, so an assumption can be written down and refused instead of quietly reading as evidence. Validated by scripts/verify-generalization-record.mjs, which refuses a record whose source study does not resolve and refuses an unsupported basis sitting at a status that asserts the generalisation holds. FILING A RECORD HERE IS NOT EVIDENCE FOR ANYTHING: no evidence level moves, and only docs/validation/claim-register.yaml can promote a claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "recordId",
+    "example",
+    "source",
+    "dimension",
+    "assertion",
+    "basis",
+    "status",
+    "statusReason",
+    "boundary",
+    "reviewedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "recordId": {
+      "description": "Stable identity. An example record must be prefixed EXAMPLE- and carry example: true, so a reader and the verifier agree about what is real.",
+      "type": "string",
+      "pattern": "^(EXAMPLE-)?[A-Z][A-Z0-9]*(?:-[A-Z0-9.]+)+$"
+    },
+    "example": {
+      "description": "True only for a template. An example is excluded from every count whatever its status, and may not sit at a status that asserts anything.",
+      "type": "boolean"
+    },
+    "source": { "$ref": "#/$defs/source" },
+    "dimension": { "$ref": "#/$defs/dimension" },
+    "assertion": {
+      "description": "What this record says holds beyond the source study, written as one sentence a reader can disagree with. \"Behaves well on other terrain\" is not one; \"the Horn slope agreement measured on the analytic DEM also holds on captured terrain above 20 degrees\" is.",
+      "type": "string",
+      "minLength": 1
+    },
+    "basis": { "$ref": "#/$defs/basis" },
+    "status": {
+      "description": "See GENERALIZATION_STATUSES in scripts/verify-generalization-record.mjs. Only \"supported\" is a generalisation this repository asserts on measurement; \"argued\" is an argument and is counted nowhere.",
+      "type": "string",
+      "enum": ["proposed", "untested", "argued", "supported", "refused", "withdrawn"]
+    },
+    "statusReason": { "type": "string", "minLength": 1 },
+    "boundary": { "$ref": "#/$defs/boundary" },
+    "reviewedAt": {
+      "description": "When a human last read this record and agreed it still says what it says. An inference does not decay on its own; the software under it does.",
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "reviewedBy": { "type": "string", "minLength": 1 },
+    "claimIds": {
+      "description": "Claims the inference bears on, if any. Each must exist in docs/validation/claim-register.yaml. Naming a claim here never changes its evidence level; it only says which claim a reader would be tempted to stretch.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9-]*$" }
+    },
+    "notes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  },
+  "$defs": {
+    "source": {
+      "description": "The measurement this record reasons FROM. It has to resolve: a generalisation of a study nobody can find is a sentence with no subject, and the verifier looks the id up in the register named by kind.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "id", "measured"],
+      "properties": {
+        "kind": {
+          "description": "Which register the id lives in. claim -> docs/validation/claim-register.yaml; cross-implementation-study -> validation/cross-implementation/studies/; field-study -> validation/field/studies/; reproduction-record -> validation/reproduction/records/.",
+          "type": "string",
+          "enum": ["claim", "cross-implementation-study", "field-study", "reproduction-record"]
+        },
+        "id": { "type": "string", "minLength": 1 },
+        "measured": {
+          "description": "What the source ACTUALLY measured, in its own terms: the data, the parameters, the conditions. The extrapolation below only means anything against this, and writing it out is what stops a record from quietly widening the base it reasons from.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dimension": {
+      "description": "The one axis this record reaches along. One axis per record on purpose: a claim that stretches terrain AND sensor AND density at once hides which of the three it is weakest on, and each has to be argued separately anyway.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "measuredRange", "extrapolatedTo"],
+      "properties": {
+        "axis": {
+          "type": "string",
+          "enum": [
+            "terrain-type",
+            "sensor",
+            "point-density",
+            "scan-geometry",
+            "crs",
+            "vertical-datum",
+            "unit",
+            "scale",
+            "file-format",
+            "parameter-set",
+            "platform",
+            "software-version",
+            "operator",
+            "season"
+          ]
+        },
+        "measuredRange": {
+          "description": "How far the source went along this axis, as a range or an enumeration and not as an adjective. \"0 to 16.4 degrees on one analytic DEM\" is a range; \"gentle terrain\" is not.",
+          "type": "string",
+          "minLength": 1
+        },
+        "extrapolatedTo": {
+          "description": "How far this record reaches along the same axis. Identical to measuredRange means nothing is being extrapolated, and the verifier says so rather than accepting a record that only looks like one.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "basis": {
+      "description": "Why anyone should believe the reach. The three families are kept apart because they are not interchangeable and prose blurs them: a measurement on a second dataset is evidence, an argument from the algorithm is an argument, and an assumption is neither. All three are representable so that an inference resting on nothing can still be written down and refused; the verifier is what stops the last two from being read as the first.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "statement"],
+      "properties": {
+        "kind": {
+          "description": "measured-second-dataset: re-measured on an independent dataset that differs along this axis. measured-parameter-sweep: re-measured across the axis inside one study. mechanism: argued from the algorithm or the mathematics, with nothing new measured. analogy: argued from resemblance to another product or another system. assumed: nothing supports it, and the record exists to say so.",
+          "type": "string",
+          "enum": [
+            "measured-second-dataset",
+            "measured-parameter-sweep",
+            "mechanism",
+            "analogy",
+            "assumed"
+          ]
+        },
+        "statement": {
+          "description": "The argument itself, or the admission that there is none. For a mechanism basis this is where the reasoning goes, in enough detail that a reader can find the step they disagree with.",
+          "type": "string",
+          "minLength": 1
+        },
+        "measurement": { "$ref": "#/$defs/measurement" }
+      }
+    },
+    "measurement": {
+      "description": "Required by the verifier whenever the basis is a measured one: what was measured, where, and on what. A second measurement that names the first study's own id is the first study, and a dataset id nobody registered cannot be looked up, so both are checked.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceKind", "sourceIds", "summary", "retrievedAt"],
+      "properties": {
+        "sourceKind": {
+          "type": "string",
+          "enum": ["claim", "cross-implementation-study", "field-study", "reproduction-record"]
+        },
+        "sourceIds": {
+          "description": "The studies or records that carry the second measurement. Each must resolve in the register named by sourceKind.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "datasetIds": {
+          "description": "The data the second measurement ran on. Each must exist in validation/datasets/dataset-register.yaml, which the verifier reads and never writes.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "summary": {
+          "description": "What the second measurement found along this axis, including the parts that went the wrong way. A summary with no disagreement in it is a summary of one result.",
+          "type": "string",
+          "minLength": 1
+        },
+        "retrievedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      }
+    },
+    "boundary": {
+      "description": "Where the reach stops. doesNotExtendTo may never be empty: a generalisation that states no boundary is read as universal, which is the exact failure this container exists to prevent.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["doesNotExtendTo"],
+      "properties": {
+        "doesNotExtendTo": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "wouldBeSettledBy": {
+          "description": "The measurement that would move this record off its current status, named concretely enough that somebody could go and run it.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

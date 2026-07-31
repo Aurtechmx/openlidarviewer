@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "recordId": "SLOPE-HORN-BEYOND-ANALYTIC-DEM",
+  "example": false,
+  "source": {
+    "kind": "cross-implementation-study",
+    "id": "OLV-XS-001-SLOPE-RASTER-GDAL-HORN",
+    "measured": "Horn slope in degrees, computed by this project and by GDAL 3.13.1 over one frozen analytic quadratic DEM, compared cell by cell inside the one-cell border against a tolerance of 0.5 degree fixed before the reference was generated. The fixture reaches about 16.4 degrees at its steepest, its header declares no CRS, and the compared area contains no nodata."
+  },
+  "dimension": {
+    "axis": "terrain-type",
+    "measuredRange": "One synthetic quadratic surface, slopes from 0 to about 16.4 degrees, no nodata inside the compared area, no captured ground.",
+    "extrapolatedTo": "Captured terrain of other forms: slopes past 16.4 degrees, breaklines, scarps and neighbourhoods that contain nodata."
+  },
+  "assertion": "The agreement with GDAL measured on the analytic DEM also holds on captured terrain of other forms and at steeper slopes, so the slope raster can be described as validated for terrain generally.",
+  "basis": {
+    "kind": "assumed",
+    "statement": "Nothing supports it. The reach rests on the fixture being taken as representative of terrain, which was never measured and cannot be inferred from a surface chosen for having a closed-form gradient. Two further findings point the other way: the 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ measured a shortfall of up to 16.2 degrees on the one-cell border against gdaldem -compute_edges, and found that GDAL propagates nodata through the 3x3 window where this project substitutes the centre value and answers for every halo cell, biasing slope toward zero near a hole with no marker in the output. Both are boundaries, not breadth."
+  },
+  "status": "refused",
+  "statusReason": "This project does not make this generalisation, and the register already says so in the places a reader would look: SLOPE-RASTER lists \"slope validated on every terrain type\" under prohibitedClaim, and its scope.unsupported names slopes above about 16.4 degrees, nodata neighbourhoods, the one-cell border and geographic grids. The record exists so the refusal is a machine-checkable entry rather than a paragraph somebody has to find, and so a future edit that starts making the inference has to delete a refusal instead of quietly adding a sentence.",
+  "boundary": {
+    "doesNotExtendTo": [
+      "Anything about accuracy. The source measured two implementations of Horn's method agreeing with each other and with a closed-form gradient; that is not a measurement against ground truth, on any terrain.",
+      "The other raster products. ASPECT-RASTER and HILLSHADE have their own studies, their own tolerances and their own boundaries, and this record says nothing about either.",
+      "The point-cloud-to-DTM pipeline. The source evidence starts from a DEM that already exists.",
+      "The other axes of the same study: geographic grids, vertical units other than metre, and parameter sets outside PS-HORN-DEG-METRE-NOEDGES each need their own record."
+    ],
+    "wouldBeSettledBy": "A cross-implementation study registered under a frozen protocol before it ran, comparing this project's Horn slope against GDAL on captured DEMs that span the terrain forms and the slope range in question, with its datasets registered in validation/datasets/dataset-register.yaml. Until one exists, the honest status of the reach is refused rather than untested: the boundaries above were measured, and they contradict it."
+  },
+  "reviewedAt": "2026-07-31",
+  "claimIds": ["SLOPE-RASTER"],
+  "notes": [
+    "A refusal, not an assertion. Nothing here raises or lowers any evidence level; SLOPE-RASTER sits at E4 on the study this record reasons from, and it sits there for exactly the fixture that study used.",
+    "The register is for both directions. A reach that is refused is as much a fact about this project's evidence as one that is carried, and it is the direction prose is worst at keeping: a boundary written once in a limitations page is easy to stop repeating."
+  ]
+}
