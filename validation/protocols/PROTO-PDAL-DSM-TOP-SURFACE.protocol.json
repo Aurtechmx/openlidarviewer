@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-PDAL-DSM-TOP-SURFACE",
+  "example": false,
+  "title": "DSM (top surface) against PDAL writers.gdal output_type=max, on synthetic point clouds",
+  "question": "Does this project buildDsm agree with PDAL writers.gdal output_type=max on the highest return per cell, on the same points with matched parameters?",
+  "recordWrittenOn": "2026-07-31",
+  "referenceTool": "PDAL",
+  "referenceVersion": "2.10.2",
+  "claims": [
+    {
+      "claimId": "DSM",
+      "datasetIds": [
+        "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "OLV-DS-017-PC-RIDGE-STRUCTURES"
+      ],
+      "parameterSetIds": [
+        "PS-DSM-MAX-CELL1-R045"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.00005,
+        "toleranceUnit": "metre",
+        "minimumComparableCells": 7500,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "The maximum, like the minimum, selects one input Z; it does not combine several, so on identical points the two sides differ only in representation. buildDsm stores the selected height as float32 (about 1.5e-5 m spacing at these ~110 m elevations, so a rounding of up to ~8e-6 m) and PDAL keeps a double transcoded at six decimals (a rounding of up to 5e-7 m). 5e-5 m sits an order of magnitude above that float32 noise and far below any elevation the product is read at, so it separates an arithmetic difference from a real one. Every cell must pass, because a single cell outside it would mean the two are not computing the same thing. It is the same derivation the DTM claim carries, and the observed maximum difference is of the same order.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-31",
+        "witnessCommit": "1dba4140c144fc1ba5c46b8cec8a8ee502df1c6e",
+        "witness": "The commit that registered this study at pending, with the tolerance already frozen and derived from the cell arithmetic, before the comparison was run. It carries the manifest at an unmeasured status and no result.",
+        "resultLandedOn": "2026-07-31",
+        "resultCommit": "e8065730c71712fc900f0211e60943b7e501087c",
+        "atInstant": "2026-07-31T14:45:28-06:00",
+        "resultAtInstant": "2026-07-31T14:46:17-06:00"
+      }
+    }
+  ],
+  "decisionRule": "The study reports agree only when the measured fraction meets requiredWithinToleranceFraction over at least minimumComparableCells. Below that it reports partial or disagree and says where. The tolerance is never widened to reach agreement; a result under it is the finding.",
+  "notes": [
+    "Written after the study landed, transcribing the freeze recorded in the registration commit named under the claim. It does not create that freeze.",
+    "Docker was not running on the host, so the reference tool was invoked from its installed path with the version, argv and exit code recorded rather than pinned to a container."
+  ],
+  "digest": "sha256:446a51438d107b6ba75054dc1954ab28fbcd80f5c7dde7eeeafad93ef2d17421"
+}
