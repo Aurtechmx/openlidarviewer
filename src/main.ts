@@ -18,6 +18,7 @@ import { Inspector } from './ui/Inspector';
 import { ThemeToggle } from './ui/ThemeToggle';
 import { mountHeaderControls } from './ui/headerControls';
 import { ToolDock } from './ui/toolDock';
+import { revealStreamingScanChrome } from './ui/streamingScanReveal';
 import { NavBar } from './ui/NavBar';
 import { ProjectCard } from './ui/ProjectCard';
 import { el } from './ui/dom';
@@ -6368,21 +6369,9 @@ async function openStreamingCopc(
   bookmarks.clear();
   refreshViewsUI();
 
-  // Measure, annotate, inspect, probe and close all work on a streaming scan:
-  // each resident COPC node keeps its full decoded per-point attributes.
-  // Reveal the dock the same way the static-load path does.
-  dock.setEmpty(false);
-  inspector.setEmpty(false);
-  dock.setMeasureEnabled(true);
-  dock.setAnnotateEnabled(true);
-  dock.setInspectEnabled(true);
-  dock.setProbeEnabled(true);
-  dock.setCloseEnabled(true);
-  dock.setBackend(viewer.activeBackend());
-  navBar.element.classList.remove('olv-hidden');
-  navBar.setMode('orbit');
-  navBar.flashHelp();
-  document.body.classList.add('olv-has-scan');
+  revealStreamingScanChrome({
+    dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
+  });
 
   startStreamingStatusPolling();
   dropZone.setProgress(null);
@@ -6653,9 +6642,11 @@ async function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void>
       schemaSummary,
     });
 
-    document.body.classList.add('olv-has-scan');
-    navBar.element.classList.remove('olv-hidden');
-    navBar.setMode('orbit');
+    // Was: body class + navBar only, which left the dock hidden — so an EPT
+    // scan loaded with no measure, inspect, probe, annotate or close.
+    revealStreamingScanChrome({
+      dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
+    });
     startStreamingStatusPolling();
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
