@@ -104,6 +104,23 @@ function historyIsShallow(): boolean {
 
 const SHALLOW = historyIsShallow();
 
+/**
+ * A source archive carries no repository at all — one step past shallow. The
+ * generator and verifier read git for every commit they touch, so without a
+ * repository this is an unavailable environment, not a mismatch, and the
+ * strict checks belong where the history exists.
+ */
+function repositoryMissing(): boolean {
+  try {
+    execFileSync('git', ['rev-parse', '--git-dir'], { stdio: 'ignore' });
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+const NO_REPO = repositoryMissing();
+
 describe('defect chronology', () => {
   beforeAll(() => {
     scratch = mkdtempSync(resolve(tmpdir(), 'olv-chronology-'));
@@ -121,11 +138,14 @@ describe('defect chronology', () => {
     // The generator reads git for every commit it records, so a shallow clone
     // cannot reproduce the file. That is an unavailable environment, not a
     // mismatch, and the strict check belongs where the history exists.
-    if (SHALLOW) return;
+    if (NO_REPO || SHALLOW) return;
     expect(run(GENERATOR, ['--check']).status).toBe(0);
   });
 
   it('verifies the generated output', () => {
+    // The verifier resolves every recorded commit against git; a source
+    // archive has none to offer it.
+    if (NO_REPO) return;
     expect(run(VERIFIER).status).toBe(0);
   });
 
@@ -161,6 +181,9 @@ describe('defect chronology', () => {
   });
 
   it('rejects a fix that precedes its own first failing validation', () => {
+    // The ordering check resolves both commits against git; without a
+    // repository the verifier refuses earlier, on the unresolved commit.
+    if (NO_REPO) return;
     const record = baseline.records.find((r) => r.firstFailingValidation.commit !== 'unknown')!;
     const { status, stderr } = verifyMutated((m) => {
       const target = m.records.find((r) => r.defectId === record.defectId)!;

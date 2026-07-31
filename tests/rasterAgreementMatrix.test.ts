@@ -90,6 +90,108 @@ import {
 import type { FixtureSpec, FixtureSun } from '../scripts/generate-raster-fixtures.mjs';
 
 /**
+ * Write a committed evidence artifact, or in verify mode prove the committed
+ * one is what this run produces.
+ *
+ * The reproduce instructions recomputed the OLV side and rewrote `olv/`,
+ * `olv-SHA256SUMS` and `results.json` every time. That makes the committed
+ * evidence unfalsifiable by its own procedure: whatever the code does today
+ * becomes the record, and a change in the OLV side rewrites the file it was
+ * supposed to be checked against. The hashes pin both sides and nothing
+ * compared against them.
+ *
+ * So verifying is the DEFAULT and regenerating is the opt-in. The first version
+ * of this helper had it the other way round, behind `MATRIX_VERIFY=1`, and that
+ * was worse than useless: this file sits in the `terrain` bucket, `test:terrain`
+ * is in `test:release:execute`, and nothing set the variable. Every release run
+ * therefore rewrote the record it was supposed to check, while a verify mode
+ * existed to say the record was checked. A guard that is off unless you
+ * remember a variable is a guard that is off.
+ *
+ * `MATRIX_WRITE=1` regenerates, for the one case that needs it: a deliberate
+ * change to the OLV side, reviewed as a diff to the committed evidence.
+ *
+ * Verification is SEMANTIC, not byte-for-byte. `results.json` stores 569
+ * full-precision doubles derived from `atan2`, and a byte compare of those
+ * turns a libm ulp difference on another CPU into a red release gate with no
+ * way to tell it from a regression. Numbers compare within a relative epsilon
+ * far tighter than any real change and far looser than rounding noise;
+ * everything else compares exactly. A guard that fails on the wrong machine
+ * gets disabled, which is the same outcome as not having one.
+ *
+ * Failures are collected rather than asserted here. This runs at module scope,
+ * so an `expect` would surface as a collection error naming no test.
+ */
+const MATRIX_WRITE = process.env.MATRIX_WRITE === '1';
+
+/** Drift found during the run, asserted inside a test at the end of the file. */
+const evidenceDrift: string[] = [];
+
+const NUM_REL_EPS = 1e-9;
+const NUM_ABS_EPS = 1e-12;
+
+/** Deep equality where numbers are compared within a tolerance. */
+function sameValue(a: unknown, b: unknown, path: string, out: string[]): void {
+  if (typeof a === 'number' && typeof b === 'number') {
+    if (Number.isNaN(a) && Number.isNaN(b)) return;
+    const tol = Math.max(NUM_ABS_EPS, NUM_REL_EPS * Math.max(Math.abs(a), Math.abs(b)));
+    if (!(Math.abs(a - b) <= tol)) out.push(`${path}: ${b} committed, ${a} produced`);
+    return;
+  }
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) { out.push(`${path}: ${b.length} entries committed, ${a.length} produced`); return; }
+    for (let i = 0; i < a.length; i++) sameValue(a[i], b[i], `${path}[${i}]`, out);
+    return;
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const ka = Object.keys(a as object).sort();
+    const kb = Object.keys(b as object).sort();
+    if (ka.join() !== kb.join()) { out.push(`${path}: key set differs`); return; }
+    for (const k of ka) {
+      sameValue((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], `${path}.${k}`, out);
+    }
+    return;
+  }
+  if (a !== b) out.push(`${path}: ${JSON.stringify(b)} committed, ${JSON.stringify(a)} produced`);
+}
+
+function writeOrVerify(path: string, content: string, what: string): void {
+  if (MATRIX_WRITE) {
+    writeFileSync(path, content, 'utf8');
+    return;
+  }
+  if (!existsSync(path)) {
+    evidenceDrift.push(`${what} is missing. Run with MATRIX_WRITE=1 to generate it, then commit it.`);
+    return;
+  }
+  const committed = readFileSync(path, 'utf8');
+  if (committed === content) return;
+
+  if (what.endsWith('.json')) {
+    const diffs: string[] = [];
+    try {
+      sameValue(JSON.parse(content), JSON.parse(committed), what, diffs);
+    } catch {
+      diffs.push(`${what}: committed file is not parseable JSON`);
+    }
+    // Byte-different but numerically equal is the platform case, not a change.
+    if (diffs.length === 0) return;
+    evidenceDrift.push(...diffs.slice(0, 12));
+    if (diffs.length > 12) evidenceDrift.push(`${what}: ${diffs.length - 12} further differences`);
+    return;
+  }
+
+  // Line-oriented artifacts (the hash list). Name the lines, not the blob.
+  const cl = committed.split('\n');
+  const nl = content.split('\n');
+  const changed = nl.filter((l, i) => l !== cl[i]).slice(0, 8);
+  evidenceDrift.push(
+    `${what} differs on ${changed.length} line(s): ${changed.join(', ')}`
+    + '. If the change is intended, re-run with MATRIX_WRITE=1 and commit the diff.',
+  );
+}
+
+/**
  * ═══════════════════════════════════════════════════════════════════════════
  * FROZEN TOLERANCES
  *
@@ -1005,7 +1107,7 @@ if (REF_RECORD) {
     }, linearAgreement(group.ours, group.truth, idx, FROZEN_TOLERANCES.slopeDeg), idx.length);
   }
 
-  writeFileSync(resolve(MATRIX_DIR, 'olv-SHA256SUMS'), olvHashes.sort().join('\n') + '\n', 'utf8');
+  writeOrVerify(resolve(MATRIX_DIR, 'olv-SHA256SUMS'), olvHashes.sort().join('\n') + '\n', 'olv-SHA256SUMS');
 }
 
 const legsFor = (predicate: (l: Leg) => boolean): Leg[] => legs.filter(predicate);
@@ -1621,7 +1723,14 @@ describe('raster agreement matrix', () => {
 
     const record = {
       generatedBy: 'tests/rasterAgreementMatrix.test.ts',
-      promotes: 'nothing — docs/validation/claim-register.yaml and REFERENCE_SLOTS are untouched',
+      promotes:
+        'nothing. docs/validation/claim-register.yaml and REFERENCE_SLOTS are untouched. '
+        + 'OLV-XS-001 through 003 are registered studies under frozen protocols now, which was '
+        + 'the blocker the register named, and each of their scopes is still the single analytic '
+        + 'DEM the claim already cites: registering them changed the paperwork, not the breadth. '
+        + 'This matrix is broader and is not one of those studies. Its tolerances were fixed for '
+        + 'this exercise rather than for any claim, and what it produced was six documented '
+        + 'boundaries. Evidence that narrows a claim is not grounds to raise it.',
       evidenceNote:
         'Legs whose reference is "analytic (closed form)" are E2: one implementation against a formula, ' +
         'however many fixtures they span. Only the "GDAL 3.13.1" legs are cross-implementation (E4). ' +
@@ -1642,7 +1751,7 @@ describe('raster agreement matrix', () => {
       boundaries,
     };
     mkdirSync(MATRIX_DIR, { recursive: true });
-    writeFileSync(resolve(MATRIX_DIR, 'results.json'), JSON.stringify(record, null, 2) + '\n', 'utf8');
+    writeOrVerify(resolve(MATRIX_DIR, 'results.json'), JSON.stringify(record, null, 2) + '\n', 'results.json');
 
     // The record has to describe a real run: every ok leg carries measured
     // statistics, and every unavailable leg carries a reason instead of a zero.
@@ -1677,4 +1786,12 @@ describe('raster agreement matrix', () => {
     const covered = new Set(legs.map((l) => l.fixtureId));
     for (const id of attempted) expect(covered.has(id), `${id} has no leg`).toBe(true);
   });
+
+  it('matches the committed evidence, or names what drifted', () => {
+    // The record is the expectation, not the output. Numbers compare within a
+    // tolerance so another machine's libm cannot red the release gate; a real
+    // change to the OLV side still fails here and names the field.
+    expect(evidenceDrift, evidenceDrift.join('\n')).toEqual([]);
+  });
+
 });

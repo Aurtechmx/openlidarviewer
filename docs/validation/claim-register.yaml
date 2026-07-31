@@ -464,7 +464,7 @@ claims:
         - "Vertical units other than metre."
         - "The point-cloud-to-DTM pipeline. The evidence starts from a DEM."
         - "Accuracy. Two implementations of Horn's method agreeing is not a measurement against ground truth."
-    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set, and it is not what holds the level up. It is not registered as a study under a frozen protocol, its tolerances were fixed for that exercise rather than for this claim, and what it produced was boundaries rather than breadth - two of the entries above come from it. Evidence that narrows a claim is not grounds to raise it, so the level did not move."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set, and it is not what holds the level up. It is still not a registered study: OLV-XS-001 through 003 are registered under frozen protocols, and each one's scope is the single analytic DEM this claim already cites, so registering them changed the paperwork and not the breadth. The matrix's own tolerances were fixed for that exercise rather than for this claim, and what it produced was boundaries rather than breadth - two of the entries above come from it. Evidence that narrows a claim is not grounds to raise it, so the level did not move."
 
   - claimId: ASPECT-RASTER
     product: Aspect raster
@@ -498,7 +498,7 @@ claims:
         - "Nodata neighbourhoods, where the two nodata policies differ."
         - "The point-cloud-to-DTM pipeline. The evidence starts from a DEM."
         - "Accuracy. Agreement between two implementations of Horn's method is not a measurement against ground truth."
-    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is not registered as a study under a frozen protocol, and for aspect its clearest finding is a limit rather than a broadening: on a geographic grid the reference tool cannot be given per-axis scales at all, so there is no reference to arbitrate the 7.5 degree divergence it measured. A finding of that shape narrows the claim; it does not promote it."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is still not a registered study: OLV-XS-001 through 003 are registered under frozen protocols, and each one's scope is the single analytic DEM this claim already cites, so registering them changed the paperwork and not the breadth, and for aspect its clearest finding is a limit rather than a broadening: on a geographic grid the reference tool cannot be given per-axis scales at all, so there is no reference to arbitrate the 7.5 degree divergence it measured. A finding of that shape narrows the claim; it does not promote it."
 
   - claimId: HILLSHADE
     product: Hillshade
@@ -531,7 +531,7 @@ claims:
         - "Sun positions other than azimuth 315 and altitude 45, and z-factors other than 1."
         - "The one-cell border, which the reference command leaves undefined."
         - "Accuracy of any kind. Hillshade is a shading index, not a physical quantity, and carries no elevation-accuracy meaning."
-    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is not registered as a study under a frozen protocol, and its extra sun positions and multidirectional legs were compared under its own tolerances rather than this claim's one-level gate. Its multidirectional finding is a divergence of up to 50 of 255 levels, which is recorded above as unsupported. The level did not move."
+    scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is still not a registered study: OLV-XS-001 through 003 are registered under frozen protocols, and each one's scope is the single analytic DEM this claim already cites, so registering them changed the paperwork and not the breadth, and its extra sun positions and multidirectional legs were compared under its own tolerances rather than this claim's one-level gate. Its multidirectional finding is a divergence of up to 50 of 255 levels, which is recorded above as unsupported. The level did not move."
 
   - claimId: VRM-TPI
     product: VRM / TPI terrain descriptors

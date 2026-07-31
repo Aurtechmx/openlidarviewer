@@ -41,7 +41,7 @@ raw `argv` and the exit code) and repeated in `results.json` under
 | `olv/` | the same products computed by this project, for side-by-side diffing |
 | `olv-SHA256SUMS` | hash per OLV output |
 | `reference-runs.json` | environment, argv, exit code and stderr for every `gdaldem` invocation |
-| `results.json` | 205 comparison legs with max abs diff, RMSE, mean bias, within-tolerance fraction, and the boundaries |
+| `results.json` | 231 comparison legs with max abs diff, RMSE, mean bias, within-tolerance fraction, and the boundaries |
 
 ## Reproducing
 
@@ -51,9 +51,16 @@ node scripts/run-gdaldem-reference.mjs
 npx vitest run tests/rasterAgreementMatrix.test.ts
 ```
 
-The third step recomputes the OLV side, rewrites `olv/` and `results.json`, and
-asserts the comparisons. Tolerances live in `FROZEN_TOLERANCES` in the test, with
+The third step recomputes the OLV side and asserts it still matches the
+committed `results.json` and `olv-SHA256SUMS`. It does not rewrite them: a run
+that regenerates its own expectation cannot fail. To regenerate after a
+deliberate change to the OLV side, run `npm run validation:matrix:update` and
+commit the diff. Tolerances live in `FROZEN_TOLERANCES` in the test, with
 the derivation each was fixed from before any result was seen.
+
+`results.json` and `olv-SHA256SUMS` are the expectation, not the output, so a
+drift fails instead of landing in a diff nobody reads. The release gate runs
+this file through the `terrain` bucket, which is what makes the default matter.
 
 ## Metrics
 

@@ -7,10 +7,10 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 ## Corrected calculations and declarations
 
 - the LAS load-memory estimate accounts for colour, so a colour-bearing point format no longer under-reports by three bytes per point and admits a budget the device cannot hold;
-- five preset fields that declared a setting the renderer never applied are separated from the ones it does;
+- three preset fields that declared a setting the renderer never applied are separated from the ones it does;
 - the preset colour mode is applied per cloud, and skipped where the cloud lacks the data that mode needs;
 - the E57 core-namespace test is anchored to its host, so a vendor namespace containing the string no longer reads as core and drops its declared extension fields;
-- five release gates escape every regular-expression metacharacter in a version, not only the dot;
+- three release gates escape every regular-expression metacharacter in a version, not only the dot, across five call sites;
 - three markdown writers escape the backslash before the pipe;
 - classification count maps are null-prototype.
 
@@ -46,7 +46,7 @@ Routing commits through the queue is off by default. It changes when a node coun
 ## Validation infrastructure
 
 - the three mutations that survived the full gate at v0.6.2 are closed: the contour saddle equality boundary, removal of `summary.html` from the required benchmark artifacts, and omission of a document that shipped Markdown still references;
-- mutation testing moved out of the tag-time gate into a scheduled workflow. The release record cites the result, states the commit it was measured at, and is refused outright when no result exists or the cited score sits below the break threshold. The current campaign scores 96.81 over 188 mutants against the numeric core, up from 87.23 at v0.6.2. Fifty-three of the 182 detected mutants were killed by timeout rather than by an assertion, which is weaker evidence than a test failing on a wrong value, so the composition is published alongside the score;
+- mutation testing moved out of the tag-time gate into a scheduled workflow. The release record cites the result, states the commit it was measured at, and is refused outright when no result exists or the cited score sits below the break threshold. The current campaign scores 96.81 over 188 mutants against the numeric core, up from 87.23 at v0.6.2. Forty-six of the 182 detected mutants were killed by timeout rather than by an assertion, which is weaker evidence than a test failing on a wrong value, so the composition is published alongside the score;
 - a frame-performance record with a fixed comparison rule. A missing measurement is recorded as absent rather than as zero, and runs from different machines, browsers or backends are refused rather than pooled;
 - a gate asserting the upload queue is still reachable from the streaming path. It was written, tested and left unconnected for a full release, and no test could catch that.
 

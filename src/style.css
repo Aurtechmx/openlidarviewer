@@ -3887,14 +3887,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   box-shadow: var(--shadow-raised);
 }
 .olv-measure-panel {
-  width: 218px; box-sizing: border-box;
+  /* 222px, not 218. Measured: the content box is width minus 26px of padding
+     and border, and the widest row (CSV / Export PDF / Clear profile) needs
+     193px. At 218 that left 192 and clipped the last label by a pixel. */
+  width: 222px; box-sizing: border-box;
   /* Drag the south-east grip (`.olv-mp-resize`) to widen the panel (and the
    * profile chart inside it) rightward into the canvas. `overflow: auto` keeps
    * the native `resize: horizontal` as a fallback; the chosen width is
    * persisted. `position: relative` anchors the explicit grip, which rides
    * ABOVE the rail collapse tab that otherwise covers the native corner. */
   position: relative;
-  min-width: 218px; max-width: 760px;
+  min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
@@ -3945,32 +3948,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
    drawn, and because the chart's own corners are taken: the top-right glyph is
    decorative and the bottom-right is the native resize grip. Auto margin pushes
    it away from the stretch chips so the two groups do not read as one set. */
-.olv-mp-chart-expand-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  margin-left: auto;
-  padding: 2px var(--space-xs);
-  color: var(--text-dim);
-  background: transparent;
-  border: 0.5px solid var(--hairline-strong);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-2xs);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard),
-    border-color var(--dur-fast) var(--ease-standard);
-}
-.olv-mp-chart-expand-btn:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-.olv-mp-chart-expand-btn:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-.olv-mp-chart-expand-btn svg { width: 13px; height: 13px; }
 
 .olv-mp-chart-expand {
   position: absolute; top: 6px; right: 6px;
@@ -3979,11 +3956,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   color: var(--text-dim);
   background: var(--panel);
   border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
-  pointer-events: none;
-  transition: color var(--dur-fast) var(--ease-standard);
+  /* A real button now. It was pointer-events: none — a mark shaped like a
+     control that could not be clicked, which is why nobody used it and why a
+     duplicate labelled button ended up in the chip strip below, overflowing
+     the panel. The colour no longer waits for hover either: an affordance that
+     is invisible until you are already over it is not discoverable. */
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+              border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-chart-expand svg { width: 15px; height: 15px; }
-.olv-mp-chart-wrap:hover .olv-mp-chart-expand { color: var(--text); }
+.olv-mp-chart-expand:hover,
+.olv-mp-chart-expand:focus-visible { color: var(--text); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .olv-mp-chart-wrap { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
@@ -4959,7 +4943,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 
 /* ── Annotations panel ───────────────────────────────────────────────────── */
 .olv-anno-panel {
-  width: 218px; box-sizing: border-box;
+  width: 222px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
@@ -6615,7 +6599,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* In-project Export / Convert panel — converter controls in the left column. */
 .olv-export-panel {
-  width: 218px; box-sizing: border-box;
+  width: 222px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
@@ -6627,7 +6611,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* Clip box panel — same shell as the Export panel. */
 .olv-clip-panel {
-  width: 218px; box-sizing: border-box;
+  width: 222px; box-sizing: border-box;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }

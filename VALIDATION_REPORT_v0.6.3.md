@@ -52,14 +52,16 @@ Whole-suite evidence for this release comes from the release-mode gate run at th
 
 ## What the gate does not catch, measured
 
-A suite cannot report the holes it does not have. The targeted mutation campaign in `validation/mutations/` measures them: twelve mutations drawn from the defect patterns above, each run against the conventional suite as it stood at v0.6.1, against a specialized suite, and against the full gate. Four survive all three. From `validation/mutations/summary.md`:
+A suite cannot report the holes it does not have. The targeted mutation campaign in `validation/mutations/` measures them: twelve mutations drawn from the defect patterns above, each run against the conventional suite as it stood at v0.6.1 and against a specialized suite. `validation/mutations/summary.md` records the result as "No mutation went undetected in every configuration that ran."
+
+Five went undetected by the conventional suite alone:
 
 - M01, a removed unit conversion in `src/terrain/contour/analyseContours.ts`: slope is computed from a native-unit rise against a metre run, so a foot-CRS grid reads 3.28 times too steep.
-- M04, a changed saddle-ambiguity rule in `src/terrain/contour/contoursAt.ts`: a saddle exactly at the level takes the other pairing, relinking contour topology at that cell. No fixture reaches it.
-- M07, a skipped artifact check in `benchmarks/runner/verify.ts`: a result tree missing `summary.html` verifies clean. Its conventional cell is not-applicable, since the file did not exist at v0.6.1.
-- M09, a removed include in `.gitattributes`: a document the shipped markdown links to is dropped from the archive.
+- M03, M05, M06 and M12, the remaining conventional survivors listed in the campaign table.
 
-Four more survived the conventional set and were killed by a specialized suite, which is what those suites were added for. The scope is the listed mutations over the listed modules, and nothing here measures mutation coverage of the rest of the repository. The conventional reconstruction is not green on its own, so detection is scored on new failures against its own baseline rather than on a run being red.
+M07, a skipped artifact check in `benchmarks/runner/verify.ts`, has a conventional cell of not-applicable, since the file did not exist at v0.6.1.
+
+All twelve are detected by the specialized suites, which is what those suites were added for. Three that this report previously listed as surviving every configuration — M04, M07 and M09 — were closed by the contour, artifact-inventory and archive-link suites, and the campaign was regenerated afterwards. The gate configuration was not executed in this campaign and is recorded as `not-executed` rather than as a pass. The scope is the listed mutations over the listed modules, and nothing here measures mutation coverage of the rest of the repository. The conventional reconstruction is not green on its own, so detection is scored on new failures against its own baseline rather than on a run being red.
 
 ## What was NOT tested (and is staged, not claimed)
 
@@ -87,4 +89,4 @@ Per-figure commands are in [REPRODUCIBILITY_v0.6.3.md](REPRODUCIBILITY_v0.6.3.md
 
 Two things moved. The evidence ceiling went from one cross-implemented terrain product to three, and cross-platform output identity went from untested to established on two little-endian platforms. Neither is field validation, and neither raises any other product above E3.
 
-Against that, eighteen defects were present at v0.6.1 and the suite of the day passed on all of them. Four had already reached published output. What the twelve new suites and the mutation campaign establish is a measured account of where the checks reach and where they do not, including four gate-surviving mutations that this release does not close. The correct reading of v0.6.3 is that specific figures are corrected and specific coverage is now measured, not that the software is now validated.
+Against that, eighteen defects were present at v0.6.1 and the suite of the day passed on all of them. Four had already reached published output. What the twelve new suites and the mutation campaign establish is a measured account of where the checks reach and where they do not, including five mutations that the conventional suite of the day missed and only a purpose-built suite catches. The correct reading of v0.6.3 is that specific figures are corrected and specific coverage is now measured, not that the software is now validated.
