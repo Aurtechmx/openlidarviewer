@@ -127,6 +127,7 @@
     "lint:python-version": "node scripts/lint-python-version.mjs",
     "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs",
     "validation:freeze:verify": "node scripts/verify-freeze-claims.mjs",
+    "validate:scientific": "node scripts/validate-scientific.mjs",
     "validation:datasets:verify": "node scripts/verify-dataset-register.mjs",
     "validation:study:verify": "node scripts/verify-cross-implementation-study.mjs",
     "validation:ground-metrics:verify": "node scripts/verify-ground-filter-metrics.mjs",
