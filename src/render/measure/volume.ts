@@ -39,7 +39,7 @@
 
 import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
-import { accumulatorOffset } from '../layerPlacement';
+import { placeBufferInto } from '../layerPlacement';
 import {
   type PolygonValidity,
   validatePolygon,
@@ -68,17 +68,7 @@ export function assembleVolumePositions(
   const positions = new Float32Array(total);
   let off = 0;
   for (const { pos, placement } of buffers) {
-    const [dx, dy, dz] = accumulatorOffset(placement);
-    if (dx === 0 && dy === 0 && dz === 0) {
-      positions.set(pos, off);
-    } else {
-      for (let i = 0; i < pos.length; i += 3) {
-        positions[off + i] = pos[i] + dx;
-        positions[off + i + 1] = pos[i + 1] + dy;
-        positions[off + i + 2] = pos[i + 2] + dz;
-      }
-    }
-    off += pos.length;
+    off = placeBufferInto(positions, off, pos, placement);
   }
   return positions;
 }

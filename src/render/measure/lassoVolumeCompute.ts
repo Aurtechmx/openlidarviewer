@@ -65,7 +65,7 @@ export function stridePlacedPositions(
   const [dx, dy, dz] = accumulatorOffset(placement);
   const identity = dx === 0 && dy === 0 && dz === 0;
   if (stride <= 1 && identity) return src;
-  const step = stride <= 1 ? 1 : stride;
+  const step = Math.max(1, stride);
   const points = Math.floor(src.length / 3);
   const kept = stride <= 1 ? points : Math.floor(points / stride);
   const out = new Float32Array(kept * 3);

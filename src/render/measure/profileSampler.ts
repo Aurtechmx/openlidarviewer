@@ -52,7 +52,7 @@
 
 import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
-import { accumulatorOffset } from '../layerPlacement';
+import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
 
 /** A placed source buffer contributing to a combined profile walk. */
@@ -91,17 +91,7 @@ export function assembleProfileBuffers(
   let off = 0;
   let coff = 0;
   for (const { pos, cls, placement } of buffers) {
-    const [dx, dy, dz] = accumulatorOffset(placement);
-    if (dx === 0 && dy === 0 && dz === 0) {
-      positions.set(pos, off);
-    } else {
-      for (let i = 0; i < pos.length; i += 3) {
-        positions[off + i] = pos[i] + dx;
-        positions[off + i + 1] = pos[i + 1] + dy;
-        positions[off + i + 2] = pos[i + 2] + dz;
-      }
-    }
-    off += pos.length;
+    off = placeBufferInto(positions, off, pos, placement);
     const m = pos.length / 3;
     if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
     coff += m;

@@ -130,7 +130,6 @@ import {
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
-import type { VolumeResult } from './measure/volume';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
@@ -191,7 +190,7 @@ import {
   DEFAULT_PROFILE_SAMPLE_COUNT,
   type ProfileSourceBuffer,
 } from './measure/profileSampler';
-import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer } from './measure/volume';
+import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds,
   isIntegrable,
