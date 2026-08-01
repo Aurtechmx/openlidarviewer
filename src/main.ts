@@ -2632,11 +2632,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName,
-    // The placed annotations, for the map sheet's opt-in annotation layer. Same
-    // list (and order) the Annotations panel shows, so a marker's number matches
-    // its table row.
-    getAnnotations: () => viewer.annotate.getAnnotations(),
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -2703,11 +2699,7 @@ function newAnalysePanel(
         worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        // The gather's own up-axis (not the source format's), so the map sheet
-        // rotates annotation markers into the SAME canonical frame the contours
-        // were built in — a Y-up mesh's contours are rotated, its markers too.
-        sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
-        isGeographic: cur?.kind === 'geographic',
+        isGeographic: cur?.kind === 'geographic', sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
         wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
