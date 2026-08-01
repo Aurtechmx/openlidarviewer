@@ -33,6 +33,15 @@
 /** Two-way implementation selector: the new default vs the v0.5.4 legacy. */
 export type ImplFlag = 'default' | 'legacy';
 
+/**
+ * Streaming node-commit path. `immediate` marks a decoded node resident in the
+ * same turn it decoded (the historical, byte-for-byte default); `metered`
+ * routes commits through the P7 GpuUploadQueue so a burst of decodes spreads
+ * over several frames. Opt-in and unverified until browser measurement, so the
+ * default stays `immediate`. Consumed live by the Viewer's streaming path.
+ */
+export type StreamingCommitMode = 'immediate' | 'metered';
+
 /** The parsed development flags — one field per URL flag. */
 export interface DevFlags {
   /** P4 node scoring: 'legacy' = v0.5.4 depth-first scoring. */
@@ -53,6 +62,13 @@ export interface DevFlags {
   uploadQueue: boolean;
   /** P3 angular-velocity prediction active. */
   angularPrediction: boolean;
+  /**
+   * P7 streaming commit path. `metered` wires the upload queue into the live
+   * scheduler; `immediate` (default) keeps the direct commit. Unlike
+   * `uploadQueue` above, this flag is READ by the Viewer — it is the switch
+   * that actually stands the queue up.
+   */
+  streamingCommitMode: StreamingCommitMode;
 }
 
 /**
@@ -68,6 +84,7 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   adaptiveDpr: true,
   uploadQueue: true,
   angularPrediction: true,
+  streamingCommitMode: 'immediate',
 });
 
 /** `legacy` (any case) selects the legacy implementation; all else = default. */
@@ -75,6 +92,17 @@ function parseImpl(value: string | null): ImplFlag {
   return value !== null && value.trim().toLowerCase() === 'legacy'
     ? 'legacy'
     : 'default';
+}
+
+/**
+ * Opt-in switch, the mirror of {@link parseOnOff}: only `metered` (any case)
+ * selects the new path; absence, empty, and garbage all keep the safe default.
+ * A flag can only opt INTO metering, never leave it on by accident.
+ */
+function parseCommitMode(value: string | null): StreamingCommitMode {
+  return value !== null && value.trim().toLowerCase() === 'metered'
+    ? 'metered'
+    : 'immediate';
 }
 
 /**
@@ -107,6 +135,7 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     adaptiveDpr: parseOnOff(params.get('adaptiveDpr')),
     uploadQueue: parseOnOff(params.get('uploadQueue')),
     angularPrediction: parseOnOff(params.get('angularPrediction')),
+    streamingCommitMode: parseCommitMode(params.get('streamingCommitMode')),
   };
 }
 

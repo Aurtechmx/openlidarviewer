@@ -69,6 +69,17 @@ export interface StreamingBenchmarkResult {
    */
   thrashEvents: number;
 
+  /**
+   * Metered-commit counters. Zero in the default (immediate) commit mode, where
+   * no upload queue runs. `commitsPerFrame` aggregates the per-pump commit count
+   * so a run can show whether metering actually spread the load or just bunched
+   * it, and the two peaks bound the deepest backlog the queue carried.
+   */
+  uploadNodesCommitted: number;
+  peakUploadPendingNodes: number;
+  peakUploadPendingBytes: number;
+  commitsPerFrame: AggregateStats;
+
   /** Whole-session wall time, in milliseconds. */
   sessionDurationMs: number;
 }
@@ -175,6 +186,15 @@ export class StreamingBenchmark {
   // are uploads (a node became resident) and evictions (a node left).
   private _nodesReady = 0;
   private _nodesEvicted = 0;
+
+  // Metered-commit accounting. Stays at zero in immediate mode, where the
+  // driver never calls recordCommitPass.
+  private _uploadNodesCommitted = 0;
+  private _peakUploadPendingNodes = 0;
+  private _peakUploadPendingBytes = 0;
+  private _lastUploadPendingNodes = 0;
+  private _lastUploadPendingBytes = 0;
+  private readonly _commitSamples = new RingSamples(SAMPLE_BUFFER_MAX);
 
   constructor(clock: Clock = defaultClock) {
     this._clock = clock;
@@ -312,6 +332,49 @@ export class StreamingBenchmark {
     };
   }
 
+  /**
+   * Record one metered-commit pass: how many nodes it committed and the queue
+   * depth / bytes still pending afterwards. The peaks keep the largest pending
+   * figure seen so a run reports the worst backlog it carried, not just the
+   * last one. Called once per frame by the metered driver; never in immediate
+   * mode, so the counters stay zero there.
+   */
+  recordCommitPass(pass: {
+    pendingNodes: number;
+    pendingBytes: number;
+    committed: number;
+  }): void {
+    if (pass.committed > 0) this._uploadNodesCommitted += pass.committed;
+    this._lastUploadPendingNodes = pass.pendingNodes;
+    this._lastUploadPendingBytes = pass.pendingBytes;
+    if (pass.pendingNodes > this._peakUploadPendingNodes) {
+      this._peakUploadPendingNodes = pass.pendingNodes;
+    }
+    if (pass.pendingBytes > this._peakUploadPendingBytes) {
+      this._peakUploadPendingBytes = pass.pendingBytes;
+    }
+    this._commitSamples.push(pass.committed);
+  }
+
+  /** Live metered-commit counters — for the debug overlay. */
+  uploadCounters(): {
+    nodesCommitted: number;
+    pendingNodes: number;
+    pendingBytes: number;
+    peakPendingNodes: number;
+    peakPendingBytes: number;
+    committedPerFrame: AggregateStats;
+  } {
+    return {
+      nodesCommitted: this._uploadNodesCommitted,
+      pendingNodes: this._lastUploadPendingNodes,
+      pendingBytes: this._lastUploadPendingBytes,
+      peakPendingNodes: this._peakUploadPendingNodes,
+      peakPendingBytes: this._peakUploadPendingBytes,
+      committedPerFrame: aggregate(this._commitSamples.toArray()),
+    };
+  }
+
   /** Live thrash-event count — for the debug overlay. */
   get thrashEvents(): number {
     return this._thrashEvents;
@@ -354,6 +417,10 @@ export class StreamingBenchmark {
       cacheMisses: this._cacheMisses,
       cacheEvictions: this._cacheEvictions,
       thrashEvents: this._thrashEvents,
+      uploadNodesCommitted: this._uploadNodesCommitted,
+      peakUploadPendingNodes: this._peakUploadPendingNodes,
+      peakUploadPendingBytes: this._peakUploadPendingBytes,
+      commitsPerFrame: aggregate(this._commitSamples.toArray()),
       sessionDurationMs: this._elapsed(),
     };
   }
@@ -408,6 +475,11 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
         : ''),
   );
   lines.push(`  thrash events ${result.thrashEvents}`);
+  lines.push(
+    `  commits       ${result.uploadNodesCommitted} nodes,` +
+      ` peak backlog ${result.peakUploadPendingNodes} nodes / ${mb(result.peakUploadPendingBytes)}`,
+  );
+  ag('commits/frame', result.commitsPerFrame);
   lines.push(`  session       ${result.sessionDurationMs.toFixed(1)} ms`);
   return lines.join('\n');
 }
