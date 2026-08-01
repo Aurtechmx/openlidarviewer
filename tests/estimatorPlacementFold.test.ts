@@ -18,7 +18,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   sampleStridedTerrain,
-  type TerrainStreamBuffer,
 } from '../src/render/terrainStreamSample';
 import {
   assembleProfileBuffers,
