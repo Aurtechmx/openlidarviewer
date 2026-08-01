@@ -64,6 +64,36 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+// A source archive extracted without .git (a Zenodo download, say) has neither
+// the repository nor the v0.6.1 baseline tag this replay needs. Report that as a
+// structured unsupported state on stdout and exit clean, the way the freeze
+// verifier does, rather than throwing a raw `git worktree` error later. The
+// full-repo release gate still runs the real replay.
+function inGitRepo() {
+  try {
+    return (
+      execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
+if (!inGitRepo()) {
+  console.log(
+    JSON.stringify({
+      status: 'unsupported',
+      reason:
+        'Defect chronology replay requires Git history and the v0.6.1 tag; an extracted archive has neither.',
+    }),
+  );
+  process.exit(0);
+}
+
 function fail(message, code = 2) {
   console.error(message);
   process.exit(code);
