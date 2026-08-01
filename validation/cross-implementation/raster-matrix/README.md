@@ -1,8 +1,9 @@
-# Raster agreement matrix — slope, aspect, hillshade
+# Raster agreement matrix — slope, aspect, hillshade, TPI
 
 Broadens the slope / aspect / hillshade comparisons from one frozen DEM to a
-matrix of 24 analytic fixtures, and records where the agreement with GDAL holds
-and where it stops.
+matrix of 24 analytic fixtures, adds Topographic Position Index (TPI) as a
+fourth product, and records where the agreement with GDAL holds and where it
+stops.
 
 This directory **promotes nothing**. `docs/validation/claim-register.yaml` and
 `REFERENCE_SLOTS` in `src/validation/crossCheck.ts` are untouched.
@@ -36,12 +37,12 @@ raw `argv` and the exit code) and repeated in `results.json` under
 | --- | --- |
 | `fixtures/` | 24 input DEMs as ESRI ASCII Grid, plus a `.prj` for the geographic one |
 | `fixtures.json` | fixture manifest: geometry, surface, nodata pattern, comparable and halo cell counts |
-| `gdal/` | 101 `gdaldem` outputs |
+| `gdal/` | 112 `gdaldem` outputs (slope, aspect, hillshade and TPI) |
 | `gdal-SHA256SUMS` | hash per GDAL output |
 | `olv/` | the same products computed by this project, for side-by-side diffing |
 | `olv-SHA256SUMS` | hash per OLV output |
 | `reference-runs.json` | environment, argv, exit code and stderr for every `gdaldem` invocation |
-| `results.json` | 231 comparison legs with max abs diff, RMSE, mean bias, within-tolerance fraction, and the boundaries |
+| `results.json` | 251 comparison legs with max abs diff, RMSE, mean bias, within-tolerance fraction, and the boundaries |
 
 ## Reproducing
 
@@ -72,6 +73,15 @@ encoding against our `255h`, which makes it blind to a half-level shading error 
 so the intensity leg exists, and one test injects exactly that fault to show
 which leg catches it.
 
+TPI (`gdaldem TPI` = centre minus the mean of the eight neighbours) uses plain
+absolute error in the grid's Z unit, because it is a height difference. It is
+compared twice, like hillshade: against gdaldem (E4) and against its EXACT closed
+form (E2, `0` on a plane, `−0.75·(a·hx²+b·hy²)` on a quadratic). TPI is a discrete
+definition, not a derivative estimate, so the closed-form leg is exact rather than
+carrying the O(cell²) error slope does on a curved surface, and it validates OLV's
+TPI independently of gdaldem. TPI carries no horizontal unit, so — unlike aspect —
+the geographic fixture is fully expressible and is included.
+
 ## Boundaries found
 
 Recorded in `results.json` under `boundaries`. In short:
@@ -93,3 +103,17 @@ Recorded in `results.json` under `boundaries`. In short:
 - **Flat-ground aspect reads as due east.** gdaldem writes `-9999` by default and
   `0` under `-zero_for_flat`. `hornSlopeAspect` writes 0 radians in the math
   frame, which is compass 90, and carries no undefined marker.
+- **TPI diverges by gdaldem's float32 accumulation, not by model.** OLV and
+  gdaldem share the TPI definition, the Float32 DEM and the summation order, but
+  gdaldem forms the eight-neighbour sum in float32 (`GDALTPIAlg` takes
+  `const float*`) while `computeTPI` accumulates in double. They agree exactly on
+  the constant surface (the sum is exact) and diverge by gdaldem's
+  float32-accumulation error elsewhere, growing with elevation to **1.3e-4 Z-units
+  on the ~1300 m geographic plane** — past the frozen 1e-5 result-rounding
+  tolerance on six of the eleven TPI fixtures. A float32-accumulation reference
+  reproduces gdaldem to result-rounding, and OLV's double-accumulated TPI matches
+  the exact closed form, so **OLV is the more precise side** and the gap is a
+  reference-tool precision limit, recorded as a boundary rather than absorbed by a
+  widened tolerance. The tolerance was frozen from a derivation that first assumed
+  double accumulation on both sides; the divergence is flagged in `results.json`
+  as `expectation corrected after the first run`.

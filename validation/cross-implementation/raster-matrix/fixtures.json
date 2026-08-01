@@ -59,7 +59,8 @@
         "hillshade-nw-default",
         "hillshade-ne-low",
         "hillshade-south-high",
-        "hillshade-multi"
+        "hillshade-multi",
+        "tpi"
       ]
     },
     {
@@ -214,7 +215,8 @@
         "hillshade-nw-default",
         "hillshade-ne-low",
         "hillshade-south-high",
-        "hillshade-multi"
+        "hillshade-multi",
+        "tpi"
       ]
     },
     {
@@ -247,7 +249,8 @@
         "aspect",
         "hillshade-nw-default",
         "hillshade-south-high",
-        "hillshade-multi"
+        "hillshade-multi",
+        "tpi"
       ]
     },
     {
@@ -278,7 +281,8 @@
         "slope-deg",
         "aspect",
         "hillshade-nw-default",
-        "hillshade-ne-low"
+        "hillshade-ne-low",
+        "tpi"
       ]
     },
     {
@@ -309,7 +313,8 @@
         "slope-deg-edges",
         "aspect",
         "hillshade-nw-default",
-        "hillshade-ne-low"
+        "hillshade-ne-low",
+        "tpi"
       ]
     },
     {
@@ -369,7 +374,8 @@
         "slope-deg",
         "aspect",
         "hillshade-nw-default",
-        "hillshade-south-high"
+        "hillshade-south-high",
+        "tpi"
       ]
     },
     {
@@ -402,7 +408,8 @@
         "aspect",
         "aspect-zero-flat",
         "hillshade-nw-default",
-        "hillshade-multi"
+        "hillshade-multi",
+        "tpi"
       ]
     },
     {
@@ -432,7 +439,8 @@
         "slope-deg",
         "aspect",
         "aspect-zero-flat",
-        "hillshade-nw-default"
+        "hillshade-nw-default",
+        "tpi"
       ]
     },
     {
@@ -462,7 +470,8 @@
       "products": [
         "slope-deg",
         "aspect",
-        "hillshade-nw-default"
+        "hillshade-nw-default",
+        "tpi"
       ]
     },
     {
@@ -491,7 +500,8 @@
       "products": [
         "slope-deg",
         "aspect",
-        "hillshade-nw-default"
+        "hillshade-nw-default",
+        "tpi"
       ]
     },
     {
@@ -522,7 +532,8 @@
         "slope-pct",
         "aspect",
         "hillshade-nw-default",
-        "hillshade-ne-low"
+        "hillshade-ne-low",
+        "tpi"
       ]
     },
     {

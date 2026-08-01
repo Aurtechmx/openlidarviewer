@@ -1,0 +1,164 @@
+{
+  "generatedBy": "scripts/run-pdal-dsm-reference.mjs",
+  "reference": "PDAL",
+  "evidenceNote": "These outputs are the cross-implementation (E4) reference for the DSM study. They are the only independent implementation on that side; the by-construction fixture heights are E3.",
+  "environment": {
+    "pdalVersion": "--------------------------------------------------------------------------------\npdal 2.10.2 (git-version: Release)\n--------------------------------------------------------------------------------",
+    "pdalResolvedPath": "/opt/homebrew/Cellar/pdal/2.10.2_1/bin/pdal",
+    "gdalTranslateVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "gdalTranslateResolvedPath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdal_translate",
+    "containerPinning": "not-executed",
+    "containerPinningReason": "The Docker daemon is not running on this host, so no pinned image was pulled and no digest exists to record; PDAL was invoked from the host PATH.",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v26.0.0"
+  },
+  "parameters": {
+    "dsm": {
+      "outputType": "max",
+      "resolution": 1,
+      "radius": 0.45,
+      "originX": 0,
+      "originY": 0,
+      "width": 50,
+      "height": 50,
+      "nodata": -9999,
+      "dataType": "double",
+      "decimalPrecision": 6
+    }
+  },
+  "runs": [
+    {
+      "runId": "pc-09-plane-structures__dsm-max",
+      "fixtureId": "pc-09-plane-structures",
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "kind": "dsm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dsm-max.json",
+      "pipelineSha256": "0928f8be3ee3e0ffd7edb17a4b297b2b0286a63bed2fe6a24746186547e17c1c",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dsm-max.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dsm-max.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "max",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.tif",
+      "rasterSha256": "cb739a0f50523ecb0a6c9143b6df1b258e3cbd7560960466e027a42cb732f3da",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.tif validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc",
+      "sha256": "aaee26058bf7361c1fffcacd63c1298ef5b03dd81360ecd3b8aa14dfbdbcf126"
+    },
+    {
+      "runId": "pc-10-rolling-structures__dsm-max",
+      "fixtureId": "pc-10-rolling-structures",
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "kind": "dsm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dsm-max.json",
+      "pipelineSha256": "5fb791977ce5cfdc3d1e9d2b2f2640d75a92b0a774410527a5d8f5392b201ee5",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dsm-max.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dsm-max.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "max",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.tif",
+      "rasterSha256": "054f4bca99a7b5e92a70dce3ddff09f3d78bbd03ad601a34b54339a2ce6791f8",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.tif validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc",
+      "sha256": "9f2d22cc1cc6efe3717ff92e520328b4eabdf0d98d475a27fcafc018eccbc805"
+    },
+    {
+      "runId": "pc-11-ridge-structures__dsm-max",
+      "fixtureId": "pc-11-ridge-structures",
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "kind": "dsm",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dsm-max.json",
+      "pipelineSha256": "93a874024cd7ea2bb7c2a4c9c356a3db1f061fe3170c8963dad813ebe45950f6",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dsm-max.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dsm-max.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "max",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.tif",
+      "rasterSha256": "f74991f3d47e93f02b97162b55ee0e0e9bad4ea53ffca05b38de56ee04911ae1",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.tif validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc",
+      "sha256": "32c8b08abf33704e6a9c4913af4288e48eddc8f05fc094ae574344d8ce58cf1a"
+    }
+  ]
+}

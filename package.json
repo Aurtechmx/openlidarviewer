@@ -89,6 +89,7 @@
     "gen:claim-registry": "node scripts/generate-claim-registry.mjs",
     "lint:release-sync": "node scripts/lint-release-sync.mjs",
     "lint:release-truth": "node scripts/lint-release-truth.mjs",
+    "gen:provenance": "node scripts/sync-provenance.mjs",
     "lint:sbom": "node scripts/lint-sbom.mjs",
     "release:verify": "node scripts/verify-release-assets.mjs",
     "release:manifest": "node scripts/create-release-manifest.mjs",
@@ -142,7 +143,7 @@
     "@loaders.gl/ply": "^4.4.2",
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
-    "proj4": "^2.20.8",
+    "proj4": "^2.21.0",
     "three": "^0.184.0"
   },
   "devDependencies": {
