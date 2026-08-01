@@ -1980,7 +1980,6 @@ export class Viewer {
         loadStreamingRenderer(),
         loadStreamingScheduler(),
       ]);
-    this.detachStreamingCloud();
     // Fade-in is enabled on desktop/mid+ profiles only; mobile and
     // low-tier sessions skip it to preserve frame-budget headroom.
     const fadeIn = !isMobile && quality !== 'low';
@@ -2034,6 +2033,10 @@ export class Viewer {
       },
       streamingBudgets(quality, isMobile),
     );
+    // Detach the prior streaming cloud only now that the replacement renderer
+    // and scheduler are built. A throw in the lazy load or the constructors
+    // above then leaves the current scan on screen instead of a blank scene.
+    this.detachStreamingCloud();
     this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
     this._streamingFrame = 0;
     // Guaranteed scheduler cadence, render-loop-independent (see the field's
