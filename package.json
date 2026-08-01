@@ -130,6 +130,7 @@
     "validate:scientific": "node scripts/validate-scientific.mjs",
     "validation:datasets:verify": "node scripts/verify-dataset-register.mjs",
     "validation:study:verify": "node scripts/verify-cross-implementation-study.mjs",
+    "validation:ground-metrics:verify": "node scripts/verify-ground-filter-metrics.mjs",
     "validation:matrix:update": "MATRIX_WRITE=1 vitest run tests/rasterAgreementMatrix.test.ts",
     "lint:doc-links": "node scripts/lint-doc-links.mjs"
   },
