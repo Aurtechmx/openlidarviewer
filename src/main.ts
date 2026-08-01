@@ -167,10 +167,7 @@ import {
   type ViewStateBundle,
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
-import {
-  DEFAULT_NAVIGATION_PREFERENCES,
-  type NavigationPreferences,
-} from './render/navPrefs';
+import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -1070,9 +1067,6 @@ let loading = false;
 
 /** The active colour mode — tracked so a share link can record it. */
 let currentColorMode: ColorMode | undefined;
-/** Live orbit-handedness prefs — the persist source of truth. Deliberately not
- *  part of the session bundle, so restoring a session never stomps handedness. */
-let navigationPrefs: NavigationPreferences = { ...DEFAULT_NAVIGATION_PREFERENCES };
 /** The colour mode active just before the confidence overlay was turned on, so
  *  toggling the overlay off returns to exactly where the user was. */
 let confidenceColorPrev: ColorMode | undefined;
@@ -1391,11 +1385,7 @@ const inspector = new Inspector({
     syncInspectorRendering();
     persistPrefs();
   },
-  onNavigationPrefsChange: (prefs) => {
-    navigationPrefs = prefs;
-    viewer.setNavigationPreferences(prefs);
-    persistPrefs();
-  },
+  onNavigationPrefsChange: (prefs) => applyNavPrefsChange(prefs, viewer, persistPrefs),
   // Visuals Studio — Visuals Studio.
   onRgbAppearancePreset: (id) => {
     if (isRgbAppearancePresetId(id)) {
@@ -5205,15 +5195,10 @@ function persistPrefs(): void {
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
     colorblindSafeClasses: colorblindSafeClasses(),
     workflow: workflowController.config,
-    navigation: navigationPrefs,
+    navigation: navigationPrefs(),
   });
 }
 
-/**
- * Apply preferences saved in a previous session. Each key is applied only when
- * it was stored, so anything absent keeps the viewer's own default — including
- * the backend-dependent EDL default.
- */
 /**
  * Apply degraded rendering defaults on a low-capability device — Eye Dome
  * Lighting and antialiasing off — so a weak GPU stays interactive. Runs before
@@ -5226,6 +5211,7 @@ function applyDeviceDefaults(): void {
   }
 }
 
+/** Apply preferences saved in a previous session; each key applies only if it was stored. */
 function applyPrefs(): void {
   const p = loadPrefs();
   if (p.pointSize !== undefined) viewer.setPointSize(p.pointSize);
@@ -5249,11 +5235,7 @@ function applyPrefs(): void {
     pendingWorkflowConfig = p.workflow;
     if (workflowConfigPanel) workflowConfigPanel.setConfig(p.workflow);
   }
-  if (p.navigation !== undefined) {
-    navigationPrefs = p.navigation;
-    viewer.setNavigationPreferences(p.navigation);
-    inspector.syncNavigationPrefs(p.navigation);
-  }
+  if (p.navigation !== undefined) restoreNavPrefs(p.navigation, viewer, inspector);
 }
 
 // Provenance + Dataset Intelligence load-time card refreshers live in

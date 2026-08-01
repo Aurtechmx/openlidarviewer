@@ -4237,7 +4237,7 @@ export class Viewer {
     return this._twoFingerTwistEnabled;
   }
   setNavigationPreferences(prefs: { invertOrbitX: boolean; invertOrbitY: boolean }): void {
-    this._nav.setNavigationPreferences(prefs); // live orbit-invert; NavController owns the takeover
+    this._nav.setNavigationPreferences(prefs); // NavController takes the drag from OrbitControls
   }
 
   /** Enter or leave point-inspection mode (freezes navigation). */
@@ -5787,12 +5787,9 @@ export class Viewer {
     // settles. Result: drag feels exactly like model-viewer's — no
     // micro-judder, no pull-back yank during the gesture.
     if (this._userInteracting) return;
-    // Same suspension for the hand tool's grab (v0.5.5 P1): a middle-mouse
-    // temporary grab in orbit mode bypasses OrbitControls entirely, so the
-    // `_userInteracting` gate above never sees it — without this check the
-    // soft-clamp lerp would fight the live drag. On release, stamp the same
-    // settle window OrbitControls gestures get, so the clamp doesn't yank
-    // the target the very next frame.
+    // The hand-tool grab and the custom orbit drag both bypass OrbitControls, so
+    // the `_userInteracting` gate never sees them; suspend the clamp during either
+    // and stamp the settle window on release so it doesn't yank the target.
     const nowMs = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
