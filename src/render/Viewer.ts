@@ -6197,11 +6197,9 @@ export class Viewer {
    * pick and shared across every candidate buffer.
    */
   private _currentFilterWindow(): PointFilterWindow {
-    // Elevation still resolves against the PRIMARY cloud: correct for one cloud,
-    // and unchanged from before. With several layers at different origins the GPU
-    // now clips each correctly while this predicate speaks only the primary
-    // cloud's space, so pick and screen can disagree on a secondary layer. Stage C
-    // of docs/gate2-per-cloud-filter-plan.md makes this per-cloud too.
+    // Pick resolves elevation against the PRIMARY cloud only, so with layers at
+    // different origins the GPU clips each correctly but pick and screen can
+    // disagree on a secondary layer. Stage C (docs/gate2-per-cloud-filter-plan.md).
     const p = this._primaryElevLayer();
     const primary = elevWindowFor(this._elevFilterWorld, p.originAlongAxis, p.axis);
     return {
