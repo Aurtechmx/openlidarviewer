@@ -18,6 +18,8 @@
  */
 
 import type { PointCloud } from '../../model/PointCloud';
+import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
+import { accumulatorOffset } from '../layerPlacement';
 import type { VolumeBudgetDecision } from './volumeBudget';
 import { decideVolumeBudget } from './volumeBudget';
 import { selectByLasso, volumeFromLassoWithFootprint } from './lassoVolume';
@@ -47,9 +49,40 @@ export function stridePositions(src: Float32Array, stride: number): Float32Array
   return out;
 }
 
+/**
+ * A strided copy, with the layer's Float64 placement folded into every kept
+ * point so both the selection (projected against the shared-frame camera) and
+ * the packed volume points are in the project frame. Identity placement makes
+ * this exactly {@link stridePositions}: `stride <= 1` returns `src` untouched
+ * (no allocation, byte-identical) and a real stride adds an offset of zero —
+ * so the lasso stays a provable no-op while mounting is disabled.
+ */
+export function stridePlacedPositions(
+  src: Float32Array,
+  stride: number,
+  placement?: LayerSpatialTransform | null,
+): Float32Array {
+  const [dx, dy, dz] = accumulatorOffset(placement);
+  const identity = dx === 0 && dy === 0 && dz === 0;
+  if (stride <= 1 && identity) return src;
+  const step = stride <= 1 ? 1 : stride;
+  const points = Math.floor(src.length / 3);
+  const kept = stride <= 1 ? points : Math.floor(points / stride);
+  const out = new Float32Array(kept * 3);
+  for (let i = 0; i < kept; i++) {
+    const srcIdx = i * step * 3;
+    out[i * 3] = src[srcIdx] + dx;
+    out[i * 3 + 1] = src[srcIdx + 1] + dy;
+    out[i * 3 + 2] = src[srcIdx + 2] + dz;
+  }
+  return out;
+}
+
 /** A layer as this walk needs to see it. */
 export interface LassoCloudEntry {
   readonly cloud: PointCloud;
+  /** Float64 placement into the shared project frame; null/absent = identity. */
+  readonly placement?: LayerSpatialTransform | null;
 }
 
 /**
@@ -134,8 +167,7 @@ export function computeLassoVolume(
   // Static clouds, walked independently so per-cloud indices can go back to
   // the highlight pipeline.
   for (const [id, entry] of host.integrable) {
-    const positions =
-      stride === 1 ? entry.cloud.positions : stridePositions(entry.cloud.positions, stride);
+    const positions = stridePlacedPositions(entry.cloud.positions, stride, entry.placement);
     const localIndices = selectByLasso({ positions, lasso, project: host.project });
     if (localIndices.length === 0) continue;
     // Strided indices are in the reduced array's space; translate back so the
