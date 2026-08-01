@@ -607,19 +607,21 @@ function drawMarker(
   color: ReturnType<typeof rgb>,
   bold: PDFFont,
 ): void {
-  // Halo + dot. drawEllipse's x/yScale are the radii; the centre is (px, py) in
-  // the y-up page frame (same frame drawText uses), so no svg-y flip is needed.
-  page.drawEllipse({ x: px, y: py, xScale: 5.2, yScale: 5.2, color: WHITE, opacity: 0.9 });
-  page.drawEllipse({ x: px, y: py, xScale: 3.2, yScale: 3.2, color, borderColor: WHITE, borderWidth: 0.6 });
+  // A waypoint dot that reads over contour ink and belongs to this sepia sheet:
+  // a soft halo lifts it off the graticule, a fine sepia keyline (not a stark
+  // white one) rings the type-coloured disc so it reads as drawn INTO the map,
+  // and the index sits in a tight knock-out to the upper-right in the same
+  // sepia the index-contour labels use. drawEllipse's x/yScale are the radii and
+  // the centre stays exactly (px, py) — the placement the projection guarantees.
+  page.drawEllipse({ x: px, y: py, xScale: 5, yScale: 5, color: WHITE, opacity: 0.92 });
+  page.drawEllipse({ x: px, y: py, xScale: 3.1, yScale: 3.1, color, borderColor: SEPIA_INDEX, borderWidth: 0.5 });
   const label = String(index);
   const sz = 6.5;
   const w = bold.widthOfTextAtSize(label, sz);
-  // Index knock-out to the upper-right of the dot, so it never disappears into
-  // the dot fill or a dark contour line.
-  const lx = px + 5.5;
-  const ly = py + 1.5;
-  page.drawRectangle({ x: lx - 1, y: ly - 1.5, width: w + 2, height: sz + 1, color: WHITE, opacity: 0.85 });
-  page.drawText(label, { x: lx, y: ly, size: sz, font: bold, color: INK });
+  const lx = px + 5.2;
+  const ly = py + 1.6;
+  page.drawRectangle({ x: lx - 1.2, y: ly - 1.4, width: w + 2.4, height: sz + 0.8, color: WHITE, opacity: 0.9 });
+  page.drawText(label, { x: lx, y: ly, size: sz, font: bold, color: SEPIA_INDEX });
 }
 
 /**
@@ -680,21 +682,31 @@ function drawAnnotationTable(
     color: WHITE, opacity: 0.9, borderColor: FRAME, borderWidth: 0.5,
   });
 
-  page.drawText(safe(header), { x: leftX, y: headerBaseline, size: headSz, font: bold, color: INK });
+  // Header set in the sheet's index sepia over a sepia hairline, so the legend
+  // reads as part of the sheet's cartographic type rather than a bolted-on panel.
+  page.drawText(safe(header), { x: leftX, y: headerBaseline, size: headSz, font: bold, color: SEPIA_INDEX });
   page.drawLine({
     start: { x: leftX, y: headerBaseline - 3 }, end: { x: rightX, y: headerBaseline - 3 },
-    thickness: 0.5, color: FRAME,
+    thickness: 0.6, color: SEPIA_INDEX,
   });
 
   let y = headerBaseline - 12;
-  const typeX = leftX + bold.widthOfTextAtSize('88', rowSz) + 4;
+  // A colour swatch leads each row, in that annotation's own type colour — the
+  // same disc drawn on the map. Legend and map become one system: a reader ties
+  // a row to its marker by matching colour and number, not by hunting position.
+  const dotX = leftX + 2.4;
+  const indexX = leftX + 9;
+  const typeX = indexX + bold.widthOfTextAtSize('88', rowSz) + 4;
   const descX = typeX + font.widthOfTextAtSize('warning', rowSz) + 5;
   const descMax = rightX - descX;
   for (let i = 0; i < shown; i++) {
     const r = rows[i];
-    // "12  warning  Title - note": the index (bold) + type prefix, then the
-    // title and any note on the same line, clipped so nothing runs past the edge.
-    page.drawText(safe(`${r.index}`), { x: leftX, y, size: rowSz, font: bold, color: INK });
+    // swatch · index (sepia bold) · type (dim) · "Title - note", clipped to the edge.
+    page.drawEllipse({
+      x: dotX, y: y + rowSz * 0.34, xScale: 2.3, yScale: 2.3,
+      color: ANNOTATION_COLORS[r.type], borderColor: SEPIA_INDEX, borderWidth: 0.4,
+    });
+    page.drawText(safe(`${r.index}`), { x: indexX, y, size: rowSz, font: bold, color: SEPIA_INDEX });
     page.drawText(safe(r.type), { x: typeX, y, size: rowSz, font, color: DIM });
     const desc = r.note ? `${r.title} - ${r.note}` : r.title;
     const clipped = clipToWidth(desc, descMax, rowSz, (s, sc) => font.widthOfTextAtSize(safe(s), sc));
