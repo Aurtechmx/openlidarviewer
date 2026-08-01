@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   classificationAgreement,
+  specificity,
   MCC_DEGENERATE_VALUE,
   type ClassLabel,
 } from '../src/validation/classificationAgreement';
@@ -75,6 +76,40 @@ describe('classificationAgreement metrics', () => {
     expect(r.groundPrecision).toBeNull();
     expect(r.groundRecall).toBe(0);
     expect(r.groundIoU).toBe(0);
+  });
+});
+
+describe('specificity', () => {
+  it('is the true-negative rate and matches nonGroundRecall', () => {
+    // tp = 4, fp = 1, fn = 2, tn = 3, so specificity = 3 / (3 + 1).
+    const truth: ClassLabel[] = [G, G, G, G, G, G, N, N, N, N];
+    const pred: ClassLabel[] = [G, G, G, G, N, N, G, N, N, N];
+    const r = classificationAgreement(truth, pred);
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(specificity(r.confusion)).toBeCloseTo(3 / 4, 12);
+    // The two names are one quantity: they may never report two numbers.
+    expect(specificity(r.confusion)).toBe(r.nonGroundRecall);
+  });
+
+  it('is a measured 0, not null, when every non-ground return is a false positive', () => {
+    // truth non-ground with predicted ground gives tn = 0, fp = 1: the rate was
+    // measured and is a real 0.
+    const r = classificationAgreement([G, N], [G, G]);
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(r.confusion.trueNegative).toBe(0);
+    expect(r.confusion.falsePositive).toBe(1);
+    expect(specificity(r.confusion)).toBe(0);
+  });
+
+  it('is null, not 0, when the reference held no non-ground', () => {
+    // No non-ground truth, so tn + fp = 0: specificity was never measured.
+    const r = classificationAgreement([G, G, G], [G, G, N]);
+    expect(r.status).toBe('compared');
+    if (r.status !== 'compared') return;
+    expect(specificity(r.confusion)).toBeNull();
+    expect(specificity(r.confusion)).toBe(r.nonGroundRecall);
   });
 });
 
