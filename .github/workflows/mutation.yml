@@ -67,6 +67,10 @@ jobs:
       # swallowed exit code nor a loosened runner config can turn a regression
       # into a green run.
       - name: Mutation run
+        env:
+          # Enables the dashboard reporter to publish the core score. Absent
+          # locally, the reporter skips silently; the run itself is unchanged.
+          STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
         run: npm run mutation
 
       - name: Record the score, the commit, and this run
