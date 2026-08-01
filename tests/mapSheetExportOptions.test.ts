@@ -13,6 +13,7 @@ import {
   defaultMapTitle,
   defaultMapNotes,
   defaultMapFilename,
+  annotationsOptionState,
 } from '../src/render/measure/mapSheetExportOptions';
 
 describe('option lists', () => {
@@ -105,5 +106,22 @@ describe('defaultMapFilename', () => {
   it('is a sanitised <basename>-map', () => {
     expect(defaultMapFilename('El Picacho')).toBe('El-Picacho-map');
     expect(defaultMapFilename('')).toBe('contours-map');
+  });
+});
+
+describe('annotationsOptionState — the opt-in checkbox', () => {
+  it('is disabled with an explanatory hint when the scan has no annotations', () => {
+    const s = annotationsOptionState(0);
+    expect(s.disabled).toBe(true);
+    expect(s.hint).toMatch(/no annotations/i);
+  });
+  it('is enabled and counts the annotations when there are some', () => {
+    const s = annotationsOptionState(3);
+    expect(s.disabled).toBe(false);
+    expect(s.hint).toContain('3 placed annotations');
+  });
+  it('uses a singular for exactly one annotation', () => {
+    expect(annotationsOptionState(1).hint).toContain('1 placed annotation');
+    expect(annotationsOptionState(1).hint).not.toContain('annotations');
   });
 });
