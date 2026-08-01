@@ -1,6 +1,6 @@
 # OpenLiDARViewer v0.6.3
 
-v0.6.3 is a correction and platform-parity release. It fixes eleven defects, most of them invisible on macOS and load-bearing on Windows, and lands the first half of a streaming-performance change that stays off until browser evidence supports enabling it. The measured figures in this document come from the release-mode gate run at the tagged commit.
+v0.6.3 is a correction and platform-parity release. It corrects defects in the viewer, its calculations and its Windows behaviour, hardens how a scan loads and how a second scan opens, adds a ground-classification comparison against PDAL, and lands the first half of a streaming-performance change that stays off until browser evidence supports enabling it. The measured figures in this document come from the release-mode gate run at the tagged commit.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
@@ -14,41 +14,51 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 - three markdown writers escape the backslash before the pipe;
 - classification count maps are null-prototype.
 
-## Windows behaviour
+## Viewer
 
-Each of these was inert on macOS, which is why none surfaced earlier. macOS
-draws overlay scrollbars: no layout width, hidden until they scroll, never
-dragged. Windows draws a classic one that occupies fifteen pixels and is meant
-to be dragged, so a rule that costs nothing on one platform is load-bearing on
-the other. The fixes are scoped by measuring what the platform actually draws
-rather than by reading the user agent, since the setting is user-changeable on
-both.
+- opening a second static scan keeps the first on screen and no longer clears its saved viewpoints and annotations; the reset runs only when there is nothing to preserve;
+- a load that fails or is cancelled no longer tears down the current scene before its replacement is ready, so a bad file leaves the previous scan intact rather than a blank view;
+- a fast scan swap no longer applies a display profile or an RGB auto-balance to the scan that replaced the one it was meant for;
+- an imported session is re-checked against the scan on screen, so a swap mid-import cannot attach its measurements or views to the wrong scan;
+- streaming EPT scans get the tool dock, so its tools (measure, inspect, probe, annotate) and closing the scan work the same as on a COPC scan;
+- the navigation cheatsheet is smaller and clears the point cloud on load, and the focused point-info card stays clickable where it overlaps the navigation bar;
+- the profile panel's Expand control is one real button again, so the panel no longer clips its rows.
 
-- the left rail's scrollbar can be grabbed: the column is the scroll container and carried `pointer-events: none`, which also made its scrollbar untargetable;
-- seven scrollable surfaces reserve a stable gutter, so crossing the overflow threshold no longer shifts content sideways by the scrollbar width; the command palette re-renders on every keystroke and moved on each one;
-- Ctrl and the wheel zoom the page again. The canvas cancelled every wheel event and fills the window, leaving no way to enlarge the interface. A macOS trackpad pinch arrives as a wheel with the same flag and no key held, so it still drives the camera;
-- the rail breakpoints meet at 767 and 768. At exactly 768 the desktop panels mounted with their collapse handles hidden;
+## Windows and platform parity
+
+Each of these was inert on macOS, whose overlay scrollbars carry no width and are never dragged, and load-bearing on Windows, which draws a fifteen-pixel classic scrollbar meant to be dragged. The fixes are scoped by measuring what the platform draws rather than by reading the user agent, since the setting is user-changeable on both.
+
+- the left rail's scrollbar can be grabbed: the column carried `pointer-events: none`, which also made its scrollbar untargetable;
+- seven scrollable surfaces reserve a stable gutter, so crossing the overflow threshold no longer shifts content sideways by the scrollbar width;
+- Ctrl and the wheel zoom the page again, while a macOS trackpad pinch still drives the camera;
+- the rail breakpoints meet at 767 and 768, so the desktop panels no longer mount with their collapse handles hidden at exactly 768;
 - shortcut chips read `Ctrl+Shift+U` rather than Apple's glyphs;
-- panel scrollbars follow the theme, on platforms that draw a scrollbar to theme;
+- panel scrollbars follow the theme, on platforms that theme a scrollbar;
 - the debug overlay's scrollbar is reachable.
 
 ## Accessibility
 
-- Windows High Contrast is supported. Twenty-six panels separated from the 3D view through a translucent fill and a blur, neither of which composites in that mode, and four controls signalled their state through background colour alone, so on and off rendered identically.
+- Windows High Contrast is supported: twenty-six panels that separated from the 3D view through a translucent blur, and four controls that signalled their state through background colour alone, now render in that mode.
 
 ## Streaming
 
-- decoded and resident are separate node states. Decode completion marked a node resident and built its mesh in the same turn, so several decodes landing together built several meshes in one frame, and the point budget throttled against decode progress rather than against what the viewer had drawn;
-- the upload queue gained payload cleanup and a per-frame byte and node budget. A time budget alone cannot bound the next frame, because the real buffer upload is deferred to render.
+- decoded and resident are separate node states, so several decodes landing together no longer build several meshes in one frame, and the point budget throttles against what the viewer has drawn rather than against decode progress;
+- the upload queue gained payload cleanup and a per-frame byte and node budget, which a time budget alone cannot supply;
+- routing commits through the queue is off by default and unchanged from v0.6.2; enabling it awaits WebGPU and forced-WebGL2 frame measurements.
 
-Routing commits through the queue is off by default. It changes when a node counts as resident and when its mesh is built, and the release criteria ask for WebGPU and forced-WebGL2 measurements first. Absent the option, behaviour is unchanged from v0.6.2.
+## Stronger scientific evidence
+
+v0.6.3 compares the built-in ground filter against PDAL on five synthetic scenes, and reports precision, recall, specificity, F1 and MCC for each. The comparison shows what the 82% pooled agreement hid: recall is low, 73.9% pooled and 0.99% on the low-outlier scene, so the filter errs by rejecting ground PDAL keeps rather than by inventing it. This measures agreement with one reference implementation on synthetic terrain. It does not establish that either result is correct on real ground, and no field study has been run. The TPI and DSM cross-implementation studies join the slope, aspect, hillshade and DTM comparisons already on file.
 
 ## Validation infrastructure
 
-- the three mutations that survived the full gate at v0.6.2 are closed: the contour saddle equality boundary, removal of `summary.html` from the required benchmark artifacts, and omission of a document that shipped Markdown still references;
-- mutation testing moved out of the tag-time gate into a scheduled workflow. The release record cites the result, states the commit it was measured at, and is refused outright when no result exists or the cited score sits below the break threshold. The current campaign scores 96.81 over 188 mutants against the numeric core, up from 87.23 at v0.6.2. Forty-six of the 182 detected mutants were killed by timeout rather than by an assertion, which is weaker evidence than a test failing on a wrong value, so the composition is published alongside the score;
-- a frame-performance record with a fixed comparison rule. A missing measurement is recorded as absent rather than as zero, and runs from different machines, browsers or backends are refused rather than pooled;
-- a gate asserting the upload queue is still reachable from the streaming path. It was written, tested and left unconnected for a full release, and no test could catch that.
+- recall and MCC are guarded against a frozen baseline in the release gate, so a drop below the recorded ground-classification figure fails the tag;
+- a `validate:scientific` command runs every existing verifier in one pass, records the commit and the tool versions it ran against, and writes JSON, CSV and Markdown; it reimplements no check and promotes no claim;
+- the analytic-terrain oracle covers a paraboloid, a ridge, a step edge and a no-data boundary, checking the terrain derivatives against values worked out by hand rather than against another program;
+- the three mutations that survived the full gate at v0.6.2 are closed: the contour saddle equality boundary, the removed `summary.html` artifact check, and a document the shipped markdown still referenced;
+- mutation testing moved out of the tag-time gate into a scheduled workflow; the release record cites the score with the commit and run behind it, and is refused when no result exists or the cited score sits below the break threshold. The current campaign scores 96.81 over 188 mutants, up from 87.23 at v0.6.2, with 46 of the 182 detected mutants killed by timeout rather than by an assertion, so the composition is published alongside the score;
+- a frame-performance record refuses to pool runs from different machines, browsers or backends, and records a missing measurement as absent rather than as zero;
+- a gate asserts the upload queue is still reachable from the streaming path, after it shipped written and tested but unconnected for a full release.
 
 ## Repository and provenance
 
@@ -74,7 +84,8 @@ New in this release:
 
 - the Windows fixes are reasoned from the platform's scrollbar and input behaviour and verified against a browser forced into that configuration. They are not yet confirmed on Windows itself;
 - High Contrast support is verified as present in the stylesheet, not as it appears in a real High Contrast session;
-- queue-metered streaming commits are implemented and tested but not enabled, and carry no performance claim.
+- queue-metered streaming commits are implemented and tested but not enabled, and carry no performance claim;
+- the ground-classification recall figure is measured against PDAL on synthetic scenes only.
 
 ## Compatibility
 

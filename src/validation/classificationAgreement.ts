@@ -237,3 +237,23 @@ export function classificationAgreement(
     groundIoU: ratio(tp, tp + fp + fn),
   };
 }
+
+/**
+ * Specificity: the true-negative rate, TN / (TN + FP).
+ *
+ * This is the same quantity `classificationAgreement` already reports as
+ * `nonGroundRecall`, the recall of the non-ground class. It is given here under
+ * its standard name because a ground-filter report is read for two things at
+ * once: how much ground a filter keeps, which is recall, and how cleanly it
+ * holds the non-ground line, which is specificity. Naming the second one after
+ * the first would read as a different measurement to anyone but the author.
+ * Both come from the one confusion matrix through the same `ratio`, so the two
+ * names cannot drift into two numbers.
+ *
+ * Null, not 0, when the reference held no non-ground: the rate was never
+ * measured, and a 0 would claim a filter that failed on non-ground it never
+ * saw.
+ */
+export function specificity(confusion: ConfusionMatrix): number | null {
+  return ratio(confusion.trueNegative, confusion.trueNegative + confusion.falsePositive);
+}
