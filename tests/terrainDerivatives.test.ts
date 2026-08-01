@@ -455,3 +455,55 @@ describe('hornSlopeAspect — degenerate inputs return a zero field, never NaN/I
     expect(slope[4]).toBeCloseTo(1, 5);
   });
 });
+
+describe('terrainDerivatives — new-code mutation coverage (v0.6.3)', () => {
+  const ramp = (cols = 3, rows = 3) => {
+    const z = new Float32Array(cols * rows);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) z[r * cols + c] = c;
+    return z;
+  };
+  const allZero = (a: Float32Array) => Array.from(a).every((v) => v === 0);
+
+  // The cell-size guard is PER AXIS. The X==Y==0 case cannot tell a `> 0` guard
+  // from a `>= 0` one, because Y (defaulted to X) fires either way. A zero X
+  // beside a valid Y must still be rejected, or dz/dx divides by zero.
+  it('rejects a zero or negative X cell size while Y is valid', () => {
+    for (const badX of [0, -1]) {
+      expect(allZero(hornSlopeAspect(ramp(), 3, 3, badX, 5).slope)).toBe(true);
+    }
+  });
+  it('rejects a zero or negative Y cell size while X is valid', () => {
+    for (const badY of [0, -1]) {
+      expect(allZero(hornSlopeAspect(ramp(), 3, 3, 5, badY).slope)).toBe(true);
+    }
+  });
+
+  // A non-positive or non-finite zScale must fall back to 1, never scale the
+  // slope by a bad factor: 0 would flatten it, a negative would invert its
+  // sign, and +Infinity would blow it up.
+  it('an invalid zScale falls back to 1, not a bad scale', () => {
+    const base = hornSlope(ramp(), 3, 3, 1, 1, 1)[4];
+    expect(base).toBeGreaterThan(0);
+    for (const bad of [0, -1, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NaN]) {
+      expect(hornSlope(ramp(), 3, 3, 1, 1, bad)[4]).toBeCloseTo(base, 6);
+    }
+  });
+  it('a valid zScale multiplies the slope linearly', () => {
+    const base = hornSlope(ramp(), 3, 3, 1, 1, 1)[4];
+    expect(hornSlope(ramp(), 3, 3, 1, 1, 2)[4]).toBeCloseTo(base * 2, 6);
+    expect(hornSlope(ramp(), 3, 3, 1, 1, 0.5)[4]).toBeCloseTo(base * 0.5, 6);
+  });
+
+  // An interior cell must use the interior kernel, not a column-edge branch. A
+  // plane cannot catch a branch that mis-routes interior cells, because linear
+  // extrapolation is exact; z = c^2 is not linear, so the interior Horn slope at
+  // (2,2) of a 5x5 is exactly 4 only through the real interior window.
+  it('an interior cell on a curved grid uses the interior kernel (z = c^2 gives slope 4)', () => {
+    const cols = 5;
+    const rows = 5;
+    const z = new Float32Array(cols * rows);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) z[r * cols + c] = c * c;
+    const { slope } = hornSlopeAspect(z, cols, rows, 1);
+    expect(slope[2 * cols + 2]).toBeCloseTo(4, 6);
+  });
+});

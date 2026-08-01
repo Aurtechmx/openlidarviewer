@@ -4621,6 +4621,15 @@ function streamingDebugSample(): StreamingDebugStats | null {
         max: recent.max,
       };
     }
+    // Metered-commit backlog. Left absent in the default immediate mode, where
+    // no upload queue runs and the driver never records a pass — so the overlay
+    // shows this line only once metering is actually committing.
+    const up = streamingBenchmark.uploadCounters();
+    if (up.committedPerFrame.count > 0 || up.pendingNodes > 0) {
+      sample.commitPending = up.pendingNodes;
+      sample.commitPendingBytes = up.pendingBytes;
+      sample.nodesCommitted = up.nodesCommitted;
+    }
   }
   return sample;
 }
