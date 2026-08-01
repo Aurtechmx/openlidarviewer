@@ -221,6 +221,60 @@ function ridgeOrValley(params: RidgeValleyParams, sign: 1 | -1): TerrainPoint[] 
   return pts;
 }
 
+export interface ParaboloidParams extends SceneExtent {
+  /** Curvature coefficient (z = base + a·r²). Positive = bowl (depression),
+   *  negative = dome (hill). Default 0.1. */
+  readonly a?: number;
+  /** Base elevation at the paraboloid's own extremum (r = 0). Default 0. */
+  readonly base?: number;
+}
+
+/**
+ * Paraboloid of revolution centred on the extent's own node grid:
+ * z = base + a·((x−cx)² + (y−cy)²), cx = cy = the centre NODE (an odd
+ * `nx`/`ny` lands the centre exactly on a node, so r = 0 is sampled and the
+ * extremum is exact rather than interpolated between nodes).
+ *
+ * KNOWN TRUTH — exact, not approximate, at every INTERIOR cell:
+ *   - Analytic gradient: dz/dx = 2a(x−cx), dz/dy = 2a(y−cy).
+ *   - Horn's 1-2-1 weighted central difference has ZERO truncation error on
+ *     this surface. z is separable (no xy cross term), so the y-weighted sum
+ *     in the dz/dx numerator is identical on the +1 and −1 columns and
+ *     cancels; what remains, (fx(x+h) − fx(x−h))/(2h) for fx(u) = a(u−cx)²,
+ *     is the exact derivative of a quadratic (its third derivative — the
+ *     source of central-difference truncation error — is identically zero).
+ *     The same argument applies to dz/dy. So for any interior cell (a full,
+ *     unclipped 3x3 window) Horn slope/aspect equal the calculus answer to
+ *     float precision, not merely within a numerical tolerance band.
+ *   - slope (rise/run) = |∇z| = 2·|a|·r, r = hypot(x−cx, y−cy).
+ *   - aspect (downhill, math frame) = atan2(−2a(y−cy), −2a(x−cx)):
+ *       a > 0 (bowl): points TOWARD the centre  (atan2(cy−y, cx−x)).
+ *       a < 0 (dome): points AWAY from the centre (atan2(y−cy, x−cx)).
+ *   - Border cells are NOT exact under this claim: the linear border
+ *     extrapolation (see terrainDerivatives.ts) reconstructs a neighbour
+ *     exactly only on a PLANAR surface; on a curved one it carries the
+ *     surface's own curvature as an extra error term. Truth assertions
+ *     restrict to the interior for this reason.
+ */
+export function paraboloid(params: ParaboloidParams = {}): TerrainPoint[] {
+  const { nx, ny, spacing } = dims(params);
+  const a = params.a ?? 0.1;
+  const base = params.base ?? 0;
+  const cx = Math.floor((nx - 1) / 2) * spacing;
+  const cy = Math.floor((ny - 1) / 2) * spacing;
+  const pts: TerrainPoint[] = [];
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      const x = i * spacing;
+      const y = j * spacing;
+      const dx = x - cx;
+      const dy = y - cy;
+      pts.push({ x, y, z: base + a * (dx * dx + dy * dy) });
+    }
+  }
+  return pts;
+}
+
 export interface TerraceParams extends SceneExtent {
   /** Vertical rise per step. Default 5. */
   readonly stepHeight?: number;
