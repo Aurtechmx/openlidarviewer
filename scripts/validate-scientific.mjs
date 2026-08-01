@@ -72,6 +72,15 @@ import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 
 import { resolve, dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { binaryOnPath, requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+
+// Resolve the helpers we spawn to absolute paths up front, so neither the npm
+// child nor the git provenance call is dispatched through a possibly-writable
+// PATH entry. npm is required to run any check; git is optional — its absence
+// just means no provenance line, which the reporter already tolerates.
+const NPM = requireBinaryOnPath('npm');
+const GIT = binaryOnPath('git');
+
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The checks, in the order a reader walks the project. Every `script` is an
@@ -105,7 +114,7 @@ const STUDIES_DIR = 'validation/cross-implementation/studies';
 /** Run one npm script. Returns its real exit code plus captured streams. */
 function runNpm(scriptId) {
   try {
-    const stdout = execFileSync('npm', ['run', '--silent', scriptId], {
+    const stdout = execFileSync(NPM, ['run', '--silent', scriptId], {
       cwd: ROOT,
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
@@ -170,8 +179,9 @@ function unsupportedStatus(stdout) {
 
 /** git output, trimmed, or null when there is no repository to answer. */
 function git(...argv) {
+  if (GIT === null) return null;
   try {
-    return execFileSync('git', argv, {
+    return execFileSync(GIT, argv, {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],

@@ -463,8 +463,6 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
   lines.push(
     `  peak resident ${result.peakResidentPoints.toLocaleString('en-US')} points,` +
       ` ${mb(result.peakResidentBytes)} GPU est.`,
-  );
-  lines.push(
     `  cache         hits=${result.cacheHits} misses=${result.cacheMisses}` +
       ` evictions=${result.cacheEvictions}` +
       (result.cacheHits + result.cacheMisses > 0
@@ -473,9 +471,7 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
             (result.cacheHits + result.cacheMisses)
           ).toFixed(1)}%)`
         : ''),
-  );
-  lines.push(`  thrash events ${result.thrashEvents}`);
-  lines.push(
+    `  thrash events ${result.thrashEvents}`,
     `  commits       ${result.uploadNodesCommitted} nodes,` +
       ` peak backlog ${result.peakUploadPendingNodes} nodes / ${mb(result.peakUploadPendingBytes)}`,
   );

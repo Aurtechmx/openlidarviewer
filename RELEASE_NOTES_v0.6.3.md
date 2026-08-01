@@ -48,7 +48,10 @@ Routing commits through the queue is off by default. It changes when a node coun
 - the three mutations that survived the full gate at v0.6.2 are closed: the contour saddle equality boundary, removal of `summary.html` from the required benchmark artifacts, and omission of a document that shipped Markdown still references;
 - mutation testing moved out of the tag-time gate into a scheduled workflow. The release record cites the result, states the commit it was measured at, and is refused outright when no result exists or the cited score sits below the break threshold. The current campaign scores 96.81 over 188 mutants against the numeric core, up from 87.23 at v0.6.2. Forty-six of the 182 detected mutants were killed by timeout rather than by an assertion, which is weaker evidence than a test failing on a wrong value, so the composition is published alongside the score;
 - a frame-performance record with a fixed comparison rule. A missing measurement is recorded as absent rather than as zero, and runs from different machines, browsers or backends are refused rather than pooled;
-- a gate asserting the upload queue is still reachable from the streaming path. It was written, tested and left unconnected for a full release, and no test could catch that.
+- a gate asserting the upload queue is still reachable from the streaming path. It was written, tested and left unconnected for a full release, and no test could catch that;
+- per-scene ground-classification metrics (precision, recall, specificity, F1 and MCC) measured against a PDAL reference on five synthetic scenes, with recall and MCC guarded against a frozen baseline in the release gate. The numbers show what the 82% pooled agreement hid: recall is low, 73.9% pooled and 0.99% on the low-outlier scene, so the filter errs by rejecting ground PDAL keeps rather than by inventing it. The reported figure is the raw comparison;
+- a `validate:scientific` command that runs every existing verifier in one pass, records the commit and the tool versions it ran against, and writes JSON, CSV and Markdown. It reimplements no check and promotes no claim;
+- the analytic-terrain oracle covers a paraboloid, a ridge, a step edge and a no-data boundary, checking the terrain derivatives against values worked out by hand rather than against another program.
 
 ## Repository and provenance
 
