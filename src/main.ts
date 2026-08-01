@@ -167,6 +167,10 @@ import {
   type ViewStateBundle,
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
+import {
+  DEFAULT_NAVIGATION_PREFERENCES,
+  type NavigationPreferences,
+} from './render/navPrefs';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -1066,6 +1070,9 @@ let loading = false;
 
 /** The active colour mode — tracked so a share link can record it. */
 let currentColorMode: ColorMode | undefined;
+/** Live orbit-handedness prefs — the persist source of truth. Deliberately not
+ *  part of the session bundle, so restoring a session never stomps handedness. */
+let navigationPrefs: NavigationPreferences = { ...DEFAULT_NAVIGATION_PREFERENCES };
 /** The colour mode active just before the confidence overlay was turned on, so
  *  toggling the overlay off returns to exactly where the user was. */
 let confidenceColorPrev: ColorMode | undefined;
@@ -1382,6 +1389,11 @@ const inspector = new Inspector({
   onTwoFingerTwist: (on) => {
     viewer.setTwoFingerTwistEnabled(on);
     syncInspectorRendering();
+    persistPrefs();
+  },
+  onNavigationPrefsChange: (prefs) => {
+    navigationPrefs = prefs;
+    viewer.setNavigationPreferences(prefs);
     persistPrefs();
   },
   // Visuals Studio — Visuals Studio.
@@ -5193,6 +5205,7 @@ function persistPrefs(): void {
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
     colorblindSafeClasses: colorblindSafeClasses(),
     workflow: workflowController.config,
+    navigation: navigationPrefs,
   });
 }
 
@@ -5235,6 +5248,11 @@ function applyPrefs(): void {
     // loaded, otherwise `ensureWorkflowConfigPanel` applies it on first open.
     pendingWorkflowConfig = p.workflow;
     if (workflowConfigPanel) workflowConfigPanel.setConfig(p.workflow);
+  }
+  if (p.navigation !== undefined) {
+    navigationPrefs = p.navigation;
+    viewer.setNavigationPreferences(p.navigation);
+    inspector.syncNavigationPrefs(p.navigation);
   }
 }
 

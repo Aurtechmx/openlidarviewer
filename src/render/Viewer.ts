@@ -4236,6 +4236,9 @@ export class Viewer {
   get twoFingerTwistEnabled(): boolean {
     return this._twoFingerTwistEnabled;
   }
+  setNavigationPreferences(prefs: { invertOrbitX: boolean; invertOrbitY: boolean }): void {
+    this._nav.setNavigationPreferences(prefs); // live orbit-invert; NavController owns the takeover
+  }
 
   /** Enter or leave point-inspection mode (freezes navigation). */
   setInspectMode(on: boolean): void {
@@ -5793,7 +5796,7 @@ export class Viewer {
     const nowMs = (typeof performance !== 'undefined' && performance.now)
       ? performance.now()
       : Date.now();
-    if (this._nav.panDragging) {
+    if (this._nav.panDragging || this._nav.orbitDragging) {
       this._panWasDragging = true;
       return;
     }

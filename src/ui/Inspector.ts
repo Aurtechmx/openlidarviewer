@@ -22,6 +22,12 @@ import {
   ANALYSIS_GATED_MODES,
 } from './colorChipModel';
 import type { PointSizeMode } from '../render/pointStyle';
+import {
+  navPresetSigns,
+  DEFAULT_NAVIGATION_PREFERENCES,
+  type NavigationPreferences,
+  type NavigationPreset,
+} from '../render/navPrefs';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
@@ -143,6 +149,12 @@ export interface InspectorCallbacks {
    * Persisted by main.ts through `prefs.touchModel`.
    */
   onTwoFingerTwist: (on: boolean) => void;
+  /**
+   * Orbit-handedness change (invert vertical / horizontal, preset, or reset).
+   * The flags are the source of truth; the preset is a convenience setter.
+   * main.ts applies it to the viewer and persists it through `prefs.navigation`.
+   */
+  onNavigationPrefsChange: (prefs: NavigationPreferences) => void;
   /**
    * Visuals Studio chip rails + Advanced sliders.
    *
@@ -706,6 +718,13 @@ export class Inspector {
   private readonly _aaChip: HTMLButtonElement;
   private readonly _touchChip: HTMLButtonElement;
   private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
+  // ── Navigation controls (orbit invert X / Y + preset) ──
+  private readonly _navInvertYChip: HTMLButtonElement;
+  private readonly _navInvertXChip: HTMLButtonElement;
+  private readonly _navPresetSelect: HTMLSelectElement;
+  /** Live copy of the navigation prefs the chips reflect; the flags are the
+   *  behavioural source of truth, the preset a convenience label. */
+  private _navPrefs: NavigationPreferences = { ...DEFAULT_NAVIGATION_PREFERENCES };
 
   constructor(callbacks: InspectorCallbacks) {
     this._cb = callbacks;
@@ -777,6 +796,80 @@ export class Inspector {
       (on) => this._cb.onTwoFingerTwist(on),
     );
 
+    // Navigation: independent invert of the vertical / horizontal orbit, plus
+    // presets. Hand-toggling an axis keeps whatever preset was selected — the
+    // flags win — so we spread the live prefs and flip only the one axis.
+    this._navInvertYChip = toggleChip(
+      'Invert vertical orbit',
+      'Flip the up / down orbit direction — the common "feels inverted vs CAD" fix',
+      (on) => {
+        this._navPrefs = { ...this._navPrefs, invertOrbitY: on };
+        this._cb.onNavigationPrefsChange(this._navPrefs);
+      },
+    );
+    this._navInvertXChip = toggleChip(
+      'Invert horizontal orbit',
+      'Flip the left / right orbit direction',
+      (on) => {
+        this._navPrefs = { ...this._navPrefs, invertOrbitX: on };
+        this._cb.onNavigationPrefsChange(this._navPrefs);
+      },
+    );
+    this._navPresetSelect = el('select', {
+      className: 'olv-report-select',
+      ariaLabel: 'Navigation preset',
+    }) as HTMLSelectElement;
+    for (const [value, label] of [
+      ['default', 'Default'],
+      ['recap', 'ReCap'],
+      ['nira', 'Nira'],
+    ] as const) {
+      const option = el('option', { text: label });
+      option.value = value;
+      this._navPresetSelect.append(option);
+    }
+    // Selecting a preset writes both invert flags from the pure sign table and
+    // records the preset; the chips then reflect the new flags.
+    this._navPresetSelect.addEventListener('change', () => {
+      const preset = this._navPresetSelect.value as NavigationPreset;
+      const signs = navPresetSigns(preset);
+      this._navPrefs = { invertOrbitX: signs.invertOrbitX, invertOrbitY: signs.invertOrbitY, preset };
+      this._syncNavChips();
+      this._cb.onNavigationPrefsChange(this._navPrefs);
+    });
+    // "Reset to defaults" — NavBar already owns "Reset" for camera framing, so
+    // this label is distinct. Confirms through the styled modal (embedded
+    // WebViews suppress window.confirm) so a misclick never flips handedness.
+    const navReset = el('button', {
+      className: 'olv-stats-reset',
+      type: 'button',
+      text: 'Reset to defaults',
+      title: 'Return orbit navigation to the shipped defaults',
+    });
+    navReset.addEventListener('click', () => {
+      void openConfirm({
+        title: 'Reset navigation?',
+        message: 'Return orbit navigation to the shipped defaults?',
+        confirmLabel: 'Reset to defaults',
+        returnFocusTo: navReset,
+      }).then((ok) => {
+        if (!ok) return;
+        this._navPrefs = { ...DEFAULT_NAVIGATION_PREFERENCES };
+        this._syncNavChips();
+        this._navPresetSelect.value = this._navPrefs.preset;
+        this._cb.onNavigationPrefsChange(this._navPrefs);
+      });
+    });
+    const navigationGroup = el('div', { className: 'olv-render-group' }, [
+      el('div', { className: 'olv-render-sublabel', text: 'Navigation' }),
+      el('div', { className: 'olv-chips' }, [this._navInvertYChip, this._navInvertXChip]),
+      el('div', { className: 'olv-render-row' }, [
+        el('span', { className: 'olv-render-label', text: 'Preset' }),
+        this._navPresetSelect,
+      ]),
+      el('div', { className: 'olv-render-row' }, [navReset]),
+    ]);
+
     this._edlStrengthSlider = el('input', {
       className: 'olv-slider',
       type: 'range',
@@ -811,6 +904,7 @@ export class Inspector {
       el('div', { className: 'olv-render-sublabel', text: 'Eye Dome Lighting' }),
       el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip, this._touchChip]),
       this._edlStrengthRow,
+      navigationGroup,
     ]);
 
     // Saved views: a "save" button above a list of stored viewpoints.
@@ -1751,6 +1845,23 @@ export class Inspector {
       const id = (chip as HTMLElement).dataset?.presetId;
       chip.classList.toggle('olv-chip-active', id === state.splatMode);
     }
+  }
+
+  /** Reflect the current `_navPrefs` flags on the two invert chips. */
+  private _syncNavChips(): void {
+    this._navInvertYChip.classList.toggle('olv-chip-active', this._navPrefs.invertOrbitY);
+    this._navInvertXChip.classList.toggle('olv-chip-active', this._navPrefs.invertOrbitX);
+  }
+
+  /**
+   * Apply persisted navigation prefs on startup — sets the chip / select visual
+   * state WITHOUT firing `onNavigationPrefsChange` (the host applies the prefs
+   * to the viewer itself on load), mirroring `ClassLegendPanel.setColorblindSafe`.
+   */
+  syncNavigationPrefs(prefs: NavigationPreferences): void {
+    this._navPrefs = { ...prefs };
+    this._syncNavChips();
+    this._navPresetSelect.value = prefs.preset;
   }
 
   /** Show the honest "shown / total" point count and a fill bar. */
