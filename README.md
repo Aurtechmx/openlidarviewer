@@ -45,6 +45,7 @@
 <!-- Is it measured, and by whom -->
 [![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
+[![Core mutation score](https://img.shields.io/endpoint?style=flat&label=core%20mutation%20score&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer%2Fmain)](https://dashboard.stryker-mutator.io/reports/github.com/Aurtechmx/openlidarviewer/main)
 [![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Aurtechmx_openlidarviewer&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Aurtechmx_openlidarviewer)
 
 <!-- Can the work be found and reused -->

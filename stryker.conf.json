@@ -9,8 +9,14 @@
   "reporters": [
     "clear-text",
     "progress",
-    "json"
+    "json",
+    "dashboard"
   ],
+  "_dashboard_comment": "The mutate list IS the numeric/terrain core, so this project score is the core score, not a repo-wide figure — the README badge is labelled 'core mutation score' to say so. The dashboard reporter only pushes when STRYKER_DASHBOARD_API_KEY is set (the mutation workflow supplies it from a secret); a local run without the key skips it silently.",
+  "dashboard": {
+    "project": "github.com/Aurtechmx/openlidarviewer",
+    "version": "main"
+  },
   "coverageAnalysis": "perTest",
   "mutate": [
     "src/process/numerics.ts",

@@ -60,8 +60,8 @@ import { resolve } from 'node:path';
 import { classifyGroundSmrf } from '../src/terrain/ground/groundFilter';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
 import { buildDsm } from '../src/terrain/surface/buildDsm';
-import { classificationAgreement } from '../src/validation/classificationAgreement';
-import type { ClassLabel } from '../src/validation/classificationAgreement';
+import { classificationAgreement, specificity } from '../src/validation/classificationAgreement';
+import type { ClassLabel, ClassificationAgreement } from '../src/validation/classificationAgreement';
 import { compareGrids } from '../src/validation/gridAgreement';
 import type { GridSpec, Raster } from '../src/validation/gridAgreement';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
@@ -278,7 +278,25 @@ interface GroundLeg {
 
 const olvLabel = (g: number): ClassLabel => (g === 1 ? 'ground' : 'non-ground');
 
-function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
+/**
+ * A leg and the comparison it was reduced from.
+ *
+ * `results-ground-filter.json` is a derived artifact the study manifest carries
+ * a digest over, so `leg` is exactly what that file records and nothing is
+ * added to it here. The full confusion metrics go to a companion file instead,
+ * and they read `cmp` and the two label arrays this carries so the pooled and
+ * per-category figures come from `classificationAgreement` on the real labels
+ * rather than from a second average of the per-scene numbers. All three are
+ * absent on a leg that did not run.
+ */
+interface GroundLegRun {
+  leg: GroundLeg;
+  cmp?: ClassificationAgreement;
+  refLabels?: ClassLabel[];
+  olvLabels?: ClassLabel[];
+}
+
+function runGroundLeg(spec: PointCloudFixtureSpec): GroundLegRun {
   const base: GroundLeg = {
     fixtureId: spec.id,
     datasetId: spec.datasetId,
@@ -289,9 +307,11 @@ function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
   const refPath = resolve(PDAL_DIR, `${spec.id}__smrf.csv`);
   if (!existsSync(refPath)) {
     return {
-      ...base,
-      status: 'unavailable',
-      reason: `no PDAL output at pdal/${spec.id}__smrf.csv; run scripts/run-pdal-reference.mjs`,
+      leg: {
+        ...base,
+        status: 'unavailable',
+        reason: `no PDAL output at pdal/${spec.id}__smrf.csv; run scripts/run-pdal-reference.mjs`,
+      },
     };
   }
 
@@ -301,9 +321,11 @@ function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
 
   if (ref.length !== points.length) {
     return {
-      ...base,
-      status: 'invalid',
-      reason: `PDAL returned ${ref.length} returns for a fixture of ${points.length}`,
+      leg: {
+        ...base,
+        status: 'invalid',
+        reason: `PDAL returned ${ref.length} returns for a fixture of ${points.length}`,
+      },
     };
   }
   for (let i = 0; i < points.length; i++) {
@@ -313,9 +335,11 @@ function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
       Math.abs(ref[i].z - points[i].z) > ROW_ALIGNMENT_EPSILON_M
     ) {
       return {
-        ...base,
-        status: 'invalid',
-        reason: `PDAL row ${i} does not hold the fixture's return; the two sides are not aligned and no agreement figure from them would mean anything`,
+        leg: {
+          ...base,
+          status: 'invalid',
+          reason: `PDAL row ${i} does not hold the fixture's return; the two sides are not aligned and no agreement figure from them would mean anything`,
+        },
       };
     }
   }
@@ -350,7 +374,7 @@ function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
 
   const cmp = classificationAgreement(refLabels, olvLabels, { minPairs: 1 });
   if (cmp.status === 'refused') {
-    return { ...base, status: 'invalid', reason: `agreement refused: ${cmp.reason} — ${cmp.detail}` };
+    return { leg: { ...base, status: 'invalid', reason: `agreement refused: ${cmp.reason} — ${cmp.detail}` } };
   }
 
   const truthLabels: ClassLabel[] = Array.from(truth, olvLabel);
@@ -367,30 +391,35 @@ function runGroundLeg(spec: PointCloudFixtureSpec): GroundLeg {
   }
 
   return {
-    ...base,
-    returns: points.length,
-    evaluated: cmp.evaluated,
-    agreeingReturns: agreeing,
-    agreementFraction: agreeing / cmp.evaluated,
-    // Ground is the positive class and the reference is the truth argument, so
-    // a false positive is a return only WE call ground.
-    onlyOlvGround: cmp.confusion.falsePositive,
-    onlyPdalGround: cmp.confusion.falseNegative,
-    groundIoU: cmp.groundIoU,
-    mcc: cmp.mcc,
-    unexpectedClassifications: unexpected,
-    disagreementByTruth: {
-      reference: 'by-construction',
-      evidenceLevel: 'E3',
-      truthGround: disagreeTruthGround,
-      truthNonGround: disagreeTruthNonGround,
+    leg: {
+      ...base,
+      returns: points.length,
+      evaluated: cmp.evaluated,
+      agreeingReturns: agreeing,
+      agreementFraction: agreeing / cmp.evaluated,
+      // Ground is the positive class and the reference is the truth argument, so
+      // a false positive is a return only WE call ground.
+      onlyOlvGround: cmp.confusion.falsePositive,
+      onlyPdalGround: cmp.confusion.falseNegative,
+      groundIoU: cmp.groundIoU,
+      mcc: cmp.mcc,
+      unexpectedClassifications: unexpected,
+      disagreementByTruth: {
+        reference: 'by-construction',
+        evidenceLevel: 'E3',
+        truthGround: disagreeTruthGround,
+        truthNonGround: disagreeTruthNonGround,
+      },
+      truthLeg: {
+        reference: 'by-construction',
+        evidenceLevel: 'E3',
+        olvBalancedAccuracy: olvVsTruth.status === 'compared' ? olvVsTruth.balancedAccuracy : null,
+        pdalBalancedAccuracy: pdalVsTruth.status === 'compared' ? pdalVsTruth.balancedAccuracy : null,
+      },
     },
-    truthLeg: {
-      reference: 'by-construction',
-      evidenceLevel: 'E3',
-      olvBalancedAccuracy: olvVsTruth.status === 'compared' ? olvVsTruth.balancedAccuracy : null,
-      pdalBalancedAccuracy: pdalVsTruth.status === 'compared' ? pdalVsTruth.balancedAccuracy : null,
-    },
+    cmp,
+    refLabels,
+    olvLabels,
   };
 }
 
@@ -642,6 +671,112 @@ function runDsmLeg(spec: PointCloudFixtureSpec): { leg: DsmLeg; olvSouthFirst?: 
   };
 }
 
+// ── the full ground-classification metrics, a companion to the E4 file ───────
+//
+// results-ground-filter.json carries the pooled agreement fraction and, per
+// scene, the two disagreement counts, IoU and MCC. The concern this companion
+// exists for is that the agreement fraction is dominated by non-ground both
+// sides reject, so it can sit near 82 % while OLV keeps only a fraction of the
+// ground PDAL calls ground. Recall is exactly that fraction. It is written here
+// per scene, per terrain category and pooled, next to MCC, so the averaging
+// that buries it in one number cannot. Every value comes from
+// classificationAgreement over the same labels; the confusion matrix is not
+// rebuilt here.
+
+interface GroundMetrics {
+  evaluated: number;
+  // Headline first: recall and MCC are where "rejects valid ground" shows.
+  groundRecall: number | null;
+  mcc: number;
+  mccDegenerate: boolean;
+  groundPrecision: number | null;
+  specificity: number | null;
+  groundF1: number | null;
+  balancedAccuracy: number | null;
+  groundIoU: number | null;
+  confusion: ClassificationAgreement['confusion'];
+}
+
+interface GroundMetricLeg {
+  fixtureId: string;
+  datasetId: string;
+  surface: string;
+  status: LegStatus;
+  reason?: string;
+  reference: 'PDAL';
+  evidenceLevel: 'E4';
+  /** Null on a leg that did not run: an unrun leg has no metric, not a zero. */
+  metrics: GroundMetrics | null;
+}
+
+interface GroundMetricCategory {
+  surface: string;
+  fixtures: string[];
+  metrics: GroundMetrics | null;
+}
+
+/** Reduce a compared agreement to the reported metric set. Reuse, not rebuild. */
+function groundMetricsOf(cmp: ClassificationAgreement): GroundMetrics {
+  return {
+    evaluated: cmp.evaluated,
+    groundRecall: cmp.groundRecall,
+    mcc: cmp.mcc,
+    mccDegenerate: cmp.mccDegenerate,
+    groundPrecision: cmp.groundPrecision,
+    specificity: specificity(cmp.confusion),
+    groundF1: cmp.groundF1,
+    balancedAccuracy: cmp.balancedAccuracy,
+    groundIoU: cmp.groundIoU,
+    confusion: cmp.confusion,
+  };
+}
+
+/**
+ * Metrics over a pool of labels, or null when the pool is empty or the
+ * comparison refuses. Pooling the labels and comparing once is not the same as
+ * averaging the per-scene numbers: it weights every return equally, which is
+ * what a confusion matrix over the union does.
+ */
+function pooledGroundMetrics(
+  ref: readonly ClassLabel[],
+  olv: readonly ClassLabel[],
+): GroundMetrics | null {
+  if (ref.length === 0) return null;
+  const cmp = classificationAgreement(ref, olv, { minPairs: 1 });
+  return cmp.status === 'compared' ? groundMetricsOf(cmp) : null;
+}
+
+const METRIC_CSV_HEADER =
+  'scope,id,surface,evaluated,tp,tn,fp,fn,precision,recall,specificity,f1,balancedAccuracy,mcc,mccDegenerate,groundIoU';
+
+/** A null metric renders as an empty cell, never 0: unmeasured is blank. */
+const csvNum = (v: number | null): string => (v === null ? '' : String(v));
+
+function metricCsvRow(scope: string, id: string, surface: string, m: GroundMetrics | null): string {
+  if (m === null) {
+    return [scope, id, surface, '', '', '', '', '', '', '', '', '', '', '', ''].join(',');
+  }
+  const c = m.confusion;
+  return [
+    scope,
+    id,
+    surface,
+    String(m.evaluated),
+    String(c.truePositive),
+    String(c.trueNegative),
+    String(c.falsePositive),
+    String(c.falseNegative),
+    csvNum(m.groundPrecision),
+    csvNum(m.groundRecall),
+    csvNum(m.specificity),
+    csvNum(m.groundF1),
+    csvNum(m.balancedAccuracy),
+    String(m.mcc),
+    String(m.mccDegenerate),
+    csvNum(m.groundIoU),
+  ].join(',');
+}
+
 // ── run everything once, then assert over the result ────────────────────────
 
 const CLASSIFICATION_FIXTURES = FIXTURES.filter((f) => f.role === 'classification');
@@ -651,11 +786,42 @@ const SURFACE_FIXTURES = FIXTURES.filter((f) => f.role === 'surface');
 mkdirSync(OLV_DIR, { recursive: true });
 
 const groundLegs: GroundLeg[] = [];
+const groundMetricLegs: GroundMetricLeg[] = [];
+const pooledRefLabels: ClassLabel[] = [];
+const pooledOlvLabels: ClassLabel[] = [];
+const surfaceRefLabels = new Map<string, ClassLabel[]>();
+const surfaceOlvLabels = new Map<string, ClassLabel[]>();
+const surfaceFixtures = new Map<string, string[]>();
 const olvSums: string[] = [];
 for (const spec of CLASSIFICATION_FIXTURES) {
-  const leg = runGroundLeg(spec);
+  const { leg, cmp, refLabels, olvLabels } = runGroundLeg(spec);
   groundLegs.push(leg);
-  if (leg.status === 'ok') {
+  groundMetricLegs.push({
+    fixtureId: spec.id,
+    datasetId: spec.datasetId,
+    surface: spec.surface,
+    status: leg.status,
+    ...(leg.reason ? { reason: leg.reason } : {}),
+    reference: 'PDAL',
+    evidenceLevel: 'E4',
+    metrics: leg.status === 'ok' && cmp ? groundMetricsOf(cmp) : null,
+  });
+  if (leg.status === 'ok' && cmp && refLabels && olvLabels) {
+    // Accumulate the labels themselves for the pooled and per-category figures,
+    // so those come from one confusion matrix over the union rather than an
+    // average of averages.
+    pooledRefLabels.push(...refLabels);
+    pooledOlvLabels.push(...olvLabels);
+    const sr = surfaceRefLabels.get(spec.surface) ?? [];
+    sr.push(...refLabels);
+    surfaceRefLabels.set(spec.surface, sr);
+    const so = surfaceOlvLabels.get(spec.surface) ?? [];
+    so.push(...olvLabels);
+    surfaceOlvLabels.set(spec.surface, so);
+    const sf = surfaceFixtures.get(spec.surface) ?? [];
+    sf.push(spec.id);
+    surfaceFixtures.set(spec.surface, sf);
+
     const points = parseFixtureCsv(readFileSync(resolve(FIXTURE_DIR, `${spec.id}.csv`), 'utf8'));
     const p = PARAMS.smrf;
     const olv = classifyGroundSmrf(points as readonly TerrainPoint[], {
@@ -677,6 +843,18 @@ for (const spec of CLASSIFICATION_FIXTURES) {
     olvSums.push(`${sha256(text)}  olv/${out}`);
   }
 }
+
+const groundPooledMetrics = pooledGroundMetrics(pooledRefLabels, pooledOlvLabels);
+const groundMetricCategories: GroundMetricCategory[] = [...surfaceRefLabels.keys()]
+  .sort(byCodeUnit)
+  .map((surface) => ({
+    surface,
+    fixtures: (surfaceFixtures.get(surface) ?? []).slice().sort(byCodeUnit),
+    metrics: pooledGroundMetrics(
+      surfaceRefLabels.get(surface) ?? [],
+      surfaceOlvLabels.get(surface) ?? [],
+    ),
+  }));
 
 const dtmLegs: DtmLeg[] = [];
 for (const spec of BARE_FIXTURES) {
@@ -782,6 +960,50 @@ writeResults('results-ground-filter.json', {
     'floorPercentile is 0, matching the reference\'s per-cell minimum. The pipeline orchestrator enables a small despike floor by default, so the low-blunder scene here exercises the leaf as the reference runs it and not as the product ships it.',
   ],
 });
+
+// The full confusion metrics, as a companion the frozen results-ground-filter.json
+// does not carry. It is a separate file on purpose: the manifest holds a digest
+// over that one, so enriching it would be a change to a preregistered record,
+// while these numbers are a reading of the same labels and belong beside it.
+writeResults('results-ground-filter-metrics.json', {
+  generatedBy: 'tests/groundFilterPdalAgreement.test.ts',
+  manifest: `validation/cross-implementation/studies/${GROUND_STUDY}`,
+  companionTo: 'validation/cross-implementation/pdal-pipeline/results-ground-filter.json',
+  reusesMetricsFrom: 'src/validation/classificationAgreement.ts',
+  promotes: 'nothing',
+  positiveClass: 'ground',
+  referenceIsTruthArgument: 'PDAL',
+  evidenceNote:
+    'E4 cross-implementation. Ground is the positive class and PDAL is the truth argument, so ' +
+    'recall is the share of PDAL-ground that OLV also calls ground: a recall well under 1 with ' +
+    'precision near 1 is OLV rejecting ground PDAL keeps, not OLV inventing ground. The pooled ' +
+    'label-agreement fraction in the companion file reads high because most returns are non-ground ' +
+    'both sides reject, so recall, MCC and specificity are reported per scene and per terrain ' +
+    'category here where averaging cannot hide them. A metric with no denominator is null, never 0.',
+  gate: GROUND_GATE,
+  pooled: groundPooledMetrics,
+  byCategory: groundMetricCategories,
+  legs: groundMetricLegs,
+  boundaries: [
+    ...SHARED_BOUNDARIES,
+    'recall, specificity and MCC here compare OLV against PDAL, not against surveyed ground; a low recall means OLV keeps less of what PDAL calls ground and does not say which side is right.',
+  ],
+});
+
+// The same numbers as CSV, one row per scene, per terrain category and pooled,
+// so a reader can open them in a spreadsheet without a JSON tool. A null metric
+// is an empty cell, never a 0.
+const metricCsvLines = [
+  METRIC_CSV_HEADER,
+  ...groundMetricLegs.map((l) => metricCsvRow('scene', l.fixtureId, l.surface, l.metrics)),
+  ...groundMetricCategories.map((c) => metricCsvRow('category', c.surface, c.surface, c.metrics)),
+  metricCsvRow('pooled', 'pooled', 'all', groundPooledMetrics),
+];
+writeFileSync(
+  resolve(PIPELINE_DIR, 'results-ground-filter-metrics.csv'),
+  metricCsvLines.join('\n') + '\n',
+  'utf8',
+);
 
 writeResults('results-dtm.json', {
   generatedBy: 'tests/groundFilterPdalAgreement.test.ts',
@@ -908,6 +1130,35 @@ describe('PDAL cross-implementation studies', () => {
     process.stdout.write(
       `ground pooled: ${((groundPooledFraction ?? 0) * 100).toFixed(3)} % over ${groundEvaluated} returns ` +
         `(gate ${(GROUND_GATE.requiredWithinToleranceFraction * 100).toFixed(1)} %)\n`,
+    );
+  });
+
+  it('records per-scene ground recall and MCC, which the agreement fraction hides', () => {
+    // Not a pass/fail on the numbers: the point is that they are recorded and
+    // visible. A low recall here is a finding about the filter, not a broken
+    // test, so this asserts the metrics exist and prints them rather than
+    // fixing a floor they must clear.
+    expect(groundPooledMetrics).not.toBeNull();
+    expect(groundMetricCategories.length).toBeGreaterThan(0);
+    const pct = (v: number | null): string => (v === null ? 'n/a' : `${(v * 100).toFixed(2)} %`);
+    for (const leg of groundMetricLegs) {
+      if (leg.status !== 'ok') continue;
+      expect(leg.metrics).not.toBeNull();
+      const m = leg.metrics!;
+      // Recall was measured (PDAL called some ground), so it is a number, not
+      // null; whether it is high is the finding, not the assertion.
+      expect(m.groundRecall).not.toBeNull();
+      expect(typeof m.mcc).toBe('number');
+      process.stdout.write(
+        `ground-metrics ${leg.fixtureId} (${leg.surface}): recall ${pct(m.groundRecall)}, ` +
+          `precision ${pct(m.groundPrecision)}, specificity ${pct(m.specificity)}, ` +
+          `MCC ${m.mcc.toFixed(3)}${m.mccDegenerate ? ' (degenerate)' : ''}\n`,
+      );
+    }
+    const p = groundPooledMetrics!;
+    process.stdout.write(
+      `ground-metrics pooled: recall ${pct(p.groundRecall)}, precision ${pct(p.groundPrecision)}, ` +
+        `MCC ${p.mcc.toFixed(3)} over ${p.evaluated} returns\n`,
     );
   });
 

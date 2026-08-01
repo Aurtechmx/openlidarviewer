@@ -1,0 +1,238 @@
+{
+  "generatedBy": "tests/groundFilterPdalAgreement.test.ts",
+  "manifest": "validation/cross-implementation/studies/GROUND-FILTER-PDAL-SMRF.study.json",
+  "companionTo": "validation/cross-implementation/pdal-pipeline/results-ground-filter.json",
+  "reusesMetricsFrom": "src/validation/classificationAgreement.ts",
+  "promotes": "nothing",
+  "positiveClass": "ground",
+  "referenceIsTruthArgument": "PDAL",
+  "evidenceNote": "E4 cross-implementation. Ground is the positive class and PDAL is the truth argument, so recall is the share of PDAL-ground that OLV also calls ground: a recall well under 1 with precision near 1 is OLV rejecting ground PDAL keeps, not OLV inventing ground. The pooled label-agreement fraction in the companion file reads high because most returns are non-ground both sides reject, so recall, MCC and specificity are reported per scene and per terrain category here where averaging cannot hide them. A metric with no denominator is null, never 0.",
+  "gate": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "label (ground or non-ground; a return either carries the same label on both sides or it does not)",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.99
+  },
+  "pooled": {
+    "evaluated": 55151,
+    "groundRecall": 0.7393730074388948,
+    "mcc": 0.6882381941192217,
+    "mccDegenerate": false,
+    "groundPrecision": 0.9998922142780153,
+    "specificity": 0.9998286791159843,
+    "groundF1": 0.8501214240984833,
+    "balancedAccuracy": 0.8696008432774396,
+    "groundIoU": 0.7393140822994979,
+    "confusion": {
+      "truePositive": 27830,
+      "falsePositive": 3,
+      "falseNegative": 9810,
+      "trueNegative": 17508
+    }
+  },
+  "byCategory": [
+    {
+      "surface": "plane",
+      "fixtures": [
+        "pc-01-plane-buildings",
+        "pc-04-plane-lowblunders",
+        "pc-05-plane-gap"
+      ],
+      "metrics": {
+        "evaluated": 32819,
+        "groundRecall": 0.8606285191780163,
+        "mcc": 0.8328454932939224,
+        "mccDegenerate": false,
+        "groundPrecision": 0.9999440840975173,
+        "specificity": 0.9999169435215947,
+        "groundF1": 0.9250704808214572,
+        "balancedAccuracy": 0.9302727313498055,
+        "groundIoU": 0.8605871029836382,
+        "confusion": {
+          "truePositive": 17883,
+          "falsePositive": 1,
+          "falseNegative": 2896,
+          "trueNegative": 12039
+        }
+      }
+    },
+    {
+      "surface": "ridge",
+      "fixtures": [
+        "pc-03-ridge-buildings"
+      ],
+      "metrics": {
+        "evaluated": 11176,
+        "groundRecall": 0.7162707306140744,
+        "mcc": 0.5806670864883533,
+        "mccDegenerate": false,
+        "groundPrecision": 1,
+        "specificity": 1,
+        "groundF1": 0.8346826847740925,
+        "balancedAccuracy": 0.8581353653070372,
+        "groundIoU": 0.7162707306140744,
+        "confusion": {
+          "truePositive": 6392,
+          "falsePositive": 0,
+          "falseNegative": 2532,
+          "trueNegative": 2252
+        }
+      }
+    },
+    {
+      "surface": "rolling",
+      "fixtures": [
+        "pc-02-rolling-buildings"
+      ],
+      "metrics": {
+        "evaluated": 11156,
+        "groundRecall": 0.4479022300617362,
+        "mcc": 0.43485943305173447,
+        "mccDegenerate": false,
+        "groundPrecision": 0.9994377284228282,
+        "specificity": 0.9993786890338614,
+        "groundF1": 0.6185836088393944,
+        "balancedAccuracy": 0.7236404595477988,
+        "groundIoU": 0.4477893941302431,
+        "confusion": {
+          "truePositive": 3555,
+          "falsePositive": 2,
+          "falseNegative": 4382,
+          "trueNegative": 3217
+        }
+      }
+    }
+  ],
+  "legs": [
+    {
+      "fixtureId": "pc-01-plane-buildings",
+      "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+      "surface": "plane",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "metrics": {
+        "evaluated": 11138,
+        "groundRecall": 1,
+        "mcc": 1,
+        "mccDegenerate": false,
+        "groundPrecision": 1,
+        "specificity": 1,
+        "groundF1": 1,
+        "balancedAccuracy": 1,
+        "groundIoU": 1,
+        "confusion": {
+          "truePositive": 9196,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "trueNegative": 1942
+        }
+      }
+    },
+    {
+      "fixtureId": "pc-02-rolling-buildings",
+      "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+      "surface": "rolling",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "metrics": {
+        "evaluated": 11156,
+        "groundRecall": 0.4479022300617362,
+        "mcc": 0.43485943305173447,
+        "mccDegenerate": false,
+        "groundPrecision": 0.9994377284228282,
+        "specificity": 0.9993786890338614,
+        "groundF1": 0.6185836088393944,
+        "balancedAccuracy": 0.7236404595477988,
+        "groundIoU": 0.4477893941302431,
+        "confusion": {
+          "truePositive": 3555,
+          "falsePositive": 2,
+          "falseNegative": 4382,
+          "trueNegative": 3217
+        }
+      }
+    },
+    {
+      "fixtureId": "pc-03-ridge-buildings",
+      "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+      "surface": "ridge",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "metrics": {
+        "evaluated": 11176,
+        "groundRecall": 0.7162707306140744,
+        "mcc": 0.5806670864883533,
+        "mccDegenerate": false,
+        "groundPrecision": 1,
+        "specificity": 1,
+        "groundF1": 0.8346826847740925,
+        "balancedAccuracy": 0.8581353653070372,
+        "groundIoU": 0.7162707306140744,
+        "confusion": {
+          "truePositive": 6392,
+          "falsePositive": 0,
+          "falseNegative": 2532,
+          "trueNegative": 2252
+        }
+      }
+    },
+    {
+      "fixtureId": "pc-04-plane-lowblunders",
+      "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+      "surface": "plane",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "metrics": {
+        "evaluated": 11137,
+        "groundRecall": 0.009914529914529915,
+        "mcc": 0.08314446932594088,
+        "mccDegenerate": false,
+        "groundPrecision": 0.9666666666666667,
+        "specificity": 0.9998782269849001,
+        "groundF1": 0.019627749576988155,
+        "balancedAccuracy": 0.504896378449715,
+        "groundIoU": 0.009911141490088858,
+        "confusion": {
+          "truePositive": 29,
+          "falsePositive": 1,
+          "falseNegative": 2896,
+          "trueNegative": 8211
+        }
+      }
+    },
+    {
+      "fixtureId": "pc-05-plane-gap",
+      "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+      "surface": "plane",
+      "status": "ok",
+      "reference": "PDAL",
+      "evidenceLevel": "E4",
+      "metrics": {
+        "evaluated": 10544,
+        "groundRecall": 1,
+        "mcc": 1,
+        "mccDegenerate": false,
+        "groundPrecision": 1,
+        "specificity": 1,
+        "groundF1": 1,
+        "balancedAccuracy": 1,
+        "groundIoU": 1,
+        "confusion": {
+          "truePositive": 8658,
+          "falsePositive": 0,
+          "falseNegative": 0,
+          "trueNegative": 1886
+        }
+      }
+    }
+  ],
+  "boundaries": [
+    "Agreement with PDAL is not accuracy against ground truth. Both implementations can be wrong about the same ground in the same way, and on a synthetic scene they were both handed a surface nobody surveyed.",
+    "Eight synthetic scenes are not survey data: uniform-random returns in plan, no sensor geometry, no scan pattern, no range noise, no multiple returns, and objects that are boxes and clumps of points.",
+    "recall, specificity and MCC here compare OLV against PDAL, not against surveyed ground; a low recall means OLV keeps less of what PDAL calls ground and does not say which side is right."
+  ]
+}

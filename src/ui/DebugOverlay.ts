@@ -64,6 +64,16 @@ export interface StreamingDebugStats {
   nodesEvicted?: number;
   /** Cumulative load → evict → reload events within the thrash window. Optional. */
   thrashEvents?: number;
+  /**
+   * Metered-commit (P7 upload queue) counters. Present only while the
+   * `streamingCommitMode=metered` flag has a queue running AND the benchmark is
+   * collecting; absent (and zero) in the default immediate mode. `commitPending`
+   * is the live backlog depth, `commitPendingBytes` its GPU-byte estimate, and
+   * `nodesCommitted` the session total.
+   */
+  commitPending?: number;
+  commitPendingBytes?: number;
+  nodesCommitted?: number;
 }
 
 /** A live snapshot the overlay polls each tick. */
@@ -371,6 +381,15 @@ export class DebugOverlay {
       lines.push(`gpu estimate  ${formatBytes(streaming.gpuBytes)}`);
       if (streaming.thrashEvents !== undefined) {
         lines.push(`thrash        ${streaming.thrashEvents} event(s)`);
+      }
+      // Metered-commit backlog — shown only when a queue is running (immediate
+      // mode never sets these fields).
+      if (streaming.commitPending !== undefined) {
+        lines.push(
+          `commit queue  ${streaming.commitPending} pending` +
+            ` / ${formatBytes(streaming.commitPendingBytes ?? 0)}` +
+            ` · committed=${streaming.nodesCommitted ?? 0}`,
+        );
       }
       if (streaming.schedulerRecent && streaming.schedulerRecent.count > 0) {
         const r = streaming.schedulerRecent;
