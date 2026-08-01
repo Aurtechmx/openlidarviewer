@@ -362,7 +362,13 @@ function markdown(run) {
   lines.push('| --- | --- | --- | --- | --- |');
   for (const s of run.steps) {
     const count = s.numbers?.primary ?? '';
-    const summary = String(s.summary ?? '').replace(/\|/g, '\\|');
+    // Escape backslash first, then the cell delimiter, so a summary that
+    // contains either renders as one intact table cell. Collapse newlines too:
+    // a literal newline would split the Markdown row.
+    const summary = String(s.summary ?? '')
+      .replace(/\\/g, '\\\\')
+      .replace(/\|/g, '\\|')
+      .replace(/[\r\n]+/g, ' ');
     lines.push(`| ${s.name} | ${s.group} | ${STATUS_MARK[s.status] ?? s.status} | ${count} | ${summary} |`);
   }
   lines.push('');
