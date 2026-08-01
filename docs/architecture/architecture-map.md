@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 7,323 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 6,983 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,12 +102,14 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (7,323)** — the largest blocks, which are the extraction
+**`src/main.ts` (6,983)** — the largest blocks, which are the extraction
 candidates:
+
+`buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
+called with a 19-member deps object. The candidates that remain:
 
 | Block | ~Lines | Extraction target |
 |---|---:|---|
-| `buildActionRegistry` | 424 | `src/app/actionDefinitions.ts` *(planned)* — command/action definitions |
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
 | `toClassBuffer` | 268 | `src/model/` or `src/render/class/` |
