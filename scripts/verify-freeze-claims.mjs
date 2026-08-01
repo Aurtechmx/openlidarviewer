@@ -112,6 +112,30 @@ function shallowClone() {
   }
 }
 
+/**
+ * Are we inside a git work tree at all? An extracted release ZIP has git on the
+ * PATH but no `.git`, so every `git` call there fails. That is not a freeze
+ * violation — it is a context where the check cannot run — so we report it
+ * distinctly from an in-repo failure rather than false-failing every claim as
+ * "unwitnessed".
+ */
+function inGitRepo() {
+  try {
+    // Own execFile with stderr silenced: outside a repo `git rev-parse` prints
+    // "fatal: not a git repository" before it exits, and that noise would sit
+    // above the clean `unsupported` status a reader (or a Zenodo reviewer) sees.
+    return (
+      execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim() === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
 function recordFiles() {
   const files = [];
   for (const dir of RECORD_DIRS) {
@@ -161,6 +185,25 @@ const skipped = [];
 if (GIT === null) {
   console.error('verify:freeze-claims could not find git on PATH; the history is the evidence here.');
   process.exit(2);
+}
+
+if (!inGitRepo()) {
+  // Archive mode: an extracted source ZIP with no `.git`. The check is inherently
+  // unavailable here (git history is the evidence), so report it as unsupported
+  // and pass, rather than false-failing every claim as unwitnessed. It stays
+  // mandatory in a real checkout — the branches below still fail on an actual
+  // unwitnessed freeze.
+  console.log(
+    JSON.stringify({
+      status: 'unsupported',
+      reason: 'Git history is required to verify temporal claim freezing.',
+    }),
+  );
+  console.error(
+    'verify:freeze-claims: unsupported here — no git history (extracted archive). ' +
+      'Run this in a full checkout to witness the freezes.',
+  );
+  process.exit(0);
 }
 
 if (shallowClone()) {
