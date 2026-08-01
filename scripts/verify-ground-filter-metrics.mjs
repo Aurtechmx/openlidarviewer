@@ -125,11 +125,11 @@ export function collectMetricRegressions(record, baseline = FROZEN_BASELINE, tol
   };
 
   const sceneById = new Map((record.legs ?? []).map((l) => [l.fixtureId, l.metrics]));
-  for (const id of Object.keys(baseline.scenes).sort()) {
+  for (const id of Object.keys(baseline.scenes).sort((a, b) => a.localeCompare(b))) {
     check('scene', id, baseline.scenes[id], sceneById.get(id));
   }
   const catBySurface = new Map((record.byCategory ?? []).map((c) => [c.surface, c.metrics]));
-  for (const surface of Object.keys(baseline.categories).sort()) {
+  for (const surface of Object.keys(baseline.categories).sort((a, b) => a.localeCompare(b))) {
     check('category', surface, baseline.categories[surface], catBySurface.get(surface));
   }
   check('pooled', 'pooled', baseline.pooled, record.pooled);
@@ -143,7 +143,8 @@ function isMain() {
 
 if (isMain()) {
   const argv = process.argv.slice(2);
-  const fileArg = argv.indexOf('--file') >= 0 ? argv[argv.indexOf('--file') + 1] : undefined;
+  const fileFlag = argv.indexOf('--file');
+  const fileArg = fileFlag >= 0 ? argv[fileFlag + 1] : undefined;
   const path = resolve(ROOT, fileArg ?? METRICS_PATH);
 
   let record;
