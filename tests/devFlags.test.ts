@@ -28,6 +28,7 @@ describe('parseDevFlags — defaults', () => {
       adaptiveDpr: true,
       uploadQueue: true,
       angularPrediction: true,
+      streamingCommitMode: 'immediate',
     });
   });
 
@@ -75,7 +76,17 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       adaptiveDpr: false,
       uploadQueue: false,
       angularPrediction: false,
+      streamingCommitMode: 'immediate',
     });
+  });
+
+  it('?streamingCommitMode=metered opts into the metered path; default is immediate', () => {
+    expect(parseDevFlags('?streamingCommitMode=metered').streamingCommitMode).toBe('metered');
+    expect(parseDevFlags('?streamingCommitMode=METERED').streamingCommitMode).toBe('metered');
+    // Absence, garbage, and the explicit value all resolve to the safe default.
+    expect(parseDevFlags('').streamingCommitMode).toBe('immediate');
+    expect(parseDevFlags('?streamingCommitMode=banana').streamingCommitMode).toBe('immediate');
+    expect(parseDevFlags('?streamingCommitMode=immediate').streamingCommitMode).toBe('immediate');
   });
 });
 
