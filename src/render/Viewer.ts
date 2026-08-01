@@ -275,6 +275,7 @@ import type { StreamingSource } from './streaming/StreamingSource';
 import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
+import { makeStreamingCommit, type StreamingCommit } from './streaming/meteredCommit';
 // The streaming-engine `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build source-transform so Vite can still emit the
 // chunks (see lazyChunks.ts).
@@ -521,6 +522,7 @@ interface StreamingSession {
   decoder: ChunkDecoder;
   /** The streaming benchmark, when one is collecting — null in normal sessions. */
   benchmark: StreamingBenchmark | null;
+  commit: StreamingCommit; // the commit driver: immediate = inert, metered = upload-queue pump
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1975,11 +1977,9 @@ export class Viewer {
   ): Promise<void> {
     // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
     this._resetGpuErrorHistory();
-    const [{ StreamingRenderer }, { StreamingScheduler }] =
-      await Promise.all([
-        loadStreamingRenderer(),
-        loadStreamingScheduler(),
-      ]);
+    const [{ StreamingRenderer }, { StreamingScheduler }] = await Promise.all([
+      loadStreamingRenderer(), loadStreamingScheduler(),
+    ]);
     // Fade-in is enabled on desktop/mid+ profiles only; mobile and
     // low-tier sessions skip it to preserve frame-budget headroom.
     const fadeIn = !isMobile && quality !== 'low';
@@ -1987,12 +1987,9 @@ export class Viewer {
     // from a COPC-specific helper. Both `StreamingPointCloud` (COPC) and
     // `EptStreamingPointCloud` implement `defaultColorMode()` so the
     // Viewer never peeks at format-specific metadata shapes.
-    const renderer = new StreamingRenderer(
-      this,
-      cloud,
-      cloud.defaultColorMode(),
-      { fadeIn },
-    );
+    const renderer = new StreamingRenderer(this, cloud, cloud.defaultColorMode(), { fadeIn });
+    // The commit driver picks the scheduler's commit path (see meteredCommit.ts).
+    const commit = makeStreamingCommit(readDevFlags().streamingCommitMode, isMobile, benchmark ?? null);
     const scheduler = new StreamingScheduler(
       cloud,
       decoder,
@@ -2032,12 +2029,13 @@ export class Viewer {
         onTick: benchmark ? (ms) => benchmark.recordSchedulerTick(ms) : undefined,
       },
       streamingBudgets(quality, isMobile),
+      commit.schedulerOptions(),
     );
     // Detach the prior streaming cloud only now that the replacement renderer
     // and scheduler are built. A throw in the lazy load or the constructors
     // above then leaves the current scan on screen instead of a blank scene.
     this.detachStreamingCloud();
-    this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null };
+    this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null, commit };
     this._streamingFrame = 0;
     // Guaranteed scheduler cadence, render-loop-independent (see the field's
     // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
@@ -6642,6 +6640,8 @@ export class Viewer {
       // Streaming COPC — run the view-dependent scheduler on a throttled
       // cadence (~10 Hz at 60 fps), never every frame.
       if (this._streaming) {
+        // Metered commits drain every frame (no-op in immediate mode).
+        this._streaming.commit.pump(this._smoothedFrameMs());
         this._streamingFrame++;
         if (this._streamingFrame % 6 === 0) this._tickStreaming();
       }
