@@ -6834,16 +6834,8 @@ function compareLoadedLayers(): void {
       const cmp = compareDtms(dtms.before, dtms.after, {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
-        isGeographic:
-          a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
-        // A projected CRS whose linear unit is 'unknown' carries the inert
-        // placeholder factor 1: using it would print source-unit spacing/heights
-        // as metres. Gate on the unit being KNOWN (either epoch declaring
-        // 'unknown' is enough to fail closed) so compareDtms withholds the metre
-        // figures instead of leaking them. A geographic frame is 'unknown' too
-        // but is handled by isGeographic above; compareDtms keeps them distinct.
-        horizontalUnitKnown:
-          a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown',
+        isGeographic: a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
+        horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres ('unknown' = placeholder factor 1; geographic frames go via isGeographic)
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
