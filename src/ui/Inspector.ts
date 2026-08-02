@@ -863,11 +863,11 @@ export class Inspector {
     const navigationGroup = el('div', { className: 'olv-render-group' }, [
       el('div', { className: 'olv-render-sublabel', text: 'Navigation' }),
       el('div', { className: 'olv-chips' }, [this._navInvertYChip, this._navInvertXChip]),
-      el('div', { className: 'olv-render-row' }, [
+      el('div', { className: 'olv-navpref-row' }, [
         el('span', { className: 'olv-render-label', text: 'Preset' }),
         this._navPresetSelect,
       ]),
-      el('div', { className: 'olv-render-row' }, [navReset]),
+      el('div', { className: 'olv-navpref-row' }, [navReset]),
     ]);
 
     this._edlStrengthSlider = el('input', {
