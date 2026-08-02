@@ -307,8 +307,12 @@ export function crsFromWkt(wkt: string): CrsInfo {
         linearUnit = linearUnitFromNameOrScale(unitName, scale);
       }
     } else {
-      // No UNIT clause is rare on a projected CRS — default to metres.
-      linearUnit = 'metre';
+      // No UNIT clause on a projected CRS leaves the linear unit
+      // underspecified. Assuming metres would silently report a foot-based
+      // grid in metres, so resolve to 'unknown' instead — metric claims stay
+      // blocked until the CRS is confirmed. `linearUnitToMetres` is left at 1
+      // as an inert placeholder consumers gate behind `linearUnit !== 'unknown'`.
+      linearUnit = 'unknown';
       linearUnitToMetres = 1;
     }
   }

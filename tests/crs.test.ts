@@ -72,6 +72,25 @@ test('crsFromWkt — State Plane CA V — US survey-foot detection', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WKT — projected, NO unit clause: must fail closed, not assume metres
+// ─────────────────────────────────────────────────────────────────────────────
+
+// A malformed projected CRS with no UNIT clause anywhere. Assuming metres here
+// would silently report a foot-based grid in metres; the linear unit must
+// resolve to 'unknown' so metric claims stay blocked until the CRS is confirmed.
+const PROJECTED_NO_UNIT_WKT =
+  'PROJCS["Minimal no-unit zone",GEOGCS["WGS 84",' +
+  'DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],' +
+  'PRIMEM["Greenwich",0]],PROJECTION["Transverse_Mercator"],' +
+  'PARAMETER["central_meridian",-111]]';
+
+test('crsFromWkt — projected CRS with no UNIT clause resolves to unknown, not metre', () => {
+  const crs = crsFromWkt(PROJECTED_NO_UNIT_WKT);
+  expect(crs.isGeographic).toBe(false);
+  expect(crs.linearUnit).toBe('unknown');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WKT — projected, international foot
 // ─────────────────────────────────────────────────────────────────────────────
 
