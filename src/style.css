@@ -1348,7 +1348,8 @@ body.olv-theme-light .olv-empty::before {
 .olv-slider { width: 100%; accent-color: var(--accent); }
 /* Rendering controls — stacked groups and a labelled slider row. */
 .olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
-.olv-render-row { display: flex; align-items: center; gap: var(--space-md); }
+.olv-render-row,
+.olv-navpref-row { display: flex; align-items: center; gap: var(--space-md); }
 /* Sub-group label inside Rendering — "Point size" / "Eye Dome
  * Lighting". Smaller and dimmer than the main section label so the
  * hierarchy reads "section > sub-group > control". */
