@@ -11,6 +11,7 @@ import {
   mapLinearUnitLabel,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
+import type { Annotation } from '../src/render/annotate/types';
 import { demAccuracyStandards } from '../src/terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../src/terrain/export/exportProvenance';
 
@@ -210,6 +211,46 @@ describe('buildMapSheetPdf', () => {
       notes: longNotes,
       sheet: 'a3',
       orientation: 'portrait',
+    });
+    expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
+  });
+
+  // ── annotation layer (opt-in) ──────────────────────────────────────────────
+  // A placed annotation carries a local render-space anchor; the sheet plots it
+  // as a numbered marker + lists it in a top-right table. The exact page maths
+  // is unit-tested in annotationMapProjection.test.ts; here we pin the two
+  // contracts that live in the PDF builder: opting in draws MORE content, and
+  // leaving it off (or absent) is byte-identical to the pre-annotation sheet.
+  const anno = (id: string, x: number, y: number, z = 0): Annotation => ({
+    id, title: `Point ${id}`, type: 'warning', note: 'note', createdAt: 0, updatedAt: 0,
+    localPosition: { x, y, z },
+  });
+
+  it('is byte-identical whether the annotation flag is OFF or absent', async () => {
+    const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const };
+    const absent = await buildMapSheetPdf({ ...base });
+    const off = await buildMapSheetPdf({ ...base, includeAnnotations: false, annotations: [anno('1', 25, 60)], sceneUpAxis: 'z' });
+    expect(Buffer.from(off).equals(Buffer.from(absent))).toBe(true);
+  });
+
+  it('draws additional content when annotations are included', async () => {
+    const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const };
+    const plain = await buildMapSheetPdf({ ...base });
+    const withAnno = await buildMapSheetPdf({
+      ...base, includeAnnotations: true, sceneUpAxis: 'z',
+      annotations: [anno('1', 25, 60), anno('2', 80, 20)],
+    });
+    // The annotated sheet must be strictly larger (markers + table) and valid.
+    expect(withAnno.length).toBeGreaterThan(plain.length);
+    expect(String.fromCharCode(...withAnno.slice(0, 5))).toBe('%PDF-');
+  });
+
+  it('renders even when every annotation is outside the map extent', async () => {
+    // All off-map: none plotted, but the table + a footnote still render.
+    const bytes = await buildMapSheetPdf({
+      model, labels: [], crs: model.crs, sheet: 'letter',
+      includeAnnotations: true, sceneUpAxis: 'z',
+      annotations: [anno('1', 500, 500), anno('2', -400, -400)],
     });
     expect(String.fromCharCode(...bytes.slice(0, 5))).toBe('%PDF-');
   });

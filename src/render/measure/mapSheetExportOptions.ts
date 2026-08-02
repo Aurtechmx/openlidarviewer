@@ -95,3 +95,30 @@ export function defaultMapFilename(basename: string): string {
   const base = (basename ?? '').trim() || 'contours';
   return sanitizeMapFilename(`${base}-map`);
 }
+
+/**
+ * State for the dialog's "Include annotations" checkbox, derived from how many
+ * annotations the scan carries. Pure so the enable/label logic is unit-testable
+ * without the DOM. The control is DISABLED (not hidden) when there is nothing to
+ * include, so the option is discoverable but clearly unavailable — the earlier
+ * decision to show it disabled at zero. Default OFF regardless, so a plain sheet
+ * never changes unless the user asks for annotations.
+ */
+export function annotationsOptionState(count: number): {
+  disabled: boolean;
+  label: string;
+  hint: string;
+} {
+  if (count <= 0) {
+    return {
+      disabled: true,
+      label: 'Include annotations',
+      hint: 'No annotations placed on this scan.',
+    };
+  }
+  return {
+    disabled: false,
+    label: 'Include annotations',
+    hint: `Plot the ${count} placed annotation${count === 1 ? '' : 's'} as numbered markers with a description table.`,
+  };
+}
