@@ -69,8 +69,8 @@ export type SkyPreset =
  */
 export interface ReservedPresetCapabilities {
   /**
-   * SSAO strength 0..1. `ssaoApproximation.ts` computes an AO factor, but no
-   * pass consumes it, so there is nothing for a preset to set.
+   * SSAO strength 0..1. No rendering pass consumes it, so there is nothing for
+   * a preset to set.
    */
   readonly aoStrength: number;
   /**
