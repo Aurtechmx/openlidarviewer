@@ -4393,11 +4393,7 @@ function runStreamingModules(cloud: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
   };
-  readonly crs?: () => {
-    readonly linearUnit?: CrsLinearUnit;
-    readonly linearUnitToMetres?: number;
-    readonly verticalUnitToMetres?: number;
-  } | null;
+  readonly crs?: () => { readonly linearUnit?: CrsLinearUnit; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
 }, classFilterActive = false): AnalysisRow[] {
@@ -4431,10 +4427,9 @@ function runStreamingModules(cloud: {
     // Convert the source-CRS units to metres before printing "m" / "pts/m²",
     // exactly as the static Scan Report and the PDF do. A state-plane-FEET COPC
     // otherwise over-reports extent ~3.28× and density ~10.8×, mislabelled as
-    // metres. `streamingExtentRows` FAILS CLOSED on an unconfirmed unit: an
-    // unknown-unit CRS carries the inert placeholder `linearUnitToMetres: 1`,
-    // so it drops the "m"/"pts/m²" claim rather than stamping metres onto
-    // non-metre data — the same gate the measure tool and lasso apply.
+    // metres. `streamingExtentRows` FAILS CLOSED on an unconfirmed unit
+    // (placeholder `linearUnitToMetres: 1`): it drops the "m"/"pts/m²" claim
+    // rather than stamping metres onto non-metre data — as measure/lasso do.
     const crsInfo = cloud.crs?.() ?? null;
     const ext = streamingExtentRows(header, crsInfo, cloud.sourcePointCount);
     if (!ext.unitConfirmed) {
