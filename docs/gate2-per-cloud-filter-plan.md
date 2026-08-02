@@ -1,8 +1,9 @@
 # Gate 2 — Per-cloud elevation/intensity filtering (implementation plan)
 
-Status: **not implemented.** This is a device-verified plan for the one remaining
-correctness gate from the v0.5.6 filter review. It is device-untestable in CI
-(WebGPU shader-graph change), so every stage below has an on-device checkpoint.
+Status: **Stage A done** (on branch `feat/v0.5.6-gate2-percloud`); Stages B–D
+pending. This is a device-verified plan for the one remaining correctness gate
+from the v0.5.6 filter review. It is device-untestable in CI (WebGPU shader-graph
+change), so every stage below has an on-device checkpoint.
 
 ## Problem
 
@@ -66,13 +67,19 @@ Keep the shared `_elevFilterEnabled` (on/off). Make **min/max/axis per material*
 
 Work on a branch (`feat/v0.5.6-gate2-percloud`) so it can be reverted cleanly.
 
-- **Stage A — infra, behaviourally identical.** Add the per-material WeakMap and
-  `_elevFilterWorld`; make `_elevMaskMultiplier(material)` read per-material
-  uniforms; seed every material from the single active window (same value for all).
-  With one cloud this is numerically identical to today.
-  - **Device check:** `npm run build:live && npm run preview`; open one static LAS
-    and one streaming COPC; apply an elevation filter; confirm rendering + the
-    existing `filterElevation` behaviour is unchanged. Run `npm run test:smoke:live`.
+- **Stage A — infra, behaviourally identical. DONE (`eeb8ece`).** The GPU state
+  moved out of `Viewer.ts` into `src/render/elevationFilterGpu.ts` (net-shrinking
+  the monolith 7073 → 7046). The window bounds and up-axis are now held per
+  material in a `WeakMap` keyed on the material (mirroring `_fadeUniforms`);
+  `maskMultiplier(material)` reads that material's uniforms, seeded from the shared
+  window record. `enabled` stays shared. With one cloud this is numerically
+  identical to the shared-uniform version.
+  - **Device check — done (WebGPU, `tiny.las`):** a hide-all window empties the
+    canvas, a show-all window restores every point, the filter clears cleanly, and
+    no GPU or shader-validation error fires across the enable/disable pipeline
+    recompiles. (The static path was exercised directly; the streaming COPC path
+    shares `buildPointMesh`, so it folds through the same per-material seam. A
+    two-cloud / streaming device pass belongs with Stage B.)
 - **Stage B — per-cloud GPU conversion.** In `setElevationFilter` and the seed-on-
   build path, convert the world window per cloud (origin + axis). Single-cloud
   output is unchanged; multi-cloud now diverges correctly.

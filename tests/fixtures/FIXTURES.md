@@ -42,3 +42,59 @@ Same cube mesh as tiny.obj, exported as binary glTF.
 - firstVertex: [0.000000, 0.000000, 0.000000]
 - min: [0.000000, 0.000000, 0.000000]
 - max: [2.000000, 2.000000, 2.000000]
+
+## Gate 2 — per-cloud elevation filter (gate2-*)
+
+Fixtures for `docs/gate2-per-cloud-filter-plan.md` Stage B. The elevation filter converts a world-space window into attribute space with ONE origin and ONE up-axis for the whole scene (`Viewer.setElevationFilter`), so a second cloud with a different origin, or a different up-axis format, clips at the wrong world height. These pairs make that visible with a concrete world window and the point-index math for both the correct (per-cloud) answer and today's shared-origin/shared-axis answer.
+
+### gate2-origin-a.las / gate2-origin-b.las — different origins, same up-axis
+
+Two Z-up LAS tiles from different areas (a few hundred kilometres apart in X/Y) whose Z ranges overlap. `origin-a` is 195-204 m, `origin-b` is 150-204 m in steps of 6 m — both climb through the 195-204 m band, so one world window should clip both at the same true height.
+
+gate2-origin-a.las:
+- pointCount: 10
+- up-axis: Z (LAS)
+- min: [500000.000000, 4100000.000000, 195.000000]
+- max: [500009.000000, 4100009.000000, 204.000000]
+- origin (floored min): [500000.000000, 4100000.000000, 195.000000]
+
+gate2-origin-b.las:
+- pointCount: 10
+- up-axis: Z (LAS)
+- min: [650000.000000, 4250000.000000, 150.000000]
+- max: [650009.000000, 4250009.000000, 204.000000]
+- origin (floored min): [650000.000000, 4250000.000000, 150.000000]
+
+**Device check window: world Z in [198, 202] m.**
+
+Correct (per-cloud, Stage B): `gate2-origin-a` accepts point(s) [4, 5, 6, 7, 8] (5 of 10, Z = [198.0, 199.0, 200.0, 201.0, 202.0]); `gate2-origin-b` accepts point(s) [9] (1 of 10, Z = [198.0]).
+
+Buggy (today, Stage A — one shared origin from whichever cloud loaded FIRST): the origins differ by 45 m along Z, so the OTHER cloud's effective accept window shifts by that same 45 m.
+- Load a then b: `gate2-origin-a` still accepts [4, 5, 6, 7, 8] (correct — it supplied the shared origin); `gate2-origin-b` accepts [2] instead of [9] (wrong point, Z = 156 m instead of 198 m).
+- Load b then a: `gate2-origin-b` still accepts [9] (correct); `gate2-origin-a` accepts [] instead of [4, 5, 6, 7, 8] (nothing shown, band shifted clean out of the tile).
+
+### gate2-axis-zup-survey.las / gate2-axis-yup-scan.ply — different up-axis
+
+A Z-up survey (LAS) and a Y-up phone scan (PLY). Both hold world elevation 10-19 m, but the survey carries it on Z while the scan carries it on Y (its Z is scanner depth, 0.0-2.7 m). `_worldUp` is reset from whichever cloud loaded LAST, so the shared axis is wrong for at least one of the two clouds regardless of load order.
+
+gate2-axis-zup-survey.las:
+- pointCount: 10
+- up-axis: Z (LAS)
+- min: [0.000000, 20.000000, 10.000000]
+- max: [9.000000, 29.000000, 19.000000]
+- origin (floored min): [0.000000, 20.000000, 10.000000]
+
+gate2-axis-yup-scan.ply:
+- pointCount: 10
+- up-axis: Y (PLY)
+- min: [-2.000000, 10.000000, 0.000000]
+- max: [2.500000, 19.000000, 2.700000]
+- origin (floored min): [-2.000000, 10.000000, 0.000000]
+
+**Device check window: world elevation in [12, 17] m.**
+
+Correct (per-cloud, Stage B): `gate2-axis-zup-survey` accepts [3, 4, 5, 6, 7, 8] (6 of 10, its own Z); `gate2-axis-yup-scan` accepts [3, 4, 5, 6, 7, 8] (6 of 10, its own Y). Both bands sit at the same world height.
+
+Buggy (today, Stage A — one shared axis from whichever cloud loaded LAST, one shared origin from whichever loaded FIRST): with these two clouds the shared threshold always lands outside BOTH clouds' 0-9 attribute range, so the filter shows ZERO points on both layers no matter the load order — instead of 6 + 6 = 12 points total.
+- Load survey then scan (shared axis = Y, from the scan): `gate2-axis-zup-survey` accepts [], `gate2-axis-yup-scan` accepts [].
+- Load scan then survey (shared axis = Z, from the survey): `gate2-axis-zup-survey` accepts [], `gate2-axis-yup-scan` accepts [].
