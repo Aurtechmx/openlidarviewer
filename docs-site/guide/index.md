@@ -32,11 +32,7 @@ npm run preview
 
 ## Something not working?
 
-A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Negative results are the useful kind here.
-
-Three forms, by what you scan. [Terrestrial LiDAR evaluation](https://lidar.aurtech.mx/testing.html) for tripod and mobile scanners and building capture, five to ten minutes. [GIS comparison](https://lidar.aurtech.mx/terrain-test.html) when you can put a number beside a number against ArcGIS, QGIS, CloudCompare or PDAL, so have the reference tool open. [Submit a test report](https://lidar.aurtech.mx/test-report.html) for anything else.
-
-All three assemble the report in your own browser, screenshots and all. You read the finished thing before anything leaves the page. Reports go to the project's own server, are kept privately for development, and are not published or shared with anyone else.
+A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Negative results are the useful kind here. Email what you found — a short description, and a screenshot if it helps — to <info@aurtech.mx>.
 
 ## Where next
 
