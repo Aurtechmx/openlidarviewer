@@ -89,6 +89,32 @@ export function accumulatorOffset(
   return isIdentityPlacement(t) ? ZERO : t!.sourceToProject;
 }
 
+/**
+ * Copy one layer's interleaved XYZ buffer into a shared accumulator at element
+ * `off`, folding the layer's placement. An identity placement bulk-copies with
+ * `set` (byte-for-byte, so a scene with nothing mounted assembles exactly the
+ * pre-fold buffer); a real translation adds the offset per component. Returns
+ * the next write offset so callers chain buffers without tracking lengths.
+ */
+export function placeBufferInto(
+  dest: Float32Array,
+  off: number,
+  pos: Float32Array,
+  placement: LayerSpatialTransform | null | undefined,
+): number {
+  const [dx, dy, dz] = accumulatorOffset(placement);
+  if (dx === 0 && dy === 0 && dz === 0) {
+    dest.set(pos, off);
+  } else {
+    for (let i = 0; i < pos.length; i += 3) {
+      dest[off + i] = pos[i] + dx;
+      dest[off + i + 1] = pos[i + 1] + dy;
+      dest[off + i + 2] = pos[i + 2] + dz;
+    }
+  }
+  return off + pos.length;
+}
+
 /** Sextuple bounds `[minX, minY, minZ, maxX, maxY, maxZ]`. */
 export type BoundsSextuple = [number, number, number, number, number, number];
 

@@ -127,7 +127,6 @@ import {
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
-import type { VolumeResult } from './measure/volume';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
@@ -182,11 +181,13 @@ import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
   sampleProfile,
+  assembleProfileBuffers,
   autoCorridorWidth,
   DEFAULT_GROUND_PERCENTILE,
   DEFAULT_PROFILE_SAMPLE_COUNT,
+  type ProfileSourceBuffer,
 } from './measure/profileSampler';
-import { volumeCutFill } from './measure/volume';
+import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds,
   isIntegrable,
@@ -197,6 +198,7 @@ import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
+  type TerrainStreamBuffer,
 } from './terrainStreamSample';
 import {
   applyClassSwap,
@@ -1386,7 +1388,7 @@ export class Viewer {
       } | null => {
         // Track each buffer's classification alongside it so the profile can
         // be computed over classified ground (vegetation / buildings dropped).
-        const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+        const buffers: ProfileSourceBuffer[] = [];
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
@@ -1397,11 +1399,11 @@ export class Viewer {
         ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
         // Only clouds the picker would place profile vertices on — visible and
         // unlocked — feed the sample, so a hidden or locked layer can't skew it.
-        for (const { cloud } of integrableClouds(this._clouds.values())) {
+        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             const cls = aligned(cloud.classification, cloud.positions);
             if (cls) anyClass = true;
-            buffers.push({ pos: cloud.positions, cls });
+            buffers.push({ pos: cloud.positions, cls, placement });
             total += cloud.positions.length;
             staticPoints += cloud.positions.length;
           }
@@ -1420,19 +1422,10 @@ export class Viewer {
           }
         }
         if (total === 0) return null;
-        // Flatten — cheap because we only walk the resident set.
-        const positions = new Float32Array(total);
-        // 255 = "no class channel" sentinel; the sampler treats it as "keep".
-        const classification = anyClass ? new Uint8Array(total / 3).fill(255) : undefined;
-        let off = 0;
-        let coff = 0;
-        for (const { pos, cls } of buffers) {
-          positions.set(pos, off);
-          off += pos.length;
-          const m = pos.length / 3;
-          if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
-          coff += m;
-        }
+        // Flatten — cheap because we only walk the resident set. The assembler
+        // folds each layer's Float64 placement into the project frame as it
+        // copies (identity while mounting is off = the same bytes as before).
+        const { positions, classification } = assembleProfileBuffers(buffers, total, anyClass);
         // `up` is the configured world up — hardcoding [0,0,1] here cut Y-up
         // phone scans along the wrong axis (v0.4.4 audit, B1). The same
         // format-driven up the navigation/measure context already uses.
@@ -1476,15 +1469,15 @@ export class Viewer {
     // returns the record. Null when no positions are loaded.
     this._measure.setVolumeSampler(
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
-        const buffers: Float32Array[] = [];
+        const buffers: PlacedVolumeBuffer[] = [];
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
         // Match the picker: only visible, unlocked clouds feed the cut/fill, so
         // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
-        for (const { cloud } of integrableClouds(this._clouds.values())) {
+        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
-            buffers.push(cloud.positions);
+            buffers.push({ pos: cloud.positions, placement });
             total += cloud.positions.length;
             staticPoints += cloud.positions.length;
           }
@@ -1492,18 +1485,15 @@ export class Viewer {
         const streamOk = this._streamingMayCombine(buffers.length);
         for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
-            buffers.push(decoded.positions);
+            buffers.push({ pos: decoded.positions });
             total += decoded.positions.length;
             streamingPoints += decoded.positions.length;
           }
         }
         if (total === 0) return null;
-        const positions = new Float32Array(total);
-        let off = 0;
-        for (const b of buffers) {
-          positions.set(b, off);
-          off += b.length;
-        }
+        // The assembler folds each layer's Float64 placement into the project
+        // frame as it concatenates (identity while mounting is off = same bytes).
+        const positions = assembleVolumePositions(buffers, total);
         // `up` is the configured world up, not a hardcoded [0,0,1]. The
         // profile sampler above already reads `this._worldUp` (v0.4.4 audit,
         // B1); the cut/fill path was missed. On a Y-up phone scan (PLY/OBJ/
@@ -2460,7 +2450,7 @@ export class Viewer {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
-    const staticBuffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const staticBuffers: TerrainStreamBuffer[] = [];
     const streamingBuffers: KeyedTerrainStreamBuffer[] = [];
     let staticPoints = 0;
     let streamingPoints = 0;
@@ -2482,7 +2472,7 @@ export class Viewer {
     ): ArrayLike<number> | undefined =>
       cls && cls.length === pos.length / 3 ? cls : undefined;
     // Match the picker: only visible, unlocked clouds contribute to the surface.
-    for (const { cloud } of integrableClouds(this._clouds.values())) {
+    for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
         if (cls) {
@@ -2491,7 +2481,7 @@ export class Viewer {
             sourceGround = true;
           }
         }
-        staticBuffers.push({ pos: cloud.positions, cls });
+        staticBuffers.push({ pos: cloud.positions, cls, placement });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
@@ -3967,7 +3957,9 @@ export class Viewer {
       return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
 
-    const integrable: Array<readonly [string, { readonly cloud: PointCloud }]> = [];
+    const integrable: Array<
+      readonly [string, { readonly cloud: PointCloud; readonly placement?: LayerSpatialTransform | null }]
+    > = [];
     for (const [id, entry] of this._clouds) {
       // Hidden and locked layers are skipped: the picker won't place vertices
       // on them, so the lasso must not select through them either.
