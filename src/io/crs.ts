@@ -299,6 +299,11 @@ export function crsFromWkt(wkt: string): CrsInfo {
     // slice (after the inner GEOGCS's angular UNIT). For non-compound WKT
     // `horizText === text`, so this path is unchanged there.
     const projectedUnit = allUnits[allUnits.length - 1];
+    // With no UNIT clause the projected linear unit is underspecified, so
+    // `linearUnit` stays at its 'unknown' default (and `linearUnitToMetres` at
+    // its inert 1) rather than assuming metres — assuming metres would silently
+    // report a foot-based grid in metres. Metric claims stay blocked, gated by
+    // `linearUnit !== 'unknown'`, until the CRS is confirmed.
     if (projectedUnit) {
       const unitName = projectedUnit[1].toLowerCase();
       const scale = Number(projectedUnit[2]);
@@ -306,14 +311,6 @@ export function crsFromWkt(wkt: string): CrsInfo {
         linearUnitToMetres = scale;
         linearUnit = linearUnitFromNameOrScale(unitName, scale);
       }
-    } else {
-      // No UNIT clause on a projected CRS leaves the linear unit
-      // underspecified. Assuming metres would silently report a foot-based
-      // grid in metres, so resolve to 'unknown' instead — metric claims stay
-      // blocked until the CRS is confirmed. `linearUnitToMetres` is left at 1
-      // as an inert placeholder consumers gate behind `linearUnit !== 'unknown'`.
-      linearUnit = 'unknown';
-      linearUnitToMetres = 1;
     }
   }
 
