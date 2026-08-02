@@ -176,6 +176,16 @@ export interface TerrainAnalysisRunner {
     generalizeToleranceCells?: number;
   }): Promise<AnalyseContoursResult>;
   /**
+   * The up-axis of the RAW scene frame the last analysed/exported scan was
+   * gathered in — the gather's own `sourceUpAxis`, cached so the map-sheet
+   * export can rotate an annotation's local position into the SAME canonical
+   * frame the contours were built in (a Y-up mesh's contours are rotated; its
+   * annotations must be too). Defaults to 'z' before any gather. Reading the
+   * actual gather value, not the source format, is deliberate: a Z-up-authored
+   * mesh is detected as Z-up here but the format table would call it Y-up.
+   */
+  getLastSourceUpAxis(): 'z' | 'y';
+  /**
    * Abort any in-flight compute and drop every cached terrain core. Called
    * from the reset-to-empty path so a result for the now-closed scan can never
    * land on the panel and cached cores stay bounded. Guarded: the cache chunk
@@ -213,6 +223,12 @@ export function createTerrainAnalysisRunner(
   // previous controller so a superseded worker job is cancelled and its reply
   // dropped. Null when no run is in flight.
   let terrainAbort: AbortController | null = null;
+
+  // The last gather's raw-scene up-axis, cached so the map-sheet export can plot
+  // annotation markers in the same canonical frame the contours were built in.
+  // Updated by every run() and export build (a scan's frame is interval- and
+  // style-independent, so the last gather always describes the current scan).
+  let lastSourceUpAxis: 'z' | 'y' = 'z';
 
   // The active cloud's world-origin Y (the render-recentre offset), so a
   // geographic scan's grid-centre LATITUDE can be recovered from the local
@@ -257,6 +273,9 @@ export function createTerrainAnalysisRunner(
       analysePanel.setStatus('Load a scan first, then run terrain analysis.');
       return;
     }
+    // Remember the frame this scan was gathered in — the map-sheet export reads
+    // it to place annotation markers (see getLastSourceUpAxis).
+    if (gathered.sourceUpAxis) lastSourceUpAxis = gathered.sourceUpAxis;
     // Claim a token + snapshot the dataset identity for this run. After every
     // await we re-check these: a newer run (token mismatch), a different/closed
     // scan (activeId changed), or a hidden panel means this result is stale and
@@ -378,6 +397,9 @@ export function createTerrainAnalysisRunner(
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
     if (!gathered) throw new Error('No scan loaded to build contours from.');
+    // Same frame capture as run() — an export from an interval re-pick keeps the
+    // annotation markers aligned with the contours it just built.
+    if (gathered.sourceUpAxis) lastSourceUpAxis = gathered.sourceUpAxis;
     // Same cached-core path the run() loop uses. Because deriveCoreParams
     // reproduces the run's fingerprint exactly, an already-analysed scan HITS
     // the LRU cache here and no worker job is started — only the cheap
@@ -430,5 +452,9 @@ export function createTerrainAnalysisRunner(
     clearTerrainCoreCacheFn?.();
   }
 
-  return { run, buildResultAtInterval, buildResultForExport, abortAndClearCache };
+  function getLastSourceUpAxis(): 'z' | 'y' {
+    return lastSourceUpAxis;
+  }
+
+  return { run, buildResultAtInterval, buildResultForExport, abortAndClearCache, getLastSourceUpAxis };
 }

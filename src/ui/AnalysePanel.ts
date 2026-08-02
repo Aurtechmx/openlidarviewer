@@ -70,6 +70,7 @@ import {
 } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
+import type { Annotation } from '../render/annotate/types';
 import {
   SHEET_OPTIONS,
   ORIENTATION_OPTIONS,
@@ -78,6 +79,7 @@ import {
   defaultMapTitle,
   defaultMapNotes,
   defaultMapFilename,
+  annotationsOptionState,
 } from '../render/measure/mapSheetExportOptions';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import {
@@ -174,6 +176,14 @@ export interface AnalysePanelCallbacks {
    * shows. When omitted or null the report simply skips those rows.
    */
   getDatasetIntelligence?: () => DatasetIntelligence | null;
+  /**
+   * The scan's placed annotations, in list order, for the (opt-in) annotation
+   * layer on the map sheet. The marker index is the 1-based list position, so
+   * the host must return them in the SAME order the Annotations panel shows.
+   * Omitted / empty ⇒ the sheet's annotation checkbox is disabled and no layer
+   * is drawn.
+   */
+  getAnnotations?: () => ReadonlyArray<Annotation>;
   /** Context for the printable map sheet (world origin, title block fields). */
   getMapContext?: () => {
     /**
@@ -212,6 +222,14 @@ export interface AnalysePanelCallbacks {
      * shown in an honest "unverified" form, NEVER falsely asserted as metres.
      */
     verticalUnitToMetres?: number | null;
+    /**
+     * The RAW scene up-axis of the loaded scan — the gather's own `sourceUpAxis`
+     * — so the map sheet can rotate an annotation's local position into the same
+     * canonical frame the contours were built in. 'z' for the survey formats a
+     * georeferenced sheet is built from; 'y' for a Y-up phone-scan mesh. Omitted
+     * ⇒ the sheet's 'z' default (identity), correct for every georeferenced case.
+     */
+    sceneUpAxis?: 'z' | 'y';
   };
 }
 
@@ -2275,6 +2293,18 @@ export class AnalysePanel {
     filenameInput.className = 'olv-modal-input';
     filenameInput.value = defaultMapFilename(basename);
 
+    // Annotations opt-in. Default OFF (a plain sheet unless asked for) and
+    // DISABLED when the scan carries none, so the option is discoverable but
+    // clearly unavailable — the enable/label logic is the pure
+    // `annotationsOptionState` so the dialog and its unit tests agree.
+    const annotationCount = this._cb.getAnnotations?.().length ?? 0;
+    const annoState = annotationsOptionState(annotationCount);
+    const annoCheck = document.createElement('input');
+    annoCheck.type = 'checkbox';
+    annoCheck.className = 'olv-modal-check';
+    annoCheck.checked = false;
+    annoCheck.disabled = annoState.disabled;
+
     const editable = el('div', { className: 'olv-modal-grid' });
     editable.append(
       field('Title', titleInput),
@@ -2297,6 +2327,7 @@ export class AnalysePanel {
           : 'Style regeneration unavailable — using the current contours.',
       ),
       field('Output filename', filenameInput, 'A single .pdf is added on download.'),
+      field(annoState.label, annoCheck, annoState.hint),
     );
 
     // ── locked / auto section (read-only) ────────────────────────────────────
@@ -2392,6 +2423,9 @@ export class AnalysePanel {
             filename: filenameInput.value,
             worldOrigin: ctx.worldOrigin ?? null,
             generatedAt,
+            // A disabled checkbox can never be checked, so a scan with no
+            // annotations always exports the plain sheet.
+            includeAnnotations: annoCheck.checked,
           });
           // Remember the user's choices for the rest of the session.
           lastPreparedBy = preparedInput.value;
@@ -2424,6 +2458,8 @@ export class AnalysePanel {
       filename: string;
       worldOrigin: { x: number; y: number; z?: number } | null;
       generatedAt: Date;
+      /** Draw the (opt-in) annotation layer on the sheet. */
+      includeAnnotations: boolean;
     },
   ): Promise<void> {
     // §19 ENFORCEMENT: the map sheet is a gated contour deliverable. It is only
@@ -2440,8 +2476,17 @@ export class AnalysePanel {
     const { buildMapSheetPdf } = await loadMapSheetPdf();
     const { buildExportProvenance } = await loadExportProvenance();
     // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
-    // CRS (the map is drawn in source units) instead of the metre default.
-    const linearUnit = this._cb.getMapContext?.()?.linearUnit;
+    // CRS (the map is drawn in source units) instead of the metre default. Read
+    // the map context ONCE — it also supplies the scene up-axis the annotation
+    // markers are rotated by.
+    const mapCtx = this._cb.getMapContext?.();
+    const linearUnit = mapCtx?.linearUnit;
+    // Annotation layer inputs, only gathered when the user opted in. The list is
+    // read straight from the host (same order as the Annotations panel, so the
+    // marker index matches). The up-axis MUST be the gather's own — see the
+    // frame reasoning in annotationMapProjection.ts.
+    const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
+    const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
     // The unified provenance, derived from the SAME result the sheet plots, so
     // the title block's CRS / datum / style / accuracy / readiness / date can't
     // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
@@ -2474,6 +2519,9 @@ export class AnalysePanel {
       sheet: opts.sheet,
       orientation: opts.orientation,
       generatedAt: opts.generatedAt,
+      includeAnnotations: opts.includeAnnotations,
+      annotations,
+      sceneUpAxis,
     });
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),
