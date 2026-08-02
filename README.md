@@ -546,20 +546,8 @@ free to redistribute. Public credit and research use are each a separate
 optional permission.
 
 A failed file, an unexpected warning or one confusing screenshot is worth
-sending. Negative results are the useful kind here.
-
-There are two forms, and which one fits depends on what you scan.
-
-[Terrestrial LiDAR evaluation](https://lidar.aurtech.mx/testing.html) takes five
-to ten minutes. Use it for tripod and mobile scanners, indoor and building
-capture, and any work where scan stations, occlusion and coverage matter more
-than a coordinate reference system.
-
-[GIS comparison](https://lidar.aurtech.mx/terrain-test.html) is longer. Use it
-when you can put a number beside a number: metadata, CRS and units, elevations,
-terrain products, and how the browser workflow compares with ArcGIS, QGIS,
-CloudCompare or PDAL. It asks for the values you read in both tools, so have the
-reference open.
+sending. Negative results are the useful kind here. Email what you found — a
+short description, and a screenshot if it helps — to <info@aurtech.mx>.
 
 ## Acknowledgements
 
@@ -567,7 +555,7 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
 **Built on** — [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-**Data** — the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo, GURS, and AHN national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
+**Data** — the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 
 **Standards & formats** — ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems).
 

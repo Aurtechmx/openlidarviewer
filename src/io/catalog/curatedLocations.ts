@@ -74,7 +74,8 @@ export interface CuratedLocation {
  *   - FI  CC BY 4.0 (NLS)
  *   - CH  Swiss federal open data
  *   - SI  CC BY 4.0 (GURS)
- *   - NL  AHN public domain (no conditions)
+ * NL AHN4 was dropped: its open-data status could not be verified against
+ * an authoritative AHN source, so the catalog no longer asserts it.
  * The S3 bucket is hosted by FLAI on AWS eu-central-1; CORS is open.
  * Bandwidth politeness: nothing preloads — user-initiated clicks only.
  */
@@ -105,16 +106,6 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
     displayName: 'Slovenia GURS CLSS 2023',
     streamUrl:
       'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/SI/GURS/CLSS_2023/copc/GKOT_433_100.copc.laz',
-  },
-  {
-    id: 'flai-nl-ahn4',
-    label: 'Netherlands — AHN4 national (2020–22)',
-    sizeLabel: '475 MB',
-    hint: 'FLAI Open LiDAR Data · Dutch AHN4 · public domain, no conditions.',
-    bbox: [4.40, 51.50, 4.50, 51.60],
-    displayName: 'Netherlands AHN4 2020–22',
-    streamUrl:
-      'https://open-lidar-data.s3.eu-central-1.amazonaws.com/data/NL/AHN/AHN4_2020-2022/copc/C_01CZ1.copc.laz',
   },
   {
     id: 'sf-coast-ca',
