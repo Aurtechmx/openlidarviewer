@@ -233,8 +233,14 @@ export class ObjectPanel {
     // else the certified-survey honesty line (present for interiors); else the
     // first reason as a fallback.
     const partialIdx = reasons.findIndex((r) => /^Preliminary —/.test(r));
+    // An unverified-unit caveat is a whole-basis honesty flag (every metre figure
+    // is an assumption), so it must be VISIBLE, not folded into the disclosure.
+    // It outranks the standing "not a certified survey" line but yields to a
+    // genuine partial-stream lead (provisional data trumps unit provenance).
+    const unitIdx = reasons.findIndex((r) => /^Coordinate units are unverified/.test(r));
     const certIdx = reasons.findIndex((r) => /not a certified survey/i.test(r));
-    const leadIdx = partialIdx >= 0 ? partialIdx : certIdx >= 0 ? certIdx : 0;
+    const leadIdx =
+      partialIdx >= 0 ? partialIdx : unitIdx >= 0 ? unitIdx : certIdx >= 0 ? certIdx : 0;
     const lead = reasons[leadIdx];
     const rest = reasons.filter((_, i) => i !== leadIdx);
     const isPreliminary = leadIdx === partialIdx && partialIdx >= 0;

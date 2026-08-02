@@ -111,6 +111,45 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(m.storyCount).toBe(2);
   });
 
+  it('unitKnown=false discloses an unverified-unit caveat instead of a bare metre claim', () => {
+    // An unknown-unit CRS (linearUnit "unknown") reaches the space report with a
+    // placeholder factor of 1, so every figure is labelled "m" without a real
+    // scale. The caveat must appear so the panel / PDF disclose the assumption.
+    const withCaveat = spaceMetrics(room(), {
+      upAxis: 'z',
+      spaceKind: 'interior',
+      unitToMetres: 1,
+      unitKnown: false,
+    });
+    expect(withCaveat.reasons.some((r) => /^Coordinate units are unverified/.test(r))).toBe(true);
+    // The unverified-unit caveat never displaces the stream-caveat lead contract.
+    expect(withCaveat.reasons[0]).not.toMatch(/^Coordinate units are unverified/);
+  });
+
+  it('a KNOWN unit (or an omitted flag) makes no unverified-unit claim', () => {
+    // A resolved CRS (unitKnown true) genuinely IS metres/feet — no caveat.
+    const known = spaceMetrics(room(), {
+      upAxis: 'z',
+      spaceKind: 'interior',
+      unitToMetres: 1,
+      unitKnown: true,
+    });
+    expect(known.reasons.some((r) => /Coordinate units are unverified/.test(r))).toBe(false);
+    // Legacy callers that never pass the flag keep the prior behaviour (no caveat).
+    const legacy = spaceMetrics(room(), { upAxis: 'z', spaceKind: 'interior' });
+    expect(legacy.reasons.some((r) => /Coordinate units are unverified/.test(r))).toBe(false);
+  });
+
+  it('the unverified-unit caveat rides through the object route too', () => {
+    const obj = spaceMetrics(dome(), {
+      upAxis: 'z',
+      spaceKind: 'object',
+      unitToMetres: 1,
+      unitKnown: false,
+    });
+    expect(obj.reasons.some((r) => /^Coordinate units are unverified/.test(r))).toBe(true);
+  });
+
   it('unit conversions m↔ft are correct', () => {
     expect(metresToFeet(1)).toBeCloseTo(3.280839895, 6);
     expect(metresToFeet(3.048)).toBeCloseTo(10, 6);

@@ -218,6 +218,34 @@ describe('ObjectPanel — space / object routing', () => {
     expect(root.textContent).toMatch(/pragmatic estimates, not a certified survey/);
   });
 
+  it('promotes the unverified-unit caveat to the VISIBLE lead (unknown-unit CRS)', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { spaceMetrics } = await import('../src/terrain/spaceMetrics');
+    const { classifyScanShape } = await import('../src/terrain/scanShape');
+
+    const pos = room();
+    const shape = classifyScanShape(pos);
+    // Unknown-unit CRS: display factor 1, but the scale is NOT confirmed metres.
+    const space = spaceMetrics(pos, {
+      upAxis: shape.up,
+      spaceKind: 'interior',
+      unitToMetres: 1,
+      unitKnown: false,
+    });
+
+    const panel = new ObjectPanel();
+    panel.showSpace(space, shape);
+    const root = panel.element as unknown as FakeEl;
+    const all = flatten(root);
+
+    // The unit caveat is the visible lead — not folded behind the disclosure —
+    // so the metre figures are never presented as a confirmed metric claim.
+    const lead = all.find((e) => e.className.includes('is-lead'));
+    expect(lead).toBeDefined();
+    expect(lead!.textContent).toMatch(/^Coordinate units are unverified/);
+    expect(lead!.textContent).toMatch(/Confirm the source CRS/);
+  });
+
   it('the empty interior state still offers the Treat-as control and the hatch', async () => {
     const { ObjectPanel } = await import('../src/ui/ObjectPanel');
     const panel = new ObjectPanel();

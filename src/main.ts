@@ -3393,12 +3393,18 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
     // (or any non-metre source units) reports honest metre/feet dimensions —
     // the same factor the terrain core uses (see deriveCoreParams). Unknown ⇒ 1
-    // (assume metres) — an honest default, never a fabricated scale.
-    const unitToMetres = crsService.current()?.linearUnitToMetres ?? 1;
+    // for DISPLAY, but that factor is then an assumption, not a confirmed scale:
+    // gate on `linearUnit !== 'unknown'` (the same predicate the lasso / measure
+    // / legend seams use) and pass the known/unknown bit so the report discloses
+    // the assumption instead of asserting a bare "m" — never a fabricated scale.
+    const spaceCrs = crsService.current();
+    const unitToMetres = spaceCrs?.linearUnitToMetres ?? 1;
+    const unitKnown = spaceCrs != null && spaceCrs.linearUnit !== 'unknown';
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
       unitToMetres,
+      unitKnown,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
       // A still-streaming cloud is measured on its resident subset only — lead
