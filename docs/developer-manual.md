@@ -13,8 +13,8 @@ the reference for building, testing, extending, and shipping the project.
 ## 1. Purpose
 
 OpenLiDARViewer opens drone LiDAR surveys, terrestrial laser scans, and phone
-scans from one drag-and-drop, with no install, no upload, and no conversion
-step. It runs entirely in the browser; no scan data ever leaves the device.
+scans from one drag-and-drop, with no install and no upload step. Local
+point-cloud files are read and rendered in the browser and are not uploaded.
 Once a scan is open you can navigate it in 3D, recolor it, measure it, read a
 Scan Intelligence report, and export the result.
 
@@ -54,7 +54,7 @@ Scan Intelligence report, and export the result.
 
 | ID | Requirement |
 |------|-------------|
-| NFR-1 | **Privacy** — 100% client-side. No server, no upload, no telemetry, no accounts. |
+| NFR-1 | **Privacy** — local files are read and rendered client-side and are not uploaded; no accounts, no telemetry. Remote datasets and location search fetch from their listed providers. |
 | NFR-2 | **Performance** — parsing runs in a worker; clouds are capped by voxel downsampling at a point budget. |
 | NFR-3 | **Compatibility** — works on modern evergreen browsers; WebGPU where available, WebGL 2 everywhere else. |
 | NFR-4 | **Zero friction** — usable with no install and no file conversion. |
@@ -378,11 +378,11 @@ matching `tests/myModule.test.ts`.
 
 ## 13. Security & privacy
 
-- **No data leaves the browser.** Files are read, parsed, and rendered
-  locally; there is no backend to send them to. Your files stay on the device.
-- **No telemetry, no accounts, no third-party calls** at runtime — the only
-  network requests are loading the app's own static assets and, if a user
-  clicks one, a built-in sample file.
+- **Local files stay local.** Files you open are read, parsed, and rendered in
+  the browser and are not uploaded — there is no backend to send them to.
+- **No telemetry, no accounts.** The network requests OpenLiDARViewer makes are:
+  its own static assets; a remote dataset you open (fetched from that provider's
+  host); and the location search you initiate (Microsoft Planetary Computer).
 - **Dependency surface** is limited to three.js, loaders.gl, and `laz-perf`.
   CI runs against pinned versions; `npm audit` is recommended before a release.
 

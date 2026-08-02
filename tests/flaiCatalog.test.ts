@@ -25,20 +25,19 @@ const FLAI_BUCKET_PREFIX =
 const FLAI_EPSG_BY_ID: Readonly<Record<string, number>> = {
   'flai-ch-swisssurface3d-2022': 2056,
   'flai-si-clss-2023': 3794,
-  'flai-nl-ahn4': 28992,
 };
 
 const flaiEntries = CURATED_LOCATIONS.filter((c) => c.id.startsWith('flai-'));
 
 describe('FLAI Open LiDAR Data catalog entries', () => {
   it('ships the curated showcase set', () => {
-    // v0.3.8 re-ordering: the catalog leads with the three
-    // highest-impact tiles (Switzerland, Slovenia, Netherlands). The
-    // five smaller "download-speed-first" entries were dropped to
-    // make room for showcase examples. If a future change adds or
-    // removes an entry without updating the expected count, this
-    // assertion fails loudly.
-    expect(flaiEntries.length).toBe(3);
+    // The catalog leads with the two showcase tiles (Switzerland,
+    // Slovenia), each on a verified open licence. Netherlands AHN4 was
+    // dropped when its open-data status could not be confirmed against an
+    // authoritative AHN source. If a future change adds or removes an
+    // entry without updating the expected count, this assertion fails
+    // loudly.
+    expect(flaiEntries.length).toBe(2);
   });
 
   it.each(flaiEntries)('$id streams from the documented S3 bucket', (loc) => {

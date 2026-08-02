@@ -1,66 +1,66 @@
 /**
  * viewerActiveColorbar.test.ts
  *
- * Pins the Viewer glue that assembles the colorbar spec — the seam between the
- * pure spec-builder (covered in activeColorbar.test.ts) and the live scene
- * state. The pure builder can't see the two things that only the Viewer knows:
+ * Pins the colour-legend glue that assembles the colorbar spec — the seam
+ * between the pure spec-builder (covered in activeColorbar.test.ts) and the
+ * live scene state. The pure builder can't see the two things only the scene
+ * knows:
  *
  *   - the STATIC path adds the cloud's up-axis origin back so the legend reads
  *     true world/source heights, not the render-local values the loader shifted
- *     to (`range + entry.cloud.origin[upAxis]`);
+ *     to (`range + cloud.sourceOrigin[upAxis]`);
  *   - the STREAMING path reads the renderer's seeded cloud-global windows
  *     VERBATIM (adding the render origin's Z), gates the non-elevation scalar
  *     fields on `colorRangesSeeded` (pre-seed placeholders → null), and pins
  *     the trim disclosure to the fixed p5–p95 the reseed core uses.
  *
- * The Viewer is far too heavy to instantiate in the node test env (WebGPU +
- * canvas), and `activeColorbar()` only touches a handful of instance members,
- * so — following the repo's Viewer-glue convention (see streamingReseed.test.ts,
- * which drives a real class method against a hand-built `this`) — we invoke the
- * REAL method bodies via `Viewer.prototype.*.call(fakeThis)`. This exercises the
- * actual shipped glue (origin math, seeded gating, mode dispatch), not a copy.
+ * That glue moved off the Viewer into `buildColorLegend` (v0.6 decomposition),
+ * so the test drives the collaborator against a hand-built host — no WebGL, no
+ * class instantiation. `elevationExtent` / `intensityExtent` live on the same
+ * collaborator and are pinned at the bottom.
  */
 
 import { describe, it, expect } from 'vitest';
-import { Viewer } from '../src/render/Viewer';
+import {
+  buildColorLegend,
+  type ColorLegendHost,
+  type ColorLegendStreaming,
+} from '../src/render/colorLegend';
 import type { ColorMode } from '../src/render/colorModes';
 import type { ActiveColorbar } from '../src/render/activeColorbar';
 import { PointCloud } from '../src/model/PointCloud';
 import type { StreamingColorRanges } from '../src/render/streaming/streamingColors';
 
-// ── Invoke the real Viewer glue against a minimal hand-built `this`. ─────────
+// ── Build a minimal host over hand-built scene state. ────────────────────────
 
-interface FakeStaticCloudEntry {
-  cloud: PointCloud;
+interface HostState {
+  streaming: ColorLegendStreaming | null;
+  cloud: PointCloud | null;
   mode: ColorMode;
+  heightPercentileTrim: number;
+  elevationUnitLabel: string | null;
+  worldUpIsZ?: boolean;
+  residentIntensityBuffers?: readonly ArrayLike<number>[];
 }
 
-interface FakeViewerState {
-  _streaming: null | {
-    renderer: {
-      colorMode: ColorMode;
-      colorRanges: StreamingColorRanges;
-      colorRangesSeeded: boolean;
-    };
-    cloud: { renderOrigin: readonly [number, number, number] };
+function host(state: HostState): ColorLegendHost {
+  return {
+    activeColorMode: () => state.mode,
+    firstStaticCloud: () => state.cloud,
+    streaming: () => state.streaming,
+    heightPercentileTrim: () => state.heightPercentileTrim,
+    elevationUnitLabel: () => state.elevationUnitLabel,
+    worldUpIsZ: () => state.worldUpIsZ ?? true,
+    residentIntensityBuffers: () => state.residentIntensityBuffers ?? [],
   };
-  _clouds: Map<string, FakeStaticCloudEntry>;
-  _heightPercentileTrim: number;
-  _elevationUnitLabel: string | null;
 }
 
-/** Run the shipped `activeColorbar()` against a fake `this` (with the real
- *  `activeColorMode()` attached, since the method calls it). */
-function callActiveColorbar(state: FakeViewerState): ActiveColorbar | null {
-  const self = {
-    ...state,
-    activeColorMode: Viewer.prototype.activeColorMode,
-  } as unknown as Viewer;
-  return Viewer.prototype.activeColorbar.call(self);
+function activeColorbar(state: HostState): ActiveColorbar | null {
+  return buildColorLegend(host(state)).activeColorbar();
 }
 
 /** A tiny Z-up (LAS) cloud with Z spanning 0..30 and a non-zero world origin. */
-function staticCloud(mode: ColorMode): FakeViewerState {
+function staticCloud(mode: ColorMode): HostState {
   const positions = new Float32Array([
     0, 0, 0,
     1, 0, 10,
@@ -79,10 +79,11 @@ function staticCloud(mode: ColorMode): FakeViewerState {
     name: 'origin.las',
   });
   return {
-    _streaming: null,
-    _clouds: new Map([['c0', { cloud, mode }]]),
-    _heightPercentileTrim: 0, // deterministic true-extent window for origin math
-    _elevationUnitLabel: 'm',
+    streaming: null,
+    cloud,
+    mode,
+    heightPercentileTrim: 0, // deterministic true-extent window for origin math
+    elevationUnitLabel: 'm',
   };
 }
 
@@ -92,7 +93,7 @@ function streamingState(
   ranges: Partial<StreamingColorRanges> = {},
   zOff = 0,
   unit: string | null = 'm',
-): FakeViewerState {
+): HostState {
   const full: StreamingColorRanges = {
     minZ: 0,
     maxZ: 30,
@@ -105,13 +106,17 @@ function streamingState(
     ...ranges,
   };
   return {
-    _streaming: {
-      renderer: { colorMode: mode, colorRanges: full, colorRangesSeeded: seeded },
-      cloud: { renderOrigin: [0, 0, zOff] },
+    streaming: {
+      renderer: { colorRanges: full, colorRangesSeeded: seeded },
+      cloud: {
+        renderOrigin: [0, 0, zOff],
+        dataBounds: () => [0, 0, full.minZ, 0, 0, full.maxZ],
+      },
     },
-    _clouds: new Map(),
-    _heightPercentileTrim: 0,
-    _elevationUnitLabel: unit,
+    cloud: null,
+    mode,
+    heightPercentileTrim: 0,
+    elevationUnitLabel: unit,
   };
 }
 
@@ -119,9 +124,9 @@ function streamingState(
 // Static path
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Viewer.activeColorbar — static path', () => {
+describe('colorLegend.activeColorbar — static path', () => {
   it('elevation adds the up-axis origin back so labels read world heights', () => {
-    const bar = callActiveColorbar(staticCloud('elevation'));
+    const bar = activeColorbar(staticCloud('elevation'));
     expect(bar).not.toBeNull();
     expect(bar!.mode).toBe('elevation');
     // render-local Z is 0..30; origin[2] = 1000 → world 1000..1030.
@@ -135,20 +140,20 @@ describe('Viewer.activeColorbar — static path', () => {
 
   it('elevation discloses the p5–p95 window when the trim slider is active', () => {
     const state = staticCloud('elevation');
-    state._heightPercentileTrim = 5;
-    const bar = callActiveColorbar(state);
+    state.heightPercentileTrim = 5;
+    const bar = activeColorbar(state);
     expect(bar!.note).toContain('p5–p95');
   });
 
   it('elevation shows bare numbers when the CRS unit is unknown', () => {
     const state = staticCloud('elevation');
-    state._elevationUnitLabel = null;
-    const bar = callActiveColorbar(state);
+    state.elevationUnitLabel = null;
+    const bar = activeColorbar(state);
     expect(bar!.spec.unit).toBeUndefined();
   });
 
   it('intensity is grayscale, raw window, NO origin add-back and NO unit', () => {
-    const bar = callActiveColorbar(staticCloud('intensity'));
+    const bar = activeColorbar(staticCloud('intensity'));
     expect(bar!.spec.palette).toBe('grayscale');
     // finiteMinMax over [7,100,200,900] — NOT shifted by the origin.
     expect(bar!.spec.min).toBe(7);
@@ -157,7 +162,7 @@ describe('Viewer.activeColorbar — static path', () => {
   });
 
   it('gpsTime normalises to seconds-from-window-start and discloses it', () => {
-    const bar = callActiveColorbar(staticCloud('gpsTime'));
+    const bar = activeColorbar(staticCloud('gpsTime'));
     expect(bar!.spec.min).toBe(0);
     expect(bar!.spec.max).toBeGreaterThan(0);
     expect(bar!.spec.unit).toBe('s');
@@ -166,7 +171,7 @@ describe('Viewer.activeColorbar — static path', () => {
   });
 
   it('returnNumber shows the raw ordinal window, no unit, no note', () => {
-    const bar = callActiveColorbar(staticCloud('returnNumber'));
+    const bar = activeColorbar(staticCloud('returnNumber'));
     expect(bar!.spec.min).toBe(1);
     expect(bar!.spec.max).toBe(5);
     expect(bar!.spec.unit).toBeUndefined();
@@ -174,16 +179,17 @@ describe('Viewer.activeColorbar — static path', () => {
   });
 
   it('categorical modes and the empty scene yield no colorbar', () => {
-    expect(callActiveColorbar(staticCloud('rgb'))).toBeNull();
-    expect(callActiveColorbar(staticCloud('classification'))).toBeNull();
-    // No clouds at all → activeColorMode() falls back to 'rgb' → null.
-    const empty: FakeViewerState = {
-      _streaming: null,
-      _clouds: new Map(),
-      _heightPercentileTrim: 0,
-      _elevationUnitLabel: 'm',
+    expect(activeColorbar(staticCloud('rgb'))).toBeNull();
+    expect(activeColorbar(staticCloud('classification'))).toBeNull();
+    // No clouds at all → null.
+    const empty: HostState = {
+      streaming: null,
+      cloud: null,
+      mode: 'rgb',
+      heightPercentileTrim: 0,
+      elevationUnitLabel: 'm',
     };
-    expect(callActiveColorbar(empty)).toBeNull();
+    expect(activeColorbar(empty)).toBeNull();
   });
 });
 
@@ -191,9 +197,9 @@ describe('Viewer.activeColorbar — static path', () => {
 // Streaming path
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('Viewer.activeColorbar — streaming path (seeded)', () => {
+describe('colorLegend.activeColorbar — streaming path (seeded)', () => {
   it('elevation reads the seeded window + render-origin Z, p5–p95 note', () => {
-    const bar = callActiveColorbar(
+    const bar = activeColorbar(
       streamingState('elevation', true, { minZ: 2, maxZ: 40 }, 1000),
     );
     expect(bar).not.toBeNull();
@@ -203,7 +209,7 @@ describe('Viewer.activeColorbar — streaming path (seeded)', () => {
   });
 
   it('intensity reads the seeded grayscale window verbatim (no origin shift)', () => {
-    const bar = callActiveColorbar(
+    const bar = activeColorbar(
       streamingState('intensity', true, { minIntensity: 3, maxIntensity: 4095 }, 1000),
     );
     expect(bar!.spec.palette).toBe('grayscale');
@@ -212,7 +218,7 @@ describe('Viewer.activeColorbar — streaming path (seeded)', () => {
   });
 
   it('gpsTime normalises the seeded window to seconds-from-start', () => {
-    const bar = callActiveColorbar(
+    const bar = activeColorbar(
       streamingState('gpsTime', true, { minGpsTime: 300_000_000, maxGpsTime: 300_000_480 }),
     );
     expect(bar!.spec.min).toBe(0);
@@ -222,7 +228,7 @@ describe('Viewer.activeColorbar — streaming path (seeded)', () => {
   });
 
   it('returnNumber reads the seeded ordinal window', () => {
-    const bar = callActiveColorbar(
+    const bar = activeColorbar(
       streamingState('returnNumber', true, { minReturnNumber: 1, maxReturnNumber: 4 }),
     );
     expect(bar!.spec.min).toBe(1);
@@ -231,11 +237,11 @@ describe('Viewer.activeColorbar — streaming path (seeded)', () => {
   });
 });
 
-describe('Viewer.activeColorbar — streaming path (pre-seed)', () => {
+describe('colorLegend.activeColorbar — streaming path (pre-seed)', () => {
   it('elevation is labelable pre-seed from the header cube, with NO trim note', () => {
     // Before the first node seeds, minZ/maxZ hold the header cube extent —
     // an honest window, and there is no percentile trim to disclose.
-    const bar = callActiveColorbar(
+    const bar = activeColorbar(
       streamingState('elevation', false, { minZ: 0, maxZ: 30 }, 0),
     );
     expect(bar).not.toBeNull();
@@ -247,13 +253,60 @@ describe('Viewer.activeColorbar — streaming path (pre-seed)', () => {
   it('intensity / gpsTime / returnNumber yield NO colorbar pre-seed (placeholders)', () => {
     // The scalar fields are 0..1 placeholders before a node seeds them —
     // labelling them would assert a window that describes nothing.
-    expect(callActiveColorbar(streamingState('intensity', false))).toBeNull();
-    expect(callActiveColorbar(streamingState('gpsTime', false))).toBeNull();
-    expect(callActiveColorbar(streamingState('returnNumber', false))).toBeNull();
+    expect(activeColorbar(streamingState('intensity', false))).toBeNull();
+    expect(activeColorbar(streamingState('gpsTime', false))).toBeNull();
+    expect(activeColorbar(streamingState('returnNumber', false))).toBeNull();
   });
 
   it('categorical streaming modes yield no colorbar', () => {
-    expect(callActiveColorbar(streamingState('rgb', true))).toBeNull();
-    expect(callActiveColorbar(streamingState('classification', true))).toBeNull();
+    expect(activeColorbar(streamingState('rgb', true))).toBeNull();
+    expect(activeColorbar(streamingState('classification', true))).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extent seeds (elevation / intensity filter controls)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('colorLegend.elevationExtent', () => {
+  it('static: adds the up-axis origin back to the local bounds', () => {
+    // Z-up cloud, Z spans 0..30 render-local, origin[2] = 1000 → world 1000..1030.
+    const state = staticCloud('elevation');
+    expect(buildColorLegend(host(state)).elevationExtent()).toEqual({ min: 1000, max: 1030 });
+  });
+
+  it('streaming: reads the header data bounds plus the render origin', () => {
+    const state = streamingState('elevation', true, { minZ: 2, maxZ: 40 }, 1000);
+    expect(buildColorLegend(host(state)).elevationExtent()).toEqual({ min: 1002, max: 1040 });
+  });
+
+  it('empty scene yields null', () => {
+    const state: HostState = {
+      streaming: null,
+      cloud: null,
+      mode: 'elevation',
+      heightPercentileTrim: 0,
+      elevationUnitLabel: 'm',
+    };
+    expect(buildColorLegend(host(state)).elevationExtent()).toBeNull();
+  });
+});
+
+describe('colorLegend.intensityExtent', () => {
+  it('static: min/max over the cloud intensity buffer', () => {
+    const state = staticCloud('intensity'); // intensity [7,100,200,900]
+    expect(buildColorLegend(host(state)).intensityExtent()).toEqual({ min: 7, max: 900 });
+  });
+
+  it('streaming: min/max over the resident intensity buffers', () => {
+    const state = streamingState('intensity', true);
+    state.residentIntensityBuffers = [new Uint16Array([12, 40]), new Uint16Array([5, 900])];
+    expect(buildColorLegend(host(state)).intensityExtent()).toEqual({ min: 5, max: 900 });
+  });
+
+  it('streaming with no resident intensity yields null', () => {
+    const state = streamingState('intensity', true);
+    state.residentIntensityBuffers = [];
+    expect(buildColorLegend(host(state)).intensityExtent()).toBeNull();
   });
 });

@@ -83,5 +83,5 @@ AddType application/manifest+json .webmanifest
   #     labels with inline style="" attributes. Style injection is low-risk and
   #     no user-derived string reaches the unsafeHtml/innerHTML sinks (guarded by
   #     `npm run lint:unsafe-html`), so this does not open an XSS path.
-  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self' https://usebasin.com"
+  Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; base-uri 'self'; form-action 'self'"
 </IfModule>

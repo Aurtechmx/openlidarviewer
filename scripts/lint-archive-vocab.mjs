@@ -10,6 +10,10 @@
  * The patterns are assembled from fragments (see `rx` below) so the phrasings
  * this lint rejects never appear as literal strings in this file.
  *
+ * It also fails on a signed-URL secret — an AWS/Azure/GCS pre-authenticated
+ * query string or an OAuth token — reaching a shipped file, so a credential
+ * pasted into a doc or fixture cannot ship.
+ *
  * Scope is the shipped surface: the files `git archive` would include. Files
  * that are already export-ignored are exempt.
  */
@@ -53,6 +57,15 @@ const ALLOW = [
   /\balpha\.\d (development|baseline|release)/i,
   /\bfirst (established|introduced) during\b/i,
 ];
+
+/**
+ * Query parameters that carry the secret in a signed / pre-authenticated URL —
+ * AWS SigV4, Azure SAS, GCS signed URLs, and OAuth bearer tokens. A signed URL
+ * committed to the tree ships a live (if short-lived) credential. Matched only
+ * with a long value so an ordinary `?token=next` or `?sig=off` in prose or a
+ * fixture does not trip the check; a real signature or token is a long blob.
+ */
+const LEAKED_URL_SECRET = /[?&](X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token|X-Goog-Signature|AWSAccessKeyId|sig|access_token)=[A-Za-z0-9%_\-+/]{16,}/i;
 
 /**
  * The files `git archive HEAD` would ship; attributes resolve from the
@@ -118,6 +131,12 @@ for (const rel of shipped) {
   if (rel.endsWith('lint-archive-vocab.mjs')) continue;
   const lines = readFileSync(full, 'utf8').split('\n');
   lines.forEach((line, i) => {
+    const secret = line.match(LEAKED_URL_SECRET);
+    if (secret) {
+      problems.push(
+        `  • ${rel}:${i + 1}: "${secret[1]}=…" — a signed-URL secret in a shipped file; redact the query string before committing.`,
+      );
+    }
     if (ALLOW.some((re) => re.test(line))) return;
     for (const re of BANNED) {
       const m = line.match(re);

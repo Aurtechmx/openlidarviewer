@@ -13,12 +13,22 @@
  * so they keep their given order and lead the walk.
  */
 
+import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
+import { accumulatorOffset } from './layerPlacement';
+
 /** A cloud/node buffer contributing to the terrain subsample. */
 export interface TerrainStreamBuffer {
   /** Local-space positions, length `3 · pointCount`. */
   pos: Float32Array;
   /** Optional index-aligned classification channel. */
   cls?: ArrayLike<number>;
+  /**
+   * The layer's Float64 placement into the shared project frame, folded into
+   * every point as it is copied. Null/absent reads as identity, so a lone layer
+   * (and every layer while mounting is disabled) samples in its own frame,
+   * byte-identically to the pre-fold walk.
+   */
+  placement?: LayerSpatialTransform | null;
 }
 
 /** A streaming-node buffer with the stable octree key it is sorted by. */
@@ -81,7 +91,12 @@ export function sampleStridedTerrain(
   const classification = anyClass ? new Uint8Array(cap).fill(255) : undefined;
   let gi = 0;
   let oi = 0;
-  for (const { pos, cls } of buffers) {
+  for (const { pos, cls, placement } of buffers) {
+    // Fold the layer's placement once per buffer, then add three scalars per
+    // point. Identity placement is [0, 0, 0], so `x + 0` is the same finite
+    // value written before the fold — the walk stays byte-identical while
+    // mounting is off.
+    const [dx, dy, dz] = accumulatorOffset(placement);
     const pts = (pos.length / 3) | 0;
     for (let i = 0; i < pts; i++, gi++) {
       if (gi % stride !== 0 || oi >= cap) continue;
@@ -90,9 +105,9 @@ export function sampleStridedTerrain(
       const y = pos[s + 1];
       const z = pos[s + 2];
       if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
-        positions[oi * 3] = x;
-        positions[oi * 3 + 1] = y;
-        positions[oi * 3 + 2] = z;
+        positions[oi * 3] = x + dx;
+        positions[oi * 3 + 1] = y + dy;
+        positions[oi * 3 + 2] = z + dz;
         // A class array shorter than its position array must leave the 255
         // "no class channel" sentinel standing: `cls[i]` would read undefined
         // and narrow to 0 on write — ASPRS "never classified", which terrain

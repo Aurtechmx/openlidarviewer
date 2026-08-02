@@ -1,42 +1,5 @@
 # OpenLiDARViewer
 
-<!-- Ten badges in three rows of three, three and four. Two rows put six
-     badges on one line, which wrapped and stranded the last one on a line of
-     its own; three groups also say more. Building and running is one
-     question, being measured by an outside service is another, and being
-     findable is a third. Every one is set by a
-     workflow run or an external service, so none of them is a claim this
-     repository makes about itself. That is the only rule this block follows,
-     and it is why the list keeps getting shorter rather than longer.
-
-     The quality gate badge went in when it began reporting a score, which is
-     the rule above. It reads passed on reliability, security, maintainability,
-     duplication and reviewed hotspots. Five findings behind it are resolved
-     rather than fixed, and the distinction is on the issues: two are marked
-     false positive, because the rule reported path injection on a flow that
-     carries an argparse integer into JSON content while the path beside it is
-     a literal; three are accepted, because the code is deliberate, a seeded
-     generator a fixture test depends on and a spawn that runs no shell.
-
-     fair-software.eu reads three of five. Both of the ones it withholds are
-     real: this is not in a package registry, and it carries no OpenSSF Best
-     Practices badge, which is deferred rather than overlooked. The score is
-     measured from the repository by `.github/workflows/fair-software.yml`.
-
-     Gone, and worth recording so nobody adds them back. A
-     fairsoftwarechecklist.net badge sat next to fair-software.eu for a while.
-     It is a self-assessment, so it reported whatever we had typed into its
-     URL, and next to a measured score it read as a second opinion when it was
-     really the same opinion twice. Rendering, privacy, status, Node and the
-     live demo went earlier, each restating something the paragraph below or
-     the Live version line already said.
-
-     One slot is held open: OpenSSF Scorecard, between CI and Security audit.
-     The workflow publishes (last run 6.1, transparency-log entry recorded) but
-     api.scorecard.dev has not ingested the project and the badge still renders
-     "invalid repo path". Rechecked 2026-07-30, still invalid. It goes in when
-     it renders a score, making ten. -->
-
 <!-- Does it build and run, everywhere it claims to -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
@@ -546,20 +509,8 @@ free to redistribute. Public credit and research use are each a separate
 optional permission.
 
 A failed file, an unexpected warning or one confusing screenshot is worth
-sending. Negative results are the useful kind here.
-
-There are two forms, and which one fits depends on what you scan.
-
-[Terrestrial LiDAR evaluation](https://lidar.aurtech.mx/testing.html) takes five
-to ten minutes. Use it for tripod and mobile scanners, indoor and building
-capture, and any work where scan stations, occlusion and coverage matter more
-than a coordinate reference system.
-
-[GIS comparison](https://lidar.aurtech.mx/terrain-test.html) is longer. Use it
-when you can put a number beside a number: metadata, CRS and units, elevations,
-terrain products, and how the browser workflow compares with ArcGIS, QGIS,
-CloudCompare or PDAL. It asks for the values you read in both tools, so have the
-reference open.
+sending. Negative results are the useful kind here. Email what you found — a
+short description, and a screenshot if it helps — to <info@aurtech.mx>.
 
 ## Acknowledgements
 
@@ -567,7 +518,7 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
 **Built on** — [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-**Data** — the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo, GURS, and AHN national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
+**Data** — the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 
 **Standards & formats** — ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems).
 

@@ -51,7 +51,53 @@
  */
 
 import type { Vec3 } from '../navMath';
+import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
+import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
+
+/** A placed source buffer contributing to a combined profile walk. */
+export interface ProfileSourceBuffer {
+  readonly pos: Float32Array;
+  /** Optional index-aligned classification channel. */
+  readonly cls?: ArrayLike<number>;
+  /** Float64 placement into the shared project frame; null/absent = identity. */
+  readonly placement?: LayerSpatialTransform | null;
+}
+
+/** The concatenated positions (and optional class channel) a profile walk reads. */
+export interface AssembledProfileBuffers {
+  readonly positions: Float32Array;
+  readonly classification?: Uint8Array;
+}
+
+/**
+ * Concatenate placed source buffers into one project-frame positions array,
+ * carrying an index-aligned classification channel when any buffer classifies.
+ * Each layer's Float64 placement is folded into its points during the copy.
+ * `total` is the summed element length (Σ pos.length).
+ *
+ * Identity placements bulk-copy with `set` — byte-for-byte — so a scene with
+ * nothing mounted assembles exactly the buffer the pre-fold path did. The
+ * class channel starts as the 255 "no class channel" sentinel and is filled
+ * only where a buffer supplies one, matching the sampler's "keep" default.
+ */
+export function assembleProfileBuffers(
+  buffers: ReadonlyArray<ProfileSourceBuffer>,
+  total: number,
+  anyClass: boolean,
+): AssembledProfileBuffers {
+  const positions = new Float32Array(total);
+  const classification = anyClass ? new Uint8Array(total / 3).fill(255) : undefined;
+  let off = 0;
+  let coff = 0;
+  for (const { pos, cls, placement } of buffers) {
+    off = placeBufferInto(positions, off, pos, placement);
+    const m = pos.length / 3;
+    if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
+    coff += m;
+  }
+  return { positions, classification };
+}
 
 // Inline vector helpers — duplicated from `geometry.ts` where they are
 // also module-local. Cheap, branch-free, no allocations beyond return

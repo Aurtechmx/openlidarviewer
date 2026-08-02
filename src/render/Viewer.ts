@@ -65,6 +65,7 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
+import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
@@ -83,13 +84,9 @@ import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
+import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
-import {
-  buildActiveColorbarSpec,
-  burnInColorbarLayout,
-  type ActiveColorbar,
-} from './activeColorbar';
+import { burnInColorbarLayout, type ActiveColorbar } from './activeColorbar';
 import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
@@ -130,7 +127,6 @@ import {
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
-import type { VolumeResult } from './measure/volume';
 import type { VolumeBudgetDecision } from './measure/volumeBudget';
 
 /** Return shape from {@link Viewer.computeLassoVolume}. */
@@ -185,11 +181,13 @@ import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
   sampleProfile,
+  assembleProfileBuffers,
   autoCorridorWidth,
   DEFAULT_GROUND_PERCENTILE,
   DEFAULT_PROFILE_SAMPLE_COUNT,
+  type ProfileSourceBuffer,
 } from './measure/profileSampler';
-import { volumeCutFill } from './measure/volume';
+import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds,
   isIntegrable,
@@ -200,6 +198,7 @@ import type { LayerCompatibility } from '../model/layerCompatibility';
 import {
   sampleStridedTerrain,
   type KeyedTerrainStreamBuffer,
+  type TerrainStreamBuffer,
 } from './terrainStreamSample';
 import {
   applyClassSwap,
@@ -1131,6 +1130,23 @@ export class Viewer {
    */
   private _resizeRafId: number | null = null;
 
+  /** Colour-legend + scalar-range reads, bound to this Viewer's live state. */
+  private readonly _colorLegend: ColorLegend = buildColorLegend({
+    activeColorMode: () => this.activeColorMode(),
+    firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
+    streaming: () => this._streaming,
+    heightPercentileTrim: () => this._heightPercentileTrim,
+    elevationUnitLabel: () => this._elevationUnitLabel,
+    worldUpIsZ: () => this._worldUp.z === 1,
+    residentIntensityBuffers: () => {
+      const buffers: ArrayLike<number>[] = [];
+      for (const { decoded } of this._streamingPickData.values()) {
+        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
+      }
+      return buffers;
+    },
+  });
+
   // ── Picking tools (measure / inspect) ────────────────────────────────────
   private readonly _canvas: HTMLCanvasElement;
   private readonly _measure: MeasureController;
@@ -1372,7 +1388,7 @@ export class Viewer {
       } | null => {
         // Track each buffer's classification alongside it so the profile can
         // be computed over classified ground (vegetation / buildings dropped).
-        const buffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+        const buffers: ProfileSourceBuffer[] = [];
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
@@ -1383,11 +1399,11 @@ export class Viewer {
         ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
         // Only clouds the picker would place profile vertices on — visible and
         // unlocked — feed the sample, so a hidden or locked layer can't skew it.
-        for (const { cloud } of integrableClouds(this._clouds.values())) {
+        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
             const cls = aligned(cloud.classification, cloud.positions);
             if (cls) anyClass = true;
-            buffers.push({ pos: cloud.positions, cls });
+            buffers.push({ pos: cloud.positions, cls, placement });
             total += cloud.positions.length;
             staticPoints += cloud.positions.length;
           }
@@ -1406,19 +1422,10 @@ export class Viewer {
           }
         }
         if (total === 0) return null;
-        // Flatten — cheap because we only walk the resident set.
-        const positions = new Float32Array(total);
-        // 255 = "no class channel" sentinel; the sampler treats it as "keep".
-        const classification = anyClass ? new Uint8Array(total / 3).fill(255) : undefined;
-        let off = 0;
-        let coff = 0;
-        for (const { pos, cls } of buffers) {
-          positions.set(pos, off);
-          off += pos.length;
-          const m = pos.length / 3;
-          if (classification && cls) for (let i = 0; i < m; i++) classification[coff + i] = cls[i];
-          coff += m;
-        }
+        // Flatten — cheap because we only walk the resident set. The assembler
+        // folds each layer's Float64 placement into the project frame as it
+        // copies (identity while mounting is off = the same bytes as before).
+        const { positions, classification } = assembleProfileBuffers(buffers, total, anyClass);
         // `up` is the configured world up — hardcoding [0,0,1] here cut Y-up
         // phone scans along the wrong axis (v0.4.4 audit, B1). The same
         // format-driven up the navigation/measure context already uses.
@@ -1462,15 +1469,15 @@ export class Viewer {
     // returns the record. Null when no positions are loaded.
     this._measure.setVolumeSampler(
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
-        const buffers: Float32Array[] = [];
+        const buffers: PlacedVolumeBuffer[] = [];
         let total = 0;
         let staticPoints = 0;
         let streamingPoints = 0;
         // Match the picker: only visible, unlocked clouds feed the cut/fill, so
         // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
-        for (const { cloud } of integrableClouds(this._clouds.values())) {
+        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
           if (cloud.positions && cloud.positions.length > 0) {
-            buffers.push(cloud.positions);
+            buffers.push({ pos: cloud.positions, placement });
             total += cloud.positions.length;
             staticPoints += cloud.positions.length;
           }
@@ -1478,18 +1485,15 @@ export class Viewer {
         const streamOk = this._streamingMayCombine(buffers.length);
         for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
           if (decoded.positions && decoded.positions.length > 0) {
-            buffers.push(decoded.positions);
+            buffers.push({ pos: decoded.positions });
             total += decoded.positions.length;
             streamingPoints += decoded.positions.length;
           }
         }
         if (total === 0) return null;
-        const positions = new Float32Array(total);
-        let off = 0;
-        for (const b of buffers) {
-          positions.set(b, off);
-          off += b.length;
-        }
+        // The assembler folds each layer's Float64 placement into the project
+        // frame as it concatenates (identity while mounting is off = same bytes).
+        const positions = assembleVolumePositions(buffers, total);
         // `up` is the configured world up, not a hardcoded [0,0,1]. The
         // profile sampler above already reads `this._worldUp` (v0.4.4 audit,
         // B1); the cut/fill path was missed. On a Y-up phone scan (PLY/OBJ/
@@ -2363,93 +2367,13 @@ export class Viewer {
   }
 
   /**
-   * The colorbar for the ACTIVE colour mode, or null when the mode carries
-   * no continuous legend. This is the single source both consumers read:
-   * the live overlay (via the host) and the snapshot burn-in — so the PNG
-   * a user exports always matches the legend they saw.
-   *
-   * Static clouds: the range comes from {@link rampRangeForMode} — the very
-   * function `colorForMode` painted with — evaluated against the FIRST
-   * static cloud (the same dispatch `activeColorMode` uses; in the rare
-   * multi-cloud scene each cloud ramps its own window and the legend
-   * honestly describes the primary one). Elevation adds the cloud's origin
-   * back so the labels read world/source values, not render-local ones.
-   *
-   * Streaming clouds: the ranges are read VERBATIM from the renderer's
-   * seeded cloud-global windows — recomputing them here would race the
-   * reseed. Before the first seed only elevation is labelable (header cube
-   * extent, no trim); the other scalar fields are 0..1 placeholders and
-   * yield null. The seeded elevation/gpsTime windows come from the
-   * percentile-clipped core (default p5–p95), which is what the note
-   * discloses. NOTE: the streaming reseed path does not (yet) honour the
-   * height-trim slider — it always clips at the default p5–p95 — so the
-   * legend reports that fixed window rather than pretending the slider
-   * applied (see StreamingRenderer.onNodeReady).
+   * The colorbar for the ACTIVE colour mode, or null when the mode carries no
+   * continuous legend. The single source both consumers read — the live
+   * overlay (via the host) and the snapshot burn-in — so the exported PNG
+   * matches the legend the user saw. Logic lives in {@link buildColorLegend}.
    */
   activeColorbar(): ActiveColorbar | null {
-    const mode = this.activeColorMode();
-    if (this._streaming) {
-      const r = this._streaming.renderer.colorRanges;
-      const seeded = this._streaming.renderer.colorRangesSeeded;
-      // Streaming sources are LAS-derived and Z-up by spec; positions are
-      // render-local, so add the render origin's Z back for display.
-      const zOff = this._streaming.cloud.renderOrigin[2];
-      let range: { min: number; max: number } | null = null;
-      let trim = 0;
-      switch (mode) {
-        case 'elevation':
-          range = { min: r.minZ + zOff, max: r.maxZ + zOff };
-          // Seeded window = computeElevationRange defaults (p5–p95);
-          // pre-seed = raw header cube (no trim to disclose).
-          trim = seeded ? 5 : 0;
-          break;
-        case 'intensity':
-          range = seeded ? { min: r.minIntensity, max: r.maxIntensity } : null;
-          break;
-        case 'gpsTime':
-          range = seeded ? { min: r.minGpsTime, max: r.maxGpsTime } : null;
-          // computeScalarRange defaults — see StreamingRenderer.onNodeReady.
-          trim = 5;
-          break;
-        case 'returnNumber':
-          range = seeded ? { min: r.minReturnNumber, max: r.maxReturnNumber } : null;
-          break;
-        default:
-          return null;
-      }
-      return buildActiveColorbarSpec({
-        mode,
-        range,
-        trimPercent: trim,
-        elevationUnit: this._elevationUnitLabel,
-      });
-    }
-    const entry = this._clouds.values().next().value;
-    if (!entry) return null;
-    const upAxis = isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1;
-    const range = rampRangeForMode(mode, entry.cloud, {
-      heightPercentileTrim: this._heightPercentileTrim,
-      upAxis,
-    });
-    if (!range) return null;
-    // Elevation ranges come out in render-local coordinates (the loader
-    // subtracted `origin`); add the up-axis origin back so the legend reads
-    // true world/source heights — the same reconstruction elevationExtent()
-    // performs for the filter controls.
-    const display =
-      mode === 'elevation'
-        ? {
-            min: range.min + entry.cloud.sourceOrigin[upAxis],
-            max: range.max + entry.cloud.sourceOrigin[upAxis],
-          }
-        : range;
-    return buildActiveColorbarSpec({
-      mode,
-      range: display,
-      trimPercent:
-        mode === 'elevation' ? this._heightPercentileTrim : mode === 'gpsTime' ? 5 : 0,
-      elevationUnit: this._elevationUnitLabel,
-    });
+    return this._colorLegend.activeColorbar();
   }
 
   /**
@@ -2526,7 +2450,7 @@ export class Viewer {
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
-    const staticBuffers: Array<{ pos: Float32Array; cls?: ArrayLike<number> }> = [];
+    const staticBuffers: TerrainStreamBuffer[] = [];
     const streamingBuffers: KeyedTerrainStreamBuffer[] = [];
     let staticPoints = 0;
     let streamingPoints = 0;
@@ -2548,7 +2472,7 @@ export class Viewer {
     ): ArrayLike<number> | undefined =>
       cls && cls.length === pos.length / 3 ? cls : undefined;
     // Match the picker: only visible, unlocked clouds contribute to the surface.
-    for (const { cloud } of integrableClouds(this._clouds.values())) {
+    for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
         const cls = alignedClass(cloud.classification, cloud.positions);
         if (cls) {
@@ -2557,7 +2481,7 @@ export class Viewer {
             sourceGround = true;
           }
         }
-        staticBuffers.push({ pos: cloud.positions, cls });
+        staticBuffers.push({ pos: cloud.positions, cls, placement });
         staticPoints += cloud.positions.length / 3;
         staticFormats.push(cloud.sourceFormat);
       }
@@ -3680,32 +3604,12 @@ export class Viewer {
   }
 
   /**
-   * The first static cloud's elevation extent in world/source units, along the
-   * current up-axis, for seeding the elevation-filter control. `bounds()` is in
-   * local (origin-shifted) space, so the world extent adds the cloud's origin
-   * back. Returns null when no static cloud is loaded (e.g. a streaming-only
-   * session), leaving the control to accept typed values.
+   * The first static cloud's elevation extent in world/source units, for seeding
+   * the elevation-filter control. Streaming falls back to the header data
+   * bounds. Null when nothing is loaded. Logic lives in {@link buildColorLegend}.
    */
   elevationExtent(): { min: number; max: number } | null {
-    const axisIdx = this._worldUp.z === 1 ? 2 : 1;
-    const entry = this._clouds.values().next().value;
-    if (entry) {
-      const b = entry.cloud.bounds();
-      const o = entry.cloud.sourceOrigin[axisIdx];
-      return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
-    }
-    // Streaming: the tight data bounds come from the file header (known at open,
-    // stable as nodes stream in), so the elevation control seeds once and never
-    // reseeds. Convert the attribute-space bound back to world with the render
-    // origin, matching the static branch above.
-    const sc = this._streaming?.cloud;
-    if (sc) {
-      // Box6 is [minX,minY,minZ, maxX,maxY,maxZ]; the max lives at axisIdx + 3.
-      const b = sc.dataBounds();
-      const o = sc.renderOrigin[axisIdx];
-      return { min: b[axisIdx] + o, max: b[axisIdx + 3] + o };
-    }
-    return null;
+    return this._colorLegend.elevationExtent();
   }
 
   /**
@@ -3730,39 +3634,11 @@ export class Viewer {
 
   /**
    * The first static cloud's intensity min/max, for seeding the intensity-filter
-   * control. Returns null when no static cloud is loaded or the cloud has no
-   * intensity channel. O(n) over the intensity array — run once on load.
+   * control. Streaming scans the resident chunks. Null when nothing is loaded or
+   * the cloud has no intensity channel. Logic lives in {@link buildColorLegend}.
    */
   intensityExtent(): { min: number; max: number } | null {
-    const entry = this._clouds.values().next().value;
-    const inten = entry?.cloud.intensity;
-    if (inten && inten.length > 0) return this._intensityRange([inten]);
-    // Streaming: LAS headers carry no intensity range, so scan the resident
-    // chunks' intensity buffers. Called once when the streaming scan seeds its
-    // control (not per node), so the O(resident) pass is paid a single time and
-    // the extent stays stable even as more nodes stream in.
-    if (this._streaming?.cloud) {
-      const buffers: ArrayLike<number>[] = [];
-      for (const { decoded } of this._streamingPickData.values()) {
-        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
-      }
-      return buffers.length > 0 ? this._intensityRange(buffers) : null;
-    }
-    return null;
-  }
-
-  /** Min/max over one or more intensity buffers, or null when none are finite. */
-  private _intensityRange(buffers: readonly ArrayLike<number>[]): { min: number; max: number } | null {
-    let min = Infinity;
-    let max = -Infinity;
-    for (const buf of buffers) {
-      for (let i = 0; i < buf.length; i++) {
-        const v = buf[i];
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-    return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+    return this._colorLegend.intensityExtent();
   }
 
   /**
@@ -4081,7 +3957,9 @@ export class Viewer {
       return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
 
-    const integrable: Array<readonly [string, { readonly cloud: PointCloud }]> = [];
+    const integrable: Array<
+      readonly [string, { readonly cloud: PointCloud; readonly placement?: LayerSpatialTransform | null }]
+    > = [];
     for (const [id, entry] of this._clouds) {
       // Hidden and locked layers are skipped: the picker won't place vertices
       // on them, so the lasso must not select through them either.
