@@ -65,6 +65,7 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
+import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
 import { buildPointFilterAccept } from './pointFilterAccept';
@@ -83,13 +84,9 @@ import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
-import { colorForMode, defaultMode, rampRangeForMode } from './colorModes';
+import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
-import {
-  buildActiveColorbarSpec,
-  burnInColorbarLayout,
-  type ActiveColorbar,
-} from './activeColorbar';
+import { burnInColorbarLayout, type ActiveColorbar } from './activeColorbar';
 import { colorbarStops, niceTicks, formatColorbarValue } from './colorbar';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
@@ -1132,6 +1129,23 @@ export class Viewer {
    * camera reprojection. RAF-debounce collapses them to one per frame.
    */
   private _resizeRafId: number | null = null;
+
+  /** Colour-legend + scalar-range reads, bound to this Viewer's live state. */
+  private readonly _colorLegend: ColorLegend = buildColorLegend({
+    activeColorMode: () => this.activeColorMode(),
+    firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
+    streaming: () => this._streaming,
+    heightPercentileTrim: () => this._heightPercentileTrim,
+    elevationUnitLabel: () => this._elevationUnitLabel,
+    worldUpIsZ: () => this._worldUp.z === 1,
+    residentIntensityBuffers: () => {
+      const buffers: ArrayLike<number>[] = [];
+      for (const { decoded } of this._streamingPickData.values()) {
+        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
+      }
+      return buffers;
+    },
+  });
 
   // ── Picking tools (measure / inspect) ────────────────────────────────────
   private readonly _canvas: HTMLCanvasElement;
@@ -2353,93 +2367,13 @@ export class Viewer {
   }
 
   /**
-   * The colorbar for the ACTIVE colour mode, or null when the mode carries
-   * no continuous legend. This is the single source both consumers read:
-   * the live overlay (via the host) and the snapshot burn-in — so the PNG
-   * a user exports always matches the legend they saw.
-   *
-   * Static clouds: the range comes from {@link rampRangeForMode} — the very
-   * function `colorForMode` painted with — evaluated against the FIRST
-   * static cloud (the same dispatch `activeColorMode` uses; in the rare
-   * multi-cloud scene each cloud ramps its own window and the legend
-   * honestly describes the primary one). Elevation adds the cloud's origin
-   * back so the labels read world/source values, not render-local ones.
-   *
-   * Streaming clouds: the ranges are read VERBATIM from the renderer's
-   * seeded cloud-global windows — recomputing them here would race the
-   * reseed. Before the first seed only elevation is labelable (header cube
-   * extent, no trim); the other scalar fields are 0..1 placeholders and
-   * yield null. The seeded elevation/gpsTime windows come from the
-   * percentile-clipped core (default p5–p95), which is what the note
-   * discloses. NOTE: the streaming reseed path does not (yet) honour the
-   * height-trim slider — it always clips at the default p5–p95 — so the
-   * legend reports that fixed window rather than pretending the slider
-   * applied (see StreamingRenderer.onNodeReady).
+   * The colorbar for the ACTIVE colour mode, or null when the mode carries no
+   * continuous legend. The single source both consumers read — the live
+   * overlay (via the host) and the snapshot burn-in — so the exported PNG
+   * matches the legend the user saw. Logic lives in {@link buildColorLegend}.
    */
   activeColorbar(): ActiveColorbar | null {
-    const mode = this.activeColorMode();
-    if (this._streaming) {
-      const r = this._streaming.renderer.colorRanges;
-      const seeded = this._streaming.renderer.colorRangesSeeded;
-      // Streaming sources are LAS-derived and Z-up by spec; positions are
-      // render-local, so add the render origin's Z back for display.
-      const zOff = this._streaming.cloud.renderOrigin[2];
-      let range: { min: number; max: number } | null = null;
-      let trim = 0;
-      switch (mode) {
-        case 'elevation':
-          range = { min: r.minZ + zOff, max: r.maxZ + zOff };
-          // Seeded window = computeElevationRange defaults (p5–p95);
-          // pre-seed = raw header cube (no trim to disclose).
-          trim = seeded ? 5 : 0;
-          break;
-        case 'intensity':
-          range = seeded ? { min: r.minIntensity, max: r.maxIntensity } : null;
-          break;
-        case 'gpsTime':
-          range = seeded ? { min: r.minGpsTime, max: r.maxGpsTime } : null;
-          // computeScalarRange defaults — see StreamingRenderer.onNodeReady.
-          trim = 5;
-          break;
-        case 'returnNumber':
-          range = seeded ? { min: r.minReturnNumber, max: r.maxReturnNumber } : null;
-          break;
-        default:
-          return null;
-      }
-      return buildActiveColorbarSpec({
-        mode,
-        range,
-        trimPercent: trim,
-        elevationUnit: this._elevationUnitLabel,
-      });
-    }
-    const entry = this._clouds.values().next().value;
-    if (!entry) return null;
-    const upAxis = isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1;
-    const range = rampRangeForMode(mode, entry.cloud, {
-      heightPercentileTrim: this._heightPercentileTrim,
-      upAxis,
-    });
-    if (!range) return null;
-    // Elevation ranges come out in render-local coordinates (the loader
-    // subtracted `origin`); add the up-axis origin back so the legend reads
-    // true world/source heights — the same reconstruction elevationExtent()
-    // performs for the filter controls.
-    const display =
-      mode === 'elevation'
-        ? {
-            min: range.min + entry.cloud.sourceOrigin[upAxis],
-            max: range.max + entry.cloud.sourceOrigin[upAxis],
-          }
-        : range;
-    return buildActiveColorbarSpec({
-      mode,
-      range: display,
-      trimPercent:
-        mode === 'elevation' ? this._heightPercentileTrim : mode === 'gpsTime' ? 5 : 0,
-      elevationUnit: this._elevationUnitLabel,
-    });
+    return this._colorLegend.activeColorbar();
   }
 
   /**
@@ -3670,32 +3604,12 @@ export class Viewer {
   }
 
   /**
-   * The first static cloud's elevation extent in world/source units, along the
-   * current up-axis, for seeding the elevation-filter control. `bounds()` is in
-   * local (origin-shifted) space, so the world extent adds the cloud's origin
-   * back. Returns null when no static cloud is loaded (e.g. a streaming-only
-   * session), leaving the control to accept typed values.
+   * The first static cloud's elevation extent in world/source units, for seeding
+   * the elevation-filter control. Streaming falls back to the header data
+   * bounds. Null when nothing is loaded. Logic lives in {@link buildColorLegend}.
    */
   elevationExtent(): { min: number; max: number } | null {
-    const axisIdx = this._worldUp.z === 1 ? 2 : 1;
-    const entry = this._clouds.values().next().value;
-    if (entry) {
-      const b = entry.cloud.bounds();
-      const o = entry.cloud.sourceOrigin[axisIdx];
-      return { min: b.min[axisIdx] + o, max: b.max[axisIdx] + o };
-    }
-    // Streaming: the tight data bounds come from the file header (known at open,
-    // stable as nodes stream in), so the elevation control seeds once and never
-    // reseeds. Convert the attribute-space bound back to world with the render
-    // origin, matching the static branch above.
-    const sc = this._streaming?.cloud;
-    if (sc) {
-      // Box6 is [minX,minY,minZ, maxX,maxY,maxZ]; the max lives at axisIdx + 3.
-      const b = sc.dataBounds();
-      const o = sc.renderOrigin[axisIdx];
-      return { min: b[axisIdx] + o, max: b[axisIdx + 3] + o };
-    }
-    return null;
+    return this._colorLegend.elevationExtent();
   }
 
   /**
@@ -3720,39 +3634,11 @@ export class Viewer {
 
   /**
    * The first static cloud's intensity min/max, for seeding the intensity-filter
-   * control. Returns null when no static cloud is loaded or the cloud has no
-   * intensity channel. O(n) over the intensity array — run once on load.
+   * control. Streaming scans the resident chunks. Null when nothing is loaded or
+   * the cloud has no intensity channel. Logic lives in {@link buildColorLegend}.
    */
   intensityExtent(): { min: number; max: number } | null {
-    const entry = this._clouds.values().next().value;
-    const inten = entry?.cloud.intensity;
-    if (inten && inten.length > 0) return this._intensityRange([inten]);
-    // Streaming: LAS headers carry no intensity range, so scan the resident
-    // chunks' intensity buffers. Called once when the streaming scan seeds its
-    // control (not per node), so the O(resident) pass is paid a single time and
-    // the extent stays stable even as more nodes stream in.
-    if (this._streaming?.cloud) {
-      const buffers: ArrayLike<number>[] = [];
-      for (const { decoded } of this._streamingPickData.values()) {
-        if (decoded.intensity && decoded.intensity.length > 0) buffers.push(decoded.intensity);
-      }
-      return buffers.length > 0 ? this._intensityRange(buffers) : null;
-    }
-    return null;
-  }
-
-  /** Min/max over one or more intensity buffers, or null when none are finite. */
-  private _intensityRange(buffers: readonly ArrayLike<number>[]): { min: number; max: number } | null {
-    let min = Infinity;
-    let max = -Infinity;
-    for (const buf of buffers) {
-      for (let i = 0; i < buf.length; i++) {
-        const v = buf[i];
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-    return Number.isFinite(min) && Number.isFinite(max) ? { min, max } : null;
+    return this._colorLegend.intensityExtent();
   }
 
   /**

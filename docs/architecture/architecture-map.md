@@ -119,7 +119,7 @@ called with a 19-member deps object. The candidates that remain:
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 | `importSession` | 177 | `src/app/sessionIo.ts` *(planned)* |
 
-**`src/render/Viewer.ts` (7,073)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,959)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
@@ -137,6 +137,12 @@ Done: `_buildExportAdapter` (265 lines) now lives in `src/render/exportAdapter.t
 which takes a structural host rather than the Viewer, so the Studio's scene
 reads are unit-testable without a WebGL context (`tests/exportAdapter.test.ts`).
 `Viewer` keeps a twelve-line factory that binds its own state to that host.
+
+Done: the colour-legend / scalar-range reads (`activeColorbar`, `elevationExtent`,
+`intensityExtent`) now live in `src/render/colorLegend.ts` behind the same host
+shape, so the origin math, seeded gating and extent scans test without a WebGL
+context (`tests/viewerActiveColorbar.test.ts`). `Viewer` keeps three thin
+delegates and one host binding.
 
 Each extraction is one gated step: move the block, have it take its collaborators
 as parameters, keep the deterministic e2e project green, and re-run the coverage
