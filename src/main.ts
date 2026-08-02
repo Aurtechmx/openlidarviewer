@@ -251,7 +251,8 @@ import { CatalogPanel } from './ui/CatalogPanel';
 // CRS detection + override — feeds the Inspector's Coordinate System
 // section. Static clouds carry `metadata.crs` (CrsInfo from src/io/crs);
 // streaming clouds expose `.crs()` returning the same shape.
-import type { CrsInfo } from './io/crs';
+import type { CrsInfo, CrsLinearUnit } from './io/crs';
+import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -4392,7 +4393,7 @@ function runStreamingModules(cloud: {
     readonly captureSensor?: string;
     readonly sourceSoftware?: string;
   };
-  readonly crs?: () => { readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
+  readonly crs?: () => { readonly linearUnit?: CrsLinearUnit; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number } | null;
   readonly maxDepth?: () => number;
   readonly octree?: { nodes: () => readonly unknown[] };
 }, classFilterActive = false): AnalysisRow[] {
@@ -4426,21 +4427,20 @@ function runStreamingModules(cloud: {
     // Convert the source-CRS units to metres before printing "m" / "pts/m²",
     // exactly as the static Scan Report and the PDF do. A state-plane-FEET COPC
     // otherwise over-reports extent ~3.28× and density ~10.8×, mislabelled as
-    // metres. COPC/EPT are Z-up by spec, so the horizontal pair is X·Y.
+    // metres. `streamingExtentRows` FAILS CLOSED on an unconfirmed unit
+    // (placeholder `linearUnitToMetres: 1`): it drops the "m"/"pts/m²" claim
+    // rather than stamping metres onto non-metre data — as measure/lasso do.
     const crsInfo = cloud.crs?.() ?? null;
-    const mpu = crsInfo?.linearUnitToMetres ?? 1;
-    const vmpu = crsInfo?.verticalUnitToMetres ?? mpu;
-    const w = (header.max[0] - header.min[0]) * mpu;
-    const d = (header.max[1] - header.min[1]) * mpu;
-    const h = (header.max[2] - header.min[2]) * vmpu;
-    rows.push(info('Width', `${w.toFixed(1)} m`));
-    rows.push(info('Depth', `${d.toFixed(1)} m`));
-    rows.push(info('Height', `${h.toFixed(1)} m`));
-    const footprintArea = w * d;
-    if (footprintArea > 0 && cloud.sourcePointCount > 0) {
-      const density = cloud.sourcePointCount / footprintArea;
-      rows.push(headerMetric('Density', `${density.toFixed(1)} pts/m²`));
-      rows.push(headerMetric('Spacing', `${Math.sqrt(footprintArea / cloud.sourcePointCount).toFixed(2)} m`));
+    const ext = streamingExtentRows(header, crsInfo, cloud.sourcePointCount);
+    if (!ext.unitConfirmed) {
+      rows.push({
+        label: 'Units',
+        value: 'unconfirmed — source CRS declares no linear unit; extents shown in source units',
+        status: 'warn',
+      });
+    }
+    for (const r of ext.rows) {
+      rows.push(r.scoped ? headerMetric(r.label, r.value) : info(r.label, r.value));
     }
   }
 
