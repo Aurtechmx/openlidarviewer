@@ -79,7 +79,7 @@ import {
   classificationCoverage,
   type DeriveClassificationOptions,
 } from './render/class/deriveClassification';
-import type { ScanStoryInputs } from './intelligence/scanStory';
+import { footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 // ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
@@ -1831,11 +1831,11 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
 
   let pointCount: number | undefined;
   let areaM2: number | undefined;
-  // Render-space bounds are in the source CRS's native linear units (feet for a
-  // foot-CRS file), so a raw span² is ft², not m². Convert with linearUnitToMetres²
-  // — without it a foot-CRS scan reads ~10.76× too large in the Story / Health.
-  const linToM = crsService.current()?.linearUnitToMetres ?? 1;
-  const areaUnitToM2 = linToM * linToM;
+  // Footprint area in m², but only when the CRS's linear unit is known.
+  // `footprintAreaM2` fails closed on an unknown unit — which would report a raw
+  // span² as metres — so the Story / Health omit the area rather than claim a
+  // wrong one; a foot-CRS scan otherwise reads ~10.76x too large.
+  const areaCrs = crsService.current();
   // Metadata read is the FALLBACK for georef; when an analysis has run, the
   // authoritative quality.crsKnown / quality.datumKnown from storyFacts wins, so
   // the Story / Health never disagree with the panel's own CRS / Datum chips.
@@ -1845,7 +1845,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
   try {
     if (cloud) {
       const b = cloud.bounds();
-      areaM2 = (b.max[0] - b.min[0]) * (b.max[1] - b.min[1]) * areaUnitToM2;
+      areaM2 = footprintAreaM2(b.max[0] - b.min[0], b.max[1] - b.min[1], areaCrs);
       pointCount = cloud.pointCount;
       const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
       metaCrsKnown = !!crs?.name;
@@ -1855,7 +1855,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       // Tight data AABB, not the octree cube — the cube overstates footprint
       // area (and understates density) for a partial-footprint scan.
       const lb = streaming.dataBounds();
-      areaM2 = (lb[3] - lb[0]) * (lb[4] - lb[1]) * areaUnitToM2;
+      areaM2 = footprintAreaM2(lb[3] - lb[0], lb[4] - lb[1], areaCrs);
       pointCount = streaming.sourcePointCount;
       const sCrs = streaming.crs();
       metaCrsKnown = !!sCrs?.name;
