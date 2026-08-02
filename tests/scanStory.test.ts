@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildScanStory,
   buildExportHealth,
+  footprintAreaM2,
   type ScanStoryInputs,
   type StoryProduct,
 } from '../src/intelligence/scanStory';
@@ -215,5 +216,31 @@ describe('buildExportHealth — rows', () => {
     expect(
       buildExportHealth({ classification: 'none' }).rows.find((r) => r.label === 'Terrain products')?.value,
     ).toBe('Not analysed');
+  });
+});
+
+describe('footprintAreaM2 — fail closed on an unknown linear unit', () => {
+  it('returns square metres for a known metre CRS', () => {
+    expect(footprintAreaM2(10, 20, { linearUnit: 'metre', linearUnitToMetres: 1 })).toBe(200);
+  });
+
+  it('converts a foot CRS by the linear factor squared', () => {
+    // 10 ft x 20 ft = 200 ft^2 -> 200 * 0.3048^2 m^2.
+    expect(footprintAreaM2(10, 20, { linearUnit: 'foot', linearUnitToMetres: 0.3048 }))
+      .toBeCloseTo(200 * 0.3048 * 0.3048, 6);
+  });
+
+  it('returns undefined for an unknown unit rather than assuming metres', () => {
+    expect(footprintAreaM2(10, 20, { linearUnit: 'unknown', linearUnitToMetres: 1 })).toBeUndefined();
+  });
+
+  it('returns undefined when there is no CRS', () => {
+    expect(footprintAreaM2(10, 20, null)).toBeUndefined();
+    expect(footprintAreaM2(10, 20, undefined)).toBeUndefined();
+  });
+
+  it('returns undefined for a non-positive span', () => {
+    expect(footprintAreaM2(0, 20, { linearUnit: 'metre', linearUnitToMetres: 1 })).toBeUndefined();
+    expect(footprintAreaM2(-5, 20, { linearUnit: 'metre', linearUnitToMetres: 1 })).toBeUndefined();
   });
 });

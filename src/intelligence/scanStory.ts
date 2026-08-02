@@ -109,6 +109,25 @@ function formatArea(m2: number | undefined): string | null {
   return `${Math.round(m2)} m²`;
 }
 
+/**
+ * Footprint area in square metres, or `undefined` when it cannot be claimed.
+ *
+ * `spanX`/`spanY` are horizontal extents in the source CRS's linear unit. The
+ * area is returned only when that unit is known: an unknown unit would report a
+ * raw span² as if it were metres — a foot grid reads ~10.76x too large — so
+ * this fails closed and the caller shows no area rather than a wrong one.
+ */
+export function footprintAreaM2(
+  spanX: number,
+  spanY: number,
+  crs: { readonly linearUnit: string; readonly linearUnitToMetres?: number } | null | undefined,
+): number | undefined {
+  if (!crs || crs.linearUnit === 'unknown') return undefined;
+  const toM = crs.linearUnitToMetres ?? 1;
+  const area = spanX * spanY * toM * toM;
+  return Number.isFinite(area) && area > 0 ? area : undefined;
+}
+
 const isPartial = (m: ScanStoryInputs['coverageMode']): boolean =>
   m === 'resident-only' || m === 'sampled';
 
