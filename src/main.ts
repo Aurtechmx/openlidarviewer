@@ -154,6 +154,7 @@ import {
   type ViewStateBundle,
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
+import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -1370,6 +1371,7 @@ const inspector = new Inspector({
     syncInspectorRendering();
     persistPrefs();
   },
+  onNavigationPrefsChange: (prefs) => applyNavPrefsChange(prefs, viewer, persistPrefs),
   // Visuals Studio — Visuals Studio.
   onRgbAppearancePreset: (id) => {
     if (isRgbAppearancePresetId(id)) {
@@ -4853,14 +4855,10 @@ function persistPrefs(): void {
     touchModel: viewer.twoFingerTwistEnabled ? 'standard' : 'advanced',
     colorblindSafeClasses: colorblindSafeClasses(),
     workflow: workflowController.config,
+    navigation: navigationPrefs(),
   });
 }
 
-/**
- * Apply preferences saved in a previous session. Each key is applied only when
- * it was stored, so anything absent keeps the viewer's own default — including
- * the backend-dependent EDL default.
- */
 /**
  * Apply degraded rendering defaults on a low-capability device — Eye Dome
  * Lighting and antialiasing off — so a weak GPU stays interactive. Runs before
@@ -4873,6 +4871,7 @@ function applyDeviceDefaults(): void {
   }
 }
 
+/** Apply preferences saved in a previous session; each key applies only if it was stored. */
 function applyPrefs(): void {
   const p = loadPrefs();
   if (p.pointSize !== undefined) viewer.setPointSize(p.pointSize);
@@ -4896,6 +4895,7 @@ function applyPrefs(): void {
     pendingWorkflowConfig = p.workflow;
     if (workflowConfigPanel) workflowConfigPanel.setConfig(p.workflow);
   }
+  if (p.navigation !== undefined) restoreNavPrefs(p.navigation, viewer, inspector);
 }
 
 // Provenance + Dataset Intelligence load-time card refreshers live in

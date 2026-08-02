@@ -24,6 +24,10 @@ import {
   parseWorkflowConfig,
   type WorkflowRecorderConfig,
 } from './render/workflow/workflowConfig';
+import {
+  parseNavigationPreferences,
+  type NavigationPreferences,
+} from './render/navPrefs';
 
 /**
  * The user's choice of mobile multi-touch model.
@@ -59,6 +63,10 @@ export interface ViewerPrefs {
   colorblindSafeClasses: boolean;
   /** Workflow-recorder settings (format, save mode, shortcut, replay, …). */
   workflow: WorkflowRecorderConfig;
+  /** Orbit-handedness preferences (invert X / Y, preset). Stays out of the
+   *  session schema on purpose, so restoring a session never stomps a user's
+   *  handedness — it's a device preference, not a per-scan view setting. */
+  navigation: NavigationPreferences;
 }
 
 /** The `localStorage` key; the `.v1` suffix lets the schema evolve later. */
@@ -116,6 +124,9 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   }
   if (o.workflow !== undefined) {
     out.workflow = parseWorkflowConfig(o.workflow);
+  }
+  if (o.navigation !== undefined) {
+    out.navigation = parseNavigationPreferences(o.navigation);
   }
   return out;
 }

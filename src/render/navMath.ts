@@ -189,6 +189,41 @@ export function orbitOffset(
   ];
 }
 
+/** A signed orbit rotation: yaw around world-up, pitch toward / away from it. */
+export interface OrbitAngles {
+  /** Yaw in radians, fed to {@link orbitOffset} (rotation around world-up). */
+  yaw: number;
+  /** Pitch in radians; `+pitch` raises the viewpoint. */
+  pitch: number;
+}
+
+/**
+ * Apply the invert-orbit handedness to a base orbit delta.
+ *
+ * `dx` / `dy` are the yaw / pitch a drag WOULD produce under OLV's default
+ * (non-inverted) convention — the caller has already folded in viewport size
+ * and OrbitControls' `rotateSpeed`, so this stays a pure sign decision and the
+ * feel constant lives where the DOM is. `invertOrbitX` negates yaw only,
+ * `invertOrbitY` negates pitch only; the two never cross-couple.
+ *
+ * WHY a function and not an inline `? -x : x`: the invert flags are the source
+ * of truth for orbit handedness, so the sign logic is worth pinning with a
+ * unit test — the custom orbit handler in `NavController` (mouse-bound) and the
+ * keyboard-orbit path can't be tested in Node, but this can.
+ *
+ * A signed zero is normalised to `+0` so a zero delta never surfaces `-0`.
+ */
+export function orbitDragAngles(
+  dx: number,
+  dy: number,
+  invertOrbitX: boolean,
+  invertOrbitY: boolean,
+): OrbitAngles {
+  const yaw = invertOrbitX ? -dx : dx;
+  const pitch = invertOrbitY ? -dy : dy;
+  return { yaw: yaw === 0 ? 0 : yaw, pitch: pitch === 0 ? 0 : pitch };
+}
+
 /**
  * Format a distance in metres for a measurement label: centimetres below a
  * metre, metres up to a kilometre, kilometres beyond.

@@ -35,6 +35,7 @@ import {
   smoothVelocity,
   easeInOutCubic,
   orbitOffset,
+  orbitDragAngles,
 } from './navMath';
 import type { Vec3, OrbitKeys } from './navMath';
 import {
@@ -141,6 +142,22 @@ export class NavController {
   /** Eased angular velocity: [yawRate, pitchRate, unused] in radians/second. */
   private _orbitVel: Vec3 = [0, 0, 0];
 
+  // ── Orbit handedness (invert X / Y) ────────────────────────────────────
+  // WHY a custom orbit handler exists at all: the primary orbit gesture is
+  // owned by OrbitControls, which OLV never sees the delta from, and whose
+  // `rotateSpeed` is a single scalar — it can't invert X and Y independently.
+  // So when either invert is on we take the left-drag / one-finger touch away
+  // from OrbitControls (the same takeover the hand tool uses) and drive orbit
+  // ourselves through the pure `orbitOffset`. The signs are read per gesture,
+  // so `setNavigationPreferences` needs no rebuild. When BOTH are off we leave
+  // OrbitControls fully in charge, so default users get byte-identical feel.
+  private _invertOrbitX = false;
+  private _invertOrbitY = false;
+  /** Pointer id of the active custom-orbit drag, or null when idle. */
+  private _orbitPointerId: number | null = null;
+  private _orbitLastX = 0;
+  private _orbitLastY = 0;
+
   // ── Pointer lock ───────────────────────────────────────────────────────
   private _locked = false;
 
@@ -208,6 +225,9 @@ export class NavController {
   private readonly _onPanPointerDown: (e: PointerEvent) => void;
   private readonly _onPanPointerMove: (e: PointerEvent) => void;
   private readonly _onPanPointerUp: (e: PointerEvent) => void;
+  private readonly _onOrbitPointerDown: (e: PointerEvent) => void;
+  private readonly _onOrbitPointerMove: (e: PointerEvent) => void;
+  private readonly _onOrbitPointerUp: (e: PointerEvent) => void;
   private readonly _onWheel: (e: WheelEvent) => void;
   /**
    * Whether a physical Control key is down.
@@ -241,6 +261,9 @@ export class NavController {
     this._onPanPointerDown = (e) => this._handlePanPointerDown(e);
     this._onPanPointerMove = (e) => this._handlePanPointerMove(e);
     this._onPanPointerUp = (e) => this._handlePanPointerUp(e);
+    this._onOrbitPointerDown = (e) => this._handleOrbitPointerDown(e);
+    this._onOrbitPointerMove = (e) => this._handleOrbitPointerMove(e);
+    this._onOrbitPointerUp = (e) => this._handleOrbitPointerUp(e);
     this._onWheel = (e) => this._handleWheel(e);
     this._onCtrlKeyChange = (e) => {
       this._ctrlHeld = e.type === 'keyup' ? false : e.ctrlKey;
@@ -257,6 +280,15 @@ export class NavController {
     canvas.addEventListener('pointermove', this._onPanPointerMove);
     canvas.addEventListener('pointerup', this._onPanPointerUp);
     canvas.addEventListener('pointercancel', this._onPanPointerUp);
+    // Custom orbit takeover (invert X / Y). Registered AFTER the pan listeners
+    // so the pan down handler's touch-count bookkeeping (`_panTouches`) is
+    // already updated when the orbit handler reads it. Both see every pointer
+    // event but grab mutually exclusively — the pan tool ignores left-drag /
+    // one-finger touch in orbit mode, and the orbit handler ignores pan mode.
+    canvas.addEventListener('pointerdown', this._onOrbitPointerDown);
+    canvas.addEventListener('pointermove', this._onOrbitPointerMove);
+    canvas.addEventListener('pointerup', this._onOrbitPointerUp);
+    canvas.addEventListener('pointercancel', this._onOrbitPointerUp);
     // Middle-mouse is the temporary grab in ANY mode (program §P1). Take the
     // middle button away from OrbitControls' default drag-dolly so the two
     // handlers can't fight over the same gesture; wheel dolly is unaffected.
@@ -334,6 +366,37 @@ export class NavController {
   }
 
   /**
+   * Live-set the orbit invert handedness. Only the yaw / pitch signs change:
+   * WASD walk, fly, wheel dolly, pinch-zoom, the hand-tool pan and the
+   * two-finger twist are all untouched. Turning either invert on takes the
+   * orbit drag away from OrbitControls; turning both off hands it back, so the
+   * default state is exactly stock OrbitControls. The keyboard-orbit path reads
+   * the same signs, so keyboard and mouse always agree.
+   */
+  setNavigationPreferences(prefs: { invertOrbitX: boolean; invertOrbitY: boolean }): void {
+    this._invertOrbitX = prefs.invertOrbitX;
+    this._invertOrbitY = prefs.invertOrbitY;
+    // Re-evaluate whether we own the left-drag / one-finger touch now.
+    this._applyDragInputMap();
+    // If the takeover just switched off, drop any drag we were mid-way through.
+    if (!this._orbitInvertActive()) this._endOrbitDrag();
+  }
+
+  /** Whether either orbit axis is currently inverted (custom handler active). */
+  private _orbitInvertActive(): boolean {
+    return this._invertOrbitX || this._invertOrbitY;
+  }
+
+  /**
+   * Whether a custom-orbit drag is live right now. The Viewer's per-frame
+   * orbit-centre maintenance reads this — exactly like `panDragging` — so the
+   * soft-clamp lerp never fights a live drag OrbitControls can't see.
+   */
+  get orbitDragging(): boolean {
+    return this._orbitPointerId !== null;
+  }
+
+  /**
    * Enable or disable all navigation input. Disabling freezes the camera so
    * another tool — distance measurement — can own pointer clicks cleanly.
    */
@@ -343,6 +406,7 @@ export class NavController {
       this._clearMovementKeys();
       this._clearOrbitKeys();
       this._cancelPanGesture();
+      this._endOrbitDrag();
       this._releaseCursor();
       this._controls.enabled = false;
       this._exitPointerLock();
@@ -367,10 +431,11 @@ export class NavController {
     this._clearMovementKeys();
     this._clearOrbitKeys();
     this._cancelPanGesture();
+    this._endOrbitDrag();
 
     // Orbit and pan are both OrbitControls-driven: pan keeps the controls
     // live for wheel dolly and damping, but takes the primary drag away
-    // (see `_applyPanInputMap`) so the hand owns it.
+    // (see `_applyDragInputMap`) so the hand owns it.
     if (mode === 'orbit' || mode === 'pan') {
       if (previous !== 'orbit' && previous !== 'pan') {
         // Hand the camera back to OrbitControls: aim its target a sensible
@@ -392,7 +457,7 @@ export class NavController {
       this._controls.enabled = false;
     }
 
-    this._applyPanInputMap();
+    this._applyDragInputMap();
     this._applyIdleCursor();
     this._cb.onModeChange?.(mode);
   }
@@ -621,6 +686,7 @@ export class NavController {
   /** Remove every event listener. Call when tearing the viewer down. */
   dispose(): void {
     this._cancelPanGesture();
+    this._endOrbitDrag();
     this._releaseCursor();
     this._canvas.removeEventListener('wheel', this._onWheel);
     window.removeEventListener('keydown', this._onKeyDown);
@@ -635,6 +701,10 @@ export class NavController {
     this._canvas.removeEventListener('pointermove', this._onPanPointerMove);
     this._canvas.removeEventListener('pointerup', this._onPanPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onPanPointerUp);
+    this._canvas.removeEventListener('pointerdown', this._onOrbitPointerDown);
+    this._canvas.removeEventListener('pointermove', this._onOrbitPointerMove);
+    this._canvas.removeEventListener('pointerup', this._onOrbitPointerUp);
+    this._canvas.removeEventListener('pointercancel', this._onOrbitPointerUp);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -715,12 +785,13 @@ export class NavController {
    * panning and zoom are untouched.
    */
   private _applyKeyboardOrbit(step: number): void {
+    // Same invert signs as the mouse handler, so keyboard and mouse agree.
     const targetYaw =
       ((this._orbitKeys.left ? 1 : 0) - (this._orbitKeys.right ? 1 : 0)) *
-      ORBIT_KEY_SPEED;
+      ORBIT_KEY_SPEED * (this._invertOrbitX ? -1 : 1);
     const targetPitch =
       ((this._orbitKeys.up ? 1 : 0) - (this._orbitKeys.down ? 1 : 0)) *
-      ORBIT_KEY_SPEED;
+      ORBIT_KEY_SPEED * (this._invertOrbitY ? -1 : 1);
     this._orbitVel = smoothVelocity(
       this._orbitVel,
       [targetYaw, targetPitch, 0],
@@ -858,6 +929,7 @@ export class NavController {
     // A grab in flight when focus is lost would never see its pointerup —
     // cancel it (and restore the idle cursor) rather than strand it.
     this._cancelPanGesture();
+    this._endOrbitDrag();
   }
 
   private _handleCanvasClick(): void {
@@ -898,17 +970,26 @@ export class NavController {
   // are preserved exactly, and the grabbed point stays under the pointer.
   // ─────────────────────────────────────────────────────────────────────────
 
+  /** True while another handler should own the primary drag / one-finger touch
+   *  instead of OrbitControls: the hand tool in pan mode, or the custom orbit
+   *  handler in orbit mode when an invert is on. */
+  private _dragTakeoverActive(): boolean {
+    if (this._mode === 'pan') return true;
+    return this._mode === 'orbit' && this._orbitInvertActive();
+  }
+
   /**
-   * In pan mode, take the primary mouse drag and the one-finger touch away
-   * from OrbitControls (rotate) so the hand owns them; wheel keeps dollying
-   * through the still-enabled controls. Leaving pan restores the exact
-   * previous mappings — including the Viewer's custom touch model, where the
-   * two-finger recogniser owns TWO and OrbitControls only ever sees ONE.
+   * Take the primary mouse drag and the one-finger touch away from
+   * OrbitControls (rotate) so a custom handler can own them — the hand tool in
+   * pan mode, or the invert-aware orbit handler in orbit mode. Wheel keeps
+   * dollying through the still-enabled controls. Handing them back restores the
+   * exact previous mappings — including the Viewer's custom touch model, where
+   * the two-finger recogniser owns TWO and OrbitControls only ever sees ONE.
    */
-  private _applyPanInputMap(): void {
+  private _applyDragInputMap(): void {
     const buttons = this._controls.mouseButtons as { LEFT: THREE.MOUSE | null };
     const touches = this._controls.touches as { ONE: THREE.TOUCH | null };
-    if (this._mode === 'pan') {
+    if (this._dragTakeoverActive()) {
       if (this._savedMouseLeft === null) this._savedMouseLeft = buttons.LEFT ?? undefined;
       if (this._savedTouchOne === null) this._savedTouchOne = touches.ONE ?? undefined;
       buttons.LEFT = null;
@@ -1088,5 +1169,109 @@ export class NavController {
     const dir = this._panRayDir(e);
     const p = this._camera.position;
     return intersectRayPlane([p.x, p.y, p.z], dir, this._panPlanePoint, this._panPlaneNormal);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Custom orbit drag — active only when invert X or Y is on (see the
+  // handedness block near the top for WHY this bypasses OrbitControls).
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Whether this pointer-down should start a custom-orbit drag. */
+  private _orbitDragEligible(e: PointerEvent): boolean {
+    if (this._mode !== 'orbit' || !this._orbitInvertActive()) return false;
+    if (!this._inputEnabled || this._locked) return false;
+    if (e.pointerType === 'touch') {
+      // One finger orbits; a second finger belongs to the Viewer's two-finger
+      // recogniser (twist + pinch + pan), which still owns TOUCH.TWO.
+      return this._panTouches.size === 1;
+    }
+    // Primary mouse / pen only. The middle button is the temporary hand grab,
+    // handled by the pan pointer path in any mode.
+    return e.button === 0;
+  }
+
+  private _handleOrbitPointerDown(e: PointerEvent): void {
+    if (this._orbitPointerId !== null) return; // one drag at a time
+    if (!this._orbitDragEligible(e)) return;
+    this._orbitPointerId = e.pointerId;
+    this._orbitLastX = e.clientX;
+    this._orbitLastY = e.clientY;
+    try {
+      this._canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // Pointer already gone (device quirk) — the drag ends on the natural up.
+    }
+    this._tween = null; // a manual orbit cancels an in-flight tween
+  }
+
+  private _handleOrbitPointerMove(e: PointerEvent): void {
+    if (this._orbitPointerId !== e.pointerId) return;
+    if (!this._inputEnabled) {
+      this._endOrbitDrag();
+      return;
+    }
+    // A second finger arrived: hand the surface to the two-finger recogniser.
+    if (e.pointerType === 'touch' && this._panTouches.size > 1) {
+      this._endOrbitDrag();
+      return;
+    }
+    const dx = e.clientX - this._orbitLastX;
+    const dy = e.clientY - this._orbitLastY;
+    this._orbitLastX = e.clientX;
+    this._orbitLastY = e.clientY;
+    this._applyOrbitDrag(dx, dy);
+  }
+
+  private _handleOrbitPointerUp(e: PointerEvent): void {
+    if (this._orbitPointerId !== e.pointerId) return;
+    this._endOrbitDrag();
+  }
+
+  /** End the active custom-orbit drag: release capture and clear the id. */
+  private _endOrbitDrag(): void {
+    if (this._orbitPointerId === null) return;
+    try {
+      this._canvas.releasePointerCapture(this._orbitPointerId);
+    } catch {
+      // Already released — ignore.
+    }
+    this._orbitPointerId = null;
+  }
+
+  /**
+   * Rotate the camera around the OrbitControls target by a pointer delta,
+   * preserving distance. The base yaw / pitch reproduce OrbitControls' own
+   * rotate: a full-viewport-height drag is `2π·rotateSpeed` (read live off the
+   * controls, so the mouse / touch tuning the Viewer chose is honoured), drag
+   * right lowers the azimuth, drag down raises the polar viewpoint. The invert
+   * signs come from the pure `orbitDragAngles`; `orbitOffset` keeps the polar
+   * clamp so the camera never flips over a pole. Only orbit yaw / pitch is
+   * affected — dolly, pan and twist are elsewhere.
+   */
+  private _applyOrbitDrag(dxPx: number, dyPx: number): void {
+    const h = Math.max(1, this._canvas.clientHeight);
+    const gain = (2 * Math.PI * this._controls.rotateSpeed) / h;
+    const { yaw, pitch } = orbitDragAngles(
+      -dxPx * gain,
+      dyPx * gain,
+      this._invertOrbitX,
+      this._invertOrbitY,
+    );
+    if (yaw === 0 && pitch === 0) return;
+    const t = this._controls.target;
+    const rotated = orbitOffset(
+      [
+        this._camera.position.x - t.x,
+        this._camera.position.y - t.y,
+        this._camera.position.z - t.z,
+      ],
+      [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      yaw,
+      pitch,
+    );
+    this._camera.position.set(t.x + rotated[0], t.y + rotated[1], t.z + rotated[2]);
+    // Let OrbitControls re-read its spherical state from the new pose so its
+    // damping resumes cleanly (and its 'change' event bumps render activity).
+    if (this._controls.enabled) this._controls.update();
   }
 }
