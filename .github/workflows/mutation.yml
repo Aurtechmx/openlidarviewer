@@ -38,11 +38,12 @@ concurrency:
 jobs:
   mutation:
     runs-on: ubuntu-latest
-    # Measured basis: 188 mutants over the numeric core at ~174 tests each ran
-    # in roughly 2 h inside the v0.6.2 release gate on this runner class. 180
-    # minutes is that figure with headroom; it is the budget the release gate
-    # used to have to carry.
-    timeout-minutes: 180
+    # The numeric-core run took ~2 h at v0.6.2, but v0.6.3 added killing tests to
+    # terrainDerivatives, so each mutant now runs against more tests and the pass
+    # overran the old 180-minute cap (the run was cancelled mid-mutation and never
+    # reached the dashboard push, leaving the badge "unknown"). 350 minutes stays
+    # under GitHub's 6 h job limit while giving the fuller test matrix headroom.
+    timeout-minutes: 350
     permissions:
       # A branch for the evidence file, and a pull request to carry it.
       contents: write
