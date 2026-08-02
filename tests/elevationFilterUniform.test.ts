@@ -104,3 +104,35 @@ describe('ELEVATION_FILTER_OFF', () => {
     expect(ELEVATION_FILTER_OFF.enabled).toBe(0);
   });
 });
+
+describe('per-cloud conversion (Gate 2 Stage B contract)', () => {
+  // Gate 2's whole bug is a single origin/axis feeding every cloud's window.
+  // This module already takes the origin shift as a parameter, so nothing here
+  // changes when Stage B wires the Viewer to call it once per cloud instead of
+  // once globally — these cases just pin that the maths is already correct to
+  // call that way, so a regression that flattens it back to one shared window
+  // fails loudly.
+  it('one world range converts to two different windows for two origins', () => {
+    // Two tiles recentred by different origins along the same axis: sharing one
+    // window (today's Viewer bug) would clip both at the same attribute bounds
+    // even though they sit at different heights in attribute space.
+    const world: [number, number] = [100, 150];
+    const cloudA = elevationFilterUniform(world, 2, 40); // origin shift 40
+    const cloudB = elevationFilterUniform(world, 2, 90); // origin shift 90
+    expect(cloudA).toEqual({ enabled: 1, axis: 2, min: 60, max: 110 });
+    expect(cloudB).toEqual({ enabled: 1, axis: 2, min: 10, max: 60 });
+    expect(cloudA.min).not.toBe(cloudB.min);
+    expect(cloudA.max).not.toBe(cloudB.max);
+  });
+
+  it('the same world window reads a different position component for Z-up vs Y-up', () => {
+    // A survey (Z-up, component 2) and a phone scan (Y-up, component 1) loaded
+    // together must not both test their elevation off the same axis index —
+    // that was the other half of the Gate 2 bug (shared `_worldUp`).
+    const zUp = elevationFilterUniform([0, 10], 2, 0);
+    const yUp = elevationFilterUniform([0, 10], 1, 0);
+    expect(zUp.axis).toBe(2);
+    expect(yUp.axis).toBe(1);
+    expect(zUp.axis).not.toBe(yUp.axis);
+  });
+});
