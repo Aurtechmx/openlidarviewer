@@ -334,7 +334,11 @@ export function crsFromWkt(wkt: string): CrsInfo {
     verticalDatum: vert.name,
     verticalEpsg: vert.epsg,
     verticalLinearUnit: vert.unit,
-    verticalUnitToMetres: vert.unit ? unitScaleForCode(vert.unit) : undefined,
+    // An unrecognised vertical unit (`'unknown'`) is treated like an absent
+    // one: leave `verticalUnitToMetres` undefined so consumers fall back to the
+    // horizontal unit rather than silently reading heights as metres.
+    verticalUnitToMetres:
+      vert.unit && vert.unit !== 'unknown' ? unitScaleForCode(vert.unit) : undefined,
     horizontalDatum,
   };
 }

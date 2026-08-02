@@ -59,6 +59,18 @@ describe('crsFromWkt — compound CRS (horizontal vs vertical)', () => {
     expect(crs.verticalDatum).toMatch(/NAVD88/);
     expect(crs.isGeographic).toBe(false);
   });
+
+  it('treats an unrecognised vertical unit as unknown, not metres', () => {
+    const wkt =
+      'COMPD_CS["x",PROJCS["NAD83 / UTM zone 11N",AUTHORITY["EPSG","26911"]],' +
+      'VERT_CS["Depth in fathoms",VERT_DATUM["Local",2005],' +
+      'UNIT["fathom",1.8288],AUTHORITY["EPSG","5703"]]]';
+    const crs = crsFromWkt(wkt);
+    expect(crs.verticalLinearUnit).toBe('unknown');
+    // Not read as metres: left undefined so consumers fall back to the
+    // horizontal unit instead of silently converting heights by 1.
+    expect(crs.verticalUnitToMetres).toBeUndefined();
+  });
 });
 
 /** Build a minimal GeoKeyDirectory byte array from [keyId, value] pairs. */
