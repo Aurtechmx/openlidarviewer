@@ -38,10 +38,40 @@
  */
 
 import type { Vec3 } from '../navMath';
+import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
+import { placeBufferInto } from '../layerPlacement';
 import {
   type PolygonValidity,
   validatePolygon,
 } from './polygonHygiene';
+
+/** A placed source buffer contributing to a combined cut/fill walk. */
+export interface PlacedVolumeBuffer {
+  readonly pos: Float32Array;
+  /** Float64 placement into the shared project frame; null/absent = identity. */
+  readonly placement?: LayerSpatialTransform | null;
+}
+
+/**
+ * Concatenate placed source buffers into one project-frame positions array,
+ * folding each layer's Float64 placement in during the copy. `total` is the
+ * summed element length (Σ pos.length) and the size of the returned array.
+ *
+ * Identity placements bulk-copy with `set` — byte-for-byte — so a scene with
+ * nothing mounted assembles exactly the buffer the pre-fold path did; only a
+ * real translation walks the buffer to add its offset.
+ */
+export function assembleVolumePositions(
+  buffers: ReadonlyArray<PlacedVolumeBuffer>,
+  total: number,
+): Float32Array {
+  const positions = new Float32Array(total);
+  let off = 0;
+  for (const { pos, placement } of buffers) {
+    off = placeBufferInto(positions, off, pos, placement);
+  }
+  return positions;
+}
 
 // ── tiny vector helpers (duplicated module-local for the leaf contract) ────
 
