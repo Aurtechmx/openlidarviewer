@@ -49,6 +49,19 @@ export interface CompareDtmsOptions extends ChangeDetectionOptions {
    * degree-based numbers as m³, and says so in the co-registration notes.
    */
   readonly isGeographic?: boolean;
+  /**
+   * False when the horizontal frame is PROJECTED but its linear unit is unknown
+   * (a CRS whose `linearUnit` is 'unknown', carrying the inert placeholder
+   * factor 1). Distinct from geographic: the frame is planar, so it passes the
+   * `isGeographic` gate, yet the source unit could be feet, US survey feet, or
+   * links — the factor 1 is a placeholder, not a measurement. Multiplying by it
+   * silently reports non-metre spacing (and, since the vertical unit falls back
+   * to this same horizontal unit, non-metre heights) as metres. When false, the
+   * comparison withholds the metre figures (cut/fill AND Δz) rather than
+   * captioning source-unit numbers as m³/m — fail closed on the unknown unit.
+   * Omitted/true means the unit is known (or a metre CRS) and figures print.
+   */
+  readonly horizontalUnitKnown?: boolean;
 }
 
 /** A two-epoch comparison plus the co-registration verdict the grids can't carry. */
@@ -81,6 +94,14 @@ export interface EpochComparison {
    * captioning them.
    */
   readonly frameIncompatible: boolean;
+  /**
+   * True when the horizontal frame is projected but its linear unit is unknown
+   * (see {@link CompareDtmsOptions.horizontalUnitKnown}). Like `frameIncompatible`,
+   * the metre figures are then withheld — an unknown source unit can't be
+   * multiplied into metres — but the cause is a missing unit, not a proven frame
+   * clash, so `summarizeChange` says so distinctly.
+   */
+  readonly horizontalUnitUnknown: boolean;
 }
 
 /**
@@ -107,6 +128,23 @@ export function compareDtms(
       'Geographic (degree) grid — cell areas are in degrees², so cut/fill volumes ' +
         'are not computable. Reproject both epochs to a projected CRS to measure ' +
         'volumes; the per-cell elevation differences remain valid.',
+    );
+  }
+
+  // Projected frame with an UNKNOWN linear unit: the frame is planar (so it is
+  // not geographic), but the source unit is undetermined and the factor fed in
+  // is the inert placeholder 1. Unlike the geographic case, z gives no reprieve
+  // — the vertical unit falls back to this same unknown horizontal unit — so
+  // BOTH the cut/fill volumes and the Δz figures would be source-unit numbers
+  // mislabelled as m³/m. Refuse the numbers (fail closed) rather than caption
+  // an unverified unit as metres; the diagnosis note says exactly what to fix.
+  const horizontalUnitUnknown =
+    options.isGeographic !== true && options.horizontalUnitKnown === false;
+  if (horizontalUnitUnknown) {
+    notes.push(
+      'Horizontal linear unit is unknown — the grid spacing has no confirmed metre scale, ' +
+        'so cut/fill volumes and elevation differences cannot be reported in metres. Set the ' +
+        'CRS linear unit (or reproject to a projected metre/foot CRS) to measure.',
     );
   }
 
@@ -172,7 +210,7 @@ export function compareDtms(
   // overall co-registration verdict folds those in too.
   const coregistered = result.aligned && notes.length === 0;
   const levelOfDetectionM = Math.max(0, options.levelOfDetectionM ?? DEFAULT_LOD_M);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible };
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, volumesComputable, frameIncompatible, horizontalUnitUnknown };
 }
 
 /**
@@ -192,6 +230,19 @@ export function summarizeChange(comparison: EpochComparison): string[] {
     lines.push(
       '✗ Not comparable — the two epochs are in provably different frames, so no ' +
         'difference is reported. Reproject them to a common CRS and vertical datum first.',
+    );
+    for (const note of coregistrationNotes) lines.push(`• ${note}`);
+    return lines;
+  }
+  if (comparison.horizontalUnitUnknown) {
+    // Projected frame, unknown linear unit: the source spacing has no confirmed
+    // metre scale, so every metre figure (m³ and Δz) would be a source-unit
+    // number wearing a metre label. Withhold them all — same posture as a proven
+    // frame clash — and keep only the diagnosis so the fix is clear.
+    lines.push(
+      '✗ Not comparable — the horizontal linear unit is unknown, so cut/fill volumes and ' +
+        'elevation differences are not reported in metres. Set the CRS linear unit (or ' +
+        'reproject to a metre/foot CRS) and compare again.',
     );
     for (const note of coregistrationNotes) lines.push(`• ${note}`);
     return lines;

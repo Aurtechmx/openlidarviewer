@@ -6836,6 +6836,14 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
         isGeographic:
           a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
+        // A projected CRS whose linear unit is 'unknown' carries the inert
+        // placeholder factor 1: using it would print source-unit spacing/heights
+        // as metres. Gate on the unit being KNOWN (either epoch declaring
+        // 'unknown' is enough to fail closed) so compareDtms withholds the metre
+        // figures instead of leaking them. A geographic frame is 'unknown' too
+        // but is handled by isGeographic above; compareDtms keeps them distinct.
+        horizontalUnitKnown:
+          a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown',
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
