@@ -79,8 +79,7 @@ import {
   classificationCoverage,
   type DeriveClassificationOptions,
 } from './render/class/deriveClassification';
-import type { ScanStoryInputs } from './intelligence/scanStory';
-import { footprintAreaM2 } from './intelligence/scanStory';
+import { footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
 // ObjectPanel is lazy-mounted on first scan load (v0.6 P1, step 2): only the
