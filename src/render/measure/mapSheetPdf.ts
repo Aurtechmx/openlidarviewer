@@ -16,6 +16,12 @@
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
+import type { Annotation, AnnotationType } from '../annotate/types';
+import { buildAnnotationReport, type AnnotationReportRow } from './annotationReportTable';
+import {
+  projectAnnotationToPage,
+  type SceneUpAxis,
+} from './annotationMapProjection';
 import { decimalsForInterval, type ContourLabel } from '../../terrain/contour/labelPlacement';
 import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
@@ -109,6 +115,26 @@ export interface MapSheetInput {
    * absent (back-compat).
    */
   readonly provenance?: ExportProvenance;
+  /**
+   * Opt-in: draw the placed annotations on the sheet (numbered markers on the
+   * map + a description table in the top-right collar). Default OFF, so a sheet
+   * built without this flag is byte-for-byte the pre-annotation output.
+   */
+  readonly includeAnnotations?: boolean;
+  /**
+   * The placed annotations, in list order (the marker index is the 1-based list
+   * position, matching the panel and the description table). Only read when
+   * {@link includeAnnotations} is true and the list is non-empty.
+   */
+  readonly annotations?: ReadonlyArray<Annotation>;
+  /**
+   * The RAW scene's up-axis, so an annotation's `localPosition` is rotated into
+   * the SAME canonical frame the contour geometry lives in before it is plotted.
+   * This MUST be the gather's `sourceUpAxis` (not the source format's nominal
+   * axis) — see the frame reasoning in `annotationMapProjection.ts`. Defaults to
+   * 'z' (the survey formats a georeferenced sheet is built from).
+   */
+  readonly sceneUpAxis?: SceneUpAxis;
 }
 
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {
@@ -128,6 +154,19 @@ const SEPIA_INDEX = rgb(0.24, 0.14, 0.05);
 // runs stay broken — the strongest "do not trust this line" signal.
 const SEPIA_LIGHT = rgb(0.58, 0.47, 0.36);
 const WHITE = rgb(1, 1, 1);
+
+/**
+ * Marker fill per annotation type. Chosen to read as a distinct inspection layer
+ * OVER the sepia contour ink (cool/saturated dots against warm hairlines), and
+ * to keep the four types tellable apart at print size. The description table
+ * carries the type name too, so colour is a reinforcement, not the only cue.
+ */
+const ANNOTATION_COLORS: Record<AnnotationType, ReturnType<typeof rgb>> = {
+  note: rgb(0.20, 0.40, 0.78),
+  info: rgb(0.10, 0.52, 0.55),
+  warning: rgb(0.85, 0.53, 0.10),
+  issue: rgb(0.74, 0.16, 0.12),
+};
 
 /**
  * One place that maps a contour feature's index/grade to its drawn style, so the
@@ -506,6 +545,199 @@ function drawMap(
     }
     page.drawText(unit, { x: bx + bar.barPt + 4, y: by, size: 6, font, color: DIM });
   }
+
+  // ── annotations (opt-in) ─────────────────────────────────────────────────
+  // Drawn LAST so the markers and their table sit above the contours, and only
+  // when the caller opted in AND there is something to draw — so a sheet built
+  // without annotations emits exactly the operations it did before this feature.
+  if (input.includeAnnotations && input.annotations && input.annotations.length > 0) {
+    drawAnnotationLayer(page, frame, inner, bbox, t, input.annotations, input.sceneUpAxis ?? 'z', font, bold);
+  }
+}
+
+/**
+ * The annotation inspection layer: a numbered marker on the map for each
+ * annotation that falls within the map extent, plus a description table in the
+ * top-right collar. The marker index is the annotation's 1-based list position,
+ * so a marker and its table row always carry the same number.
+ *
+ * Coordinate frame: `projectAnnotationToPage` converts each annotation's raw
+ * scene position into the map (contour) frame before projecting — see
+ * annotationMapProjection.ts. Off-map annotations are not drawn on the map but
+ * are STILL listed in the table (with a footnote), so the table stays complete.
+ */
+function drawAnnotationLayer(
+  page: PDFPage,
+  frame: { x: number; y: number; w: number; h: number },
+  inner: { x: number; y: number; w: number; h: number },
+  bbox: Box,
+  t: { ox: number; oy: number; scale: number },
+  annotations: ReadonlyArray<Annotation>,
+  sceneUpAxis: SceneUpAxis,
+  font: PDFFont,
+  bold: PDFFont,
+): void {
+  // One content model for the table (buildAnnotationReport) — complete by
+  // construction (one row per annotation, note summarised + flagged, no
+  // coordinate emitted). The markers reuse the SAME 1-based index.
+  const report = buildAnnotationReport(annotations, {});
+  let offMapCount = 0;
+  annotations.forEach((a, i) => {
+    const index = i + 1;
+    const p = projectAnnotationToPage(a.localPosition, sceneUpAxis, bbox, t);
+    if (!p.insideBbox || p.pageX < inner.x || p.pageX > inner.x + inner.w || p.pageY < inner.y || p.pageY > inner.y + inner.h) {
+      offMapCount++;
+      return;
+    }
+    drawMarker(page, p.pageX, p.pageY, index, ANNOTATION_COLORS[a.type], bold);
+  });
+  drawAnnotationTable(page, frame, report.header, report.rows, offMapCount, font, bold);
+}
+
+/**
+ * One numbered marker: a white halo disc for legibility over the contour ink, a
+ * filled type-coloured dot, and the index in a small knock-out box beside it so
+ * the number reads whatever the dot sits on.
+ */
+function drawMarker(
+  page: PDFPage,
+  px: number,
+  py: number,
+  index: number,
+  color: ReturnType<typeof rgb>,
+  bold: PDFFont,
+): void {
+  // A waypoint dot that reads over contour ink and belongs to this sepia sheet:
+  // a soft halo lifts it off the graticule, a fine sepia keyline (not a stark
+  // white one) rings the type-coloured disc so it reads as drawn INTO the map,
+  // and the index sits in a tight knock-out to the upper-right in the same
+  // sepia the index-contour labels use. drawEllipse's x/yScale are the radii and
+  // the centre stays exactly (px, py) — the placement the projection guarantees.
+  page.drawEllipse({ x: px, y: py, xScale: 5, yScale: 5, color: WHITE, opacity: 0.92 });
+  page.drawEllipse({ x: px, y: py, xScale: 3.1, yScale: 3.1, color, borderColor: SEPIA_INDEX, borderWidth: 0.5 });
+  const label = String(index);
+  const sz = 6.5;
+  const w = bold.widthOfTextAtSize(label, sz);
+  const lx = px + 5.2;
+  const ly = py + 1.6;
+  page.drawRectangle({ x: lx - 1.2, y: ly - 1.4, width: w + 2.4, height: sz + 0.8, color: WHITE, opacity: 0.9 });
+  page.drawText(label, { x: lx, y: ly, size: sz, font: bold, color: SEPIA_INDEX });
+}
+
+/**
+ * The description table in the top-right collar. Rows are SUMMARISED but never
+ * silently dropped: the height is fitted by shrinking the row pitch within
+ * reason, and if the list still overflows the sheet the overflow is called out
+ * with a note recommending a larger sheet size — the surveyor-sheet rule that a
+ * deliverable must recommend a better area rather than hide rows.
+ */
+function drawAnnotationTable(
+  page: PDFPage,
+  frame: { x: number; y: number; w: number; h: number },
+  header: string,
+  rows: ReadonlyArray<AnnotationReportRow>,
+  offMapCount: number,
+  font: PDFFont,
+  bold: PDFFont,
+): void {
+  const pad = 8;
+  const boxW = Math.min(190, frame.w * 0.42);
+  const rightX = frame.x + frame.w - pad;
+  const leftX = rightX - boxW;
+  // The box TOP sits below both orientation indicators (the north-arrow box
+  // bottoms out at frame top − 52; the ungeoreferenced "local grid up" note at
+  // frame top − 36), so the table never collides with the corner. Everything
+  // flows downward from here.
+  const boxTop = frame.y + frame.h - 54;
+  const headSz = 8;
+  const rowSz = 6.5;
+  const headerBaseline = boxTop - 12;
+  // Available vertical run from the header down to a margin above the scale bar.
+  const avail = headerBaseline - (frame.y + 28);
+  const footNote =
+    offMapCount > 0
+      ? `${offMapCount} annotation${offMapCount === 1 ? '' : 's'} outside the map extent - listed, not plotted.`
+      : '';
+  const footLines = footNote ? 1 : 0;
+  const noteRun = rowSz + 4;
+  // Fit the row pitch: start roomy, shrink toward a floor so more rows fit before
+  // we ever recommend a bigger sheet — a surveyor sheet must not silently drop a
+  // row. Only when even the floor pitch overflows do we show a "+N more" note
+  // and recommend a larger sheet size.
+  const minPitch = 7.5;
+  const maxPitch = 10;
+  let pitch = maxPitch;
+  const rowsRun = (): number => rows.length * pitch + footLines * noteRun;
+  while (pitch > minPitch && rowsRun() > avail) pitch -= 0.5;
+  const fitRows = Math.max(0, Math.floor((avail - footLines * noteRun) / pitch));
+  const shown = Math.min(rows.length, Math.max(1, fitRows));
+  const overflowed = shown < rows.length;
+  const overflowRun = overflowed ? noteRun : 0;
+
+  // Background box sized to exactly what is drawn (header + shown rows + notes).
+  const bodyBottom = headerBaseline - 6 - shown * pitch - overflowRun - footLines * noteRun;
+  const boxBottom = bodyBottom - 2;
+  page.drawRectangle({
+    x: leftX - 4, y: boxBottom, width: boxW + 8, height: boxTop - boxBottom,
+    color: WHITE, opacity: 0.9, borderColor: FRAME, borderWidth: 0.5,
+  });
+
+  // Header set in the sheet's index sepia over a sepia hairline, so the legend
+  // reads as part of the sheet's cartographic type rather than a bolted-on panel.
+  page.drawText(safe(header), { x: leftX, y: headerBaseline, size: headSz, font: bold, color: SEPIA_INDEX });
+  page.drawLine({
+    start: { x: leftX, y: headerBaseline - 3 }, end: { x: rightX, y: headerBaseline - 3 },
+    thickness: 0.6, color: SEPIA_INDEX,
+  });
+
+  let y = headerBaseline - 12;
+  // A colour swatch leads each row, in that annotation's own type colour — the
+  // same disc drawn on the map. Legend and map become one system: a reader ties
+  // a row to its marker by matching colour and number, not by hunting position.
+  const dotX = leftX + 2.4;
+  const indexX = leftX + 9;
+  const typeX = indexX + bold.widthOfTextAtSize('88', rowSz) + 4;
+  const descX = typeX + font.widthOfTextAtSize('warning', rowSz) + 5;
+  const descMax = rightX - descX;
+  for (let i = 0; i < shown; i++) {
+    const r = rows[i];
+    // swatch · index (sepia bold) · type (dim) · "Title - note", clipped to the edge.
+    page.drawEllipse({
+      x: dotX, y: y + rowSz * 0.34, xScale: 2.3, yScale: 2.3,
+      color: ANNOTATION_COLORS[r.type], borderColor: SEPIA_INDEX, borderWidth: 0.4,
+    });
+    page.drawText(safe(`${r.index}`), { x: indexX, y, size: rowSz, font: bold, color: SEPIA_INDEX });
+    page.drawText(safe(r.type), { x: typeX, y, size: rowSz, font, color: DIM });
+    const desc = r.note ? `${r.title} - ${r.note}` : r.title;
+    const clipped = clipToWidth(desc, descMax, rowSz, (s, sc) => font.widthOfTextAtSize(safe(s), sc));
+    page.drawText(safe(clipped), { x: descX, y, size: rowSz, font, color: INK });
+    y -= pitch;
+  }
+  if (overflowed) {
+    const more = rows.length - shown;
+    page.drawText(
+      safe(`+${more} more not shown - increase the sheet size to print the full list.`),
+      { x: leftX, y: y - 2, size: rowSz, font: bold, color: rgb(0.6, 0.2, 0.1) },
+    );
+    y -= noteRun;
+  }
+  if (footNote) {
+    page.drawText(safe(footNote), { x: leftX, y: y - 2, size: rowSz, font, color: DIM });
+  }
+}
+
+/** Hard-clip a single line to a max width, appending "…" when it is cut. */
+function clipToWidth(
+  s: string,
+  maxW: number,
+  sz: number,
+  measure: (s: string, sz: number) => number,
+): string {
+  if (maxW <= 0) return '';
+  if (measure(s, sz) <= maxW) return s;
+  let out = s;
+  while (out.length > 0 && measure(`${out}…`, sz) > maxW) out = out.slice(0, -1);
+  return out.length > 0 ? `${out}…` : '';
 }
 
 /** Title block with CRS, datum, scale, accuracy, legend, and provenance. */
