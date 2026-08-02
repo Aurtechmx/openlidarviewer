@@ -5,7 +5,7 @@
  * the tool drops a glowing marker on it and shows a compact floating card with
  * the point's coordinates and attributes, plus a one-click Copy button.
  *
- * Like MeasureTool, the marker is an **SVG overlay** projected from 3D each
+ * The marker is an **SVG overlay** projected from 3D each
  * frame rather than a scene object — this sidesteps the WebGPU one-pixel point
  * limit and keeps the marker crisp at any depth. The picked-point data shape
  * and its serialisations live in the pure, unit-tested `pointInfo.ts`.
