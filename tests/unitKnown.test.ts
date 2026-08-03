@@ -39,4 +39,22 @@ describe('isLinearUnitKnown', () => {
     expect(isLinearUnitKnown(footCrs)).toBe(true);
     expect(isLinearUnitKnown(unknownWithFactor)).toBe(false);
   });
+
+  it('the two-epoch compare gate fails closed when EITHER epoch lacks a known unit', () => {
+    // Regression for the epoch-compare wiring (compareLoadedLayers in main.ts):
+    // `horizontalUnitKnown` is `isLinearUnitKnown(a) && isLinearUnitKnown(b)`.
+    // The earlier inline form `a.linearUnit !== 'unknown' && b...` read a MISSING
+    // CRS (null metadata, the default for a plain PLY/PCD/XYZ) as unit-known —
+    // fail-OPEN — so cut/fill volume and Δz/LoD printed in metres from a
+    // placeholder factor of 1 while the real unit was unknown.
+    const metre = { linearUnit: 'metre' };
+    const bothKnown = (a: unknown, b: unknown) =>
+      isLinearUnitKnown(a as { linearUnit?: string } | null) &&
+      isLinearUnitKnown(b as { linearUnit?: string } | null);
+    expect(bothKnown(metre, metre)).toBe(true);
+    expect(bothKnown(metre, null)).toBe(false); // after-epoch has no CRS
+    expect(bothKnown(null, metre)).toBe(false); // before-epoch has no CRS
+    expect(bothKnown(metre, { linearUnit: 'unknown' })).toBe(false);
+    expect(bothKnown(null, null)).toBe(false);
+  });
 });

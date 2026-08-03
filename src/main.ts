@@ -6625,7 +6625,7 @@ function compareLoadedLayers(): void {
       const span = horizontalSpanXY(a.positions, a.sourceOrigin);
       const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // both KNOWN ⇒ summarizeAlignment reports the shift/residual in metres; 'unknown' withholds the metre figures (geographic frames are refused before the fit)
+        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // both units KNOWN ⇒ summarizeAlignment reports the shift/residual in metres; a missing CRS or 'unknown' unit withholds the metre figures (geographic frames are refused before the fit)
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
@@ -6642,7 +6642,7 @@ function compareLoadedLayers(): void {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
         isGeographic: a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
-        horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres ('unknown' = placeholder factor 1; geographic frames go via isGeographic)
+        horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres (a missing CRS or 'unknown' unit = placeholder factor 1; geographic frames go via isGeographic)
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
