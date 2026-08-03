@@ -155,7 +155,7 @@ alongside `exportGeoContext`'s static → streaming → zero frame resolution
 (`tests/reportExport.test.ts`). `main.ts` keeps thin `generateReportPdf` /
 `exportGeoContext` delegates that bind its running state to the deps.
 
-**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,376)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
@@ -193,6 +193,25 @@ error path test without a canvas context (`tests/snapshot.test.ts`). The
 overlay-compositing branch still needs a real 2-D canvas and stays on the e2e
 export suite. `Viewer` keeps a one-line delegate and a host binding.
 
+Done: the streaming session assembly (the `attachStreamingCloud` block that
+lazily loaded the render engine, constructed the `StreamingRenderer` with the
+Viewer *itself* as host, wired the scheduler's node-ready / node-evicted / tick
+callbacks, and picked the commit path) now lives in
+`src/render/streaming/streamingAttach.ts` as `buildStreamingSession(host, …)`
+behind a structural `StreamingHost`, with `disposeStreamingSession` owning the
+symmetric teardown. The `StreamingRenderer` no longer takes the concrete
+`Viewer`: it takes a six-method `StreamingRendererHost` (the mesh factory + the
+dissolve-uniform bookkeeping), which is the coupling the "passes the Viewer
+itself as host" note below flagged. The decisions the extraction exposes are
+Node-tested — the `shouldFadeIn` gate, the guarded fan-out to the two
+display-only node hooks (a throwing legend/reroute hook must not break the
+stream) with its benchmark bookkeeping, the fresh-per-node hook read, and the
+teardown order (`tests/streamingAttach.test.ts`). `Viewer` keeps a thin
+`attachStreamingCloud` that binds its state through `_buildStreamingHost` and
+still owns the view-bound remainder: the fresh GPU-error slate, the ordered
+detach-then-mount, the render-loop-independent heartbeat, and the
+camera/nav/EDL/orbit setup in `_configureForStreaming`.
+
 Each extraction is one gated step: move the block, have it take its collaborators
 as parameters, keep the deterministic e2e project green, and re-run the coverage
 ratchet. Behaviour does not change; only where the code lives.
@@ -202,16 +221,20 @@ because a few blocks are large, so the line count falls slowly even as the
 testable logic leaves. That is expected and fine: the goal is the extractions
 above, not the number.
 
-**One substantial cluster with a real boundary remains: streaming**
-(`_streaming*`). It is cohesive in *state* but not yet in *behaviour* —
-`attachStreamingCloud` passes the Viewer itself to `StreamingRenderer` as host
-and reaches into nav, camera, measure-datum and colour-context, so it moves
-only behind an explicit host interface, the same shape used for the export
-adapter and the lasso walk. That is the next decomposition step worth taking.
-The EDL cluster (`_edl*`) is a smaller follow-on. Everything else on the class
-— the constructor's scene/pipeline build, the render loop's requestAnimationFrame
-scheduling, event wiring — is the irreducibly view-bound remainder, and belongs
-here.
+**The streaming cluster's behavioural boundary is now extracted.** The part
+that had a genuine boundary — the session assembly that `attachStreamingCloud`
+built inline, and the `StreamingRenderer` taking the Viewer *itself* as host —
+now lives behind `StreamingHost` / `StreamingRendererHost` (see the Done entry
+above). What stays on the Viewer under `_streaming*` is the irreducibly
+view-bound remainder: `_configureForStreaming` (camera near/far, EDL uniforms,
+nav base-speed, orbit-clamp envelope, measure datum), the detach-side orbit and
+datum recompute, the per-frame `_tickStreaming` camera feed, and the heartbeat.
+Lifting those behind a host would mean a wide accessor surface over the camera,
+EDL uniforms and orbit state with no Node-testable decision to gain — GPU/camera
+mutation, not logic — so they belong here. The EDL cluster (`_edl*`) is a
+smaller follow-on. Everything else on the class — the constructor's
+scene/pipeline build, the render loop's requestAnimationFrame scheduling, event
+wiring — is the same view-bound remainder, and belongs here.
 
 ## Test and gate topology
 
