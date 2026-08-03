@@ -53,9 +53,30 @@ parsed, and rendered entirely in the browser, and there is no server to upload
 them to. The security of
 your data also depends on how and where you choose to deploy and run the app.
 
+## Secrets and credentials
+
+OpenLiDARViewer is a client-only static web app. It ships no server, database,
+or user authentication, and the built artifact contains no secrets. The release
+gate scans the tree and the archive for them, and the SBOM covers the shipped
+dependency set. The only secrets are CI-only GitHub Actions secrets, such as the
+mutation-dashboard key. They live in GitHub's encrypted secret store, are
+referenced by name from workflows, are never written into the repository or the
+bundle, and are rotated if exposure is suspected. Every workflow declares
+least-privilege `permissions`.
+
+## Dependency and code scanning
+
+Every push and pull request runs software-composition analysis (`npm audit` over
+the runtime dependencies) and static analysis (CodeQL and SonarCloud). Findings
+are triaged: a High or Critical result is remediated, or documented as not
+exploitable, before the next release, and the maintainer does not cut a release
+with an open High or Critical dependency or code-scanning alert. Lower-severity
+findings are fixed or recorded with the reason they are accepted. Dependency
+changes are reviewed rather than merged automatically.
+
 ## Supported versions
 
-OpenLiDARViewer is an R&D-stage project. Security fixes are applied to the
+OpenLiDARViewer is actively maintained. Security fixes are applied to the
 latest version on the default branch, and there is no long-term support branch
 for older releases. Older tagged releases stay published and verifiable, since
 the archived assets are what a citation points at, but they do not receive

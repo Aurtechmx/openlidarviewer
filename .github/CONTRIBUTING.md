@@ -1,7 +1,7 @@
 # Contributing to OpenLiDARViewer
 
-Thanks for your interest in improving OpenLiDARViewer. It is an R&D-stage,
-open-source project, and contributions are welcome.
+Thanks for your interest in improving OpenLiDARViewer. It is an actively
+maintained open-source project, and contributions are welcome.
 
 ## Getting started
 
@@ -89,6 +89,15 @@ writing the test.
 
 Documentation lives in `README.md` and `docs/`. If a change affects behavior,
 update the docs in the same pull request.
+
+## Collaborators and access
+
+Write access is granted only to trusted contributors, and access is reviewed
+before escalated permissions to sensitive resources (CI secrets,
+branch-protection bypass) are granted. A new collaborator starts with the least
+access their task needs, reviewed again when their role changes. Branch
+protection applies to everyone: pull requests, passing checks, resolved
+conversations, and linear history are required, with no direct pushes to `main`.
 
 ## A note on honesty
 

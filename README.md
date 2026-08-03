@@ -39,7 +39,7 @@ OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. Yo
 
 The idea is simple: opening a point cloud should feel about as easy as opening an image, but you still get the spatial depth, navigation, and inspection tools that LiDAR work needs.
 
-It is built as an R&D project for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is honesty-first: every result discloses its coverage, method, and uncertainty, and its terrain and contour exports are evidence-gated so they refuse to over-claim.
+It is built for browser-native geospatial visualization and human-centered point-cloud interaction. It is not a GIS, photogrammetry, or survey-grade processing suite. It is honesty-first: every result discloses its coverage, method, and uncertainty, and its terrain and contour exports are evidence-gated so they refuse to over-claim.
 
 ## Live Demo
 
@@ -449,7 +449,7 @@ The current release is **v0.6.3**. The full, dated history is in
 
 ## Current Limitations
 
-OpenLiDARViewer is an active R&D-stage project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools.
+OpenLiDARViewer is an actively maintained project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools.
 
 - Large files are limited by browser memory and GPU performance.
 - Some LiDAR formats need preprocessing or conversion before they load.

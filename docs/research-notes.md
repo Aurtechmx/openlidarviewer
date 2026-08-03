@@ -29,4 +29,4 @@ Both carry the project's honesty envelope: confidence **derived** from data supp
 
 ## Honest positioning
 
-OpenLiDARViewer is an R&D-stage open-source tool. A capability is described as implemented only when the code supports it. Measurement is for visual inspection, not survey-grade use, unless it has been validated against survey-grade data and procedures.
+OpenLiDARViewer is an actively maintained open-source tool. A capability is described as implemented only when the code supports it. Measurement is for visual inspection, not survey-grade use, unless it has been validated against survey-grade data and procedures.
