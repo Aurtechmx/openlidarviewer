@@ -3,6 +3,7 @@ import type { PointCloud } from '../../model/PointCloud';
 import type { ClassScope } from '../../render/class/classScope';
 import type { CrsLinearUnit } from '../../io/crs';
 import { isZUpFormat } from '../../io/sniffFormat';
+import { heightLabel, verticalReferenceFromDatum } from '../../geo/height';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -278,6 +279,28 @@ export const scanReport: AnalysisModule = {
       `${(c[2] + origin[2]).toFixed(3)}`;
     rows.push({ label: 'Min corner', value: corner(bounds.min), status: 'info', advanced: true });
     rows.push({ label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true });
+
+    // The absolute corners carry an absolute Z, which asserts a vertical
+    // reference the reader cannot recover from the number alone. State it,
+    // honestly (roadmap P1 #6): a georeferenced scan whose file declares no —
+    // or an unrecognised — vertical datum reads "Height (datum unknown)" rather
+    // than letting the corner Z pass as a sea-level elevation, mirroring the
+    // Inspector's datum-honest Z label (#229) via the same classifier. Shown
+    // only when the file carried a CRS: a scan with none has purely local
+    // corners and no datum to name.
+    const crs = meta?.crs;
+    if (crs) {
+      const reference = verticalReferenceFromDatum({
+        verticalEpsg: crs.verticalEpsg,
+        verticalDatum: crs.verticalDatum,
+      });
+      rows.push({
+        label: 'Vertical reference',
+        value: heightLabel(reference),
+        status: 'info',
+        advanced: true,
+      });
+    }
 
     // (v0.5.5 P12 — the separate "Classification Coverage" diagnostic row
     // merged into the main Classification row above.)
