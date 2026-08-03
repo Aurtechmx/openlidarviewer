@@ -95,10 +95,9 @@ import { colorForMode, defaultMode } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
+import { runRenderFrame, type RenderLoopHost } from './renderLoop';
 import { type ClipBox, clipKeepsPoint, countKept } from './clip/clipBox';
 import { edlDefaultEnabled, EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
-import { cameraIsMoving, edlActiveThisFrame } from './edlMotionGate';
-import { shouldRunProbePick } from './hoverPickGate';
 import { angularVelocity } from './angularVelocity';
 import {
   targetPixelRatio,
@@ -6298,113 +6297,75 @@ export class Viewer {
   }
 
   private _startLoop(): void {
-    const loop = () => {
+    // The per-frame body lives in `renderLoop.ts` behind a structural
+    // RenderLoopHost; this starter binds the Viewer's own state to it and owns
+    // the requestAnimationFrame scheduling (browser-only, e2e-covered). The
+    // host is built once — its accessors read `this` on every frame, so the
+    // loop always sees current state.
+    const host = this._buildRenderLoopHost();
+    const loop = (): void => {
       this._rafId = requestAnimationFrame(loop);
-      this._timer.update();
-      const delta = this._timer.getDelta();
-      this._recordFrame(delta);
-      this._nav.update(delta);
-      // Orbit-pivot maintenance — soft-clamp + streaming bounds-refinement
-      // lerp. Cheap and bounded; runs every frame regardless of EDL state.
-      this._maintainOrbitCenter();
-      // adaptive EDL. Modulate strength based on
-      // camera-to-target distance — close inspection gets stronger depth
-      // cueing (carves out structure), overview gets lighter (avoids
-      // muddy contrast). Cheap, runs every frame.
-      this._updateAdaptiveEdl();
-      // Idle-render throttle — the dominant fix for "OpenLiDARViewer
-      // makes my laptop hot". When the scene is quiet (no input, no
-      // tween, no streaming work) we render only every Nth frame
-      // instead of every frame. The CPU path above still runs every
-      // iteration so OrbitControls damping integrates correctly and
-      // streaming keeps its cadence; only the GPU `render()` call is
-      // gated. See `_shouldRenderFrame` for the full predicate.
-      const rendered = this._shouldRenderFrame();
-      // Suspend EDL while the camera is moving: its full-screen post-process is
-      // the dominant per-frame cost during orbit/pan/fly. The depth cue returns
-      // the instant the view parks. `moving` reuses the same motion signal the
-      // frame-rate throttle uses, so the two never disagree.
-      const nowMs = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
-      const moving = cameraIsMoving(this._nav.isTweening, nowMs, this._renderGate.activityUntilMs);
-      const wantEdl = edlActiveThisFrame(this._edlEnabled, moving);
-      // P5 — pick this frame's DPR before rendering so the render uses it.
-      this._applyAdaptiveDpr(moving, delta, nowMs, rendered);
-      if (rendered) {
-        this._renderGate.noteRendered();
-        // EDL when parked → render through the post-processing pipeline; moving
-        // or EDL off → render the scene directly for zero post-processing cost.
-        if (wantEdl) this._post.render();
-        else this._renderer.render(this._scene, this._camera);
-        this._edlPaintedAtRest = wantEdl;
-      } else if (wantEdl && !this._edlPaintedAtRest) {
-        // Motion just settled and the last paint had EDL off — force one EDL
-        // repaint so the depth cue snaps back, then resume idle throttling.
-        this._renderGate.noteRendered();
-        this._post.render();
-        this._edlPaintedAtRest = true;
-      } else {
-        this._renderGate.noteSkipped();
-      }
-      // Streaming COPC — run the view-dependent scheduler on a throttled
-      // cadence (~10 Hz at 60 fps), never every frame.
-      if (this._streaming) {
-        // Metered commits drain every frame (no-op in immediate mode).
-        this._streaming.commit.pump(this._smoothedFrameMs());
-        this._streamingFrame++;
-        if (this._streamingFrame % 6 === 0) this._tickStreaming();
-      }
-      // After render, camera matrices are current — project the tool overlays.
-      if (this._toolMode === 'measure' && !this._measure.dragging && this._pointerMoved) {
-        this._pointerMoved = false;
-        const hit = this._pointerOnCanvas
-          ? this._pickPoint(this._pointerNdcX, this._pointerNdcY)
-          : null;
-        this._measure.setCursor(hit ? [hit.x, hit.y, hit.z] : null);
-      }
-      // Live probe — at most one detailed pick per frame, only when the
-      // pointer actually moved, so a hover readout costs no idle frame budget.
-      // v0.6 P6: skip the detailed GPU pick while the user is actively driving
-      // the camera (orbit/pan drag) — during a drag you are navigating, not
-      // reading a hover value, so the readback is wasted. `_pointerMoved` is NOT
-      // consumed here, so the probe fires once as soon as the drag settles.
-      // (No separate camera-tween flag exists, so only active interaction gates.)
-      if (
-        this._toolMode === 'probe' &&
-        this._pointerMoved &&
-        shouldRunProbePick({ userInteracting: this._userInteracting, tweening: false })
-      ) {
-        this._pointerMoved = false;
-        let info: PointInfo | null = null;
-        if (this._pointerOnCanvas) {
-          const hit = this._pickDetailed(this._pointerNdcX, this._pointerNdcY);
-          if (hit) {
-            info = this._infoForHit(hit);
-          } else {
-            // Fall back to resident streaming nodes — COPC live probe.
-            const streamHit = this._pickStreamingDetailed(
-              this._pointerNdcX,
-              this._pointerNdcY,
-            );
-            if (streamHit) info = this._infoForStreamingHit(streamHit);
-          }
-        }
-        this._probe.update(info, this._pointerClientX, this._pointerClientY);
-      }
-      // Re-project the 2D tool overlays only on frames we actually rendered
-      // (camera/scene changed). Pointer, keyboard and orbit input all bump
-      // render-activity → `rendered` is true during any interaction, so the
-      // live measure cursor stays responsive; quiet idle frames skip this DOM
-      // work instead of re-laying-out overlays 60×/s for a static scene. The
-      // idle heartbeat still renders periodically, keeping overlays fresh.
-      if (rendered) {
-        this._measure.render(this._camera, this._canvas);
-        this._inspect.render();
-        this._annotate.render(this._camera, this._canvas);
-      }
+      runRenderFrame(host);
     };
     loop();
+  }
+
+  /** Bind the Viewer's live render state to the {@link RenderLoopHost} contract. */
+  private _buildRenderLoopHost(): RenderLoopHost {
+    return {
+      advanceFrameClock: () => {
+        this._timer.update();
+        return this._timer.getDelta();
+      },
+      recordFrame: (delta) => this._recordFrame(delta),
+      updateNav: (delta) => this._nav.update(delta),
+      maintainOrbitCenter: () => this._maintainOrbitCenter(),
+      updateAdaptiveEdl: () => this._updateAdaptiveEdl(),
+      shouldRenderFrame: () => this._shouldRenderFrame(),
+      isTweening: () => this._nav.isTweening,
+      activityUntilMs: () => this._renderGate.activityUntilMs,
+      edlEnabled: () => this._edlEnabled,
+      applyAdaptiveDpr: (moving, delta, nowMs, rendered) =>
+        this._applyAdaptiveDpr(moving, delta, nowMs, rendered),
+      noteRendered: () => this._renderGate.noteRendered(),
+      noteSkipped: () => this._renderGate.noteSkipped(),
+      renderEdl: () => this._post.render(),
+      renderScene: () => this._renderer.render(this._scene, this._camera),
+      edlPaintedAtRest: () => this._edlPaintedAtRest,
+      setEdlPaintedAtRest: (value) => {
+        this._edlPaintedAtRest = value;
+      },
+      hasStreaming: () => this._streaming !== null,
+      pumpStreamingCommit: () => {
+        this._streaming?.commit.pump(this._smoothedFrameMs());
+      },
+      advanceStreamingFrame: () => ++this._streamingFrame,
+      tickStreaming: () => this._tickStreaming(),
+      toolMode: () => this._toolMode,
+      measureDragging: () => this._measure.dragging,
+      pointerMoved: () => this._pointerMoved,
+      clearPointerMoved: () => {
+        this._pointerMoved = false;
+      },
+      pointerOnCanvas: () => this._pointerOnCanvas,
+      pointerNdc: () => ({ x: this._pointerNdcX, y: this._pointerNdcY }),
+      pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
+      pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
+      setMeasureCursor: (point) => this._measure.setCursor(point),
+      userInteracting: () => this._userInteracting,
+      probePickStatic: (ndcX, ndcY) => {
+        const hit = this._pickDetailed(ndcX, ndcY);
+        return hit ? this._infoForHit(hit) : null;
+      },
+      probePickStreaming: (ndcX, ndcY) => {
+        const hit = this._pickStreamingDetailed(ndcX, ndcY);
+        return hit ? this._infoForStreamingHit(hit) : null;
+      },
+      updateProbe: (info, clientX, clientY) => this._probe.update(info, clientX, clientY),
+      renderMeasureOverlay: () => this._measure.render(this._camera, this._canvas),
+      renderInspectOverlay: () => this._inspect.render(),
+      renderAnnotateOverlay: () => this._annotate.render(this._camera, this._canvas),
+    };
   }
 
   /**
