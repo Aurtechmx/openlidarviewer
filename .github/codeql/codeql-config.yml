@@ -1,0 +1,39 @@
+# CodeQL configuration for the advanced setup in
+# ../workflows/codeql.yml. Read alongside ./README.md, which carries the full
+# rationale for the one exclusion below.
+name: "OpenLiDARViewer CodeQL config"
+
+# Reproduce default setup's coverage. Default setup on this repo runs the
+# "extended" query suite; security-extended is its advanced-setup name — the
+# standard code-scanning queries plus the extended security set. Nothing is
+# disabled, so this is a strict superset of the default query pack.
+queries:
+  - uses: security-extended
+
+# Scope out exactly one rule, by id, for the whole repository.
+#
+# js/client-side-request-forgery flags a user-provided URL reaching `fetch`.
+# In this client-only viewer that pattern exists in exactly two places — the
+# remote EPT and remote COPC loaders in src/main.ts — and both pass the URL
+# through validateRemoteEptUrl / validateRemoteCopcUrl before any fetch. Those
+# validators reject non-http(s), over-length, embedded-credential, and (via
+# isBlockedHost in src/io/range/RangeSource.ts) loopback / RFC1918 / link-local /
+# CGNAT / metadata (169.254.169.254) hosts. The finding is a false positive:
+# alert #40 is the current instance, #12 was the same pattern on the old
+# main.ts and was dismissed by the maintainer.
+#
+# Why a query-filter and not a Models-as-Data barrier: CodeQL >= 2.25.2 does
+# support barrierModel / barrierGuardModel for JavaScript, which would be the
+# more precise fix. But those models anchor on a package or global `type`
+# (e.g. codeql/javascript-all, or an npm package name like "axios"). Our guard
+# is a first-party local ES module with no package identity in the API graph,
+# so there is no reliable `type` to bind the barrier to — and it cannot be
+# verified without running CodeQL. A scoped, id-level exclusion is the reliable
+# mechanism: because this is the first (and only) filter and it is an `exclude`,
+# every other query stays included and active. The trade-off is breadth — the
+# rule is off repo-wide, not just on those two functions — which is acceptable
+# here precisely because those two functions are the app's only user-URL→fetch
+# surface. See README.md for the full write-up.
+query-filters:
+  - exclude:
+      id: js/client-side-request-forgery

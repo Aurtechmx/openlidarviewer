@@ -1,0 +1,73 @@
+# CodeQL — advanced setup.
+#
+# Replaces the repository's *default* CodeQL setup with an equivalent
+# advanced (workflow-driven) one. The only reason to make the switch is that
+# default setup cannot take a configuration file, so it has no way to model
+# the remote point-cloud loader's URL validator. That gap makes
+# `js/client-side-request-forgery` re-flag the guarded `fetch` in the two
+# remote-load paths every time the code moves (alert #40 today; #12 was the
+# same finding on the old main.ts, already dismissed by the maintainer).
+#
+# This workflow reproduces default setup exactly — same languages, same
+# extended suite, same weekly cadence — and adds ./.github/codeql/codeql-config.yml,
+# where the one false-positive rule is scoped out and every other query kept.
+# See .github/codeql/README.md for the rationale and the activation steps
+# (default setup must be turned off before this can run; the two cannot
+# coexist).
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly, matching default setup's cadence so newly-shipped queries reach
+    # main even in a quiet week. Offset off the hour and off the other weekly
+    # jobs (Security audit 06:00, Scorecard 04:17) to spread runner load.
+    - cron: "26 3 * * 1"
+
+# Read-only by default. The analysis job widens its own grant below to the
+# least it needs to upload results; a job added later without its own block
+# inherits nothing but repository read.
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # Upload SARIF to the code-scanning API.
+      security-events: write
+      # Check out the repository.
+      contents: read
+      # Read workflow run metadata (Actions analysis + status reporting).
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # The exact language set default setup analyses today. CodeQL folds
+        # javascript + typescript into the single `javascript-typescript`
+        # identifier in advanced setup; both are interpreted, so build-mode
+        # is `none` (no compile step).
+        include:
+          - language: actions
+            build-mode: none
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3.37.5
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3.37.5
+        with:
+          category: "/language:${{ matrix.language }}"
