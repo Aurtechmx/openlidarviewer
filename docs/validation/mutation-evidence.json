@@ -4,8 +4,8 @@
   "score": 98.32,
   "break": 75,
   "mutants": {
-    "killed": 313,
-    "timeout": 39,
+    "killed": 305,
+    "timeout": 47,
     "survived": 5,
     "noCoverage": 1,
     "ignored": 0,
@@ -19,12 +19,12 @@
     "src/terrain/quantile.ts",
     "src/terrain/ground/terrainDerivatives.ts"
   ],
-  "commit": "a537e7dc47059b55aef39ee02479a359e4ca8ca0",
-  "measuredAt": "2026-08-01T13:52:35.385Z",
+  "commit": "3a3581dde063fb2c8b85757d52ef3236066a7265",
+  "measuredAt": "2026-08-03T10:25:16.087Z",
   "ranInThisGate": false,
   "workflow": "Mutation",
-  "workflowRunId": "30697202511",
-  "workflowRunUrl": "https://github.com/Aurtechmx/openlidarviewer/actions/runs/30697202511",
+  "workflowRunId": "30791794380",
+  "workflowRunUrl": "https://github.com/Aurtechmx/openlidarviewer/actions/runs/30791794380",
   "nodeVersion": "v22.17.1",
   "platform": "linux-x64"
 }
