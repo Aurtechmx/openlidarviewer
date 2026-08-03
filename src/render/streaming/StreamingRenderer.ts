@@ -17,7 +17,7 @@
 
 import { clamp01 } from '../../numeric';
 import type * as THREE from 'three/webgpu';
-import type { Viewer, PointMeshHandle } from '../Viewer';
+import type { PointMeshHandle } from '../Viewer';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
@@ -116,9 +116,33 @@ export interface StreamingRendererOptions {
   now?: () => number;
 }
 
+/**
+ * The narrow slice of the Viewer this renderer drives — the mesh factory the
+ * Viewer owns and the dissolve-uniform bookkeeping. Declared structurally (six
+ * methods, not the whole class) so the renderer no longer depends on the
+ * concrete `Viewer`: the streaming attach path can build it from a plain host,
+ * and the fade/reseed tests construct it from a small capture stub. The Viewer
+ * satisfies this by having each method public — the same host relationship the
+ * export adapter and render loop use (see
+ * `docs/architecture/architecture-map.md`).
+ */
+export interface StreamingRendererHost {
+  buildPointMesh(
+    positions: Float32Array,
+    colorsU8: Uint8Array,
+    classification?: ArrayLike<number> | null,
+    intensity?: ArrayLike<number> | null,
+  ): PointMeshHandle;
+  addStreamingMesh(mesh: THREE.Mesh, decoded: DecodedChunk, depth: number, key: string): void;
+  removeStreamingMesh(mesh: THREE.Mesh): void;
+  beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number;
+  setNodeDissolveProgress(material: THREE.PointsNodeMaterial, progress: number): void;
+  endNodeDissolve(material: THREE.PointsNodeMaterial): void;
+}
+
 /** Manages the per-node meshes of a streaming COPC cloud. */
 export class StreamingRenderer {
-  private readonly _viewer: Viewer;
+  private readonly _host: StreamingRendererHost;
   private readonly _meshes = new Map<string, NodeMesh>();
   private _mode: ColorMode;
   private _ranges: StreamingColorRanges;
@@ -170,12 +194,12 @@ export class StreamingRenderer {
   private _fadeRafHandle: number | null = null;
 
   constructor(
-    viewer: Viewer,
+    host: StreamingRendererHost,
     cloud: StreamingSource,
     mode: ColorMode,
     options: StreamingRendererOptions = {},
   ) {
-    this._viewer = viewer;
+    this._host = host;
     this._mode = mode;
     this._fadeIn = options.fadeIn ?? false;
     this._now = options.now ?? nowMs;
@@ -249,8 +273,8 @@ export class StreamingRenderer {
         // fade entry keeps `_stepFades` from ever re-removing this id — the new
         // mesh is a distinct object with its own (fade-in) entry.
         this._fades.delete(existing.mesh);
-        this._viewer.endNodeDissolve(fade.mat);
-        this._viewer.removeStreamingMesh(existing.mesh);
+        this._host.endNodeDissolve(fade.mat);
+        this._host.removeStreamingMesh(existing.mesh);
         this._meshes.delete(node.record.id);
       } else {
         return; // settled or fading in — already the current mesh
@@ -312,13 +336,13 @@ export class StreamingRenderer {
     // shared `_classMaskUniform` node (not a per-node copy), so a node decoded
     // AFTER a class toggle reads the current mask the moment it is built — no
     // re-application call is needed for late-arriving nodes.
-    const handle: PointMeshHandle = this._viewer.buildPointMesh(
+    const handle: PointMeshHandle = this._host.buildPointMesh(
       decoded.positions,
       colors,
       decoded.classification,
       decoded.intensity,
     );
-    this._viewer.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
+    this._host.addStreamingMesh(handle.mesh, decoded, node.record.key.depth, node.record.id);
     this._meshes.set(node.record.id, {
       mesh: handle.mesh,
       colorAttr: handle.colorAttr,
@@ -346,7 +370,7 @@ export class StreamingRenderer {
     if (!entry) return;
     if (!this._fadeIn) {
       this._fades.delete(entry.mesh);
-      this._viewer.removeStreamingMesh(entry.mesh);
+      this._host.removeStreamingMesh(entry.mesh);
       this._meshes.delete(node.record.id);
       return;
     }
@@ -427,7 +451,7 @@ export class StreamingRenderer {
     }
     this._fades.clear();
     for (const entry of this._meshes.values()) {
-      this._viewer.removeStreamingMesh(entry.mesh);
+      this._host.removeStreamingMesh(entry.mesh);
     }
     this._meshes.clear();
   }
@@ -441,7 +465,7 @@ export class StreamingRenderer {
     // Opaque screen-door dissolve: seed progress at 0 (hidden) and ramp to 1.
     // The material stays fully opaque, so there is no transparent-pass z-fight
     // against depthWrite and EDL/depth stay exact throughout the transition.
-    this._viewer.beginNodeDissolve(mat, 0);
+    this._host.beginNodeDissolve(mat, 0);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'in' });
     this._scheduleFadeTick();
   }
@@ -456,7 +480,7 @@ export class StreamingRenderer {
     // Dissolve OUT from the node's CURRENT density down to 0, opaque. A settled
     // node seeds at 1; a node still materialising dissolves out from where it
     // got to (beginNodeDissolve returns that), never snapping to full density.
-    const fromProgress = this._viewer.beginNodeDissolve(mat, 1);
+    const fromProgress = this._host.beginNodeDissolve(mat, 1);
     this._fades.set(mesh, { start: this._now(), mat, direction: 'out', nodeId, fromProgress });
     this._scheduleFadeTick();
   }
@@ -482,22 +506,22 @@ export class StreamingRenderer {
       const elapsed = now - state.start;
       if (state.direction === 'in') {
         // Dissolve IN: progress 0 → 1 (ease-out), then settle to the plain graph.
-        this._viewer.setNodeDissolveProgress(state.mat, fadeOpacity(elapsed, FADE_MS, 0));
+        this._host.setNodeDissolveProgress(state.mat, fadeOpacity(elapsed, FADE_MS, 0));
         if (elapsed >= FADE_MS) {
-          this._viewer.endNodeDissolve(state.mat);
+          this._host.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
         }
       } else {
         // direction === 'out' — the node was evicted; dissolve from its start
         // density → 0 (fadeOutOpacity is 1 → 0), then remove the mesh + entry.
-        this._viewer.setNodeDissolveProgress(
+        this._host.setNodeDissolveProgress(
           state.mat,
           (state.fromProgress ?? 1) * fadeOutOpacity(elapsed, FADE_MS),
         );
         if (elapsed >= FADE_MS) {
-          this._viewer.endNodeDissolve(state.mat);
+          this._host.endNodeDissolve(state.mat);
           this._fades.delete(mesh);
-          this._viewer.removeStreamingMesh(mesh);
+          this._host.removeStreamingMesh(mesh);
           if (state.nodeId) this._meshes.delete(state.nodeId);
         }
       }

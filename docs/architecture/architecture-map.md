@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 6,125 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,927 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -98,7 +98,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (6,125)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,927)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -109,7 +109,6 @@ called with a 19-member deps object. The candidates that remain:
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
-| `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 
 Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called with a
 `SessionIoDeps` object of ~16 accessors the shell binds to its own state. The pure
@@ -140,7 +139,23 @@ The SSRF URL validation (`validateRemoteEptUrl` / `validateRemoteCopcUrl`) is
 preserved exactly. `main.ts` keeps thin `openStreamingCopc` / `handleRemoteEpt`
 delegates that bind its running state to the deps.
 
-**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
+Done: `generateReportPdf` / `exportGeoContext` (~402 lines) — the report / geo-context
+export orchestration — now live in `src/app/reportExport.ts`, driven through a
+`ReportExportDeps` object of accessor functions closing over the shell's services,
+its resolved CRS and its mutable scan verdict rather than the Viewer class. The
+report engine (which pulls pdf-lib) is passed as a lazy loader so the module stays
+free of the boot graph. The pure decisions the extraction exposes are Node-tested —
+`effectiveCrsName` (the CRS-label honesty rule: only a projected / geographic CRS
+names the export frame, so a post-override label can't confidently place an export
+in the CRS the user rejected), `reportPointCount` (the file-scale honesty rule the
+PDF's Point Count follows, the same declared-total-over-strided-subset rule as the
+Layers chip's `layerChipCount`) and `isNonTerrainVerdict` (the capture-lens
+predicate that rules out an aerial density guess for a compact object / interior),
+alongside `exportGeoContext`'s static → streaming → zero frame resolution
+(`tests/reportExport.test.ts`). `main.ts` keeps thin `generateReportPdf` /
+`exportGeoContext` delegates that bind its running state to the deps.
+
+**`src/render/Viewer.ts` (6,376)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
@@ -178,6 +193,25 @@ error path test without a canvas context (`tests/snapshot.test.ts`). The
 overlay-compositing branch still needs a real 2-D canvas and stays on the e2e
 export suite. `Viewer` keeps a one-line delegate and a host binding.
 
+Done: the streaming session assembly (the `attachStreamingCloud` block that
+lazily loaded the render engine, constructed the `StreamingRenderer` with the
+Viewer *itself* as host, wired the scheduler's node-ready / node-evicted / tick
+callbacks, and picked the commit path) now lives in
+`src/render/streaming/streamingAttach.ts` as `buildStreamingSession(host, …)`
+behind a structural `StreamingHost`, with `disposeStreamingSession` owning the
+symmetric teardown. The `StreamingRenderer` no longer takes the concrete
+`Viewer`: it takes a six-method `StreamingRendererHost` (the mesh factory + the
+dissolve-uniform bookkeeping), which is the coupling the "passes the Viewer
+itself as host" note below flagged. The decisions the extraction exposes are
+Node-tested — the `shouldFadeIn` gate, the guarded fan-out to the two
+display-only node hooks (a throwing legend/reroute hook must not break the
+stream) with its benchmark bookkeeping, the fresh-per-node hook read, and the
+teardown order (`tests/streamingAttach.test.ts`). `Viewer` keeps a thin
+`attachStreamingCloud` that binds its state through `_buildStreamingHost` and
+still owns the view-bound remainder: the fresh GPU-error slate, the ordered
+detach-then-mount, the render-loop-independent heartbeat, and the
+camera/nav/EDL/orbit setup in `_configureForStreaming`.
+
 Each extraction is one gated step: move the block, have it take its collaborators
 as parameters, keep the deterministic e2e project green, and re-run the coverage
 ratchet. Behaviour does not change; only where the code lives.
@@ -187,16 +221,20 @@ because a few blocks are large, so the line count falls slowly even as the
 testable logic leaves. That is expected and fine: the goal is the extractions
 above, not the number.
 
-**One substantial cluster with a real boundary remains: streaming**
-(`_streaming*`). It is cohesive in *state* but not yet in *behaviour* —
-`attachStreamingCloud` passes the Viewer itself to `StreamingRenderer` as host
-and reaches into nav, camera, measure-datum and colour-context, so it moves
-only behind an explicit host interface, the same shape used for the export
-adapter and the lasso walk. That is the next decomposition step worth taking.
-The EDL cluster (`_edl*`) is a smaller follow-on. Everything else on the class
-— the constructor's scene/pipeline build, the render loop's requestAnimationFrame
-scheduling, event wiring — is the irreducibly view-bound remainder, and belongs
-here.
+**The streaming cluster's behavioural boundary is now extracted.** The part
+that had a genuine boundary — the session assembly that `attachStreamingCloud`
+built inline, and the `StreamingRenderer` taking the Viewer *itself* as host —
+now lives behind `StreamingHost` / `StreamingRendererHost` (see the Done entry
+above). What stays on the Viewer under `_streaming*` is the irreducibly
+view-bound remainder: `_configureForStreaming` (camera near/far, EDL uniforms,
+nav base-speed, orbit-clamp envelope, measure datum), the detach-side orbit and
+datum recompute, the per-frame `_tickStreaming` camera feed, and the heartbeat.
+Lifting those behind a host would mean a wide accessor surface over the camera,
+EDL uniforms and orbit state with no Node-testable decision to gain — GPU/camera
+mutation, not logic — so they belong here. The EDL cluster (`_edl*`) is a
+smaller follow-on. Everything else on the class — the constructor's
+scene/pipeline build, the render loop's requestAnimationFrame scheduling, event
+wiring — is the same view-bound remainder, and belongs here.
 
 ## Test and gate topology
 

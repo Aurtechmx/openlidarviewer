@@ -271,21 +271,26 @@ import { writeFloatColorsInto } from './colorEncode';
 // scan is opened. `streamingBudget` is a tiny leaf kept static for the
 // synchronous `setStreamingQuality` path.
 import type { StreamingScheduler } from './streaming/StreamingScheduler';
-import type { StreamingRenderer } from './streaming/StreamingRenderer';
 import { buildResidentSnapshot } from './streaming/residentSnapshot';
 import type { StreamingSource } from './streaming/StreamingSource';
 import { streamingBudgets, estimateGpuBytes } from './streaming/streamingBudget';
 import type { StreamingQuality } from './streaming/streamingBudget';
 import type { StreamingBenchmark } from './streaming/streamingBenchmark';
-import { makeStreamingCommit, type StreamingCommit } from './streaming/meteredCommit';
+// The session assembly (renderer/scheduler/commit construction + callback
+// wiring) lives in `streamingAttach.ts` behind a structural host; the Viewer
+// keeps a thin `attachStreamingCloud` that binds its state to it and owns the
+// view-bound camera/nav/EDL setup. See `docs/architecture/architecture-map.md`.
+import {
+  buildStreamingSession,
+  disposeStreamingSession,
+  type StreamingSession,
+  type StreamingHost,
+} from './streaming/streamingAttach';
 // The streaming-engine `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build source-transform so Vite can still emit the
-// chunks (see lazyChunks.ts).
-import {
-  loadStreamingRenderer,
-  loadStreamingScheduler,
-  loadExportStudio,
-} from '../lazyChunks';
+// chunks (see lazyChunks.ts). `loadExportStudio` is the export path's split
+// point; the streaming ones now load inside `streamingAttach.ts`.
+import { loadExportStudio } from '../lazyChunks';
 import type { ChunkDecoder, DecodedChunk } from '../io/copc/copcChunkDecode';
 import type {
   ExportMode,
@@ -452,27 +457,8 @@ export interface PointMeshHandle {
   classAttr: THREE.InstancedBufferAttribute | null;
 }
 
-/**
- * The live streaming subsystem — present only while a COPC OR EPT cloud is
- * open. Widens the `cloud` type from `StreamingPointCloud`
- * to the format-agnostic `StreamingSource` interface (the same one the
- * scheduler/renderer already consume), so both COPC and EPT route through
- * the exact same session shape.
- */
-interface StreamingSession {
-  cloud: StreamingSource;
-  scheduler: StreamingScheduler;
-  renderer: StreamingRenderer;
-  /**
-   * The chunk decoder driving this session. Retained so the full-cloud grade
-   * can re-decode a breadth-first octree sample through the
-   * SAME decoder the scheduler uses, without standing up a second worker pool.
-   */
-  decoder: ChunkDecoder;
-  /** The streaming benchmark, when one is collecting — null in normal sessions. */
-  benchmark: StreamingBenchmark | null;
-  commit: StreamingCommit; // the commit driver: immediate = inert, metered = upload-queue pump
-}
+// The `StreamingSession` shape now lives in `streaming/streamingAttach.ts`
+// alongside the builder that constructs it; imported above.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -1923,12 +1909,33 @@ export class Viewer {
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
+   * Bind the Viewer's live streaming collaborators to the {@link StreamingHost}
+   * contract the session builder reads. Held as a factory (not a stored field)
+   * so the node hooks are read fresh on every scheduler callback — the property
+   * the previous inline closures had by reading `this.onStreaming*` at call
+   * time. Mirrors `_buildExportAdapter`.
+   */
+  private _buildStreamingHost(): StreamingHost {
+    return {
+      rendererHost: this,
+      streamingNodeClassesHook: () => this.onStreamingNodeClasses,
+      streamingNodeReadyHook: () => this.onStreamingNodeReady,
+    };
+  }
+
+  /**
    * Attach a streaming COPC cloud: wire its scheduler to a renderer, configure
    * navigation for its extent, and begin view-dependent streaming on the next
    * render tick. Replaces any previously attached streaming cloud.
    *
-   * Async: the streaming render engine is a lazily-imported chunk, fetched
-   * here on the first COPC open so it never weighs on the initial bundle.
+   * The session assembly (lazy render-engine load, renderer/scheduler/commit
+   * construction, callback wiring) lives in `streamingAttach.ts`; this method
+   * keeps the view-bound remainder — the fresh GPU-error slate, the ordered
+   * detach-then-mount, the render-loop-independent heartbeat, and the
+   * camera/nav/EDL/orbit setup in `_configureForStreaming`.
+   *
+   * Async: the streaming render engine is a lazily-imported chunk, fetched on
+   * the first COPC open so it never weighs on the initial bundle.
    */
   async attachStreamingCloud(
     cloud: StreamingSource,
@@ -1939,65 +1946,19 @@ export class Viewer {
   ): Promise<void> {
     // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
     this._resetGpuErrorHistory();
-    const [{ StreamingRenderer }, { StreamingScheduler }] = await Promise.all([
-      loadStreamingRenderer(), loadStreamingScheduler(),
-    ]);
-    // Fade-in is enabled on desktop/mid+ profiles only; mobile and
-    // low-tier sessions skip it to preserve frame-budget headroom.
-    const fadeIn = !isMobile && quality !== 'low';
-    // the default colour mode comes from the source itself, not
-    // from a COPC-specific helper. Both `StreamingPointCloud` (COPC) and
-    // `EptStreamingPointCloud` implement `defaultColorMode()` so the
-    // Viewer never peeks at format-specific metadata shapes.
-    const renderer = new StreamingRenderer(this, cloud, cloud.defaultColorMode(), { fadeIn });
-    // The commit driver picks the scheduler's commit path (see meteredCommit.ts).
-    const commit = makeStreamingCommit(readDevFlags().streamingCommitMode, isMobile, benchmark ?? null);
-    const scheduler = new StreamingScheduler(
+    const session = await buildStreamingSession(
+      this._buildStreamingHost(),
       cloud,
       decoder,
-      {
-        onNodeReady: (node, decoded) => {
-          renderer.onNodeReady(node, decoded);
-          // DISPLAY-ONLY class legend hook — hand the host the node's decoded
-          // per-point classification so the legend can fold its histogram in.
-          // A DecodedChunk always carries a `classification` array (zero-filled
-          // when the source lacked the field). Pure read; never touches the GPU
-          // mask path above.
-          if (this.onStreamingNodeClasses && decoded.classification) {
-            try {
-              this.onStreamingNodeClasses(decoded.classification);
-            } catch {
-              /* a legend refresh must never break the streaming pipeline */
-            }
-          }
-          // Geometry-level node-ready hook — lets the host re-route the scan
-          // type as the cloud fills in. Guarded so a host throw can't break
-          // streaming.
-          if (this.onStreamingNodeReady) {
-            try { this.onStreamingNodeReady(); }
-            catch { /* a re-route must never break the streaming pipeline */ }
-          }
-          if (benchmark) {
-            benchmark.recordFirstPaint();
-            benchmark.recordNodeReady(node.record.id);
-            // Position bytes are a stable proxy for "decoded points" volume.
-            benchmark.recordDecodedBytes(decoded.positions.byteLength);
-          }
-        },
-        onNodeEvicted: (node) => {
-          renderer.onNodeEvicted(node);
-          benchmark?.recordNodeEvicted(node.record.id);
-        },
-        onTick: benchmark ? (ms) => benchmark.recordSchedulerTick(ms) : undefined,
-      },
-      streamingBudgets(quality, isMobile),
-      commit.schedulerOptions(),
+      quality,
+      isMobile,
+      benchmark ?? null,
     );
     // Detach the prior streaming cloud only now that the replacement renderer
     // and scheduler are built. A throw in the lazy load or the constructors
     // above then leaves the current scan on screen instead of a blank scene.
     this.detachStreamingCloud();
-    this._streaming = { cloud, scheduler, renderer, decoder, benchmark: benchmark ?? null, commit };
+    this._streaming = session;
     this._streamingFrame = 0;
     // Guaranteed scheduler cadence, render-loop-independent (see the field's
     // contract). 200 ms is comfortably above a tick's sub-millisecond cost and
@@ -2048,13 +2009,9 @@ export class Viewer {
       this._streamingHeartbeat = null;
     }
     if (!this._streaming) return;
-    this._streaming.scheduler.stop();
-    this._streaming.renderer.dispose();
-    // Release the source's underlying reader (COPC file handle / range source)
-    // so it doesn't outlive the detach. close() is async and may reject if the
-    // reader is already gone; detach is synchronous and best-effort, so fire it
-    // and swallow the rejection rather than block teardown.
-    void this._streaming.cloud.close?.().catch(() => {});
+    // Stop the scheduler, dispose the renderer's GPU meshes, and release the
+    // source's underlying reader (best-effort, swallowing a late-close reject).
+    disposeStreamingSession(this._streaming);
     this._streaming = null;
     this._lastStreamingCenter = null;
     // Recompute the orbit-clamp envelope from whatever static clouds remain
@@ -6088,10 +6045,10 @@ export class Viewer {
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name,
       index,
-      // `point` is in local space; the cloud's origin restores real-world
-      // coordinates — the absolute survey position engineers expect.
-      local: [point.x, point.y, point.z],
-      origin: [cloud.sourceOrigin[0], cloud.sourceOrigin[1], cloud.sourceOrigin[2]],
+      // `point` is the PLACED pick; for a non-anchor mounted layer it would
+      // double-count the origin. `worldXYZ` folds each cloud's own source origin.
+      local: cloud.worldXYZ(index),
+      origin: [0, 0, 0],
       distance: this._camera.position.distanceTo(point),
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,
