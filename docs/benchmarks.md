@@ -978,3 +978,107 @@ Two fixes landed alongside the report harness:
    silently broke at 250M; the new bounds are tier-specific honest
    upper limits, not aspirations.
 
+## Streaming fast-navigation measurement (evidence-driven hardening)
+
+The stress harness above proves *bounded residency and thrash-free eviction on
+a settled orbit*. It says nothing about what a user feels while flicking across
+a scene. This harness measures that: it drives the real `StreamingScheduler`
+through a scripted fast navigation and records the latencies the streaming path
+pays under motion, so any future hardening (metered commit, reconcile
+stickiness, an anti-thrash policy) has a before to point at.
+
+It measures. It changes nothing. Nothing about scheduler admission, eviction,
+commit or upload is touched; every number comes off a seam that already exists —
+the source's `decodeMeta` / `readNodeChunk`, the decoder, and the scheduler
+callbacks (`onNodeReady`, `onNodeEvicted`, `onTick`).
+
+### What it records
+
+| Component | Where measured | Node result |
+| --- | --- | --- |
+| frame time p50/p95/p99 | device only | **unavailable** — no render loop, no GPU |
+| node decode time | Node scheduler-drive | measured (see caveat below) |
+| queue wait time | Node scheduler-drive | measured |
+| mesh creation / GPU upload | device only | **unavailable** — no GL context |
+| first-render latency | Node scheduler-drive | measured |
+| peak decoded-but-not-resident memory | Node scheduler-drive | measured (≈ 0 on the immediate-commit path) |
+
+Supporting, directly measured: scheduler-tick CPU per frame, peak in-flight
+decode footprint, nodes resident / evicted, thrash events, peak resident points.
+
+### Node-simulated, and why
+
+Two of the requested components cannot be observed in Node — there is no render
+loop to time a frame and no GL context to build or upload a mesh. The harness
+does not invent them. It marks `frameTimeMs` and `meshCreationMs` `unavailable`
+with a reason, and `validateNavigationRecord` **refuses** a Node record that
+claims to have measured either (the honesty rule the frame-record schema already
+enforces, applied here as a test with teeth). The scheduler, decode queue,
+residency and eviction, by contrast, are pure TypeScript and run bit-for-bit as
+they do in the browser, so the four scheduler-side latencies here are real
+measurements of the real code, not a model of it.
+
+One caveat travels with the numbers and is written into the record's `notes`:
+`nodeDecodeMs` measures the harness's representative typed-array assembly, **not**
+laz-perf LAZ decompression. The synthetic fixture's chunk bytes are placeholders
+(the same reason the stress harness uses an instant decoder), so a real LAZ
+decode cannot run over them. The Node decode figure is therefore a floor; the
+true per-node decode is heavier and is captured on device.
+
+### How the workload reaches the budget boundary
+
+A fixed wide frustum can only exercise *admission* backpressure: the whole scene
+stays wanted, so the scheduler fills to the `1.5 × pointBudget` hysteresis cap
+and defers the rest — nothing is ever evicted. To measure the eviction path (the
+"regions pulsing" churn), two things have to be true, and the harness arranges
+both without touching a scheduler knob:
+
+- **The wanted set has to move.** The navigation flies a tight orthographic
+  window (~18 % of the extent per axis) between scattered dwell targets, so
+  nodes leave the frustum as the window passes.
+- **Wall-clock has to advance past the 2 s eviction defer window.** The
+  scheduler holds an unwanted node for `DEFAULT_EVICT_DEFER_MS = 2000 ms` before
+  dropping it, so the harness hops-and-dwells over real seconds (it does not fake
+  the clock), and revisits earlier targets inside the 5 s thrash window so an
+  evicted region reloads.
+
+The point budget is set below the source point count on purpose — at a preset
+budget (2.5M points) a test-tractable fixture never evicts.
+
+### Running it
+
+```
+# Node baseline — writes docs/validation/streaming-navigation-baseline.json
+npm run benchmark:streaming-nav
+
+# The always-on contract + honesty test (part of the normal gate)
+npx vitest run tests/benchmark/streamingNav.test.ts
+```
+
+The Node record's `frameTimeMs` and `meshCreationMs` are the two blanks. Fill
+them on a real device:
+
+```
+# Put the ~80 MB autzen COPC fixture next to package.json (or set
+# OLV_AUTZEN_FIXTURE), then, on a machine with a real GPU:
+STREAMING_NAV_DEVICE_WRITE=1 npx playwright test \
+  tests/e2e/streamingNavPerf.spec.ts --project=gpu --headed
+```
+
+That spec (`@gpu`, opt-in, skips without the fixture) loads the scan, drives a
+scripted orbit, samples frame times off the browser's own `requestAnimationFrame`
+cadence, and reads the `?debug=1` metrics overlay for the live streaming
+counters — writing `docs/validation/streaming-navigation-device.json`. A device
+record and a Node record are compared only within the same runtime, browser, OS
+and backend; pooling across machines produces a figure that describes nothing.
+
+### The committed baseline
+
+`docs/validation/streaming-navigation-baseline.json` is the first recorded run,
+tagged with the revision it was measured against. It is a *measured-on-this-
+machine* artifact, not a reproducibility hash — timings never repeat exactly, so
+the normal gate never regenerates or diffs it (the writer is gated behind
+`STREAMING_NAV_WRITE=1`). It exists so the follow-on hardening has a baseline to
+improve against, and so a reviewer can read the shape of the problem — evictions,
+thrash events, queue-wait tail — before any fix is written.
+
