@@ -120,6 +120,7 @@
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
+    "lint:positions-reads": "node scripts/lint-positions-reads.mjs",
     "lint:monolith-size": "node scripts/lint-monolith-size.mjs",
     "lint:claims-language": "node scripts/lint-claims-language.mjs",
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",
