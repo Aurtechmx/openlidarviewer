@@ -24,7 +24,7 @@
  *
  * Not a vitest suite: it spawns npm scripts, several of which are themselves
  * vitest runs. Its pure parts are unit-covered from vitest in
- * `tests/benchmark/publicationBattery.test.ts`.
+ * `tests/benchmark/cleanClone.test.ts`.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
