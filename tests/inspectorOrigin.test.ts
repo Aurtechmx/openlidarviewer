@@ -7,7 +7,14 @@
  * adding the origin a second time doubled every easting/northing and fed
  * the doubled values into the WGS-84 projection.
  */
-import { makePointInfo, splitPointCoords, worldCoordLabels } from '../src/render/pointInfo';
+import {
+  makePointInfo,
+  splitPointCoords,
+  worldCoordLabels,
+  pointVerticalReference,
+  pointHeight,
+  heightRowLabel,
+} from '../src/render/pointInfo';
 import type { RawPointInfo } from '../src/render/pointInfo';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
@@ -200,4 +207,65 @@ test('worldCoordLabels: an unrecognised vertical scale asserts NO suffix (never 
     userConfirmed: false,
   };
   expect(worldCoordLabels(oddVertical).zUnit).toBe('');
+});
+
+// ── Z-row datum honesty (the inspector's height label) ─────────────────────
+// The unit-suffix tests above pin what unit the Z value is shown in. These pin
+// what REFERENCE the label claims. The failure they guard: a georeferenced scan
+// with a KNOWN horizontal CRS but NO declared vertical datum printed
+// "Elevation", asserting a sea-level datum the file never carried. The label is
+// now built from an explicit HeightValue whose reference is honestly 'unknown'.
+
+/** A projected/geographic CRS carrying explicit vertical fields. */
+function crsWithVertical(kind: ResolvedCrs['kind'], vertical: Partial<ResolvedCrs>): ResolvedCrs {
+  return { ...crs(kind), ...vertical };
+}
+
+test('heightRowLabel: known horizontal CRS, NO vertical datum → "Height (datum unknown)", never "Elevation"', () => {
+  // The common, dangerous case: a UTM survey with no vertical CRS declared.
+  const projected = crs('projected', 'UTM zone 10N');
+  expect(projected.verticalDatum).toBeUndefined();
+  expect(heightRowLabel(projected)).toBe('Height (datum unknown)');
+  expect(heightRowLabel(projected)).not.toBe('Elevation');
+  // A geographic scan with no vertical datum is equally undeclared.
+  expect(heightRowLabel(crs('geographic', 'WGS 84'))).toBe('Height (datum unknown)');
+});
+
+test('heightRowLabel: a declared orthometric datum still reads "Elevation"', () => {
+  expect(heightRowLabel(crsWithVertical('projected', { verticalEpsg: 5703 }))).toBe('Elevation');
+  expect(heightRowLabel(crsWithVertical('projected', { verticalDatum: 'NAVD88' }))).toBe(
+    'Elevation',
+  );
+});
+
+test('heightRowLabel: an ellipsoidal (WGS 84 3D) height is labelled as such, not "Elevation"', () => {
+  const label = heightRowLabel(crsWithVertical('geographic', { verticalEpsg: 4979 }));
+  expect(label).toBe('Ellipsoidal height');
+});
+
+test('heightRowLabel: local / unknown / undefined scans keep the neutral "Z"', () => {
+  for (const c of [undefined, crs('local'), crs('unknown')]) {
+    expect(heightRowLabel(c)).toBe('Z');
+  }
+});
+
+test('pointVerticalReference maps CRS kind + datum to an honest reference', () => {
+  expect(pointVerticalReference(undefined)).toBe('unknown');
+  expect(pointVerticalReference(crs('unknown'))).toBe('unknown');
+  expect(pointVerticalReference(crs('local'))).toBe('local');
+  // Known horizontal CRS, undeclared vertical datum → unknown, not a guess.
+  expect(pointVerticalReference(crs('projected'))).toBe('unknown');
+  expect(pointVerticalReference(crsWithVertical('projected', { verticalEpsg: 5703 }))).toBe(
+    'orthometric',
+  );
+});
+
+test('pointHeight carries the world Z with its reference and the CRS vertical scale', () => {
+  const footZ = crsWithVertical('projected', { verticalEpsg: 5703, verticalUnitToMetres: 0.3048 });
+  const h = pointHeight(500, footZ);
+  expect(h.value).toBe(500);
+  expect(h.reference).toBe('orthometric');
+  expect(h.metresPerUnit).toBe(0.3048);
+  // No vertical datum declared → the height is honestly datum-unknown.
+  expect(pointHeight(500, crs('projected')).reference).toBe('unknown');
 });
