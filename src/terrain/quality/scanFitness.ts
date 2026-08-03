@@ -62,6 +62,18 @@ export interface FitnessInputs {
    * without this a feet RMSE was graded against metre thresholds. Default 1.
    */
   readonly unitToMetres?: number;
+  /**
+   * Whether the source linear unit is KNOWN — the CRS resolved a real linear
+   * unit. When explicitly `false`, the "pts/m²" density verdict and the "m"
+   * vertical-accuracy verdict are assume-metres claims on an inert placeholder
+   * factor (an unknown-unit or CRS-less scan), so they are HELD BACK (graded
+   * `review`, the headline accuracy suppressed) and a unit-unverified caveat is
+   * added instead of asserting a bare metric figure. `undefined` keeps the
+   * legacy "assume known" behaviour (no change) for callers that predate the
+   * flag. Mirrors the `crs.linearUnit !== 'unknown'` gate the streaming-extent /
+   * space-metrics / lasso seams already apply.
+   */
+  readonly unitKnown?: boolean;
   // Classification: fraction unclassified (null = no classification at all) and
   // whether a ground class is present.
   readonly unclassifiedFraction: number | null;
@@ -127,6 +139,15 @@ const RMSE_READY = 0.1;
 const RMSE_OKAY = 0.3;
 /** Unclassified fraction below which the cloud is well classified. */
 const UNCLASSIFIED_OKAY = 0.1;
+/**
+ * Caveat when the source linear unit is unverified (unknown-unit or CRS-less
+ * scan): every density / accuracy figure here would be labelled "pts/m²" / "m"
+ * off an inert placeholder factor, so disclose the assumption rather than assert
+ * metres. Parallels the space-metrics `UNVERIFIED_UNIT_CAVEAT` and the
+ * streaming-extent "in source units" fallback.
+ */
+const UNVERIFIED_UNIT_CAVEAT =
+  'Coordinate units are unverified — density (pts/m²) and vertical accuracy (m) would assume metres, so both are held back until the source CRS is confirmed.';
 
 function pct(frac: number): number {
   return Math.round(frac * 100);
@@ -151,8 +172,19 @@ function coverageDimension(f: number | null): FitnessDimension {
   return { key: 'coverage', label: 'Coverage', tone, summary };
 }
 
-function densityDimension(d: number | null): FitnessDimension {
+function densityDimension(d: number | null, unitKnown: boolean): FitnessDimension {
   if (d == null) return { key: 'density', label: 'Ground detail', tone: 'review', summary: 'Ground density unknown.' };
+  // Fail closed on an unverified scale: a pts/m² figure derived off an inert
+  // placeholder factor is not assertable, so hold the metric verdict rather than
+  // grade an unknown-unit scan against the metric 3DEP density floors.
+  if (!unitKnown) {
+    return {
+      key: 'density',
+      label: 'Ground detail',
+      tone: 'review',
+      summary: 'Coordinate units are unverified — ground density can’t be graded in pts/m² until the source CRS is confirmed.',
+    };
+  }
   const tone: FitnessTone = d >= QL1_DENSITY ? 'ready' : d >= QL2_DENSITY ? 'okay' : 'review';
   const v = d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
   const summary =
@@ -164,9 +196,20 @@ function densityDimension(d: number | null): FitnessDimension {
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
-function accuracyDimension(rmse: number | null, unit: string, unitToMetres: number): FitnessDimension {
+function accuracyDimension(rmse: number | null, unit: string, unitToMetres: number, unitKnown: boolean): FitnessDimension {
   if (rmse == null) {
     return { key: 'accuracy', label: 'Vertical accuracy', tone: 'review', summary: 'Not validated against any reference.' };
+  }
+  // Fail closed on an unverified scale: the RMSE would print "± m" and bucket
+  // against metric thresholds off an inert placeholder factor, so hold the
+  // verdict rather than assert a metre figure on an unknown-unit scan.
+  if (!unitKnown) {
+    return {
+      key: 'accuracy',
+      label: 'Vertical accuracy',
+      tone: 'review',
+      summary: 'Coordinate units are unverified — vertical accuracy can’t be stated in metres until the source CRS is confirmed.',
+    };
   }
   // Bucket on the METRIC value; the thresholds are metres. The displayed value
   // stays in the file's unit.
@@ -232,12 +275,15 @@ const LIMITER_PRIORITY: readonly FitnessKey[] = [
 export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const unit = inp.unit ?? 'm';
   const unitToMetres = inp.unitToMetres ?? 1;
+  // `undefined` keeps the legacy assume-known behaviour; only an explicit `false`
+  // fails the metric verdicts closed (unknown-unit / CRS-less scan).
+  const unitKnown = inp.unitKnown !== false;
   const provisional = inp.coverageMode !== 'full';
   const dimensions: FitnessDimension[] = [
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
-    densityDimension(inp.groundDensityPerM2),
-    accuracyDimension(inp.verticalRmse, unit, unitToMetres),
+    densityDimension(inp.groundDensityPerM2, unitKnown),
+    accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
     integrityDimension(inp),
   ];
@@ -252,8 +298,12 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const limiterPhrase: Record<FitnessKey, string> = {
     georeferencing: 'it isn’t placed in the real world (no map position or height datum)',
     coverage: 'ground coverage is sparse — most of the surface is interpolated',
-    density: 'ground density is below survey thresholds',
-    accuracy: 'vertical accuracy isn’t validated',
+    density: unitKnown
+      ? 'ground density is below survey thresholds'
+      : 'coordinate units are unverified, so density can’t be graded',
+    accuracy: unitKnown
+      ? 'vertical accuracy isn’t validated'
+      : 'coordinate units are unverified, so accuracy can’t be stated',
     classification: 'points aren’t classified to ground',
     integrity: 'only part of the cloud was analysed',
   };
@@ -292,9 +342,15 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
       ? `${inp.qualityLevel} (estimated)`
       : null;
 
-  const headlineAccuracy = inp.verticalRmse != null ? `±${inp.verticalRmse.toFixed(2)} ${unit} vertical` : null;
+  // The headline is a bare "± m" claim, so it too is withheld on an unverified
+  // scale (the unit-unverified caveat carries the disclosure instead).
+  const headlineAccuracy =
+    unitKnown && inp.verticalRmse != null ? `±${inp.verticalRmse.toFixed(2)} ${unit} vertical` : null;
 
   const caveats: string[] = [];
+  // Lead with the unit-unverified disclosure when the scale is unconfirmed — it
+  // is the most use-limiting caveat, since it holds back the metric verdicts.
+  if (!unitKnown) caveats.push(UNVERIFIED_UNIT_CAVEAT);
   if (inp.notSurveyGrade && inp.verticalRmse != null) {
     caveats.push('Accuracy is internal consistency (held-out points), not independent checkpoint verification.');
   }
