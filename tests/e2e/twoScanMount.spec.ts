@@ -161,3 +161,59 @@ test('two georeferenced tiles mount into one frame at their real separation', as
   expect(parseCoords(layers[0].sourceOrigin)?.[0]).toBe(500000);
   expect(parseCoords(layers[1].sourceOrigin)?.[0]).toBe(500000 + SEP_M);
 });
+
+/** A layer's offset is effectively zero — a coordinate at the origin, or "none"
+ * (its own frame). Either means the layer sits where its file put it. */
+function isZeroDisplacement(offsetText: string): boolean {
+  const c = parseCoords(offsetText);
+  if (c === null) return offsetText.includes('none');
+  return Math.abs(c[0]) < 1e-6 && Math.abs(c[1]) < 1e-6 && Math.abs(c[2]) < 1e-6;
+}
+
+test('the surviving layer does not move when a sibling is added or removed (#2)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error') errors.push(m.text());
+  });
+  page.on('pageerror', (e) => errors.push(String(e)));
+
+  const w = await loadLasWriter();
+  // A's origin is the lower easting, so A anchors the frame at offset zero.
+  const bytesA = georefLas(w, 500000, 4100000);
+  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
+
+  await page.goto('/');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+
+  await dropBytes(page, bytesA, 'utm33-a.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await dropBytes(page, bytesB, 'utm33-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  await page.waitForTimeout(500);
+
+  const withBoth = await readLayerHealth(page);
+  const aWithBoth = withBoth.find((l) => l.name.includes('utm33-a'));
+  expect(aWithBoth, 'A is enumerated with both loaded').toBeTruthy();
+  // Adding B did not displace A: it anchors the shared frame at zero.
+  expect(
+    isZeroDisplacement(aWithBoth!.offsetToProject),
+    `A offset after B added was "${aWithBoth!.offsetToProject}"`,
+  ).toBe(true);
+
+  // Remove B from the scene.
+  await page.getByRole('button', { name: 'Remove utm33-b.las' }).click();
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await page.waitForTimeout(300);
+
+  const afterRemove = await readLayerHealth(page);
+  const aAfter = afterRemove.find((l) => l.name.includes('utm33-a'));
+  expect(aAfter, 'A survives B removal').toBeTruthy();
+  // Removing B did not displace A, and never rewrote its file origin.
+  expect(
+    isZeroDisplacement(aAfter!.offsetToProject),
+    `A offset after B removed was "${aAfter!.offsetToProject}"`,
+  ).toBe(true);
+  expect(parseCoords(aAfter!.sourceOrigin)?.[0]).toBe(500000);
+
+  expect(errors, `console/page errors: ${errors.join(' | ')}`).toEqual([]);
+});
