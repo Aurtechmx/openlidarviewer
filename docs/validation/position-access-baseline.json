@@ -1,5 +1,5 @@
 {
-  "total": 181,
+  "total": 179,
   "files": {
     "src/analysis/modules/healthCheck.ts": 7,
     "src/analysis/modules/scanReport.ts": 1,
@@ -31,12 +31,11 @@
     "src/render/localDensitySize.ts": 1,
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 10,
-    "src/render/measure/lassoVolumeCompute.ts": 3,
+    "src/render/measure/lassoVolumeCompute.ts": 2,
     "src/render/measure/profileSampler.ts": 1,
     "src/render/measure/stockpileVolume.ts": 5,
     "src/render/measure/volume.ts": 4,
     "src/render/patchView.ts": 9,
-    "src/render/ssaoApproximation.ts": 1,
     "src/render/streaming/StreamingRenderer.ts": 3,
     "src/render/streaming/fullCloudGradeAdapter.ts": 3,
     "src/render/streaming/residentSnapshot.ts": 1,
