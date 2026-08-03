@@ -63,17 +63,27 @@ describe('streaming scan reveal', () => {
     expect(c.calls).toContain('body.add(olv-has-scan)');
   });
 
-  it('is called by every streaming attach path in main.ts', () => {
+  it('is called by every streaming attach path', () => {
+    // v0.6 decomposition: both streaming attach paths (COPC + EPT) moved out of
+    // the shell into `src/app/openStreaming.ts`, where each attach is followed
+    // by the shared reveal — now indirected through the deps as
+    // `revealStreamingChrome()`, which `main.ts` binds to the single
+    // `revealStreamingScanChrome(...)` call. Scan both files.
     const main = readFileSync(resolve(ROOT, 'src/main.ts'), 'utf8');
+    const openStreaming = readFileSync(resolve(ROOT, 'src/app/openStreaming.ts'), 'utf8');
+    const src = main + openStreaming;
 
     // Both streaming formats go through `viewer.attachStreamingCloud`. Counting
     // the reveal against the attaches is what makes a new format fail here
     // instead of shipping a scan with no dock.
-    const attaches = main.match(/viewer\.attachStreamingCloud\(/g) ?? [];
-    const reveals = main.match(/revealStreamingScanChrome\(/g) ?? [];
+    const attaches = src.match(/viewer\.attachStreamingCloud\(/g) ?? [];
+    const reveals = src.match(/revealStreamingChrome\(/g) ?? [];
 
     expect(attaches.length).toBeGreaterThanOrEqual(2);
     expect(reveals.length).toBe(attaches.length);
+
+    // The reveal helper itself is wired exactly once — the shell's deps binding.
+    expect((main.match(/revealStreamingScanChrome\(/g) ?? []).length).toBe(1);
 
     // And nothing re-inlines the block. Two hand-written `setCloseEnabled`
     // calls are correct and expected: the static-load path enables it, and
