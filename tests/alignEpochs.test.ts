@@ -333,3 +333,62 @@ describe('undeclared frames are labelled indicative', () => {
     expect(summarizeAlignment(r.alignment)).not.toMatch(/indicative/i);
   });
 });
+
+/**
+ * A projected CRS can declare a name AND a datum yet leave its linear unit
+ * unknown — 'unknown' ⇒ the inert placeholder factor 1 in linearUnitToMetres.
+ * frameUnverified then stays false (both a CRS and a datum ARE declared), so
+ * the summary took the plain applied/refused path and printed the shift and
+ * residual as "N m", even though the placeholder means those numbers are
+ * source-unit magnitudes (feet, US survey feet, links) wearing a metre label.
+ * Same fail-closed rule as compareDtms' horizontalUnitKnown: on an unknown
+ * unit, withhold the metre figures rather than caption an unverified unit as m.
+ */
+describe('unknown projected linear unit withholds the metre figures', () => {
+  const shiftedScatter = (dx: number): EpochCloud =>
+    cloudFrom(scatter(200).map(([x, y, z]) => [x + dx, y, z] as P));
+  const declared = (base: EpochCloud, over: Partial<EpochCloud> = {}): EpochCloud => ({
+    ...base,
+    crs: 'EPSG:32612',
+    verticalDatum: 'EPSG:5703',
+    ...over,
+  });
+
+  test('an applied fit reports yaw but withholds the shift and residual', () => {
+    const before = declared(cloudFrom(scatter(200)));
+    const after = declared(shiftedScatter(10));
+    const r = alignEpochClouds(before, after, { horizontalUnitKnown: false });
+    expect(r.alignment.applied).toBe(true);
+    expect(r.alignment.horizontalUnitUnknown).toBe(true);
+    // frameUnverified is NOT the guard here — a CRS and a datum are declared.
+    expect(r.alignment.frameUnverified).not.toBe(true);
+    const s = summarizeAlignment(r.alignment);
+    expect(s).toMatch(/linear unit is unknown/i);
+    expect(s).toMatch(/yaw/i); // the angle is unit-free, so it still reads
+    expect(s).not.toMatch(/m shift/i); // the metre figures are withheld…
+    expect(s).not.toMatch(/m residual/i); // …not captioned as metres
+  });
+
+  test('a refused fit withholds the metre residual too', () => {
+    const before = declared(cloudFrom(scatter(200, 1)));
+    const after = declared(cloudFrom(scatter(200, 2)));
+    const r = alignEpochClouds(before, after, { maxResidualM: 0.001, horizontalUnitKnown: false });
+    expect(r.alignment.refused).toBe(true);
+    expect(r.alignment.horizontalUnitUnknown).toBe(true);
+    const s = summarizeAlignment(r.alignment);
+    expect(s).toMatch(/refused/i);
+    expect(s).toMatch(/linear unit is unknown/i);
+    expect(s).not.toMatch(/\d+(\.\d+)? m\b/); // no "N m" residual quoted
+  });
+
+  test('a known-unit projected fit still prints the metre shift and residual', () => {
+    // The honest path is unchanged: omitting horizontalUnitKnown means known.
+    const before = declared(cloudFrom(scatter(200)));
+    const after = declared(shiftedScatter(10));
+    const r = alignEpochClouds(before, after);
+    expect(r.alignment.horizontalUnitUnknown).not.toBe(true);
+    const s = summarizeAlignment(r.alignment);
+    expect(s).toMatch(/m shift/i);
+    expect(s).toMatch(/m residual/i);
+  });
+});

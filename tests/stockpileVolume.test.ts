@@ -90,6 +90,39 @@ describe('stockpileVolume — volume + auditable band', () => {
     expect(unknown.confidence).toBe('medium');
   });
 
+  test('an unknown unit leads the caveats with a units-unverified disclosure', () => {
+    // The volume/footprint/thickness are printed as m³/m²/m downstream but rest
+    // on the placeholder factor 1, so the result must SAY the metres are assumed
+    // — otherwise a foot survey reads ~35× too large as a confident m³ figure.
+    const footprint = squareFootprint(10);
+    const positions = grid(10, 0.9, () => 2);
+    const base = { mode: 'explicit', z: 0 } as const;
+
+    const known = stockpileVolume({ polygon: footprint, positions, base });
+    expect(known.caveats.join(' ')).not.toMatch(/units are unverified/i);
+
+    const unknown = stockpileVolume({ polygon: footprint, positions, base, densityUnitKnown: false });
+    // Lead position: the disclosure is a whole-basis honesty flag.
+    expect(unknown.caveats[0]).toMatch(/Coordinate units are unverified/);
+    expect(unknown.caveats[0]).toMatch(/assume metres/);
+  });
+
+  test('a degenerate footprint on an unknown unit still discloses the unverified scale', () => {
+    // The zero-result path must fail closed too: it echoes footprintArea as "m²".
+    const collinear: Vec3[] = [
+      [0, 0, 0],
+      [5, 0, 0],
+      [10, 0, 0],
+    ];
+    const r = stockpileVolume({
+      polygon: collinear,
+      positions: grid(10, 1, () => 1),
+      densityUnitKnown: false,
+    });
+    expect(r.volume).toBe(0);
+    expect(r.caveats[0]).toMatch(/Coordinate units are unverified/);
+  });
+
   test('every result carries the spatial-correlation caveat (√N assumes independence)', () => {
     // The sampling-error term divides by √N under an independence assumption
     // scan noise routinely violates — the caveat must say so, mirroring

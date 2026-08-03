@@ -119,7 +119,7 @@ cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`) i
 exported and Node-tested, and the parse/verify/rebase halves it leans on already
 lived in `src/io/session.ts`; `main.ts` keeps a thin caller (`tests/sessionIo.test.ts`).
 
-**`src/render/Viewer.ts` (6,458)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
@@ -130,7 +130,14 @@ been extracted, and both errors pointed the decomposition at the wrong work.
 | Block | Lines | Extraction target |
 |---|---:|---|
 | `constructor` | 564 | staged scene/pipeline builders |
-| `_startLoop` | 107 | `src/render/renderLoop.ts` *(planned)* |
+
+Done: the per-frame render loop body (`_startLoop`, 107 lines) now lives in
+`src/render/renderLoop.ts` as `runRenderFrame(host)` behind a structural
+`RenderLoopHost`, so the paint-path choice, the EDL snap-back on settle, the
+streaming tick cadence and the tool-overlay gating test against a fake host
+without a WebGL or rAF context (`tests/renderLoop.test.ts`). `Viewer` keeps a
+thin `_startLoop` that binds its state to the host and owns the
+requestAnimationFrame scheduling (browser-only, e2e-covered).
 
 Done: `_buildExportAdapter` (265 lines) now lives in `src/render/exportAdapter.ts`,
 which takes a structural host rather than the Viewer, so the Studio's scene
@@ -166,8 +173,9 @@ and reaches into nav, camera, measure-datum and colour-context, so it moves
 only behind an explicit host interface, the same shape used for the export
 adapter and the lasso walk. That is the next decomposition step worth taking.
 The EDL cluster (`_edl*`) is a smaller follow-on. Everything else on the class
-— the constructor's scene/pipeline build, the render loop body, event wiring —
-is the irreducibly view-bound remainder, and belongs here.
+— the constructor's scene/pipeline build, the render loop's requestAnimationFrame
+scheduling, event wiring — is the irreducibly view-bound remainder, and belongs
+here.
 
 ## Test and gate topology
 
