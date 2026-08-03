@@ -41,8 +41,9 @@ Scientific-integrity failure is the project's highest-value risk: a coordinate
 that looks reasonable but belongs to the wrong unit, axis, CRS, vertical
 reference or datum, because a wrong number is silent rather than a crash. It is
 handled by the fail-closed coordinate-integrity model
-([coordinate-integrity-roadmap.md](architecture/coordinate-integrity-roadmap.md)),
-which withholds a metric claim unless the unit and frame are known.
+(see [limitations.md](limitations.md), "Coordinate reference systems are read,
+not transformed"), which withholds a metric claim unless the unit and frame are
+known.
 
 ## Critical paths to protect
 
