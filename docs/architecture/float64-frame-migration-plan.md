@@ -1,23 +1,75 @@
-# Float64 project-frame migration: inventory and order
+# Float64 project-frame: current architecture and the remaining fold
 
-The on-ramp for coordinate-integrity roadmap P1 #2 ("Stop writing project
-offsets into Float32 vertices"). This document is additive. It names the surface
-and fixes the order. It migrates nothing. The scaffold it points to
-(`src/model/LayerSpatialState.ts`) is unreferenced at runtime, and the running
-companion (`scripts/lint-positions-reads.mjs`, `npm run lint:positions-reads`)
-is a report, never a gate.
+This tracked the on-ramp for coordinate-integrity roadmap P1 #2 ("Stop writing
+project offsets into Float32 vertices"). Its original premise — that mounting a
+layer rewrites the Float32 position buffer, and that 162 `.positions` reads must
+be migrated together in one atomic change — is SUPERSEDED. The placement
+architecture in `docs/architecture/float64-transform.md` (steps 1–5) has landed:
+mounting is a Float64 placement now, not a buffer rewrite. What follows records
+the architecture as it stands and the one fold that is still browser-gated. The
+inventory further down is kept as the historical surface the migration was
+planned against; `scripts/lint-positions-reads.mjs` (`npm run
+lint:positions-reads`) still prints the live `.positions` list and is a report,
+never a gate.
 
-## Why an inventory before a line of migration
+## Current architecture (the premise this document opened with is retired)
 
-Today mounting a layer applies the project offset by rewriting the Float32
-position buffer, so a consumer that reads `cloud.positions` and one that reads
-the mesh see the same frame. The destination keeps vertices source-local and
-holds the placement as a Float64 translation applied at read time, which only
-stays coherent if every reader moves together. Migrate half and rendering sees
-project space while the rest sees source-local: the render/CPU split the data
-rebase exists to close, reintroduced, now unbounded and silent instead of
-bounded and refused-past-1 mm. So the whole surface has to be visible first, and
-the move is one atomic change, not a trickle. This file is that surface.
+Mounting a layer no longer touches its vertices. `Viewer.setLayerPlacement`
+stores the layer's Float64 `sourceToProject` translation on the layer entry and
+sets `mesh.position`; the `.positions` buffer is written once, by the loader, and
+is byte-identical through mount, unmount, hide, session restore and export
+(`float64-transform.md` invariant 1, pinned by
+`tests/sourceGeometryImmutable.test.ts`). The destination shape every review
+named is therefore already in place for the DATA MODEL: vertices stay
+source-local, and the placement is data ABOUT the layer, held beside the buffer
+rather than baked into it.
+
+The world coordinate is recovered per boundary, in the frame each one names:
+
+- Source-frame consumers read `positions[i] + sourceOrigin` — `worldXYZ`,
+  `cloudToGlobal`, the exporters through `exportGeoContext`'s `sourceOrigin`, and
+  the two-epoch change comparison through each epoch's own `sourceOrigin`
+  (`main.ts` ~5936). These are world-correct under any mount: `sourceOrigin` is
+  fixed at construction and the placement never enters the sum.
+- Project-frame consumers fold the layer translation into their shared
+  accumulator instead of moving the points. The picking ray drops into the
+  layer's source frame and the hit lifts back (`layerPlacement.ts`), terrain
+  gather adds `accumulatorOffset(placement)` per buffer as it copies into the
+  shared grid (`terrainStreamSample.ts:99,108`), and the scene-bounds merge
+  translates each layer's cached AABB (`mergePlacedBounds`). With one layer — or
+  while a mount is refused — every translation is the identity, so these folds
+  are byte-identical to the pre-fold walk.
+
+`src/model/LayerSpatialState.ts` remains an unreferenced scaffold: the runtime
+adopted the `PointCloud.worldXYZ` / `projectXYZ` accessors and the
+`layerPlacement.ts` fold toolbox rather than a per-layer container, so nothing
+imports it outside its own unit test.
+
+## The remaining fold is not the whole GPU path
+
+Two things are still browser-gated (`float64-transform.md` step 6, and the
+acceptance battery in `coordinate-integrity-roadmap.md` P1 #1):
+
+1. **The renderer's camera-relative / render-origin fold.** Mesh position is
+   `sourceToProject` today; for far-apart mounts it should become
+   `sourceToProject − renderOrigin`, folded on the CPU per mesh, so the Float32
+   GPU residual stays small. Bounded and refused past 1 mm by the `LayerService`
+   mount-precision gate, so this is a precision refinement, not a correctness
+   defect.
+2. **The display-coordinate fold for picking and cross-layer measurement.** The
+   inspector's world coordinate is built in `Viewer._infoForHit`
+   (`src/render/Viewer.ts` ~6087) as the PLACED (project-local) pick point plus
+   `sourceOrigin`. For a non-anchor mounted layer that double-counts the
+   translation — the coordinate is off by the full `sourceToProject` (2 km in
+   `tests/e2e/twoScanMount.spec.ts`'s fixture), because the placed point already
+   carries the offset. It is correct only under the identity placement, which is
+   why it is invisible single-layer and while mounting stays effectively off. The
+   fix is to derive the world coordinate from the source-local hit index —
+   `cloud.worldXYZ(index)` is already the right value — rather than the placed
+   point; the same applies to a measured vertex on a non-anchor layer exported
+   through the active scan's `sourceOrigin`. Tracked as roadmap P1 #1 acceptance
+   items #4 (picking) and #5 (cross-layer measure), and pinned as a property by
+   `tests/frameWorldCoords.test.ts`.
 
 ## Method
 
