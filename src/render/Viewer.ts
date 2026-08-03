@@ -6045,10 +6045,10 @@ export class Viewer {
       geographicHorizontal: this._inspectGeographicHorizontal,
       layer: cloud.name,
       index,
-      // `point` is in local space; the cloud's origin restores real-world
-      // coordinates — the absolute survey position engineers expect.
-      local: [point.x, point.y, point.z],
-      origin: [cloud.sourceOrigin[0], cloud.sourceOrigin[1], cloud.sourceOrigin[2]],
+      // `point` is the PLACED pick; for a non-anchor mounted layer it would
+      // double-count the origin. `worldXYZ` folds each cloud's own source origin.
+      local: cloud.worldXYZ(index),
+      origin: [0, 0, 0],
       distance: this._camera.position.distanceTo(point),
       intensity: cloud.intensity ? cloud.intensity[index] : null,
       classification: cloud.classification ? cloud.classification[index] : null,
