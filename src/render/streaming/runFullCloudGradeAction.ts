@@ -41,14 +41,21 @@ export async function runFullCloudGrade(deps: {
   }
   panel.setGradeBusy('Planning octree sample…');
   // The decoded positions are in the source CRS's linear unit; convert spans to
-  // metres so the density (pts/m²) and vertical extent read in SI rather than
-  // in feet for a state-plane-feet cloud. Unknown CRS ⇒ factor 1 (treated as
-  // metres), matching the rest of the streaming readouts.
+  // metres so the density (pts/m²) and vertical extent read in SI rather than in
+  // feet for a state-plane-feet cloud. FAIL CLOSED on an unconfirmed unit: an
+  // unknown-unit CRS carries the inert placeholder linearUnitToMetres:1 (and a
+  // CRS-less cloud resolves the same), so applying that factor would stamp raw
+  // source spans as metres — pts/m² and vertical m for data that may be feet.
+  // Metres are only claimed when the CRS declares a real linear unit, the same
+  // gate the scan-report rows (streamingExtentRows) and the measure tool apply;
+  // otherwise the factor stays 1 and the summary labels the figures per source
+  // unit (see summarizeSampleGrade's unitConfirmed argument).
   const crs = source.crs();
-  const metresPerUnit = crs?.linearUnitToMetres ?? 1;
+  const unitConfirmed = crs != null && crs.linearUnit !== 'unknown';
+  const metresPerUnit = unitConfirmed ? (crs?.linearUnitToMetres ?? 1) : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88
   // feet over a metre grid); otherwise it follows the horizontal factor.
-  const verticalMetresPerUnit = crs?.verticalUnitToMetres ?? metresPerUnit;
+  const verticalMetresPerUnit = unitConfirmed ? (crs?.verticalUnitToMetres ?? metresPerUnit) : 1;
   try {
     const run = await gradeFullCloud({
       source,
@@ -72,7 +79,11 @@ export async function runFullCloudGrade(deps: {
     // it silently rather than paint a stale grade over a different (or absent)
     // cloud's panel.
     if (viewer.streamingCloud !== source) return;
-    panel.setGradeResult(run.coverage.label, summarizeSampleGrade(run.grade), run.coverage.note);
+    panel.setGradeResult(
+      run.coverage.label,
+      summarizeSampleGrade(run.grade, unitConfirmed),
+      run.coverage.note,
+    );
   } catch (err) {
     // A user-initiated cancel is not a failure — show a neutral note, not the
     // red error state.
