@@ -136,6 +136,30 @@ export interface ResolvedCrs {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Unit-integrity predicate — the single fail-closed gate
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Whether a CRS declares a REAL linear unit — the canonical fail-closed gate
+ * every metric-claiming seam shares (measure tool, lasso density, streaming and
+ * scan reports, full-cloud grade, epoch compare). A metre / foot / us-survey-
+ * foot CRS is known; a null/undefined CRS, one carrying `linearUnit: 'unknown'`
+ * (the inert `linearUnitToMetres: 1` placeholder), or one with no `linearUnit`
+ * field at all is NOT — so the caller withholds the "m" / "pts/m²" claim rather
+ * than stamping raw source units as metres. The `!== undefined` arm keeps a
+ * missing unit on the fail-closed side, matching the streaming-extent / scan-
+ * report gates whose CRS type leaves `linearUnit` optional.
+ *
+ * Structurally typed so every CRS shape (ResolvedCrs, CrsInfo, metadata.crs)
+ * passes without a cast. Pure — no DOM, no proj4, no three.
+ */
+export function isLinearUnitKnown(
+  crs: { readonly linearUnit?: string } | null | undefined,
+): boolean {
+  return crs != null && crs.linearUnit !== undefined && crs.linearUnit !== 'unknown';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Point shapes — every coordinate the platform talks about
 // ─────────────────────────────────────────────────────────────────────────────
 

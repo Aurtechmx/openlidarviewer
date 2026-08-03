@@ -265,4 +265,80 @@ describe('scanReport module', () => {
       expect(parseFloat(v)).toBeCloseTo(30.5, 0);
     });
   });
+
+  describe('vertical reference of the absolute corners (roadmap P1 #6)', () => {
+    // The advanced "Min/Max corner" rows are absolute georeferenced Z, so the
+    // report must state what that Z is measured from — not let it pass as a
+    // sea-level elevation. Mirrors the Inspector's datum-honest Z label (#229).
+    const positions = new Float32Array([0, 0, 0, 2, 0, 0, 0, 2, 0, 2, 2, 1]);
+    const cloudWith = (crs: Record<string, unknown> | undefined) =>
+      new PointCloud({
+        positions,
+        origin: [0, 0, 0],
+        sourceFormat: 'las',
+        name: 'vref',
+        ...(crs ? { metadata: { crs: crs as never } } : {}),
+      });
+
+    test('a georeferenced scan with NO declared vertical datum reads "Height (datum unknown)"', () => {
+      const cloud = cloudWith({
+        source: 'wkt',
+        name: 'WGS 84 / UTM zone 12N',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        isGeographic: false,
+      });
+      expect(rowByLabel(scanReport.run(cloud), 'Vertical reference').value).toBe(
+        'Height (datum unknown)',
+      );
+    });
+
+    test('a recognised orthometric datum (NAVD88, EPSG:5703) reads "Elevation"', () => {
+      const cloud = cloudWith({
+        source: 'wkt',
+        name: 'NAD83 / UTM 12N + NAVD88 height',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        isGeographic: false,
+        verticalEpsg: 5703,
+        verticalDatum: 'NAVD88',
+      });
+      expect(rowByLabel(scanReport.run(cloud), 'Vertical reference').value).toBe('Elevation');
+    });
+
+    test('WGS 84 3D (EPSG:4979) reads "Ellipsoidal height", not "Elevation"', () => {
+      const cloud = cloudWith({
+        source: 'epsg',
+        name: 'WGS 84 (3D)',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        isGeographic: true,
+        verticalEpsg: 4979,
+      });
+      expect(rowByLabel(scanReport.run(cloud), 'Vertical reference').value).toBe(
+        'Ellipsoidal height',
+      );
+    });
+
+    test('a present-but-unrecognised vertical datum still reads "Height (datum unknown)"', () => {
+      const cloud = cloudWith({
+        source: 'wkt',
+        name: 'Some projected CRS',
+        linearUnit: 'metre',
+        linearUnitToMetres: 1,
+        isGeographic: false,
+        verticalDatum: 'Mine local vertical',
+      });
+      expect(rowByLabel(scanReport.run(cloud), 'Vertical reference').value).toBe(
+        'Height (datum unknown)',
+      );
+    });
+
+    test('a scan with NO CRS omits the row entirely (its corners are purely local)', () => {
+      const cloud = cloudWith(undefined);
+      expect(
+        scanReport.run(cloud).rows.find((r) => r.label === 'Vertical reference'),
+      ).toBeUndefined();
+    });
+  });
 });

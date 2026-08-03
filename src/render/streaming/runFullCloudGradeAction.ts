@@ -20,6 +20,7 @@ import type { Viewer } from '../Viewer';
 import type { StreamingPanel } from '../../ui/StreamingPanel';
 import { gradeFullCloud } from './fullCloudGradeAdapter';
 import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
+import { isLinearUnitKnown } from '../../geo/CoordinateTypes';
 
 /**
  * Decode + grade the active streaming cloud's full extent and render the result
@@ -51,7 +52,7 @@ export async function runFullCloudGrade(deps: {
   // otherwise the factor stays 1 and the summary labels the figures per source
   // unit (see summarizeSampleGrade's unitConfirmed argument).
   const crs = source.crs();
-  const unitConfirmed = crs != null && crs.linearUnit !== 'unknown';
+  const unitConfirmed = isLinearUnitKnown(crs);
   const metresPerUnit = unitConfirmed ? (crs?.linearUnitToMetres ?? 1) : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88
   // feet over a metre grid); otherwise it follows the horizontal factor.

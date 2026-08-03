@@ -26,6 +26,7 @@ import {
   type LayerCompatibility,
 } from '../model/layerCompatibility';
 import { loadLayerHealth } from '../lazyChunks';
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 
@@ -357,7 +358,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             crsName: info.crsName ?? null,
             crsSource: (crs as { source?: string } | null)?.source ?? null,
             horizontalUnit:
-              crs && crs.linearUnit && crs.linearUnit !== 'unknown' ? crs.linearUnit : null,
+              crs && isLinearUnitKnown(crs) ? crs.linearUnit : null,
             verticalUnit: null, // no declared vertical unit NAME exists; never reverse-map the factor
             verticalDatum: info.verticalDatum ?? null,
             compatibility: lastCompatibility.get(info.id) ?? null,
