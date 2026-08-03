@@ -42,6 +42,7 @@ import { bootTour, type TourHandle } from './ui/onboarding/bootTour';
 import { buildMeasureConfidenceContext } from './app/measureConfidenceContext';
 import { findDuplicateIds } from './ui/actionRegistry';
 import { buildActionRegistry } from './app/actionDefinitions';
+import { importSession as runImportSession, type SessionIoDeps } from './app/sessionIo';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
@@ -57,7 +58,6 @@ import {
 import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 import { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
-import { summarizeMeasurementTrust } from './render/measure/measurementTrust';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -109,7 +109,6 @@ import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
-import { isExportStale, staleExportReason } from './export/exportStaleness';
 import { footprintMetres } from './report/reportFootprint';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
@@ -5270,217 +5269,32 @@ async function exportSession(): Promise<void> {
 }
 
 /**
- * Import an inspection session: restore measurements, annotations and views.
- * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
- * scan-identity match, so the same restore re-runs past the confirmation gate.
+ * Session import — a thin caller over the extracted `src/app/sessionIo.ts`.
+ * Binds the shell's running state to the module's deps; the parse / verify /
+ * rebase / apply logic and the pure `ScanFacts` adapter live in that module.
  */
-async function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
-  try {
-    // The session path's imports are light (no three.js), so a session restore
-    // can finish before the lazily-imported Viewer chunk resolves — leaving
-    // `viewer` as its null sentinel. Await viewerLoaded so every `viewer.*`
-    // access below is safe (measure/annotate are built in the Viewer ctor, so
-    // no GPU backend is needed — just a non-null instance).
-    await viewerLoaded;
-    const { parseSession, rebaseSessionGeometry, matchSessionToScan } = await loadSession();
-    const session = parseSession(await file.text());
-    // If an older build wrote this session, a newer one may grade or label the
-    // scan differently — surface that so the user can re-save. Absent stamp
-    // (pre-v6 file) reads as "an earlier version".
-    if (isExportStale(session.software, __APP_VERSION__)) {
-      const note = staleExportReason(session.software, __APP_VERSION__);
-      if (note) showLassoToast(note);
-    }
-    // Session vertices are LOCAL to the origin of the scan they were captured
-    // against. Imported onto a DIFFERENT loaded cloud (a different floored
-    // origin), they must be rebased into that cloud's frame or they land
-    // displaced by the two origins' difference — and a later export would
-    // compound the error by adding the new origin. With no cloud loaded there
-    // is nothing to rebase against; keep the verbatim geometry (the missing-
-    // scan toast below already tells the user to drop the scan).
-    const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
-    // Capture the scan this import matches against, re-checked before we attach
-    // state. A session restore routes ahead of the loading guard, so a scan
-    // swapped in mid-import must not inherit another scan's measurements.
-    const targetId = scans.activeId;
-    const targetStreamingCloud = viewer.streamingCloud;
-    const targetStaticCloud = targetId ? viewer.getCloud(targetId) : undefined;
-    // Guard the rebase: a session's geometry is local to the scan it was
-    // captured over, so realigning it onto the loaded cloud is only correct when
-    // that IS its scan. Compare the session's stored fingerprint (built the same
-    // way exportSession writes it) against the loaded scan. A clear conflict is
-    // refused rather than silently realigned onto the wrong scan; a partial
-    // match asks the user to confirm before anything is applied.
-    if (haveCloud) {
-      const streamingCloud = viewer.streamingCloud;
-      const staticCloud = scans.activeCloud() ?? undefined;
-      let loadedFacts: import('./io/session').ScanFacts | undefined;
-      if (streamingCloud) {
-        const b = streamingCloud.dataBounds();
-        loadedFacts = {
-          fileName: streamingCloud.name,
-          sourcePoints: streamingCloud.sourcePointCount,
-          width: b[3] - b[0],
-          depth: b[4] - b[1],
-          height: b[5] - b[2],
-          crs: streamingCloud.crs()?.name,
-          epsg: streamingCloud.crs()?.epsg,
-        };
-      } else if (staticCloud) {
-        const b = staticCloud.bounds();
-        loadedFacts = {
-          fileName: staticCloud.name,
-          sourcePoints: staticCloud.pointCount,
-          width: b.max[0] - b.min[0],
-          depth: b.max[1] - b.min[1],
-          height: b.max[2] - b.min[2],
-          crs: staticCloud.metadata?.crs?.name,
-          epsg: staticCloud.metadata?.crs?.epsg,
-        };
-      }
-      if (loadedFacts) {
-        const match = matchSessionToScan(session.scanSummary, loadedFacts);
-        if (match.verdict === 'conflict') {
-          const why = match.reasons[0] ?? 'its scan fingerprint does not match';
-          const want = session.scanSummary?.fileName;
-          showLassoToast(
-            `This session was captured over a different scan (${why}) — it was not applied. ` +
-              (want ? `Load “${want}” to restore it on its own scan.` : 'Load its source scan to restore it.'),
-          );
-          return;
-        }
-        if (match.verdict === 'partial' && !opts.skipScanConfirm) {
-          // Not a clear conflict, but not a confirmed match — don't touch the
-          // scene until the user opts in. "Apply anyway" re-imports with the
-          // check skipped, so the same restore proceeds on their confirmation.
-          const why = match.reasons[0] ?? '';
-          showLassoToast(
-            `This session's scan couldn't be fully verified${why ? ` (${why})` : ''}. ` +
-              'Applying it may place its measurements on the wrong scan.',
-            { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }) },
-          );
-          return;
-        }
-      }
-    }
-    const geo = haveCloud
-      ? rebaseSessionGeometry(session, exportGeoContext().origin)
-      : {
-          measurements: session.measurements,
-          annotations: session.annotations,
-          views: session.views,
-          camera: session.camera,
-          clip: session.clip,
-          delta: [0, 0, 0] as const,
-        };
-    const rebased = geo.delta[0] !== 0 || geo.delta[1] !== 0 || geo.delta[2] !== 0;
-    // The scan could have been swapped in under us since we matched (this import
-    // routes ahead of the loading guard). Refuse to attach the session's state
-    // to a scan it was never matched against. (mirrors the 1723/1808 guard.)
-    if (
-      haveCloud &&
-      (scans.activeId !== targetId ||
-        viewer.streamingCloud !== targetStreamingCloud ||
-        (targetId ? viewer.getCloud(targetId) : undefined) !== targetStaticCloud)
-    ) {
-      showLassoToast('Session not applied — the active scan changed while it was importing.');
-      return;
-    }
-    viewer.measure.loadMeasurements(geo.measurements);
-    viewer.annotate.loadAnnotations(geo.annotations);
-    // v7 — a view may carry a display bundle beyond its camera; hydrate it
-    // into the in-memory shape so restoring by name reapplies the lot. A
-    // v6 file's views have no bundle fields, so `buildViewState` returns
-    // undefined and they stay exactly the camera-only bookmarks they were.
-    bookmarks.restore(
-      geo.views.map((v) => {
-        const { name, camera, ...state } = v;
-        return { name, pose: camera, state: buildViewState(state) };
-      }),
-    );
-    inspector.setViews(bookmarks.names());
-    refreshMeasurePanel();
-    refreshAnnotationPanel();
+const sessionIoDeps: SessionIoDeps = {
+  viewerReady: viewerLoaded,
+  getViewer: () => viewer,
+  loadSession,
+  appVersion: __APP_VERSION__,
+  getActiveScanId: () => scans.activeId,
+  getActiveCloud: () => scans.activeCloud(),
+  exportOrigin: () => exportGeoContext().origin,
+  bookmarks,
+  setInspectorViews: (names) => inspector.setViews(names),
+  refreshMeasurePanel,
+  refreshAnnotationPanel,
+  applyViewState,
+  setCrsOverride: (args) => {
+    crsService.setOverride(args);
+  },
+  showToast: showLassoToast,
+  setDropError: (message) => dropZone.setError(message),
+};
 
-    // Apply the optional GLOBAL state when present — through the SAME
-    // applyViewState path a named view restore uses (the extraction that
-    // replaced the old inline field-by-field block here). Each field is
-    // independently guarded so a partial file (e.g. a camera but no render
-    // settings) restores what's there without assuming the rest, and the
-    // camera is applied LAST so nothing re-frames after it. A v1 / v2 file
-    // has none of these — fall through to the existing behaviour.
-    applyViewState({
-      render: session.render,
-      colorMode: session.colorMode,
-      classFilter: session.classFilter,
-      pointFilters: session.pointFilters,
-      clip: geo.clip,
-      camera: geo.camera,
-    });
-    if (
-      session.crs &&
-      session.crs.epsg != null &&
-      (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
-    ) {
-      // Restore the author's CRS override so a capsule round-trips without
-      // re-prompting — but NEVER over a scan that declares a DIFFERENT code.
-      // The scan-identity match already conflicts on differing codes; this
-      // guard covers the remaining hole, a scan whose declaration exists but
-      // was absent from the session summary. A file that states its own CRS is
-      // stronger evidence than a session written who-knows-where, so the
-      // declaration wins and the session's choice is dropped with a note.
-      const declared =
-        viewer.streamingCloud?.crs()?.epsg ??
-        (scans.activeId ? viewer.getCloud(scans.activeId)?.metadata?.crs?.epsg : undefined);
-      if (declared != null && declared !== session.crs.epsg) {
-        showLassoToast(
-          `The session's CRS (EPSG:${session.crs.epsg}) was not applied — this scan declares EPSG:${declared}, and a file's own declaration wins.`,
-        );
-      } else {
-        crsService.setOverride({
-          override: { epsg: session.crs.epsg, kind: session.crs.kind },
-          detected: scans.activeId ? viewer.getCloud(scans.activeId)?.metadata?.crs ?? undefined : undefined,
-          source: 'user-override',
-        });
-      }
-    }
-
-    // Honest disclosure: the session carries the saved analysis, not the scan
-    // itself (a point cloud can't travel in the file). If its scan isn't
-    // loaded, the restored measurements/annotations have nothing to sit on —
-    // say so and point the user at the file to drop, rather than restoring onto
-    // an empty scene silently.
-    const restored =
-      session.measurements.length + session.annotations.length + session.views.length;
-    const wantFile = session.scanSummary?.fileName;
-    // When the user reached here via "Apply anyway", record that the restore
-    // proceeded on an unverified scan match rather than a confirmed one.
-    const appliedNote = opts.skipScanConfirm ? ' Applied despite an unverified scan match.' : '';
-    // Disclosure when the session was captured in a different scan's frame and
-    // its geometry was shifted to line up with the loaded cloud — an honest
-    // note that a non-obvious transform happened, not a silent relocation.
-    const frameNote = rebased
-      ? ' Its measurements were realigned to the loaded scan’s origin.'
-      : '';
-    // Evidence Capsule: lead with the honesty roll-up when the shared session
-    // carries graded measurements — the recipient sees the trust picture, not
-    // just a count.
-    const evidence = summarizeMeasurementTrust(session.measurements.map((m) => m.trust));
-    const lead = evidence.total > 0 ? `Evidence restored — ${evidence.line}.` : null;
-    if (wantFile && !haveCloud) {
-      showLassoToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
-        lead ? { label: 'Need the scan', onClick: () => showLassoToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
-    } else if (lead) {
-      showLassoToast(`${lead}${frameNote}${appliedNote}`);
-    } else {
-      showLassoToast(
-        `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${appliedNote}`,
-      );
-    }
-  } catch (err) {
-    dropZone.setError(err instanceof Error ? err.message : 'Could not import the session');
-  }
+function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Promise<void> {
+  return runImportSession(file, opts, sessionIoDeps);
 }
 
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
