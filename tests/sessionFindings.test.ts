@@ -70,6 +70,19 @@ describe('converters preserve band + caveats', () => {
     expect(single.value).toBeCloseTo(1000 * 0.3048 ** 3, 6);
   });
 
+  test('stockpileFinding carries the unverified-unit disclosure into the report', () => {
+    // The result caveats already lead with the disclosure for an unknown unit;
+    // the finding passes them through, so the signed report never presents the
+    // m³ value as a confirmed metric claim.
+    const unknown = stockpileFinding(
+      stock({
+        densityUnitKnown: false,
+        caveats: ['Coordinate units are unverified — assume metres.', 'Point-sample estimate.'],
+      }),
+    );
+    expect(unknown.caveats?.[0]).toMatch(/Coordinate units are unverified/);
+  });
+
   test('changeFinding carries detectability honesty', () => {
     const u = changeVolumeUncertainty({
       netVolumeM3: 2,
