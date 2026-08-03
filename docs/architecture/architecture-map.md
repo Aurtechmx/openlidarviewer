@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 6,983 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 6,976 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (6,983)** — the largest blocks, which are the extraction
+**`src/main.ts` (6,976)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -112,14 +112,13 @@ called with a 19-member deps object. The candidates that remain:
 |---|---:|---|
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
-| `toClassBuffer` | 268 | `src/model/` or `src/render/class/` |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
 | `handleRemoteEpt` / `openStreamingCopc` | 406 | `src/app/openStreaming.ts` *(planned)* |
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 | `importSession` | 177 | `src/app/sessionIo.ts` *(planned)* |
 
-**`src/render/Viewer.ts` (6,959)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,951)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
