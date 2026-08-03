@@ -129,8 +129,12 @@ describe('main.ts scan-lifecycle reset sites still clear saved views', () => {
     // mutation onto the `viewBookmarks` service, so each reset now calls
     // `bookmarks.clear()`. The "views AND counter, together" guarantee is atomic
     // in the service's clear() (see tests/viewBookmarks.test.ts) rather than
-    // duplicated across three inline field pairs.
-    const src = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+    // duplicated across three inline field pairs. The new-static-scan reset now
+    // lives in the extracted open/load pipeline (`src/app/openScan.ts`), so the
+    // three sites span both the shell and that module.
+    const src =
+      readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8') +
+      readFileSync(new URL('../src/app/openScan.ts', import.meta.url), 'utf8');
     const resets = src.match(/bookmarks\.clear\(\)/g) ?? [];
     expect(resets.length).toBeGreaterThanOrEqual(3);
     // And no reset site pokes the cluster fields directly any more.

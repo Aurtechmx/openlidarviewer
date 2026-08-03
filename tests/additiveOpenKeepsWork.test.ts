@@ -14,9 +14,10 @@
  * identical at the point of the clear. Until annotations carry a layer, the
  * honest rule is to reset only when there is nothing to preserve.
  *
- * Two assertions here. The first models the rule, so a reader can see what it
- * decides. The second reads main.ts, because that is where the rule lives and
- * the file cannot be imported in Node.
+ * Two assertions here. The first exercises the rule directly — the load-pipeline
+ * extraction (`src/app/openScan.ts`) exports it as the pure `shouldResetSavedWork`,
+ * so a reader can see what it decides. The second reads `src/app/openScan.ts`,
+ * because that is where the rule now lives and the shell cannot be imported in Node.
  */
 
 import { readFileSync } from 'node:fs';
@@ -24,9 +25,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { shouldResetSavedWork } from '../src/app/openScan';
+
 /** The decision the load path makes, with nothing else attached. */
 function resetsSavedWork(cloudCountAfterAdd: number): boolean {
-  return cloudCountAfterAdd <= 1;
+  return shouldResetSavedWork(cloudCountAfterAdd);
 }
 
 describe('an additive open keeps saved work', () => {
@@ -52,16 +55,17 @@ describe('an additive open keeps saved work', () => {
 });
 
 describe('the load path applies that rule', () => {
-  const mainSource = readFileSync(join(__dirname, '../src/main.ts'), 'utf8');
+  const loadSource = readFileSync(join(__dirname, '../src/app/openScan.ts'), 'utf8');
 
   it('gates the bookmark and annotation reset on the cloud count', () => {
     // Matching the guard rather than the bare calls: an unguarded
     // `bookmarks.clear()` on this path is the defect, so the test has to see
-    // the condition, not just the presence of a clear.
+    // the condition, not just the presence of a clear. The gate is the pure
+    // `shouldResetSavedWork(viewer.clouds().length)` after the extraction.
     const guarded =
-      /if \(viewer\.clouds\(\)\.length <= 1\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.clear\(\);[^}]*\}/;
+      /if \(shouldResetSavedWork\(viewer\.clouds\(\)\.length\)\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.clear\(\);[^}]*\}/;
     expect(
-      guarded.test(mainSource),
+      guarded.test(loadSource),
       'The reset must stay gated on there being at most one cloud. An ' +
         'unconditional clear here destroys saved viewpoints for a layer that ' +
         'is still on screen, with no undo.',
@@ -74,11 +78,11 @@ describe('the load path applies that rule', () => {
     // Anchored forward from the additive marker: `refreshAnnotationPanel();`
     // also appears earlier in the file, so an unanchored indexOf produced an
     // empty slice and the assertion below passed against nothing.
-    const start = mainSource.indexOf('static layers are ADDITIVE');
-    const end = mainSource.indexOf('refreshAnnotationPanel();', start);
+    const start = loadSource.indexOf('static layers are ADDITIVE');
+    const end = loadSource.indexOf('refreshAnnotationPanel();', start);
     expect(start).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(start);
-    const loadPath = mainSource.slice(start, end);
+    const loadPath = loadSource.slice(start, end);
     expect(loadPath).not.toContain('clearMeasurements');
   });
 });
