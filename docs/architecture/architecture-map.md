@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 6,507 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 6,125 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -98,7 +98,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (6,507)** — the largest blocks, which are the extraction
+**`src/main.ts` (6,125)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -109,7 +109,6 @@ called with a 19-member deps object. The candidates that remain:
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
-| `handleRemoteEpt` / `openStreamingCopc` | 406 | `src/app/openStreaming.ts` *(planned)* |
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 
 Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called with a
@@ -126,6 +125,20 @@ Node-tested — `layerChipCount` (the file-total vs strided-display count the La
 chip shows) and `shouldResetSavedWork` (fresh-project vs additive open) — alongside
 the three-way router's session / COPC / static dispatch (`tests/openScan.test.ts`).
 `main.ts` keeps a thin `handleFile` delegate that binds its running state to the deps.
+
+Done: `handleRemoteEpt` / `openStreamingCopc` (~406 lines) — the remote / streaming
+open pipeline — now live in `src/app/openStreaming.ts`, driven through an
+`OpenStreamingDeps` object of accessor functions closing over the shell's services
+and its mutable streaming-session state (the load flag, the COPC / EPT decode
+workers, the benchmark collector, the quality preset) rather than the Viewer class.
+The pure decisions the extraction exposes are Node-tested — `isEptUrl` (the
+COPC-vs-EPT routing predicate the shell's URL router dispatches on), `isAbortError`
+(the user-cancel classifier both remote handlers surface through) and
+`linkAbortSignals` — alongside the guarded remote-open paths: the one-load guard, the
+URL-validation gate, and the honest error surfacing (`tests/openStreaming.test.ts`).
+The SSRF URL validation (`validateRemoteEptUrl` / `validateRemoteCopcUrl`) is
+preserved exactly. `main.ts` keeps thin `openStreamingCopc` / `handleRemoteEpt`
+delegates that bind its running state to the deps.
 
 **`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
 methods dominate:
