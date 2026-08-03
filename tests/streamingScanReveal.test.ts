@@ -78,9 +78,13 @@ describe('streaming scan reveal', () => {
     // And nothing re-inlines the block. Two hand-written `setCloseEnabled`
     // calls are correct and expected: the static-load path enables it, and
     // `closeScan` disables it on the way back to the empty state. A third
-    // means a streaming path drifted back out of the shared reveal.
-    const enables = main.match(/dock\.setCloseEnabled\(true\)/g) ?? [];
-    const disables = main.match(/dock\.setCloseEnabled\(false\)/g) ?? [];
+    // means a streaming path drifted back out of the shared reveal. The
+    // static-load enable moved to the extracted open/load pipeline
+    // (`src/app/openScan.ts`), so the enable is counted across both files while
+    // the disable stays in the shell's `closeScan`.
+    const openScanSrc = readFileSync(resolve(ROOT, 'src/app/openScan.ts'), 'utf8');
+    const enables = (main + openScanSrc).match(/dock\.setCloseEnabled\(true\)/g) ?? [];
+    const disables = (main + openScanSrc).match(/dock\.setCloseEnabled\(false\)/g) ?? [];
     expect(enables.length).toBe(1);
     expect(disables.length).toBe(1);
   });
