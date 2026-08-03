@@ -25,12 +25,18 @@ import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
 import { summarizeMeasurementTrust } from '../render/measure/measurementTrust';
+import { isZUpFormat } from '../io/sniffFormat';
+import type { SourceFormat } from '../io/sniffFormat';
+import type { CrsLinearUnit } from '../io/crs';
 import type {
+  DeclaredSpatialFacts,
   InspectionSession,
   RebasedSessionGeometry,
   ScanFacts,
   ScanMatch,
   SessionScanSummary,
+  SessionSpatialClaims,
+  SessionSpatialVerdict,
 } from '../io/session';
 
 /** The streaming-source slice `scanFactsFromStreaming` reads — a structural subset of {@link StreamingSource}. */
@@ -38,7 +44,10 @@ export interface StreamingScanSource {
   readonly name: string;
   readonly sourcePointCount: number;
   dataBounds(): readonly [number, number, number, number, number, number];
-  crs(): { readonly name?: string; readonly epsg?: number } | null | undefined;
+  crs():
+    | { readonly name?: string; readonly epsg?: number; readonly linearUnit?: CrsLinearUnit }
+    | null
+    | undefined;
 }
 
 /** The static-cloud slice `scanFactsFromStatic` reads — a structural subset of {@link PointCloud}. */
@@ -49,8 +58,12 @@ export interface StaticScanCloud {
     readonly min: readonly [number, number, number];
     readonly max: readonly [number, number, number];
   };
+  /** Source file format — drives the file's own up-axis (`isZUpFormat`). */
+  readonly sourceFormat?: SourceFormat;
   readonly metadata?: {
-    readonly crs?: { readonly name?: string; readonly epsg?: number } | null;
+    readonly crs?:
+      | { readonly name?: string; readonly epsg?: number; readonly linearUnit?: CrsLinearUnit }
+      | null;
   };
 }
 
@@ -92,7 +105,35 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
   };
 }
 
-/** The three pure session functions `importSession` resolves lazily (from `../io/session`). */
+/**
+ * The FILE's own spatial declaration from a streaming source — the source of
+ * truth a restored session may not silently redefine (roadmap P1 #5). CRS code
+ * and linear unit come off the source's `crs()`. Up-axis is intentionally left
+ * unknown: COPC/EPT streaming sources don't surface a source format through the
+ * `StreamingSource` seam, and they are z-up by construction, so there is nothing
+ * to conflict against — the CRS and unit checks still run.
+ */
+export function declaredSpatialFromStreaming(cloud: StreamingScanSource): DeclaredSpatialFacts {
+  const crs = cloud.crs();
+  return { epsg: crs?.epsg, linearUnit: crs?.linearUnit };
+}
+
+/**
+ * The FILE's own spatial declaration from a static cloud. Up-axis comes from the
+ * source format the same way the renderer and session exporter derive it
+ * (`isZUpFormat`), so the three can never disagree; CRS code and linear unit come
+ * off the header metadata.
+ */
+export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpatialFacts {
+  const crs = cloud.metadata?.crs;
+  return {
+    upAxis: cloud.sourceFormat ? (isZUpFormat(cloud.sourceFormat) ? 'z' : 'y') : undefined,
+    epsg: crs?.epsg,
+    linearUnit: crs?.linearUnit,
+  };
+}
+
+/** The pure session functions `importSession` resolves lazily (from `../io/session`). */
 export interface SessionModule {
   parseSession: (text: string) => InspectionSession;
   rebaseSessionGeometry: (
@@ -100,6 +141,10 @@ export interface SessionModule {
     cloudOrigin: readonly [number, number, number],
   ) => RebasedSessionGeometry;
   matchSessionToScan: (summary: SessionScanSummary | undefined, loaded: ScanFacts) => ScanMatch;
+  detectSessionSpatialConflict: (
+    claims: SessionSpatialClaims,
+    declared: DeclaredSpatialFacts,
+  ) => SessionSpatialVerdict;
 }
 
 /**
@@ -145,6 +190,22 @@ export interface SessionIoDeps {
 }
 
 /**
+ * The FILE's declared spatial frame for whatever scan is active right now —
+ * streaming source first, else the active static cloud, else an empty
+ * declaration. Mirrors the streaming/static split the scan-identity match uses,
+ * so the spatial-conflict guard reads exactly the scan the geometry is being
+ * attached to.
+ */
+function declaredSpatialForActiveScan(viewer: Viewer, deps: SessionIoDeps): DeclaredSpatialFacts {
+  const streaming = viewer.streamingCloud;
+  if (streaming) return declaredSpatialFromStreaming(streaming);
+  const id = deps.getActiveScanId();
+  const staticCloud = id ? viewer.getCloud(id) : undefined;
+  if (staticCloud) return declaredSpatialFromStatic(staticCloud);
+  return {};
+}
+
+/**
  * Import an inspection session: restore measurements, annotations and views.
  * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
  * scan-identity match, so the same restore re-runs past the confirmation gate.
@@ -162,7 +223,8 @@ export async function importSession(
     // no GPU backend is needed — just a non-null instance).
     await deps.viewerReady;
     const viewer = deps.getViewer();
-    const { parseSession, rebaseSessionGeometry, matchSessionToScan } = await deps.loadSession();
+    const { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict } =
+      await deps.loadSession();
     const session = parseSession(await file.text());
     // If an older build wrote this session, a newer one may grade or label the
     // scan differently — surface that so the user can re-save. Absent stamp
@@ -279,34 +341,43 @@ export async function importSession(
       clip: geo.clip,
       camera: geo.camera,
     });
-    if (
+    // Roadmap P1 #5 — the session's stored spatial metadata must never silently
+    // redefine the loaded scan's own frame. Compare the session's CRS code,
+    // up-axis and linear unit against what the FILE declares; any divergence is a
+    // conflict, not a disclosure. On a conflict we keep the file's declaration
+    // and refuse the session's spatial claim (disclosing it), rather than
+    // reinterpreting the scan's coordinates. The scan-identity gate already
+    // refuses a mismatched EPSG summary; this covers the rest — a differing
+    // up-axis or unit, and a scan whose declaration exists but was absent from
+    // the session's summary. With no cloud loaded the file declares nothing, so
+    // nothing can conflict and the session's CRS (if any) still round-trips.
+    const declaredSpatial: DeclaredSpatialFacts = haveCloud
+      ? declaredSpatialForActiveScan(viewer, deps)
+      : {};
+    const spatial = detectSessionSpatialConflict(
+      { upAxis: session.upAxis, epsg: session.crs?.epsg, linearUnit: session.crs?.linearUnit },
+      declaredSpatial,
+    );
+    if (spatial.hasConflict) {
+      const why = spatial.conflicts.map((c) => c.reason).join('; ');
+      deps.showToast(
+        `The session's spatial metadata conflicts with this scan (${why}) — ` +
+          `the scan's own declaration is kept and the session's was not applied.`,
+      );
+    } else if (
       session.crs &&
       session.crs.epsg != null &&
       (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
     ) {
-      // Restore the author's CRS override so a capsule round-trips without
-      // re-prompting — but NEVER over a scan that declares a DIFFERENT code.
-      // The scan-identity match already conflicts on differing codes; this
-      // guard covers the remaining hole, a scan whose declaration exists but
-      // was absent from the session summary. A file that states its own CRS is
-      // stronger evidence than a session written who-knows-where, so the
-      // declaration wins and the session's choice is dropped with a note.
-      const declared =
-        viewer.streamingCloud?.crs()?.epsg ??
-        (deps.getActiveScanId() ? viewer.getCloud(deps.getActiveScanId()!)?.metadata?.crs?.epsg : undefined);
-      if (declared != null && declared !== session.crs.epsg) {
-        deps.showToast(
-          `The session's CRS (EPSG:${session.crs.epsg}) was not applied — this scan declares EPSG:${declared}, and a file's own declaration wins.`,
-        );
-      } else {
-        deps.setCrsOverride({
-          override: { epsg: session.crs.epsg, kind: session.crs.kind },
-          detected: deps.getActiveScanId()
-            ? viewer.getCloud(deps.getActiveScanId()!)?.metadata?.crs ?? undefined
-            : undefined,
-          source: 'user-override',
-        });
-      }
+      // No conflict — restore the author's CRS override so a capsule round-trips
+      // without re-prompting.
+      deps.setCrsOverride({
+        override: { epsg: session.crs.epsg, kind: session.crs.kind },
+        detected: deps.getActiveScanId()
+          ? viewer.getCloud(deps.getActiveScanId()!)?.metadata?.crs ?? undefined
+          : undefined,
+        source: 'user-override',
+      });
     }
 
     // Honest disclosure: the session carries the saved analysis, not the scan
