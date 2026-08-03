@@ -18,6 +18,7 @@ vi.mock('../src/render/streaming/sampleGrade', () => ({
 }));
 
 import { runFullCloudGrade } from '../src/render/streaming/runFullCloudGradeAction';
+import { summarizeSampleGrade } from '../src/render/streaming/sampleGrade';
 
 function makePanel() {
   return {
@@ -77,5 +78,40 @@ describe('runFullCloudGrade — stale-cloud guard', () => {
     await run(mkViewer(null, null), panel);
     expect(panel.setGradeError).toHaveBeenCalled();
     expect(gradeFullCloud).not.toHaveBeenCalled();
+  });
+});
+
+describe('runFullCloudGrade — unit-confirmation gate', () => {
+  beforeEach(() => {
+    gradeFullCloud.mockReset();
+    gradeFullCloud.mockResolvedValue(RUN);
+    vi.mocked(summarizeSampleGrade).mockClear();
+  });
+
+  const runWithCrs = async (crs: unknown) => {
+    const cloud = { crs: () => crs } as FakeViewer['streamingCloud'];
+    const panel = makePanel();
+    await run(mkViewer(cloud), panel);
+    return panel;
+  };
+
+  it('summarises unconfirmed for a CRS-less cloud (metre factor never applied)', async () => {
+    await runWithCrs(null);
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
+  });
+
+  it("summarises unconfirmed for an unknown-unit CRS (linearUnitToMetres:1 placeholder)", async () => {
+    await runWithCrs({ linearUnit: 'unknown', linearUnitToMetres: 1 });
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
+  });
+
+  it('summarises confirmed for a real metre CRS', async () => {
+    await runWithCrs({ linearUnit: 'metre', linearUnitToMetres: 1 });
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
+  });
+
+  it('summarises confirmed for a foot CRS', async () => {
+    await runWithCrs({ linearUnit: 'foot', linearUnitToMetres: 0.3048 });
+    expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
   });
 });

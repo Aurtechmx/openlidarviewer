@@ -254,24 +254,64 @@ function clampInt(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(v)));
 }
 
+/** The unit suffixes the grade summary stamps on its density / extent figures. */
+export interface GradeUnitSuffixes {
+  /** Areal density unit — "pts/m²" only when the source unit is confirmed. */
+  readonly areal: string;
+  /** Volumetric density unit — "pts/m³" only when confirmed. */
+  readonly volumetric: string;
+  /** Vertical-extent unit — "m" only when confirmed. */
+  readonly vertical: string;
+}
+
+/**
+ * Choose the summary's unit suffixes, FAILING CLOSED on an unconfirmed linear
+ * unit. `metresPerUnit` is 1 both for a real metre CRS and for the unknown /
+ * absent case (the inert `linearUnitToMetres: 1` placeholder), so the factor
+ * alone can't tell them apart — the caller passes `unitConfirmed` (its CRS
+ * carries a real, non-'unknown' linear unit). When it's false the spans are in
+ * raw source units, so the figures are labelled per source unit and never "m" /
+ * "pts/m²". Same gate as `streamingExtentRows` and the measure tool.
+ */
+export function gradeUnitSuffixes(unitConfirmed: boolean): GradeUnitSuffixes {
+  return unitConfirmed
+    ? { areal: 'pts/m²', volumetric: 'pts/m³', vertical: 'm' }
+    : { areal: 'pts/unit²', volumetric: 'pts/unit³', vertical: '(source units)' };
+}
+
 /**
  * A short, honest human summary of a {@link SampleGrade} for the panel. Pairs
  * with the runner's coverage label (passed separately) so the density figures
  * always travel with their "exact vs sampled" context.
+ *
+ * `unitConfirmed` gates every unit-bearing claim. The density TIER word
+ * (Sparse … Very Dense) is calibrated to metre-based density floors (USGS 3DEP
+ * pts/m²), so it is only truthful when the source declares a real linear unit.
+ * With the unit unconfirmed the spans are in raw source units: the tier verdict
+ * is withheld and only the raw figures — labelled per source unit — are shown,
+ * so a state-plane-FEET (or CRS-less) cloud is never reported in metres.
  */
-export function summarizeSampleGrade(grade: SampleGrade): string[] {
+export function summarizeSampleGrade(grade: SampleGrade, unitConfirmed = true): string[] {
+  const units = gradeUnitSuffixes(unitConfirmed);
   const lines: string[] = [];
   // Headline tier, annotated with the density it was judged on (areal for flat
   // data, volumetric for tall) so the number and its unit always agree.
   let densityFigure = '';
   if (grade.bucketBasis === 'areal' && grade.arealDensityPerM2 != null) {
-    densityFigure = ` · ≈ ${formatDensity(grade.arealDensityPerM2)} pts/m²`;
+    densityFigure = ` · ≈ ${formatDensity(grade.arealDensityPerM2)} ${units.areal}`;
   } else if (grade.bucketBasis === 'volumetric' && grade.volumetricDensityPerM3 != null) {
-    densityFigure = ` · ≈ ${formatDensity(grade.volumetricDensityPerM3)} pts/m³`;
+    densityFigure = ` · ≈ ${formatDensity(grade.volumetricDensityPerM3)} ${units.volumetric}`;
   }
-  lines.push(`Density: ${grade.bucketLabel}${densityFigure}`);
+  // The tier word claims an absolute pts/m² band, so withhold it when the unit
+  // is unconfirmed — the '—'/none case still reads '—'.
+  const tier = unitConfirmed
+    ? grade.bucketLabel
+    : grade.bucketBasis === 'none'
+      ? grade.bucketLabel
+      : 'units unknown';
+  lines.push(`Density: ${tier}${densityFigure}`);
   if (grade.verticalSpanM > 0) {
-    lines.push(`Vertical extent: ${grade.verticalSpanM.toFixed(1)} m`);
+    lines.push(`Vertical extent: ${grade.verticalSpanM.toFixed(1)} ${units.vertical}`);
   }
   if (grade.occupancyRatio != null) {
     const pct = Math.round(grade.occupancyRatio * 100);
