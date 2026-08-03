@@ -13,6 +13,8 @@
  */
 
 import { classVisibleAt } from './class/classMaskUniform';
+import { elevWindowFor } from './elevationWindowResolver';
+import type { UpAxis } from './elevationFilterUniform';
 
 /**
  * A snapshot of the active filter windows, in the SAME spaces the GPU uniforms
@@ -74,4 +76,32 @@ export function buildPointFilterAccept(
     }
     return true;
   };
+}
+
+/** The elevation portion of a {@link PointFilterWindow}, in one cloud's attribute space. */
+export interface ElevWindowFields {
+  /** Index into an interleaved xyz triple for the up axis: 2 = Z-up, 1 = Y-up. */
+  readonly elevAxisIdx: 1 | 2;
+  readonly elevMin: number;
+  readonly elevMax: number;
+}
+
+/**
+ * Convert a world-space elevation window into ONE cloud's attribute space using
+ * THAT cloud's origin and up-axis — the exact per-cloud conversion the GPU takes
+ * (`elevationWindowResolver.elevWindowFor`), so a CPU pick / lasso edit and the
+ * shader clip the same true height on EVERY layer, not just the primary one.
+ * Positions are stored origin-shifted, so a window converted with cloud A's
+ * origin tests cloud B (recentred elsewhere) at the wrong height — this is the
+ * seam that stops that. Reuses the resolver; it never forks a second convention.
+ * Off (`world === undefined`) still returns finite bounds (never consulted, since
+ * the caller gates on `elevActive`), matching the resolver and the shader.
+ */
+export function elevWindowFieldsFor(
+  world: readonly [number, number] | undefined,
+  originAlongAxis: number,
+  axis: UpAxis,
+): ElevWindowFields {
+  const w = elevWindowFor(world, originAlongAxis, axis);
+  return { elevAxisIdx: w.axisIsZ === 1 ? 2 : 1, elevMin: w.min, elevMax: w.max };
 }

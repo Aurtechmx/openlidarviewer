@@ -68,13 +68,12 @@ import { buildExportAdapter } from './exportAdapter';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
-import { buildPointFilterAccept } from './pointFilterAccept';
+import { buildPointFilterAccept, elevWindowFieldsFor } from './pointFilterAccept';
 import { PHI_CONJUGATE } from './streaming/fadeDither';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
 import { ElevationFilterGpu } from './elevationFilterGpu';
 import {
-  elevWindowFor,
   elevWindowForMaterial,
   type ElevFallback,
   type ElevLayer,
@@ -3212,7 +3211,7 @@ export class Viewer {
         entry.cloud.positions,
         entry.cloud.classification,
         entry.cloud.intensity,
-        this._currentFilterWindow(),
+        this._currentFilterWindow(this._elevLayerOf(entry.cloud)),
       ),
     });
     const buf = entry.cloud.classification;
@@ -3543,11 +3542,15 @@ export class Viewer {
     this._bumpRenderActivity();
   }
 
+  /** ONE cloud's own origin + up-axis — the facts that decide its conversion. */
+  private _elevLayerOf(cloud: PointCloud): ElevFallback {
+    const axis: UpAxis = isZUpFormat(cloud.sourceFormat) ? 2 : 1;
+    return { originAlongAxis: cloud.origin[axis], axis };
+  }
   /** Each static layer with the two facts that decide its own conversion. */
   private *_elevLayers(): Generator<ElevLayer<THREE.PointsNodeMaterial>> {
     for (const entry of this._clouds.values()) {
-      const axis: UpAxis = isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1;
-      yield { material: entry.material, originAlongAxis: entry.cloud.origin[axis], axis };
+      yield { material: entry.material, ...this._elevLayerOf(entry.cloud) };
     }
   }
 
@@ -5840,9 +5843,9 @@ export class Viewer {
     // Viewer's mesh-lifecycle plumbing.
     // Thread each node's class + intensity so the pick can obey the class,
     // elevation, and intensity filters (positions drive the elevation test).
-    // The per-node accept factory is passed only when SOME filter is active, so
-    // the all-visible hot path compares exactly as before (no per-point call).
-    const filterWindow = this._currentFilterWindow();
+    // The accept factory is passed only when SOME filter is active (hot path
+    // unchanged); streaming nodes share the streaming renderOrigin = primary layer.
+    const filterWindow = this._currentFilterWindow(this._primaryElevLayer());
     const anyFilter =
       filterWindow.classActive || filterWindow.elevActive || filterWindow.intenActive;
     const pick = selectStreamingPick(
@@ -5902,22 +5905,19 @@ export class Viewer {
   /**
    * Snapshot the active filter windows (class + elevation + intensity) in the
    * same spaces the GPU uniforms use, so a CPU accept predicate built from it
-   * rejects exactly the points the shader collapses to zero size. Read once per
-   * pick and shared across every candidate buffer.
+   * rejects exactly the points the shader collapses to zero size. Built for the
+   * given `layer`, so each cloud's elevation converts with ITS own origin/axis.
    */
-  private _currentFilterWindow(): PointFilterWindow {
-    // Pick resolves elevation against the PRIMARY cloud only, so with layers at
-    // different origins the GPU clips each correctly but pick and screen can
-    // disagree on a secondary layer. Stage C (docs/gate2-per-cloud-filter-plan.md).
-    const p = this._primaryElevLayer();
-    const primary = elevWindowFor(this._elevFilterWorld, p.originAlongAxis, p.axis);
+  private _currentFilterWindow(layer: ElevFallback): PointFilterWindow {
+    // Elevation converts with the PASSED layer's origin (class/intensity are origin-free).
+    const e = elevWindowFieldsFor(this._elevFilterWorld, layer.originAlongAxis, layer.axis);
     return {
       classActive: this._classFiltered,
       classMask: this._classMaskUniform.array as ArrayLike<number>,
       elevActive: this._elevGpu.isActive(),
-      elevAxisIdx: primary.axisIsZ === 1 ? 2 : 1,
-      elevMin: primary.min,
-      elevMax: primary.max,
+      elevAxisIdx: e.elevAxisIdx,
+      elevMin: e.elevMin,
+      elevMax: e.elevMax,
       intenActive: this._intenFilterEnabled.value !== 0,
       intenMin: this._intenFilterMin.value as number,
       intenMax: this._intenFilterMax.value as number,
@@ -5952,10 +5952,10 @@ export class Viewer {
 
     let best: { cloud: PointCloud; index: number; point: THREE.Vector3 } | null = null;
     let bestScore = Infinity;
-    const filterWindow = this._currentFilterWindow();
     for (const entry of this._clouds.values()) {
       const { mesh, cloud, locked, placement } = entry;
       if (!mesh.visible || locked) continue;
+      const filterWindow = this._currentFilterWindow(this._elevLayerOf(cloud)); // per-cloud origin
       // Placement fold (float64-transform.md step 3): the ray drops into the
       // layer's source frame, the pick runs over the raw positions unchanged,
       // and the hit lifts back. Identity returns the same tuples — a no-op.
