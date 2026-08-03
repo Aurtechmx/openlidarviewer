@@ -6,8 +6,15 @@ import {
   type SessionIoDeps,
   type SessionModule,
 } from '../src/app/sessionIo';
-import { serializeSession, parseSession, rebaseSessionGeometry, matchSessionToScan } from '../src/io/session';
+import {
+  serializeSession,
+  parseSession,
+  rebaseSessionGeometry,
+  matchSessionToScan,
+  detectSessionSpatialConflict,
+} from '../src/io/session';
 import type { InspectionSession, SessionScanSummary } from '../src/io/session';
+import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import type { Viewer } from '../src/render/Viewer';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 
@@ -21,13 +28,29 @@ const p = (x: number, y: number, z: number): Vec3 => [x, y, z];
 // depending on a Node `File` global.
 const asFile = (text: string): File => ({ text: async () => text }) as unknown as File;
 
-const realSessionModule: SessionModule = { parseSession, rebaseSessionGeometry, matchSessionToScan };
+const realSessionModule: SessionModule = {
+  parseSession,
+  rebaseSessionGeometry,
+  matchSessionToScan,
+  detectSessionSpatialConflict,
+};
+
+type LinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
 
 interface StreamingOpts {
   name: string;
   sourcePointCount: number;
   dataBounds: readonly [number, number, number, number, number, number];
-  crs?: { name?: string; epsg?: number } | null;
+  crs?: { name?: string; epsg?: number; linearUnit?: LinearUnit } | null;
+}
+
+interface StaticOpts {
+  name: string;
+  scanId: string;
+  pointCount: number;
+  bounds: { min: readonly [number, number, number]; max: readonly [number, number, number] };
+  sourceFormat: string;
+  crs?: { name?: string; epsg?: number; linearUnit?: LinearUnit } | null;
 }
 
 /**
@@ -38,6 +61,7 @@ interface StreamingOpts {
 function makeDeps(
   over: {
     streaming?: StreamingOpts;
+    static?: StaticOpts;
     origin?: readonly [number, number, number];
     appVersion?: string;
   } = {},
@@ -62,11 +86,21 @@ function makeDeps(
       }
     : null;
 
+  const staticCloud = over.static
+    ? {
+        name: over.static.name,
+        pointCount: over.static.pointCount,
+        bounds: () => over.static!.bounds,
+        sourceFormat: over.static.sourceFormat,
+        metadata: { crs: over.static.crs ?? null },
+      }
+    : null;
+
   const viewer = {
-    clouds: () => [] as string[],
+    clouds: () => (over.static ? [over.static.scanId] : ([] as string[])),
     hasStreamingCloud: over.streaming != null,
     streamingCloud,
-    getCloud: () => undefined,
+    getCloud: (id: string) => (over.static && id === over.static.scanId ? staticCloud : undefined),
     measure: { loadMeasurements },
     annotate: { loadAnnotations },
   };
@@ -76,8 +110,8 @@ function makeDeps(
     getViewer: () => viewer as unknown as Viewer,
     loadSession: async () => realSessionModule,
     appVersion: over.appVersion ?? CURRENT,
-    getActiveScanId: () => null,
-    getActiveCloud: () => null,
+    getActiveScanId: () => over.static?.scanId ?? null,
+    getActiveCloud: () => (staticCloud as unknown as import('../src/model/PointCloud').PointCloud | null),
     exportOrigin: () => over.origin ?? [0, 0, 0],
     bookmarks: { restore, names: () => ['V1'] },
     setInspectorViews,
@@ -301,5 +335,124 @@ describe('importSession — scan-identity gate against a loaded cloud', () => {
     expect(calls.showToast).toHaveBeenCalledWith(
       expect.stringContaining('Applied despite an unverified scan match'),
     );
+  });
+});
+
+describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', () => {
+  // A resolved CRS the session carries; the serializer/parser round-trips it and
+  // the restore tries to re-apply it as the author's override.
+  const resolvedCrs = (over: Partial<ResolvedCrs> = {}): ResolvedCrs => ({
+    kind: 'projected',
+    name: 'NAD83 / UTM 13N',
+    epsg: 32613,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: true,
+    ...over,
+  });
+
+  // Extents match SCAN_A so the scan-identity gate returns a STRONG verdict and
+  // the restore reaches the spatial-metadata block. The summary carries NO epsg,
+  // so the identity gate can't conflict on CRS — that is precisely the hole this
+  // guard closes: a scan whose CRS declaration exists but wasn't in the summary.
+  const strongStreaming = (crs?: { epsg?: number; linearUnit?: LinearUnit }): StreamingOpts => ({
+    name: 'loaded.laz',
+    sourcePointCount: 1000,
+    dataBounds: [0, 0, 0, 10, 10, 3],
+    crs: crs ?? null,
+  });
+  const strongSummary = () => summary({ width: 10, depth: 10, height: 3, sourcePoints: 1000 });
+
+  it('refuses the session CRS when the file declares a DIFFERENT EPSG (no silent adopt)', async () => {
+    const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32614 }) });
+    await importSession(
+      asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613 }), scanSummary: strongSummary() })),
+      {},
+      deps,
+    );
+    // Geometry still restores — the scan IS a spatial match — but the session's
+    // CRS claim is refused and disclosed, not applied.
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
+    expect(warn).toBeTruthy();
+    expect(warn).toMatch(/EPSG:32613/);
+    expect(warn).toMatch(/EPSG:32614/);
+  });
+
+  it('applies the session CRS when it AGREES with the file', async () => {
+    const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613 }) });
+    await importSession(
+      asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613 }), scanSummary: strongSummary() })),
+      {},
+      deps,
+    );
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: 32613 });
+    expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
+  });
+
+  it('keeps the file’s CRS when the session declares none — no override, no conflict', async () => {
+    const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613 }) });
+    await importSession(asFile(sessionJson({ scanSummary: strongSummary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
+  });
+
+  it('refuses the session CRS on a UNIT mismatch even when the EPSG agrees', async () => {
+    const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613, linearUnit: 'metre' }) });
+    await importSession(
+      asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613, linearUnit: 'foot', linearUnitToMetres: 0.3048 }), scanSummary: strongSummary() })),
+      {},
+      deps,
+    );
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
+    expect(warn).toMatch(/linear unit/);
+    expect(warn).toMatch(/foot/);
+  });
+
+  it('flags an up-axis mismatch against the file’s detected axis', async () => {
+    // A Y-up mesh format (GLB) loaded; the session was captured Z-up. Extents
+    // match so the identity gate passes; the axis divergence is the conflict.
+    const { deps, calls } = makeDeps({
+      static: {
+        name: 'loaded.glb',
+        scanId: 'scan-1',
+        pointCount: 1000,
+        bounds: { min: [0, 0, 0], max: [10, 10, 3] },
+        sourceFormat: 'glb',
+      },
+    });
+    await importSession(
+      asFile(sessionJson({ upAxis: 'z', scanSummary: strongSummary() })),
+      {},
+      deps,
+    );
+    // Geometry restores; the axis conflict is surfaced, not silently adopted.
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
+    expect(warn).toBeTruthy();
+    expect(warn).toMatch(/up-axis/);
+    expect(warn).toMatch(/Y-up/);
+  });
+
+  it('restores cleanly when the file’s axis AGREES with the session', async () => {
+    // A Z-up survey format (LAS); session Z-up — no axis conflict.
+    const { deps, calls } = makeDeps({
+      static: {
+        name: 'loaded.las',
+        scanId: 'scan-1',
+        pointCount: 1000,
+        bounds: { min: [0, 0, 0], max: [10, 10, 3] },
+        sourceFormat: 'las',
+      },
+    });
+    await importSession(asFile(sessionJson({ upAxis: 'z', scanSummary: strongSummary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 });
