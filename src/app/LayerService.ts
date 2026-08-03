@@ -76,24 +76,25 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
 /**
  * Whether layers are physically rebased onto a shared project origin.
  *
- * OFF in v0.6.0. The mount writes the project offset into the Float32
- * position array, so the residual a layer keeps depends on how far it moved —
- * bounded by the precision gate above, refused past a millimetre, but a
- * permanent edit to the only copy of the source values. That is the wrong
- * trade for a research tool to make by default before the transform is held
- * in Float64 beside source-local vertices (coordinate-integrity roadmap, P1
- * item 2).
+ * ON since the mount became non-destructive. It is a Float64 placement
+ * transform (`Viewer.setLayerPlacement`), not a rewrite of the position array:
+ * the source vertices never move, rendering places the mesh by its transform,
+ * each layer's CPU work reads its own source-local frame (per-cloud origin),
+ * and combined estimators run only across `verified` layers. The precision
+ * gate above still refuses a placement it cannot represent, and an unaligned
+ * or foreign-CRS layer carries no placement and stays in its own frame, so
+ * `mounted: false` still makes the combined estimators refuse rather than
+ * average unlike frames.
  *
- * With it off, every layer stays in its own frame and nothing is merged
- * across layers — `mounted: false` makes the combined estimators refuse, so
- * disabling the mount cannot leave unaligned layers being averaged together.
- * Single-layer work is completely unaffected: a lone layer's mount was always
- * the identity.
- *
- * The frame service still runs, still classifies, and is still tested. It is
- * a foundation being carried, not a feature being claimed.
+ * The remaining Float64 work — holding `sourceToProject` beside source-local
+ * vertices for every `.positions` consumer — is coordinate-integrity roadmap
+ * P1 item 2. It does not gate this: the placement folds at the render, bounds,
+ * picking and elevation-window boundaries the mount actually crosses, which is
+ * what the two-layer placement e2e (`gate2-origin-a` / `gate2-origin-b`)
+ * confirms. Single-layer work is unaffected: a lone layer's placement is the
+ * identity.
  */
-export const MULTI_LAYER_MOUNT_ENABLED = false;
+export const MULTI_LAYER_MOUNT_ENABLED = true;
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that
@@ -122,19 +123,28 @@ function mountPrecision(
     };
   } | null | undefined,
   frame: { projectOrigin: readonly [number, number, number] } | null,
+  verticalMount: boolean,
 ): { errorMetres: number | null; basis: 'projected-linear-unit' | 'geographic' | 'unknown' } {
   if (!cloud || !frame) return { errorMetres: 0, basis: 'projected-linear-unit' };
   if (info.isGeographic) return { errorMetres: null, basis: 'geographic' };
   const usable = (s: number | undefined): s is number =>
     s !== undefined && Number.isFinite(s) && s > 0;
   const horizontalScale = info.linearUnitToMetres;
-  const verticalScale = info.verticalUnitToMetres;
-  if (!usable(horizontalScale) || !usable(verticalScale)) {
-    return { errorMetres: null, basis: 'unknown' };
-  }
+  if (!usable(horizontalScale)) return { errorMetres: null, basis: 'unknown' };
   const q = cloud.rebaseQuantum(frame.projectOrigin);
+  const horizontalError = q.horizontal * horizontalScale;
+  // A horizontal-only mount applies its offset in X/Y only and leaves Z on the
+  // source origin (`dz = 0` below), so the vertical unit never scales a Z
+  // offset and must not gate the placement. Requiring it refused the common
+  // real case — a projected scan with a horizontal CRS but no declared vertical
+  // unit — from ever sharing a frame. Only a vertical mount reads the Z budget.
+  if (!verticalMount) {
+    return { errorMetres: horizontalError, basis: 'projected-linear-unit' };
+  }
+  const verticalScale = info.verticalUnitToMetres;
+  if (!usable(verticalScale)) return { errorMetres: null, basis: 'unknown' };
   return {
-    errorMetres: Math.max(q.horizontal * horizontalScale, q.vertical * verticalScale),
+    errorMetres: Math.max(horizontalError, q.vertical * verticalScale),
     basis: 'projected-linear-unit',
   };
 }
@@ -272,7 +282,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       // data. Degrees are not a linear metre frame at all, so a destructive
       // mount on geographic coordinates is refused outright rather than
       // converted through a latitude-dependent approximation.
-      const precision = mountPrecision(info, cloud, aligned ? frame : null);
+      const precision = mountPrecision(info, cloud, aligned ? frame : null, alignsVertically(state));
       lastPrecision.set(info.id, precision);
       const precisionSafe = precision.errorMetres !== null
         && precision.errorMetres <= REBASE_QUANTUM_BUDGET_M;
