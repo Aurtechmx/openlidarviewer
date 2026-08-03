@@ -66,6 +66,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
+import type { TransformProvenance } from '../../convert/transformProvenance';
 export { NOT_SURVEY_GRADE_NOTE };
 
 /**
@@ -244,6 +245,16 @@ export interface ExportProvenance {
    * §19: a contour file that carries no permit stamp was not gate-approved.
    */
   readonly exportPermit: ExportPermitStamp | null;
+  /**
+   * The coordinate transform this export's geometry was reprojected through, or
+   * `null` when the export path did not reproject (the common case — terrain
+   * products are built in the source CRS). Optional/disclosure metadata: it
+   * discloses WHICH operation moved the coordinates, its accuracy, the
+   * source/target datum + realization, and the source coordinate epoch (see
+   * {@link TransformProvenance}). Never a user-visible number — it changes no
+   * figure the export already stated.
+   */
+  readonly transform?: TransformProvenance | null;
 }
 
 /** Options for {@link buildExportProvenance}. */
@@ -279,6 +290,13 @@ export interface ExportProvenanceOptions {
    * which decision permitted it. Null / omitted for non-gated paths.
    */
   readonly exportPermit?: ExportPermitStamp | null;
+  /**
+   * The coordinate transform the exported geometry was reprojected through (from
+   * `reprojectGlobal`'s result). Supplied only by a path that actually
+   * reprojects; omitted/`null` otherwise, and the export then discloses no
+   * transform. Pure disclosure metadata — it never alters an exported figure.
+   */
+  readonly transform?: TransformProvenance | null;
 }
 
 /** Resolve the generation timestamp to an ISO string. */
@@ -403,6 +421,10 @@ export function buildExportProvenance(
     warnings: result.warnings ?? [],
     notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
     exportPermit: opts.exportPermit ?? null,
+    // Disclosure metadata: present only when a reprojecting path supplied it,
+    // `null` otherwise — the terrain surface products build in the source CRS
+    // and reproject nothing, so this is `null` for them.
+    transform: opts.transform ?? null,
   };
 }
 
@@ -629,6 +651,28 @@ export function provenanceLines(p: ExportProvenance): string[] {
       p.pointDensityPerM2 != null ? `${p.pointDensityPerM2.toFixed(1)} pts/m²` : 'unknown',
     ),
   ];
+  // Coordinate-transform disclosure — present ONLY when the export path
+  // reprojected (p.transform set). Each line carries a real value: the operation
+  // always, the datum realization / epoch / accuracy only when known, so a
+  // reader never sees a fabricated figure. Absent entirely for the common
+  // build-in-source-CRS terrain export.
+  if (p.transform) {
+    const t = p.transform;
+    lines.push(kv('Transform operation', t.operation));
+    if (t.sourceRealization) lines.push(kv('Source realization', t.sourceRealization));
+    if (t.targetRealization) lines.push(kv('Target realization', t.targetRealization));
+    lines.push(
+      kv(
+        'Transform accuracy',
+        t.accuracyMetres != null
+          ? `≈ ${t.accuracyMetres} m (datum-shift estimate, not survey-grade)`
+          : 'not characterised (no cross-datum leg or unknown datums)',
+      ),
+    );
+    if (t.coordinateEpoch != null) {
+      lines.push(kv('Coordinate epoch', String(t.coordinateEpoch)));
+    }
+  }
   // Derived complexity (v0.5.4): metric, window/radius in cells AND ground
   // metres, Z units and the convention note — reproducible parameters, worded
   // identically to the panel/card (the texts are the same strings).
@@ -731,6 +775,25 @@ export function provenanceJson(p: ExportProvenance): Record<string, unknown> {
           label: p.exportPermit.label,
           watermark: p.exportPermit.watermark,
           caveats: [...p.exportPermit.caveats],
+        }
+      : null,
+    // The coordinate-transform disclosure (null when the path reprojected
+    // nothing). Copied field-by-field so the JSON owns its own object; absent
+    // datum/realization fields stay absent (never fabricated), and the
+    // accuracy/epoch are the honest `null` when unknown.
+    transform: p.transform
+      ? {
+          operation: p.transform.operation,
+          accuracyMetres: p.transform.accuracyMetres ?? null,
+          coordinateEpoch: p.transform.coordinateEpoch ?? null,
+          ...(p.transform.sourceDatum ? { sourceDatum: p.transform.sourceDatum } : {}),
+          ...(p.transform.targetDatum ? { targetDatum: p.transform.targetDatum } : {}),
+          ...(p.transform.sourceRealization
+            ? { sourceRealization: p.transform.sourceRealization }
+            : {}),
+          ...(p.transform.targetRealization
+            ? { targetRealization: p.transform.targetRealization }
+            : {}),
         }
       : null,
     // The canonical analysis record (PR3): the single structure every output can
