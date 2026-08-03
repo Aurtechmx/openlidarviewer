@@ -172,6 +172,18 @@ export interface StockpileVolumeResult {
 /** Sparse-footprint floor: below this, the band is unreliable, not just wide. */
 const MIN_RELIABLE_POINTS = 100;
 
+/**
+ * Disclosure for an unknown-unit CRS. The volume/footprint/thickness are labelled
+ * m³/m²/m downstream, but on an unknown unit they rest on the placeholder
+ * `linearUnitToMetres = 1`, so they only ASSUME metres — a foot survey read as
+ * metres overstates volume ~35×. Emitted as the LEAD caveat so the panel and the
+ * signed report disclose it (both render `caveats` verbatim); the toast, which
+ * shows no caveats, appends its own short note. Mirrors spaceMetrics'
+ * UNVERIFIED_UNIT_CAVEAT and the footprint-area / epoch-cut-fill fail-closed seams.
+ */
+const UNIT_UNVERIFIED_CAVEAT =
+  'Coordinate units are unverified — the volume, footprint and thickness assume metres; confirm the source CRS before relying on the figures.';
+
 function isZUp(up: Vec3): boolean {
   return Math.abs(up[2] - 1) < 1e-6 && Math.abs(up[0]) < 1e-6 && Math.abs(up[1]) < 1e-6;
 }
@@ -324,6 +336,7 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
     baseMode,
     baseUncertainty,
     input.sourceReduced ?? false,
+    densityUnitKnown,
   );
 
   return {
@@ -389,6 +402,7 @@ function buildCaveats(
   baseMode: BasePlaneMode,
   baseUncertainty: number,
   sourceReduced: boolean,
+  densityUnitKnown: boolean,
 ): string[] {
   const out: string[] = [];
   if (pointsInPolygon < MIN_RELIABLE_POINTS) {
@@ -420,6 +434,13 @@ function buildCaveats(
   );
   if (confidence === 'high') {
     out.unshift('Dense, even coverage with a clean base — suitable for a documented stockpile figure once validated.');
+  }
+  // Fail closed on an unverified scale: with an unknown horizontal unit every
+  // metre figure is an assume-metres default, so lead with the disclosure rather
+  // than let "X m³" read as a confirmed metric claim. (Unknown units cannot earn
+  // HIGH, so this never displaces the high-confidence lead above.)
+  if (!densityUnitKnown) {
+    out.unshift(UNIT_UNVERIFIED_CAVEAT);
   }
   return out;
 }
@@ -453,9 +474,15 @@ function zeroResult(
       basePlaneError: 0,
     },
     validity,
-    caveats:
-      validity === 'ok'
-        ? ['No points fell inside the footprint.']
-        : [`Footprint is not usable (${validity}).`],
+    caveats: zeroCaveats(validity, densityUnitKnown),
   };
+}
+
+function zeroCaveats(validity: PolygonValidity, densityUnitKnown: boolean): string[] {
+  const out =
+    validity === 'ok'
+      ? ['No points fell inside the footprint.']
+      : [`Footprint is not usable (${validity}).`];
+  if (!densityUnitKnown) out.unshift(UNIT_UNVERIFIED_CAVEAT);
+  return out;
 }
