@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPointFilterAccept } from '../src/render/pointFilterAccept';
+import { buildPointFilterAccept, elevWindowFieldsFor } from '../src/render/pointFilterAccept';
 import type { PointFilterWindow } from '../src/render/pointFilterAccept';
 
 /** A 256-entry all-visible class mask, optionally hiding some codes. */
@@ -146,5 +146,61 @@ describe('buildPointFilterAccept — per-cloud windows (Gate 2 Stage B contract)
     const zUpAcceptWrongAxis = buildPointFilterAccept(zUpPos, null, null,
       win({ elevActive: true, elevAxisIdx: 1, elevMin: 0, elevMax: 10 }));
     expect(zUpAcceptWrongAxis!(0)).toBe(false); // reads y=999, outside the window
+  });
+});
+
+describe('elevWindowFieldsFor — CPU world→attribute conversion (per-cloud)', () => {
+  // This pins the seam the Viewer's CPU pick / lasso path now goes through
+  // (`_currentFilterWindow(layer)`), mirroring elevationWindowResolver.test.ts's
+  // two-different-origins case but for the CPU accept path. The block above
+  // proves the PREDICATE honours two already-different windows; this proves the
+  // Viewer derives those two windows from ONE world range per cloud, closing the
+  // gap where a single primary-origin window was reused for every cloud.
+
+  it('subtracts the cloud origin along the up-axis (attr = world - origin), matching the resolver', () => {
+    // Same fixture as the resolver test: Cloud A, Z origin 195, world [198, 202].
+    expect(elevWindowFieldsFor([198, 202], 195, 2)).toEqual({ elevAxisIdx: 2, elevMin: 3, elevMax: 7 });
+  });
+
+  it('maps the up-axis to the position component: Z-up -> 2, Y-up -> 1', () => {
+    expect(elevWindowFieldsFor([10, 20], 0, 2).elevAxisIdx).toBe(2);
+    expect(elevWindowFieldsFor([10, 20], 0, 1).elevAxisIdx).toBe(1);
+  });
+
+  it('still returns finite bounds when the filter is off (undefined range)', () => {
+    // The accept predicate gates on `elevActive`, so an off window is never
+    // consulted — but it must be a real window, never NaN, matching the resolver.
+    const w = elevWindowFieldsFor(undefined, 195, 2);
+    expect(Number.isFinite(w.elevMin)).toBe(true);
+    expect(Number.isFinite(w.elevMax)).toBe(true);
+  });
+
+  it('gives two clouds at different origins two windows that accept the SAME true-height point', () => {
+    // The core CPU-path guarantee. gate2-origin-a: Z origin 195; gate2-origin-b:
+    // Z origin 150. ONE world window [198, 202] must convert per cloud, so a real
+    // point at true world Z=200 (stored origin-shifted: 5 in A, 50 in B) is
+    // accepted by BOTH — the whole point of routing each cloud through its own
+    // origin instead of the primary's.
+    const world: [number, number] = [198, 202];
+    const a = elevWindowFieldsFor(world, 195, 2);
+    const b = elevWindowFieldsFor(world, 150, 2);
+    expect(a).toEqual({ elevAxisIdx: 2, elevMin: 3, elevMax: 7 });
+    expect(b).toEqual({ elevAxisIdx: 2, elevMin: 48, elevMax: 52 });
+    expect(a.elevMin).not.toBe(b.elevMin);
+
+    const posA = new Float32Array([0, 0, 200 - 195]); // 5
+    const posB = new Float32Array([0, 0, 200 - 150]); // 50
+    const base = { classActive: false, classMask: null, intenActive: false, intenMin: 0, intenMax: 0 } as const;
+    expect(buildPointFilterAccept(posA, null, null, { ...base, elevActive: true, ...a })!(0)).toBe(true);
+    expect(buildPointFilterAccept(posB, null, null, { ...base, elevActive: true, ...b })!(0)).toBe(true);
+
+    // The Stage-A CPU bug this fix closes: cloud B's point tested against cloud
+    // A's window (one shared/primary origin) is wrongly rejected — 50 ∉ [3, 7].
+    expect(buildPointFilterAccept(posB, null, null, { ...base, elevActive: true, ...a })!(0)).toBe(false);
+  });
+
+  it('reads the correct component for a Z-up cloud beside a Y-up cloud from one world window', () => {
+    expect(elevWindowFieldsFor([12, 17], 10, 2).elevAxisIdx).toBe(2); // survey, Z-up
+    expect(elevWindowFieldsFor([12, 17], 10, 1).elevAxisIdx).toBe(1); // phone, Y-up
   });
 });
