@@ -135,7 +135,11 @@ export function convertCloud(
     if (sourceEpsg == null) {
       return fail('Reproject needs a known source CRS. Assign the source EPSG, or pick Assign instead.');
     }
-    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg);
+    // Pass the source CRS as a provenance hint so the result's
+    // TransformProvenance carries the realization-preserving datum name and the
+    // source coordinate epoch. Hints affect only the metadata, never the
+    // reprojected coordinates.
+    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs: cloud.metadata?.crs ?? null });
     g = r.points;
     if (r.transformed && r.datumCaveat == null) {
       reprojectApplied = true;

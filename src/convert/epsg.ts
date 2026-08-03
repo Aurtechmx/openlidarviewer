@@ -165,21 +165,23 @@ const WGS84_COINCIDENT: ReadonlySet<DatumFamily> = new Set([
   'GDA2020',
 ]);
 
-export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | null {
+/**
+ * The three degenerate datum-shift classes our proj4 definitions cannot model
+ * faithfully. `null` means the pair is clean (same family, a pure projection
+ * change, or a conventionally-coincident cluster pair) OR unresolvable. This is
+ * the SINGLE classification both {@link datumShiftCaveat} (the human warning) and
+ * {@link datumShiftAccuracyMetres} (the machine-readable magnitude) read, so the
+ * two can never disagree about which pairs are degenerate.
+ */
+type DatumShiftClass = 'nad27-legless' | 'gda94-gda2020-identity' | 'nad83-wgs84-identity';
+
+function classifyDatumShift(srcEpsg: number, dstEpsg: number): DatumShiftClass | null {
   const a = epsgDatumFamily(srcEpsg);
   const b = epsgDatumFamily(dstEpsg);
   if (a == null || b == null || a === b) return null;
-  if (a === 'NAD27' || b === 'NAD27') {
-    return (
-      'NAD27 datum grids (NADCON/NTv2) are not bundled — the NAD27 leg of this ' +
-      'transform uses a coarse parametric shift; horizontal errors of 10 m or more are expected'
-    );
-  }
+  if (a === 'NAD27' || b === 'NAD27') return 'nad27-legless';
   if ((a === 'GDA94' && b === 'GDA2020') || (a === 'GDA2020' && b === 'GDA94')) {
-    return (
-      'GDA94 and GDA2020 are both defined as identity shifts to WGS84 here, so no real ' +
-      'datum shift was applied — the true GDA94→GDA2020 difference is ≈ 1.8 m (plate motion)'
-    );
+    return 'gda94-gda2020-identity';
   }
   // NAD83 is realised here as an identity shift to WGS84, but it is offset from
   // the WGS84-coincident cluster (modern WGS84 / ETRS89 / GDA2020) by ≈ 1–2 m
@@ -189,12 +191,62 @@ export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | nul
     (a === 'NAD83' && WGS84_COINCIDENT.has(b)) ||
     (b === 'NAD83' && WGS84_COINCIDENT.has(a))
   ) {
-    return (
-      'NAD83 is applied here as an identity shift to the WGS84 datum family, but the two ' +
-      'differ by ≈ 1–2 m — no NAD83 datum grid was applied'
-    );
+    return 'nad83-wgs84-identity';
   }
   return null;
+}
+
+export function datumShiftCaveat(srcEpsg: number, dstEpsg: number): string | null {
+  switch (classifyDatumShift(srcEpsg, dstEpsg)) {
+    case 'nad27-legless':
+      return (
+        'NAD27 datum grids (NADCON/NTv2) are not bundled — the NAD27 leg of this ' +
+        'transform uses a coarse parametric shift; horizontal errors of 10 m or more are expected'
+      );
+    case 'gda94-gda2020-identity':
+      return (
+        'GDA94 and GDA2020 are both defined as identity shifts to WGS84 here, so no real ' +
+        'datum shift was applied — the true GDA94→GDA2020 difference is ≈ 1.8 m (plate motion)'
+      );
+    case 'nad83-wgs84-identity':
+      return (
+        'NAD83 is applied here as an identity shift to the WGS84 datum family, but the two ' +
+        'differ by ≈ 1–2 m — no NAD83 datum grid was applied'
+      );
+    default:
+      return null;
+  }
+}
+
+/**
+ * The estimated horizontal error, in METRES, that the DATUM leg of a src→dst
+ * transform introduces given our grid-less / identity proj4 definitions. It is
+ * the machine-readable companion to {@link datumShiftCaveat} — the SAME
+ * classification decides both — and reports the magnitude the caveat already
+ * states in prose, never a fabricated precision:
+ *
+ *   - NAD27 leg: 10 m — the stated floor ("10 m or more"); the true error grows
+ *     larger at datum edges / in Alaska, so this is a lower bound, not a claim.
+ *   - GDA94 ↔ GDA2020: 1.8 m — the plate-motion difference the identity omits.
+ *   - NAD83 ↔ the WGS84-coincident cluster: 2 m — the conservative top of the
+ *     "≈ 1–2 m" offset.
+ *
+ * Returns `null` when there is NO cross-datum leg to characterise (a same-family
+ * projection change, a conventionally-coincident cluster pair, or an
+ * unresolvable code): a projection-only transform is not assigned a survey
+ * figure, and an unknown datum is reported as unknown, never as zero.
+ */
+export function datumShiftAccuracyMetres(srcEpsg: number, dstEpsg: number): number | null {
+  switch (classifyDatumShift(srcEpsg, dstEpsg)) {
+    case 'nad27-legless':
+      return 10;
+    case 'gda94-gda2020-identity':
+      return 1.8;
+    case 'nad83-wgs84-identity':
+      return 2;
+    default:
+      return null;
+  }
 }
 
 /** A human label for an EPSG code (best-effort, for logs/UI). */
