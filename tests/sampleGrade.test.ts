@@ -11,6 +11,7 @@ import { describe, it, expect } from 'vitest';
 import {
   gradeSampleDensity,
   summarizeSampleGrade,
+  gradeUnitSuffixes,
   classifyArealDensity,
 } from '../src/render/streaming/sampleGrade';
 
@@ -210,6 +211,52 @@ describe('summarizeSampleGrade', () => {
     expect(lines[0]).toBe('Density: —');
     expect(lines.some((l) => /pts\/m²/.test(l))).toBe(false);
     expect(lines.some((l) => /Coverage of bounding box/.test(l))).toBe(false);
+  });
+});
+
+describe('summarizeSampleGrade — fails closed on an unconfirmed unit', () => {
+  // A flat swath graded by AREA, so the density line carries an areal figure.
+  const flat = () => gradeSampleDensity(filledFlatCloud(50_000, 100, 2), 1);
+
+  it('claims metres only when the unit is confirmed', () => {
+    const lines = summarizeSampleGrade(flat(), true);
+    expect(lines[0]).toMatch(/pts\/m²/);
+    expect(lines.some((l) => /Vertical extent: [\d.]+ m$/.test(l))).toBe(true);
+    // The metre-calibrated tier word is asserted.
+    expect(lines[0]).toMatch(/^Density: (Sparse|Moderate|Dense|Very Dense)/);
+  });
+
+  it('withholds the metre claim and the tier when the unit is unconfirmed', () => {
+    const lines = summarizeSampleGrade(flat(), false);
+    // No bare metre units anywhere.
+    expect(lines.some((l) => /pts\/m²|pts\/m³/.test(l))).toBe(false);
+    expect(lines.some((l) => /\bm$/.test(l))).toBe(false);
+    // Raw figures are shown, labelled per source unit.
+    expect(lines[0]).toMatch(/pts\/unit²/);
+    expect(lines.some((l) => /Vertical extent: [\d.]+ \(source units\)/.test(l))).toBe(true);
+    // The absolute-band tier verdict is not asserted.
+    expect(lines[0]).not.toMatch(/Sparse|Moderate|Dense|Very Dense/);
+    expect(lines[0]).toMatch(/units unknown/);
+  });
+
+  it('keeps the (unit-independent) occupancy line under an unconfirmed unit', () => {
+    const lines = summarizeSampleGrade(flat(), false);
+    expect(lines.some((l) => /Coverage of bounding box: \d+%/.test(l))).toBe(true);
+  });
+
+  it('an empty grade still reads "Density: —" even when unconfirmed', () => {
+    const lines = summarizeSampleGrade(gradeSampleDensity(new Float32Array(0), 1), false);
+    expect(lines[0]).toBe('Density: —');
+  });
+});
+
+describe('gradeUnitSuffixes', () => {
+  it('uses metre suffixes only when confirmed, source-unit suffixes otherwise', () => {
+    expect(gradeUnitSuffixes(true)).toEqual({ areal: 'pts/m²', volumetric: 'pts/m³', vertical: 'm' });
+    const raw = gradeUnitSuffixes(false);
+    expect(raw.areal).not.toMatch(/m²/);
+    expect(raw.volumetric).not.toMatch(/m³/);
+    expect(raw.vertical).toBe('(source units)');
   });
 });
 
