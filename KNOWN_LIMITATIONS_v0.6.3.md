@@ -6,7 +6,7 @@ Four v0.6.1 statements or outputs are corrected in `docs/release/ERRATUM_v0.6.2.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 6,790 lines and `src/render/Viewer.ts` is 6,419, against stated targets of 2,500 and 2,000. The composition root is finished (no module-level mutable application state remains in `main.ts`) and the architecture is written down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The remaining blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
+`src/main.ts` is 6,507 lines and `src/render/Viewer.ts` is 6,419, against stated targets of 2,500 and 2,000. The composition root is finished (no module-level mutable application state remains in `main.ts`) and the architecture is written down with a drift check, but that is the scaffolding for the decomposition, not the decomposition. The remaining blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
 
 ## The shared project frame is carried, not applied
 
