@@ -6834,8 +6834,8 @@ function compareLoadedLayers(): void {
       const cmp = compareDtms(dtms.before, dtms.after, {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
-        isGeographic:
-          a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
+        isGeographic: a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
+        horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres ('unknown' = placeholder factor 1; geographic frames go via isGeographic)
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);

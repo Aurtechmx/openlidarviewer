@@ -209,3 +209,58 @@ describe('compareDtms — a proven frame mismatch refuses the numbers', () => {
     expect(summarizeChange(cmp).join('\n')).toContain('Net volume');
   });
 });
+
+/**
+ * A projected CRS with an UNKNOWN linear unit refuses the metre figures.
+ *
+ * The frame is planar (not geographic), and its CRS name may even match across
+ * epochs, so it passes every co-registration check — yet its linear unit is
+ * 'unknown', so the factor fed in is the inert placeholder 1. Multiplying the
+ * grid spacing (and, via the vertical fallback, the heights) by that placeholder
+ * would report source-unit numbers as m³/m. Fail closed: withhold the metres.
+ */
+describe('compareDtms — an unknown projected linear unit refuses the metres', () => {
+  const flat = [1, 1, 1, 1];
+
+  it('flags horizontalUnitUnknown when the projected unit is unknown', () => {
+    const cmp = compareDtms(grid(flat, 2, 2), grid(flat, 2, 2), {
+      horizontalUnitKnown: false,
+    });
+    expect(cmp.horizontalUnitUnknown).toBe(true);
+    // Not a proven frame clash — the frames may well agree, the unit is just missing.
+    expect(cmp.frameIncompatible).toBe(false);
+  });
+
+  it('does NOT flag when the unit is known (or omitted / a metre CRS)', () => {
+    expect(compareDtms(grid(flat, 2, 2), grid(flat, 2, 2)).horizontalUnitUnknown).toBe(false);
+    expect(
+      compareDtms(grid(flat, 2, 2), grid(flat, 2, 2), { horizontalUnitKnown: true })
+        .horizontalUnitUnknown,
+    ).toBe(false);
+  });
+
+  it('does NOT flag a geographic frame (handled by isGeographic, keeps Δz)', () => {
+    // Geographic CRSs also report linearUnit 'unknown', but their vertical unit
+    // is a valid linear unit, so the geographic path withholds only volumes and
+    // keeps the elevation differences — it must not be swept into this refusal.
+    const cmp = compareDtms(grid(flat, 2, 2), grid(flat, 2, 2), {
+      isGeographic: true,
+      horizontalUnitKnown: false,
+    });
+    expect(cmp.horizontalUnitUnknown).toBe(false);
+    expect(cmp.volumesComputable).toBe(false);
+  });
+
+  it('summarizeChange withholds every metre figure and says why', () => {
+    const cmp = compareDtms(grid([1, 1, 1, 1], 2, 2), grid([2, 2, 2, 2], 2, 2), {
+      horizontalUnitKnown: false,
+    });
+    const lines = summarizeChange(cmp);
+    expect(lines[0]).toMatch(/not comparable/i);
+    const text = lines.join('\n');
+    expect(text).not.toContain('Net volume');
+    expect(text).not.toContain('Largest gain');
+    expect(text).not.toContain('m³');
+    expect(text).toMatch(/linear unit is unknown/i);
+  });
+});
