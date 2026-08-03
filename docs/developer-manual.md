@@ -461,7 +461,7 @@ shipped through this release.
 
 ## 17. Known limitations
 
-OpenLiDARViewer is an R&D-stage viewer, not a survey-grade processing suite.
+OpenLiDARViewer is an actively maintained viewer, not a survey-grade processing suite.
 Measurement is for visual inspection, large files are bound by browser memory
 and GPU limits, and OBJ/glTF meshes are shown as their vertices. See
 [`limitations.md`](limitations.md) for the full list.
