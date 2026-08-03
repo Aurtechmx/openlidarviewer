@@ -62,7 +62,7 @@ It opens georeferenced drone LiDAR surveys in LAS and LAZ, terrestrial laser-sca
 - Opens compatible iPhone and mobile scan exports when saved as PLY, OBJ, GLB/GLTF, XYZ, or CSV.
 - Opens georeferenced drone LiDAR surveys in LAS and LAZ, and terrestrial laser-scanner data in E57, PTX, and PTS, with a coordinate bridge that keeps large survey coordinates numerically stable.
 - Reads Point Cloud Library (PCD) files — ASCII, binary, and binary-compressed.
-- Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (Experimental 3D Tiles / `.pnts` parser foundations exist, but user-facing 3D Tiles loading is not enabled yet.)
+- Streams large COPC and EPT datasets progressively, with bounded memory and no full-file load. (3D Tiles / `.pnts` files are detected and reported as not-yet-supported; opening them is on the roadmap, not shipped.)
 - Game-like navigation: Orbit, Walk, Fly, and Pan (hand-tool) modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar smart camera presets.
 - A measurement toolkit — distance, polyline, area, height, angle, slope, cross-section profile (with a resizable height-vs-distance chart), and volume cut/fill against a polygon or 3D lasso — with editable points, in-session persistence, and JSON export/import.
 - Annotations: mark points of interest with categorised, titled notes, revisit them, and save the whole inspection to a file.
@@ -90,8 +90,8 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 ### Streaming
 - COPC streaming — a `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory; never a full-file load. A remote scan opens from the start screen's open-from-URL field or a shareable `?copc=<url>` deep link
 - EPT (Entwine Point Tile) streaming — local and remote, `binary` and `laszip` tiles
-- 3D Tiles / `.pnts` (experimental, not yet user-facing) — parser foundations exist for Cesium-style tilesets, but dropping a `.pnts` file or a `tileset.json` URL does not open them yet; treat the format as planned, not shipped
-- A curated catalog of 14 hand-vetted public COPC / EPT datasets
+- 3D Tiles / `.pnts` (not yet user-facing) — a `.pnts` file or a `tileset.json` URL is detected by filename and reported as not-yet-supported rather than opened; there is no tileset parser today, so treat the format as planned, not shipped
+- A curated catalog of 12 hand-vetted public COPC / EPT datasets
 
 ### Navigation & camera
 - Orbit, Walk, and Fly navigation with WASD movement and mouse-look
@@ -102,8 +102,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 
 ### Rendering
 - Eye Dome Lighting (EDL) depth shading that makes point-cloud structure far more readable, with strength, radius, and three named presets (Subtle / Balanced / Inspection)
-- Optional SSAO ambient occlusion that combines with EDL for surface separation
-- Hillshade overlay colour mode for terrain readability
+- Hillshade relief overlay from the terrain surface model for topographic readability
 - Soft splat rendering — Classic round points, Soft splats, or Inspection mode with density-aware radius
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Height, intensity, classification, RGB, and surface-normal colour modes, picked automatically per file

@@ -210,6 +210,20 @@ effective reference for coordinates, labels and embedded metadata.
    invariance, source-origin immutability, restore round-trips — is the
    regression net for (a) and (b).
 
+   **On-ramp landed (additive, non-mutating). No consumer migrated.** Step (a)'s
+   container exists as an unreferenced scaffold, `src/model/LayerSpatialState.ts`
+   (source-local vertices + Float64 `sourceToProject`/`projectToSource`, the
+   world-space accessor consumers will adopt, pinned by
+   `tests/layerSpatialState.test.ts`). The surface is inventoried and ordered in
+   `docs/architecture/float64-frame-migration-plan.md`, and
+   `scripts/lint-positions-reads.mjs` (`npm run lint:positions-reads`,
+   report-only, never a gate) prints the live list. Re-measured from the tree:
+   **162 direct `.positions` reads across 42 files** (the file count the roadmap
+   recorded; occurrences drifted up from 154 as the code moved). This changes no
+   runtime and no e2e byte. The atomic-landing requirement above is unchanged:
+   the transform still has to reach every reader together, and a partially
+   migrated tree is still worse than none.
+
 3. **Replace regex WKT parsing with an AST parser.** The current parser survives
    realistic WKT1 and WKT2 (verified against six shapes including `PROJCRS` with
    nested `BASEGEOGCRS`, `COMPD_CS`, and bracketed names), so this is
