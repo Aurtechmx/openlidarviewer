@@ -6819,6 +6819,7 @@ function compareLoadedLayers(): void {
       const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
         maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined,
+        horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // KNOWN in both epochs ⇒ summarizeAlignment reports the shift/residual in metres; 'unknown' = placeholder factor 1, so the metre figures are withheld (geographic frames are refused before the fit)
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
