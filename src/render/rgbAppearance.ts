@@ -4,8 +4,8 @@
  * Pure-data RGB appearance modulator and the named preset bundle the
  * Inspector exposes — gamma, contrast, saturation, exposure. Runs once
  * per chunk at decode time on a Float32Array of normalised [0, 1] RGB
- * values; the renderer reads the modulated buffer through the same
- * pipeline seam it uses for hillshade and SSAO.
+ * values; the renderer reads the modulated buffer through its normal
+ * per-point colour seam.
  *
  * Pipeline order (each transform applied in turn so a preset is
  * deterministic):
