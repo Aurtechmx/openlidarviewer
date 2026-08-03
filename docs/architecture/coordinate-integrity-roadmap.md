@@ -153,11 +153,22 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## P1 — before a stable v0.6 research release
 
-1. **Activate the project frame in the scene — DONE for static layers (9b0ddf7).**
-   Layers mount at their `sourceToProject` translation; the lone-layer identity
-   keeps the single-scan path byte-identical (full e2e untouched). Remaining:
-   the two-scan browser confirmation with real fixtures, and steps 3–4
-   (elevation ramps + measure datum under offsets).
+1. **Activate the project frame in the scene — multi-scan mount now ON.**
+   `MULTI_LAYER_MOUNT_ENABLED` is true: two georeferenced tiles that declare the
+   same projected CRS mount into one shared frame at their real separation,
+   non-destructively (the placement moves the mesh, never the `.positions`).
+   The lone-layer identity keeps the single-scan path byte-identical.
+   `tests/e2e/twoScanMount.spec.ts` builds a UTM-33N tile pair with the real LAS
+   writer and proves acceptance #1 (real separation), #3 (source geometry
+   untouched) and #8 (a horizontal-only mount does not fold Z). Enabling it
+   surfaced and fixed a real refusal: `mountPrecision` demanded a usable vertical
+   unit even for a horizontal-only mount that applies no Z offset, which blocked
+   the common projected-horizontal-CRS-with-no-vertical case; the vertical term
+   now gates only a vertical mount. Remaining: the rest of the acceptance battery
+   (#2 add/remove no-move, #4 picking, #5 cross-layer measure, #6 profiles/
+   terrain/lasso/volume, #7 export world coords, #9 incompatible excluded — the
+   CRS-less case is already shown, #10 WebGPU vs forced-WebGL2), and the
+   per-cloud elevation-filter CPU pick path.
 
    Membership is now REVERSIBLE (bac535f). A cloud keeps `sourceOrigin` for its
    lifetime and `restoreSourceFrame()` returns it there; the frame seeds its

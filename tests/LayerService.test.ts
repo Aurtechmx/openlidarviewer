@@ -384,6 +384,24 @@ describe('LayerService rebases each aligned layer onto the project origin', () =
     expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 120]);
   });
 
+  it('mounts a horizontal-only layer even when the vertical unit is unknown', () => {
+    // The common real case: a projected scan with a horizontal CRS but no
+    // declared vertical unit. The mount is X/Y only (dz = 0), so the unknown
+    // vertical unit must not refuse the placement — the mount-precision gate
+    // reads the Z budget only for a vertical mount. `verticalUnitToMetres: null`
+    // is an EXPLICIT unknown, so the harness does not fill it from the
+    // horizontal unit the way an omitted value is.
+    const noVertUnit = { epsg: 32612, verticalUnitToMetres: null };
+    const t = setup({
+      west: { origin: [500_000, 4_500_000, 100], metadata: { crs: noVertUnit } },
+      east: { origin: [501_000, 4_500_000, 120], metadata: { crs: noVertUnit } },
+    });
+    t.service.refreshCrsFlags();
+    expect(t.compatCalls.get('east')).toBe('horizontal-only');
+    // Mounted in X/Y onto the shared origin; Z kept per source (dz = 0).
+    expect(t.rebaseCalls.get('east')).toEqual([500_000, 4_500_000, 120]);
+  });
+
   it('keeps an UNDECLARED-CRS layer out of the frame entirely', () => {
     // The reported defect: a mesh with no CRS mounted beside a georeferenced
     // scan because nothing had contradicted it.

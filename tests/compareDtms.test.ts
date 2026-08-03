@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 import { dtmToChangeGrid, compareDtms, summarizeChange } from '../src/terrain/change/compareDtms';
+import { isLinearUnitKnown } from '../src/geo/CoordinateTypes';
 
 /** Build a small DtmGrid from a row-major height array; empty cells are NaN. */
 function grid(
@@ -260,6 +261,27 @@ describe('compareDtms — an unknown projected linear unit refuses the metres', 
     const text = lines.join('\n');
     expect(text).not.toContain('Net volume');
     expect(text).not.toContain('Largest gain');
+    expect(text).not.toContain('m³');
+    expect(text).toMatch(/linear unit is unknown/i);
+  });
+
+  it('a CRS-bearing epoch vs a CRS-less epoch derives the gate closed and withholds the metres', () => {
+    // The epoch-compare wiring (compareLoadedLayers in main.ts) derives
+    // horizontalUnitKnown as isLinearUnitKnown(a.metadata?.crs) &&
+    // isLinearUnitKnown(b.metadata?.crs). A plain PLY/PCD/XYZ epoch carries no
+    // CRS (metadata.crs === null), so the gate must resolve to false even when
+    // the OTHER epoch is a fully-known metre CRS — and compareDtms then withholds
+    // the metre figures rather than stamping the placeholder factor 1 as m³/m.
+    const crsBearing = { linearUnit: 'metre' };
+    const crsLess = null;
+    const horizontalUnitKnown = isLinearUnitKnown(crsBearing) && isLinearUnitKnown(crsLess);
+    expect(horizontalUnitKnown).toBe(false);
+    const cmp = compareDtms(grid([1, 1, 1, 1], 2, 2), grid([2, 2, 2, 2], 2, 2), {
+      horizontalUnitKnown,
+    });
+    expect(cmp.horizontalUnitUnknown).toBe(true);
+    const text = summarizeChange(cmp).join('\n');
+    expect(text).not.toContain('Net volume');
     expect(text).not.toContain('m³');
     expect(text).toMatch(/linear unit is unknown/i);
   });

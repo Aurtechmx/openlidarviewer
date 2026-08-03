@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { alignEpochClouds, summarizeAlignment } from '../src/terrain/change/alignEpochs';
 import type { EpochCloud } from '../src/terrain/change/compareEpochs';
+import { isLinearUnitKnown } from '../src/geo/CoordinateTypes';
 
 type P = [number, number, number];
 
@@ -390,5 +391,25 @@ describe('unknown projected linear unit withholds the metre figures', () => {
     const s = summarizeAlignment(r.alignment);
     expect(s).toMatch(/m shift/i);
     expect(s).toMatch(/m residual/i);
+  });
+
+  test('a CRS-bearing epoch vs a CRS-less epoch derives the gate closed and withholds the shift/residual', () => {
+    // main.ts derives horizontalUnitKnown for the fit from isLinearUnitKnown of
+    // BOTH epochs' resolved CRS. A CRS-less epoch (metadata.crs === null) drives
+    // the gate false, so the applied fit still reports yaw but withholds the
+    // metre shift and residual — the same fail-closed posture as an unknown unit.
+    const crsBearing = { linearUnit: 'metre' };
+    const crsLess = null;
+    const horizontalUnitKnown = isLinearUnitKnown(crsBearing) && isLinearUnitKnown(crsLess);
+    expect(horizontalUnitKnown).toBe(false);
+    const before = declared(cloudFrom(scatter(200)));
+    const after = declared(shiftedScatter(10));
+    const r = alignEpochClouds(before, after, { horizontalUnitKnown });
+    expect(r.alignment.applied).toBe(true);
+    expect(r.alignment.horizontalUnitUnknown).toBe(true);
+    const s = summarizeAlignment(r.alignment);
+    expect(s).toMatch(/linear unit is unknown/i);
+    expect(s).not.toMatch(/m shift/i);
+    expect(s).not.toMatch(/m residual/i);
   });
 });
