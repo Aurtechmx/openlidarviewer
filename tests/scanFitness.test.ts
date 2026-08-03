@@ -198,3 +198,47 @@ describe('buildScanFitness — density reports a measurement, not a quality leve
     expect(buildScanFitness(base()).tierBadge).toBe('USGS QL1 (estimated)');
   });
 });
+
+describe('buildScanFitness — unverified units fail closed', () => {
+  const summary = (f: ReturnType<typeof buildScanFitness>, key: FitnessKey): string =>
+    f.dimensions.find((d) => d.key === key)!.summary;
+
+  it('an unknown-unit CRS holds the pts/m² and metre verdicts and discloses it', () => {
+    // Same dense, survey-grade numbers as the all-pass baseline, but the source
+    // linear unit is NOT confirmed (inert placeholder factor). The metric claims
+    // must be withheld rather than asserted as metres.
+    const f = buildScanFitness(base({ unitKnown: false }));
+    expect(tone(f, 'density')).toBe<FitnessTone>('review');
+    expect(tone(f, 'accuracy')).toBe<FitnessTone>('review');
+    // No bare metric figure survives in either summary.
+    expect(summary(f, 'density')).not.toMatch(/\d+\s*ground pts\/m²/);
+    expect(summary(f, 'density')).toMatch(/units are unverified/i);
+    expect(summary(f, 'accuracy')).not.toMatch(/±\s*\d/);
+    expect(summary(f, 'accuracy')).toMatch(/units are unverified/i);
+    // Headline accuracy (a bare "± m") is withheld too.
+    expect(f.headlineAccuracy).toBeNull();
+    // The disclosure leads the non-hideable caveats.
+    expect(f.caveats[0]).toMatch(/coordinate units are unverified/i);
+    // A QL tier can't be earned on an unverified scale, even though a QL was supplied.
+    expect(f.tierBadge).toBeNull();
+    // The hero tone is driven to review and the verdict names the unit limitation.
+    expect(f.overallTone).toBe<FitnessTone>('review');
+    expect(f.verdict).toMatch(/units are unverified/i);
+  });
+
+  it('omitting unitKnown keeps the legacy metric verdict (no regression)', () => {
+    const f = buildScanFitness(base()); // unitKnown undefined ⇒ assume known
+    expect(tone(f, 'density')).toBe<FitnessTone>('ready');
+    expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
+    expect(f.headlineAccuracy).toBe('±0.07 m vertical');
+    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+    expect(f.caveats.some((c) => /units are unverified/i.test(c))).toBe(false);
+  });
+
+  it('unitKnown:true is unchanged from the assume-known baseline', () => {
+    const f = buildScanFitness(base({ unitKnown: true }));
+    expect(tone(f, 'density')).toBe<FitnessTone>('ready');
+    expect(tone(f, 'accuracy')).toBe<FitnessTone>('ready');
+    expect(f.tierBadge).toBe('USGS QL1 (estimated)');
+  });
+});
