@@ -29,6 +29,7 @@ import type {
   GroundVisibilityBucket,
   CoverageBucket,
 } from '../terrain/datasetIntelligence';
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 
 /** Surface-quality / fitness tier, mirroring terrainAssessment's axis. */
 export type FitnessTier = 'Good' | 'Preview' | 'Limited' | 'Blocked' | 'Unknown';
@@ -122,7 +123,7 @@ export function footprintAreaM2(
   spanY: number,
   crs: { readonly linearUnit: string; readonly linearUnitToMetres?: number } | null | undefined,
 ): number | undefined {
-  if (!crs || crs.linearUnit === 'unknown') return undefined;
+  if (!crs || !isLinearUnitKnown(crs)) return undefined;
   const toM = crs.linearUnitToMetres ?? 1;
   const area = spanX * spanY * toM * toM;
   return Number.isFinite(area) && area > 0 ? area : undefined;

@@ -1,4 +1,5 @@
 import type { CrsLinearUnit } from '../io/crs';
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
 export interface ExtentRowSpec {
@@ -50,8 +51,7 @@ export function streamingExtentRows(
   crsInfo: ExtentCrs,
   sourcePointCount: number,
 ): StreamingExtentResult {
-  const unitConfirmed =
-    crsInfo != null && crsInfo.linearUnit !== undefined && crsInfo.linearUnit !== 'unknown';
+  const unitConfirmed = isLinearUnitKnown(crsInfo);
 
   // Apply the metre factor ONLY when the unit is real. Otherwise the span stays
   // in raw source units (factor 1) and is not labelled "m".
