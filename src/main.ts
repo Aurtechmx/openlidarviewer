@@ -74,6 +74,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
+import { toClassBuffer } from './render/class/classBuffer';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import {
   classificationCoverage,
@@ -3591,14 +3592,6 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
   // all-visible, so this clears any stamp left by a prior filtered scan.
   syncInspectClassScope();
-}
-
-/** Narrow an ArrayLike classification source to a typed buffer for counting. */
-function toClassBuffer(src: ArrayLike<number>): Uint8Array {
-  if (src instanceof Uint8Array) return src;
-  const out = new Uint8Array(src.length);
-  for (let i = 0; i < src.length; i++) out[i] = src[i];
-  return out;
 }
 
 // Every listener-binding that synchronously dereferences `viewer.*` must
