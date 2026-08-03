@@ -1,6 +1,7 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
 import type { ClassScope } from '../../render/class/classScope';
+import type { CrsLinearUnit } from '../../io/crs';
 import { isZUpFormat } from '../../io/sniffFormat';
 
 function rowInfo(label: string, value: string): AnalysisRow {
@@ -24,6 +25,56 @@ function withScope(row: AnalysisRow, scope: ClassScope | undefined): AnalysisRow
 /** Format a length in metres — centimetres below a metre, for readability. */
 function formatLength(metres: number): string {
   return metres < 1 ? `${(metres * 100).toFixed(1)} cm` : `${metres.toFixed(2)} m`;
+}
+
+/** The minimal CRS shape the unit basis reads — a subset of `CrsInfo`. */
+type UnitCrs = {
+  readonly linearUnit?: CrsLinearUnit;
+  readonly linearUnitToMetres?: number;
+  readonly verticalUnitToMetres?: number;
+} | null | undefined;
+
+/** Source→metre factors and unit labels for the extent block. */
+export interface ScanReportUnitBasis {
+  /** Whether the CRS declares a real, resolved linear unit (metres claimable). */
+  readonly unitKnown: boolean;
+  /** Horizontal source→metre factor; 1 (identity) when the unit is unconfirmed. */
+  readonly mpu: number;
+  /** Vertical source→metre factor; 1 (identity) when the unit is unconfirmed. */
+  readonly vmpu: number;
+  /** Length suffix: ' m' when confirmed, ' (source units)' otherwise. */
+  readonly lengthUnit: string;
+  /** Areal-density suffix: ' pts/m²' when confirmed, ' pts/unit²' otherwise. */
+  readonly densityUnit: string;
+}
+
+/**
+ * Resolve the extent block's unit basis, FAILING CLOSED on an unconfirmed
+ * linear unit.
+ *
+ * Metres are only CLAIMED when the CRS declares a real linear unit. An
+ * unknown-unit CRS carries the inert placeholder `linearUnitToMetres: 1`, and
+ * a CRS-less cloud resolves the same way — multiplying a source span by that 1
+ * and stamping "m" would report non-metre data (feet, or even degrees for a
+ * geographic CRS) as metres. So metres are claimed only when
+ * `crs != null && crs.linearUnit !== 'unknown'`, the same canonical gate the
+ * streaming report (`streamingExtentRows`), the space report (`spaceMetrics`),
+ * the measure tool and the lasso already apply. When the unit is unconfirmed
+ * the factor stays 1, the raw source span is shown, and the "m" / "pts/m²"
+ * claim is withheld.
+ */
+export function scanReportUnitBasis(crs: UnitCrs): ScanReportUnitBasis {
+  const unitKnown =
+    crs != null && crs.linearUnit !== undefined && crs.linearUnit !== 'unknown';
+  const mpu = unitKnown ? (crs?.linearUnitToMetres ?? 1) : 1;
+  const vmpu = unitKnown ? (crs?.verticalUnitToMetres ?? mpu) : 1;
+  return {
+    unitKnown,
+    mpu,
+    vmpu,
+    lengthUnit: unitKnown ? ' m' : ' (source units)',
+    densityUnit: unitKnown ? ' pts/m²' : ' pts/unit²',
+  };
 }
 
 /**
@@ -101,10 +152,16 @@ export const scanReport: AnalysisModule = {
     // Extent — bounds are in the source CRS's native linear units (feet for a
     // state-plane-feet cloud), so convert to metres before reporting "m" /
     // "pts/m²" / spacing. Horizontal spans use linearUnitToMetres; height uses
-    // the vertical unit when the CRS declares one separately. metre / CRS-less
-    // clouds resolve to factor 1 — byte-identical to before.
-    const mpu = cloud.metadata?.crs?.linearUnitToMetres ?? 1;
-    const vmpu = cloud.metadata?.crs?.verticalUnitToMetres ?? mpu;
+    // the vertical unit when the CRS declares one separately.
+    //
+    // FAIL CLOSED on the unit: `scanReportUnitBasis` claims metres only when the
+    // CRS declares a real linear unit. An unknown-unit CRS (or a CRS-less cloud)
+    // carries the inert placeholder factor 1; multiplying by it and stamping "m"
+    // would report non-metre data — feet, or even degrees for a geographic CRS —
+    // as metres. When unconfirmed, the factor stays 1, the raw source span is
+    // shown, and the "m" / "pts/m²" claim is withheld (matches #218/#220).
+    const basis = scanReportUnitBasis(cloud.metadata?.crs);
+    const { mpu, vmpu } = basis;
     // Footprint and height are axis-aware. LAS-family (and COPC/EPT) are Z-up
     // by spec, so the ground footprint is X·Y and height is Z. Mesh formats
     // (PLY/OBJ/GLB/GLTF) load in their native Y-up frame — the same up-axis
@@ -116,9 +173,9 @@ export const scanReport: AnalysisModule = {
     const width = spanX * mpu;
     const depth = (zUp ? spanY : spanZ) * mpu;
     const height = (zUp ? spanZ : spanY) * vmpu;
-    rows.push(withScope(rowInfo('Width', `${width.toFixed(1)} m`), scope));
-    rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)} m`), scope));
-    rows.push(withScope(rowInfo('Height', `${height.toFixed(1)} m`), scope));
+    rows.push(withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope));
+    rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope));
+    rows.push(withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}`), scope));
 
     const footprintArea = width * depth;
 
@@ -126,14 +183,18 @@ export const scanReport: AnalysisModule = {
     if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)} pts/m²`), scope));
+      rows.push(withScope(rowInfo('Density', `${(reportedN / footprintArea).toFixed(1)}${basis.densityUnit}`), scope));
     }
 
-    // Estimated point spacing.
+    // Estimated point spacing. The cm/m formatter assumes metres, so it is used
+    // only when the unit is confirmed; an unconfirmed scan shows the raw source
+    // spacing without a metre label.
     if (footprintArea <= 0 || reportedN === 0) {
       rows.push(withScope(rowWarn('Spacing', 'N/A (degenerate footprint)'), scope));
     } else {
-      rows.push(withScope(rowInfo('Spacing', formatLength(Math.sqrt(footprintArea / reportedN))), scope));
+      const spacing = Math.sqrt(footprintArea / reportedN);
+      const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
+      rows.push(withScope(rowInfo('Spacing', spacingValue), scope));
     }
 
     // Attribute coverage.
