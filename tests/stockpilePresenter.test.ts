@@ -61,6 +61,21 @@ describe('presentStockpile', () => {
     expect(density).toMatch(/13\.2 pts\/unit²/);
   });
 
+  test('an unknown-unit result flags the view and discloses on the toast', () => {
+    // The headline still prints "m³" (like the space report keeps "m"), but the
+    // toast — which renders no caveats — must carry the disclosure inline so a
+    // bare "X m³" is never presented as a confirmed metric claim.
+    const known = presentStockpile(result());
+    expect(known.unitVerified).toBe(true);
+    expect(stockpileToastLine(known)).not.toMatch(/units unverified/);
+
+    const unknown = presentStockpile(result({ densityUnitKnown: false }));
+    expect(unknown.unitVerified).toBe(false);
+    expect(stockpileToastLine(unknown)).toBe(
+      'Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence · units unverified (assumes metres)',
+    );
+  });
+
   test('a foot-CRS result converts to true metres (lin = 0.3048)', () => {
     // Same native figures, but in feet → volume in m³ is value × 0.3048³.
     const v = presentStockpile(result({ volume: 1000, sigma: 0 }), { lin: 0.3048 });

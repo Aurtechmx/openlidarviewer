@@ -39,6 +39,14 @@ export interface StockpileView {
   readonly rows: ReadonlyArray<StockpileViewRow>;
   /** Honesty notes, verbatim from the result. */
   readonly caveats: ReadonlyArray<string>;
+  /**
+   * Whether the horizontal unit was verified. When false every m³/m²/m figure
+   * here rests on an assumed-metres scale (an unknown-unit CRS yields the
+   * placeholder factor 1); the `caveats` carry the full disclosure and
+   * {@link stockpileToastLine} appends a short note, so a bare "X m³" is never
+   * presented as a confirmed metric claim.
+   */
+  readonly unitVerified: boolean;
 }
 
 export interface StockpilePresentOptions {
@@ -107,12 +115,16 @@ export function presentStockpile(
     confidenceLabel: CONFIDENCE_LABEL[r.confidence],
     rows,
     caveats: r.caveats,
+    unitVerified: r.densityUnitKnown,
   };
 }
 
 /** One-line summary for a toast: "Stockpile: 1,254 m³ ± 41 m³ (1σ) (±3.3%) · Medium confidence". */
 export function stockpileToastLine(view: StockpileView): string {
-  return `Stockpile: ${view.headline} (${view.relative}) · ${view.confidenceLabel} confidence`;
+  const line = `Stockpile: ${view.headline} (${view.relative}) · ${view.confidenceLabel} confidence`;
+  // The toast renders no caveats, so the unverified-unit disclosure has to live
+  // in the line itself — otherwise an unknown-unit CRS shows a bare "X m³".
+  return view.unitVerified ? line : `${line} · units unverified (assumes metres)`;
 }
 
 /**
