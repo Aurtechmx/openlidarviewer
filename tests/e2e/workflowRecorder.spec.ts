@@ -127,8 +127,16 @@ test.describe('workflow recorder — capture into a live session', () => {
     // Stop the recording. The download is intercepted by Playwright;
     // we just confirm the page didn't throw at any point.
     page.on('download', async (d) => {
-      // Acknowledge the download so the browser doesn't hang on it.
-      await d.cancel();
+      // Acknowledge the download so the browser doesn't hang on it. The event can
+      // arrive during teardown, after the context has already closed, where
+      // cancel() rejects with "browser has been closed" — swallow that late
+      // rejection so it can't crash the worker (the test's own assertions have
+      // run by then).
+      try {
+        await d.cancel();
+      } catch {
+        /* context already closing — nothing left to cancel */
+      }
     });
     await pressRecordToggle(page);
     expect(errors).toEqual([]);
