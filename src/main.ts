@@ -43,6 +43,7 @@ import { buildMeasureConfidenceContext } from './app/measureConfidenceContext';
 import { findDuplicateIds } from './ui/actionRegistry';
 import { buildActionRegistry } from './app/actionDefinitions';
 import { importSession as runImportSession, type SessionIoDeps } from './app/sessionIo';
+import { openScan, type OpenScanDeps } from './app/openScan';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
@@ -124,9 +125,6 @@ import { parseEmbedConfig } from './ui/embedConfig';
 // non-iframe page load (the dominant traffic pattern).
 import { encodeShareState, decodeShareState } from './io/shareState';
 import type { ShareState } from './io/shareState';
-import { formatProgress } from './io/loadProgress';
-import { formatTelemetry } from './io/loadTelemetry';
-import { buildBenchmarkResult, formatBenchmarkResult } from './io/benchmark';
 // The diagnostics runtime (DebugOverlay + streamingBenchmark + the
 // instrumented range source) loads only when `?debug=1` or `?benchmark=1`
 // is set — see `loadDiagnostics()` below. The types stay reachable for the
@@ -143,7 +141,6 @@ import { isZUpFormat } from './io/sniffFormat';
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
 // initial bundle.
-import { isSessionFile } from './io/sessionFile';
 // The view-state seam is eager but weightless: pure capture/apply
 // orchestration with type-only imports (no session parser, no three.js), so
 // saveCurrentView/applyView can run synchronously from a keystroke while the
@@ -166,11 +163,6 @@ import {
 } from './render/colorModes';
 import type { ColorMode } from './render/colorModes';
 import type { PointCloud } from './model/PointCloud';
-// `detectCopc` is a tiny leaf — kept static so `handleFile` can branch on it
-// synchronously. The rest of the COPC + streaming subsystem is dynamically
-// imported (in `openStreamingCopc` and `handleRemoteCopc`), so it lands in a
-// lazy chunk fetched only when a COPC scan is actually opened.
-import { detectCopc } from './io/copc/copcDetect';
 import { validateRemoteCopcUrl } from './io/range/RangeSource';
 import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
@@ -5297,339 +5289,64 @@ function importSession(file: File, opts: { skipScanConfirm?: boolean } = {}): Pr
   return runImportSession(file, opts, sessionIoDeps);
 }
 
+/**
+ * Open/load pipeline — a thin caller over the extracted `src/app/openScan.ts`.
+ * Binds the shell's running state to the module's deps; the three-way router
+ * (session / COPC / static), the post-load orchestration and the pure
+ * `layerChipCount` / `shouldResetSavedWork` decisions live in that module.
+ */
+const openScanDeps: OpenScanDeps = {
+  viewerReady: viewerLoaded,
+  getViewer: () => viewer,
+  importSession,
+  isLoading: () => loading,
+  setLoading: (v) => { loading = v; },
+  showToast: showLassoToast,
+  dropZone,
+  openLocalCopc: async (fileToOpen, signal) => {
+    const { LocalFileRangeSource } = await loadLocalFileRangeSource();
+    await openStreamingCopc(new LocalFileRangeSource(fileToOpen), fileToOpen.name, signal);
+  },
+  loadLocalSource: (fileToLoad, callbacks, options) =>
+    new LocalFileSource(fileToLoad).load(callbacks, options),
+  renderBudget: deviceCapsValue.renderBudget,
+  isPhone,
+  deviceMemoryGB,
+  stage,
+  closeStreaming,
+  scans,
+  inspector,
+  inspectorCards,
+  crsCoordinator,
+  dock,
+  navBar,
+  bookmarks,
+  layerService,
+  setLayerVisible: (id, visible) => { layerVisible.set(id, visible); },
+  rememberSourceFile: (id, sourceFile) => { sourceFileById.set(id, sourceFile); },
+  rememberReduced: (id, reduced) => { reducedById.set(id, reduced); },
+  refreshAnnotationPanel,
+  setCurrentColorMode: (mode) => { currentColorMode = mode; },
+  loadApplyDisplayProfile,
+  runModules,
+  currentClassScope,
+  prewarmExportStudio: () => { void prewarmExportStudio(); },
+  getPendingShareState: () => pendingShareState,
+  clearPendingShareState: () => { pendingShareState = null; },
+  applyShareState,
+  bareMode,
+  showProjectCard,
+  revealAnalysePanel,
+  showInstantAnswer,
+  refreshClassLegend,
+  debug,
+  benchmark,
+  getDebugOverlay: () => debugOverlay,
+};
+
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
-async function handleFile(file: File): Promise<void> {
-  // SINGLE ROUTER for every file that enters the app (drop zone, Open picker,
-  // Measurements Import). An `.olvsession` is a saved analysis, not a scan, so
-  // it goes to the one session loader — never the cloud worker — and every
-  // entry point therefore opens sessions the same way. A session restore is
-  // cheap (read + apply state) and safe to run even mid-load, so it routes
-  // ahead of the cloud-loading guard.
-  if (isSessionFile(file.name)) {
-    await importSession(file);
-    return;
-  }
-  // One load at a time. The shared parse worker decodes a single file; a
-  // second load started mid-flight would hijack the first one's worker. The
-  // in-progress load carries a Cancel control if the user wants to switch.
-  if (loading) {
-    showLassoToast('Already loading — cancel the current load first.');
-    return;
-  }
-  // Claim the flag SYNCHRONOUSLY — the `await viewerLoaded` below yields to
-  // the event loop, and a second drop in that window used to pass the
-  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
-  loading = true;
-  const controller = new AbortController();
-  // Blue blinking "Opening …" — the prominent first feedback, matching the
-  // catalog status vocabulary so device and public-dataset loads read the same.
-  // The load's staged progress (decoding / uploading / rendering) supersedes it.
-  dropZone.setOpening(`Opening ${file.name}…`);
-  dropZone.setCancelHandler(() => controller.abort());
-  try {
-    // ensure the lazy-loaded Viewer is ready before touching it.
-    await viewerLoaded;
-    // COPC files take the streaming pipeline, not the static loader. The
-    // range-source module is part of the lazy COPC chunk.
-    const headSlice = await file.slice(0, 4096).arrayBuffer();
-    if (detectCopc(headSlice).isCopc) {
-      const { LocalFileRangeSource } = await loadLocalFileRangeSource();
-      await openStreamingCopc(
-        new LocalFileRangeSource(file),
-        file.name,
-        controller.signal,
-      );
-      return;
-    }
-    // Phones get a tighter point budget — limited GPU memory and fill-rate.
-    // The dropped file is wrapped in a LocalFileSource — the source
-    // abstraction; v0.3 streaming sources slot in beside it.
-    const source = new LocalFileSource(file);
-    const result = await source.load(
-      {
-        onProgress: (u) => dropZone.setProgress(formatProgress(u), u.fraction),
-        onPreload: (lines) => dropZone.setPreload(lines),
-      },
-      {
-        // The point budget is the device's safe render budget — full on a
-        // capable machine, reduced on a weak one to keep the GPU stable.
-        budget: deviceCapsValue.renderBudget,
-        isMobile: isPhone(),
-        deviceMemoryGB: deviceMemoryGB(),
-        signal: controller.signal,
-      },
-    );
-    await viewer.ready;
-
-    // NB: static layers are ADDITIVE — dropping/opening a second scan keeps the
-    // first as a separate layer (the LAYERS panel lists each with its own ✕ to
-    // free it). We deliberately do NOT clear prior static clouds here: an
-    // earlier "free the previous scan on re-open" optimisation mistook the
-    // retained layer for a leak and silently broke multi-scan loading. GPU for
-    // multiple layers is intended; the user releases a layer via its ✕, which
-    // routes through removeCloud() and frees the same buffers. (Streaming opens
-    // remain exclusive and still call clearOpenStaticLayers below.)
-
-    dropZone.setProgress(formatProgress({ stage: 'uploading' }));
-    stage.hideEmptyState();
-    // A static load replaces any open streaming scan — but only now that the
-    // file parsed. A failed or cancelled parse above must leave the current
-    // scene intact rather than clearing it for a scan that never arrived.
-    if (controller.signal.aborted) throw new LoadCancelledError();
-    if (viewer.hasStreamingCloud) closeStreaming();
-    const uploadStartedAt = performance.now();
-    const id = viewer.addCloud(result.cloud);
-    const gpuUploadMs = performance.now() - uploadStartedAt;
-    scans.setActive(id);
-    // A freshly opened scan has no terrain analysis yet — drop any prior grid so
-    // the Coverage colour chip starts disabled until this scan is analysed.
-    viewer.setCoverageGrid(null);
-    inspector.setCoverageAvailable(false);
-    // Retain the source file + whether the display cloud was reduced, so the
-    // Export panel can offer a full-resolution re-decode.
-    sourceFileById.set(id, file);
-    reducedById.set(id, result.downsampled);
-    // Local-first counter — categorical source format only; never the file name.
-    try { recordUsage('scan-open', result.cloud.sourceFormat); }
-    catch (err) { if (debug) console.warn('[usage] recordUsage threw', err); }
-    // Provenance fingerprint — pure metadata classification, surfaced in
-    // the Inspector's "Provenance" section. Wrapped because a malformed
-    // input shape would have aborted the rest of the post-load setup
-    // (including the navBar reveal further down).
-    try { inspectorCards.refreshProvenance(result.cloud); }
-    catch (err) { if (debug) console.warn('[provenance] refreshProvenance threw', err); }
-    // CRS — detected from the loaded cloud's metadata, merged with any
-    // persisted user override. Wrapped because a malformed cloud
-    // shape shouldn't break the rest of the load.
-    try { crsCoordinator.refreshCrsForStaticCloud(result.cloud); }
-    catch (err) { if (debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
-
-    dropZone.setProgress(formatProgress({ stage: 'rendering' }));
-    const renderStartedAt = performance.now();
-    // A freshly opened scan starts in the orbit overview, then glides in.
-    viewer.setMode('orbit');
-    viewer.frameAll();
-    const firstRenderMs = performance.now() - renderStartedAt;
-
-    const mode = defaultMode(result.cloud);
-    currentColorMode = mode;
-    viewer.setColorMode(id, mode);
-
-    // ── CRITICAL UI REVEAL — runs BEFORE any inspector / module setup ────
-    // The dock backend indicator + NavBar (Orbit/Walk/Fly mode switcher
-    // + speed slider) must reveal even if a downstream inspector call
-    // throws. Without this ordering, a failure in `runModules` or
-    // `inspector.setReport` left the user with a rendered scan they
-    // couldn't navigate around, and the backend indicator stuck at
-    // "initialising…". Critical reveal first, decorations second.
-    dock.setBackend(viewer.activeBackend());
-    // v0.3.6 design-audit fix: reveal the dock at attach. It stays hidden
-    // through the empty state so eight dimmed tools don't clutter the
-    // primary CTA on mobile.
-    dock.setEmpty(false);
-    inspector.setEmpty(false);
-    dock.setMeasureEnabled(true);
-    dock.setInspectEnabled(true);
-    dock.setProbeEnabled(true);
-    dock.setAnnotateEnabled(true);
-    dock.setCloseEnabled(true);
-    navBar.element.classList.remove('olv-hidden');
-    navBar.setMode('orbit');
-    navBar.flashHelp();
-    document.body.classList.add('olv-has-scan');
-    if (isPhone()) navBar.flashTouchHint();
-
-    // Only a fresh project resets saved work; an additive open keeps the layer
-    // that is still on screen. tests/additiveOpenKeepsWork.test.ts pins this.
-    if (viewer.clouds().length <= 1) { bookmarks.clear(); viewer.annotate.clear(); }
-    refreshAnnotationPanel();
-
-    // ── Inspector setup — wrapped in defensive try/catches so a single
-    //    failing analysis module or inspector call can't abort the rest.
-    //    Each isolated block restores its own slice; the navigation
-    //    above remains usable even if every block below fails.
-    try {
-      // The Layers chip names the FILE, so it shows the file total (the same
-      // count DETAIL renders as "loaded / total"), not the strided display
-      // subset — consistent with the Scan Report's file-scale Point Count.
-      const layerCount =
-        result.originalPointCount && result.originalPointCount > result.cloud.pointCount
-          ? result.originalPointCount
-          : result.cloud.pointCount;
-      inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
-      layerVisible.set(id, true);
-      layerService.refreshCrsFlags();
-      inspector.setColorModes(availableModes(result.cloud), mode);
-      inspector.setDetail(result.cloud.pointCount, result.originalPointCount);
-      inspector.setElevationExtent(viewer.elevationExtent());
-      inspector.setIntensityExtent(viewer.intensityExtent());
-      inspectorCards.refreshDatasetIntelligenceFromStaticCloud(result.cloud);
-      // v0.5.7 capability-driven card: derive the display profile from the
-      // loaded scan and surface the declared-by-the-file provenance (E57 olv:
-      // block, headline) + hide the CRS section for local-frame scans. Loaded
-      // lazily (via lazyChunks) so displayProfile + scanCapability stay out of
-      // the eager startup shell / index bundle budget. Additive; a no-op on the
-      // geo path.
-      {
-        const profileCloud = result.cloud;
-        const targetId = id;
-        void loadApplyDisplayProfile()
-          .then(({ applyDisplayProfile }) => {
-            if (scans.activeId !== targetId) return; // scan changed while we waited
-            applyDisplayProfile(profileCloud, inspector);
-          })
-          // The card is additive and no-op on absence; a chunk-load or
-          // derivation failure must not surface as an unhandled rejection (the
-          // enclosing try/catch is synchronous and won't catch this promise).
-          .catch((err) => {
-            if (debug) console.warn('[inspector] display-profile card threw', err);
-          });
-      }
-    } catch (err) {
-      if (debug) console.warn('[inspector] cloud + details setup threw', err);
-    }
-    // Scan Report — deferred off the attach path (v0.5.3). The health-check
-    // module walks EVERY point several times (duplicate-point set, median/MAD
-    // sorts, outlier + finite scans): ~3 s of the attach long-task on a
-    // multi-million-point cloud, blocking first paint and first input after
-    // "rendering…" clears. Run it when the main thread goes idle instead —
-    // the report card fills in a beat later, navigation is live immediately.
-    // The cloud-id guard drops the stale result if the user swapped scans
-    // before idle arrived (the memoised module re-runs cheaply on re-open).
-    {
-      const reportForId = id;
-      const fillReport = (): void => {
-        if (scans.activeId !== reportForId) return; // scan changed while we waited
-        try {
-          inspector.setReport(runModules(result.cloud, currentClassScope(result.cloud)));
-        } catch (err) {
-          if (debug) console.warn('[inspector] runModules + setReport threw', err);
-        }
-      };
-      type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
-      const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
-      if (typeof rIC === 'function') rIC(fillReport, { timeout: 1500 });
-      else setTimeout(fillReport, 200);
-    }
-    try {
-      inspector.setViews([]);
-    } catch (err) {
-      if (debug) console.warn('[inspector] setViews threw', err);
-    }
-    // Visual Export Studio — a scan is now loaded; turn on the image-
-    // export buttons so the user can capture it. Pre-warm the lazy Studio
-    // chunk in the background so the first export click feels instant
-    // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
-    // forget; we don't await the result.
-    try {
-      inspector.setImageExportEnabled(true);
-      // Per-mode gating — disable buttons whose mode the loaded cloud can't
-      // satisfy (Normal map on a LAZ, etc.) so the user sees the constraint
-      // before clicking rather than as a post-click error toast.
-      inspector.setImageExportAvailability(viewer.availableImageExportModes());
-    } catch (err) {
-      if (debug) console.warn('[inspector] setImageExportEnabled threw', err);
-    }
-    void prewarmExportStudio();
-
-    // A share link, if one opened this page, restores its view onto this scan.
-    if (pendingShareState) {
-      try {
-        applyShareState(pendingShareState, result.cloud);
-      } catch (err) {
-        if (debug) console.warn('[share] applyShareState threw', err);
-      }
-      pendingShareState = null;
-    }
-
-    // The render-quality controls reflect the viewer's state — EDL defaults
-    // depend on the GPU backend, known only once `viewer.ready` resolved.
-    try {
-      inspector.syncRendering({
-        pointSize: viewer.pointSize,
-        edlEnabled: viewer.edlEnabled,
-        edlStrength: viewer.edlStrength,
-        pointSizeMode: viewer.pointSizeMode,
-        antialiasing: viewer.antialiasing,
-        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
-    splatMode: viewer.splatMode,
-      });
-    } catch (err) {
-      if (debug) console.warn('[inspector] syncRendering threw', err);
-    }
-
-    if (!bareMode) showProjectCard(result.cloud, result.originalPointCount);
-
-    // Reveal the Analyse panel now there's a scan to analyse. v0.4.0.
-    revealAnalysePanel(result.cloud.name);
-
-    // Instant analysis-on-drop — surface the most relevant analysis one click
-    // away (terrain / volume / floor plan / before-after), nothing uploaded.
-    // Skipped in bare/embedded mode, which has no panels to drive.
-    if (!bareMode) showInstantAnswer(result.cloud.name);
-
-    // Classification legend (v0.4.1) — populate from the cloud's per-point
-    // class buffer when present, then show. A scan with no classification
-    // channel renders the panel's empty state. DISPLAY-ONLY; the all-visible
-    // default mask is applied so nothing is hidden on load.
-    try {
-      refreshClassLegend(result.cloud.classification);
-    } catch (err) {
-      if (debug) console.warn('[class-legend] refresh threw', err);
-    }
-
-    // Developer diagnostics — the merged telemetry feeds the debug console
-    // block, the performance overlay, and (under ?benchmark=1) a benchmark.
-    if ((debug || benchmark) && result.telemetry) {
-      const telemetry = { ...result.telemetry, gpuUploadMs, firstRenderMs };
-      if (debug) {
-        console.log(
-          '%cOpenLiDARViewer — load telemetry',
-          'font-weight:600;color:#22dcff',
-          '\n' + formatTelemetry(telemetry),
-        );
-      }
-      debugOverlay?.setTelemetry(telemetry);
-      if (benchmark) {
-        const text = formatBenchmarkResult(
-          buildBenchmarkResult(
-            result.cloud.name,
-            result.cloud.sourceFormat,
-            result.cloud.pointCount,
-            telemetry,
-            // Surface the header-declared point count when the source had
-            // one, so the benchmark output disambiguates "4M of 100M (4 %)"
-            // from "4M of 4M (100 %)" — a budget-capped load shouldn't
-            // read identically to a full one.
-            result.cloud.declaredPointCount,
-          ),
-        );
-        console.log(
-          '%cOpenLiDARViewer — benchmark',
-          'font-weight:600;color:#22dcff',
-          '\n' + text,
-        );
-        debugOverlay?.setBenchmark('benchmark\n' + text);
-      }
-    }
-    dropZone.setCancelHandler(null);
-    dropZone.setProgress(null);
-  } catch (err) {
-    dropZone.setCancelHandler(null);
-    if (err instanceof LoadCancelledError) {
-      // A cancelled load is a quiet no-op — no error toast, nothing was added.
-      dropZone.setProgress(null);
-    } else {
-      // The toast shows a clear, categorised message; the raw error still
-      // reaches the console for developers under ?debug=1.
-      if (debug) console.error('OpenLiDARViewer — load error', err);
-      dropZone.setError(describeLoadError(err));
-      // A streaming open that failed mid-flight leaves no scan — tidy up.
-      closeStreaming();
-    }
-  } finally {
-    loading = false;
-  }
+function handleFile(file: File): Promise<void> {
+  return openScan(file, openScanDeps);
 }
 
 /**

@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 6,790 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 6,507 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -98,7 +98,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (6,790)** — the largest blocks, which are the extraction
+**`src/main.ts` (6,507)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -107,7 +107,6 @@ called with a 19-member deps object. The candidates that remain:
 | Block | ~Lines | Extraction target |
 |---|---:|---|
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
-| `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
 | `handleRemoteEpt` / `openStreamingCopc` | 406 | `src/app/openStreaming.ts` *(planned)* |
@@ -118,6 +117,15 @@ Done: `importSession` (~208 lines) now lives in `src/app/sessionIo.ts`, called w
 cloud→fingerprint adapter (`scanFactsFromStreaming` / `scanFactsFromStatic`) is
 exported and Node-tested, and the parse/verify/rebase halves it leans on already
 lived in `src/io/session.ts`; `main.ts` keeps a thin caller (`tests/sessionIo.test.ts`).
+
+Done: `handleFile` (~336 lines) — the open/load pipeline — now lives in
+`src/app/openScan.ts` as `openScan(file, deps)`, driven through an `OpenScanDeps`
+object of accessor functions closing over the shell's services rather than the
+Viewer class. The two genuinely pure decisions it made are extracted and
+Node-tested — `layerChipCount` (the file-total vs strided-display count the Layers
+chip shows) and `shouldResetSavedWork` (fresh-project vs additive open) — alongside
+the three-way router's session / COPC / static dispatch (`tests/openScan.test.ts`).
+`main.ts` keeps a thin `handleFile` delegate that binds its running state to the deps.
 
 **`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
 methods dominate:

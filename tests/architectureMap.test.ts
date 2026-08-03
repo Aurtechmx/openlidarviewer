@@ -91,9 +91,10 @@ describe('architecture map stays in step with the tree', () => {
     // The floor is a sanity guard against the tables being deleted wholesale,
     // not a fixed size: each completed extraction moves its row out of the
     // pending table into "Done:" prose, so the count ratchets down over time
-    // (the render-loop and importSession extractions took it from 10 to 8).
+    // (the render-loop and importSession extractions took it from 10 to 8, and
+    // the openScan extraction took it to 7).
     const rows = text.split('\n').filter((l) => /^\|\s*`?[A-Za-z_]/.test(l) && /\|\s*[\d,]+\s*\|/.test(l));
-    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(8);
+    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(7);
 
     const lines = [
       ...readFileSync(root + 'src/main.ts', 'utf8').split('\n'),
