@@ -97,6 +97,18 @@ export interface SpaceMetricsParams {
   readonly spaceKind: 'interior' | 'object';
   /** Scale from source units to metres (default 1 — assume metres). */
   readonly unitToMetres?: number;
+  /**
+   * Whether the source linear unit is KNOWN — the CRS resolved a real linear
+   * unit. When explicitly `false`, `unitToMetres` is an assume-metres
+   * placeholder (an unknown-unit or CRS-less scan yields factor 1 for display),
+   * so the figures cannot be asserted as metres: a unit-unverified caveat is
+   * added to `reasons` so the panel and PDF disclose the assumption instead of
+   * printing a bare "m" claim. `undefined` keeps the legacy "assume known"
+   * behaviour (no caveat) for callers that predate the flag. Mirrors the
+   * `crs.linearUnit !== 'unknown'` gate the lasso / measurement / legend seams
+   * already apply.
+   */
+  readonly unitKnown?: boolean;
   /** Whether the scan carries colour. */
   readonly hasRgb?: boolean;
   /** Honest source/resident count the sample was drawn from. */
@@ -129,6 +141,17 @@ const STREAM_CAVEAT =
  */
 const PARTIAL_STREAM_CAVEAT =
   'Preliminary — only the streamed-in part of the scan has been measured so far; dimensions, areas and volumes will change as more loads. Let the full cloud stream in, then re-run.';
+/**
+ * Caveat for a scan whose source linear unit could not be confirmed as metres
+ * (no CRS, or a CRS that names no resolved linear unit). Every figure here is
+ * labelled "m" / "m²" / "m³" / "pts/m²", but with an unverified scale that claim
+ * is an assumption, so say so plainly instead of asserting metres. Recognised by
+ * ObjectPanel._caveats to surface it as the visible lead. Parallels the
+ * measurement-trust "unknown CRS" gate and the space-report PDF's
+ * "scale unverified — not asserted as metres" provenance line.
+ */
+const UNVERIFIED_UNIT_CAVEAT =
+  'Coordinate units are unverified — dimensions, areas, volumes and densities assume metres. Confirm the source CRS before relying on the figures.';
 
 const upOffsets = (a: Axis): { v: number; h1: number; h2: number } =>
   a === 'x' ? { v: 0, h1: 1, h2: 2 } : a === 'y' ? { v: 1, h1: 0, h2: 2 } : { v: 2, h1: 0, h2: 1 };
@@ -253,6 +276,12 @@ export function spaceMetrics(
   const sourcePointCount = params.sourcePointCount ?? n;
 
   const reasons: string[] = [params.residentOnly ? PARTIAL_STREAM_CAVEAT : STREAM_CAVEAT];
+  // Fail closed on an unverified scale: when the caller knows the linear unit is
+  // NOT resolved, every metre figure below is an assume-metres default, so
+  // disclose it rather than let "X m" read as a confirmed metric claim. Pushed
+  // after the stream caveat so `reasons[0]` (the partial-stream lead contract)
+  // is untouched; the panel promotes this caveat to the visible lead itself.
+  if (params.unitKnown === false) reasons.push(UNVERIFIED_UNIT_CAVEAT);
   const blankQuality: CaptureQuality = {
     sampledPointCount: 0, sourcePointCount, densityPerM2: 0,
     meanSpacingM: 0, coveragePct: 0, hasRgb,
