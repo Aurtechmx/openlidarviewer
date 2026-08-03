@@ -52,6 +52,12 @@ import {
   linkAbortSignals,
   type OpenStreamingDeps,
 } from './app/openStreaming';
+import {
+  generateReportPdf as runGenerateReportPdf,
+  exportGeoContext as runExportGeoContext,
+  type GeoExportContext,
+  type ReportExportDeps,
+} from './app/reportExport';
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
@@ -118,7 +124,6 @@ import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { composeClassScopeBannerOntoBlob } from './export/ScanReportRenderer';
-import { footprintMetres } from './report/reportFootprint';
 import { planInstantAnswer } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { HelpOverlay } from './ui/HelpOverlay';
@@ -232,14 +237,9 @@ import {
   isSuppressed as usageIsSuppressed,
 } from './diagnostics/usageCounters';
 import {
-  classify as classifyProvenance,
   fingerprintFor as provenanceFor,
   type CaptureType,
 } from './diagnostics/provenance';
-import {
-  signalsForStaticCloud,
-  signalsForStreamingCloud,
-} from './diagnostics/provenanceSignals';
 // CatalogPanel renders the empty-state "verified public LiDAR" picker.
 // The picker carries a curated dropdown of direct EPT URLs (each probed
 // at build time) and routes the selected URL into the existing streaming
@@ -2903,39 +2903,14 @@ function streamingExportCloud(): PointCloud | null {
 }
 
 /**
- * Origin + CRS + name for the ACTIVE scan, static OR streaming. The Products-
- * lane exporters (measurements / integrity report / KML) place local points
- * back into the source frame by adding the cloud origin — but streaming clouds
- * aren't tracked by `scans.activeId`, so reading only the static cloud left them
- * exporting at RENDER-frame coordinates (off by the whole `renderOrigin`) with
- * no CRS. This resolves the origin from the streaming source's `renderOrigin`
- * when no static cloud is active.
+ * Origin + CRS + name for the ACTIVE scan, static OR streaming — a thin caller
+ * over the extracted `src/app/reportExport.ts`. The origin-resolution rule (static
+ * `sourceOrigin`, else streaming `renderOrigin`, else zero) and the CRS-label
+ * honesty rule (`effectiveCrsName`) live in that module; here we bind the shell's
+ * running state through `reportExportDeps`.
  */
-function exportGeoContext(): {
-  origin: readonly [number, number, number];
-  crsName: string | undefined; name: string | null;
-} {
-  // The label must come from the RESOLVED CRS — the same one every conversion,
-  // unit factor and validation gate uses — not from the raw source metadata.
-  // After a user override (the picker exists precisely because files declare
-  // wrong CRSs), the source label names the CRS the user rejected: a KML whose
-  // coordinates were converted under the override then carried metadata naming
-  // the old CRS, which places confidently in the wrong frame — worse than no
-  // label. The raw source name stays available on the cloud for provenance.
-  const effectiveCrsName = (): string | undefined => {
-    const cur = crsService.current();
-    return cur && (cur.kind === 'projected' || cur.kind === 'geographic')
-      ? cur.name
-      : undefined;
-  };
-  if (scans.activeId) {
-    const c = viewer.getCloud(scans.activeId);
-    // SOURCE frame (float64-transform.md step 2): sessions save + import here.
-    if (c) return { origin: c.sourceOrigin, crsName: effectiveCrsName() ?? c.metadata?.crs?.name, name: c.name };
-  }
-  const sc = viewer.streamingCloud;
-  if (sc) return { origin: sc.renderOrigin, crsName: effectiveCrsName() ?? sc.crs()?.name ?? undefined, name: sc.name };
-  return { origin: [0, 0, 0], crsName: undefined, name: null };
+function exportGeoContext(): GeoExportContext {
+  return runExportGeoContext(reportExportDeps);
 }
 
 const exportPanel = new ExportPanel({
@@ -4593,209 +4568,15 @@ function schedulePrewarm(): void {
 }
 
 /**
- * Assemble + render a PDF report from the live state.
- * Lazy-loads the report engine (which pulls pdf-lib) on first call.
- * Returns a Promise so the caller can surface errors via toast/alert.
- *
- * Pulls the active streaming OR static cloud's metadata, the current
- * annotations + measurements + unit system, and assembles a
- * `ReportInputs`. Visuals + technical notes are queued for a UI-coupled
- * follow-up (the user will pre-render image exports + type notes via a
- * follow-on Studio-panel dialog). The engineering-
- * inspection template renders cleanly without visuals.
+ * Assemble + render a PDF report from the live state — a thin caller over the
+ * extracted `src/app/reportExport.ts`. The metadata assembly, provenance
+ * fingerprint, template normalisation and download live in that module, along with
+ * the pure `reportPointCount` (file-scale honesty) and `isNonTerrainVerdict`
+ * (capture lens) decisions; here we bind the shell's running state through
+ * `reportExportDeps`.
  */
-async function generateReportPdf(templateId: string): Promise<void> {
-  // the report flow needs the Viewer state; ensure it's loaded.
-  await viewerLoaded;
-  const report = await loadReportEngine();
-  const streamingCloud = viewer.streamingCloud;
-  const staticCloud = scans.activeCloud() ?? undefined;
-  if (!streamingCloud && !staticCloud) {
-    throw new Error('Load a scan first.');
-  }
-
-  // Build the MetadataInputs the composer + dataset-summary section need.
-  let metadata: import('./report').MetadataInputs;
-  let exportFileStem: string;
-  if (streamingCloud) {
-    // `dataBounds` (tight data AABB), NOT `localBounds` (the octree cube): the
-    // cube inflates height ~7× and, for a partial footprint, deflates density.
-    const b = streamingCloud.dataBounds();
-    const crs = streamingCloud.crs();
-    // Footprint + density in metres / pts·m⁻², not raw CRS units (see
-    // reportFootprint): a foot-CRS scan would otherwise overstate the headline
-    // area ~10.76× and be graded against the wrong USGS Quality Level.
-    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
-      extentX: b[3] - b[0], extentY: b[4] - b[1], extentZ: b[5] - b[2],
-      pointCount: streamingCloud.sourcePointCount,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
-      // COPC and EPT are Z-up by spec.
-      zUp: true,
-    });
-    const modes = streamingCloud.availableColorModes();
-    // Streaming-preview accounting — how much of the cloud is resident at
-    // export time. Surfaced as a "Loaded" row so the PDF discloses that a
-    // mid-stream report describes the full cloud but inspected only the
-    // resident subset. counts().known is the total known node count.
-    const nodeCounts = streamingCloud.counts();
-    metadata = {
-      fileName: streamingCloud.name,
-      format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
-      sourcePointCount: streamingCloud.sourcePointCount,
-      width: wM, depth: dM, height: hM, density,
-      hasRgb: modes.includes('rgb'),
-      hasIntensity: modes.includes('intensity'),
-      hasClassification: modes.includes('classification'),
-      streamingResident: {
-        points: streamingCloud.residentPointCount,
-        nodes: nodeCounts.resident,
-        totalNodes: nodeCounts.known,
-      },
-      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
-      // Class-filter honesty — when a filter narrows the live view, disclose
-      // it so the PDF's full-cloud figures aren't read as filter-scoped.
-      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
-    };
-    exportFileStem = baseName(streamingCloud.name);
-  } else if (staticCloud) {
-    const b = staticCloud.bounds();
-    // File-scale honesty: the loader strides huge clouds for display, so
-    // `pointCount` is the rendered subset. The client PDF must describe the
-    // FILE — use the declared total (and the density that follows from it) when
-    // striding reduced the in-memory count, matching the Scan Report panel.
-    const fileN =
-      staticCloud.declaredPointCount !== undefined && staticCloud.declaredPointCount > staticCloud.pointCount
-        ? staticCloud.declaredPointCount
-        : staticCloud.pointCount;
-    const crs = staticCloud.metadata?.crs;
-    // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
-    // scan would otherwise overstate area ~10.76× and be graded against the
-    // wrong USGS Quality Level.
-    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
-      extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
-      pointCount: fileN,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
-      // Mesh formats load Y-up, so the PDF reads the same axes as the
-      // on-screen Scan Report rather than assuming Z.
-      zUp: isZUpFormat(staticCloud.sourceFormat),
-    });
-    metadata = {
-      fileName: staticCloud.name,
-      format: staticCloud.sourceFormat.toUpperCase(),
-      sourcePointCount: fileN,
-      width: wM, depth: dM, height: hM, density,
-      hasRgb: !!staticCloud.colors,
-      hasIntensity: !!staticCloud.intensity,
-      hasClassification: !!staticCloud.classification,
-      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
-      // Class-filter honesty — when a filter narrows the live view, disclose
-      // it so the PDF's full-cloud figures aren't read as filter-scoped.
-      ...(currentClassScopeStamp() ? { classScopeNote: currentClassScopeStamp() } : {}),
-    };
-    exportFileStem = baseName(staticCloud.name);
-  } else {
-    throw new Error('Load a scan first.');
-  }
-
-  // Derive the cover title from the actual template so each template
-  // produces a distinct, recognisable PDF. The user-reported bug — "all
-  // reports show the same export" — was driven by a hardcoded
-  // `title: 'Scan Report'` that made the cover identical across every
-  // template choice. Pulling `label` off `getReportTemplate(templateId)`
-  // gives "Survey Summary" or "Technical Report" as appropriate. The
-  // dataset name moves into the subtitle so both axes (template type,
-  // source scan) are surfaced on the cover.
-  //
-  // v0.5.5 P12 — legacy ids (engineering-inspection, qa-validation,
-  // terrain-review, technical-documentation, scan-acceptance) normalise
-  // to the nearest current template, so an id carried in old UI state or
-  // an external caller keeps working; the export filename follows the
-  // NORMALISED id.
-  const validatedTemplateId =
-    report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
-  const template = report.getReportTemplate(validatedTemplateId);
-  const coverTitle = template?.label ?? 'Scan Report';
-  // Compute the same provenance fingerprint the Inspector's Provenance
-  // section already shows, and feed it to the report. Templates that
-  // include the `provenance` section get a real capture-type +
-  // confidence + cited accuracy bounds — auto-computed, varies per
-  // scan, gives every export per-template differentiation without
-  // requiring the user to take measurements or annotate first.
-  //
-  // Wrapped because a malformed cloud shape shouldn't sink the whole
-  // PDF — the section gracefully renders "No provenance fingerprint
-  // available" when the fingerprint is undefined.
-  let provenanceFp: import('./report').ReportProvenanceFingerprint | undefined;
-  try {
-    const activeCloud = scans.activeCloud();
-    const streamingCloud = viewer.streamingCloud;
-    // The shape router's verdict rules out an aerial density guess for a
-    // compact object / interior (v0.5.7 capture lens) — a temple is not drone
-    // LiDAR just because its density resembles a UAV survey.
-    const isNonTerrain = lastScanVerdict === 'object' || lastScanVerdict === 'interior';
-    if (activeCloud) {
-      const f = classifyProvenance({ ...signalsForStaticCloud(activeCloud as never), isNonTerrain });
-      provenanceFp = {
-        label: f.label,
-        confidence: f.confidence,
-        signals: f.signals,
-        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
-        disclaimer: f.disclaimer,
-      };
-    } else if (streamingCloud) {
-      const f = classifyProvenance({ ...signalsForStreamingCloud(streamingCloud as never), isNonTerrain });
-      provenanceFp = {
-        label: f.label,
-        confidence: f.confidence,
-        signals: f.signals,
-        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
-        disclaimer: f.disclaimer,
-      };
-    }
-  } catch (err) {
-    if (debug) console.warn('[report] classifyProvenance threw', err);
-  }
-  const inputs = report.composeReportInputs({
-    templateId: validatedTemplateId,
-    title: coverTitle,
-    subtitle: metadata.fileName,
-    metadata,
-    visuals: [],          // user-pre-rendered Studio exports
-    annotations: viewer.annotate.getAnnotations(),
-    measurements: viewer.measure.getMeasurements(),
-    unitSystem: viewer.measure.unitSystem,
-    // Render-units → metres, the SAME factor the live measure readouts apply
-    // (B2, v0.4.5) — so the report PDF's measurement values agree with the
-    // panel to the digit on foot-based CRSs.
-    unitToMetres: viewer.measure.unitToMetres,
-    provenance: provenanceFp,
-    // The file's own declared source metadata (E57 today) — verbatim,
-    // rendered by the report's "Declared source metadata" section under the
-    // "declared by the file, not verified" disclosure. Undefined (streaming
-    // sources, metadata-less files) omits the section entirely.
-    sourceMetadata: staticCloud?.metadata?.sourceMetadata,
-  });
-
-  const result = await report.generateReport(inputs);
-  // The download filename now mirrors the template choice so the
-  // user's Downloads folder distinguishes a Survey Summary from an
-  // Engineering Inspection at a glance.
-  triggerDownload(result.blob, `${exportFileStem}-${validatedTemplateId}.pdf`);
-  // Per-section render failures are caught by the engine's isolation pass
-  // and surfaced as a `failedSections` list — the PDF still ships but
-  // misses those sections. Tell the user so they're not surprised by a
-  // partial deliverable, and record it for local diagnostics so the
-  // partial-PDF mode is visible in the session-stats panel.
-  if (result.failedSections.length > 0) {
-    recordUsage('error', 'report:partial');
-    const list = result.failedSections.join(', ');
-    dropZone.setError(
-      `Report rendered without these sections: ${list}. ` +
-        'Check for unusual characters in the affected inputs and try again.',
-    );
-  }
+function generateReportPdf(templateId: string): Promise<void> {
+  return runGenerateReportPdf(templateId, reportExportDeps);
 }
 
 
@@ -5409,6 +5190,27 @@ const openStreamingDeps: OpenStreamingDeps = {
   hideReclassifyUi,
   syncInspectClassScope,
   runStreamingModules,
+};
+
+/**
+ * Report / geo-context export — thin callers over the extracted
+ * `src/app/reportExport.ts`. `reportExportDeps` binds the shell's running state
+ * (the lazy Viewer, the active-scan seam, the resolved CRS, the scan verdict and
+ * the class-scope stamp) to the module's accessors; the PDF assembly and the
+ * origin/CRS resolution, plus the pure `effectiveCrsName` / `reportPointCount` /
+ * `isNonTerrainVerdict` decisions, live in that module.
+ */
+const reportExportDeps: ReportExportDeps = {
+  viewerReady: viewerLoaded,
+  getViewer: () => viewer,
+  scans,
+  crsCurrent: () => crsService.current(),
+  lastScanVerdict: () => lastScanVerdict,
+  classScopeStamp: currentClassScopeStamp,
+  baseName,
+  loadReportEngine,
+  dropZone,
+  debug,
 };
 
 /**
