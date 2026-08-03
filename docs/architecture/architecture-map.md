@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 6,983 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 6,976 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -90,10 +90,6 @@ so it belongs beside the panels.
 
 Recorded so the next pass does not re-derive them:
 
-- **`snapshot`** — canvas compositing. Reaches into twelve Viewer internals and
-  twelve DOM/GL calls; the pure overlay maths (scale bar, colorbar, inspector
-  card) is already in its own modules. A host would expose the whole class for
-  no testable gain.
 - **The filter cluster** (`_classFiltered`, `_elevFilter*`, `_intenFilter*`) —
   not CPU predicates. They are three.js shader uniforms folded in a TSL pass;
   there is no Node-testable logic to lift.
@@ -102,7 +98,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (6,983)** — the largest blocks, which are the extraction
+**`src/main.ts` (6,976)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -112,14 +108,13 @@ called with a 19-member deps object. The candidates that remain:
 |---|---:|---|
 | `seedStreamingFilterExtents` | 338 | streaming panel wiring module |
 | `handleFile` | 336 | `src/app/openScan.ts` *(planned)* — the open/load pipeline |
-| `toClassBuffer` | 268 | `src/model/` or `src/render/class/` |
 | `syncInspectorVisuals` | 266 | inspector wiring module |
 | `applyScanRoute` | 233 | joins `ScanRouteService` |
 | `handleRemoteEpt` / `openStreamingCopc` | 406 | `src/app/openStreaming.ts` *(planned)* |
 | `generateReportPdf` / `exportGeoContext` | 402 | export/report wiring module |
 | `importSession` | 177 | `src/app/sessionIo.ts` *(planned)* |
 
-**`src/render/Viewer.ts` (6,959)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,458)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
@@ -130,7 +125,6 @@ been extracted, and both errors pointed the decomposition at the wrong work.
 | Block | Lines | Extraction target |
 |---|---:|---|
 | `constructor` | 564 | staged scene/pipeline builders |
-| `snapshot` | 143 | `src/render/snapshot.ts` *(planned)* |
 | `_startLoop` | 107 | `src/render/renderLoop.ts` *(planned)* |
 
 Done: `_buildExportAdapter` (265 lines) now lives in `src/render/exportAdapter.ts`,
@@ -143,6 +137,13 @@ Done: the colour-legend / scalar-range reads (`activeColorbar`, `elevationExtent
 shape, so the origin math, seeded gating and extent scans test without a WebGL
 context (`tests/viewerActiveColorbar.test.ts`). `Viewer` keeps three thin
 delegates and one host binding.
+
+Done: the `snapshot` capture pipeline (and its four overlay-compositing draw
+helpers) now lives in `src/render/snapshot.ts` behind a structural
+`SnapshotHost`, so the option resolution, fast-path decision and `toBlob`-null
+error path test without a canvas context (`tests/snapshot.test.ts`). The
+overlay-compositing branch still needs a real 2-D canvas and stays on the e2e
+export suite. `Viewer` keeps a one-line delegate and a host binding.
 
 Each extraction is one gated step: move the block, have it take its collaborators
 as parameters, keep the deterministic e2e project green, and re-run the coverage
@@ -160,8 +161,8 @@ and reaches into nav, camera, measure-datum and colour-context, so it moves
 only behind an explicit host interface, the same shape used for the export
 adapter and the lasso walk. That is the next decomposition step worth taking.
 The EDL cluster (`_edl*`) is a smaller follow-on. Everything else on the class
-— the constructor's scene/pipeline build, `snapshot`, the render loop body,
-event wiring — is the irreducibly view-bound remainder, and belongs here.
+— the constructor's scene/pipeline build, the render loop body, event wiring —
+is the irreducibly view-bound remainder, and belongs here.
 
 ## Test and gate topology
 
