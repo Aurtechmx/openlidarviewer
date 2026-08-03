@@ -56,7 +56,7 @@ function fakeBenchmark(): StreamingBenchmark {
 describe('shouldFadeIn', () => {
   it('fades in on desktop mid/high presets', () => {
     expect(shouldFadeIn(false, 'high')).toBe(true);
-    expect(shouldFadeIn(false, 'medium')).toBe(true);
+    expect(shouldFadeIn(false, 'balanced')).toBe(true);
   });
 
   it('skips the fade on mobile regardless of preset', () => {
