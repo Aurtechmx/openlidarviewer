@@ -2,6 +2,7 @@ import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '..
 import type { PointCloud } from '../../model/PointCloud';
 import type { ClassScope } from '../../render/class/classScope';
 import type { CrsLinearUnit } from '../../io/crs';
+import { isLinearUnitKnown } from '../../geo/CoordinateTypes';
 import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel, verticalReferenceFromDatum } from '../../geo/height';
 
@@ -65,8 +66,7 @@ export interface ScanReportUnitBasis {
  * claim is withheld.
  */
 export function scanReportUnitBasis(crs: UnitCrs): ScanReportUnitBasis {
-  const unitKnown =
-    crs != null && crs.linearUnit !== undefined && crs.linearUnit !== 'unknown';
+  const unitKnown = isLinearUnitKnown(crs);
   const mpu = unitKnown ? (crs?.linearUnitToMetres ?? 1) : 1;
   const vmpu = unitKnown ? (crs?.verticalUnitToMetres ?? mpu) : 1;
   return {

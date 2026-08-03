@@ -254,6 +254,7 @@ import { CatalogPanel } from './ui/CatalogPanel';
 import type { CrsInfo, CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
+import { isLinearUnitKnown } from './geo/CoordinateTypes';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -559,7 +560,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // Whether that factor is real or an assumed 1: an unknown CRS still yields
     // lin = 1 for display, but its points/m² density is then an assumption, so
     // the stockpile grade must not claim it.
-    const densityUnitKnown = crsForLasso != null && crsForLasso.linearUnit !== 'unknown';
+    const densityUnitKnown = isLinearUnitKnown(crsForLasso);
     const vert = crsForLasso?.verticalUnitToMetres ?? lin;
     const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown, vert);
     if (out === null) {
@@ -2217,7 +2218,7 @@ void viewerLoaded.then(() => {
     // A CRS is "known" for the measurement trust grade when one resolved with a
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
-    viewer.measure.setCrsKnown(resolved != null && resolved.linearUnit !== 'unknown');
+    viewer.measure.setCrsKnown(isLinearUnitKnown(resolved));
     // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
     // X/Y are degrees, Z is linear. The controller refuses the affected
     // trust grades + captions the hint; the panel shows the persistent
@@ -2228,14 +2229,13 @@ void viewerLoaded.then(() => {
     // Colorbar legend — the elevation unit comes from the SAME resolved CRS
     // (overrides included), through the same vertical-unit rule the terrain
     // runner uses: an explicit vertical unit wins, else the horizontal
-    // linear unit WHEN KNOWN. An unknown CRS reports factor 1 as a
-    // pass-through, so gate on `linearUnit !== 'unknown'` — otherwise
-    // unknown units would masquerade as metres on the legend. `verticalUnitLabel`
+    // linear unit WHEN KNOWN. An unknown CRS reports factor 1 as a pass-through,
+    // so gate via `isLinearUnitKnown` — else units masquerade as metres. `verticalUnitLabel`
     // returns 'units' for odd factors; that is not a unit, so it maps to
     // null and the legend shows bare numbers (honesty rule).
     const vToM =
       resolved?.verticalUnitToMetres ??
-      (resolved && resolved.linearUnit !== 'unknown' ? resolved.linearUnitToMetres : null);
+      (resolved && isLinearUnitKnown(resolved) ? resolved.linearUnitToMetres : null);
     const vLabel = vToM != null ? verticalUnitLabel(vToM) : 'units';
     viewer.setElevationUnit(vLabel === 'units' ? null : vLabel);
   });
@@ -2396,7 +2396,7 @@ function newAnalysePanel(
         // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
         verticalUnitToMetres:
           cur?.verticalUnitToMetres ??
-          (cur && cur.linearUnit !== 'unknown' ? cur.linearUnitToMetres : undefined),
+          (cur && isLinearUnitKnown(cur) ? cur.linearUnitToMetres : undefined),
       };
     },
   });
@@ -3399,7 +3399,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
       unitToMetres,
-      unitKnown: (crsService.current()?.linearUnit ?? 'unknown') !== 'unknown',
+      unitKnown: isLinearUnitKnown(crsService.current()),
       hasRgb,
       sourcePointCount: gathered.totalPoints,
       // A still-streaming cloud is measured on its resident subset only — lead
@@ -6625,7 +6625,7 @@ function compareLoadedLayers(): void {
       const span = horizontalSpanXY(a.positions, a.sourceOrigin);
       const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // both KNOWN ⇒ summarizeAlignment reports the shift/residual in metres; 'unknown' withholds the metre figures (geographic frames are refused before the fit)
+        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // both units KNOWN ⇒ summarizeAlignment reports the shift/residual in metres; a missing CRS or 'unknown' unit withholds the metre figures (geographic frames are refused before the fit)
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
@@ -6642,7 +6642,7 @@ function compareLoadedLayers(): void {
         horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
         verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
         isGeographic: a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
-        horizontalUnitKnown: a.metadata?.crs?.linearUnit !== 'unknown' && b.metadata?.crs?.linearUnit !== 'unknown', // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres ('unknown' = placeholder factor 1; geographic frames go via isGeographic)
+        horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres (a missing CRS or 'unknown' unit = placeholder factor 1; geographic frames go via isGeographic)
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
