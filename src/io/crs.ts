@@ -27,6 +27,15 @@
  * users that need WGS84 conversion can use a downstream tool (proj4, GDAL).
  */
 
+import {
+  collectWktNodes,
+  parseWkt,
+  wktChildNodes,
+  wktFirstNumber,
+  wktNodeName,
+  type WktNode,
+} from './wktParser';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -244,28 +253,45 @@ export function parseCrsFromVlrs(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Best-effort WKT parser — extracts the top-level CRS name and any AUTHORITY
- * EPSG code, plus the linear unit from the first UNIT[...] clause. A full
- * WKT parser is intentionally out of scope; the regex-based path covers every
- * common LAS WKT (UTM zones, state plane, web mercator, WGS 84) which is
- * what research users actually ship.
+ * WKT → {@link CrsInfo}. Tokenises the WKT into a `KEYWORD["name", child, …]`
+ * AST (see {@link parseWkt}) and reads every field by STRUCTURE: the CRS name,
+ * horizontal EPSG (`AUTHORITY["EPSG",…]` / `ID["EPSG",…]` on the CRS node
+ * itself), linear unit + factor, geodetic datum, geographic-vs-projected kind,
+ * and the compound-CRS horizontal slice. Structure is what lets the code tell a
+ * CRS's own authority from one nested in a `UNIT` or `DATUM`, and keep a
+ * compound's vertical clauses out of the horizontal read — the two failure
+ * modes a flat regex cannot avoid.
+ *
+ * Resolution SEMANTICS are unchanged from the prior regex implementation: a
+ * projected CRS with no UNIT clause defaults to metre (the WKT default), an
+ * unrecognised linear-unit name resolves to `unknown` (fail-closed), and only
+ * the horizontal slice of a compound CRS decides name / EPSG / unit.
  */
 export function crsFromWkt(wkt: string): CrsInfo {
   // Trim wrapper whitespace + null terminators.
   const text = wkt.replace(/\0+$/, '').trim();
 
+  const root = parseWkt(text);
+  const nodes = root ? collectWktNodes(root) : [];
+
   // For a compound CRS (COMPD_CS / COMPOUNDCRS) the horizontal CRS and its
   // EPSG / unit live BEFORE the vertical block, so we analyse only the
   // horizontal slice for name / EPSG / unit. This stops the vertical CRS's
-  // EPSG and metre UNIT from being mistaken for the horizontal ones.
-  const vertKeyword = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
-  const horizText = vertKeyword ? text.slice(0, vertKeyword.index) : text;
+  // EPSG and metre UNIT from being mistaken for the horizontal ones. The slice
+  // is every node that opens before the first vertical node — the structural
+  // equivalent of the old "text before the first VERT_CS keyword".
+  const verticalNode = nodes.find((n) => isVerticalKeyword(n.keyword));
+  const vertStart = verticalNode ? verticalNode.start : Infinity;
+  const horizNodes = nodes.filter((n) => n.start < vertStart);
 
-  // The CRS name is the first quoted string after a PROJCS / GEOGCS keyword
-  // (skipping the outer COMPD_CS name, which describes the whole compound).
-  const nameMatch = /(?:PROJCS|PROJCRS|GEOGCS|GEOGCRS)\s*\[\s*"([^"]+)"/i.exec(horizText)
-    ?? /^(?:COMPD_CS|COMPOUNDCRS)\s*\[\s*"([^"]+)"/i.exec(text);
-  const rawName = nameMatch ? nameMatch[1] : 'Unknown CRS';
+  // The CRS name is the first NAMED horizontal CRS node (PROJCS / GEOGCS /
+  // …); for a projected CRS that is the PROJCS, whose name wins over the nested
+  // base GEOGCS. A compound with no inner named CRS falls back to its own
+  // COMPD_CS name, which describes the whole compound.
+  const rawName =
+    firstName(horizNodes, isHorizontalCrsKeyword)
+    ?? (root && isCompoundKeyword(root.keyword) ? wktNodeName(root) : undefined)
+    ?? 'Unknown CRS';
 
   // Horizontal datum = the geographic base CRS's name (the GEOGCS / GEOGCRS /
   // BASEGEOGCRS node). For a projected CRS this is the nested base (e.g.
@@ -273,20 +299,23 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // realization — "NAD83(2011)" stays distinct from "NAD83" (~1–2 m apart) — so
   // it is the precision-preserving source the resolver prefers over the generic
   // registry name.
-  const datumMatch = /\b(?:GEOGCS|GEOGCRS|BASEGEOGCRS)\s*\[\s*"([^"]+)"/i.exec(horizText);
-  const horizontalDatum = datumMatch ? datumMatch[1] : undefined;
+  const horizontalDatum = firstName(horizNodes, isGeodeticBaseKeyword);
 
-  // EPSG via the standard AUTHORITY clause. LAS WKT is permissive — we look
-  // for both AUTHORITY["EPSG","32612"] (WKT1) and ID["EPSG",32612] (WKT2).
-  // Restricted to the horizontal slice so a compound's vertical code can't win.
-  const epsg = extractEpsgFromWkt(horizText);
+  // EPSG via the standard AUTHORITY / ID clause on the CRS node itself. LAS WKT
+  // is permissive — AUTHORITY["EPSG","32612"] (WKT1) and ID["EPSG",32612]
+  // (WKT2) are both read. Anchored on the horizontal CRS node so a nested
+  // unit/datum authority, or a compound's vertical code, cannot win.
+  const horizCrsNode = horizNodes.find((n) => isHorizontalCrsKeyword(n.keyword));
+  const epsg = horizCrsNode ? epsgFromNodeChildren(horizCrsNode) : undefined;
 
   // Linear units. A projected WKT typically contains TWO UNIT clauses:
   // an angular one inside the nested GEOGCS (e.g. degrees), then the
   // projected linear one at the top level (metres / feet / etc.). We need
   // the LAST one in the horizontal slice for projected CRSs. For geographic
   // CRSs the unit is degrees and the "linear" field falls back to 'unknown'.
-  const isGeographic = !/\b(?:PROJCS|PROJCRS)/i.test(horizText) && /\b(?:GEOGCS|GEOGCRS)/i.test(horizText);
+  const isGeographic =
+    !horizNodes.some((n) => isProjectedKeyword(n.keyword)) &&
+    horizNodes.some((n) => isGeographicKeyword(n.keyword));
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
   if (!isGeographic) {
@@ -294,17 +323,12 @@ export function crsFromWkt(wkt: string): CrsInfo {
     // its own UNIT (almost always metres); scanning the full text let that
     // vertical metre clause win over the horizontal one — e.g. a state-plane
     // CRS in US survey feet + NAVD88 metres parsed as metres.
-    const allUnits = [...horizText.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
-    // The projected linear unit is the LAST UNIT match in the horizontal
-    // slice (after the inner GEOGCS's angular UNIT). For non-compound WKT
-    // `horizText === text`, so this path is unchanged there.
-    const projectedUnit = allUnits[allUnits.length - 1];
+    const projectedUnit = lastLinearUnit(horizNodes);
     if (projectedUnit) {
-      const unitName = projectedUnit[1].toLowerCase();
-      const scale = Number(projectedUnit[2]);
+      const scale = projectedUnit.scale;
       if (Number.isFinite(scale) && scale > 0) {
         linearUnitToMetres = scale;
-        linearUnit = linearUnitFromNameOrScale(unitName, scale);
+        linearUnit = linearUnitFromNameOrScale(projectedUnit.name.toLowerCase(), scale);
       }
     } else {
       // No UNIT clause is rare on a projected CRS — default to metres.
@@ -317,7 +341,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // VERT_CS. The name (e.g. "NAVD88") is the reliable signal; the EPSG is a
   // best-effort reverse lookup for the writer. The vertical block's own UNIT
   // (when present) gives the Z-axis unit, which can differ from the horizontal.
-  const vert = extractVerticalFromWkt(text);
+  const vert = verticalNode ? extractVerticalFromNode(verticalNode) : {};
 
   return {
     source: 'wkt',
@@ -335,44 +359,24 @@ export function crsFromWkt(wkt: string): CrsInfo {
   };
 }
 
-/** Extract the vertical-CRS name + best-effort EPSG + unit from a WKT string. */
-function extractVerticalFromWkt(
-  text: string,
+/** Extract the vertical-CRS name + best-effort EPSG + unit from a VERT_CS node. */
+function extractVerticalFromNode(
+  vert: WktNode,
 ): { epsg?: number; name?: string; unit?: CrsLinearUnit } {
-  const m = /\b(?:VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
-  if (!m) return {};
-  // Isolate the bracketed vertical block so a compound CRS's other authorities
-  // (the horizontal CRS, or the compound itself) can't be read as the vertical
-  // EPSG. The '[' is the last char of the match.
-  const block = bracketBlock(text, m.index + m[0].length - 1);
-  const nameMatch = /\[\s*"([^"]+)"/.exec(block);
-  const name = nameMatch ? nameMatch[1] : undefined;
+  const name = wktNodeName(vert);
   // A known datum name resolves to the vertical CRS code directly; otherwise
-  // fall back to an explicit EPSG authority inside the block (the LAST one is
-  // the vertical CRS's own, after any VERT_DATUM authority).
-  const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? extractEpsgFromWkt(block);
-  // The vertical block's UNIT clause names the Z-axis unit (LAS WKT puts at most
+  // fall back to an explicit EPSG authority on the vertical node itself (its own
+  // AUTHORITY / ID, NOT a nested VERT_DATUM authority).
+  const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? epsgFromNodeChildren(vert);
+  // The vertical node's UNIT child names the Z-axis unit (LAS WKT puts at most
   // one UNIT here). Mapped to our enum so elevation can convert by its own unit.
   let unit: CrsLinearUnit | undefined;
-  const unitMatches = [...block.matchAll(/\bUNIT\s*\[\s*"([^"]+)"\s*,\s*([0-9.eE+-]+)/g)];
-  const unitMatch = unitMatches[unitMatches.length - 1];
-  if (unitMatch) {
-    const scale = Number(unitMatch[2]);
-    if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitMatch[1].toLowerCase(), scale);
+  const unitClause = lastLinearUnit(collectWktNodes(vert));
+  if (unitClause) {
+    const scale = unitClause.scale;
+    if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitClause.name.toLowerCase(), scale);
   }
   return { name, epsg, unit };
-}
-
-/** Return the bracketed group that opens at/after `from` (matched depth-aware). */
-function bracketBlock(text: string, from: number): string {
-  let open = text[from] === '[' ? from : text.indexOf('[', from);
-  if (open < 0) return text.slice(from);
-  let depth = 0;
-  for (let j = open; j < text.length; j++) {
-    if (text[j] === '[') depth++;
-    else if (text[j] === ']' && --depth === 0) return text.slice(open, j + 1);
-  }
-  return text.slice(open);
 }
 
 /** Map a vertical-datum name to its EPSG code (the common geoids/datums). */
@@ -389,58 +393,105 @@ function verticalEpsgFromName(name: string): number | undefined {
   return undefined;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// AST field derivation — keyword predicates + node readers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The projected-CRS keywords (WKT1 `PROJCS`, WKT2 `PROJCRS`). */
+function isProjectedKeyword(k: string): boolean {
+  return k === 'PROJCS' || k === 'PROJCRS';
+}
+
+/** The geographic-CRS keywords (WKT1 `GEOGCS`, WKT2 `GEOGCRS`). */
+function isGeographicKeyword(k: string): boolean {
+  return k === 'GEOGCS' || k === 'GEOGCRS';
+}
+
+/** The vertical-CRS keywords (WKT1 `VERT_CS`, WKT2 `VERTCRS` / `VERTICALCRS`). */
+function isVerticalKeyword(k: string): boolean {
+  return k === 'VERT_CS' || k === 'VERTCRS' || k === 'VERTICALCRS';
+}
+
+/** The compound-CRS keywords (WKT1 `COMPD_CS`, WKT2 `COMPOUNDCRS`). */
+function isCompoundKeyword(k: string): boolean {
+  return k === 'COMPD_CS' || k === 'COMPOUNDCRS';
+}
+
+/** A horizontal CRS node — the one whose name and authority describe the frame. */
+function isHorizontalCrsKeyword(k: string): boolean {
+  return isProjectedKeyword(k) || isGeographicKeyword(k);
+}
+
 /**
- * Pull the first credible EPSG code from a WKT string. Looks for both WKT1
- * (`AUTHORITY["EPSG","32612"]`) and WKT2 (`ID["EPSG",32612]`) syntaxes.
- * Numerically constrained to the EPSG range (1024-32767, plus a generous
- * 32768-99999 for newer codes) so we don't latch onto a random integer.
+ * The geodetic BASE node whose name is the horizontal datum. For a projected
+ * CRS this is the nested `GEOGCS` / `BASEGEOGCRS`; for a geographic CRS it is
+ * the CRS node itself.
  */
-function extractEpsgFromWkt(text: string): number | undefined {
-  /*
-   * WKT carries many AUTHORITY/ID clauses — datum, spheroid, primem, axis and
-   * unit each have their own — and only the one on the OUTERMOST node names the
-   * CRS. Taking the last match in the EPSG range worked only because
-   * well-formed WKT happens to put the CRS's authority last; a PROJCS with no
-   * top-level authority (older / non-GDAL writers) then latched onto
-   * UNIT[...AUTHORITY["EPSG","9001"]] and reported the scan's CRS as EPSG:9001,
-   * a unit of measure presented as a coordinate system. Every nested code —
-   * 9001/9002/9003 (units), 6326/7030 (datum, spheroid) — sits inside that
-   * range, so no numeric filter can separate them.
-   *
-   * So match on STRUCTURE instead: track bracket depth and accept only a clause
-   * that is a direct child of the root node. When the root declares no
-   * authority, the honest answer is that the file names no code — not the
-   * nearest number that happens to look like one.
-   */
-  // Anchor on the CRS node itself rather than on the outermost bracket: a
-  // compound CRS wraps the horizontal CRS in COMPD_CS, so its authority sits one
-  // level deeper than a plain PROJCS's would.
-  const node = /\b(?:PROJCS|PROJCRS|GEOGCS|GEOGCRS|VERT_CS|VERTCRS|VERTICALCRS)\s*\[/i.exec(text);
+function isGeodeticBaseKeyword(k: string): boolean {
+  return isGeographicKeyword(k) || k === 'BASEGEOGCRS';
+}
 
-  /** Unclosed brackets before `index` — the nesting depth at that point. */
-  const depthAt = (index: number): number => {
-    let depth = 0;
-    for (let i = 0; i < index; i++) {
-      const c = text[i];
-      if (c === '[') depth++;
-      else if (c === ']') depth--;
-    }
-    return depth;
-  };
+/** The first node (document order) matching `pred` that carries a quoted name. */
+function firstName(candidates: readonly WktNode[], pred: (k: string) => boolean): string | undefined {
+  for (const n of candidates) {
+    if (!pred(n.keyword)) continue;
+    const name = wktNodeName(n);
+    if (name !== undefined) return name;
+  }
+  return undefined;
+}
 
-  // The node's own children sit one level inside it. With no keyword present the
-  // caller handed us a node's bracket block directly (the vertical path slices
-  // one out), so its children are already at depth 1.
-  const childDepth = node ? depthAt(node.index) + 1 : 1;
-
-  const clause = /(?:AUTHORITY|ID)\s*\[\s*"EPSG"\s*,\s*"?(\d+)"?\s*\]/gi;
+/**
+ * The EPSG code declared by a CRS node's OWN `AUTHORITY` / `ID` child — never a
+ * nested unit/datum/spheroid authority (those are grandchildren, not direct
+ * children). Both WKT1 `AUTHORITY["EPSG","32612"]` and WKT2 `ID["EPSG",32612]`
+ * are read. Constrained to the EPSG range (1024-99999) so a stray number can't
+ * pose as a code; the LAST qualifying child wins, matching well-formed WKT that
+ * places the CRS's own authority last.
+ */
+function epsgFromNodeChildren(node: WktNode): number | undefined {
   let found: number | undefined;
-  for (const m of text.matchAll(clause)) {
-    if (depthAt(m.index) !== childDepth) continue;
-    const n = Number(m[1]);
-    if (Number.isFinite(n) && n >= 1024 && n <= 99999) found = n;
+  for (const child of wktChildNodes(node)) {
+    if (child.keyword !== 'AUTHORITY' && child.keyword !== 'ID') continue;
+    if (wktNodeName(child)?.toUpperCase() !== 'EPSG') continue;
+    // The code is the clause's numeric argument. WKT1 quotes it ("32612"),
+    // WKT2 does not (32612); the AST carries the former as a string child and
+    // the latter as a number child, so read whichever is present.
+    const code = firstNumericArg(child);
+    if (code !== undefined && Number.isFinite(code) && code >= 1024 && code <= 99999) found = code;
   }
   return found;
+}
+
+/** The first numeric argument of a node — a number child, or a numeric string. */
+function firstNumericArg(node: WktNode): number | undefined {
+  for (const child of node.children) {
+    if (child.type === 'number') return child.value;
+    // Skip the leading name string ("EPSG"); a later numeric string is the code.
+    if (child.type === 'string' && /^\d+$/.test(child.value.trim())) return Number(child.value);
+  }
+  return undefined;
+}
+
+/**
+ * The LAST linear `UNIT` clause among `candidates` (document order), returning
+ * its name + scale. Only bare `UNIT` nodes count — WKT2's `LENGTHUNIT` /
+ * `ANGLEUNIT` are intentionally NOT read here, matching the prior parser's
+ * `\bUNIT\[` scan (which a `LENGTHUNIT` substring never satisfied). A node
+ * qualifies only when it has a quoted name and a numeric scale, exactly the
+ * `UNIT["name",<number>` shape the old regex required.
+ */
+function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
+  let result: { name: string; scale: number } | undefined;
+  for (const n of candidates) {
+    if (n.keyword !== 'UNIT') continue;
+    const name = wktNodeName(n);
+    if (name === undefined) continue;
+    const scale = wktFirstNumber(n);
+    if (scale === undefined) continue;
+    result = { name, scale };
+  }
+  return result;
 }
 
 /**

@@ -9,7 +9,13 @@
  */
 
 import { describe, test, expect } from 'vitest';
-import { matchSessionToScan, type ScanFacts } from '../src/io/session';
+import {
+  matchSessionToScan,
+  detectSessionSpatialConflict,
+  type ScanFacts,
+  type DeclaredSpatialFacts,
+  type SessionSpatialClaims,
+} from '../src/io/session';
 import type { SessionScanSummary } from '../src/io/session';
 
 const SCAN_A: SessionScanSummary = {
@@ -85,5 +91,89 @@ describe('matchSessionToScan', () => {
     const m = matchSessionToScan(undefined, loaded());
     expect(m.verdict).toBe('partial');
     expect(m.reasons[0]).toMatch(/no scan fingerprint/);
+  });
+});
+
+/**
+ * `detectSessionSpatialConflict` is the per-scan spatial-metadata gate (roadmap
+ * P1 #5): the FILE's own declaration is the source of truth, so a session may
+ * SUPPLY metadata the file omits but may never REDEFINE metadata the file
+ * carries. A conflict is raised only when both sides positively declare a value
+ * (a real axis for the axis field) and they differ.
+ */
+describe('detectSessionSpatialConflict', () => {
+  const claims = (over: Partial<SessionSpatialClaims> = {}): SessionSpatialClaims => ({
+    upAxis: 'z',
+    epsg: 32613,
+    linearUnit: 'metre',
+    ...over,
+  });
+  const file = (over: Partial<DeclaredSpatialFacts> = {}): DeclaredSpatialFacts => ({
+    upAxis: 'z',
+    epsg: 32613,
+    linearUnit: 'metre',
+    ...over,
+  });
+
+  test('fully-agreeing metadata has no conflict', () => {
+    const v = detectSessionSpatialConflict(claims(), file());
+    expect(v.hasConflict).toBe(false);
+    expect(v.conflicts).toEqual([]);
+  });
+
+  test('a differing EPSG is a CRS conflict, not a silent adoption', () => {
+    const v = detectSessionSpatialConflict(claims({ epsg: 32613 }), file({ epsg: 32614 }));
+    expect(v.hasConflict).toBe(true);
+    expect(v.conflicts.map((c) => c.field)).toContain('crs');
+    expect(v.conflicts.find((c) => c.field === 'crs')!.reason).toMatch(/EPSG:32613.*EPSG:32614/);
+  });
+
+  test('a differing up-axis is an axis conflict', () => {
+    const v = detectSessionSpatialConflict(claims({ upAxis: 'z' }), file({ upAxis: 'y' }));
+    expect(v.conflicts.map((c) => c.field)).toEqual(['axis']);
+    expect(v.conflicts[0].reason).toMatch(/up-axis \(Z\).*Y-up/);
+  });
+
+  test('a differing linear unit is a unit conflict', () => {
+    const v = detectSessionSpatialConflict(
+      claims({ linearUnit: 'foot' }),
+      file({ linearUnit: 'metre' }),
+    );
+    expect(v.conflicts.map((c) => c.field)).toEqual(['unit']);
+    expect(v.conflicts[0].reason).toMatch(/foot.*metre/);
+  });
+
+  test('the file declaring NOTHING lets the session fill the gap — no conflict', () => {
+    // File has no EPSG, an unknown axis, and an unknown unit; the session's
+    // values are free to stand.
+    const v = detectSessionSpatialConflict(
+      claims({ epsg: 32613, linearUnit: 'foot' }),
+      { upAxis: 'unknown', epsg: undefined, linearUnit: 'unknown' },
+    );
+    expect(v.hasConflict).toBe(false);
+  });
+
+  test('the session declaring nothing beyond its axis cannot conflict on CRS/unit', () => {
+    const v = detectSessionSpatialConflict(
+      { upAxis: 'z', epsg: undefined, linearUnit: undefined },
+      file({ epsg: 32613, linearUnit: 'metre' }),
+    );
+    expect(v.hasConflict).toBe(false);
+  });
+
+  test('an unknown-unit file never conflicts on unit (fail-closed = no claim)', () => {
+    const v = detectSessionSpatialConflict(
+      claims({ linearUnit: 'foot' }),
+      file({ linearUnit: 'unknown' }),
+    );
+    expect(v.conflicts.some((c) => c.field === 'unit')).toBe(false);
+  });
+
+  test('multiple divergences are all reported, CRS first', () => {
+    const v = detectSessionSpatialConflict(
+      claims({ epsg: 32613, upAxis: 'z', linearUnit: 'metre' }),
+      file({ epsg: 32614, upAxis: 'y', linearUnit: 'foot' }),
+    );
+    expect(v.conflicts.map((c) => c.field)).toEqual(['crs', 'axis', 'unit']);
   });
 });

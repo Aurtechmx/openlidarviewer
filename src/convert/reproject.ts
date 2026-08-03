@@ -12,6 +12,11 @@
 import proj4 from 'proj4';
 import type { GlobalPoints } from './globalPoints';
 import { epsgToProj4, datumShiftCaveat } from './epsg';
+import {
+  buildTransformProvenance,
+  type TransformCrsHints,
+  type TransformProvenance,
+} from './transformProvenance';
 
 export interface ReprojectResult {
   readonly points: GlobalPoints;
@@ -25,6 +30,15 @@ export interface ReprojectResult {
    * off. Always null when `transformed` is false (nothing moved).
    */
   readonly datumCaveat: string | null;
+  /**
+   * Provenance of the operation this result came from — which transform, its
+   * accuracy, the source/target datum + realization, and the source coordinate
+   * epoch (see {@link TransformProvenance}). Derived from the src/dst CRS, not
+   * from the coordinates, so it is present on EVERY outcome (transformed,
+   * skipped, or failed); a skipped/failed transform still discloses the
+   * operation that was attempted. Never affects a returned coordinate.
+   */
+  readonly provenance: TransformProvenance;
 }
 
 /**
@@ -32,22 +46,33 @@ export interface ReprojectResult {
  * points plus a human note. If either CRS can't be resolved to a proj4 def,
  * the points are returned untouched with an explanatory note so the caller
  * can downgrade to "assign" or surface a warning rather than corrupt data.
+ *
+ * `hints` is optional source/target `CrsInfo` used ONLY to enrich the result's
+ * {@link TransformProvenance} (realization-preserving datum name + source
+ * coordinate epoch). It never influences the projection math or any returned
+ * coordinate, so existing 3-argument callers behave exactly as before.
  */
 export function reprojectGlobal(
   g: GlobalPoints,
   srcEpsg: number,
   dstEpsg: number,
+  hints: TransformCrsHints = {},
 ): ReprojectResult {
+  // Provenance is a pure function of the src/dst CRS (+ optional hints), not of
+  // the coordinates or the transform's success, so derive it once and stamp it
+  // on every return path — a skipped/failed transform still discloses what was
+  // attempted.
+  const provenance = buildTransformProvenance(srcEpsg, dstEpsg, hints);
   if (srcEpsg === dstEpsg) {
-    return { points: g, transformed: false, note: 'source and target CRS are identical — no transform needed', datumCaveat: null };
+    return { points: g, transformed: false, note: 'source and target CRS are identical — no transform needed', datumCaveat: null, provenance };
   }
   const srcDef = epsgToProj4(srcEpsg);
   const dstDef = epsgToProj4(dstEpsg);
   if (!srcDef) {
-    return { points: g, transformed: false, note: `cannot resolve source EPSG:${srcEpsg} — coordinates left unchanged`, datumCaveat: null };
+    return { points: g, transformed: false, note: `cannot resolve source EPSG:${srcEpsg} — coordinates left unchanged`, datumCaveat: null, provenance };
   }
   if (!dstDef) {
-    return { points: g, transformed: false, note: `cannot resolve target EPSG:${dstEpsg} — coordinates left unchanged`, datumCaveat: null };
+    return { points: g, transformed: false, note: `cannot resolve target EPSG:${dstEpsg} — coordinates left unchanged`, datumCaveat: null, provenance };
   }
 
   try {
@@ -92,6 +117,7 @@ export function reprojectGlobal(
           `projection's valid area, or a non-finite source elevation) — ` +
           `coordinates left unchanged`,
         datumCaveat: null,
+        provenance,
       };
     }
     return {
@@ -101,6 +127,7 @@ export function reprojectGlobal(
       // Datum honesty: proj4 has now "succeeded", but for grid-less / identity
       // datum pairs that success is only the PROJECTION math — flag it.
       datumCaveat: datumShiftCaveat(srcEpsg, dstEpsg),
+      provenance,
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -109,6 +136,7 @@ export function reprojectGlobal(
       transformed: false,
       note: `reprojection failed (${detail}) — coordinates left unchanged`,
       datumCaveat: null,
+      provenance,
     };
   }
 }
