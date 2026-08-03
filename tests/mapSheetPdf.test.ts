@@ -227,7 +227,11 @@ describe('buildMapSheetPdf', () => {
   });
 
   it('is byte-identical whether the annotation flag is OFF or absent', async () => {
-    const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const };
+    // A fixed generatedAt: the sheet stamps the generation time (minute
+    // precision) when none is passed (`?? new Date()`), so two back-to-back
+    // builds that straddle a minute boundary on a slow runner differ — a real
+    // flake that has nothing to do with the annotation flag this test pins.
+    const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const, generatedAt: new Date(0) };
     const absent = await buildMapSheetPdf({ ...base });
     const off = await buildMapSheetPdf({ ...base, includeAnnotations: false, annotations: [anno('1', 25, 60)], sceneUpAxis: 'z' });
     expect(Buffer.from(off).equals(Buffer.from(absent))).toBe(true);
