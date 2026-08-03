@@ -2571,6 +2571,14 @@ export class AnalysePanel {
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
     const ql = r.accuracyStandards.qualityLevel;
     const hasClass = r.excludedByClassification > 0;
+    // Whether the source linear unit is confirmed — the same gate every other
+    // unit consumer applies (`crs.linearUnit !== 'unknown'`). An unknown-unit or
+    // CRS-less scan carries the inert placeholder factor 1, so the density
+    // (pts/m²) and vertical-accuracy (m) verdicts would silently assert metres;
+    // pass the flag so scanFitness holds those metric claims and discloses the
+    // assumption instead of stamping a bare "pts/m²" / "m".
+    const fitLinearUnit = this._cb.getMapContext?.()?.linearUnit;
+    const unitKnown = fitLinearUnit != null && fitLinearUnit !== 'unknown';
     const inputs: FitnessInputs = {
       status: a.status,
       score: a.scoreKnown ? a.score : null,
@@ -2584,6 +2592,7 @@ export class AnalysePanel {
       notSurveyGrade: true,
       unit: 'm',
       unitToMetres: 1,
+      unitKnown,
       // The contour result doesn't carry the full class histogram; the presence
       // of classified returns dropped before ground filtering tells us the
       // source WAS classified (else ground was derived).
