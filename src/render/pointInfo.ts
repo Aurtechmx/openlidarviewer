@@ -14,8 +14,8 @@ import {
   type VerticalReference,
   heightLabel,
   makeHeight,
-  verticalReferenceFromDatum,
 } from '../geo/height';
+import { spatialContextFrom } from '../geo/SpatialContext';
 import { UNIT_FACTORS } from '../units/units';
 
 /**
@@ -95,12 +95,20 @@ function verticalAxisSuffix(verticalUnitToMetres: number | undefined, fallback: 
 
 /** Build the World-group labels + units for a resolved CRS (or undefined). */
 export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels {
+  // The unit/kind decisions come from the one SpatialContext façade instead of
+  // being re-read off `crs` here — so the inspector, the scan report, and every
+  // other consumer read the SAME horizontal-unit and vertical-scale facts. The
+  // façade uses a ResolvedCrs directly, so `ctx.kind`, `ctx.linearUnit`,
+  // `ctx.verticalUnitToMetres`, and `ctx.crsName` are byte-identical to the
+  // `crs.*` fields this used to read (and `undefined` resolves to `kind:
+  // 'unknown'`, matching the old `!crs` guard).
+  const ctx = spatialContextFrom(crs);
   // No CRS, local, or unknown: the coordinates are in the file's own units,
   // whose scale we do NOT know — assert no unit rather than fabricate metres.
-  if (!crs || crs.kind === 'local' || crs.kind === 'unknown') {
+  if (ctx.kind === 'local' || ctx.kind === 'unknown') {
     return { heading: 'World', x: 'X', y: 'Y', z: 'Z', xUnit: '', yUnit: '', zUnit: '' };
   }
-  if (crs.kind === 'geographic') {
+  if (ctx.kind === 'geographic') {
     return {
       heading: 'World (geographic)',
       x: 'Longitude',
@@ -110,7 +118,7 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
       yUnit: '°',
       // Elevation is metres by the geographic convention, UNLESS the file
       // declared a distinct (e.g. foot) vertical unit — then honour that.
-      zUnit: verticalAxisSuffix(crs.verticalUnitToMetres, ' m'),
+      zUnit: verticalAxisSuffix(ctx.verticalUnitToMetres, ' m'),
     };
   }
   // Projected: the axis unit is the CRS's own linear unit, so a foot-based CRS
@@ -118,15 +126,15 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
   // horizontal linear unit by default, but a CRS with a DISTINCT declared
   // vertical unit (e.g. metre easting/northing over a foot height) now reports
   // the elevation in its own unit rather than inheriting the horizontal one.
-  const suffix = linearAxisSuffix(crs.linearUnit);
+  const suffix = linearAxisSuffix(ctx.linearUnit);
   return {
-    heading: `World (${crs.name})`,
+    heading: `World (${ctx.crsName})`,
     x: 'Easting',
     y: 'Northing',
     z: 'Elevation',
     xUnit: suffix,
     yUnit: suffix,
-    zUnit: verticalAxisSuffix(crs.verticalUnitToMetres, suffix),
+    zUnit: verticalAxisSuffix(ctx.verticalUnitToMetres, suffix),
   };
 }
 
@@ -138,12 +146,17 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
  * `'unknown'` when none is declared — never upgraded to a datum it never had).
  */
 export function pointVerticalReference(crs: ResolvedCrs | undefined): VerticalReference {
+  // Frame classes first: 'local' and 'unknown' are properties of the coordinate
+  // frame, not of a datum, so they are decided here — the façade never returns
+  // 'local' (per height.ts) and would flatten a local frame to 'unknown'.
   if (!crs || crs.kind === 'unknown') return 'unknown';
   if (crs.kind === 'local') return 'local';
-  return verticalReferenceFromDatum({
-    verticalEpsg: crs.verticalEpsg,
-    verticalDatum: crs.verticalDatum,
-  });
+  // Datum → reference now reads the single SpatialContext definition instead of a
+  // second direct `verticalReferenceFromDatum` call. Behaviour-identical: the
+  // façade computes `verticalReference` as exactly
+  // `verticalReferenceFromDatum({ verticalEpsg, verticalDatum })` over these same
+  // fields, so the inspector and the façade can never disagree about a datum.
+  return spatialContextFrom(crs).verticalReference;
 }
 
 /**
@@ -153,7 +166,14 @@ export function pointVerticalReference(crs: ResolvedCrs | undefined): VerticalRe
  * inspector carry a typed height end to end instead of a bare "elevation" number.
  */
 export function pointHeight(z: number, crs: ResolvedCrs | undefined): HeightValue {
-  return makeHeight(z, pointVerticalReference(crs), crs?.verticalUnitToMetres);
+  // Reference from the frame-aware helper; vertical scale from the same façade
+  // (`ctx.verticalUnitToMetres === crs?.verticalUnitToMetres`, so this is a pure
+  // re-route, not a behaviour change).
+  return makeHeight(
+    z,
+    pointVerticalReference(crs),
+    spatialContextFrom(crs).verticalUnitToMetres,
+  );
 }
 
 /**

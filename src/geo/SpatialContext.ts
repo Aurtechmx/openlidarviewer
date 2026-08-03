@@ -34,7 +34,7 @@
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';
-import type { CrsKind, CrsSource } from './CoordinateTypes';
+import type { CrsKind, CrsSource, ResolvedCrs } from './CoordinateTypes';
 import { isLinearUnitKnown, resolvedFromCrsInfo, unknownCrs } from './CoordinateTypes';
 import type { CrsValidity, CrsValiditySeverity } from './CrsValidation';
 import { validateCrsForMeasurement } from './CrsValidation';
@@ -155,22 +155,36 @@ export interface SpatialContextPlacement {
 }
 
 /**
- * Build a {@link SpatialContext} from the existing {@link CrsInfo} (the shape
- * `src/io/crs.ts` extracts) plus optional project-frame placement. A `null` /
- * `undefined` CRS fails closed: the context resolves to `unknown`, and
- * `metricClaimsPermitted` is `false`.
+ * Build a {@link SpatialContext} from either the raw {@link CrsInfo} (the shape
+ * `src/io/crs.ts` extracts) or an already-resolved {@link ResolvedCrs} (the shape
+ * most consumers hold, e.g. the inspector's coordinate context), plus optional
+ * project-frame placement. A `null` / `undefined` CRS fails closed: the context
+ * resolves to `unknown`, and `metricClaimsPermitted` is `false`.
+ *
+ * Accepting both inputs is what lets the ~13 consumers route through this one
+ * façade without hand-building anything: a `CrsInfo` is bridged through the
+ * canonical `resolvedFromCrsInfo` mapper, while a `ResolvedCrs` — which already
+ * carries the resolved `kind` (including `local` / `unknown`, which a `CrsInfo`
+ * cannot express) — is used directly rather than round-tripped and re-derived.
  *
  * This is a pure fan-out over already-merged predicates — it introduces no new
  * unit, datum, or validity logic of its own.
  */
 export function spatialContextFrom(
-  crs: CrsInfo | null | undefined,
+  crs: CrsInfo | ResolvedCrs | null | undefined,
   frame?: ProjectSpatialFrame,
   placement: SpatialContextPlacement = {},
 ): SpatialContext {
-  // Bridge CrsInfo → ResolvedCrs via the canonical mapper; a missing CRS is the
-  // explicit unknown case, which the ladder classifies as needs-confirmation.
-  const resolved = crs ? (resolvedFromCrsInfo(crs, FACADE_SOURCE) ?? unknownCrs()) : unknownCrs();
+  // A missing CRS is the explicit unknown case, which the ladder classifies as
+  // needs-confirmation. A ResolvedCrs (identified by its `kind` discriminant,
+  // which CrsInfo lacks) is already resolved and is used as-is; a CrsInfo is
+  // bridged CrsInfo → ResolvedCrs via the canonical mapper.
+  const resolved =
+    crs == null
+      ? unknownCrs()
+      : 'kind' in crs
+        ? crs
+        : (resolvedFromCrsInfo(crs, FACADE_SOURCE) ?? unknownCrs());
 
   const verdict = validateCrsForMeasurement(resolved);
   const linearUnitKnown = isLinearUnitKnown(resolved);

@@ -23,6 +23,7 @@ import type { VerticalReference } from '../src/geo/height';
 import type { SpatialUpAxis } from '../src/geo/SpatialContext';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { createProjectFrame, layerTransform } from '../src/geo/ProjectSpatialFrame';
+import { resolvedFromCrsInfo, localCrs, unknownCrs } from '../src/geo/CoordinateTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Matrix dimensions
@@ -284,5 +285,67 @@ describe('spatialContextFrom — project-frame placement', () => {
     expect(ctx.inProjectFrame).toBe(false);
     expect(ctx.projectFrame).toBeUndefined();
     expect(ctx.sourceToProject).toBeUndefined();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ResolvedCrs input — the shape most consumers (e.g. the inspector) actually
+// hold. The façade accepts it directly so those consumers can route without
+// hand-building a CrsInfo. A ResolvedCrs must yield the same context a CrsInfo
+// with the equivalent fields would, AND it can express `kind` a CrsInfo cannot
+// ('local' / 'unknown').
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('spatialContextFrom — accepts a ResolvedCrs directly', () => {
+  it('a resolved projected CRS yields the same context as its CrsInfo', () => {
+    const info: CrsInfo = {
+      source: 'wkt',
+      name: 'NAD83 / UTM 12N + NAVD88',
+      epsg: 32000,
+      linearUnit: 'foot',
+      linearUnitToMetres: 0.3048,
+      isGeographic: false,
+      verticalEpsg: 5703,
+      verticalDatum: 'NAVD88',
+      verticalUnitToMetres: 0.3048,
+    };
+    const resolved = resolvedFromCrsInfo(info, 'las-vlr');
+    expect(resolved).not.toBeNull();
+    const fromInfo = spatialContextFrom(info);
+    const fromResolved = spatialContextFrom(resolved);
+
+    for (const key of [
+      'kind', 'isGeographic', 'linearUnit', 'linearUnitToMetres', 'linearUnitKnown',
+      'verticalReference', 'verticalDatum', 'verticalEpsg', 'verticalUnitToMetres',
+      'metricValidity', 'metricClaimsPermitted',
+    ] as const) {
+      expect(fromResolved[key]).toEqual(fromInfo[key]);
+    }
+    expect(fromResolved.metricClaimsPermitted).toBe(true);
+    expect(fromResolved.verticalReference).toBe('orthometric');
+  });
+
+  it('honours a resolved kind a CrsInfo cannot express (local / unknown)', () => {
+    const local = spatialContextFrom(localCrs());
+    expect(local.kind).toBe('local');
+    expect(local.linearUnitKnown).toBe(false);
+    expect(local.metricClaimsPermitted).toBe(false);
+    // The ladder classifies a local frame as safe-explicit-local, not projected.
+    expect(local.metricValidity).toBe('safe-explicit-local');
+
+    const unknown = spatialContextFrom(unknownCrs());
+    expect(unknown.kind).toBe('unknown');
+    expect(unknown.metricClaimsPermitted).toBe(false);
+  });
+
+  it('a resolved geographic CRS fails the gate closed', () => {
+    const geo = resolvedFromCrsInfo(
+      { source: 'wkt', name: 'WGS 84', linearUnit: 'unknown', linearUnitToMetres: 1, isGeographic: true },
+      'las-vlr',
+    );
+    const ctx = spatialContextFrom(geo);
+    expect(ctx.isGeographic).toBe(true);
+    expect(ctx.metricValidity).toBe('requires-projection');
+    expect(ctx.metricClaimsPermitted).toBe(false);
   });
 });
