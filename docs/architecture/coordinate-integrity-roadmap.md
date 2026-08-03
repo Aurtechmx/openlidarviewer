@@ -175,54 +175,61 @@ effective reference for coordinates, labels and embedded metadata.
    anchor from file origins instead of from origins it had itself written, and
    the anchor persists only while it still describes the current layer set.
 
-2. **Stop writing project offsets into Float32 vertices.** Mounting adds the
-   offset to the position array, so the residual precision a layer keeps is set
-   by how far it moves. Measured with `PointCloud.rebaseQuantum`: a lone
-   georeferenced scan anchors on its own origin and loses nothing (~1e-8 m);
-   1 km of separation costs ~0.02 mm; 100 km costs a full millimetre. The gates
-   in `LayerService` refuse a mount past 1 mm (converted through the CRS's
-   linear unit; geographic frames refused outright), so the loss is bounded and
-   disclosed rather than silent — but bounded is not absent.
+2. **Stop writing project offsets into Float32 vertices — data model DONE; two
+   display-frame folds browser-gated.** The destructive rebase is gone. Mounting
+   no longer rewrites the Float32 buffer: `Viewer.setLayerPlacement` holds the
+   layer's Float64 `sourceToProject` as data on the layer entry and sets
+   `mesh.position`, and `positions` is written once by the loader and stays
+   byte-identical through mount, unmount, hide, restore and export
+   (`float64-transform.md` invariant 1, `tests/sourceGeometryImmutable.test.ts`).
+   The destination shape every review named is in place for the DATA MODEL:
+   source-local vertices, the transform held in Float64 beside the buffer.
 
-   The destination is the shape every review has named: vertices stay
-   source-local, `sourceToProject` is held in Float64, CPU work applies it in
-   Float64, and the GPU renders camera-relative or high/low-split.
+   The CPU world coordinate is recovered per boundary, in the frame each one
+   names, and audited under a non-identity mount by
+   `tests/frameWorldCoords.test.ts`:
 
-   **Measured surface, so the estimate is not a guess:** 154 direct reads of
-   `.positions` across 42 files — picking, terrain gather, lasso, profiles,
-   volumes, clipping, colour modes, downsampling, conversion and export bounds.
+   - **Source-frame consumers are world-correct via `sourceOrigin`** —
+     `worldXYZ`, `cloudToGlobal`, the exporters (`exportGeoContext` →
+     `c.sourceOrigin`), and the two-epoch change comparison (`main.ts` ~5936,
+     each epoch built on its own `sourceOrigin`, not the live project origin).
+     The placement never enters the sum, so these hold under any mount.
+   - **Project-frame estimators fold the translation into their shared
+     accumulator** rather than moving points: the picking ray + hit lift
+     (`layerPlacement.ts`), terrain gather (`terrainStreamSample.ts:99,108`), and
+     the scene-bounds merge (`mergePlacedBounds`). Identity while mounting is
+     off, so byte-identical to the pre-fold walk.
 
-   **Why it is one change and not several.** The transform has to land in every
-   one of those readers together. Migrate half and rendering sees project space
-   while the rest sees source-local — which is precisely the render/CPU split
-   the data rebase was introduced to close, reintroduced deliberately. A
-   partially-migrated tree is worse than the current one: today every consumer
-   agrees and the error is a bounded, refused-past-1 mm quantisation; mid-
-   migration they disagree and the error is unbounded and silent.
+   **Remaining, both browser-gated** (the P1 #1 acceptance battery, and
+   `float64-transform.md` step 6):
 
-   Sequence when it is taken on: (a) `LayerSpatialState` holding source-local
-   positions plus Float64 `sourceToProject` / `projectToSource`; (b) a
-   world-space accessor every CPU consumer moves to, one file at a time behind
-   a lint that fails on a raw `.positions` read outside the model; (c) the GPU
-   path last, since it is the only one that genuinely needs Float32 and the
-   only one where camera-relative rendering is a real design choice. The
-   property suite in `tests/frameGateProperties.test.ts` — world-position
-   invariance, source-origin immutability, restore round-trips — is the
-   regression net for (a) and (b).
+   1. The renderer's camera-relative / render-origin fold (mesh position →
+      `sourceToProject − renderOrigin`, folded on the CPU per mesh). Bounded and
+      refused past 1 mm by the `LayerService` mount-precision gate
+      (`PointCloud.rebaseQuantum`: ~0.02 mm at 1 km, ~1 mm at 100 km; geographic
+      frames refused outright), so a precision refinement, not a correctness
+      defect.
+   2. The display-coordinate fold for picking and cross-layer measurement.
+      `Viewer._infoForHit` (`src/render/Viewer.ts` ~6087) builds the inspector's
+      world coordinate as the PLACED (project-local) pick point plus
+      `sourceOrigin`, which double-counts the translation for a non-anchor
+      mounted layer — off by the full `sourceToProject` (2 km in the
+      `twoScanMount` fixture), because the placed point already carries the
+      offset. Correct only under the identity placement, which is why it is
+      invisible single-layer and while mounting stays effectively off. The fix is
+      to read `cloud.worldXYZ(index)` from the hit index rather than the placed
+      point; the same applies to a measured vertex on a non-anchor layer exported
+      through the active scan's `sourceOrigin`. Tracked as P1 #1 acceptance items
+      #4 (picking) and #5 (cross-layer measure); pinned by
+      `tests/frameWorldCoords.test.ts`.
 
-   **On-ramp landed (additive, non-mutating). No consumer migrated.** Step (a)'s
-   container exists as an unreferenced scaffold, `src/model/LayerSpatialState.ts`
-   (source-local vertices + Float64 `sourceToProject`/`projectToSource`, the
-   world-space accessor consumers will adopt, pinned by
-   `tests/layerSpatialState.test.ts`). The surface is inventoried and ordered in
-   `docs/architecture/float64-frame-migration-plan.md`, and
+   `src/model/LayerSpatialState.ts` stays an unreferenced scaffold — the runtime
+   adopted the `PointCloud.worldXYZ` / `projectXYZ` accessors and the
+   `layerPlacement.ts` fold toolbox instead of a per-layer container.
+   `docs/architecture/float64-frame-migration-plan.md` records the current
+   architecture and keeps the historical `.positions` surface;
    `scripts/lint-positions-reads.mjs` (`npm run lint:positions-reads`,
-   report-only, never a gate) prints the live list. Re-measured from the tree:
-   **162 direct `.positions` reads across 42 files** (the file count the roadmap
-   recorded; occurrences drifted up from 154 as the code moved). This changes no
-   runtime and no e2e byte. The atomic-landing requirement above is unchanged:
-   the transform still has to reach every reader together, and a partially
-   migrated tree is still worse than none.
+   report-only) prints the live list.
 
 3. **Replace regex WKT parsing with an AST parser.** The current parser survives
    realistic WKT1 and WKT2 (verified against six shapes including `PROJCRS` with
