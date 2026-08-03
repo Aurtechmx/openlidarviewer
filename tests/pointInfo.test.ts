@@ -10,8 +10,17 @@ import {
   normalText,
   pointInfoCopyText,
   pointInfoJson,
+  worldCoordLabels,
+  pointVerticalReference,
+  pointHeight,
+  heightRowLabel,
 } from '../src/render/pointInfo';
 import type { RawPointInfo } from '../src/render/pointInfo';
+import type { CrsInfo } from '../src/io/crs';
+import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
+import { resolvedFromCrsInfo, localCrs, unknownCrs } from '../src/geo/CoordinateTypes';
+import { verticalReferenceFromDatum } from '../src/geo/height';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
 
 /** A raw picked point with every attribute present (origin at zero). */
 function fullRaw(): RawPointInfo {
@@ -317,5 +326,118 @@ describe('makePointInfo — geographic horizontal precision', () => {
   it('shows the defect scale without the flag: the 7th decimal is destroyed', () => {
     const info = makePointInfo(raw());
     expect(info.x).toBe(-111.045); // ~40 m of longitude gone at this latitude
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// CRS-derived display facts routed through SpatialContext (P2 coordinate-integrity)
+//
+// worldCoordLabels / pointVerticalReference / pointHeight now read their
+// unit-suffix and datum-reference decisions off `spatialContextFrom(crs)` rather
+// than re-deriving them inline. These tests pin the routed path across the
+// unit × vertical-datum × frame matrix AND assert it is byte-identical to the
+// prior inline derivation (verticalReferenceFromDatum over the same fields).
+// ────────────────────────────────────────────────────────────────────────────
+
+/** A projected/geographic ResolvedCrs from a CrsInfo (the inspector's shape). */
+function resolved(over: Partial<CrsInfo>): ResolvedCrs {
+  const info: CrsInfo = {
+    source: 'wkt',
+    name: 'Matrix CRS',
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    isGeographic: false,
+    ...over,
+  };
+  const r = resolvedFromCrsInfo(info, 'las-vlr');
+  if (!r) throw new Error('resolvedFromCrsInfo returned null for a defined CrsInfo');
+  return r;
+}
+
+const US_SURVEY_FOOT = 1200 / 3937;
+
+describe('worldCoordLabels — unit suffixes routed through the façade', () => {
+  it.each([
+    { name: 'undefined CRS', crs: undefined, xUnit: '', yUnit: '', zUnit: '', heading: 'World' },
+    { name: 'local frame', crs: localCrs(), xUnit: '', yUnit: '', zUnit: '', heading: 'World' },
+    { name: 'unknown CRS', crs: unknownCrs(), xUnit: '', yUnit: '', zUnit: '', heading: 'World' },
+    { name: 'projected metre', crs: resolved({ linearUnit: 'metre', linearUnitToMetres: 1 }), xUnit: ' m', yUnit: ' m', zUnit: ' m', heading: 'World (Matrix CRS)' },
+    { name: 'projected intl-foot', crs: resolved({ linearUnit: 'foot', linearUnitToMetres: 0.3048 }), xUnit: ' ft', yUnit: ' ft', zUnit: ' ft', heading: 'World (Matrix CRS)' },
+    { name: 'projected us-survey-foot', crs: resolved({ linearUnit: 'us-survey-foot', linearUnitToMetres: US_SURVEY_FOOT }), xUnit: ' ft', yUnit: ' ft', zUnit: ' ft', heading: 'World (Matrix CRS)' },
+    { name: 'projected unknown-unit → no fabricated metres', crs: resolved({ linearUnit: 'unknown', linearUnitToMetres: 1 }), xUnit: '', yUnit: '', zUnit: '', heading: 'World (Matrix CRS)' },
+    { name: 'geographic → degrees, elevation metres', crs: resolved({ linearUnit: 'unknown', linearUnitToMetres: 1, isGeographic: true }), xUnit: '°', yUnit: '°', zUnit: ' m', heading: 'World (geographic)' },
+  ])('$name', ({ crs, xUnit, yUnit, zUnit, heading }) => {
+    const labels = worldCoordLabels(crs);
+    expect(labels.xUnit).toBe(xUnit);
+    expect(labels.yUnit).toBe(yUnit);
+    expect(labels.zUnit).toBe(zUnit);
+    expect(labels.heading).toBe(heading);
+  });
+
+  it('honours a DISTINCT declared vertical unit on the Z axis (metre grid, foot height)', () => {
+    const metreGridFootHeight = resolved({ linearUnit: 'metre', linearUnitToMetres: 1, verticalUnitToMetres: 0.3048 });
+    expect(worldCoordLabels(metreGridFootHeight).xUnit).toBe(' m');
+    expect(worldCoordLabels(metreGridFootHeight).zUnit).toBe(' ft');
+    // Geographic base with a declared foot height → degrees horizontal, feet Z.
+    const geoFootHeight = resolved({ isGeographic: true, linearUnit: 'unknown', linearUnitToMetres: 1, verticalUnitToMetres: 0.3048 });
+    expect(worldCoordLabels(geoFootHeight).xUnit).toBe('°');
+    expect(worldCoordLabels(geoFootHeight).zUnit).toBe(' ft');
+  });
+});
+
+describe('pointVerticalReference — datum reference routed through the façade', () => {
+  // Frame classes are decided in the consumer (the façade never returns 'local').
+  it('undefined / unknown → unknown; local → local', () => {
+    expect(pointVerticalReference(undefined)).toBe('unknown');
+    expect(pointVerticalReference(unknownCrs())).toBe('unknown');
+    expect(pointVerticalReference(localCrs())).toBe('local');
+  });
+
+  const datumCells: { name: string; over: Partial<CrsInfo>; expected: string }[] = [
+    { name: 'orthometric (NAVD88, EPSG:5703)', over: { verticalEpsg: 5703, verticalDatum: 'NAVD88' }, expected: 'orthometric' },
+    { name: 'ellipsoidal (EPSG:4979)', over: { isGeographic: true, linearUnit: 'unknown', verticalEpsg: 4979, verticalDatum: 'EPSG:4979' }, expected: 'ellipsoidal' },
+    { name: 'no declared datum → unknown', over: {}, expected: 'unknown' },
+    { name: 'present-but-unrecognised datum → unknown', over: { verticalDatum: 'Some local vertical' }, expected: 'unknown' },
+  ];
+
+  it.each(datumCells)('$name', ({ over, expected }) => {
+    const crs = resolved(over);
+    expect(pointVerticalReference(crs)).toBe(expected);
+    // Byte-identical to the prior inline derivation …
+    expect(pointVerticalReference(crs)).toBe(
+      verticalReferenceFromDatum({ verticalEpsg: crs.verticalEpsg, verticalDatum: crs.verticalDatum }),
+    );
+    // … and to the single façade field the consumer now reads.
+    expect(pointVerticalReference(crs)).toBe(spatialContextFrom(crs).verticalReference);
+  });
+});
+
+describe('pointHeight — reference + vertical scale routed through the façade', () => {
+  it('carries the frame-aware reference and the CRS vertical scale', () => {
+    const metreGridFootHeight = resolved({ linearUnit: 'metre', verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalUnitToMetres: 0.3048 });
+    const h = pointHeight(100, metreGridFootHeight);
+    expect(h.reference).toBe('orthometric');
+    expect(h.metresPerUnit).toBe(0.3048);
+    expect(h.value).toBe(100);
+  });
+
+  it('an undeclared vertical scale stays undefined (never read as metres)', () => {
+    expect(pointHeight(5, resolved({ linearUnit: 'metre' })).metresPerUnit).toBeUndefined();
+    expect(pointHeight(5, undefined).metresPerUnit).toBeUndefined();
+    expect(pointHeight(5, undefined).reference).toBe('unknown');
+    expect(pointHeight(5, localCrs()).reference).toBe('local');
+  });
+});
+
+describe('heightRowLabel — datum-honest Z label via the routed reference', () => {
+  it.each([
+    { name: 'undefined → neutral Z', crs: undefined, label: 'Z' },
+    { name: 'local → neutral Z', crs: localCrs(), label: 'Z' },
+    { name: 'unknown → neutral Z', crs: unknownCrs(), label: 'Z' },
+    { name: 'orthometric → Elevation', crs: resolved({ verticalEpsg: 5703, verticalDatum: 'NAVD88' }), label: 'Elevation' },
+    { name: 'ellipsoidal → Ellipsoidal height', crs: resolved({ isGeographic: true, linearUnit: 'unknown', verticalEpsg: 4979 }), label: 'Ellipsoidal height' },
+    { name: 'no datum → Height (datum unknown)', crs: resolved({ linearUnit: 'metre' }), label: 'Height (datum unknown)' },
+  ])('$name', ({ crs, label }) => {
+    expect(heightRowLabel(crs)).toBe(label);
   });
 });

@@ -1,10 +1,10 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
 import type { ClassScope } from '../../render/class/classScope';
-import type { CrsLinearUnit } from '../../io/crs';
-import { isLinearUnitKnown } from '../../geo/CoordinateTypes';
+import type { SpatialContext } from '../../geo/SpatialContext';
+import { spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
-import { heightLabel, verticalReferenceFromDatum } from '../../geo/height';
+import { heightLabel } from '../../geo/height';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -29,13 +29,6 @@ function formatLength(metres: number): string {
   return metres < 1 ? `${(metres * 100).toFixed(1)} cm` : `${metres.toFixed(2)} m`;
 }
 
-/** The minimal CRS shape the unit basis reads — a subset of `CrsInfo`. */
-type UnitCrs = {
-  readonly linearUnit?: CrsLinearUnit;
-  readonly linearUnitToMetres?: number;
-  readonly verticalUnitToMetres?: number;
-} | null | undefined;
-
 /** Source→metre factors and unit labels for the extent block. */
 export interface ScanReportUnitBasis {
   /** Whether the CRS declares a real, resolved linear unit (metres claimable). */
@@ -58,17 +51,24 @@ export interface ScanReportUnitBasis {
  * unknown-unit CRS carries the inert placeholder `linearUnitToMetres: 1`, and
  * a CRS-less cloud resolves the same way — multiplying a source span by that 1
  * and stamping "m" would report non-metre data (feet, or even degrees for a
- * geographic CRS) as metres. So metres are claimed only when
- * `crs != null && crs.linearUnit !== 'unknown'`, the same canonical gate the
- * streaming report (`streamingExtentRows`), the space report (`spaceMetrics`),
- * the measure tool and the lasso already apply. When the unit is unconfirmed
- * the factor stays 1, the raw source span is shown, and the "m" / "pts/m²"
- * claim is withheld.
+ * geographic CRS) as metres. So metres are claimed only when the one
+ * {@link SpatialContext} says the linear unit is real — `ctx.linearUnitKnown` —
+ * the same canonical gate the streaming report (`streamingExtentRows`), the
+ * space report (`spaceMetrics`), the measure tool and the lasso already apply
+ * (each is `isLinearUnitKnown`, which the façade wraps). When the unit is
+ * unconfirmed the factor stays 1, the raw source span is shown, and the "m" /
+ * "pts/m²" claim is withheld.
+ *
+ * NOTE: the gate is `linearUnitKnown`, NOT `metricClaimsPermitted`. The two agree
+ * on every well-formed CRS but diverge on a corrupt `linearUnit: 'metre'` with a
+ * non-finite `linearUnitToMetres`, where the ladder blocks the metric headline
+ * yet the unit name is still "known"; the report's fail-closed rule keys off the
+ * declared unit, so preserving the prior behaviour means reading `linearUnitKnown`.
  */
-export function scanReportUnitBasis(crs: UnitCrs): ScanReportUnitBasis {
-  const unitKnown = isLinearUnitKnown(crs);
-  const mpu = unitKnown ? (crs?.linearUnitToMetres ?? 1) : 1;
-  const vmpu = unitKnown ? (crs?.verticalUnitToMetres ?? mpu) : 1;
+export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
+  const unitKnown = ctx.linearUnitKnown;
+  const mpu = unitKnown ? ctx.linearUnitToMetres : 1;
+  const vmpu = unitKnown ? (ctx.verticalUnitToMetres ?? mpu) : 1;
   return {
     unitKnown,
     mpu,
@@ -161,7 +161,11 @@ export const scanReport: AnalysisModule = {
     // would report non-metre data — feet, or even degrees for a geographic CRS —
     // as metres. When unconfirmed, the factor stays 1, the raw source span is
     // shown, and the "m" / "pts/m²" claim is withheld (matches #218/#220).
-    const basis = scanReportUnitBasis(cloud.metadata?.crs);
+    // Build the one SpatialContext for this report and hand it down, rather than
+    // letting the extent block and the vertical-reference row each re-read the
+    // CRS: both the unit gate and the datum classification now come from `ctx`.
+    const ctx = spatialContextFrom(cloud.metadata?.crs);
+    const basis = scanReportUnitBasis(ctx);
     const { mpu, vmpu } = basis;
     // Footprint and height are axis-aware. LAS-family (and COPC/EPT) are Z-up
     // by spec, so the ground footprint is X·Y and height is Z. Mesh formats
@@ -287,16 +291,14 @@ export const scanReport: AnalysisModule = {
     // than letting the corner Z pass as a sea-level elevation, mirroring the
     // Inspector's datum-honest Z label (#229) via the same classifier. Shown
     // only when the file carried a CRS: a scan with none has purely local
-    // corners and no datum to name.
-    const crs = meta?.crs;
-    if (crs) {
-      const reference = verticalReferenceFromDatum({
-        verticalEpsg: crs.verticalEpsg,
-        verticalDatum: crs.verticalDatum,
-      });
+    // corners and no datum to name. The datum → reference classification is read
+    // from the same `ctx` as the extent block (behaviour-identical to the prior
+    // direct `verticalReferenceFromDatum` call over these same datum fields), so
+    // the report and the inspector can never disagree about what a datum means.
+    if (meta?.crs) {
       rows.push({
         label: 'Vertical reference',
-        value: heightLabel(reference),
+        value: heightLabel(ctx.verticalReference),
         status: 'info',
         advanced: true,
       });
