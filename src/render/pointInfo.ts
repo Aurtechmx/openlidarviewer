@@ -9,6 +9,13 @@
 
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from '../io/crs';
+import {
+  type HeightValue,
+  type VerticalReference,
+  heightLabel,
+  makeHeight,
+  verticalReferenceFromDatum,
+} from '../geo/height';
 import { UNIT_FACTORS } from '../units/units';
 
 /**
@@ -121,6 +128,45 @@ export function worldCoordLabels(crs: ResolvedCrs | undefined): WorldCoordLabels
     yUnit: suffix,
     zUnit: verticalAxisSuffix(crs.verticalUnitToMetres, suffix),
   };
+}
+
+/**
+ * The vertical reference a picked point's height is measured from, per the
+ * resolved CRS. `local` and `unknown` scans have no georeferenced datum, so
+ * their heights are `'local'` / `'unknown'`; a projected or geographic scan
+ * takes the reference from its declared vertical datum (and is honestly
+ * `'unknown'` when none is declared — never upgraded to a datum it never had).
+ */
+export function pointVerticalReference(crs: ResolvedCrs | undefined): VerticalReference {
+  if (!crs || crs.kind === 'unknown') return 'unknown';
+  if (crs.kind === 'local') return 'local';
+  return verticalReferenceFromDatum({
+    verticalEpsg: crs.verticalEpsg,
+    verticalDatum: crs.verticalDatum,
+  });
+}
+
+/**
+ * A picked point's height (world Z) as an explicit {@link HeightValue}: the
+ * source-unit magnitude, the CRS's declared vertical scale (absent ⇒ unknown
+ * scale), and the reference from {@link pointVerticalReference}. Lets the
+ * inspector carry a typed height end to end instead of a bare "elevation" number.
+ */
+export function pointHeight(z: number, crs: ResolvedCrs | undefined): HeightValue {
+  return makeHeight(z, pointVerticalReference(crs), crs?.verticalUnitToMetres);
+}
+
+/**
+ * The inspector's Z-row label, honest about the vertical datum. A local or
+ * unknown-CRS scan keeps the neutral `'Z'` the World group already uses for its
+ * X / Y axes — no datum is implied there. A projected or geographic scan reads a
+ * reference-aware label, so an undeclared vertical datum shows "Height (datum
+ * unknown)" rather than "Elevation" (which asserts a sea-level datum the file
+ * never stated); a declared orthometric datum still reads "Elevation".
+ */
+export function heightRowLabel(crs: ResolvedCrs | undefined): string {
+  if (!crs || crs.kind === 'local' || crs.kind === 'unknown') return 'Z';
+  return heightLabel(pointVerticalReference(crs));
 }
 
 /**
