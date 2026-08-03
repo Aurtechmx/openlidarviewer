@@ -28,7 +28,10 @@ import {
   pointInfoCopyText,
   splitPointCoords,
   worldCoordLabels,
+  pointHeight,
+  heightRowLabel,
 } from './pointInfo';
+import { heightReferenceNote } from '../geo/height';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { latLonToUtm, utmLatitudeFailure, utmConverter } from '../geo/UtmConverter';
 import { buildPatchView } from './patchView';
@@ -418,7 +421,19 @@ export class InspectTool {
     // CRS-aware unit suffix so a lon/lat scan never reads "-122.4 m".
     rows.push(infoRow(worldLabels.x, `${split.world.x}${worldLabels.xUnit}`));
     rows.push(infoRow(worldLabels.y, `${split.world.y}${worldLabels.yUnit}`));
-    rows.push(infoRow(worldLabels.z, `${split.world.z}${worldLabels.zUnit}`));
+    // Z / height row. The label is datum-aware via an explicit HeightValue: a
+    // projected or geographic scan with no declared vertical datum reads
+    // "Height (datum unknown)" instead of "Elevation" (which would assert a
+    // sea-level datum the file never carried). The displayed value and unit
+    // suffix are unchanged — this only stops the label implying a reference.
+    const height = pointHeight(split.world.z, this._coordContext.crs);
+    rows.push(
+      infoRow(
+        heightRowLabel(this._coordContext.crs),
+        `${split.world.z}${worldLabels.zUnit}`,
+        heightReferenceNote(height.reference),
+      ),
+    );
 
     // Local group — only when an origin shift exists; otherwise local ==
     // world and a second identical group would be noise.
