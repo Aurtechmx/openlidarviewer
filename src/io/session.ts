@@ -29,6 +29,7 @@ import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsLinearUnit } from './crs';
 import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 
@@ -659,6 +660,131 @@ export function matchSessionToScan(
   // consistent with the same scan, not proof of it.
   if (rel > 0.01) reasons.unshift(`scan extents differ by ${(rel * 100).toFixed(1)}%`);
   return { verdict: 'partial', reasons };
+}
+
+// --- per-scan spatial-metadata guard (roadmap P1 #5) ------------------------
+
+/**
+ * The session's own spatial claims, distilled into a scan-independent bundle so
+ * the conflict check reads one shape whatever the session's provenance. `upAxis`
+ * is always present (top-level, parsed fail-closed by {@link parseUpAxis}); the
+ * CRS code and linear unit come from the session's resolved CRS when it carried
+ * one.
+ */
+export interface SessionSpatialClaims {
+  /** Vertical axis the session was captured in. */
+  readonly upAxis: 'y' | 'z';
+  /** Horizontal EPSG the session declares, when it carried a resolved CRS. */
+  readonly epsg?: number;
+  /** Linear unit the session's CRS declares; `'unknown'`/absent ⇒ no unit claim. */
+  readonly linearUnit?: CrsLinearUnit;
+}
+
+/**
+ * What the freshly-loaded FILE declares about its own frame — the source of
+ * truth a session may not silently redefine. Every field is optional because a
+ * file may declare none of them; when it does, that field simply can't conflict
+ * and the session's value is free to fill the gap.
+ */
+export interface DeclaredSpatialFacts {
+  /** The file's detected up-axis; `'unknown'`/absent ⇒ the file makes no axis claim. */
+  readonly upAxis?: 'y' | 'z' | 'unknown';
+  /** The file's horizontal EPSG, when it declares one. */
+  readonly epsg?: number;
+  /** The file's linear unit; `'unknown'`/absent ⇒ the file makes no unit claim. */
+  readonly linearUnit?: CrsLinearUnit;
+}
+
+/** Which spatial claim a {@link SpatialClaimConflict} concerns. */
+export type SpatialClaimField = 'crs' | 'axis' | 'unit';
+
+/** One proven divergence between the session's spatial claim and the file's. */
+export interface SpatialClaimConflict {
+  readonly field: SpatialClaimField;
+  /** Human-readable evidence, phrased so the file reads as the authority. */
+  readonly reason: string;
+}
+
+/** The verdict of {@link detectSessionSpatialConflict}. */
+export interface SessionSpatialVerdict {
+  /** True when the session's spatial metadata contradicts the file's own declaration. */
+  readonly hasConflict: boolean;
+  /** Every proven contradiction, most-load-bearing (CRS) first; empty on a clean match. */
+  readonly conflicts: readonly SpatialClaimConflict[];
+}
+
+/** A linear unit that positively names a real metric length (not the inert placeholder). */
+function isKnownLinearUnit(u: CrsLinearUnit | undefined): u is Exclude<CrsLinearUnit, 'unknown'> {
+  return u != null && u !== 'unknown';
+}
+
+/**
+ * Compare a session's stored spatial metadata (CRS identity, up-axis, linear
+ * unit) against what the freshly-loaded FILE declares, and report every field
+ * where they contradict — roadmap P1 #5's fail-closed gate.
+ *
+ * The rule is asymmetric on purpose: the FILE's own declaration is the source of
+ * truth, so a session may only SUPPLY spatial metadata the file leaves blank, it
+ * may never REDEFINE metadata the file already carries. A conflict is therefore
+ * raised only when BOTH sides positively declare a value AND those values differ
+ * (for the axis, when the file names a real axis that differs). When the file
+ * declares nothing — no EPSG, an `'unknown'` axis, an `'unknown'` unit — there is
+ * no conflict and the session's value fills the gap, exactly as before.
+ *
+ * The caller (session restore) treats any conflict as a refusal of the session's
+ * spatial claim, not a silent adoption of it: it keeps the file's declaration and
+ * discloses the disagreement, mirroring how the scan-identity gate refuses a
+ * differing EPSG rather than realigning onto it.
+ *
+ * Pure — no DOM, no cloud objects — so it is fully unit-tested in Node.
+ */
+export function detectSessionSpatialConflict(
+  claims: SessionSpatialClaims,
+  declared: DeclaredSpatialFacts,
+): SessionSpatialVerdict {
+  const conflicts: SpatialClaimConflict[] = [];
+
+  // CRS — canonical EPSG codes: a difference means the coordinates' MEANING
+  // differs, so no matching extents make adopting the session's frame honest.
+  if (
+    isFiniteNumber(claims.epsg) &&
+    isFiniteNumber(declared.epsg) &&
+    claims.epsg !== declared.epsg
+  ) {
+    conflicts.push({
+      field: 'crs',
+      reason: `the session's CRS (EPSG:${claims.epsg}) disagrees with the scan's declared EPSG:${declared.epsg}`,
+    });
+  }
+
+  // Axis — only when the FILE names a real axis (never on an unknown/undetected
+  // one). A differing up-axis reinterprets which component of every restored
+  // vertex is elevation, so it can't be adopted silently.
+  if (
+    (declared.upAxis === 'y' || declared.upAxis === 'z') &&
+    declared.upAxis !== claims.upAxis
+  ) {
+    conflicts.push({
+      field: 'axis',
+      reason: `the session's up-axis (${claims.upAxis.toUpperCase()}) disagrees with the scan's ${declared.upAxis.toUpperCase()}-up frame`,
+    });
+  }
+
+  // Unit — only when BOTH sides name a KNOWN unit (an unknown unit is the
+  // fail-closed "no claim", never a conflict). Metre vs foot silently rescales
+  // every distance, so the file's unit wins.
+  if (
+    isKnownLinearUnit(claims.linearUnit) &&
+    isKnownLinearUnit(declared.linearUnit) &&
+    claims.linearUnit !== declared.linearUnit
+  ) {
+    conflicts.push({
+      field: 'unit',
+      reason: `the session's linear unit (${claims.linearUnit}) disagrees with the scan's ${declared.linearUnit}`,
+    });
+  }
+
+  return { hasConflict: conflicts.length > 0, conflicts };
 }
 
 // --- validation helpers ----------------------------------------------------
