@@ -32,6 +32,14 @@ const BUDGETS = [
   { prefix: 'index', maxKiB: 720, warnKiB: 680 },   // live ~669 KiB after v0.6 P1 (AnalysePanel + ObjectPanel lazy-mounted on scan-load, was 792). Hard ceiling lowered 800→720 to lock in the win and fail a regression well before the old 800; warn at 680 flags creep early. The lazy panels ride their own AnalysePanel-*/ObjectPanel-* chunks — verified by the shell-leak fingerprint guard.
   { prefix: 'vendor-three-webgpu', maxKiB: 1100 },  // live ~978 KiB
   { prefix: 'vendor-pdf', maxKiB: 512 },            // live ~410 KiB
+  // Heavy capability chunks, lazy-loaded on the feature that needs them. Each
+  // gets its own ceiling so a single capability cannot bloat unnoticed under the
+  // "unbudgeted chunks never fail" rule above (R5: a budget line per heavy
+  // capability). Sized ~12-15 % over the current live (obfuscated) size.
+  { prefix: 'Viewer', maxKiB: 740, warnKiB: 710 },          // live ~657 KiB — render core (three binding, tools, streaming attach)
+  { prefix: 'lazDecode', maxKiB: 700, warnKiB: 670 },       // live ~613 KiB across 2 files — laz-perf WASM + decode glue
+  { prefix: 'eptLaszipWorker', maxKiB: 395, warnKiB: 380 }, // live ~343 KiB — EPT laszip streaming worker
+  { prefix: 'copcWorker', maxKiB: 385, warnKiB: 370 },      // live ~334 KiB — COPC streaming worker
 ];
 
 function listJs() {
