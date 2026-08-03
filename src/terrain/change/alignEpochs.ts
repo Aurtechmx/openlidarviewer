@@ -57,6 +57,20 @@ export interface AlignEpochOptions {
    * apply the full 3-D transform.
    */
   readonly horizontalOnly?: boolean;
+  /**
+   * False when the horizontal frame is PROJECTED but its linear unit is unknown
+   * (a CRS whose `linearUnit` is 'unknown', carrying the inert placeholder
+   * factor 1 in `linearUnitToMetres`). The fit still runs — the transform is
+   * geometrically valid in the cloud's own units — but the residual and shift
+   * this module reports "in metres" are computed with that placeholder, so they
+   * are source-unit numbers (feet, US survey feet, links) wearing a metre label.
+   * When false, `summarizeAlignment` withholds those metre figures rather than
+   * captioning an unverified unit as metres — the same fail-closed posture as
+   * `compareDtms`' `horizontalUnitKnown`. Omitted/true means the unit is known
+   * (or a metre CRS) and the figures print. Geographic frames never reach this
+   * option — they are refused before the fit (see {@link EpochAlignment.geographicSkipped}).
+   */
+  readonly horizontalUnitKnown?: boolean;
 }
 
 export interface EpochAlignment {
@@ -102,6 +116,15 @@ export interface EpochAlignment {
    * evidence of georeferenced agreement.
    */
   readonly frameUnverified?: boolean;
+  /**
+   * True when the fit ran on a projected frame whose linear unit is unknown
+   * (see {@link AlignEpochOptions.horizontalUnitKnown}). The residual and shift
+   * were scaled by the inert placeholder factor 1, so they carry source-unit
+   * magnitudes under a metre label. `summarizeAlignment` then withholds those
+   * metre figures — an unknown source unit cannot be multiplied into metres —
+   * and keeps only the unit-free parts (yaw, sample count) plus the diagnosis.
+   */
+  readonly horizontalUnitUnknown?: boolean;
 }
 
 const NO_ALIGNMENT: EpochAlignment = {
@@ -242,6 +265,15 @@ export function alignEpochClouds(
     };
   }
 
+  // Projected frame with an UNKNOWN linear unit. The fit still runs (the
+  // transform is valid in the cloud's own units and the residual gate is
+  // self-consistent — both the span-derived threshold and the residual live in
+  // source units), but the metresPerUnit below is the inert placeholder 1, so
+  // the residual/shift this module labels "m" are actually source-unit numbers.
+  // Carry the flag so the summary withholds those metre figures. Geographic
+  // frames are already refused above, so this is purely the projected case.
+  const horizontalUnitUnknown = options.horizontalUnitKnown === false;
+
   const maxSamples = options.maxSamples ?? 1500;
   const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples);
   const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples);
@@ -287,6 +319,7 @@ export function alignEpochClouds(
         translation: toMetres(fit.translation),
         sampleCount,
         frameUnverified,
+        horizontalUnitUnknown,
       },
     };
   }
@@ -325,6 +358,7 @@ export function alignEpochClouds(
       translation: toMetres(applied.translation),
       sampleCount,
       frameUnverified,
+      horizontalUnitUnknown,
     },
   };
 }
@@ -341,6 +375,21 @@ export function summarizeAlignment(a: EpochAlignment): string {
     );
   }
   if (!a.attempted || a.degenerate) return 'Alignment: skipped (not enough points to register).';
+  // Projected frame, unknown linear unit: the residual and shift were scaled by
+  // the placeholder factor 1, so every "m" figure would be a source-unit number
+  // wearing a metre label. Withhold them — the same fail-closed posture as
+  // compareDtms — and keep only the unit-free parts (the applied/refused
+  // outcome, the yaw angle, the sample count) plus the diagnosis. Checked before
+  // the frameUnverified caveat: an unknown unit is the stronger claim (the
+  // figures are not even metres), and its guidance already covers the fix.
+  if (a.horizontalUnitUnknown) {
+    const unitNote =
+      'the horizontal linear unit is unknown, so the shift and residual have no confirmed ' +
+      'metre scale and are withheld; set the CRS linear unit (or reproject to a metre/foot CRS) to report them.';
+    return a.refused
+      ? `Alignment: refused — the fit residual exceeds the limit, so the clouds are compared as-is. Note: ${unitNote}`
+      : `Aligned the after cloud horizontally (${a.yawDeg.toFixed(2)}° yaw over ${a.sampleCount} sampled points); vertical change preserved. Note: ${unitNote}`;
+  }
   if (a.refused) {
     return `Alignment: refused — residual ${a.rmsResidualM.toFixed(2)} m exceeds the limit; comparing as-is.`;
   }
