@@ -88,8 +88,12 @@ describe('architecture map stays in step with the tree', () => {
     const text = mapText();
     // Table rows look like: | `blockName` | 265 | target |
     // A cell may name two blocks (`handleRemoteEpt` / `openStreamingCopc`).
+    // The floor is a sanity guard against the tables being deleted wholesale,
+    // not a fixed size: each completed extraction moves its row out of the
+    // pending table into "Done:" prose, so the count ratchets down over time
+    // (the render-loop extraction took it from 10 to 9).
     const rows = text.split('\n').filter((l) => /^\|\s*`?[A-Za-z_]/.test(l) && /\|\s*[\d,]+\s*\|/.test(l));
-    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(10);
+    expect(rows.length, 'the extraction tables have gone missing').toBeGreaterThanOrEqual(9);
 
     const lines = [
       ...readFileSync(root + 'src/main.ts', 'utf8').split('\n'),
