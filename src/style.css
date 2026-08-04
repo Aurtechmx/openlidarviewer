@@ -5006,6 +5006,29 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: var(--accent-soft); border-radius: var(--radius-xs); padding: 1px var(--space-sm);
 }
 .olv-ap-time { font-size: var(--text-2xs); color: var(--text-faint); flex-shrink: 0; }
+/* Category section header for the grouped (long) annotation list. A left rule in
+   the category's colour groups the rows beneath it; the count sits at the right. */
+.olv-ap-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 var(--space-2xs);
+  padding: 0 var(--space-xs) var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-faint, rgba(255, 255, 255, 0.08));
+  border-left: 2px solid var(--text-faint);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-ap-group:first-child { margin-top: 0; }
+.olv-ap-group-count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+.olv-ap-group.olv-anno-note { border-left-color: #5b9bd5; }
+.olv-ap-group.olv-anno-info { border-left-color: #22dcff; }
+.olv-ap-group.olv-anno-warning { border-left-color: var(--rating-good); }
+.olv-ap-group.olv-anno-issue { border-left-color: var(--rating-weak); }
 .olv-ap-edit {
   font-size: var(--text-2xs); color: var(--text-dim); font-family: var(--font);
   background: none; border: 0.5px solid var(--hairline);

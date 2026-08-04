@@ -9,7 +9,7 @@
 import { el } from './dom';
 import type { AnnotationSummary } from '../render/annotate/AnnotationController';
 import type { AnnotationType } from '../render/annotate/types';
-import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
+import { describeAnnotationGroups, groupByCategory } from '../render/annotate/annotationClustering';
 
 /** How the annotation list is ordered. */
 export type AnnotationSort = 'created' | 'updated' | 'type' | 'title';
@@ -37,6 +37,17 @@ const SORT_OPTIONS: { value: AnnotationSort; label: string }[] = [
 
 /** Type order for the "Type" sort — most actionable first. */
 const TYPE_RANK: Record<AnnotationType, number> = { issue: 0, warning: 1, info: 2, note: 3 };
+
+/** Capitalised section labels for the grouped (long) list. */
+const CATEGORY_LABEL: Record<AnnotationType, string> = {
+  issue: 'Issues',
+  warning: 'Warnings',
+  info: 'Info',
+  note: 'Notes',
+};
+
+/** Above this many rows the list splits into per-category sections. */
+const GROUP_THRESHOLD = 8;
 
 /** A short relative time, e.g. "just now", "4m ago", "2h ago", "3d ago". */
 function relativeTime(ts: number, now: number = Date.now()): string {
@@ -189,7 +200,31 @@ export class AnnotationPanel {
       return;
     }
     const sorted = sortSummaries(filtered, this._sort);
-    this._list.replaceChildren(...sorted.map((s) => this._row(s)));
+    // A short list reads fine flat; a long one splits into per-category sections
+    // (severity-first) so a dense roster is navigable instead of a wall of rows.
+    // Search + sort still apply — grouping partitions the already-filtered,
+    // already-sorted list and keeps each row's order within its section.
+    if (sorted.length > GROUP_THRESHOLD) {
+      const groups = [...groupByCategory(sorted)].sort(
+        (x, y) => TYPE_RANK[x.type] - TYPE_RANK[y.type],
+      );
+      const nodes: HTMLElement[] = [];
+      for (const g of groups) {
+        nodes.push(this._groupHeader(g.type, g.items.length));
+        for (const s of g.items) nodes.push(this._row(s));
+      }
+      this._list.replaceChildren(...nodes);
+    } else {
+      this._list.replaceChildren(...sorted.map((s) => this._row(s)));
+    }
+  }
+
+  /** A category section header for the grouped (long) list. */
+  private _groupHeader(type: AnnotationType, count: number): HTMLElement {
+    return el('div', { className: `olv-ap-group olv-anno-${type}` }, [
+      el('span', { className: 'olv-ap-group-label', text: CATEGORY_LABEL[type] }),
+      el('span', { className: 'olv-ap-group-count', text: String(count) }),
+    ]);
   }
 
   /** Whether a summary matches the current search query (title / note / type). */
