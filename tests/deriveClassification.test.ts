@@ -372,3 +372,50 @@ describe('deriveClassification — void-aware confidence', () => {
     expect(res.confidence).toBeGreaterThan(0.5);
   });
 });
+
+describe('deriveClassification — multi-return vegetation cue', () => {
+  const scene = buildScene();
+  const n = scene.count;
+  const baseline = deriveClassification(scene.positions, n, { cellSizeM: 1 });
+
+  it('a multi-return smooth roof reads as vegetation, not a building', () => {
+    // Baseline (no return data): the smooth roof classifies as a building.
+    expect(frac(scene.buildingIdx, baseline.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+    // Mark every pulse as multi-return (returnCount = 2): a solid roof reflects
+    // the whole pulse in ONE return, so multi-return means the pulse penetrated
+    // foliage — the roof points now fall through to the vegetation bands.
+    const returnNumber = new Uint8Array(n).fill(1);
+    const returnCount = new Uint8Array(n).fill(2);
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnNumber, returnCount });
+    const roofAsVeg =
+      frac(scene.buildingIdx, res.codes, DERIVED_HIGH_VEG) +
+      frac(scene.buildingIdx, res.codes, DERIVED_MED_VEG) +
+      frac(scene.buildingIdx, res.codes, DERIVED_LOW_VEG);
+    expect(roofAsVeg).toBeGreaterThan(0.7);
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeLessThan(0.1);
+    // The cue only touches TALL points — ground below the band stays Ground.
+    expect(frac(scene.groundIdx, res.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+    // Provenance discloses that return data informed the classification.
+    expect(res.provenance).toContain('multi-return');
+  });
+
+  it('single-return keeps the smooth roof a building (cue fires only on multi-return)', () => {
+    const returnNumber = new Uint8Array(n).fill(1);
+    const returnCount = new Uint8Array(n).fill(1);
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnNumber, returnCount });
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+  });
+
+  it('needs BOTH return arrays — returnCount alone leaves the cue off', () => {
+    const returnCount = new Uint8Array(n).fill(2); // no returnNumber
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnCount });
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+    expect(res.provenance).not.toContain('multi-return');
+  });
+
+  it('absent return data is byte-identical to the geometry-only path', () => {
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1 });
+    expect(Array.from(res.codes)).toEqual(Array.from(baseline.codes));
+    expect(res.provenance).not.toContain('multi-return');
+  });
+});

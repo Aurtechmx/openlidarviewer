@@ -135,6 +135,20 @@ export interface DeriveClassificationOptions {
    */
   readonly minGroundSupport?: number;
   /**
+   * Optional per-point LAS return number and total returns-per-pulse (same point
+   * order as `positions`). When BOTH are present, a TALL point from a
+   * MULTI-return pulse (`returnCount > 1`) is read as vegetation rather than a
+   * building: a solid roof reflects the whole pulse in a single return, so
+   * multiple returns mean the pulse penetrated a canopy. This is the strongest
+   * aerial veg-vs-structure cue and supplements the geometry + greenness the same
+   * way — it only rescues a tall SMOOTH patch from being mis-filed as a roof,
+   * never inventing vegetation where the geometry says ground. Either array
+   * absent or mis-sized ⇒ the cue is off and the result is byte-identical to the
+   * geometry(+colour)-only path.
+   */
+  readonly returnNumber?: Uint8Array;
+  readonly returnCount?: Uint8Array;
+  /**
    * Optional producer classification to PRESERVE (same point order). Any point
    * whose existing code is a real producer class — anything other than
    * 0 (Created, never classified) or 1 (Unclassified) — keeps that code
@@ -520,6 +534,18 @@ export function deriveClassification(
   };
   const useGreen = colorStride >= 3;
 
+  // Optional return-number cue. A TALL point from a MULTI-return pulse
+  // (returnCount > 1) penetrated a canopy — a solid roof reflects the whole pulse
+  // in ONE return — so it reads as vegetation, not a building. The strongest
+  // aerial veg-vs-structure signal; supplements geometry + greenness the same
+  // way. Both arrays required and count-length; otherwise the cue is off.
+  const retNum = options.returnNumber;
+  const retCount = options.returnCount;
+  const useReturns = !!(
+    retNum && retCount && retNum.length >= count && retCount.length >= count
+  );
+  const vegByReturn = (i: number): boolean => retCount![i] > 1;
+
   // 6. Rule classification + per-point ground support.
   phase('Classifying');
   const codes = new Uint8Array(count);
@@ -554,7 +580,10 @@ export function deriveClassification(
         // photogrammetry, canopy is often locally smooth and would otherwise be
         // mistaken for a roof. Green ⇒ fall through to the vegetation bands.
         const green = useGreen && greenAt(i) >= o.vegGreennessMin;
-        if (planar && h >= o.buildingMinHagM && !green) {
+        // A multi-return pulse penetrated foliage — a solid roof would not. So a
+        // tall smooth patch that is multi-return is canopy, not a building.
+        const vegReturn = useReturns && vegByReturn(i);
+        if (planar && h >= o.buildingMinHagM && !green && !vegReturn) {
           code = DERIVED_BUILDING;
         } else if (h < o.lowVegBandM) {
           code = DERIVED_LOW_VEG;
@@ -641,6 +670,7 @@ export function deriveClassification(
 
   const modeNotes: string[] = [];
   if (useGreen) modeNotes.push('RGB vegetation index');
+  if (useReturns) modeNotes.push('multi-return vegetation cue');
   if (preserved) modeNotes.push('producer classes preserved (gaps only)');
   const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
 

@@ -91,6 +91,7 @@ import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
 import { toClassBuffer } from './render/class/classBuffer';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
+import { classifierCues } from './render/class/classifierCues';
 import {
   classificationCoverage,
   type DeriveClassificationOptions,
@@ -1693,8 +1694,7 @@ async function runDeriveClassification(): Promise<void> {
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
-  const deriveOptions: DeriveClassificationOptions =
-    cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {};
+  const deriveOptions = classifierCues(cloud);
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
@@ -1780,7 +1780,7 @@ async function runFillUnclassified(): Promise<void> {
   // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
   const deriveOptions: DeriveClassificationOptions = {
     existingClassification: cloud.classification,
-    ...(cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {}),
+    ...classifierCues(cloud),
   };
 
   classifyRunning = true;
