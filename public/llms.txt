@@ -1,0 +1,38 @@
+# OpenLiDARViewer
+
+> A browser-native, local-first LiDAR and point-cloud viewer. Open a `.las`, `.laz`, or `.copc.laz` scan (or a remote COPC / Entwine EPT `ept.json` URL) in a browser tab, then inspect, navigate in 3D, colour, measure, analyse terrain, classify, annotate, and export. Everything runs on the user's device. Files stay local, and it needs no account. MIT-licensed and citable (Zenodo DOI).
+
+Live app: https://lidar.aurtech.mx/ · Source: https://github.com/Aurtechmx/openlidarviewer · DOI: https://doi.org/10.5281/zenodo.21544619
+
+## What it does
+
+- Opens LAS, LAZ, and COPC point clouds locally, and streams remote COPC and Entwine EPT over HTTP range requests. It reads several exchange and mesh formats too (see the format matrix).
+- Colours by RGB, intensity, height/elevation, classification, return number, GPS time, point density, coverage, or per-point confidence.
+- Navigates with orbit, fly, and walk camera modes, camera presets, a keyboard NavWidget, and a command palette. Runs on WebGL 2, with a WebGPU path where available.
+- Measures distances, cross-sections and elevation profiles, and stockpile volumes; runs an elevation contour analysis; and reads a terrain "Scan Intelligence" panel (point density, terrain complexity, ground visibility) with unit-honest reporting.
+- Classifies ground, vegetation, and building points to ASPRS codes with an on-device heuristic, including per-point confidence and lasso re-classification. The output is derived, not survey-grade.
+- Builds purpose-driven contour deliverables in Contour Studio (Engineering Plan, Survey Review, Terrain Research, Presentation Map) and exports them to PDF, GeoJSON, or DXF, with the internal validation state written on the sheet.
+- Annotates with numbered markers, saves sessions, shares a view link, and exports a map-sheet PDF plus CSV and GeoJSON.
+- Embeds the viewer in an iframe (`?embed=1`) with a validated `postMessage` bridge for host-page control.
+
+## What it is honest about
+
+- The classifier is a heuristic. We benchmark it against PDAL on synthetic scenes, not against field survey, and the viewer labels its output "derived, not survey-grade."
+- When the CRS linear unit is unconfirmed, metric figures fail closed: the viewer shows source-unit extents, not fabricated metres.
+- It leaves CRS reprojection to dedicated tools like PDAL and QGIS, and analyses each scan in its own coordinate frame.
+- It views and inspects point clouds. It is not a full GIS, and not an editing or processing pipeline.
+
+## Key facts
+
+- Open-source (MIT) browser-based LiDAR and point-cloud viewer and terrain-analysis tool.
+- Runs entirely client-side. Local files never leave the device.
+- Research-derived, with a published evidence model, claim register, reproducibility record, and a Zenodo archive.
+
+## Links
+
+- [README](https://github.com/Aurtechmx/openlidarviewer/blob/main/README.md): full feature list and positioning
+- [User Guide](https://github.com/Aurtechmx/openlidarviewer/blob/main/docs/USER_GUIDE.md): open a scan, measure, analyse terrain, compare scans, share
+- [Documentation site](https://aurtechmx.github.io/openlidarviewer/): guide, supported-format matrix, scientific validation, reproducibility, reference
+- [Live app](https://lidar.aurtech.mx/): open a scan in the browser
+- [Zenodo record (DOI 10.5281/zenodo.21544619)](https://doi.org/10.5281/zenodo.21544619): citable archive
+- [Releases](https://github.com/Aurtechmx/openlidarviewer/releases): changelog and per-release notes
