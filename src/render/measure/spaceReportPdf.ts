@@ -68,6 +68,14 @@ function safe(s: string): string {
 export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {
   const content = buildSpaceReportContent(input);
   const doc = await PDFDocument.create();
+  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
+  // DisplayDocTitle flag so a screen reader / PDF viewer announces the report
+  // title rather than the raw filename; setLanguage tags the document language.
+  // (A full tagged-structure tree is out of reach with this PDF library; these
+  // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
+  doc.setTitle(content.title, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
+  doc.setAuthor('OpenLiDARViewer');
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 

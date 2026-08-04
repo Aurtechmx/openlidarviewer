@@ -149,6 +149,17 @@ function scaleRatio(groundM: number, paperPt: number): number {
 /** Build the profile PDF and return its bytes. */
 export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
+  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
+  // DisplayDocTitle flag so a screen reader / PDF viewer announces the sheet
+  // title rather than the raw filename; setLanguage tags the document language.
+  // (A full tagged-structure tree is out of reach with this PDF library; these
+  // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
+  const pdfTitle = input.name && input.name.trim()
+    ? `Terrain Profile - ${input.name.trim()}`
+    : 'Terrain Profile';
+  doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
+  doc.setAuthor('OpenLiDARViewer');
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const mono = await doc.embedFont(StandardFonts.Courier);
