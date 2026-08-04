@@ -11,6 +11,7 @@
 // thin factory that captures the inspector once. Call sites destructure the
 // returned object and otherwise behave exactly as before.
 import type { Inspector } from '../ui/Inspector';
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import { classify as classifyProvenance } from '../diagnostics/provenance';
 import {
   signalsForStaticCloud,
@@ -36,7 +37,7 @@ export interface InspectorCardRefreshers {
   refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
-    readonly metadata?: { crs?: { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
+    readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void;
   /** Push a cheap Dataset Intelligence summary from a streaming cloud's header. */
@@ -48,7 +49,7 @@ export interface InspectorCardRefreshers {
         readonly max?: readonly [number, number, number] | number[];
       };
     };
-    crs?(): { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
+    crs?(): { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
   }): void;
   /**
    * Fold a real analysed-point count from a finished terrain run into the
@@ -71,6 +72,35 @@ export interface InspectorCardRefreshers {
    * complexity) naturally resets the row.
    */
   noteTerrainComplexity(derived: DerivedComplexity | null): void;
+}
+
+/**
+ * The bounding-box volume in cubic METRES, or `undefined` when the CRS declares
+ * no usable linear unit. FAIL CLOSED: an unknown-unit CRS carries the inert
+ * placeholder `linearUnitToMetres: 1`, so converting with it would feed raw
+ * source-unit³ (feet³, degrees³) into the per-m³ density bucketing and mis-tier
+ * the scan — `classifyDensity` renders "—" for an absent volume, which is the
+ * honest state. Two axes are horizontal (×linear), one vertical (×vertical); the
+ * scalar factor mpu²·vmpu is order-independent. Shared by the static and
+ * streaming refreshers so the two paths can never diverge (see
+ * `tests/benchmark/unitIntegrity.test.ts`).
+ */
+function metresCubedBbox(
+  dx: number,
+  dy: number,
+  dz: number,
+  crs:
+    | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }
+    | null
+    | undefined,
+): number | undefined {
+  if (!isLinearUnitKnown(crs)) return undefined;
+  const mpu = crs?.linearUnitToMetres;
+  if (!Number.isFinite(mpu) || (mpu as number) <= 0) return undefined;
+  const vmpuRaw = crs?.verticalUnitToMetres ?? mpu;
+  if (!Number.isFinite(vmpuRaw) || (vmpuRaw as number) <= 0) return undefined;
+  const v = dx * dy * dz * (mpu as number) * (mpu as number) * (vmpuRaw as number);
+  return Number.isFinite(v) && v > 0 ? v : undefined;
 }
 
 /**
@@ -124,7 +154,7 @@ export function createInspectorCardRefreshers(
   function refreshDatasetIntelligenceFromStaticCloud(cloud: {
     readonly pointCount: number;
     readonly declaredPointCount?: number;
-    readonly metadata?: { crs?: { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
+    readonly metadata?: { crs?: { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null };
     bounds(): { min: [number, number, number]; max: [number, number, number] };
   }): void {
     // A static summary supersedes any remembered streaming one.
@@ -138,9 +168,14 @@ export function createInspectorCardRefreshers(
       // a state-plane-FEET tile is otherwise ~35× under-dense and a genuine QL1
       // survey grades "sparse". Two axes are horizontal (×linear), one vertical
       // (×vertical); the scalar factor mpu²·vmpu is order-independent.
-      const mpu = cloud.metadata?.crs?.linearUnitToMetres ?? 1;
-      const vmpu = cloud.metadata?.crs?.verticalUnitToMetres ?? mpu;
-      const bboxVolume = dx * dy * dz * mpu * mpu * vmpu;
+      //
+      // FAIL CLOSED on the unit: a cubic-metre volume is only computed when the
+      // CRS declares a REAL linear unit. An unknown-unit CRS carries the inert
+      // placeholder factor 1, so multiplying by it would feed raw source-unit³
+      // (feet³, degrees³) into the per-m³ bucketing and mis-tier the density.
+      // When the unit is unconfirmed, `bboxVolume` is left undefined and
+      // `classifyDensity` renders "—" rather than a wrong tier.
+      const bboxVolume = metresCubedBbox(dx, dy, dz, cloud.metadata?.crs);
       // Density numerator is the file's declared total, back-scaled when the
       // loader strided for display — matching the Scan Report, not the smaller
       // in-memory sample that would under-report the tier.
@@ -148,7 +183,7 @@ export function createInspectorCardRefreshers(
       const n = declared !== undefined && declared > cloud.pointCount ? declared : cloud.pointCount;
       const summary: Parameters<Inspector['setDatasetIntelligence']>[0] = {
         pointCount: n,
-        bboxVolume: Number.isFinite(bboxVolume) && bboxVolume > 0 ? bboxVolume : undefined,
+        bboxVolume,
         coverageMeta: {
           coverage: 'full',
           sourcePointCount: n,
@@ -183,7 +218,7 @@ export function createInspectorCardRefreshers(
         readonly max?: readonly [number, number, number] | number[];
       };
     };
-    crs?(): { linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
+    crs?(): { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
   }): void {
     try {
       const sourcePoints = cloud.sourcePointCount;
@@ -197,12 +232,11 @@ export function createInspectorCardRefreshers(
         // Cubic METRES, for the same reason the static path above converts: a
         // state-plane-feet tile's header box is 35.31x larger in raw units, so
         // the per-m³ bucketing dropped a genuine QL1 survey a whole tier. The
-        // header carries source units; the CRS carries the factors.
-        const crs = cloud.crs?.() ?? null;
-        const mpu = crs?.linearUnitToMetres ?? 1;
-        const vmpu = crs?.verticalUnitToMetres ?? mpu;
-        const v = dx * dy * dz * mpu * mpu * vmpu;
-        if (Number.isFinite(v) && v > 0) bboxVolume = v;
+        // header carries source units; the CRS carries the factors. FAIL CLOSED
+        // on the unit exactly as the static path does — an unknown-unit CRS
+        // leaves `bboxVolume` undefined rather than feeding raw feet³ / degrees³
+        // into the per-m³ bucketing.
+        bboxVolume = metresCubedBbox(dx, dy, dz, cloud.crs?.() ?? null);
       }
       const summary = {
         pointCount: sourcePoints,

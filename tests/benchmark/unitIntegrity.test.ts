@@ -722,6 +722,7 @@ describe('unit integrity: axis convention', () => {
       pointCount: POINTS,
       linearUnitToMetres: 1,
       verticalUnitToMetres: 1,
+      linearUnitKnown: true,
       zUp: true,
     });
     const yUp = footprintMetres({
@@ -731,12 +732,16 @@ describe('unit integrity: axis convention', () => {
       pointCount: POINTS,
       linearUnitToMetres: 1,
       verticalUnitToMetres: 1,
+      linearUnitKnown: true,
       zUp: false,
     });
-    expect(Math.abs(yUp.width - zUp.width)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(Math.abs(yUp.depth - zUp.depth)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(Math.abs(yUp.height - zUp.height)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(relDiff(yUp.density, zUp.density)).toBeLessThan(DENSITY_RELATIVE_TOL);
+    if (zUp.unitStatus !== 'confirmed' || yUp.unitStatus !== 'confirmed') {
+      throw new Error('expected confirmed footprints');
+    }
+    expect(Math.abs(yUp.widthMetres - zUp.widthMetres)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(Math.abs(yUp.depthMetres - zUp.depthMetres)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(Math.abs(yUp.heightMetres - zUp.heightMetres)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(relDiff(yUp.densityPerM2, zUp.densityPerM2)).toBeLessThan(DENSITY_RELATIVE_TOL);
   });
 
   /**
@@ -753,11 +758,13 @@ describe('unit integrity: axis convention', () => {
       pointCount: POINTS,
       linearUnitToMetres: 1,
       verticalUnitToMetres: M_PER_FT,
+      linearUnitKnown: true,
       zUp: false,
     });
-    expect(Math.abs(yUp.height - Y_UP_EXTENTS.y * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(Math.abs(yUp.depth - Y_UP_EXTENTS.z)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(relDiff(yUp.density, POINTS / (Y_UP_EXTENTS.x * Y_UP_EXTENTS.z))).toBeLessThan(
+    if (yUp.unitStatus !== 'confirmed') throw new Error('expected confirmed footprint');
+    expect(Math.abs(yUp.heightMetres - Y_UP_EXTENTS.y * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(Math.abs(yUp.depthMetres - Y_UP_EXTENTS.z)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(relDiff(yUp.densityPerM2, POINTS / (Y_UP_EXTENTS.x * Y_UP_EXTENTS.z))).toBeLessThan(
       DENSITY_RELATIVE_TOL,
     );
   });
@@ -774,11 +781,13 @@ describe('unit integrity: axis convention', () => {
       pointCount: POINTS,
       linearUnitToMetres: M_PER_FT,
       verticalUnitToMetres: M_PER_FT,
+      linearUnitKnown: true,
       zUp: true,
     });
-    expect(Math.abs(f.width - 30 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(Math.abs(f.depth - 40 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
-    expect(Math.abs(f.height - 8 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
+    if (f.unitStatus !== 'confirmed') throw new Error('expected confirmed footprint');
+    expect(Math.abs(f.widthMetres - 30 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(Math.abs(f.depthMetres - 40 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
+    expect(Math.abs(f.heightMetres - 8 * M_PER_FT)).toBeLessThan(LENGTH_METRES_TOL);
   });
 
   /**
@@ -880,7 +889,10 @@ describe('unit integrity: cross-path agreement', () => {
    * classifier agreeing proves nothing if one caller feeds it raw feet.
    */
   test('the static and streaming refreshers agree on the density tier for one foot-CRS box', () => {
-    const crs = { linearUnitToMetres: M_PER_FT, verticalUnitToMetres: M_PER_FT };
+    // A real foot CRS declares its linear unit; the refreshers now fail closed
+    // on an unknown unit, so the fixture must name it (an under-specified crs
+    // with only a factor is treated as unconfirmed and yields no bboxVolume).
+    const crs = { linearUnit: 'foot' as const, linearUnitToMetres: M_PER_FT, verticalUnitToMetres: M_PER_FT };
     // A 100 x 100 x 20 m box, expressed in feet.
     const minFt: [number, number, number] = [0, 0, 0];
     const maxFt: [number, number, number] = [100 / M_PER_FT, 100 / M_PER_FT, 20 / M_PER_FT];
