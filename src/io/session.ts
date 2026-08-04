@@ -497,6 +497,18 @@ export function rebaseSessionGeometry(
     return next;
   });
   const annotations = session.annotations.map((a) => {
+    // The world (survey) position is frame-INVARIANT: a render-frame rebase
+    // shifts the local anchor by `delta` and the active origin by `-delta`, so
+    // `local + origin` is unchanged. Honour the "recomputed on load" contract on
+    // annotate/types.ts by (re)deriving it here — keep a stored value, else
+    // compute it from the OLD local plus the session's capture origin (which
+    // equals the rebased local plus the new cloud origin). This is what lets a
+    // deliverable report state a real survey coordinate after a reopen.
+    const world = a.worldPosition ?? {
+      x: a.localPosition.x + session.origin[0],
+      y: a.localPosition.y + session.origin[1],
+      z: a.localPosition.z + session.origin[2],
+    };
     const next: Annotation = {
       ...a,
       localPosition: {
@@ -504,9 +516,7 @@ export function rebaseSessionGeometry(
         y: a.localPosition.y + dy,
         z: a.localPosition.z + dz,
       },
-      // Drop the cached world position — it was derived against the OLD frame and
-      // the viewer recomputes it from the rebased local plus the active origin.
-      worldPosition: undefined,
+      worldPosition: { x: world.x, y: world.y, z: world.z },
     };
     // The jump-to-view camera is in the same local frame as the vertices.
     if (a.cameraState) next.cameraState = shiftCamera(a.cameraState);
@@ -1073,6 +1083,12 @@ function parseAnnotations(v: unknown): Annotation[] {
     if (typeof item.note === 'string' && item.note.length > 0) annotation.note = item.note;
     const world = parseVec3Object(item.worldPosition);
     if (world) annotation.worldPosition = world;
+    // The owning layer + CRS label — the world frame's provenance, kept so a
+    // report can attribute the annotation and name the survey frame on reload.
+    if (typeof item.layerId === 'string' && item.layerId.length > 0) {
+      annotation.layerId = item.layerId;
+    }
+    if (typeof item.crs === 'string' && item.crs.length > 0) annotation.crs = item.crs;
     if (isRecord(item.cameraState)) annotation.cameraState = parseCameraState(item.cameraState);
     if (typeof item.linkedMeasurementId === 'string') {
       annotation.linkedMeasurementId = item.linkedMeasurementId;
