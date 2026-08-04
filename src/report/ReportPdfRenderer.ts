@@ -1135,9 +1135,14 @@ async function renderAnnotations(
     if (a.note) {
       cursor = drawBodyLine(cursor, a.note, body, theme);
     }
+    // Label the coordinate FRAME so a render-local fallback is never presented
+    // as a surveyed location. `world` names the CRS when the annotation carries
+    // one; anything else is the scan's render-local anchor.
+    const frameLabel =
+      a.frame === 'world' ? (a.crs ? `world · ${a.crs}` : 'world') : 'render-local';
     cursor = drawBodyLine(
       cursor,
-      `Position: ${a.position.x.toFixed(3)}, ${a.position.y.toFixed(3)}, ${a.position.z.toFixed(3)}`,
+      `Position (${frameLabel}): ${a.position.x.toFixed(3)}, ${a.position.y.toFixed(3)}, ${a.position.z.toFixed(3)}`,
       body,
       theme,
     );

@@ -15,20 +15,28 @@ import type { ReportAnnotationRow } from './types';
 /**
  * Convert one runtime annotation to a report row.
  *
- * Position policy: prefer `worldPosition` (absolute world coords) over
- * `localPosition` so analysts reading the report can correlate the
- * annotation to a survey coordinate. Falls back to `localPosition` when
- * the annotation pre-dates the worldPosition field (older sessions).
+ * Position policy: prefer `worldPosition` (absolute survey coords) over
+ * `localPosition` so analysts reading the report can correlate the annotation to
+ * a survey coordinate. Falls back to `localPosition` when no world position
+ * could be derived (an annotation with no owning cloud, or an older session).
+ *
+ * Honesty: the row records WHICH frame the coordinate is in (`frame`) and the
+ * CRS label when known, so the renderer can label a render-local fallback as
+ * such instead of presenting it as a surveyed location.
  */
 function toRow(a: Annotation): ReportAnnotationRow {
-  const pos = a.worldPosition ?? a.localPosition;
-  return {
+  const world = a.worldPosition;
+  const pos = world ?? a.localPosition;
+  const row: ReportAnnotationRow = {
     title: a.title,
     type: a.type,
     note: a.note,
     position: { x: pos.x, y: pos.y, z: pos.z },
+    frame: world ? 'world' : 'local',
     createdAt: a.createdAt,
   };
+  if (world && a.crs) return { ...row, crs: a.crs };
+  return row;
 }
 
 /**
