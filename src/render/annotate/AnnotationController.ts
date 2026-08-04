@@ -19,6 +19,7 @@ import type {
   Vec3Object,
 } from './types';
 import { createAnnotation, editAnnotation } from './types';
+import type { AnnotationGeoref } from './pickGeoref';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import { AnnotationEditor } from '../../ui/AnnotationEditor';
 import { el } from '../../ui/dom';
@@ -127,12 +128,19 @@ export class AnnotationController {
    * `cameraState` is the viewpoint captured at the moment of the click; it is
    * attached to the annotation only if the user keeps the "Save current camera
    * view" checkbox ticked.
+   *
+   * `georef` carries the world-frame provenance the picker resolved from the hit
+   * (survey `worldPosition`, owning `layerId`, and an optional CRS label). It is
+   * stored on the annotation so a deliverable report can state a real survey
+   * coordinate; when the pick has no owning cloud it is omitted and the
+   * annotation keeps only its render-local anchor.
    */
   beginDraft(
     local: Vec3Object,
     screenX: number,
     screenY: number,
     cameraState?: SavedCameraState,
+    georef?: AnnotationGeoref,
   ): void {
     this._setHint('Fill in the annotation, then Save');
     this._editor.open({
@@ -146,6 +154,13 @@ export class AnnotationController {
           note: fields.note,
           type: fields.type,
           localPosition: local,
+          ...(georef
+            ? {
+                worldPosition: georef.worldPosition,
+                layerId: georef.layerId,
+                ...(georef.crs ? { crs: georef.crs } : {}),
+              }
+            : {}),
           ...(fields.captureCamera && cameraState ? { cameraState } : {}),
           ...(fields.linkedMeasurementId
             ? { linkedMeasurementId: fields.linkedMeasurementId }
