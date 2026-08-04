@@ -143,6 +143,16 @@ export interface ReportAnnotationRow {
   readonly type: string;
   readonly note?: string;
   readonly position: { readonly x: number; readonly y: number; readonly z: number };
+  /**
+   * Which frame `position` is in — so the report never presents a render-local
+   * coordinate as a surveyed one. `world` means `position` is a survey
+   * coordinate (from the annotation's `worldPosition`); `local` means it is the
+   * render-local anchor because no world position could be derived. Optional so
+   * rows built directly by older callers default to the honest `local` label.
+   */
+  readonly frame?: 'world' | 'local';
+  /** CRS label of the world frame (e.g. `EPSG:25830`), when the annotation carries one. */
+  readonly crs?: string;
   readonly createdAt: number;
 }
 

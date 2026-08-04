@@ -229,6 +229,7 @@ import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
+import { annotationGeorefFor } from './annotate/pickGeoref';
 import type { SavedCameraState } from './annotate/types';
 import { LiveProbe } from './LiveProbe';
 import { downsampleToBudget } from '../process/voxelDownsample';
@@ -5986,22 +5987,21 @@ export class Viewer {
   }
 
   /**
-   * While annotating, a canvas click picks the point under the cursor and
-   * opens the inline editor on a hit, or reports a clear miss message on a
-   * miss — never creating an invalid annotation. Marker clicks are handled by
-   * the overlay itself; a click while the editor is open is left to the editor.
+   * A click while annotating opens the editor on a hit, or reports a clear miss.
    */
   private _handleAnnotateClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
     if (this._annotate.isEditing) return;
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    const hit = this._pickPoint(ndcX, ndcY);
+    const detailed = this._pickDetailed(ndcX, ndcY);
+    const hit = detailed?.point ?? this._pickStreaming(ndcX, ndcY);
     if (hit) {
       this._annotate.beginDraft(
         { x: hit.x, y: hit.y, z: hit.z },
         e.clientX,
         e.clientY,
         this.getCameraState(),
+        annotationGeorefFor(detailed),
       );
     } else {
       this._annotate.pickMissed();
