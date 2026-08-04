@@ -81,7 +81,15 @@ export interface SessionScanSummary {
   fileName: string;
   /** Source point count. */
   sourcePoints: number;
-  /** Source extents in metres: width × depth × height. */
+  /**
+   * Source extents in the scan's OWN CRS linear units (width × depth × height) —
+   * NOT metres. The writer stores the raw bounding-box spans (`b.max - b.min`)
+   * with no unit conversion, so a foot-CRS scan records feet here. The unit is
+   * disclosed by {@link crsUnit}; a metre value is never asserted. These raw
+   * spans are what `matchSessionToScan` compares (`extentRelDiff`), so the
+   * stored values must stay unconverted — this is a documentation correction
+   * only, not a value change.
+   */
   width: number;
   depth: number;
   height: number;
