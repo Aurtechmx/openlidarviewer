@@ -2548,6 +2548,20 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-measure-dot-snap {
   fill: var(--cyan, #00f0ff); stroke: #0a0e1a; stroke-width: 1.65;
 }
+/*
+ * Profile-station markers — the small dim dots at evenly-spaced chainages
+ * along a profile section line. Dim by default so they sit quietly under the
+ * measurement's own vertices; `.is-active` brightens the ONE dot coupled to a
+ * hovered profile-chart tick or station-table row. The dim base mirrors the
+ * inline `SNAPSHOT_CSS` in MeasureOverlay.ts so the live overlay and the
+ * screenshot export read identically — keep the two in sync.
+ */
+.olv-measure-dot-station {
+  fill: rgba(0, 178, 255, 0.55); stroke: #0a0e1a; stroke-width: 1;
+}
+.olv-measure-dot-station.is-active {
+  fill: rgba(0, 178, 255, 0.98); stroke: #0a0e1a; stroke-width: 1.4;
+}
 .olv-measure-snap-ring {
   fill: none;
   stroke: var(--cyan, #00f0ff);
