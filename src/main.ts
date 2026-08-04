@@ -5307,13 +5307,11 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // a host that cannot stream reports a precise reason instead of stalling.
     await range.probe(controller.signal);
     if (controller.signal.aborted) throw new LoadCancelledError();
-    // TODO(gate F4): closes the prior scan before openStreamingCopc's own fetch,
-    // so a malformed COPC that passes the range probe still blanks the scene.
-    // Deferring needs the teardown moved into the shared openStreamingCopc (the
-    // local path relies on attach's internal detach) — a larger refactor. The
-    // probe above already guards the common remote failures (CORS / ranges / 404).
-    if (viewer.hasStreamingCloud) closeStreaming();
+    // Prior-scene teardown is transactional (gate F4): openStreamingCopc defers
+    // it to attachStreamingCloud (build replacement, then detach prior) — a
+    // malformed COPC that fails to open leaves the scene intact, as local does.
     await openStreamingCopc(range, remoteCopcName(url), controller.signal);
+    streamingFilterSeeded = false; // fresh scan re-seeds its own filter extents
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
   } catch (err) {
@@ -5326,8 +5324,9 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
       recordUsage('error', 'load');
       dropZone.setError(describeRemoteCopcError(err, url));
-      // A remote open that failed mid-flight leaves no scan — tidy up.
-      closeStreaming();
+      // Transactional: a failed open left the prior scene untouched, so keep it
+      // — only tidy the streaming chrome when no streaming scene remains.
+      if (!viewer.hasStreamingCloud) closeStreaming();
     }
   } finally {
     unlinkAbort();

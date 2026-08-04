@@ -109,8 +109,15 @@ function usgsQlApplies(provenance: ReportProvenanceFingerprint | undefined): boo
   return provenance.bounds.some((b) => /\bQL\b|USGS/i.test(b.label));
 }
 
-/** Footprint area in m² from width × depth, or NaN when either is unknown. */
+/**
+ * Footprint area in m² from width × depth, or NaN when the area is not a
+ * confirmed metric quantity. FAILS CLOSED on an unconfirmed linear unit: when
+ * the CRS declares no real unit, `width`/`depth` are raw source-unit spans, so
+ * multiplying them would yield a source-unit² figure the report must NOT present
+ * as m² — the coverage finding reads "unknown extent" instead.
+ */
 function footprintAreaM2(metadata: MetadataInputs): number {
+  if (metadata.extentUnitStatus === 'unknown') return Number.NaN;
   const { width, depth } = metadata;
   if (!Number.isFinite(width) || !Number.isFinite(depth)) return Number.NaN;
   return width * depth;

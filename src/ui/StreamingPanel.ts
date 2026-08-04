@@ -16,6 +16,21 @@ import { formatCount } from './dom';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
+import type { CrsLinearUnit } from '../io/crs';
+
+/**
+ * The CRS facts the spacing row needs to state its unit honestly — a structural
+ * subset of `CrsInfo`, so `cloud.crs()` (which returns a full `CrsInfo`) is
+ * assignable without coupling the panel to the loader's shape.
+ */
+export interface SpacingCrs {
+  /** Horizontal linear unit. `'unknown'` / absent ⇒ spacing shown in source units. */
+  readonly linearUnit?: CrsLinearUnit;
+  /** Linear unit → metres factor (1 metre, ~0.3048 foot). Used to convert feet to m. */
+  readonly linearUnitToMetres?: number;
+  /** Geographic (degrees) CRS — a linear spacing is undefined. */
+  readonly isGeographic?: boolean;
+}
 
 /** Live status numbers for the panel. */
 export interface StreamingStatus {
@@ -49,6 +64,13 @@ export interface StreamingScanSummary {
   format?: 'copc' | 'ept';
   /** EPT-only: schema summary string for the Format row. */
   schemaSummary?: string;
+  /**
+   * Source CRS, when known — carried so the COPC `spacing` row can state its
+   * unit honestly (metre / foot→m / source units / geographic) instead of
+   * unconditionally labelling the CRS-unit distance "m". Absent ⇒ the unit is
+   * unconfirmed and the spacing is shown in source units.
+   */
+  crs?: SpacingCrs | null;
 }
 
 /** Callbacks the panel raises. */
@@ -98,17 +120,26 @@ function formatDim(n: number): string {
 /**
  * Label + value for the resolution row of the scan summary.
  *
- * COPC's metadata `spacing` is a METRIC root-node point spacing (CRS units —
- * metres for the usual projected scans), so it reads as "1.20 m". EPT's `span`
- * is a DIMENSIONLESS points-per-tile budget (the octree resolution analogue),
- * NOT a distance — feeding it into the same bare "Spacing" row read as "128 m"
- * of spacing, a label-vs-value drift. EPT therefore gets its own "Node budget"
- * label and a "pts/node" value so the number is never mistaken for a distance.
+ * COPC's metadata `spacing` is a METRIC root-node point spacing in the dataset's
+ * CRS units. EPT's `span` is a DIMENSIONLESS points-per-tile budget (the octree
+ * resolution analogue), NOT a distance — feeding it into the same bare "Spacing"
+ * row read as "128 m" of spacing, a label-vs-value drift. EPT therefore gets its
+ * own "Node budget" label and a "pts/node" value so the number is never mistaken
+ * for a distance.
+ *
+ * The COPC spacing FAILS CLOSED on its unit, the same gate the rest of the
+ * platform applies: it is only labelled "m" when the CRS declares a metre unit;
+ * a foot CRS is converted to metres, a geographic CRS has no linear spacing at
+ * all, and an unknown / absent unit is shown in raw source units rather than
+ * stamped "m". Previously the value was unconditionally suffixed " m", so a
+ * state-plane-FEET COPC read ~3.28× too large mislabelled as metres.
+ *
  * Pure + DOM-free so the decision is unit-tested without standing up the panel.
  */
 export function spacingRowFor(
   format: 'copc' | 'ept' | undefined,
   spacing: number,
+  crs?: SpacingCrs | null,
 ): { readonly label: string; readonly value: string; readonly title: string } {
   if (format === 'ept') {
     return {
@@ -117,10 +148,39 @@ export function spacingRowFor(
       title: 'EPT octree resolution — target points per node, not a metric spacing.',
     };
   }
+  // COPC: spacing is a root-node point spacing in the dataset's CRS units.
+  if (crs?.isGeographic) {
+    // Degrees of longitude are not a linear distance; a "spacing in metres"
+    // would be latitude-dependent and is not defined here.
+    return {
+      label: 'Spacing',
+      value: '— (geographic CRS)',
+      title: 'Spacing is not a linear distance for a geographic (degrees) CRS.',
+    };
+  }
+  if (crs?.linearUnit === 'metre') {
+    return {
+      label: 'Spacing',
+      value: `${spacing.toFixed(2)} m`,
+      title: 'Root-node point spacing in metres.',
+    };
+  }
+  if (crs?.linearUnit === 'foot' || crs?.linearUnit === 'us-survey-foot') {
+    // Spacing is in feet; convert to metres so the number is comparable.
+    const factor = crs.linearUnitToMetres;
+    const metres = Number.isFinite(factor) ? spacing * (factor as number) : spacing;
+    return {
+      label: 'Spacing',
+      value: `${metres.toFixed(2)} m`,
+      title: 'Root-node point spacing, converted from the source foot unit to metres.',
+    };
+  }
+  // Unknown / absent linear unit — fail closed: show the raw source figure and
+  // do NOT claim metres.
   return {
     label: 'Spacing',
-    value: `${spacing.toFixed(2)} m`,
-    title: 'Root-node point spacing in the dataset’s CRS units.',
+    value: `${spacing.toFixed(2)} (source units)`,
+    title: 'Linear unit unconfirmed — spacing shown in the source CRS units, not metres.',
   };
 }
 
@@ -425,7 +485,7 @@ export class StreamingPanel {
       // budget. `spacingRowFor` labels + units each correctly so neither is
       // misread (see its doc-comment for the label-vs-value drift it fixes).
       (() => {
-        const r = spacingRowFor(summary.format, summary.spacing);
+        const r = spacingRowFor(summary.format, summary.spacing, summary.crs);
         return this._statRow(r.label, this._value(r.value, r.title));
       })(),
       this._statRow(
