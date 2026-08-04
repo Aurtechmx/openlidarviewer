@@ -21,6 +21,8 @@ import type { Vec3Object } from './types';
 export interface AnnotationPickCloud {
   /** Stable layer identity — the cloud's display name / source filename. */
   readonly name: string;
+  /** Optional CRS metadata, for the annotation's world-frame label. */
+  readonly metadata?: { readonly crs?: { readonly name?: string } | null } | null;
   /**
    * World coordinate of point `index`, as `positions[index] + sourceOrigin`.
    * Survey-frame, fixed for the cloud's life (float64-transform invariant).
@@ -55,4 +57,26 @@ export function georefFromPick(
   };
   if (crs !== undefined && crs.length > 0) georef.crs = crs;
   return georef;
+}
+
+/**
+ * A human-readable CRS label for an annotation's world frame, or undefined when
+ * the cloud declares none. Structural param so callers need no io/crs import;
+ * `CrsInfo.name` is already a best-effort label ("WGS 84 / UTM zone 12N").
+ */
+export function crsLabelFor(crs: { name?: string } | null | undefined): string | undefined {
+  const name = crs?.name;
+  return name !== undefined && name.length > 0 ? name : undefined;
+}
+
+/**
+ * The georef for a DETAILED static pick, or undefined for a streaming / missed
+ * pick. Folds the pick cloud's origin and CRS label so the annotation stores a
+ * survey coordinate; a caller with no detailed pick keeps only render-local.
+ */
+export function annotationGeorefFor(
+  pick: { cloud: AnnotationPickCloud; index: number } | null | undefined,
+): AnnotationGeoref | undefined {
+  if (!pick) return undefined;
+  return georefFromPick(pick.cloud, pick.index, crsLabelFor(pick.cloud.metadata?.crs));
 }

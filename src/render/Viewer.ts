@@ -229,7 +229,7 @@ import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
-import { georefFromPick } from './annotate/pickGeoref';
+import { annotationGeorefFor } from './annotate/pickGeoref';
 import type { SavedCameraState } from './annotate/types';
 import { LiveProbe } from './LiveProbe';
 import { downsampleToBudget } from '../process/voxelDownsample';
@@ -312,17 +312,6 @@ import type {
  * with `clipIntersection = true` so a fragment survives if it's outside ANY
  * face (i.e. outside the box). A three.js plane clips where n·p + c < 0.
  */
-/**
- * A human-readable CRS label for an annotation's world frame, or undefined when
- * the cloud declares none. Structural param so this stays free of the io/crs
- * import; `CrsInfo.name` is already a best-effort label ("WGS 84 / UTM zone 12N"
- * or "EPSG:32612").
- */
-function crsLabelFor(crs: { name?: string } | null | undefined): string | undefined {
-  const name = crs?.name;
-  return name !== undefined && name.length > 0 ? name : undefined;
-}
-
 function clipBoxPlanes(clip: ClipBox): THREE.Plane[] {
   const { min, max } = clip.box;
   const planes = [
@@ -5998,34 +5987,21 @@ export class Viewer {
   }
 
   /**
-   * While annotating, a canvas click picks the point under the cursor and
-   * opens the inline editor on a hit, or reports a clear miss message on a
-   * miss — never creating an invalid annotation. Marker clicks are handled by
-   * the overlay itself; a click while the editor is open is left to the editor.
+   * A click while annotating opens the editor on a hit, or reports a clear miss.
    */
   private _handleAnnotateClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
     if (this._annotate.isEditing) return;
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    // Prefer the DETAILED static pick — it carries the cloud + point index, so
-    // the annotation can store the SURVEY coordinate (`cloud.worldXYZ(index)`)
-    // and not just the small render-local anchor. Fall back to the streaming
-    // pick (same order as `_pickPoint`); a streaming hit has no cloud+index in
-    // this shape, so its annotation keeps only the render-local position and the
-    // report labels the frame honestly.
     const detailed = this._pickDetailed(ndcX, ndcY);
     const hit = detailed?.point ?? this._pickStreaming(ndcX, ndcY);
     if (hit) {
-      const crs = detailed ? crsLabelFor(detailed.cloud.metadata?.crs) : undefined;
-      const georef = detailed
-        ? georefFromPick(detailed.cloud, detailed.index, crs)
-        : undefined;
       this._annotate.beginDraft(
         { x: hit.x, y: hit.y, z: hit.z },
         e.clientX,
         e.clientY,
         this.getCameraState(),
-        georef,
+        annotationGeorefFor(detailed),
       );
     } else {
       this._annotate.pickMissed();
