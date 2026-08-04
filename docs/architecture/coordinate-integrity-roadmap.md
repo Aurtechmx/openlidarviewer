@@ -175,8 +175,9 @@ effective reference for coordinates, labels and embedded metadata.
    anchor from file origins instead of from origins it had itself written, and
    the anchor persists only while it still describes the current layer set.
 
-2. **Stop writing project offsets into Float32 vertices — data model DONE; two
-   display-frame folds browser-gated.** The destructive rebase is gone. Mounting
+2. **Stop writing project offsets into Float32 vertices — data model DONE; the
+   picking/measure display fold FIXED (#254); one renderer fold browser-gated.**
+   The destructive rebase is gone. Mounting
    no longer rewrites the Float32 buffer: `Viewer.setLayerPlacement` holds the
    layer's Float64 `sourceToProject` as data on the layer entry and sets
    `mesh.position`, and `positions` is written once by the loader and stays
@@ -200,7 +201,7 @@ effective reference for coordinates, labels and embedded metadata.
      the scene-bounds merge (`mergePlacedBounds`). Identity while mounting is
      off, so byte-identical to the pre-fold walk.
 
-   **Remaining, both browser-gated** (the P1 #1 acceptance battery, and
+   **Remaining, browser-gated** (the P1 #1 acceptance battery, and
    `float64-transform.md` step 6):
 
    1. The renderer's camera-relative / render-origin fold (mesh position →
@@ -209,19 +210,17 @@ effective reference for coordinates, labels and embedded metadata.
       (`PointCloud.rebaseQuantum`: ~0.02 mm at 1 km, ~1 mm at 100 km; geographic
       frames refused outright), so a precision refinement, not a correctness
       defect.
-   2. The display-coordinate fold for picking and cross-layer measurement.
-      `Viewer._infoForHit` (`src/render/Viewer.ts` ~6087) builds the inspector's
-      world coordinate as the PLACED (project-local) pick point plus
-      `sourceOrigin`, which double-counts the translation for a non-anchor
-      mounted layer — off by the full `sourceToProject` (2 km in the
-      `twoScanMount` fixture), because the placed point already carries the
-      offset. Correct only under the identity placement, which is why it is
-      invisible single-layer and while mounting stays effectively off. The fix is
-      to read `cloud.worldXYZ(index)` from the hit index rather than the placed
-      point; the same applies to a measured vertex on a non-anchor layer exported
-      through the active scan's `sourceOrigin`. Tracked as P1 #1 acceptance items
-      #4 (picking) and #5 (cross-layer measure); pinned by
-      `tests/frameWorldCoords.test.ts`.
+   2. The display-coordinate fold for picking and cross-layer measurement —
+      FIXED (#254). `Viewer._infoForHit` had built the inspector's world
+      coordinate as the PLACED (project-local) pick point plus `sourceOrigin`,
+      double-counting the translation for a non-anchor mounted layer (off by the
+      full `sourceToProject`, 2 km in the `twoScanMount` fixture) — correct only
+      under the identity placement, which is why it was invisible single-layer.
+      It now reads `cloud.worldXYZ(index)` from the hit index, correct mounted or
+      not, pinned by `tests/frameWorldCoords.test.ts`. Closes P1 #1 acceptance #4
+      (picking) and #5 (cross-layer measure) at the data-model level; a browser
+      e2e that picks a point on a mounted non-anchor tile is the remaining
+      evidence.
 
    `src/model/LayerSpatialState.ts` stays an unreferenced scaffold — the runtime
    adopted the `PointCloud.worldXYZ` / `projectXYZ` accessors and the
@@ -249,12 +248,22 @@ effective reference for coordinates, labels and embedded metadata.
 5. **Per-layer session spatial metadata**, replacing the single global
    origin/up-axis/CRS. A session must never silently redefine the active scan's
    CRS, and a CRS/axis/unit mismatch must be a conflict, not a disclosure.
-6. **Separate horizontal and vertical operations.** A horizontal conversion must
-   not pass Z through and let a downstream field call it `altMetres`. Heights need
-   an explicit value + unit + reference (ellipsoidal / orthometric / depth /
-   local / unknown).
-7. **Model datum realization and coordinate epoch**, and carry operation
-   provenance and accuracy on every transform result.
+6. **Separate horizontal and vertical operations — LARGELY DONE.**
+   `src/geo/height.ts` carries a height as an explicit value + optional metres
+   scale + reference (ellipsoidal / orthometric / depth / local / unknown), wired
+   into the inspector (`pointInfo.pointHeight`), scan report, measurement
+   confidence and `SpatialContext`. KML export refuses an authoritative altitude
+   unless the vertical reference is a proven orthometric-metric surface, and drops
+   the ordinate otherwise. Remaining: the converter still returns a bare `Vec3`
+   whose Z it documents as passed through unchanged — carrying a `HeightValue`
+   there would close the last bare-number path.
+7. **Model datum realization and coordinate epoch — provenance + realization
+   DONE.** Every reproject result carries transform provenance (#248) and the
+   converter method, and the registry preserves realization-specific datum names
+   (NAD83(2011), ITRF2008) rather than collapsing them to a generic base.
+   Remaining: model the coordinate epoch as a first-class field on the CRS /
+   transform result — a dynamic-datum coordinate is only fully specified with its
+   epoch — and, optionally, a numeric accuracy estimate on each result.
 8. **CHM must not carry an absolute vertical CRS — DONE (9b0ddf7).** The DTM and
    DSM keep the VerticalCSType stamp; the CHM, a height above ground, carries
    none.
