@@ -135,6 +135,15 @@ export interface DeriveClassificationOptions {
    */
   readonly minGroundSupport?: number;
   /**
+   * Minimum ground support for a tall smooth patch to be called a BUILDING —
+   * stricter than {@link minGroundSupport}. A false roof conjured from an
+   * extrapolated scan-edge DTM is worse than a false shrub, so a building
+   * demands firmer ground evidence; a tall smooth not-green candidate below this
+   * is left Unclassified (its height can't be trusted). Default 0.66. Set ≤
+   * minGroundSupport to disable the gate.
+   */
+  readonly buildingMinSupport?: number;
+  /**
    * Optional per-point LAS return number and total returns-per-pulse (same point
    * order as `positions`). When BOTH are present, a TALL point from a
    * MULTI-return pulse (`returnCount > 1`) is read as vegetation rather than a
@@ -194,6 +203,7 @@ export interface DeriveClassificationResult {
 const DEFAULTS = {
   vegGreennessMin: 0.06,
   minGroundSupport: 0.5,
+  buildingMinSupport: 0.66,
   maxObjectSizeM: 20,
   elevThresholdM: 0.3,
   slope: 0.15,
@@ -584,7 +594,16 @@ export function deriveClassification(
         // tall smooth patch that is multi-return is canopy, not a building.
         const vegReturn = useReturns && vegByReturn(i);
         if (planar && h >= o.buildingMinHagM && !green && !vegReturn) {
-          code = DERIVED_BUILDING;
+          // A building also demands firmer ground than vegetation: an
+          // extrapolated scan-edge DTM otherwise conjures tall smooth "roofs"
+          // out of boundary slopes. Below the gate the height can't be trusted,
+          // so leave it Unclassified rather than invent a structure.
+          if (s >= o.buildingMinSupport) {
+            code = DERIVED_BUILDING;
+          } else {
+            code = DERIVED_UNCLASSIFIED;
+            voidDowngraded++;
+          }
         } else if (h < o.lowVegBandM) {
           code = DERIVED_LOW_VEG;
         } else if (h < o.medVegBandM) {
