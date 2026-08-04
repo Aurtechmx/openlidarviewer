@@ -74,6 +74,36 @@ export function mapSheetEvidenceLine(claimId: string = MAP_SHEET_CLAIM): string 
 export type SheetSize = 'letter' | 'a4' | 'a3';
 export type SheetOrientation = 'portrait' | 'landscape';
 
+/**
+ * Purpose-driven product facts a map sheet DOCUMENTS (v0.5.9 §6.2). When present
+ * on {@link MapSheetInput}, the sheet gains a purpose line, a "This deliverable"
+ * settings box and (when {@link appendixRequired}) an internal-validation
+ * appendix — so two purposes produce visibly different sheets. These are
+ * PRESENTATION/product defaults only: nothing here raises an evidence level,
+ * hides a warning, or bypasses a gate (§6.3). Absent ⇒ the sheet is byte-for-byte
+ * the pre-purpose output.
+ */
+export interface MapSheetPurpose {
+  /** Human label ("Engineering Plan"). */
+  readonly label: string;
+  /** One-line purpose statement. */
+  readonly statement: string;
+  readonly analytical: boolean;
+  readonly cartographic: boolean;
+  readonly cartographicSmoothing: boolean;
+  /** Generalization tolerance (cells): ε = tolerance × cell. 0 = exact. */
+  readonly generalizeToleranceCells: number;
+  readonly indexEvery: number;
+  /** Only index contours are labelled on the map. */
+  readonly labelsIndexOnly: boolean;
+  readonly hillshade: boolean;
+  readonly hypsometricTint: boolean;
+  readonly allowExploratory: boolean;
+  readonly completePackage: boolean;
+  /** Draw the internal-validation appendix section. */
+  readonly appendixRequired: boolean;
+}
+
 export interface MapSheetInput {
   readonly model: ContourFeatureModel;
   readonly labels: ReadonlyArray<ContourLabel>;
@@ -135,6 +165,14 @@ export interface MapSheetInput {
    * 'z' (the survey formats a georeferenced sheet is built from).
    */
   readonly sceneUpAxis?: SceneUpAxis;
+  /**
+   * The active Contour Studio purpose + its deliverable facts. When present the
+   * sheet documents them (purpose line, settings box, optional validation
+   * appendix) and the on-map label mode honours {@link MapSheetPurpose.labelsIndexOnly}.
+   * Absent ⇒ the sheet is byte-for-byte the pre-purpose output (index-only
+   * labels), so non-Studio callers are unaffected.
+   */
+  readonly purpose?: MapSheetPurpose | null;
 }
 
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {
@@ -360,7 +398,133 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   page.drawRectangle({ x: frame.x - 3, y: frame.y - 3, width: frame.w + 6, height: frame.h + 6, borderColor: FRAME, borderWidth: 0.4 });
   page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
 
+  // ── purpose (Contour Studio deliverable) ───────────────────────────────────
+  // Gated on the optional purpose facts: absent ⇒ nothing drawn and no page
+  // added, so a non-Studio sheet is byte-for-byte the pre-purpose output. When
+  // present, a compact purpose line sits in the empty bottom-left footer (mirror
+  // of the software credit on the right), and a dedicated appendix page carries
+  // the purpose statement, the "This deliverable" settings box and — when the
+  // purpose requires it — the internal-validation appendix.
+  const purpose = input.purpose;
+  if (purpose) {
+    text(`Deliverable - ${purpose.label}`, M, M - 9, 6, bold, DIM);
+    drawPurposeAppendix(doc, purpose, input, font, bold);
+  }
+
   return doc.save();
+}
+
+/**
+ * The purpose appendix page. Documents WHAT the chosen purpose applied so two
+ * purposes produce visibly different deliverables:
+ *   - a purpose header + the one-line purpose statement;
+ *   - a "This deliverable" settings box (geometry, generalization, labels,
+ *     appearance, packaging);
+ *   - when {@link MapSheetPurpose.appendixRequired}, an internal-validation
+ *     appendix.
+ *
+ * Honesty (§6.3): every string here records a PRESENTATION/product default or
+ * the sheet's EXISTING internal validation state. Nothing raises an evidence
+ * level, asserts survey certification, or changes a gate decision — the appendix
+ * even says so in words.
+ */
+function drawPurposeAppendix(
+  doc: PDFDocument,
+  purpose: MapSheetPurpose,
+  input: MapSheetInput,
+  font: PDFFont,
+  bold: PDFFont,
+): void {
+  const size = input.sheet ?? 'letter';
+  const orient = input.orientation ?? 'portrait';
+  let [PW, PH] = SHEET_PT[size];
+  if (orient === 'landscape') [PW, PH] = [PH, PW];
+  const page = doc.addPage([PW, PH]);
+  const M = 36;
+  const text = (s: string, x: number, y: number, sz: number, f: PDFFont = font, c = INK): void => {
+    page.drawText(safe(s), { x, y, size: sz, font: f, color: c });
+  };
+
+  // Outer neatline — the same finished-sheet convention as page 1.
+  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
+
+  let y = PH - M - 20;
+  // ── header + purpose statement ─────────────────────────────────────────────
+  text(`Deliverable - ${purpose.label}`, M, y, 15, bold);
+  page.drawLine({ start: { x: M, y: y - 6 }, end: { x: PW - M, y: y - 6 }, thickness: 0.8, color: FRAME });
+  y -= 22;
+  const wrapW = PW - 2 * M;
+  const measure = (s: string, sz: number): number => font.widthOfTextAtSize(safe(s), sz);
+  for (const ln of wrapTextToWidth(purpose.statement, wrapW, 9, measure, 3)) {
+    text(ln, M, y, 9, font, DIM);
+    y -= 12;
+  }
+  y -= 14;
+
+  // ── "This deliverable" settings box ────────────────────────────────────────
+  const onOff = (b: boolean): string => (b ? 'on' : 'off');
+  const yesNo = (b: boolean): string => (b ? 'yes' : 'no');
+  const geometry =
+    purpose.analytical && purpose.cartographic
+      ? 'analytical + cartographic'
+      : purpose.analytical
+        ? 'analytical (exact)'
+        : purpose.cartographic
+          ? 'cartographic'
+          : 'none';
+  const generalization =
+    purpose.generalizeToleranceCells > 0
+      ? `e = ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker tolerance)`
+      : 'exact - no generalization';
+  const settings: Array<[string, string]> = [
+    ['Geometry', geometry],
+    ['Cartographic smoothing', onOff(purpose.cartographicSmoothing)],
+    ['Generalization', generalization],
+    ['Contour index interval', `every ${purpose.indexEvery}`],
+    ['Labels', purpose.labelsIndexOnly ? 'index only' : 'all contours'],
+    ['Hillshade', `${onOff(purpose.hillshade)} (documented; raster not rendered on this sheet)`],
+    ['Hypsometric tint', `${onOff(purpose.hypsometricTint)} (documented; raster not rendered on this sheet)`],
+    ['Exploratory output allowed', yesNo(purpose.allowExploratory)],
+    ['Complete package', yesNo(purpose.completePackage)],
+  ];
+  const boxTop = y;
+  const rowH = 15;
+  const boxH = 24 + settings.length * rowH;
+  page.drawRectangle({ x: M, y: boxTop - boxH, width: PW - 2 * M, height: boxH, color: WHITE, borderColor: FRAME, borderWidth: 0.6 });
+  text('This deliverable', M + 10, boxTop - 16, 10, bold, SEPIA_INDEX);
+  page.drawLine({ start: { x: M + 10, y: boxTop - 20 }, end: { x: PW - M - 10, y: boxTop - 20 }, thickness: 0.5, color: FRAME });
+  let ry = boxTop - 36;
+  for (const [k, v] of settings) {
+    text(k, M + 12, ry, 8, bold, DIM);
+    text(v, M + 190, ry, 8, font, INK);
+    ry -= rowH;
+  }
+  y = boxTop - boxH - 20;
+
+  // ── internal-validation appendix (only when the purpose requires it) ───────
+  // HONESTY (§6.3): this records the sheet's INTERNAL validation state — the same
+  // evidence-ladder verdict every export of this scan carries. It is explicitly
+  // NOT a survey certification and it does NOT raise the evidence level.
+  if (purpose.appendixRequired) {
+    text('Validation appendix', M, y, 12, bold);
+    page.drawLine({ start: { x: M, y: y - 5 }, end: { x: PW - M, y: y - 5 }, thickness: 0.6, color: FRAME });
+    y -= 22;
+    const warn = rgb(0.6, 0.2, 0.1);
+    // Lead with the honesty disclaimer so it can never read as a certification.
+    const lines: Array<[string, ReturnType<typeof rgb>]> = [
+      ['This appendix records OpenLiDARViewer\'s INTERNAL validation state for this surface. It is NOT a survey certification and does NOT raise the evidence level of this deliverable.', warn],
+      [mapSheetEvidenceNote(), INK],
+      [mapSheetEvidenceLine(), evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : warn],
+      [readinessNote(input.readiness ?? 'previewOnly'), input.readiness === 'ready' ? INK : warn],
+    ];
+    for (const [ln, c] of lines) {
+      for (const w of wrapTextToWidth(ln, wrapW, 9, measure, 4)) {
+        text(w, M, y, 9, font, c);
+        y -= 12;
+      }
+      y -= 6;
+    }
+  }
 }
 
 /** Contours + graticule + scale bar + north arrow inside the map frame. */
@@ -476,7 +640,9 @@ function drawMap(
         labelHeight: (sz + 2) / t.scale,
         charWidth: 3.7 / t.scale,
         minFeatureLenForScale: extent * 0.04,
-        indexOnly: true,
+        // Honour the purpose's label mode: 'index only' (the default and the
+        // pre-purpose behaviour) or every contour when the purpose labels all.
+        indexOnly: input.purpose?.labelsIndexOnly ?? true,
         maxLabels: 60,
         // Repeat labels along each index contour (~every 28% of the map extent)
         // so a long line reads its height wherever the eye lands — the printed
