@@ -2302,7 +2302,12 @@ export class AnalysePanel {
     const annoCheck = document.createElement('input');
     annoCheck.type = 'checkbox';
     annoCheck.className = 'olv-modal-check';
-    annoCheck.checked = false;
+    // Default ON when the scan actually has annotations, so a map sheet includes
+    // them without the user hunting for the toggle — the reported "annotations
+    // missing from the map sheet" was this box sitting unchecked. A scan with no
+    // annotations keeps the clean, byte-reproducible sheet: the option is
+    // disabled there, so `!disabled` leaves it off and unchanged.
+    annoCheck.checked = !annoState.disabled;
     annoCheck.disabled = annoState.disabled;
 
     const editable = el('div', { className: 'olv-modal-grid' });
