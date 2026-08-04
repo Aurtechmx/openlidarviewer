@@ -2183,9 +2183,9 @@ const measurePanel = new MeasurePanel({
   // controller, which clamps the values, converts the metre corridor back to
   // render units, and emits a change so the panel re-renders with the values
   // that actually shaped the new chart.
-  onProfileResample: (id, params) => {
-    viewer.measure.resampleProfile(id, params);
-  },
+  onProfileResample: (id, params) => viewer.measure.resampleProfile(id, params),
+  // Profile-station hover → highlight the matching scene dot; repaint only when the dot changed.
+  onStationHover: (id, i) => { if (viewer.measure.setHoveredStation(id, i)) viewer.requestFrame(); },
 });
 
 // B2 (v0.4.5) — feed the measure stack the SAME render-units → metres seam

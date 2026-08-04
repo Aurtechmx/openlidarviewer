@@ -36,6 +36,7 @@ const SNAPSHOT_CSS = [
   '.olv-measure-dot-pending{fill:none;stroke:#00b2ff;stroke-width:2.2}',
   '.olv-measure-dot-snap{fill:#00f0ff;stroke:#0a0e1a;stroke-width:1.65}',
   '.olv-measure-dot-station{fill:rgba(0,178,255,0.55);stroke:#0a0e1a;stroke-width:1}',
+  '.olv-measure-dot-station.is-active{fill:rgba(0,178,255,0.98);stroke:#0a0e1a;stroke-width:1.4}',
   '.olv-measure-snap-ring{fill:none;stroke:#00f0ff;stroke-width:1.4;stroke-dasharray:3 3;opacity:0.85}',
   '.olv-m-fill{fill:rgba(0,178,255,0.14);stroke:#00b2ff;stroke-width:1.45;stroke-dasharray:5 4}',
   '.olv-m-leader{stroke:rgba(0,178,255,0.5);stroke-width:1.1}',
@@ -59,6 +60,13 @@ export interface OverlayVertex {
   role: 'normal' | 'pending' | 'snap-target' | 'station';
   /** When set, this vertex is a draggable edit handle. */
   handle?: { mid: string; vi: number };
+  /**
+   * `station` role only — the profile-station marker currently coupled to a
+   * hovered chart tick / station-table row. Brightens the otherwise-dim dot
+   * via an `is-active` class. A pure display flag set by the controller from
+   * its single active-station index; the renderer never owns the state.
+   */
+  active?: boolean;
 }
 
 /** A line segment between two world points. */
@@ -208,7 +216,9 @@ export class MeasureOverlay {
               : vx.role === 'snap-target'
                 ? 'olv-measure-dot olv-measure-dot-snap'
                 : vx.role === 'station'
-                  ? 'olv-measure-dot olv-measure-dot-station'
+                  ? vx.active
+                    ? 'olv-measure-dot olv-measure-dot-station is-active'
+                    : 'olv-measure-dot olv-measure-dot-station'
                   : 'olv-measure-dot',
         }),
       );
