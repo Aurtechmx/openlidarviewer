@@ -57,6 +57,28 @@ export function summariseAnnotationCategories(
   return { total: items.length, byType, ordered };
 }
 
+/**
+ * Partition annotations into per-category buckets in display
+ * ({@link ANNOTATION_TYPES}) order, dropping empty categories. Input order is
+ * preserved WITHIN each bucket, so a caller that has already sorted its items
+ * keeps that order inside every group. Generic over anything carrying a `type`,
+ * so it serves both the full {@link Annotation} and the panel's summaries.
+ */
+export function groupByCategory<T extends { readonly type: AnnotationType }>(
+  items: readonly T[],
+): ReadonlyArray<{ readonly type: AnnotationType; readonly items: readonly T[] }> {
+  const buckets = new Map<AnnotationType, T[]>();
+  for (const it of items) {
+    const bucket = buckets.get(it.type);
+    if (bucket) bucket.push(it);
+    else buckets.set(it.type, [it]);
+  }
+  return ANNOTATION_TYPES.filter((t) => buckets.has(t)).map((t) => ({
+    type: t,
+    items: buckets.get(t)!,
+  }));
+}
+
 /** One spatial cluster of nearby annotations. */
 export interface AnnotationCluster {
   /** Mean of the members' local positions. */
