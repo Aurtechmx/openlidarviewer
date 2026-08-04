@@ -88,6 +88,16 @@ function drawWatermark(page: PDFPage, font: PDFFont, mark: string): void {
  */
 export async function buildContourStudioPdf(model: ContourPdfModel): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
+  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
+  // DisplayDocTitle flag so a screen reader / PDF viewer announces the
+  // deliverable title rather than the raw filename; setLanguage tags the
+  // document language. (A full tagged-structure tree is out of reach with this
+  // PDF library; these are the honest, supported accessibility hooks — see
+  // ReportPdfRenderer.)
+  const pdfTitle = model.titleBlock[0]?.trim() || 'Contour Studio Deliverable';
+  doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
+  doc.setAuthor('OpenLiDARViewer');
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
