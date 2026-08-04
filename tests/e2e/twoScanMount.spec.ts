@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
 
 /**
@@ -116,6 +118,22 @@ function parseCoords(text: string): [number, number, number] | null {
   if (!nums || nums.length < 3) return null;
   return [Number(nums[0]), Number(nums[1]), Number(nums[2])];
 }
+
+// Multi-layer mount is disabled pending the per-layer frame fixes (v0.6.4).
+// This spec is browser evidence that the mount produces a shared frame, so it
+// only applies while the mount is on. The flag is read from source rather than
+// imported from LayerService (which pulls lazyChunks + Vite-define globals the
+// Playwright transform does not provide); the gate re-arms itself when the flag
+// returns to true.
+const MULTI_LAYER_MOUNT_ENABLED = /MULTI_LAYER_MOUNT_ENABLED\s*=\s*true\b/.test(
+  readFileSync(resolve(process.cwd(), 'src/app/LayerService.ts'), 'utf8'),
+);
+test.beforeEach(() => {
+  test.skip(
+    !MULTI_LAYER_MOUNT_ENABLED,
+    'multi-layer mount disabled pending per-layer frame fixes (v0.6.4)',
+  );
+});
 
 test('two georeferenced tiles mount into one frame at their real separation', async ({ page }) => {
   const errors: string[] = [];

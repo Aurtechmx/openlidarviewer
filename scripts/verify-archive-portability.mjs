@@ -369,6 +369,15 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     // test-file.mjs prints `usage: test-file.mjs <file.test.ts ...>` and exits
     // non-zero with no arguments; it is a runner, not a check.
     'scripts/test-file.mjs',
+    // acquire-dataset.mjs reaches the network: its own header (lines 19–22)
+    // says it is "Deliberately NOT in the release gate. It reaches the
+    // network", fetching each `acquired` record's sourceUrl from an outside
+    // bucket. The register ships a real acquired record (OLV-DS-019), so it
+    // would be selected and fetched, and a remote failure or drift would red
+    // this gate offline for reasons unrelated to the archive. The offline
+    // verify-dataset-register.mjs (validation:datasets:verify) is the
+    // network-free hash/immutability check and still runs here.
+    'scripts/acquire-dataset.mjs',
   ]);
   const candidates = Object.entries(c.pkg.scripts)
     .filter(([, cmd]) => /^node scripts\/[\w.-]+\.mjs$/.test(cmd))
