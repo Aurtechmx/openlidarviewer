@@ -124,6 +124,13 @@ function liveSourceTransformPlugin() {
       /eptLaszipWorkerClient\.ts/,
       /terrainCoreWorkerClient\.ts/,
       /computeTerrainCoreAsync\.ts/,
+      // The classifier mirrors the terrain-core pair above: the client holds
+      // `new Worker(new URL('./deriveClassificationWorker.ts', …))` and the async
+      // bridge holds `import('./deriveClassificationWorkerClient')`. Obfuscating
+      // either scrambles the specifier, so the worker chunk never emits and the
+      // dynamic import 404s at runtime (`vite:preloadError` → a full reload).
+      /deriveClassificationWorkerClient\.ts/,
+      /deriveClassificationAsync\.ts/,
       /lazyChunks\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
@@ -276,11 +283,13 @@ function chunkEmissionGuard() {
     'copcWorker',
     'eptLaszipWorker',
     'terrainCoreWorker',
+    'deriveClassificationWorker',
     // Dynamic imports living inside OTHER excluded modules (not lazyChunks.ts):
     // `computeTerrainCoreAsync.ts` lazy-imports the terrain worker client;
     // `loadLas.ts` lazy-imports `lazDecode` (laz-perf JS + embedded WASM) so
     // uncompressed `.las` files never download the decompressor.
     'terrainCoreWorkerClient',
+    'deriveClassificationWorkerClient',
     'lazDecode',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them

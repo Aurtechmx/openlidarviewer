@@ -4,9 +4,11 @@ import {
   isAbortError,
   linkAbortSignals,
   handleRemoteEpt,
+  openStreamingCopc,
   type OpenStreamingDeps,
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
+import type { RangeSource } from '../src/io/range/RangeSource';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pure decisions the extraction exposes — the only remote-open logic that
@@ -236,5 +238,172 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
     expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
     // And the one-load flag is always released.
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// openStreamingCopc — transactional replacement (gate F4). A COPC candidate
+// that clears the range probe but fails to PARSE (StreamingPointCloud.open
+// rejects) must not tear the current scene down: the prior-scan teardown is
+// deferred to attachStreamingCloud's own build-then-detach, which never runs
+// when the open rejects. This is the seam that keeps a range-capable host
+// serving a malformed COPC from blanking the scene the user still has.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Build an OpenStreamingDeps for the COPC open path, wired far enough to run
+ * `openStreamingCopc` end to end. `openRejects` makes `StreamingPointCloud.open`
+ * reject (a malformed COPC that passed the range probe); the spies let the tests
+ * assert whether the exclusive-scene teardown (clear static layers + attach the
+ * replacement) ran — and it must run ONLY once the candidate has opened.
+ */
+function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boolean } = {}) {
+  // A structurally-complete streaming cloud so the post-open panel/inspector
+  // wiring runs without a stray undefined-access aborting the flow early.
+  const cloud = {
+    kind: 'copc' as const,
+    name: 'scan.copc.laz',
+    sourcePointCount: 1000,
+    metadata: {
+      header: { min: [0, 0, 0], max: [10, 10, 5], pointDataRecordFormat: 6 },
+      info: { spacing: 0.05 },
+    },
+    maxDepth: () => 4,
+    octree: { nodes: () => [] as unknown[] },
+    crs: () => null,
+  };
+  const openSpy = vi.fn(async () => {
+    if (over.openRejects) throw new Error('malformed COPC hierarchy');
+    return cloud;
+  });
+  const attachStreamingCloud = vi.fn(async () => {});
+  const viewer = {
+    ready: Promise.resolve(),
+    hasStreamingCloud: over.priorStreamingCloud ?? true,
+    attachStreamingCloud,
+    setMode: vi.fn(),
+    frameAll: vi.fn(),
+    availableImageExportModes: () => [],
+  } as unknown as Viewer;
+
+  const calls = {
+    openSpy,
+    attachStreamingCloud,
+    closeStreaming: vi.fn(),
+    clearOpenStaticLayers: vi.fn(),
+  };
+
+  const stub = <K extends keyof OpenStreamingDeps>(): OpenStreamingDeps[K] =>
+    vi.fn() as unknown as OpenStreamingDeps[K];
+
+  const deps: OpenStreamingDeps = {
+    loadStreamingPointCloud: vi.fn(async () => ({
+      StreamingPointCloud: { open: openSpy },
+    })) as unknown as OpenStreamingDeps['loadStreamingPointCloud'],
+    loadCopcWorkerClient: vi.fn(async () => ({
+      CopcWorkerClient: class {},
+    })) as unknown as OpenStreamingDeps['loadCopcWorkerClient'],
+    loadStreamingColors: vi.fn(async () => ({
+      availableStreamingModes: () => [],
+      defaultStreamingMode: () => 'rgb',
+    })) as unknown as OpenStreamingDeps['loadStreamingColors'],
+    loadEptLaszipWorkerClient: stub<'loadEptLaszipWorkerClient'>(),
+    loadEpt: stub<'loadEpt'>(),
+    loadDiagnostics: stub<'loadDiagnostics'>(),
+    viewerReady: Promise.resolve(),
+    getViewer: () => viewer,
+    isLoading: () => false,
+    setLoading: vi.fn(),
+    getStreamingBenchmark: () => null,
+    setStreamingBenchmark: vi.fn(),
+    setCoarseStableFired: vi.fn(),
+    getCopcDecoder: () => null,
+    setCopcDecoder: vi.fn(),
+    getEptLaszipDecoder: () => null,
+    setEptLaszipDecoder: vi.fn(),
+    getStreamingQuality: () => 'balanced',
+    setLastStreamingReportCloud: vi.fn(),
+    debug: false,
+    benchmark: false,
+    showToast: vi.fn(),
+    dropZone: {
+      setError: vi.fn(),
+      setOpening: vi.fn(),
+      setCancelHandler: vi.fn(),
+      setProgress: vi.fn(),
+    },
+    stage: { hideEmptyState: vi.fn() },
+    inspector: {
+      element: { classList: { remove: vi.fn() } },
+      setImageExportEnabled: vi.fn(),
+      setImageExportAvailability: vi.fn(),
+      setStreamingMode: vi.fn(),
+      setDetail: vi.fn(),
+      setReport: vi.fn(),
+    } as unknown as OpenStreamingDeps['inspector'],
+    streamingPanel: {
+      setPhase: vi.fn(),
+      show: vi.fn(),
+      setColorModes: vi.fn(),
+      setQuality: vi.fn(),
+      setSummary: vi.fn(),
+    } as unknown as OpenStreamingDeps['streamingPanel'],
+    classLegendPanel: {
+      setClasses: vi.fn(),
+      hide: vi.fn(),
+      getVisibility: () => ({ isFiltered: () => false }),
+    } as unknown as OpenStreamingDeps['classLegendPanel'],
+    inspectorCards: {
+      refreshProvenanceFromStreaming: vi.fn(),
+      refreshDatasetIntelligenceFromStreamingCloud: vi.fn(),
+    } as unknown as OpenStreamingDeps['inspectorCards'],
+    crsCoordinator: {
+      refreshCrsForStreamingCloud: vi.fn(),
+    } as unknown as OpenStreamingDeps['crsCoordinator'],
+    bookmarks: { clear: vi.fn() },
+    isPhone: () => false,
+    closeStreaming: calls.closeStreaming,
+    clearOpenStaticLayers: calls.clearOpenStaticLayers,
+    startStreamingStatusPolling: vi.fn(),
+    revealStreamingChrome: vi.fn(),
+    revealAnalysePanel: vi.fn(),
+    prewarmExportStudio: vi.fn(),
+    prewarmForUrl: vi.fn(),
+    refreshViewsUI: vi.fn(),
+    hideReclassifyUi: vi.fn(),
+    syncInspectClassScope: vi.fn(),
+    runStreamingModules: vi.fn(() => []),
+  };
+
+  return { deps, calls };
+}
+
+describe('openStreamingCopc — transactional replacement (gate F4)', () => {
+  it('leaves the prior streaming scene intact when the candidate fails to open', async () => {
+    const { deps, calls } = makeCopcDeps({ openRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/malformed COPC/i);
+
+    // The open was reached (so we're past the range probe) …
+    expect(calls.openSpy).toHaveBeenCalledTimes(1);
+    // … but it REJECTED, and the prior scene's teardown is deferred to
+    // attachStreamingCloud — which never ran. So nothing was torn down: no
+    // detach of the streaming cloud, no clearing of static layers.
+    expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+  });
+
+  it('tears down (attaches the replacement, clears static layers) only once the candidate opens', async () => {
+    const { deps, calls } = makeCopcDeps({ openRejects: false, priorStreamingCloud: true });
+    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
+
+    // A candidate that DOES open reaches the exclusive-scene teardown: static
+    // layers cleared and the replacement attached (attach's own detach retires
+    // the prior streaming cloud) — the "after the candidate opened" ordering.
+    expect(calls.openSpy).toHaveBeenCalledTimes(1);
+    expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
   });
 });

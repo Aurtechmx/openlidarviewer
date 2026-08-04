@@ -50,6 +50,7 @@ export function collectReleaseTruthProblems(read) {
 
   const KNOWN = `KNOWN_LIMITATIONS_v${version}.md`;
   const VALREPORT = `VALIDATION_REPORT_v${version}.md`;
+  const RELEASE_NOTES = `RELEASE_NOTES_v${version}.md`;
   const ARCHMAP = 'docs/architecture/architecture-map.md';
   const CLAIMS = 'docs/validation/claim-register.yaml';
   const EVTEST = 'tests/evidenceRegistry.test.ts';
@@ -239,6 +240,55 @@ export function collectReleaseTruthProblems(read) {
       ];
       for (const [label, re] of required) {
         if (!re.test(text)) problems.push(`${RELEASE_ASSETS} does not document the "${label}" release asset.`);
+      }
+    }
+  }
+
+  // ── 8. The shipped mount flag agrees with the current truth docs ──────────
+  // PR #238 flipped MULTI_LAYER_MOUNT_ENABLED on AFTER v0.6.3 tagged, while all
+  // three truth docs still say multi-layer mounting is disabled — a live
+  // contradiction the mount wording above never saw, because rule 2 only
+  // matched alpha/beta/rc phrasing. Assert the shipped flag and the docs
+  // describe the same state, in both directions.
+  {
+    const svc = read('src/app/LayerService.ts');
+    if (svc == null) {
+      problems.push('src/app/LayerService.ts unreadable — cannot verify the mount flag.');
+    } else {
+      const flagMatch = svc.match(/export const MULTI_LAYER_MOUNT_ENABLED\s*=\s*(true|false)\s*;/);
+      if (!flagMatch) {
+        problems.push('src/app/LayerService.ts has no "export const MULTI_LAYER_MOUNT_ENABLED = true|false;" declaration to check.');
+      } else {
+        const mountEnabled = flagMatch[1] === 'true';
+        // A doc asserting mounting is OFF. Bounded by sentence/line so the span
+        // stays within one claim.
+        const MOUNT_DISABLED_CLAIM =
+          /(?:multi-layer mount\w*|mounting)[^.\n]*\b(?:disabled|remains disabled)\b|MULTI_LAYER_MOUNT_ENABLED\s*=\s*false/i;
+        // A doc asserting mounting is ON. Requires "is" so "Turning mounting on
+        // waits …" and "mounting is off" do not read as an enabled claim.
+        const MOUNT_ENABLED_CLAIM =
+          /(?:multi-layer mount\w*|mounting)\s+is(?:\s+now)?\s+(?:enabled|on)\b|MULTI_LAYER_MOUNT_ENABLED\s*=\s*true/i;
+        for (const doc of [KNOWN, VALREPORT, RELEASE_NOTES]) {
+          const text = read(doc);
+          if (text == null) continue;
+          if (mountEnabled) {
+            const m = MOUNT_DISABLED_CLAIM.exec(text);
+            if (m) {
+              problems.push(
+                `${doc} says "${m[0]}", but src/app/LayerService.ts ships ` +
+                  `MULTI_LAYER_MOUNT_ENABLED = true. Re-disable the flag or correct the doc.`,
+              );
+            }
+          } else {
+            const m = MOUNT_ENABLED_CLAIM.exec(text);
+            if (m) {
+              problems.push(
+                `${doc} says "${m[0]}", but src/app/LayerService.ts ships ` +
+                  `MULTI_LAYER_MOUNT_ENABLED = false. Enable the flag or correct the doc.`,
+              );
+            }
+          }
+        }
       }
     }
   }
