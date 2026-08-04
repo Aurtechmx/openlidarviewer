@@ -121,10 +121,7 @@ import {
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
-import {
-  computeLassoVolume as computeLassoVolumeWalk,
-  stridePlacedPositions,
-} from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, stridePlacedPositions } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -2041,13 +2038,8 @@ export class Viewer {
    * anchors the frame at its own origin), so the existing single-scan path is
    * unchanged by construction.
    *
-   * The DATA never moves — only the mesh position — so every CPU consumer that
-   * reads `entry.cloud.positions` (source-local) against something in the
-   * project frame must fold this offset at its own boundary: picking via
-   * `rayOriginToLayer`/`placePoint`, the lasso volume via
-   * `stridePlacedPositions`, and the reclassify lasso / polygon and clip
-   * kept-count the same way. Camera framing and the orbit clamp fold it through
-   * `mergePlacedBounds` in `_visibleBoundingBox` / `_visibleCloudAabb`.
+   * The DATA never moves — only the mesh — so every CPU reader of
+   * `entry.cloud.positions` folds this offset at its own boundary.
    */
   /**
    * Set (or clear) a layer's Float64 placement in the shared project frame —
@@ -2549,14 +2541,8 @@ export class Viewer {
     const entry = this._clouds.get(id);
     if (!entry) return null;
     const total = (entry.cloud.positions.length / 3) | 0;
-    // The clip box lives in the project/render frame, but the cloud's positions
-    // are source-local for a non-anchor mounted layer. Fold the layer placement
-    // into the points (float64-transform.md step 3) so the kept-count is taken
-    // against the SAME frame the box — and the rendered cloud — sit in. Identity
-    // placement returns the source buffer untouched, so the anchor is unchanged.
-    const kept = this._clip
-      ? countKept(this._clip, stridePlacedPositions(entry.cloud.positions, 1, entry.placement))
-      : total;
+    const placed = stridePlacedPositions(entry.cloud.positions, 1, entry.placement);
+    const kept = this._clip ? countKept(this._clip, placed) : total;
     return { kept, total };
   }
 
@@ -3119,12 +3105,6 @@ export class Viewer {
     recordEdit(this._historyFor(id), buf, () => {
       result = applyPolygonReclassify({
         classification: buf,
-        // The polygon vertices are in local render (project) space, so the
-        // points must be too: fold the layer placement into the positions
-        // (float64-transform.md step 3) or a non-anchor mounted layer's raw
-        // source-local points project onto a shifted basis and the wrong points
-        // are rewritten. Identity placement returns the source buffer untouched;
-        // index order is 1:1 with `classification`, so the by-index edit aligns.
         positions: stridePlacedPositions(entry.cloud.positions, 1, entry.placement),
         polygon,
         newClass,
@@ -3163,12 +3143,6 @@ export class Viewer {
     this._camera.updateMatrixWorld(true);
     const projMatrix = this._camera.projectionMatrix;
     const viewMatrix = this._camera.matrixWorldInverse;
-    // The camera lives in the project/render frame, but `entry.cloud.positions`
-    // is source-local for a non-anchor mounted layer. Fold the layer placement
-    // into every point BEFORE the camera transform (float64-transform.md step 3,
-    // the same fold picking and the volume lasso use) so a point projects to the
-    // screen pixel it actually renders at. Identity placement is a `+0` no-op, so
-    // the anchor / single-scan path is unchanged.
     const off = accumulatorOffset(entry.placement);
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
@@ -3187,9 +3161,6 @@ export class Viewer {
     // and edit agree point-for-point. In-place filter — no hot-path allocation.
     const clip = this._clip;
     filterSelectionToVisible(indices, entry.cloud.positions, {
-      // The clip box is in the project/render frame; the positions handed to
-      // this predicate are source-local. Fold the same placement offset in so
-      // the visibility test matches the screen (float64-transform.md step 3).
       keepPoint: clip?.enabled
         ? (x, y, z) => clipKeepsPoint(clip, [x + off[0], y + off[1], z + off[2]])
         : undefined,
