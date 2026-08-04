@@ -102,57 +102,61 @@ when the CRS unit is not confirmed, and routes the display tier through one
 
 ---
 
-## Hardening in progress (verified backlog)
+## v0.6.4 hardening — status
 
-Each item below was verified against the code before listing. `[~]` = in
-progress this cycle, `[ ]` = queued.
+`[x]` merged to main · `[~]` implemented on a branch, pending merge · `[ ]` queued.
 
-### Interim safety
-- [~] Revert `MULTI_LAYER_MOUNT_ENABLED` to `false` until the per-layer frame
-  model lands. The mount shipped enabled (#238) but has the P0 coordinate bugs
-  below; reverting makes them unreachable and makes the truth docs accurate.
+### Landed on main
+- [x] Classifier worker chunk emitted in the obfuscated build — fixes the
+  auto-classify page-reload (#266)
+- [x] Archive self-verification no longer requires network (#267)
+- [x] Fail closed on unknown units at four surfaces: PDF footprint, COPC
+  spacing, Dataset Intelligence volume, session-summary schema comment (#268)
+- [x] Revert `MULTI_LAYER_MOUNT_ENABLED` to `false` + release-truth mount-flag
+  guard so flag and truth docs can't disagree (#269)
+- [x] Lasso reclassify / clip placement-aware, with a direct-placement unit test
+  — P0 (#270)
+- [x] Annotation `worldPosition` populated on create; report labels the frame;
+  `layerId`/`crs` round-trip — P1 (#271)
+- [x] Streaming replacement made transactional — gate F4 (#272)
+- [x] Return-number cue: multi-return ⇒ vegetation, not building (#263)
+- [x] Quick wins: export-drops-class-edits disclosure (#258), annotation panel
+  grouping (#260), colour-mode recommendation (#261), profile-station hover (#262)
 
-### P0 — coordinate integrity
+### Implemented on a branch, pending merge (currently in the test build)
+- [~] Auto-classify button + loading state (#265)
+- [~] Keep the natural colour after auto-classify — don't force the class palette
+  (matches a pre-classified scan; class-hide still filters)
+- [~] Contour Studio purpose picker declutter — compact pills, descriptions on hover
+- [~] Building support-gate: a tall smooth not-green candidate needs firmer
+  ground support (0.66) to be Building; below it → Unclassified, killing
+  scan-edge false roofs
+- [~] Purpose-aware map-sheet PDF: each purpose renders a deliverable line, a
+  "This deliverable" settings box, and a validation appendix when required
+
+### P0 still open — the mount re-enable gate
 - [ ] Multi-layer session frame model: `projectOrigin`, per-layer
-  `{sourceOrigin, sourceToProject, fingerprint}`, `layerId` on every
-  measurement + annotation, explicit frame/CRS metadata, `SESSION_VERSION`
-  bump. `exportGeoContext()` returns the active cloud's origin, not the project
-  origin — work saved over a non-anchor layer reloads displaced. Same defect
-  taints measurement GeoJSON/CSV export.
-- [ ] Lasso reclassify / clip placement-awareness: `reclassifyLasso` and
-  `clipKeptCount` run the CPU projection/predicate on raw source-local
-  positions with no `sourceToProject` fold, so a destructive edit hits the
-  wrong points of a mounted layer.
+  `{sourceOrigin, sourceToProject, fingerprint}`, `layerId` on measurements +
+  annotations, explicit frame/CRS metadata, `SESSION_VERSION` bump; fix
+  `exportGeoContext()` to return the project origin (it returns the active
+  cloud's, so work saved over a non-anchor layer reloads displaced — same defect
+  taints measurement GeoJSON/CSV export). Unreachable in production while the
+  mount is disabled; landing this is what lets the mount turn back on.
 
-### P1
-- [ ] Populate annotation `worldPosition` on create (retain the picked layer,
-  compute via `worldXYZ`, store `layerId` + frame/CRS) so reports print survey
-  coordinates, not render-local.
+### Tests + deferred
+- [ ] Multi-layer session round-trip regression (two layers, work on the
+  non-anchor, export, reopen alone, every point returns to the same world coord)
+- [ ] Mounted-layer lasso/clip 2 km-displacement browser regression (the fix
+  shipped with a unit test; the e2e is still queued)
+- [ ] Synthetic low-support building test for the support gate
+- [ ] Hillshade / hypsometric-tint raster on the purpose PDF (currently
+  documented in the settings box, not drawn)
 
-### Credibility — unit fail-closed (in flight)
-- [~] PDF footprint: fail closed on unknown units (discriminated union; omit
-  m / pts·m² / density grading, show source units + a warning)
-- [~] COPC spacing: unit-aware formatting instead of unconditional ` m`
-- [~] Dataset Intelligence volume: only grade density when horizontal + vertical
-  units are confirmed
-- [~] Session summary: correct the "metres" schema comment to source-unit extents
+### Re-enable the mount
+- [ ] After the frame model + regression tests land, flip
+  `MULTI_LAYER_MOUNT_ENABLED` back to `true` and un-skip the two-scan-mount e2e.
 
-### Integrity and hygiene (in flight)
-- [~] Release-truth lint: add a mount-flag guard so the flag and the truth docs
-  cannot disagree
-- [~] Archive self-verification: stop auto-running the network dataset
-  acquisition; keep the offline hash verifier
-
-### Robustness
-- [ ] Streaming replacement transactional (gate F4): move the teardown past
-  source validation so a malformed remote COPC can't blank the current scene
-
-### Tests to add
-- [ ] Multi-layer session round-trip (two layers, place work on the non-anchor,
-  export, reopen alone, verify every point returns to the same world coordinate)
-- [ ] Mounted-layer lasso/clip regression (edited layer displaced 2 km, select
-  visible points on the non-anchor layer, verify only those change)
-
-### Release
-- [ ] Version bump + regenerate validation/reproducibility/limitations evidence
-  + finalize these notes (after the above land and CI is green)
+### Release (last)
+- [ ] Bump 0.6.3 → 0.6.4, regenerate validation / reproducibility / limitations
+  evidence, and finalize these notes — after everything above is merged and CI
+  is green.
