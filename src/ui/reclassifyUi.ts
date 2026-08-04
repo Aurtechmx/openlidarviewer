@@ -40,7 +40,7 @@ export interface ReclassifyUiOptions {
    * Drives the primary "Auto-classify" button; the host owns the derive so the
    * panel stays a dumb view. Absent ⇒ the button is not shown.
    */
-  readonly onAutoClassify?: () => void;
+  readonly onAutoClassify?: () => Promise<void> | void;
 }
 
 export interface ReclassifyUi {
@@ -80,7 +80,21 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   if (autoBtn) {
     autoBtn.title =
       'Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade).';
-    autoBtn.addEventListener('click', () => opts.onAutoClassify?.());
+    // Reflect the in-flight derive: disable + spinner while it runs, restore on
+    // settle. Awaits the promise the host returns, so a slow whole-scan classify
+    // reads as working rather than frozen.
+    const autoLabel = autoBtn.textContent ?? 'Auto-classify scan';
+    autoBtn.addEventListener('click', () => {
+      if (autoBtn.disabled) return;
+      autoBtn.disabled = true;
+      autoBtn.classList.add('olv-reclass-auto-loading');
+      autoBtn.textContent = 'Classifying…';
+      void Promise.resolve(opts.onAutoClassify?.()).finally(() => {
+        autoBtn.disabled = false;
+        autoBtn.classList.remove('olv-reclass-auto-loading');
+        autoBtn.textContent = autoLabel;
+      });
+    });
   }
 
   const toast = (m: string): void => opts.onToast?.(m);

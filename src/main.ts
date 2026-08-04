@@ -2473,7 +2473,7 @@ async function showReclassifyUi(): Promise<void> {
         getViewer: () => viewer,
         getActiveId: () => scans.activeId,
         onToast: showLassoToast,
-        onAutoClassify: () => void runDeriveClassification(),
+        onAutoClassify: () => runDeriveClassification(),
       });
       classLegendPanel.element.after(ui.element);
       reclassifyUi = ui;
