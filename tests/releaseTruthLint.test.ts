@@ -101,4 +101,24 @@ describe('lint:release-truth', () => {
     const problems = problemsFor(withOverride(RELEASE_ASSETS, doc));
     expect(problems.some((p) => p.includes('sbom.json'))).toBe(true);
   });
+
+  const SERVICE = 'src/app/LayerService.ts';
+
+  it('fails when the mount flag is ON while the docs say mounting is disabled', () => {
+    // The real docs state mounting is disabled; flip only the shipped flag to
+    // true to reproduce the post-tag PR #238 contradiction.
+    const svc = realRead(SERVICE)!.replace(
+      'MULTI_LAYER_MOUNT_ENABLED = false',
+      'MULTI_LAYER_MOUNT_ENABLED = true',
+    );
+    const problems = problemsFor(withOverride(SERVICE, svc));
+    expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = true'))).toBe(true);
+  });
+
+  it('fails when the mount flag is OFF while a doc claims mounting is enabled', () => {
+    // Keep the real (disabled) flag; make one truth doc claim mounting is on.
+    const doc = realRead(KNOWN)! + '\n\nMulti-layer mounting is enabled in this release.\n';
+    const problems = problemsFor(withOverride(KNOWN, doc));
+    expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = false'))).toBe(true);
+  });
 });
