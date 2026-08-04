@@ -2965,9 +2965,9 @@ const exportPanel = new ExportPanel({
     viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
-  // A streaming snapshot exports only the resident (streamed-in) points, so it
-  // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
-  // the export status says "reduced view" and never reads as the full survey.
+  hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
+  // A streaming snapshot exports only resident points, so it is a reduced subset
+  // until the whole cloud lands — flagged so the status reads "reduced view".
   isReduced: () => {
     if (scans.activeId != null) return reducedById.get(scans.activeId) === true;
     // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's

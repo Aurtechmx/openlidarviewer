@@ -160,3 +160,33 @@ describe('buildExportSummary — CRS label + line', () => {
     expect(s.line).toContain('·');
   });
 });
+
+describe('buildExportSummary — full-res drops in-session class edits', () => {
+  const dropRe = /class(ification)? edits will NOT/i;
+
+  it('warns when a full-res export would drop in-session class edits', () => {
+    expect(
+      warns({ ...base, fullRes: true, hasClassEdits: true, includeClassification: true }),
+    ).toEqual(
+      expect.arrayContaining([expect.stringMatching(/warn:.*edits will NOT be included/i)]),
+    );
+  });
+
+  it('no warning without class edits', () => {
+    expect(warns({ ...base, fullRes: true, hasClassEdits: false })).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(dropRe)]),
+    );
+  });
+
+  it('no warning at display resolution (edits are kept)', () => {
+    expect(warns({ ...base, fullRes: false, hasClassEdits: true })).not.toEqual(
+      expect.arrayContaining([expect.stringMatching(dropRe)]),
+    );
+  });
+
+  it('no warning when classification is omitted from the export', () => {
+    expect(
+      warns({ ...base, fullRes: true, hasClassEdits: true, includeClassification: false }),
+    ).not.toEqual(expect.arrayContaining([expect.stringMatching(dropRe)]));
+  });
+});
