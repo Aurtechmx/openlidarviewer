@@ -2464,8 +2464,7 @@ async function showReclassifyUi(): Promise<void> {
     reclassifyUi.refresh();
     return;
   }
-  // Dedupe concurrent first-mounts (a classification-load show racing an
-  // explicit one) so the panel is only ever created once.
+  // Dedupe concurrent first-mounts so the panel is only ever created once.
   if (!reclassifyUiLoading) {
     reclassifyUiLoading = (async () => {
       const { createReclassifyUi } = await loadReclassifyUi();
@@ -2474,6 +2473,7 @@ async function showReclassifyUi(): Promise<void> {
         getViewer: () => viewer,
         getActiveId: () => scans.activeId,
         onToast: showLassoToast,
+        onAutoClassify: () => void runDeriveClassification(),
       });
       classLegendPanel.element.after(ui.element);
       reclassifyUi = ui;

@@ -35,6 +35,12 @@ export interface ReclassifyUiOptions {
   readonly getViewer: () => Viewer | null;
   readonly getActiveId: () => string | null;
   readonly onToast?: (msg: string) => void;
+  /**
+   * Run the whole-scan heuristic classifier (ground / vegetation / building).
+   * Drives the primary "Auto-classify" button; the host owns the derive so the
+   * panel stays a dumb view. Absent ⇒ the button is not shown.
+   */
+  readonly onAutoClassify?: () => void;
 }
 
 export interface ReclassifyUi {
@@ -66,6 +72,16 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm', 'olv-reclass-go');
   const undoBtn = mkBtn('Undo', 'reclass-undo');
   const redoBtn = mkBtn('Redo', 'reclass-redo');
+  // Primary action: derive a whole-scan classification (heuristic). Only built
+  // when the host wires a handler, so the panel degrades cleanly without it.
+  const autoBtn = opts.onAutoClassify
+    ? mkBtn('Auto-classify scan', 'reclass-auto', 'olv-reclass-auto')
+    : null;
+  if (autoBtn) {
+    autoBtn.title =
+      'Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade).';
+    autoBtn.addEventListener('click', () => opts.onAutoClassify?.());
+  }
 
   const toast = (m: string): void => opts.onToast?.(m);
 
@@ -130,6 +146,8 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   // with the wide select (which clipped it in the cramped left dock).
   const element = el('div', { className: 'olv-reclass-panel' }, [
     el('div', { className: 'olv-reclass-head', text: 'Edit classes' }),
+    // Primary: derive the whole scan. Manual class + lasso follow it.
+    ...(autoBtn ? [autoBtn] : []),
     select,
     armBtn,
     el('div', { className: 'olv-reclass-actions' }, [undoBtn, redoBtn]),
