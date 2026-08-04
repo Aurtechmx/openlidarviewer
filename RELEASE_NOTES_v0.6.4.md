@@ -106,6 +106,13 @@ when the CRS unit is not confirmed, and routes the display tier through one
 
 `[x]` merged to main · `[~]` implemented on a branch, pending merge · `[ ]` queued.
 
+**Completion: ~72%.** 13 of 25 tracked items merged, 5 more in the merge cascade
+(auto-merging), 7 queued. By area: hardening and quick wins 100% (merged);
+test-feedback fixes ~100% (the cascade is landing them now); AI-discoverability
+100%; the coordinate-integrity P0, the regression tests, and the release 0%. The
+remaining ~28% is weighted toward the session frame model (the single largest
+item) and the release evidence regeneration, so effort-to-go exceeds the count.
+
 ### Landed on main
 - [x] Classifier worker chunk emitted in the obfuscated build — fixes the
   auto-classify page-reload (#266)
@@ -122,8 +129,10 @@ when the CRS unit is not confirmed, and routes the display tier through one
 - [x] Return-number cue: multi-return ⇒ vegetation, not building (#263)
 - [x] Quick wins: export-drops-class-edits disclosure (#258), annotation panel
   grouping (#260), colour-mode recommendation (#261), profile-station hover (#262)
+- [x] AI-discoverability: `llms.txt` + `robots.txt` for LLM crawlers, honest
+  about the heuristic classifier and unit fail-closed behaviour (#273)
 
-### Implemented on a branch, pending merge (currently in the test build)
+### In the merge cascade, auto-merging (test-confirmed)
 - [~] Auto-classify button + loading state (#265)
 - [~] Keep the natural colour after auto-classify — don't force the class palette
   (matches a pre-classified scan; class-hide still filters)
