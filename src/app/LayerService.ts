@@ -76,25 +76,24 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
 /**
  * Whether layers are physically rebased onto a shared project origin.
  *
- * ON since the mount became non-destructive. It is a Float64 placement
- * transform (`Viewer.setLayerPlacement`), not a rewrite of the position array:
- * the source vertices never move, rendering places the mesh by its transform,
- * each layer's CPU work reads its own source-local frame (per-cloud origin),
- * and combined estimators run only across `verified` layers. The precision
- * gate above still refuses a placement it cannot represent, and an unaligned
- * or foreign-CRS layer carries no placement and stays in its own frame, so
- * `mounted: false` still makes the combined estimators refuse rather than
- * average unlike frames.
+ * DISABLED pending the multi-layer per-layer-frame fixes. The mount mechanism
+ * is a Float64 placement transform (`Viewer.setLayerPlacement`), not a rewrite
+ * of the position array: the source vertices never move, rendering places the
+ * mesh by its transform, each layer's CPU work reads its own source-local frame
+ * (per-cloud origin), and combined estimators run only across `verified`
+ * layers. But a non-anchor mounted layer still corrupts data — lasso reclassify
+ * edits the wrong points, and session and measurement export write the wrong
+ * coordinates — because those paths do not yet read each layer's own frame.
+ * Until that per-layer-frame model lands, mounting stays off, which keeps the
+ * three v0.6.3 truth docs accurate and the corruption unreachable.
  *
- * The remaining Float64 work — holding `sourceToProject` beside source-local
- * vertices for every `.positions` consumer — is coordinate-integrity roadmap
- * P1 item 2. It does not gate this: the placement folds at the render, bounds,
- * picking and elevation-window boundaries the mount actually crosses, which is
- * what the two-layer placement e2e (`gate2-origin-a` / `gate2-origin-b`)
- * confirms. Single-layer work is unaffected: a lone layer's placement is the
- * identity.
+ * The precision gate above still refuses a placement it cannot represent, and
+ * an unaligned or foreign-CRS layer carries no placement and stays in its own
+ * frame, so `mounted: false` still makes the combined estimators refuse rather
+ * than average unlike frames. Single-layer work is unaffected: a lone layer's
+ * placement is the identity.
  */
-export const MULTI_LAYER_MOUNT_ENABLED = true;
+export const MULTI_LAYER_MOUNT_ENABLED = false;
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that

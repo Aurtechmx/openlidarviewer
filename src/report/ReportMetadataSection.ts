@@ -30,6 +30,18 @@ export interface MetadataInputs {
   readonly crsName?: string;
   readonly crsUnit?: string;
   /**
+   * Whether the extent figures above are in confirmed metres. Absent (or
+   * `'confirmed'`) means `width`/`depth`/`height` are metres and `density` is
+   * pts·m⁻² — the summary is byte-identical to the pre-feature output. When
+   * `'unknown'`, the CRS declares no real linear unit: `width`/`depth`/`height`
+   * are RAW SOURCE-UNIT spans and `density` is NaN, so the summary prints the
+   * extents with a "source units" suffix, omits the density row, and adds a
+   * visible "units unconfirmed" warning rather than stamping metres on feet /
+   * degrees. Set by `footprintToMetadataExtent` behind the `isLinearUnitKnown`
+   * gate.
+   */
+  readonly extentUnitStatus?: 'confirmed' | 'unknown';
+  /**
    * Active class-filter scope stamp — e.g. `"Ground + Building · 2 of 5
    * classes"`. Present ONLY while a class filter narrows the live view at
    * export time. When set, the dataset-summary table prepends an honesty row
@@ -66,6 +78,16 @@ function formatMetres(m: number): string {
   if (m >= 10) return `${m.toFixed(1)} m`;
   if (m >= 1) return `${m.toFixed(2)} m`;
   return `${(m * 100).toFixed(1)} cm`;
+}
+
+/**
+ * Format a raw source-unit extent — used when the CRS declares no real linear
+ * unit. No km/m/cm scaling and no "m" label: the magnitude's unit is unknown,
+ * so the value is shown verbatim with an explicit "(source units)" suffix.
+ */
+function formatSourceUnits(n: number): string {
+  if (!Number.isFinite(n)) return 'unknown';
+  return `${n.toFixed(1)} (source units)`;
 }
 
 /** Pretty-format an integer point count with locale separators. */
@@ -126,11 +148,29 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       value: `${formatCompactCount(sr.points)} of ${formatCompactCount(total)} pts${pctPart} — streaming preview`,
     });
   }
-  rows.push(
-    { label: 'Width',  value: formatMetres(inputs.width) },
-    { label: 'Depth',  value: formatMetres(inputs.depth) },
-    { label: 'Height', value: formatMetres(inputs.height) },
-  );
+  // FAIL CLOSED on an unconfirmed linear unit. When the CRS declares no real
+  // linear unit the extents are raw source-unit spans, not metres — a warning
+  // row discloses that, the extents carry a "(source units)" suffix instead of
+  // "m", and the density row is omitted (density is NaN, caught below). A
+  // confirmed unit (or the absent default) is byte-identical to before.
+  const unitsUnconfirmed = inputs.extentUnitStatus === 'unknown';
+  if (unitsUnconfirmed) {
+    rows.push({
+      label: 'Units',
+      value: 'Unconfirmed — extents in source units',
+    });
+    rows.push(
+      { label: 'Width',  value: formatSourceUnits(inputs.width) },
+      { label: 'Depth',  value: formatSourceUnits(inputs.depth) },
+      { label: 'Height', value: formatSourceUnits(inputs.height) },
+    );
+  } else {
+    rows.push(
+      { label: 'Width',  value: formatMetres(inputs.width) },
+      { label: 'Depth',  value: formatMetres(inputs.depth) },
+      { label: 'Height', value: formatMetres(inputs.height) },
+    );
+  }
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     // One decimal — same as the Inspection-summary finding and the on-screen
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
@@ -142,7 +182,9 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   if (inputs.crsName) {
     rows.push({ label: 'CRS',   value: inputs.crsName });
   }
-  if (inputs.crsUnit) {
+  // The dedicated "Units — Unconfirmed …" warning above already states the unit
+  // status, so skip the redundant `crsUnit` row (which would read "unknown").
+  if (!unitsUnconfirmed && inputs.crsUnit) {
     rows.push({ label: 'Units', value: inputs.crsUnit });
   }
   return rows;

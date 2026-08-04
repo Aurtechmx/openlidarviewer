@@ -121,7 +121,7 @@ import {
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
-import { computeLassoVolume as computeLassoVolumeWalk } from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, stridePlacedPositions } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -229,6 +229,7 @@ import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
+import { annotationGeorefFor } from './annotate/pickGeoref';
 import type { SavedCameraState } from './annotate/types';
 import { LiveProbe } from './LiveProbe';
 import { downsampleToBudget } from '../process/voxelDownsample';
@@ -2038,10 +2039,8 @@ export class Viewer {
    * anchors the frame at its own origin), so the existing single-scan path is
    * unchanged by construction.
    *
-   * Picking needs no changes — the raycaster works in world space, so hits on
-   * an offset mesh already come back project-local. Camera framing and the
-   * orbit clamp fold the same offset in `_visibleBoundingBox` /
-   * `_visibleCloudAabb`.
+   * The DATA never moves — only the mesh — so every CPU reader of
+   * `entry.cloud.positions` folds this offset at its own boundary.
    */
   /**
    * Set (or clear) a layer's Float64 placement in the shared project frame —
@@ -2543,7 +2542,8 @@ export class Viewer {
     const entry = this._clouds.get(id);
     if (!entry) return null;
     const total = (entry.cloud.positions.length / 3) | 0;
-    const kept = this._clip ? countKept(this._clip, entry.cloud.positions) : total;
+    const placed = stridePlacedPositions(entry.cloud.positions, 1, entry.placement);
+    const kept = this._clip ? countKept(this._clip, placed) : total;
     return { kept, total };
   }
 
@@ -3106,7 +3106,7 @@ export class Viewer {
     recordEdit(this._historyFor(id), buf, () => {
       result = applyPolygonReclassify({
         classification: buf,
-        positions: entry.cloud.positions,
+        positions: stridePlacedPositions(entry.cloud.positions, 1, entry.placement),
         polygon,
         newClass,
         includeIf,
@@ -3144,9 +3144,10 @@ export class Viewer {
     this._camera.updateMatrixWorld(true);
     const projMatrix = this._camera.projectionMatrix;
     const viewMatrix = this._camera.matrixWorldInverse;
+    const off = accumulatorOffset(entry.placement);
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
-      tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
+      tmp.set(x + off[0], y + off[1], z + off[2]).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
       if (tmp.z < -1 || tmp.z > 1) return null;
       return { x: (tmp.x * 0.5 + 0.5) * w, y: (1 - (tmp.y * 0.5 + 0.5)) * h };
     };
@@ -3162,7 +3163,7 @@ export class Viewer {
     const clip = this._clip;
     filterSelectionToVisible(indices, entry.cloud.positions, {
       keepPoint: clip?.enabled
-        ? (x, y, z) => clipKeepsPoint(clip, [x, y, z])
+        ? (x, y, z) => clipKeepsPoint(clip, [x + off[0], y + off[1], z + off[2]])
         : undefined,
       acceptIndex: this._pickAccept(
         entry.cloud.positions,
@@ -5986,22 +5987,21 @@ export class Viewer {
   }
 
   /**
-   * While annotating, a canvas click picks the point under the cursor and
-   * opens the inline editor on a hit, or reports a clear miss message on a
-   * miss — never creating an invalid annotation. Marker clicks are handled by
-   * the overlay itself; a click while the editor is open is left to the editor.
+   * A click while annotating opens the editor on a hit, or reports a clear miss.
    */
   private _handleAnnotateClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
     if (this._annotate.isEditing) return;
     const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
-    const hit = this._pickPoint(ndcX, ndcY);
+    const detailed = this._pickDetailed(ndcX, ndcY);
+    const hit = detailed?.point ?? this._pickStreaming(ndcX, ndcY);
     if (hit) {
       this._annotate.beginDraft(
         { x: hit.x, y: hit.y, z: hit.z },
         e.clientX,
         e.clientY,
         this.getCameraState(),
+        annotationGeorefFor(detailed),
       );
     } else {
       this._annotate.pickMissed();
