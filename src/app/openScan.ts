@@ -25,7 +25,8 @@ import { describeLoadError } from '../io/loadErrors';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
-import { defaultMode, availableModes } from '../render/colorModes';
+import { availableModes } from '../render/colorModes';
+import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 
 import type { LoadResult, LoadCallbacks, LoadOptions } from '../io/loadFile';
@@ -292,7 +293,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     viewer.frameAll();
     const firstRenderMs = performance.now() - renderStartedAt;
 
-    const mode = defaultMode(result.cloud);
+    // Colour the fresh scan by the mode its attributes best support (RGB →
+    // classification → intensity → elevation), gated so it never picks a mode
+    // the cloud can't render. The rail syncs off `mode` below, so this single
+    // seam keeps the render and the COLOR BY chips in step.
+    const mode = recommendColorMode(result.cloud).mode;
     deps.setCurrentColorMode(mode);
     viewer.setColorMode(id, mode);
 
