@@ -74,6 +74,13 @@ export interface ExportPanelCallbacks {
   isReduced: () => boolean;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
+  /**
+   * Whether the active cloud has in-session classification edits (manual
+   * reclassify) that live only in the display-resolution buffer. Drives the
+   * full-resolution disclosure — a full-res export re-decodes the original file
+   * and drops them.
+   */
+  hasClassEdits?: () => boolean;
   /** Count of placed measurements — drives the Products lane's enablement. */
   measurementCount?: () => number;
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
@@ -387,6 +394,7 @@ export class ExportPanel {
       includeClassification: this._includeClass,
       viewDecimated: this._cb.isReduced(),
       fullRes: this._fullRes,
+      hasClassEdits: this._cb.hasClassEdits?.() ?? false,
       gzip: this._gzip,
     };
     const s = buildExportSummary(input);
