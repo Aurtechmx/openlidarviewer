@@ -91,6 +91,7 @@ import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
 import { toClassBuffer } from './render/class/classBuffer';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
+import { classifierCues } from './render/class/classifierCues';
 import {
   classificationCoverage,
   type DeriveClassificationOptions,
@@ -1693,8 +1694,7 @@ async function runDeriveClassification(): Promise<void> {
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
-  const deriveOptions: DeriveClassificationOptions =
-    cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {};
+  const deriveOptions = classifierCues(cloud);
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
@@ -1780,7 +1780,7 @@ async function runFillUnclassified(): Promise<void> {
   // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
   const deriveOptions: DeriveClassificationOptions = {
     existingClassification: cloud.classification,
-    ...(cloud.colors && cloud.colors.length > 0 ? { colors: cloud.colors } : {}),
+    ...classifierCues(cloud),
   };
 
   classifyRunning = true;
@@ -2183,9 +2183,9 @@ const measurePanel = new MeasurePanel({
   // controller, which clamps the values, converts the metre corridor back to
   // render units, and emits a change so the panel re-renders with the values
   // that actually shaped the new chart.
-  onProfileResample: (id, params) => {
-    viewer.measure.resampleProfile(id, params);
-  },
+  onProfileResample: (id, params) => viewer.measure.resampleProfile(id, params),
+  // Profile-station hover → highlight the matching scene dot; repaint only when the dot changed.
+  onStationHover: (id, i) => { if (viewer.measure.setHoveredStation(id, i)) viewer.requestFrame(); },
 });
 
 // B2 (v0.4.5) — feed the measure stack the SAME render-units → metres seam
@@ -2965,9 +2965,9 @@ const exportPanel = new ExportPanel({
     viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
   getActiveClip: () => viewer.getClip(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
-  // A streaming snapshot exports only the resident (streamed-in) points, so it
-  // is a reduced subset whenever the whole cloud hasn't landed yet — flag it so
-  // the export status says "reduced view" and never reads as the full survey.
+  hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
+  // A streaming snapshot exports only resident points, so it is a reduced subset
+  // until the whole cloud lands — flagged so the status reads "reduced view".
   isReduced: () => {
     if (scans.activeId != null) return reducedById.get(scans.activeId) === true;
     // `viewer` is null until the lazy Viewer chunk resolves, and ExportPanel's
@@ -5307,13 +5307,11 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // a host that cannot stream reports a precise reason instead of stalling.
     await range.probe(controller.signal);
     if (controller.signal.aborted) throw new LoadCancelledError();
-    // TODO(gate F4): closes the prior scan before openStreamingCopc's own fetch,
-    // so a malformed COPC that passes the range probe still blanks the scene.
-    // Deferring needs the teardown moved into the shared openStreamingCopc (the
-    // local path relies on attach's internal detach) — a larger refactor. The
-    // probe above already guards the common remote failures (CORS / ranges / 404).
-    if (viewer.hasStreamingCloud) closeStreaming();
+    // Prior-scene teardown is transactional (gate F4): openStreamingCopc defers
+    // it to attachStreamingCloud (build replacement, then detach prior) — a
+    // malformed COPC that fails to open leaves the scene intact, as local does.
     await openStreamingCopc(range, remoteCopcName(url), controller.signal);
+    streamingFilterSeeded = false; // fresh scan re-seeds its own filter extents
     dropZone.setCancelHandler(null);
     dropZone.setProgress(null);
   } catch (err) {
@@ -5326,8 +5324,9 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
       recordUsage('error', 'load');
       dropZone.setError(describeRemoteCopcError(err, url));
-      // A remote open that failed mid-flight leaves no scan — tidy up.
-      closeStreaming();
+      // Transactional: a failed open left the prior scene untouched, so keep it
+      // — only tidy the streaming chrome when no streaming scene remains.
+      if (!viewer.hasStreamingCloud) closeStreaming();
     }
   } finally {
     unlinkAbort();

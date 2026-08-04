@@ -4,6 +4,7 @@ import {
   clusterAnnotations,
   suggestCellSize,
   describeAnnotationGroups,
+  groupByCategory,
   type ClusterableAnnotation,
 } from '../src/render/annotate/annotationClustering';
 import type { AnnotationType } from '../src/render/annotate/types';
@@ -94,6 +95,26 @@ describe('describeAnnotationGroups', () => {
 
   it('uses singular nouns for a single annotation', () => {
     expect(describeAnnotationGroups([a('issue', 0, 0)])).toBe('1 annotation');
+  });
+});
+
+describe('groupByCategory', () => {
+  it('partitions into non-empty buckets in display order, preserving within-group order', () => {
+    const items = [
+      a('issue', 1, 0), a('note', 2, 0), a('issue', 3, 0), a('warning', 4, 0), a('note', 5, 0),
+    ];
+    const groups = groupByCategory(items);
+    // Display order note, info, warning, issue — info is absent, so dropped.
+    expect(groups.map((g) => g.type)).toEqual(['note', 'warning', 'issue']);
+    // Input order is kept inside each bucket (notes captured at x 2 then 5).
+    expect(groups[0].items.map((i) => i.localPosition.x)).toEqual([2, 5]);
+    expect(groups[2].items.map((i) => i.localPosition.x)).toEqual([1, 3]);
+    // Every item lands in exactly one bucket.
+    expect(groups.reduce((n, g) => n + g.items.length, 0)).toBe(items.length);
+  });
+
+  it('returns an empty array for no items', () => {
+    expect(groupByCategory([])).toEqual([]);
   });
 });
 

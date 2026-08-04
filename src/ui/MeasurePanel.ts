@@ -272,6 +272,56 @@ export interface MeasurePanelCallbacks {
    * sampler controls are simply not rendered.
    */
   onProfileResample?: (id: string, params: ProfileResampleParams) => void;
+  /**
+   * Highlight (or clear) one scene profile-station dot as the reader hovers a
+   * profile-chart tick or station-table row. `stationIndex` indexes the dots of
+   * measurement `id` in `MeasurementSummary.profileStationChainages` order;
+   * `null` (with either argument) clears the highlight. Purely a display
+   * coupling — the host forwards it to the controller and requests a frame.
+   * Optional: without it the profile panel renders exactly as before, inert.
+   */
+  onStationHover?: (id: string | null, stationIndex: number | null) => void;
+}
+
+/**
+ * Coupling passed into the profile builders so a hovered chart tick / table
+ * row can brighten the matching scene dot. `stationChainages` are the scene
+ * dots' chainages (metres, dot order); `notify(i)` reports the resolved dot
+ * index (or null on leave) up to the panel's `onStationHover`.
+ */
+interface StationHoverCoupling {
+  readonly stationChainages: readonly number[];
+  readonly notify: (stationIndex: number | null) => void;
+}
+
+/** The scene dot whose chainage is nearest `target` (metres). Callers guard emptiness. */
+function nearestStationIndex(stationChainages: readonly number[], target: number): number {
+  let best = 0;
+  let bestDist = Infinity;
+  for (let i = 0; i < stationChainages.length; i++) {
+    const d = Math.abs(stationChainages[i] - target);
+    if (d < bestDist) {
+      bestDist = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Attach a symmetric hover coupling to one element: pointer-enter reports
+ * `stationIndex`, pointer-leave clears it. `mouseenter`/`mouseleave` don't
+ * bubble, so a leave always pairs with its own enter and the highlight can't
+ * get stuck when the pointer crosses between adjacent targets. The nodes are
+ * discarded whole on the next `_renderList`, taking these listeners with them.
+ */
+function bindStationHover(
+  node: EventTarget,
+  stationIndex: number,
+  coupling: StationHoverCoupling,
+): void {
+  node.addEventListener('mouseenter', () => coupling.notify(stationIndex));
+  node.addEventListener('mouseleave', () => coupling.notify(null));
 }
 
 export class MeasurePanel {
@@ -666,6 +716,10 @@ export class MeasurePanel {
 
   /** Show or hide the panel. */
   setVisible(visible: boolean): void {
+    // Hiding the panel can strand a station hover (no `mouseleave` fires on a
+    // now-hidden row), which would leave a scene dot lit; clear it on the way
+    // out. The host no-ops when nothing was highlighted.
+    if (!visible) this._cb.onStationHover?.(null, null);
     this.element.classList.toggle('olv-hidden', !visible);
   }
 
@@ -1018,6 +1072,11 @@ export class MeasurePanel {
 
   /** Internal — rebuild the list DOM from `_summaries`. */
   private _renderList(): void {
+    // Drop any live station-hover highlight BEFORE the old chart/table nodes are
+    // replaced: their `mouseleave` will never fire once detached, so without
+    // this an in-flight hover would leave a scene dot lit indefinitely. The
+    // host no-ops (and skips the frame) when nothing was highlighted.
+    this._cb.onStationHover?.(null, null);
     // Disconnect any ResizeObservers attached to the old chart
     // nodes BEFORE we drop those nodes on the floor. Otherwise
     // the observers keep their callbacks (and the chart elements
@@ -1132,7 +1191,17 @@ export class MeasurePanel {
         ? storedVex
         : 1;
       const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
-      const chart = renderProfileChart(s.profileChart, vex, system);
+      // Hover coupling: a chart tick or table row highlights the scene dot at
+      // the nearest chainage. Built once and shared by the chart and the table
+      // so both speak the same dot index. Absent (inert) when the host wired no
+      // `onStationHover`, or the profile has no intermediate station dots.
+      const onStationHover = this._cb.onStationHover;
+      const stationChainages = s.profileStationChainages ?? [];
+      const stationCoupling: StationHoverCoupling | undefined =
+        onStationHover && stationChainages.length > 0
+          ? { stationChainages, notify: (i) => onStationHover(s.id, i) }
+          : undefined;
+      const chart = renderProfileChart(s.profileChart, vex, system, stationCoupling);
       // The chart is where the eye lands, so it carries the primary "expand"
       // affordance: click (or Enter / Space) anywhere on it to open the whole
       // result in the shared focus surface. An always-visible corner badge marks
@@ -1333,6 +1402,8 @@ export class MeasurePanel {
         unitLabel,
         s.name,
         heightHeader,
+        stationCoupling,
+        s.profileChart.map((sample) => sample.distance),
       );
       const stationDetails = el('details', { className: 'olv-mp-stations' }, [
         el('summary', {
@@ -1530,6 +1601,8 @@ function buildStationTable(
   unitLabel: string,
   name: string,
   heightHeader = 'Elevation',
+  coupling?: StationHoverCoupling,
+  rowChainages?: readonly number[],
 ): { table: HTMLElement; build: () => void } {
   const headerCells = [
     'Station',
@@ -1544,23 +1617,31 @@ function buildStationTable(
   });
   const tbody = el('tbody');
   let built = false;
+  // Couple rows to scene dots only when the host wired the hover callback AND
+  // the per-row chainages are available to resolve each row to its nearest dot.
+  const couple = coupling && coupling.stationChainages.length > 0 ? coupling : undefined;
   const build = (): void => {
     if (built) return;
     built = true;
-    for (const r of stationRows) {
+    stationRows.forEach((r, i) => {
       // '' is an honest gap (blank in the CSV); the table shows an em dash so a
       // gap reads as "no data", not an empty cell.
       const dash = (v: string): string => (v === '' ? '—' : v);
-      tbody.append(
-        el('tr', {}, [
-          el('td', { className: 'olv-mp-stations-td', text: r.station }),
-          el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
-          el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
-          el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
-          el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
-        ]),
-      );
-    }
+      const tr = el('tr', {}, [
+        el('td', { className: 'olv-mp-stations-td', text: r.station }),
+        el('td', { className: 'olv-mp-stations-td', text: dash(r.chainage) }),
+        el('td', { className: 'olv-mp-stations-td', text: dash(r.elevation) }),
+        el('td', { className: 'olv-mp-stations-td', text: dash(r.points) }),
+        el('td', { className: 'olv-mp-stations-td', text: dash(r.grade) }),
+      ]);
+      const chainage = rowChainages?.[i];
+      if (couple && chainage !== undefined && Number.isFinite(chainage)) {
+        const si = nearestStationIndex(couple.stationChainages, chainage);
+        tr.dataset.si = String(si);
+        bindStationHover(tr, si, couple);
+      }
+      tbody.append(tr);
+    });
   };
   const table = el(
     'table',
@@ -1574,6 +1655,7 @@ function renderProfileChart(
   samples: readonly { distance: number; height: number }[],
   vex: number,
   system: 'metric' | 'imperial',
+  coupling?: StationHoverCoupling,
 ): HTMLElement {
   // viewBox proportioned to the (taller-than-wide) chart box so that
   // `preserveAspectRatio="none"` barely distorts the text — the prior
@@ -1778,8 +1860,29 @@ function renderProfileChart(
     `<rect x="${plotLeft}" y="${plotTop}" width="${plotW}" height="${plotH}"/>` +
     `</clipPath></defs>`;
 
+  // Station hover coupling (optional): one transparent hit-zone per visible
+  // station tick, tiled to the midpoints of its neighbours so every x in the
+  // plot maps to exactly one tick. Each zone's `data-si` is the SCENE dot
+  // nearest that tick's chainage, so hovering the chart brightens the matching
+  // 3D marker. Zones stop at `plotBottom`, clear of the X labels and the native
+  // resize grip below. Rendered last so they sit above the grid/path for
+  // pointer-events; visually invisible (transparent fill).
+  let hitParts = '';
+  if (coupling && coupling.stationChainages.length > 0 && stations.length > 0) {
+    const tickX = stations.map((c) => plotLeft + (c / xSpan) * plotW);
+    hitParts = stations
+      .map((c, i) => {
+        const cx = tickX[i];
+        const left = i === 0 ? plotLeft : (tickX[i - 1] + cx) / 2;
+        const right = i === stations.length - 1 ? plotRight : (cx + tickX[i + 1]) / 2;
+        const si = nearestStationIndex(coupling.stationChainages, c);
+        return `<rect class="olv-mp-chart-hit" data-si="${si}" x="${left.toFixed(2)}" y="${plotTop}" width="${Math.max(0, right - left).toFixed(2)}" height="${plotH}" fill="transparent" pointer-events="all"/>`;
+      })
+      .join('');
+  }
+
   const svg = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    ${clipDef}${minorGridParts}${majorGridParts}${yGridParts}${yAxisRules}${stationCaps}<g clip-path="url(#${clipId})">${pathParts}</g>
+    ${clipDef}${minorGridParts}${majorGridParts}${yGridParts}${yAxisRules}${stationCaps}<g clip-path="url(#${clipId})">${pathParts}</g>${hitParts}
   </svg>`;
 
   // ── HTML overlay: every numeral, in the brand mono with tabular figures,
@@ -1822,5 +1925,13 @@ function renderProfileChart(
     `${samples.length} samples · Δh ${formatLength(trueSpan, system)} · ` +
     `station interval ${formatChainage(stationInterval)} · vertical ${vexLabel} · ` +
     `drag bottom-right to resize`;
-  return el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
+  const chartEl = el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
+  if (hitParts) {
+    // The zones live in the just-assigned innerHTML; bind each to its `data-si`.
+    for (const hit of Array.from(chartEl.querySelectorAll('.olv-mp-chart-hit'))) {
+      const si = Number(hit.getAttribute('data-si'));
+      if (Number.isInteger(si) && si >= 0) bindStationHover(hit, si, coupling!);
+    }
+  }
+  return chartEl;
 }

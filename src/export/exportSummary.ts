@@ -49,6 +49,12 @@ export interface ExportSummaryInput {
   readonly viewDecimated?: boolean;
   /** User ticked "convert at full resolution". */
   readonly fullRes?: boolean;
+  /**
+   * The active cloud carries in-session classification edits (manual reclassify)
+   * that live only in the display-resolution buffer. A full-resolution export
+   * re-decodes the original file and would silently drop them.
+   */
+  readonly hasClassEdits?: boolean;
   /** User ticked "Compress (.gz)" — gzip the LAS output (LAS formats only). */
   readonly gzip?: boolean;
 }
@@ -196,6 +202,14 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
       message:
         'This writes the DERIVED (heuristic) classification — not survey-grade. ' +
         'Validate it before anyone relies on it, or omit it below.',
+    });
+  }
+  if (input.fullRes && includeClass && input.hasClassEdits) {
+    warnings.push({
+      level: 'warn',
+      message:
+        'Full-resolution export re-decodes the original file — your in-session ' +
+        'classification edits will NOT be included. Untick full resolution to keep them.',
     });
   }
   if (includeClass && provenance !== 'none' && input.format === 'las') {

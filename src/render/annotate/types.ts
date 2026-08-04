@@ -61,8 +61,23 @@ export interface Annotation {
    * against any particular node's mesh.
    */
   localPosition: Vec3Object;
-  /** Georeferenced position (local + cloud origin); recomputed on load. */
+  /**
+   * Georeferenced (survey) position — the picked point's `localPosition` folded
+   * with the owning cloud's source origin (`cloud.worldXYZ(index)`). Populated
+   * at creation from the picked cloud, and recomputed on load from the session's
+   * capture origin when a stored value is absent (see `rebaseSessionGeometry`),
+   * so a deliverable report can state a real survey coordinate rather than a
+   * small render-local one. Absent only when no owning cloud can be resolved.
+   */
   worldPosition?: Vec3Object;
+  /**
+   * The cloud the point was picked on — its display name / source filename.
+   * A scan fingerprint that lets a report attribute an annotation to its layer
+   * and lets the world position be interpreted against the right frame.
+   */
+  layerId?: string;
+  /** Human-readable CRS label of the world frame (e.g. `EPSG:25830`), when known. */
+  crs?: string;
   /** Camera viewpoint captured at creation, for "jump to annotation". */
   cameraState?: SavedCameraState;
   /** Optional link to a measurement by its id. */
@@ -113,6 +128,8 @@ export interface NewAnnotation {
   type: AnnotationType;
   localPosition: Vec3Object;
   worldPosition?: Vec3Object;
+  layerId?: string;
+  crs?: string;
   cameraState?: SavedCameraState;
   linkedMeasurementId?: string;
 }
@@ -134,6 +151,8 @@ export function createAnnotation(input: NewAnnotation, now: number = Date.now())
   const note = cleanNote(input.note);
   if (note !== undefined) a.note = note;
   if (input.worldPosition) a.worldPosition = cloneVec3(input.worldPosition);
+  if (input.layerId) a.layerId = input.layerId;
+  if (input.crs) a.crs = input.crs;
   if (input.cameraState) a.cameraState = input.cameraState;
   if (input.linkedMeasurementId) a.linkedMeasurementId = input.linkedMeasurementId;
   return a;

@@ -410,6 +410,9 @@ export async function openStreamingCopc(
     // explicit format tag so the Scan Intelligence panel renders
     // "COPC LAZ · PDRF N" for COPC and "EPT · binary · N attrs" for EPT.
     format: 'copc',
+    // Carry the CRS so the spacing row states its unit honestly (metre / foot→m
+    // / source units / geographic) instead of unconditionally labelling "m".
+    crs: cloud.crs(),
   });
   deps.bookmarks.clear();
   deps.refreshViewsUI();
@@ -627,6 +630,9 @@ export async function handleRemoteEpt(
       nodeCount: cloud.octree.nodes().length,
       format: 'ept',
       schemaSummary,
+      // EPT's resolution row is a node budget (crs-independent), but carry the
+      // CRS anyway for shape parity with the COPC path.
+      crs: cloud.crs(),
     });
 
     // Was: body class + navBar only, which left the dock hidden — so an EPT
