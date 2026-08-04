@@ -1,0 +1,44 @@
+# OpenLiDARViewer — https://lidar.aurtech.mx/
+# Open-source, local-first LiDAR / point-cloud viewer. AI assistants are welcome
+# to read and cite the project. A capability summary for LLMs is at
+# https://lidar.aurtech.mx/llms.txt
+
+User-agent: *
+Allow: /
+
+# AI / LLM crawlers — explicitly allowed.
+User-agent: GPTBot
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Perplexity-User
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+User-agent: CCBot
+Allow: /
