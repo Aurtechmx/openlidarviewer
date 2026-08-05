@@ -141,6 +141,24 @@
    */
   --caveat-rule: var(--rating-good);
   --caveat-tint: color-mix(in srgb, var(--rating-good) 9%, transparent);
+
+  /*
+   * Mobile GUI refresh (v0.6.x) — hero-console material + accent, PHONE ONLY.
+   * Every token below is consumed exclusively inside `max-width: 767px` /
+   * `pointer: coarse` blocks, so desktop rendering is byte-for-byte unchanged.
+   * The reference is a dark, high-tech point-cloud console: near-black navy
+   * base, panels of dark glass edged with a low-opacity cyan hairline, one
+   * bright azure->cyan accent, and a semantic green for on/enabled status.
+   */
+  --m-accent-1: #3ba9ff;        /* azure end of the accent gradient */
+  --m-accent-2: #29d3ff;        /* cyan end — the "active" hue on phones */
+  --m-accent-grad: linear-gradient(135deg, #3ba9ff 0%, #29d3ff 100%);
+  --m-edge: rgba(41, 211, 255, 0.15);       /* low-opacity cyan panel hairline */
+  --m-edge-strong: rgba(41, 211, 255, 0.34);/* active / focused edge */
+  --m-glass: rgba(14, 20, 32, 0.86);        /* #0E1420 dark-glass panel fill */
+  --m-glass-raised: rgba(17, 24, 38, 0.92); /* #111826 focal surface fill */
+  --m-glass-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.62);
+  --m-on: #4ade80;              /* semantic on/enabled/yes green */
 }
 
 /*
@@ -8292,6 +8310,143 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 }
 .olv-layerhealth-empty {
   font-size: var(--text-xs); color: var(--text-dim);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE GUI REFRESH (v0.6.x) — hero-console material + accent on phones
+   ═══════════════════════════════════════════════════════════════════════════
+   A styling pass, not a re-layout: it re-skins the already-built mobile
+   surfaces (unified bottom sheet, tool dock, standalone inspector sheet,
+   streaming panel) to match the marketing hero — dark glass edged in a faint
+   cyan hairline, one azure->cyan accent for the active tool / titles / key
+   values, and a green for on/enabled status. Placed last (before the
+   forced-colors reset) so it wins over the earlier phone blocks; scoped
+   entirely to max-width:767px + pointer:coarse so desktop is untouched. */
+@media (max-width: 767px) {
+  /* ── Dark-glass panels with a cyan hairline ──────────────────────────────
+     The unified bottom sheet is the focal surface (raised glass); the tool
+     dock, standalone inspector sheet and streaming panel are secondary glass.
+     All earn a 1px low-opacity cyan edge and a soft (not neon) lift shadow. */
+  .olv-mobile-sheet {
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    border-top: 1px solid var(--m-edge);
+    border-left: 1px solid var(--m-edge);
+    border-right: 1px solid var(--m-edge);
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+  }
+  /* Re-parented panels sit on the sheet's glass, so they go transparent and
+     let the one backdrop carry the material (no stacked opaque cards). */
+  .olv-mobile-sheet .olv-inspector,
+  .olv-mobile-sheet .olv-analyse-panel,
+  .olv-mobile-sheet .olv-object-panel,
+  .olv-mobile-sheet .olv-class-panel,
+  .olv-mobile-sheet .olv-measure-panel,
+  .olv-mobile-sheet .olv-anno-panel,
+  .olv-mobile-sheet .olv-export-panel {
+    background: transparent;
+  }
+
+  /* Standalone inspector sheet (used when the unified sheet isn't mounted). */
+  .olv-inspector {
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    border-top: 1px solid var(--m-edge);
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+  }
+
+  /* Streaming COPC panel reads as the same dark glass. */
+  .olv-streaming-panel {
+    background: var(--m-glass);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+    border: 1px solid var(--m-edge);
+    border-radius: 14px;
+    box-shadow: var(--m-glass-shadow);
+  }
+
+  /* ── Tool dock — glass bar, cyan-lit active tool ─────────────────────────
+     Keep it the thumb-reachable bottom strip it already is; just re-skin. */
+  .olv-dock {
+    background: var(--m-glass);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+    border: 1px solid var(--m-edge);
+    border-radius: 14px;
+    box-shadow: var(--m-glass-shadow);
+  }
+  .olv-dock .olv-tool {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: var(--m-edge);
+  }
+  /* Active tool: cyan glyph + label, a firmer cyan edge, and a short cyan
+     indicator bar under the button so the current mode reads at a glance. */
+  .olv-dock .olv-tool.olv-tool-active,
+  .olv-dock .olv-tool-active {
+    position: relative;
+    color: var(--m-accent-2);
+    background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
+    border-color: var(--m-edge-strong);
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 4px 14px -6px rgba(41, 211, 255, 0.35);
+  }
+  .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
+  .olv-dock .olv-tool-active::after {
+    content: "";
+    position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px;
+    border-radius: 2px;
+    background: var(--m-accent-grad);
+  }
+
+  /* ── Segmented sheet tabs — cyan active indicator ────────────────────────
+     The active tab keeps its raised chip; add a cyan underline + cyan label
+     so the current panel (Layers / Properties / Scan) matches the accent. */
+  .olv-msheet-tab.is-active {
+    color: var(--m-accent-2);
+    box-shadow: inset 0 -2px 0 var(--m-accent-2), 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .olv-msheet-tab:focus-visible,
+  .olv-dock .olv-tool:focus-visible,
+  .olv-panel-head:focus-visible {
+    outline-color: var(--m-accent-2);
+  }
+
+  /* ── Section titles / labels get a small cyan accent lead ────────────────
+     A short gradient bar before each panel/section title picks up the hero's
+     "section-title accent" without shouting. */
+  .olv-inspector .olv-panel-title,
+  .olv-streaming-title {
+    display: flex; align-items: center; gap: var(--space-md);
+  }
+  .olv-inspector .olv-panel-title::before,
+  .olv-streaming-title::before {
+    content: "";
+    width: 3px; height: 0.95em; border-radius: 2px;
+    background: var(--m-accent-grad);
+    flex: 0 0 auto;
+  }
+
+  /* ── Key values ──────────────────────────────────────────────────────────
+     Streaming phase + progress readout are the live "throughput" numerals;
+     lift them to the cyan accent, tabular + mono, so they read as the hero's
+     key metrics. On/enabled Scan-Intelligence values stay semantic green. */
+  .olv-streaming-phase { color: var(--m-accent-2); }
+  .olv-stream-prog-readout { color: var(--m-accent-2); font-variant-numeric: tabular-nums; }
+  .olv-di-row-value[data-tier="strong"] { color: var(--m-on); }
+  .olv-di-row-value { font-variant-numeric: tabular-nums; }
+
+  /* ── Tactile press feedback ──────────────────────────────────────────────
+     A 1px downward nudge on tappable controls (design brief), overriding the
+     desktop scale() press inside the phone scope only. `:not(:disabled)` /
+     extra qualifiers keep specificity above the base `:active` rules. */
+  .olv-dock .olv-tool:active:not(:disabled),
+  .olv-msheet-tab:active,
+  .olv-mobile-sheet .olv-chip:active:not(:disabled),
+  .olv-streaming-btn:active:not(:disabled),
+  .olv-layer-x:active {
+    transform: translateY(1px);
+  }
 }
 
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
