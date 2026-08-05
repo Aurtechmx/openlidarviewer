@@ -788,7 +788,7 @@ check('version-coherence', 'package.json, the citation file, the changelog and t
   else if (!new RegExp(`^##\\s*\\[${escapeRegExp(v)}\\]`, 'm').test(changelog)) {
     f.push({ level: 'error', message: `CHANGELOG.md has no released section for ${v}.` });
   }
-  for (const doc of [`RELEASE_NOTES_v${v}.md`, `KNOWN_LIMITATIONS_v${v}.md`, `VALIDATION_REPORT_v${v}.md`, `REPRODUCIBILITY_v${v}.md`]) {
+  for (const doc of [`docs/releases/RELEASE_NOTES_v${v}.md`, `docs/releases/KNOWN_LIMITATIONS_v${v}.md`, `docs/releases/VALIDATION_REPORT_v${v}.md`, `docs/releases/REPRODUCIBILITY_v${v}.md`]) {
     if (!c.set.has(doc)) f.push({ level: 'error', message: `${doc} is not in the archive; the release’s own evidence set is incomplete.` });
   }
   const manifestDoc = c.read('docs/project/MANIFEST.md');
