@@ -2880,8 +2880,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    /* Clear the bottom sheet's collapsed bar + the iOS home-indicator. */
-    bottom: calc(76px + env(safe-area-inset-bottom));
+    /* Clear the bottom sheet's collapsed thin handle + the iOS home-indicator.
+       The sheet collapses to a slim grip by default (see below), so the dock
+       hugs the bottom edge instead of floating up over the cloud. */
+    bottom: calc(38px + env(safe-area-inset-bottom));
     flex-wrap: nowrap;
     justify-content: flex-start;
     gap: var(--space-xs);
@@ -2895,21 +2897,32 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* Buttons must not shrink in a scrollable row, or they'd squash instead of
      overflow. */
   .olv-dock .olv-tool { flex: 0 0 auto; }
-  .olv-dock > .olv-dock-gap { margin-left: var(--space-xs); }
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-sm); }
+  /* Canvas-first tools: a small icon over a tiny label (the hero left-rail
+     look), compact and low-contrast so the cloud dominates. The tap area stays
+     >= 40px via min-width/height + padding while the VISUAL is small. Ghost by
+     default (transparent fill, no resting border); the single cyan accent lands
+     only on the active tool in the aesthetic block below. */
   .olv-dock .olv-tool {
-    font-size: var(--text-xs);
-    padding: var(--space-sm) var(--space-md);
+    flex-direction: column;
+    gap: 2px;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    padding: var(--space-2xs) var(--space-xs);
     border-radius: var(--radius-sm);
-    /* Touch target: 44 px tall (Apple HIG minimum) so a fingertip reliably
-       lands on a dock button. Width stays content-driven (with a 44 px floor)
-       so the 6-button row still fits the narrowest iPhone — height carries the
-       tap area in a dense horizontal toolbar. Desktop density is untouched:
-       this rule lives inside the phone media query. */
-    min-width: 44px;
-    min-height: 44px;
+    min-width: 40px;
+    min-height: 40px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+  }
+  /* Icon-over-label: stack the glyph above the tiny caption. */
+  .olv-dock .olv-tool-ico { flex-direction: column; gap: 2px; }
+  .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
+  .olv-dock .olv-tool-label {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 500;
   }
   /* Hide the lower-value buttons on phones — they're reachable via the
      "More" disclosure to the right of Annotate. The disclosure flips a
@@ -2932,6 +2945,19 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-dock.olv-dock-more-open .olv-tool-more {
     background: var(--accent-soft);
     color: var(--accent);
+  }
+
+  /* Streaming / Scan info card: a slim dark-glass card docked to the top-right
+     corner, never a half-screen panel over the cloud. Narrow width + a modest
+     max-height keep the point cloud visible behind it. */
+  .olv-streaming-panel {
+    top: calc(52px + env(safe-area-inset-top));
+    right: calc(8px + env(safe-area-inset-right));
+    left: auto;
+    width: min(212px, calc(100vw - 16px));
+    max-height: 38vh;
+    padding: var(--space-md);
+    font-size: var(--text-xs);
   }
 
   /* The mode switcher lets its speed slider wrap onto a second line. */
@@ -7854,6 +7880,16 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     transform: translateY(2px) rotate(-135deg); /* points up → tap to expand */
   }
 
+  /* Canvas-first default: a COLLAPSED sheet is a slim handle strip, not a full
+     tab bar. The tab row only appears once the user expands the sheet, so the
+     point cloud is never covered by chrome at rest. Tapping the grip expands. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-tabs { display: none; }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head {
+    justify-content: center;
+    padding-top: 12px;
+    padding-bottom: 6px;
+  }
+
   /* Body: the active tabpanel only; scrolls inside the sheet. */
   .olv-msheet-body {
     flex: 1 1 auto;
@@ -7920,6 +7956,12 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   }
   /* Shorter head so the collapsed peek leaves more of the scene in view. */
   .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
+  /* Streaming card stays a narrow top-right sliver so the short landscape
+     canvas is not covered along the top. */
+  .olv-streaming-panel { width: min(220px, 42vw); max-height: 60vh; }
+  /* Dock hugs the very bottom edge (never centred over the canvas): the sheet's
+     collapsed thin handle is short, so a small clearance is enough. */
+  .olv-dock { bottom: calc(30px + env(safe-area-inset-bottom)); }
 }
 
 /* ── Dataset Story card + Export Health (fitness-for-use synthesis) ───────── */
@@ -8448,17 +8490,15 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     border-radius: 14px;
     box-shadow: var(--m-glass-shadow);
   }
-  /* Compact, refined dock pills (v0.6.x polish): a smaller visual with a
-     tighter radius and a lighter hairline, but the tap area stays >= 40px via
-     padding + min-height. Quiet neutral glass fill; the cyan accent is reserved
-     for the active tool below. Transition is a short ease-out on press. */
+  /* Ghost-by-default dock tools: transparent fill, NO resting border, dim
+     neutral colour so nothing competes with the cloud. Accent discipline: the
+     single cyan accent lands only on the active tool (below). The dock strip
+     itself carries the glass + faint cyan hairline. */
   .olv-dock .olv-tool {
-    background: rgba(255, 255, 255, 0.025);
-    border-color: color-mix(in srgb, var(--m-edge) 70%, transparent);
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-dim);
     border-radius: 10px;
-    min-height: 40px;
-    padding: var(--space-xs) var(--space-md);
-    font-size: var(--text-2xs);
     transition:
       background 180ms ease-out,
       border-color 180ms ease-out,
