@@ -2815,8 +2815,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   right: calc(14px + env(safe-area-inset-right));
 }
 
-/* ── Phone layout (< 768 px) ──────────────────────────────────────────────── */
-@media (max-width: 767px) {
+/* ── Phone layout ─────────────────────────────────────────────────────────
+   CANONICAL MOBILE-LAYOUT CONDITION (mirrors MOBILE_LAYOUT_QUERY in
+   src/ui/isMobileDevice.ts). Every LAYOUT-structural phone block below repeats
+   it verbatim so a phone stays in the mobile layout in BOTH orientations:
+     (max-width: 767px)                              portrait phone / narrow window
+     (max-height: 500px) and (pointer: coarse)       landscape phone (wide but short + touch)
+   The second arm needs a coarse pointer so a short desktop window (fine pointer)
+   is never captured; a real desktop is tall and fine-pointer, so it never
+   matches either arm. Purely cosmetic max-width:767px blocks (dialogs, splash)
+   are left alone since they are harmless in landscape. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* Topbar: tighter padding so the wordmark, badge and link share one row. */
   .olv-topbar {
     padding-left: calc(var(--space-xl) + env(safe-area-inset-left));
@@ -3643,7 +3652,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 /* 767, matching MOBILE_LAYOUT_QUERY. At exactly 768 the old pair left the
    desktop panels mounted with their collapse handles hidden. */
-@media (max-width: 767px) { .olv-rail-tab { display: none; } }
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-rail-tab { display: none; } }
 
 /* ── Right rail — one-tap collapse for the right column ──────────────────────
    Mirror of the left rail. A single grabber slides BOTH right panels (the
@@ -3731,7 +3740,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
-@media (max-width: 767px) { .olv-right-rail-tab { display: none; } }
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-right-rail-tab { display: none; } }
 
 /* ── P9 · panel scroll hygiene & wheel ownership ─────────────────────────────
    Scrollable overlay panels CONTAIN their scroll: no chaining to the page and
@@ -5134,7 +5143,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-ap-action-armed { color: var(--rating-weak); border-color: color-mix(in srgb, var(--rating-weak) 60%, transparent); }
 
 /* Touch sizing for the measurement controls on phones */
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .olv-mkind, .olv-measure-undo, .olv-units-toggle, .olv-mp-action {
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -7741,7 +7750,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-mobile-sheet { display: none; }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .olv-mobile-sheet {
     position: fixed;
     left: 0; right: 0; bottom: 0;
@@ -7888,6 +7897,29 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet .olv-inspector .olv-sheet-chevron,
   .olv-mobile-sheet .olv-inspector .olv-sheet-close { display: none; }
   .olv-mobile-sheet .olv-inspector .olv-panel-head { cursor: default; }
+}
+
+/* ── Landscape phone: keep the canvas usable ────────────────────────────────
+   On a short landscape viewport the sheet's half/full detents would eat most of
+   the scene. Cap the sheet to a shorter bottom sheet so the point cloud stays
+   visible above it, and tighten the head so the peek row is not a large slice of
+   the screen. Gated on a coarse pointer so desktop windows (fine pointer) are
+   never affected. */
+@media (orientation: landscape) and (pointer: coarse) {
+  .olv-mobile-sheet {
+    max-height: 82vh;
+    max-height: min(82dvh, 82vh);
+  }
+  .olv-mobile-sheet.olv-msheet--half {
+    height: 58vh;
+    height: 58dvh;
+  }
+  .olv-mobile-sheet.olv-msheet--full {
+    height: 82vh;
+    height: min(82dvh, 82vh);
+  }
+  /* Shorter head so the collapsed peek leaves more of the scene in view. */
+  .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
 }
 
 /* ── Dataset Story card + Export Health (fitness-for-use synthesis) ───────── */
@@ -8359,8 +8391,9 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
    cyan hairline, one azure->cyan accent for the active tool / titles / key
    values, and a green for on/enabled status. Placed last (before the
    forced-colors reset) so it wins over the earlier phone blocks; scoped
-   entirely to max-width:767px + pointer:coarse so desktop is untouched. */
-@media (max-width: 767px) {
+   entirely to the mobile-layout condition (portrait OR landscape phone) so
+   desktop is untouched. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* ── Dark-glass panels with a cyan hairline ──────────────────────────────
      The unified bottom sheet is the focal surface (raised glass); the tool
      dock, standalone inspector sheet and streaming panel are secondary glass.
@@ -8415,9 +8448,22 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     border-radius: 14px;
     box-shadow: var(--m-glass-shadow);
   }
+  /* Compact, refined dock pills (v0.6.x polish): a smaller visual with a
+     tighter radius and a lighter hairline, but the tap area stays >= 40px via
+     padding + min-height. Quiet neutral glass fill; the cyan accent is reserved
+     for the active tool below. Transition is a short ease-out on press. */
   .olv-dock .olv-tool {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: var(--m-edge);
+    background: rgba(255, 255, 255, 0.025);
+    border-color: color-mix(in srgb, var(--m-edge) 70%, transparent);
+    border-radius: 10px;
+    min-height: 40px;
+    padding: var(--space-xs) var(--space-md);
+    font-size: var(--text-2xs);
+    transition:
+      background 180ms ease-out,
+      border-color 180ms ease-out,
+      color 180ms ease-out,
+      transform 150ms ease-out;
   }
   /* Active tool: cyan glyph + label, a firmer cyan edge, and a short cyan
      indicator bar under the button so the current mode reads at a glance. */
@@ -8427,7 +8473,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     color: var(--m-accent-2);
     background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
     border-color: var(--m-edge-strong);
-    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 4px 14px -6px rgba(41, 211, 255, 0.35);
+    /* One quiet accent, no heavy glow: an inset cyan hairline plus a soft lift. */
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px rgba(41, 211, 255, 0.28);
   }
   .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
   .olv-dock .olv-tool-active::after {
@@ -8440,6 +8487,18 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   /* ── Segmented sheet tabs — cyan active indicator ────────────────────────
      The active tab keeps its raised chip; add a cyan underline + cyan label
      so the current panel (Layers / Properties / Scan) matches the accent. */
+  /* Compact, evenly-spaced pill tabs: tighter min-height (tap area held at
+     >= 40px), a smoother ease-out, and a lighter resting weight. */
+  .olv-msheet-tabs { gap: 3px; padding: 3px; border-radius: 11px; }
+  .olv-msheet-tab {
+    min-height: 40px;
+    border-radius: 9px;
+    transition:
+      background 180ms ease-out,
+      color 180ms ease-out,
+      box-shadow 180ms ease-out,
+      transform 150ms ease-out;
+  }
   .olv-msheet-tab.is-active {
     color: var(--m-accent-2);
     box-shadow: inset 0 -2px 0 var(--m-accent-2), 0 1px 3px rgba(0, 0, 0, 0.3);
