@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "View supported LiDAR and point-cloud datasets locally in a browser. No installation or account required; local files are not uploaded.",
   "license": "MIT",
   "author": "A. Urias",
