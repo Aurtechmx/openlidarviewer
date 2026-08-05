@@ -1152,7 +1152,7 @@ export class Viewer {
    *
    * @param canvas - The `<canvas>` element to render into.
    */
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, forceWebGL = false) {
     // The resolver closes over the cloud registry, which only the Viewer owns.
     this._elevGpu.setWindowResolver((material) =>
       elevWindowForMaterial(
@@ -1166,6 +1166,7 @@ export class Viewer {
     // ── Renderer ──────────────────────────────────────────────────────────
     this._renderer = new THREE.WebGPURenderer({
       canvas,
+      forceWebGL, // WebGL 2 when the adapter probe found no WebGPU adapter (WebKit/iOS)
       antialias: true,
       alpha: false,
       // logarithmic depth buffer distributes

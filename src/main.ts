@@ -10,6 +10,7 @@ import './style.css';
 // so OBJ/PLY/glTF never fetch executable code from a third-party CDN.
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
+import { chooseRenderBackend } from './render/renderBackendChoice';
 import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -510,24 +511,24 @@ async function openBatchConverter(): Promise<void> {
 /**
  * The Viewer is lazy-imported so three.js stays out of the initial shell.
  * `viewer` is treated as non-null throughout the rest of main.ts; every
- * scan-open path awaits `viewerLoaded` before touching it, and UI handlers
- * that *could* fire pre-init are operating against an empty state where the
- * calls are no-ops anyway.
+ * scan-open path awaits `viewerLoaded` before touching it, and UI handlers that
+ * could fire pre-init operate against an empty state where the calls are no-ops.
  *
- * The cast through `unknown` is the documented escape hatch — TypeScript
- * cannot see the runtime guarantee that `viewerLoaded` resolves before
- * any user-driven scan-open, but it does.
+ * The cast through `unknown` is the documented escape hatch: TS cannot see that
+ * `viewerLoaded` resolves before any user-driven scan-open at runtime, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
-// v0.6 P3: recover from a stale lazy chunk after a deploy. If the first big
-// dynamic import (the Viewer) fails because its content-hashed asset was
-// replaced by a newer build while this tab was open, do ONE guarded reload
-// (sessionStorage cooldown, URL preserved) instead of a hard boot failure.
-// Ordinary Viewer exceptions are NOT classified as stale and never reload.
+// v0.6 P3: recover from a stale lazy chunk after a deploy. If the Viewer's
+// content-hashed import fails because a newer build replaced the asset mid-session,
+// do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
+// failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
 const { importOrReload } = installStaleChunkRecovery();
 const viewerLoaded: Promise<Viewer> = (async () => {
   const { Viewer: ViewerCtor } = await importOrReload(loadViewer);
-  viewer = new ViewerCtor(stage.canvas);
+  // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe so
+  // the renderer picks WebGL 2 instead of throwing on the first scan open.
+  const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
+  viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackend(gpu)) === 'webgl2');
   return viewer;
 })();
 
