@@ -4,6 +4,10 @@ import { execFileSync } from 'node:child_process';
 import liveSourceTransform from 'vite-plugin-javascript-obfuscator';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
+import {
+  workerExcludePatterns,
+  workerChunkPins,
+} from './src/workers/workerRegistry';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -84,29 +88,6 @@ function resolveBuildIdentity(mode: string): {
 function liveSourceTransformPlugin() {
   return liveSourceTransform({
     apply: 'build',
-    // These modules are excluded because each carries an import specifier
-    // Vite must read *statically* to split a chunk or bundle a worker:
-    //   - `loadFile.ts`        — `new Worker(new URL('./parseWorker.ts', …))`
-    //   - `copcWorkerClient.ts`— `new Worker(new URL('./copcWorker.ts', …))`
-    //   - `eptLaszipWorkerClient.ts`
-    //                          — `new Worker(new URL('./eptLaszipWorker.ts', …))`
-    //   - `terrainCoreWorkerClient.ts`
-    //                          — `new Worker(new URL('./terrainCoreWorker.ts', …))`
-    //   - `computeTerrainCoreAsync.ts`
-    //                          — `import('./terrainCoreWorkerClient')`, the
-    //     lazy split point that pulls in the worker client (mirrors how
-    //     `lazyChunks.ts` holds the COPC `import()` literal). Without this the
-    //     stringArray pass scrambles the specifier and neither the client nor
-    //     the `terrainCoreWorker` chunk it constructs ever gets emitted.
-    //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
-    //   - `parseBuffer.ts` / `loaderRegistry.ts` / `loadLas.ts` — the loader
-    //     chain now reached from the main thread (the format converter's
-    //     full-resolution decode), so their `import('./loadLas' | './loadXyz'
-    //     | './lazDecode')` split points must stay literal here too, not just
-    //     in the un-transformed worker pass.
-    // The plugin's stringArray transform rewrites those literals, which
-    // breaks Vite's static analysis and the chunk/worker never gets emitted.
-    // Everything else in the project's own source is transformed.
     // POSITIVE allow-list: only this project's own TypeScript is transformed.
     //
     // The exclusions below are a deny-list that grew one entry at a time,
@@ -116,21 +97,29 @@ function liveSourceTransformPlugin() {
     // own sources up front means anything else — vendor code, three.js,
     // pdf-lib, the LAZ WASM shim, generated output — is never a candidate,
     // and the entries below narrow that further for the reasons each gives.
+    //
+    // Worker exclusions are NO LONGER hand-listed here. Every worker's client
+    // module (`new Worker(new URL(...))`) and async bridge (`import('./client')`)
+    // is declared once in `src/workers/workerRegistry.ts`, and
+    // `workerExcludePatterns()` derives the exact set. A worker missing from
+    // that single source can no longer ship an un-excluded specifier — the
+    // class of defect behind the #266 crash. The stringArray pass rewrites
+    // those literals, which breaks Vite's static analysis and the
+    // chunk/worker never gets emitted; the registry keeps every one covered.
+    //
+    // The remaining literal entries below are the NON-worker split points that
+    // carry an `import()` specifier Vite must read statically:
+    //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
+    //   - `parseBuffer.ts` / `loaderRegistry.ts` / `loadLas.ts` — the loader
+    //     chain reached from the main thread (the format converter's
+    //     full-resolution decode), so their `import('./loadLas' | './loadXyz'
+    //     | './lazDecode')` split points must stay literal here too.
     include: [/src\/.*\.ts$/],
     exclude: [
       /node_modules/,
-      /loadFile\.ts/,
-      /copcWorkerClient\.ts/,
-      /eptLaszipWorkerClient\.ts/,
-      /terrainCoreWorkerClient\.ts/,
-      /computeTerrainCoreAsync\.ts/,
-      // The classifier mirrors the terrain-core pair above: the client holds
-      // `new Worker(new URL('./deriveClassificationWorker.ts', …))` and the async
-      // bridge holds `import('./deriveClassificationWorkerClient')`. Obfuscating
-      // either scrambles the specifier, so the worker chunk never emits and the
-      // dynamic import 404s at runtime (`vite:preloadError` → a full reload).
-      /deriveClassificationWorkerClient\.ts/,
-      /deriveClassificationAsync\.ts/,
+      // Worker client + async-bridge modules, derived from the single-source
+      // worker registry (src/workers/workerRegistry.ts).
+      ...workerExcludePatterns(),
       /lazyChunks\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
@@ -274,22 +263,18 @@ function chunkEmissionGuard() {
     // `new Worker(new URL(...))`, dynamic imports living in other excluded
     // modules, and the manualChunks vendor splits.
     ...lazyChunkNames(),
-    // Worker files reached through `new Worker(new URL(...))` — their URL
-    // literals live in the excluded worker-client modules, not lazyChunks.ts,
-    // so they must stay pinned by hand. Losing one means the worker 404s at
-    // runtime (COPC/EPT tile decodes reject; terrain-core offload silently
-    // falls back to main-thread compute) — a regression that drops them must
-    // fail the build loudly.
-    'copcWorker',
-    'eptLaszipWorker',
-    'terrainCoreWorker',
-    'deriveClassificationWorker',
-    // Dynamic imports living inside OTHER excluded modules (not lazyChunks.ts):
-    // `computeTerrainCoreAsync.ts` lazy-imports the terrain worker client;
+    // Worker chunks reached through `new Worker(new URL(...))`, plus the client
+    // chunks of workers reached through a dynamic import — DERIVED from the
+    // single-source worker registry (src/workers/workerRegistry.ts), never
+    // hand-copied. Their URL/import literals live in the excluded worker-client
+    // modules, not lazyChunks.ts. Losing one means the worker 404s at runtime
+    // (COPC/EPT tile decodes reject; terrain-core / classification offload
+    // silently falls back to main-thread compute) — a regression that drops
+    // one fails the build loudly here, and can no longer arise from a worker
+    // missed off a hand-maintained list.
+    ...workerChunkPins(),
     // `loadLas.ts` lazy-imports `lazDecode` (laz-perf JS + embedded WASM) so
     // uncompressed `.las` files never download the decompressor.
-    'terrainCoreWorkerClient',
-    'deriveClassificationWorkerClient',
     'lazDecode',
     // Vendor chunks pinned via manualChunks. The presence of these
     // chunks proves the manualChunks rule is still active — losing them
