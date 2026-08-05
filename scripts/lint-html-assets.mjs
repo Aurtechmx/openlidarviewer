@@ -70,7 +70,7 @@ const DEPLOYED_SEPARATELY = new Map([
  * source the plugin emits from instead of to a copy sitting in public/.
  */
 const BUILT_INTO_DIST = new Map([
-  ['THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.md'],
+  ['THIRD_PARTY_NOTICES.md', 'docs/project/THIRD_PARTY_NOTICES.md'],
 ]);
 
 /** Anything with a scheme, a protocol-relative URL, or a bare fragment. */

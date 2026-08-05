@@ -2,7 +2,7 @@
 /**
  * lint-claims-language.mjs — bans marketing superlatives from public documents.
  *
- * The claims policy (CLAIMS_AND_LIMITATIONS.md) reserves subtle vocabulary
+ * The claims policy (docs/project/CLAIMS_AND_LIMITATIONS.md) reserves subtle vocabulary
  * discipline — "validated" vs "accurate", "agreement" vs "correctness" — for
  * review, because those words have honest uses a regex cannot judge. This
  * lint enforces only the phrases with NO honest use in any document this
@@ -56,7 +56,7 @@ function publicDocs() {
 const problems = [];
 for (const file of publicDocs()) {
   // The policy file DEFINES the banned vocabulary; it must be able to name it.
-  if (file.endsWith('CLAIMS_AND_LIMITATIONS.md')) continue;
+  if (file.endsWith('docs/project/CLAIMS_AND_LIMITATIONS.md')) continue;
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, i) => {
     for (const re of BANNED) {
@@ -73,7 +73,7 @@ for (const file of publicDocs()) {
 if (problems.length > 0) {
   console.error('lint:claims-language FAILED\n');
   console.error(problems.join('\n'));
-  console.error('\nSee CLAIMS_AND_LIMITATIONS.md for the vocabulary policy.');
+  console.error('\nSee docs/project/CLAIMS_AND_LIMITATIONS.md for the vocabulary policy.');
   process.exit(1);
 }
 console.log('lint:claims-language OK — no marketing superlatives in public documents.');

@@ -140,9 +140,9 @@ export function documentedScripts(text) {
 }
 
 /**
- * The repository paths MANIFEST.md declares the archive to carry.
+ * The repository paths docs/project/MANIFEST.md declares the archive to carry.
  *
- * MANIFEST.md is the archive's own inventory: every document it names in a
+ * docs/project/MANIFEST.md is the archive's own inventory: every document it names in a
  * code span is a promise to the reader that the file is in the deposit. The
  * tokens are taken literally — one code span, no spaces, path characters only
  * — so prose in code spans (`npm run gate`, a version string with a space)
@@ -223,7 +223,7 @@ export function classifyMarkdownReferences(text, fromRelPath) {
  *
  * The governing documents of the deposit sit at the archive root and are named
  * in prose and in code spans far more often than they are linked: three shipped
- * files tell a reader that CLAIMS_AND_LIMITATIONS.md is the canonical policy and
+ * files tell a reader that docs/project/CLAIMS_AND_LIMITATIONS.md is the canonical policy and
  * not one of them wraps it in link syntax. A reference of that shape is still a
  * promise the archive has to keep, so it is extracted here and required to
  * resolve alongside the real links.
@@ -496,7 +496,7 @@ check('no-dangling-references-to-excluded', 'nothing that ships references a fil
  * The dangling-reference check above answers "does anything shipped point at
  * something absent", which degrades to a warning for a prose mention and so
  * cannot, on its own, fail a release. This one asks the stronger question the
- * deposit actually makes: MANIFEST.md tells a reader what the archive holds,
+ * deposit actually makes: docs/project/MANIFEST.md tells a reader what the archive holds,
  * so every path it names that the repository TRACKS must be in the archive.
  * Tracked-but-absent is one thing and one thing only — an export-ignore that
  * deleted a declared document — and it is an error, never a warning.
@@ -505,10 +505,10 @@ check('no-dangling-references-to-excluded', 'nothing that ships references a fil
  * per-release manifest are attached to the release, not committed, so their
  * absence from a source archive is correct.
  */
-check('manifest-inventory-ships', 'every tracked path MANIFEST.md declares is in the archive', (c) => {
+check('manifest-inventory-ships', 'every tracked path docs/project/MANIFEST.md declares is in the archive', (c) => {
   const f = [];
-  const text = c.read('MANIFEST.md');
-  if (text === null) return [{ level: 'error', message: 'MANIFEST.md is not in the archive.' }];
+  const text = c.read('docs/project/MANIFEST.md');
+  if (text === null) return [{ level: 'error', message: 'docs/project/MANIFEST.md is not in the archive.' }];
   const tracked = git(['ls-files']).split('\n').filter(Boolean);
   const trackedFiles = new Set(tracked);
   const trackedDirs = new Set();
@@ -522,17 +522,17 @@ check('manifest-inventory-ships', 'every tracked path MANIFEST.md declares is in
     if (trackedFiles.has(p)) {
       declared.push({ token: tok, kind: 'file' });
       if (!c.set.has(p)) {
-        f.push({ level: 'error', message: `MANIFEST.md declares ${tok}, which the repository tracks but the archive does not carry.` });
+        f.push({ level: 'error', message: `docs/project/MANIFEST.md declares ${tok}, which the repository tracks but the archive does not carry.` });
       }
     } else if (trackedDirs.has(p)) {
       declared.push({ token: tok, kind: 'directory' });
       if (!c.files.some((q) => q.startsWith(`${p}/`))) {
-        f.push({ level: 'error', message: `MANIFEST.md declares ${tok}, which the repository tracks but the archive carries nothing from.` });
+        f.push({ level: 'error', message: `docs/project/MANIFEST.md declares ${tok}, which the repository tracks but the archive carries nothing from.` });
       }
     }
   }
   if (declared.length === 0) {
-    f.push({ level: 'error', message: 'MANIFEST.md declares no tracked path at all — the inventory check has nothing to verify.' });
+    f.push({ level: 'error', message: 'docs/project/MANIFEST.md declares no tracked path at all — the inventory check has nothing to verify.' });
   }
   return { findings: f, detail: { declared } };
 }, { needsRepo: true });
@@ -556,7 +556,7 @@ check('doc-links-resolve', 'every relative link in shipping markdown resolves to
  * `doc-links-resolve` above walks link syntax only, and it reports nothing about
  * how much it skipped. That is how an export-ignore rule can delete a governing
  * document while every check stays green: no shipped file LINKS to
- * CLAIMS_AND_LIMITATIONS.md, they all name it as a path in prose or a code span,
+ * docs/project/CLAIMS_AND_LIMITATIONS.md, they all name it as a path in prose or a code span,
  * so the link walk never had an edge to follow and the prose scan in
  * `no-dangling-references-to-excluded` only warns.
  *
@@ -791,11 +791,11 @@ check('version-coherence', 'package.json, the citation file, the changelog and t
   for (const doc of [`RELEASE_NOTES_v${v}.md`, `KNOWN_LIMITATIONS_v${v}.md`, `VALIDATION_REPORT_v${v}.md`, `REPRODUCIBILITY_v${v}.md`]) {
     if (!c.set.has(doc)) f.push({ level: 'error', message: `${doc} is not in the archive; the release’s own evidence set is incomplete.` });
   }
-  const manifestDoc = c.read('MANIFEST.md');
-  if (manifestDoc == null) f.push({ level: 'error', message: 'MANIFEST.md is not in the archive.' });
+  const manifestDoc = c.read('docs/project/MANIFEST.md');
+  if (manifestDoc == null) f.push({ level: 'error', message: 'docs/project/MANIFEST.md is not in the archive.' });
   else {
     for (const m of manifestDoc.matchAll(/v(\d+\.\d+\.\d+(?:-[\w.]+)?)/g)) {
-      if (m[1] !== v) f.push({ level: 'error', message: `MANIFEST.md names v${m[1]}, but this archive is v${v}.` });
+      if (m[1] !== v) f.push({ level: 'error', message: `docs/project/MANIFEST.md names v${m[1]}, but this archive is v${v}.` });
     }
   }
   // A CITATION date must match the changelog entry for the same version.

@@ -104,7 +104,7 @@ const CHECKS = [
 // The sbom components worth pinning in a provenance record: the libraries that
 // actually shape a numeric result the viewer produces. Read from sbom.json, which
 // carries resolved versions rather than the ranges package.json states, and is
-// corroborated by THIRD_PARTY_NOTICES.md.
+// corroborated by docs/project/THIRD_PARTY_NOTICES.md.
 const PINNED_TOOLS = ['proj4', 'three', 'laz-perf', '@loaders.gl/core', 'pdf-lib'];
 
 const STUDIES_DIR = 'validation/cross-implementation/studies';

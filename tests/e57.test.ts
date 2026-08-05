@@ -8,7 +8,7 @@ import { parseE57 } from '../src/io/e57/parseE57';
 
 // Real-file E57 coverage runs against the pump fixture, which carries an
 // explicit redistribution grant (libE57 Test Data License; see
-// THIRD_PARTY_NOTICES.md). It exercises the header, depage, XML, and full-parse
+// docs/project/THIRD_PARTY_NOTICES.md). It exercises the header, depage, XML, and full-parse
 // paths on a genuine E57 without bundling any dataset whose redistribution
 // rights are not granted.
 const pump = readFileSync(

@@ -24,24 +24,24 @@ development runs.
 
 ## What to read first
 
-- `RELEASE_NOTES_v0.6.3.md`: what changed in this release.
-- `VALIDATION_REPORT_v0.6.3.md`: what was and was not tested, and the honest gaps.
-- `KNOWN_LIMITATIONS_v0.6.3.md`: the documented limits.
-- `REPRODUCIBILITY.md` and `REPRODUCIBILITY_v0.6.3.md`: how to rebuild, test,
+- `docs/releases/RELEASE_NOTES_v0.6.3.md`: what changed in this release.
+- `docs/releases/VALIDATION_REPORT_v0.6.3.md`: what was and was not tested, and the honest gaps.
+- `docs/releases/KNOWN_LIMITATIONS_v0.6.3.md`: the documented limits.
+- `REPRODUCIBILITY.md` and `docs/releases/REPRODUCIBILITY_v0.6.3.md`: how to rebuild, test,
   and regenerate the reported figures. The versioned file ties each figure to
   the command that produces it.
-- `CLAIMS_AND_LIMITATIONS.md`: the canonical policy for what the project claims
+- `docs/project/CLAIMS_AND_LIMITATIONS.md`: the canonical policy for what the project claims
   and the vocabulary it uses, including the E0 to E6 evidence ladder.
-- `STABILITY_POLICY.md`: what this stable version freezes and how frozen things
+- `docs/project/STABILITY_POLICY.md`: what this stable version freezes and how frozen things
   change.
 - `ARTIFACT_EVALUATION.md`: a reviewer's quickstart.
 
 ## Dependencies and attribution
 
-- `DEPENDENCIES.md`: the committed dependency baseline.
+- `docs/project/DEPENDENCIES.md`: the committed dependency baseline.
 - `sbom.json`: a CycloneDX software bill of materials.
-- `THIRD_PARTY_NOTICES.md`: third-party licenses.
-- `AI_ASSISTANCE.md`: how generative AI tools were and were not used.
+- `docs/project/THIRD_PARTY_NOTICES.md`: third-party licenses.
+- `docs/project/AI_ASSISTANCE.md`: how generative AI tools were and were not used.
 
 ## Layout
 

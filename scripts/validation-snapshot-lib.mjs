@@ -160,7 +160,7 @@ export const INPUTS = Object.freeze([
       'CHANGELOG.md',
       'CITATION.cff',
       'README.md',
-      'MANIFEST.md',
+      'docs/project/MANIFEST.md',
     ],
   },
 ]);

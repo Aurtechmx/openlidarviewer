@@ -60,15 +60,15 @@ function sourceRequiredFor(version) {
     'package-lock.json',
     'sbom.json',
     'CITATION.cff',
-    'DEPENDENCIES.md',
-    'THIRD_PARTY_NOTICES.md',
+    'docs/project/DEPENDENCIES.md',
+    'docs/project/THIRD_PARTY_NOTICES.md',
     'docs/validation/claim-register.yaml',
     'docs/release/RELEASE_ASSETS.md',
     'tests/fixtures/reference/slope/SHA256SUMS',
-    `RELEASE_NOTES_v${version}.md`,
-    `KNOWN_LIMITATIONS_v${version}.md`,
-    `VALIDATION_REPORT_v${version}.md`,
-    `REPRODUCIBILITY_v${version}.md`,
+    `docs/releases/RELEASE_NOTES_v${version}.md`,
+    `docs/releases/KNOWN_LIMITATIONS_v${version}.md`,
+    `docs/releases/VALIDATION_REPORT_v${version}.md`,
+    `docs/releases/REPRODUCIBILITY_v${version}.md`,
   ];
 }
 

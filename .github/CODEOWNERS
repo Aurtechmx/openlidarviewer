@@ -10,8 +10,8 @@
 /validation/            @Aurtechmx
 /CITATION.cff           @Aurtechmx
 /.zenodo.json           @Aurtechmx
-/CLAIMS_AND_LIMITATIONS.md @Aurtechmx
-/STABILITY_POLICY.md    @Aurtechmx
+/docs/project/CLAIMS_AND_LIMITATIONS.md @Aurtechmx
+/docs/project/STABILITY_POLICY.md    @Aurtechmx
 
 # Numeric core: a wrong value here is a silent scientific error.
 /src/process/numerics.ts        @Aurtechmx
