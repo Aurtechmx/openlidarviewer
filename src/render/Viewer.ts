@@ -3246,11 +3246,10 @@ export class Viewer {
     // class-mask multiply folded into the size node. Without this the legend
     // could colour the derived classes but not hide them.
     this._attachClassAttribute(entry, codes);
-    if (entry.mode === 'classification') {
-      this._refreshClassificationColours(id);
-    } else {
-      this.setColorMode(id, 'classification');
-    }
+    // Keep the current colour mode (RGB/natural) after a derive, like a cloud
+    // loaded WITH classification: the class-filter wiring above hides classes
+    // without recolouring. Only refresh when already showing class colours.
+    if (entry.mode === 'classification') this._refreshClassificationColours(id);
     this._bumpRenderActivity();
     return true;
   }
