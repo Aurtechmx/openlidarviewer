@@ -52,7 +52,7 @@ Everything happens on your machine; no data leaves the browser.
 ## Verifying a published release
 
 ```bash
-git checkout v0.6.1
+git checkout v0.6.4
 nvm use && npm ci
 npm run gate
 ```
