@@ -20,11 +20,11 @@ const realRead = (p: string): string | null =>
   existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null;
 
 const VERSION = JSON.parse(realRead('package.json')!).version as string;
-const KNOWN = `KNOWN_LIMITATIONS_v${VERSION}.md`;
-const VALREPORT = `VALIDATION_REPORT_v${VERSION}.md`;
+const KNOWN = `docs/releases/KNOWN_LIMITATIONS_v${VERSION}.md`;
+const VALREPORT = `docs/releases/VALIDATION_REPORT_v${VERSION}.md`;
 const CLAIMS = 'docs/validation/claim-register.yaml';
-const DEPS = 'DEPENDENCIES.md';
-const NOTICES = 'THIRD_PARTY_NOTICES.md';
+const DEPS = 'docs/project/DEPENDENCIES.md';
+const NOTICES = 'docs/project/THIRD_PARTY_NOTICES.md';
 const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
 /** A reader over the real tree with a single-file override. */

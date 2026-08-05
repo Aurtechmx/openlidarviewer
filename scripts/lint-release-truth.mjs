@@ -10,7 +10,7 @@
  *   - "nothing is E4" / "every reference slot is pending" wording while the
  *     registry has one E4 claim and one supplied reference slot;
  *   - a dependency-audit doc still headed with the previous release;
- *   - a direct-dependency version in THIRD_PARTY_NOTICES.md that disagreed with
+ *   - a direct-dependency version in docs/project/THIRD_PARTY_NOTICES.md that disagreed with
  *     package.json;
  *   - validation prose claiming ALL terrain evidence is inherited unchanged;
  *   - a release checklist missing required release-asset entries.
@@ -48,14 +48,14 @@ export function collectReleaseTruthProblems(read) {
   const alphaMatch = version.match(/-(alpha|beta|rc)\.(\d+)/);
   const currentPre = alphaMatch ? `${alphaMatch[1]}.${alphaMatch[2]}` : null;
 
-  const KNOWN = `KNOWN_LIMITATIONS_v${version}.md`;
-  const VALREPORT = `VALIDATION_REPORT_v${version}.md`;
-  const RELEASE_NOTES = `RELEASE_NOTES_v${version}.md`;
+  const KNOWN = `docs/releases/KNOWN_LIMITATIONS_v${version}.md`;
+  const VALREPORT = `docs/releases/VALIDATION_REPORT_v${version}.md`;
+  const RELEASE_NOTES = `docs/releases/RELEASE_NOTES_v${version}.md`;
   const ARCHMAP = 'docs/architecture/architecture-map.md';
   const CLAIMS = 'docs/validation/claim-register.yaml';
   const EVTEST = 'tests/evidenceRegistry.test.ts';
-  const DEPS = 'DEPENDENCIES.md';
-  const NOTICES = 'THIRD_PARTY_NOTICES.md';
+  const DEPS = 'docs/project/DEPENDENCIES.md';
+  const NOTICES = 'docs/project/THIRD_PARTY_NOTICES.md';
   const RELEASE_ASSETS = 'docs/release/RELEASE_ASSETS.md';
 
   // ── 1. Monolith line counts, derived from the ratchet baseline ────────────
@@ -219,7 +219,7 @@ export function collectReleaseTruthProblems(read) {
   }
 
   // ── 7. The shipped asset index documents the full asset set ───────────────
-  // RELEASE_CHECKLIST.md is an internal process aid and is export-ignored, so
+  // docs/project/RELEASE_CHECKLIST.md is an internal process aid and is export-ignored, so
   // the source archive cannot depend on it. The public, shipped index of what a
   // release attaches is docs/release/RELEASE_ASSETS.md — assert the asset set
   // there, so this lint passes from inside the extracted archive too.

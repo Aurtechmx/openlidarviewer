@@ -64,4 +64,4 @@ The viewer itself is built on open-source work we're grateful for:
 - **pdf-lib** — the PDF reports
 
 Full license details for every bundled dependency are in
-[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+[THIRD_PARTY_NOTICES.md](project/THIRD_PARTY_NOTICES.md).
