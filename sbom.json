@@ -1800,8 +1800,7 @@
       "name": "texture-compressor",
       "version": "1.0.2",
       "bom-ref": "openlidarviewer@0.6.4|texture-compressor@1.0.2",
-      "author": "Tim van Scherpenzeel",
-      "description": "CLI tool for texture compression using ASTC, ETC, PVRTC and S3TC in a KTX container.",
+      "description": "Local empty stub for the encode-only texture-compressor CLI, which OLV never invokes. Replaces the registry package via a file: override to drop its vulnerable image-size transitive (CVE-2025-71329/71330).",
       "licenses": [
         {
           "license": {
@@ -1811,19 +1810,6 @@
         }
       ],
       "purl": "pkg:npm/texture-compressor@1.0.2",
-      "externalReferences": [
-        {
-          "url": "https://registry.npmjs.org/texture-compressor/-/texture-compressor-1.0.2.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "752b55828690d75980e61b49f91cd9e75671219a8d3a058a008bed8cbad6d409624102c29ab0ea373419f0987dd5879a950f790d7b7830476e2f32666ecea58a"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -2294,107 +2280,6 @@
     },
     {
       "type": "library",
-      "name": "argparse",
-      "version": "1.0.10",
-      "bom-ref": "openlidarviewer@0.6.4|argparse@1.0.10",
-      "description": "Very powerful CLI arguments parser. Native port of argparse - python's options parsing library",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/argparse@1.0.10",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/nodeca/argparse.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/nodeca/argparse#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/nodeca/argparse/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/argparse/-/argparse-1.0.10.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "a39468cbab4d1b848bfc53a408037a4738e26a4652db944b605adc32db49a9b75df015ab9c0f9f1b3e7b88de4f6f4ea9bc11af979810d01e3c74996c957be84e"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/argparse"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "image-size",
-      "version": "0.7.5",
-      "bom-ref": "openlidarviewer@0.6.4|image-size@0.7.5",
-      "author": "netroy",
-      "description": "get dimensions of any image file",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/image-size@0.7.5",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/image-size/image-size.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/image-size/image-size#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/image-size/image-size/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/image-size/-/image-size-0.7.5.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "1e2caffa65c77c510fecbcd42ff96583d470171c58fa8f4ddc954b21e1b913b88520501a971bd153d519b6105d6031159f31cc8239ca24f3e96b2e4159fd60f6"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/image-size"
-        }
-      ]
-    },
-    {
-      "type": "library",
       "name": "undici-types",
       "version": "7.18.2",
       "bom-ref": "openlidarviewer@0.6.4|undici-types@7.18.2",
@@ -2745,57 +2630,6 @@
         {
           "name": "cdx:npm:package:path",
           "value": "node_modules/table-layout"
-        }
-      ]
-    },
-    {
-      "type": "library",
-      "name": "sprintf-js",
-      "version": "1.0.3",
-      "bom-ref": "openlidarviewer@0.6.4|sprintf-js@1.0.3",
-      "author": "Alexandru Marasteanu",
-      "description": "JavaScript sprintf implementation",
-      "licenses": [
-        {
-          "license": {
-            "id": "BSD-3-Clause",
-            "acknowledgement": "declared"
-          }
-        }
-      ],
-      "purl": "pkg:npm/sprintf-js@1.0.3",
-      "externalReferences": [
-        {
-          "url": "git+https://github.com/alexei/sprintf.js.git",
-          "type": "vcs",
-          "comment": "as detected from PackageJson property \"repository.url\""
-        },
-        {
-          "url": "https://github.com/alexei/sprintf.js#readme",
-          "type": "website",
-          "comment": "as detected from PackageJson property \"homepage\""
-        },
-        {
-          "url": "https://github.com/alexei/sprintf.js/issues",
-          "type": "issue-tracker",
-          "comment": "as detected from PackageJson property \"bugs.url\""
-        },
-        {
-          "url": "https://registry.npmjs.org/sprintf-js/-/sprintf-js-1.0.3.tgz",
-          "type": "distribution",
-          "hashes": [
-            {
-              "alg": "SHA-512",
-              "content": "0fd70f824bcb955deddc8ccbd03d182ef180f40864e0f72f57051b3747521abd5a3f436bb780049d351bb86beab840b4980eb81aab757f38ab951b3989b5f1f2"
-            }
-          ],
-          "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
-        }
-      ],
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/sprintf-js"
         }
       ]
     },
@@ -3375,11 +3209,7 @@
       "ref": "openlidarviewer@0.6.4|ktx-parse@0.7.1"
     },
     {
-      "ref": "openlidarviewer@0.6.4|texture-compressor@1.0.2",
-      "dependsOn": [
-        "openlidarviewer@0.6.4|argparse@1.0.10",
-        "openlidarviewer@0.6.4|image-size@0.7.5"
-      ]
+      "ref": "openlidarviewer@0.6.4|texture-compressor@1.0.2"
     },
     {
       "ref": "openlidarviewer@0.6.4|@swc/helpers@0.5.23",
@@ -3427,15 +3257,6 @@
       "ref": "openlidarviewer@0.6.4|tslib@2.8.1"
     },
     {
-      "ref": "openlidarviewer@0.6.4|argparse@1.0.10",
-      "dependsOn": [
-        "openlidarviewer@0.6.4|sprintf-js@1.0.3"
-      ]
-    },
-    {
-      "ref": "openlidarviewer@0.6.4|image-size@0.7.5"
-    },
-    {
       "ref": "openlidarviewer@0.6.4|undici-types@7.18.2"
     },
     {
@@ -3462,9 +3283,6 @@
         "openlidarviewer@0.6.4|array-back@6.2.3",
         "openlidarviewer@0.6.4|wordwrapjs@5.1.1"
       ]
-    },
-    {
-      "ref": "openlidarviewer@0.6.4|sprintf-js@1.0.3"
     },
     {
       "ref": "openlidarviewer@0.6.4|chalk@4.1.2",
