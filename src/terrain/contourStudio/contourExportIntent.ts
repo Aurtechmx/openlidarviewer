@@ -28,6 +28,43 @@
 
 import type { ContourStudioState } from './contourStudioState';
 import type { ContourShapeStyle } from '../contour/contourShapeStyle';
+import { PURPOSE_META } from './contourStudioPurpose';
+
+/**
+ * The purpose-driven product facts a deliverable renders on its sheet, so a
+ * map-sheet PDF (or any deliverable) can DOCUMENT the settings the chosen purpose
+ * applied — the geometry claim, generalization, labels, appearance and packaging.
+ * These are PRESENTATION/product defaults only: none of them raises an evidence
+ * level, hides a warning, or bypasses a gate.
+ */
+export interface ContourDeliverableFacts {
+  /** Human label of the purpose ("Engineering Plan"). */
+  readonly label: string;
+  /** One-line purpose statement (from PURPOSE_META.summary). */
+  readonly statement: string;
+  /** Exact analytical isolines are emitted. */
+  readonly analytical: boolean;
+  /** Generalized cartographic contours are emitted. */
+  readonly cartographic: boolean;
+  /** Cartographic smoothing is applied. */
+  readonly cartographicSmoothing: boolean;
+  /** Generalization tolerance (cells): ε = tolerance × cell. 0 = exact. */
+  readonly generalizeToleranceCells: number;
+  /** Every Nth contour is an index (bold) line. */
+  readonly indexEvery: number;
+  /** Only index contours are labelled. */
+  readonly labelsIndexOnly: boolean;
+  /** Hillshade appearance requested (raster documented, see mapSheetPdf). */
+  readonly hillshade: boolean;
+  /** Hypsometric tint requested (raster documented, see mapSheetPdf). */
+  readonly hypsometricTint: boolean;
+  /** Exploratory (watermarked) output may be produced for this purpose. */
+  readonly allowExploratory: boolean;
+  /** The complete deliverable package is part of this purpose. */
+  readonly completePackage: boolean;
+  /** The purpose demands the internal-validation appendix. */
+  readonly appendixRequired: boolean;
+}
 
 export interface ContourExportIntent {
   /** The purpose that produced this intent (stamped into provenance). */
@@ -50,6 +87,12 @@ export interface ContourExportIntent {
   readonly methodVersion: number;
   /** Human tag "id@version" for provenance and diagnostics. */
   readonly methodTag: string;
+  /**
+   * The purpose-driven product facts (label, statement, and the deliverable
+   * config). A deliverable renderer uses these to DOCUMENT what the chosen
+   * purpose applied — never to change any evidence/gate decision.
+   */
+  readonly deliverable: ContourDeliverableFacts;
 }
 
 /**
@@ -82,6 +125,7 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
   const methodId = exact ? 'olv.contour.analytical' : 'olv.contour.generalize';
   const methodVersion = 1;
 
+  const meta = PURPOSE_META[state.purpose];
   return {
     purpose: state.purpose,
     shapeStyle,
@@ -90,5 +134,22 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
     methodId,
     methodVersion,
     methodTag: `${methodId}@${methodVersion}`,
+    deliverable: {
+      label: meta.label,
+      statement: meta.summary,
+      analytical: state.contour.analytical,
+      cartographic: state.contour.cartographic,
+      cartographicSmoothing: state.surface.cartographicSmoothing,
+      // Report the tolerance actually in effect for the exported geometry: 0 on
+      // the exact path, else the state's per-purpose tolerance.
+      generalizeToleranceCells: exact ? 0 : tol,
+      indexEvery: state.contour.indexEvery,
+      labelsIndexOnly: state.labels.indexOnly,
+      hillshade: state.appearance.hillshade,
+      hypsometricTint: state.appearance.hypsometricTint,
+      allowExploratory: state.deliverable.allowExploratory,
+      completePackage: state.deliverable.completePackage,
+      appendixRequired: state.validation.appendixRequired,
+    },
   };
 }
