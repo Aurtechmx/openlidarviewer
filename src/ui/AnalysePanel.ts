@@ -271,10 +271,34 @@ let lastNotes: string | null = null;
  *   "1 m"          → { num: "1",  unit: "m" }
  *   "Not ready"    → { num: "Not ready", unit: "" }  (no leading digit)
  */
-function splitReadinessValue(value: string): { num: string; unit: string } {
+export function splitReadinessValue(value: string): { num: string; unit: string } {
   const m = value.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
   if (!m) return { num: value, unit: '' };
   return { num: m[1], unit: m[2].trim() };
+}
+
+/**
+ * Decide how a readiness value + detail render across the card's two text slots.
+ * The subscript slot beside the big figure is narrow, so only a short, real unit
+ * ("m", "%", "ft", "% meas.") is allowed to sit there. A long, word-y annotation
+ * such as "(vertical unit unverified)" would collapse that slot into a
+ * one-char-per-line column, so it is kept out of the subscript and folded onto
+ * the normally-wrapping detail line instead (unless the detail already carries
+ * the same caveat, to avoid stating it twice).
+ */
+export function readinessCardParts(
+  value: string,
+  detail: string,
+): { num: string; unitText: string; detailText: string } {
+  const { num, unit } = splitReadinessValue(value);
+  const compactUnit = unit.replace(/\bmeasured\b/, 'meas.');
+  const unitIsCompact = compactUnit.length <= 8 && !compactUnit.includes('(');
+  const caveat = unitIsCompact ? '' : unit;
+  return {
+    num,
+    unitText: unitIsCompact ? compactUnit : '',
+    detailText: caveat && !detail.includes(caveat) ? `${detail} · ${caveat}` : detail,
+  };
 }
 
 export class AnalysePanel {
@@ -1585,19 +1609,19 @@ export class AnalysePanel {
   private _readinessCard(ind: ReadinessIndicator): HTMLElement {
     const card = el('div', { className: `olv-analyse-ready is-${ind.rating}` });
 
+    // Right column: a big tabular figure with the unit set as a subscript,
+    // and a colour-coded rating pill (the rating word stays for colourblind
+    // safety, no longer relying on hue alone). A long, word-y unit is demoted
+    // off the narrow subscript and onto the detail line (see readinessCardParts).
+    const { num, unitText, detailText } = readinessCardParts(ind.value, ind.detail);
+
     // Left column: label over the supporting line.
     const main = el('div', { className: 'olv-analyse-ready-main' });
     main.append(
       el('div', { className: 'olv-analyse-ready-label', text: ind.label }),
-      el('div', { className: 'olv-analyse-ready-detail', text: ind.detail }),
+      el('div', { className: 'olv-analyse-ready-detail', text: detailText }),
     );
 
-    // Right column: a big tabular figure with the unit set as a subscript,
-    // and a colour-coded rating pill (the rating word stays for colourblind
-    // safety, no longer relying on hue alone).
-    const { num, unit } = splitReadinessValue(ind.value);
-    // Keep the unit compact so the figure can't crowd the supporting line.
-    const unitText = unit.replace(/\bmeasured\b/, 'meas.');
     const figure = el('div', {
       className: `olv-analyse-ready-figure${num.match(/\d/) ? '' : ' is-text'}`,
     });
