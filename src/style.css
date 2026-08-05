@@ -8052,12 +8052,14 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 
 /* Purpose cards */
-.olv-cs-purpose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+/* Compact pills: the label alone; the full description is on hover (title
+   attribute) so the picker stays tight instead of a wall of summary text. */
+.olv-cs-purpose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .olv-cs-purpose-card {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 10px 12px;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
   text-align: left;
   background: var(--panel-recessive);
   border: 1px solid var(--hairline);
@@ -8072,8 +8074,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   background: var(--accent-soft);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
-.olv-cs-purpose-label { display: block; font-size: var(--text-md); font-weight: 620; color: var(--text); }
-.olv-cs-purpose-summary { display: block; font-size: var(--text-xs); line-height: 1.4; color: var(--text-faint); }
+.olv-cs-purpose-label { display: block; font-size: var(--text-sm); font-weight: 620; color: var(--text); }
 
 /* Review + settings summary — definition grids */
 .olv-cs-review-list, .olv-cs-summary-list {

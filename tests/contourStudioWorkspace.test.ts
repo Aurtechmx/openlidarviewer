@@ -11,11 +11,13 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createContourStudioController } from '../src/terrain/contourStudio/contourStudioController';
 import { renderContourStudioWorkspace } from '../src/ui/contourStudioWorkspace';
 import type { ContourStudioLaunchState } from '../src/terrain/contourStudio/contourStudioLaunchState';
+import { PURPOSE_META } from '../src/terrain/contourStudio/contourStudioPurpose';
 
 class FakeEl {
   readonly tagName: string;
   className = '';
   textContent = '';
+  title = '';
   type = '';
   disabled = false;
   readonly children: FakeEl[] = [];
@@ -80,6 +82,10 @@ describe('renderContourStudioWorkspace', () => {
     expect(cards.length).toBe(5);
     // The Survey Review card is the 2nd in order.
     const survey = cards[1];
+    // Declutter: the description moved off-card onto hover (title) + aria-label.
+    const meta = PURPOSE_META['survey-review'];
+    expect(survey.title).toBe(meta.summary);
+    expect(survey.getAttribute('aria-label')).toBe(`${meta.label}. ${meta.summary}`);
     survey.click();
     expect(c.getState().purpose).toBe('survey-review');
     // After re-render, survey is now the selected card.
