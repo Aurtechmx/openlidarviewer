@@ -52,6 +52,21 @@ const intent = (over: Partial<ContourExportIntent> = {}): ContourExportIntent =>
   methodId: 'olv.contour.analytical',
   methodVersion: 1,
   methodTag: 'olv.contour.analytical@1',
+  deliverable: {
+    label: 'Survey Review',
+    statement: 'Exact analytical geometry.',
+    analytical: true,
+    cartographic: false,
+    cartographicSmoothing: false,
+    generalizeToleranceCells: 0,
+    indexEvery: 5,
+    labelsIndexOnly: true,
+    hillshade: false,
+    hypsometricTint: false,
+    allowExploratory: false,
+    completePackage: false,
+    appendixRequired: true,
+  },
   ...over,
 });
 
