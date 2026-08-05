@@ -97,7 +97,7 @@ schemaVersion: 1
 # aspect divergence with no reference to arbitrate it, the multidirectional
 # hillshade split, and the nodata-halo difference. Every one of those narrows a
 # claim. None of them promotes one, and the per-claim scopeNote says so.
-softwareVersion: 0.6.3
+softwareVersion: 0.6.4
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
 
