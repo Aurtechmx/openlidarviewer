@@ -4498,6 +4498,43 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
 .olv-reclass-go { width: 100%; text-align: center; }
+/* Auto-classify: the panel's primary action — a filled accent button that reads
+   above the outline lasso/undo pills, matching the accent-on-dark chip convention. */
+.olv-reclass-auto {
+  width: 100%;
+  text-align: center;
+  margin-bottom: var(--space-sm);
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06121a;
+  font-weight: 600;
+}
+.olv-reclass-auto:hover:not(.is-disabled) {
+  filter: brightness(1.08);
+  border-color: var(--accent);
+  color: #06121a;
+}
+/* In-flight derive: dim the button and spin a ring before the label. */
+.olv-reclass-auto-loading {
+  opacity: 0.72;
+  cursor: progress;
+  pointer-events: none;
+}
+.olv-reclass-auto-loading::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: olv-reclass-spin 0.7s linear infinite;
+}
+@keyframes olv-reclass-spin {
+  to { transform: rotate(360deg); }
+}
 .olv-reclass-actions { display: flex; gap: var(--space-sm); }
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
