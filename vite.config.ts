@@ -260,7 +260,7 @@ function thirdPartyNotices() {
     name: 'olv-third-party-notices',
     apply: 'build' as const,
     generateBundle(this: NoticeEmitter): void {
-      const source = readFileSync(new URL('./THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
+      const source = readFileSync(new URL('./docs/project/THIRD_PARTY_NOTICES.md', import.meta.url), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.md', source });
     },
   };

@@ -92,7 +92,7 @@ if (!heading) {
 }
 
 // 4. Release-notes file — must exist and be finished, not a placeholder.
-const notesPath = `RELEASE_NOTES_v${version}.md`;
+const notesPath = `docs/releases/RELEASE_NOTES_v${version}.md`;
 if (!existsSync(resolve(ROOT, notesPath))) {
   problems.push(`${notesPath} is missing.`);
 } else {
@@ -238,7 +238,7 @@ const EVIDENCE = [
   'REPRODUCIBILITY',
 ];
 for (const name of EVIDENCE) {
-  const path = `${name}_v${version}.md`;
+  const path = `docs/releases/${name}_v${version}.md`;
   if (!existsSync(resolve(ROOT, path))) {
     problems.push(`${path} is missing — every release needs its own ${name} file.`);
   }
@@ -284,7 +284,7 @@ if (!existsSync(resolve(ROOT, releasePage))) {
 // link still resolves, so nothing else can notice it is pointing backwards.
 const REFERRERS = [
   'README.md',
-  'AI_ASSISTANCE.md',
+  'docs/project/AI_ASSISTANCE.md',
   'ARTIFACT_EVALUATION.md',
   'docs-site/reproducibility/validation-report.md',
 ];
@@ -330,7 +330,7 @@ const COUNT_RE = new RegExp(
 );
 const counted = [];
 for (const name of EVIDENCE) {
-  const path = `${name}_v${version}.md`;
+  const path = `docs/releases/${name}_v${version}.md`;
   let text;
   try {
     text = read(path);

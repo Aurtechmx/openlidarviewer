@@ -386,8 +386,8 @@ The quick report takes five to ten minutes. A longer comparison against a refere
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.3.md](VALIDATION_REPORT_v0.6.3.md): what this release validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md).
-- [KNOWN_LIMITATIONS_v0.6.3.md](KNOWN_LIMITATIONS_v0.6.3.md): the documented limits of this release (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
+- [VALIDATION_REPORT_v0.6.3.md](docs/releases/VALIDATION_REPORT_v0.6.3.md): what this release validates and what it does not; terrain/measurement claims are inherited unchanged from [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md).
+- [KNOWN_LIMITATIONS_v0.6.3.md](docs/releases/KNOWN_LIMITATIONS_v0.6.3.md): the documented limits of this release (project frame staged, residual streaming flicker, bundle above the early-warning line, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md): where the test fixtures and streamed sample datasets come from, and how they are licensed.
@@ -400,7 +400,7 @@ Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [
 
 OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
-**Built on** [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+**Built on** [three.js](https://github.com/mrdoob/three.js) (rendering), [loaders.gl](https://github.com/visgl/loaders.gl) (format parsing), [proj4js](https://github.com/proj4js/proj4js) (CRS transforms), [pdf-lib](https://github.com/Hopding/pdf-lib) (reports), and [laz-perf](https://github.com/hobuinc/laz-perf) (LAZ decoding). Full licenses in [THIRD_PARTY_NOTICES.md](docs/project/THIRD_PARTY_NOTICES.md).
 
 **Data:** the streamed sample datasets are limited to sources with a confirmed open licence: [USGS 3DEP](https://www.usgs.gov/3d-elevation-program) (public domain) and the swisstopo and GURS national programmes (via FLAI). Providers and terms are listed in [docs/credits.md](docs/credits.md).
 

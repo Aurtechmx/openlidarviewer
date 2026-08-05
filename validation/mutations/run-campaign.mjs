@@ -190,7 +190,7 @@ const MUTATIONS = [
     pattern: 'remove a required archive include',
     module: 'archive portability',
     file: '.gitattributes',
-    append: '\nCLAIMS_AND_LIMITATIONS.md export-ignore\n',
+    append: '\ndocs/project/CLAIMS_AND_LIMITATIONS.md export-ignore\n',
     effect: 'a document the shipped markdown links to is dropped from the archive',
     // The portability check extracts `git archive HEAD`, which reads
     // `.gitattributes` from the commit and never from the working tree. A

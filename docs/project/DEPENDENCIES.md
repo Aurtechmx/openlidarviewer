@@ -25,7 +25,7 @@ unaffected.
 | SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.1`, 59 components |
 
 The CycloneDX bill of materials for the production dependency set is in
-[sbom.json](sbom.json). Licences are credited in
+[sbom.json](../../sbom.json). Licences are credited in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Direct runtime dependencies
