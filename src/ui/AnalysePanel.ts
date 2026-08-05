@@ -69,7 +69,7 @@ import {
   loadContourDeliverableBuild,
 } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
-import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
+import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {
   SHEET_OPTIONS,
@@ -348,6 +348,14 @@ export class AnalysePanel {
    * when it is null or not granted. Cleared after each PDF export attempt.
    */
   private _contourPdfPermit: ContourExportPermit | null = null;
+  /**
+   * The active purpose's deliverable facts for the pending map-sheet PDF. Stashed
+   * at Studio 'pdf' click time (alongside the permit) and read by
+   * `_buildAndDownloadMapPdf` so the sheet documents the chosen purpose. Null for
+   * any non-Studio export path, keeping that sheet byte-identical. Cleared after
+   * each attempt.
+   */
+  private _contourPdfPurpose: MapSheetPurpose | null = null;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
   /**
@@ -669,8 +677,12 @@ export class AnalysePanel {
               this._contourGeneralizeToleranceCells = generalizeToleranceCells;
             },
             exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
-            openMapPdf: (permit) => {
+            openMapPdf: (permit, intent) => {
               this._contourPdfPermit = permit;
+              // Stash the purpose deliverable facts so the async map-sheet build
+              // documents the chosen purpose (presentation only; the permit is
+              // the sole gate). Field-compatible with MapSheetPurpose.
+              this._contourPdfPurpose = intent.deliverable;
               this._studioExportBtns.get('pdf')?.click();
             },
             exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
@@ -2473,6 +2485,10 @@ export class AnalysePanel {
     // and package paths so no PDF escapes the gate).
     const permit = this._contourPdfPermit;
     this._contourPdfPermit = null;
+    // Consume the stashed purpose (Studio path only); cleared so a later non-Studio
+    // export can never inherit a stale purpose.
+    const purpose = this._contourPdfPurpose;
+    this._contourPdfPurpose = null;
     if (!permit || !permit.ok) {
       // eslint-disable-next-line no-console
       console.warn('OpenLiDARViewer: map sheet export refused — no granted evidence permit (§19).');
@@ -2527,6 +2543,9 @@ export class AnalysePanel {
       includeAnnotations: opts.includeAnnotations,
       annotations,
       sceneUpAxis,
+      // Purpose deliverable facts (Studio path) so the sheet renders purpose-
+      // specific content. Null on any other path ⇒ byte-identical sheet.
+      purpose,
     });
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),
