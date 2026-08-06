@@ -53,18 +53,35 @@ type FsEl = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void
 /**
  * Element-level Fullscreen API availability.
  *
- * True when the document element exposes `requestFullscreen` (or the webkit
- * prefix) and `fullscreenEnabled` is not false. iPhone Safari exposes the API
- * on `HTMLVideoElement` only, so both checks fail there; Android Chromium and
- * iPadOS pass. The manifest's `display: standalone` covers the iPhone case for
- * an installed copy.
+ * True only when the document element exposes `requestFullscreen` (or the
+ * webkit prefix) AND the matching `fullscreenEnabled` / `webkitFullscreenEnabled`
+ * flag is explicitly true. iPhone WebKit (Safari / Brave / every iOS browser)
+ * exposes the request on `HTMLVideoElement` only and never reports an enabled
+ * flag of true for the document, so it is correctly treated as unsupported and
+ * the button is hidden instead of shown-but-inert. Android Chromium and iPadOS
+ * report the flag true and pass. The manifest's `display: standalone` covers the
+ * iPhone case for an installed copy.
  */
 export function fullscreenSupported(doc: Document = document): boolean {
   const d = doc as FsDoc & { fullscreenEnabled?: boolean; webkitFullscreenEnabled?: boolean };
   const root = doc.documentElement as FsEl | null;
-  const canRequest = !!(root?.requestFullscreen ?? root?.webkitRequestFullscreen);
-  const enabled = d.fullscreenEnabled ?? d.webkitFullscreenEnabled ?? canRequest;
-  return canRequest && enabled !== false;
+  if (!root) return false;
+  // Standard API (modern desktop + Android Chromium). `fullscreenEnabled` must
+  // be EXPLICITLY true: it is false inside a permission-blocked or sandboxed
+  // iframe, and it is the flag iPhone WebKit never sets true for the document.
+  if (typeof root.requestFullscreen === 'function' && d.fullscreenEnabled === true) {
+    return true;
+  }
+  // Prefixed API (older desktop Safari, which reports webkitFullscreenEnabled
+  // === true). Crucially we do NOT trust the bare request method's presence:
+  // iPhone WebKit (Safari / Brave / any iOS browser) exposes a
+  // requestFullscreen only on <video> and never reports an enabled flag of true
+  // for the document, so this stays false and the dead button is hidden rather
+  // than shown-but-inert. iPadOS and Android report the flag true and still pass.
+  if (typeof root.webkitRequestFullscreen === 'function' && d.webkitFullscreenEnabled === true) {
+    return true;
+  }
+  return false;
 }
 
 /**

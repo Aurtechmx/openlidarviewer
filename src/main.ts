@@ -3916,8 +3916,8 @@ void viewerLoaded.then(() => {
       leftPanels.append(...desktopPanels);
     };
 
-    // Layout swap stays keyed to the WIDTH breakpoint so JS layout and the CSS
-    // `@media` rules never disagree; input-aware detection drives behaviour only.
+    // Layout swap stays keyed to the shared mobile-layout condition (orientation-
+    // independent, so a phone stays mobile in landscape) so JS and CSS agree.
     const mobileMql =
       typeof window.matchMedia === 'function'
         ? window.matchMedia(MOBILE_LAYOUT_QUERY)
