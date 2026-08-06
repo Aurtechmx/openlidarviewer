@@ -4926,7 +4926,7 @@ async function exportSession(): Promise<void> {
     const b = cloud.bounds();
     scanSummary = {
       fileName: cloud.name,
-      sourcePoints: cloud.pointCount,
+      sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
       width: b.max[0] - b.min[0],
       depth: b.max[1] - b.min[1],
       height: b.max[2] - b.min[2],
