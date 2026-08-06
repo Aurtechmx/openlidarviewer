@@ -32,9 +32,19 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from './crs';
 import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
+import { parseResolvedCrs } from './sessionCrs';
+import {
+  assertOwnershipWithinFrame,
+  frameAnchorLayerId,
+  parseSessionProjectFrame,
+  serializeSessionProjectFrame,
+} from './sessionFrame';
+import type { SessionProjectFrame } from './sessionFrame';
+import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnership';
+import type { WorkOwnership } from '../model/workOwnership';
 
 /**
- * Current session-file schema version (v7). The history, oldest first: v3 added
+ * Current session-file schema version (v8). The history, oldest first: v3 added
  *   • the live camera state (not just saved views) so a re-import lands
  *     the viewer on the exact viewpoint the user saved;
  *   • render settings (point size, EDL, antialiasing, size mode) so the
@@ -54,13 +64,23 @@ import type { ClipBox, ClipMode } from '../render/clip/clipBox';
  * passthrough) so the verifiable-processing workstream can populate it
  * without another version bump.
  *
- * Older v1 + v2 files parse with no loss — the new optional fields just
- * read as undefined, and the Viewer falls back to its current state.
+ * v8 adds the PROJECT FRAME: one project origin plus a record per layer
+ * (stable id, source fingerprint, display name, source origin, the Float64
+ * transform into the project frame, CRS, up axis), and per-item ownership on
+ * measurements and annotations. Through v7 a session described one scan with
+ * one origin, so saved work had no way to say which layer it belonged to,
+ * which is why multi-layer mounting is disabled. v8 is the persistence half of
+ * removing that block; the mount flag itself stays off (see `LayerService.ts`).
+ *
+ * Older v1..v7 files parse with no loss: the new optional fields just
+ * read as undefined, and the Viewer falls back to its current state. A v7
+ * file's work carries no owner, and `io/sessionOwnership.ts` attributes it to
+ * the anchor layer with the assignment MARKED inferred rather than asserted.
  */
-export const SESSION_VERSION = 7;
+export const SESSION_VERSION = 8;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -252,6 +272,18 @@ export interface InspectionSession {
    * and tolerantly parsed like {@link layerId}.
    */
   layerName?: string;
+  /**
+   * v8. The project frame: the one origin the project's layers map into, plus
+   * a record per layer (see `io/sessionFrame.ts`). Present only for a session
+   * that actually describes a project frame; absent means the pre-v8 reading
+   * applies, where {@link origin} is the single frame everything is local to.
+   *
+   * Unlike every other optional field, this one is NOT tolerantly dropped when
+   * malformed. A dropped display setting costs a display setting; a dropped or
+   * repaired frame changes where saved geometry is read back, invisibly. An
+   * inconsistent frame is therefore refused on read and on write.
+   */
+  projectFrame?: SessionProjectFrame;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -296,8 +328,11 @@ export function serializeSession(
     // discipline as the top-level fields, so a camera-only view stays
     // byte-identical to its v6 form.
     views: session.views.map(serializeSavedView),
-    measurements: session.measurements,
-    annotations: session.annotations,
+    // v8. Ownership is validated on the way out, never rewritten. Work that
+    // carries no owner is passed through as the SAME object, so a session with
+    // no ownership keeps its pre-v8 byte-shape exactly.
+    measurements: session.measurements.map((m) => withCheckedOwner(m, `Measurement ${m.id}`)),
+    annotations: session.annotations.map((a) => withCheckedOwner(a, `Annotation ${a.id}`)),
   };
   if (session.camera) doc.camera = session.camera;
   if (session.render) doc.render = session.render;
@@ -332,7 +367,29 @@ export function serializeSession(
   if (typeof session.layerName === 'string' && session.layerName !== '') {
     doc.layerName = session.layerName;
   }
+  // v8. The project frame, validated here as well as on read, so this app can
+  // never write a session it would itself refuse to open.
+  if (session.projectFrame) {
+    const frame = serializeSessionProjectFrame(session.projectFrame);
+    assertOwnershipWithinFrame(frame, doc.measurements, 'measurements');
+    assertOwnershipWithinFrame(frame, doc.annotations, 'annotations');
+    doc.projectFrame = frame;
+  }
   return JSON.stringify(doc, null, 2);
+}
+
+/**
+ * Pass a measurement or annotation through the ownership check unchanged.
+ *
+ * Returns the SAME object when there is no owner, which is what keeps the
+ * pre-v8 byte-shape intact for work that carries none. An owner that would not
+ * survive its own parser throws rather than being dropped: dropping it would
+ * turn a stated attribution into an inferred one on the next import, and the
+ * work would be read in whatever frame happened to be open.
+ */
+function withCheckedOwner<T extends { owner?: WorkOwnership }>(item: T, context: string): T {
+  if (item.owner === undefined) return item;
+  return { ...item, owner: serializeWorkOwnership(item.owner, context) };
 }
 
 /**
@@ -445,6 +502,16 @@ export function parseSession(text: string): InspectionSession {
   // ignored (treated as absent) rather than throwing.
   if (typeof raw.layerId === 'string' && raw.layerId !== '') out.layerId = raw.layerId;
   if (typeof raw.layerName === 'string' && raw.layerName !== '') out.layerName = raw.layerName;
+  // v8. The project frame. Version-independent on read, like the other
+  // additive fields, so a file that carries one is never stripped by a round
+  // trip. An inconsistent frame THROWS (see `sessionFrame.ts`): it decides
+  // where every owned measurement is read back, so there is nothing safe to
+  // fall back to.
+  if (raw.projectFrame != null) {
+    out.projectFrame = parseSessionProjectFrame(raw.projectFrame);
+    assertOwnershipWithinFrame(out.projectFrame, out.measurements, 'measurements');
+    assertOwnershipWithinFrame(out.projectFrame, out.annotations, 'annotations');
+  }
   return out;
 }
 
@@ -469,6 +536,14 @@ export interface RebasedSessionGeometry {
   clip?: ClipBox;
   /** `session.origin − cloudOrigin`, in f64. All-zero when the frames match. */
   delta: Vec3;
+  /**
+   * v8. Ids of the measurements and annotations left where they were because
+   * their stored ownership says they are NOT in the session's global frame:
+   * work already declared project-frame, or owned by a layer other than the one
+   * `session.origin` describes. Shifting those by this delta would move them.
+   * Empty for every pre-v8 session, where all work shares the one frame.
+   */
+  unrebased: readonly string[];
 }
 
 /**
@@ -510,8 +585,27 @@ export function rebaseSessionGeometry(
     ...c,
     box: { min: shiftVec(c.box.min), max: shiftVec(c.box.max) },
   });
+  const copyVec = (v: readonly [number, number, number]): Vec3 => [v[0], v[1], v[2]];
+
+  // `session.origin` is the frame of ONE layer, the anchor. Work owned by any
+  // other layer, or already declared project-frame, is in a different frame and
+  // this delta does not describe it. Pre-v8 work carries no owner and is in the
+  // session's single frame by construction, so it rebases exactly as before.
+  const anchorLayerId = session.projectFrame
+    ? frameAnchorLayerId(session.projectFrame)
+    : (session.layerId ?? null);
+  const unrebased: string[] = [];
+  const inSessionFrame = (owner: WorkOwnership | undefined): boolean => {
+    if (!owner) return true;
+    if (owner.frame === 'project') return false;
+    return anchorLayerId !== null && owner.layerId === anchorLayerId;
+  };
 
   const measurements = session.measurements.map((m) => {
+    if (!inSessionFrame(m.owner)) {
+      unrebased.push(m.id);
+      return { ...m, points: m.points.map(copyVec) };
+    }
     const next: Measurement = { ...m, points: m.points.map(shiftVec) };
     if (m.profileChart) {
       next.profileChart = m.profileChart.map((s) => ({
@@ -526,6 +620,10 @@ export function rebaseSessionGeometry(
     return next;
   });
   const annotations = session.annotations.map((a) => {
+    if (!inSessionFrame(a.owner)) {
+      unrebased.push(a.id);
+      return { ...a, localPosition: { ...a.localPosition } };
+    }
     // The world (survey) position is frame-INVARIANT: a render-frame rebase
     // shifts the local anchor by `delta` and the active origin by `-delta`, so
     // `local + origin` is unchanged. Honour the "recomputed on load" contract on
@@ -563,6 +661,7 @@ export function rebaseSessionGeometry(
     camera: session.camera ? shiftCamera(session.camera) : undefined,
     clip: session.clip ? shiftClip(session.clip) : undefined,
     delta: [dx, dy, dz],
+    unrebased,
   };
 }
 
@@ -978,6 +1077,12 @@ function parseMeasurements(v: unknown): Measurement[] {
     // was actually found), which is the point of evidence.
     const trust = parseMeasurementTrust(item.trust);
     if (trust) m.trust = trust;
+    // v8. Which layer this measurement belongs to, and which frame its stored
+    // vertices are already in. A malformed claim leaves the field undefined:
+    // the measurement is kept, and the ownership migration attributes it the
+    // same way it attributes legacy work, marked inferred rather than asserted.
+    const owner = parseWorkOwnership(item.owner);
+    if (owner) m.owner = owner;
     // Kind-specific specialised data. Serialised as part of the Measurement
     // object; parsed here so a round-tripped profile/volume keeps its chart,
     // corridor width, ground percentile, cut/fill record, and resident-only
@@ -1118,6 +1223,12 @@ function parseAnnotations(v: unknown): Annotation[] {
       annotation.layerId = item.layerId;
     }
     if (typeof item.crs === 'string' && item.crs.length > 0) annotation.crs = item.crs;
+    // v8. The owning layer's STABLE id plus the frame the stored position is
+    // in. Distinct from `layerId` above, which holds the cloud's display name
+    // for report attribution and is not an identity. Malformed ⇒ left
+    // undefined, and the migration marks what it assigns as inferred.
+    const owner = parseWorkOwnership(item.owner);
+    if (owner) annotation.owner = owner;
     if (isRecord(item.cameraState)) annotation.cameraState = parseCameraState(item.cameraState);
     if (typeof item.linkedMeasurementId === 'string') {
       annotation.linkedMeasurementId = item.linkedMeasurementId;
@@ -1231,62 +1342,5 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
   return out;
 }
 
-const CRS_KINDS = ['local', 'projected', 'geographic', 'unknown'] as const;
-const CRS_SOURCES = [
-  'las-vlr',
-  'copc-meta',
-  'ept-srs',
-  'catalog-tile',
-  'user-override',
-  'default-assumption',
-] as const;
-const CRS_CONFIDENCES = ['high', 'medium', 'low', 'none'] as const;
-const CRS_LINEAR_UNITS = ['metre', 'foot', 'us-survey-foot', 'unknown'] as const;
-
-/**
- * Tolerantly parse the v4 `crs` field. Returns null when the object is
- * missing, not a record, or fails the required-field set. Optional fields
- * (`epsg`, `wkt`) are dropped individually on bad shape; the rest of the
- * resolved CRS still imports. This matches the "v3 optional fields"
- * discipline — a partly-broken record never blocks the rest of the
- * session.
- */
-function parseResolvedCrs(v: unknown): ResolvedCrs | null {
-  if (!isRecord(v)) return null;
-  // Required fields.
-  if (typeof v.name !== 'string' || v.name.length === 0) return null;
-  if (typeof v.kind !== 'string' || !CRS_KINDS.includes(v.kind as never)) return null;
-  if (typeof v.source !== 'string' || !CRS_SOURCES.includes(v.source as never)) return null;
-  if (typeof v.confidence !== 'string' || !CRS_CONFIDENCES.includes(v.confidence as never)) return null;
-  if (typeof v.linearUnit !== 'string' || !CRS_LINEAR_UNITS.includes(v.linearUnit as never)) {
-    return null;
-  }
-  if (!isFiniteNumber(v.linearUnitToMetres)) return null;
-  if (typeof v.userConfirmed !== 'boolean') return null;
-  const out: ResolvedCrs = {
-    kind: v.kind as ResolvedCrs['kind'],
-    name: v.name,
-    linearUnit: v.linearUnit as ResolvedCrs['linearUnit'],
-    linearUnitToMetres: v.linearUnitToMetres,
-    source: v.source as ResolvedCrs['source'],
-    confidence: v.confidence as ResolvedCrs['confidence'],
-    userConfirmed: v.userConfirmed,
-    ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
-    ...(typeof v.wkt === 'string' && v.wkt.length > 0 ? { wkt: v.wkt } : {}),
-    // The vertical + datum fields. The serializer has always written the whole
-    // ResolvedCrs; only these were dropped on the way back in, so a
-    // compound-CRS session reopened with its geometry intact and the metadata
-    // needed to interpret its heights silently gone.
-    ...(isFiniteNumber(v.verticalEpsg) ? { verticalEpsg: v.verticalEpsg } : {}),
-    ...(typeof v.verticalDatum === 'string' && v.verticalDatum.length > 0
-      ? { verticalDatum: v.verticalDatum }
-      : {}),
-    ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
-      ? { verticalUnitToMetres: v.verticalUnitToMetres }
-      : {}),
-    ...(typeof v.horizontalDatum === 'string' && v.horizontalDatum.length > 0
-      ? { horizontalDatum: v.horizontalDatum }
-      : {}),
-  };
-  return out;
-}
+// The resolved-CRS parser lives in `./sessionCrs` so the session document and
+// the v8 project-frame records validate a persisted CRS through one definition.
