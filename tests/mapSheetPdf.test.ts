@@ -334,7 +334,15 @@ describe('buildMapSheetPdf — purpose deliverable content', () => {
   } as const;
 
   it('is byte-identical to the pre-purpose sheet when purpose is absent or null', async () => {
-    const base = { model, labels: [] as never[], provenance: PROV } as const;
+    // A fixed generatedAt: the sheet stamps the generation time to the minute,
+    // so two builds that straddle a boundary differ in bytes for a reason this
+    // test is not about.
+    const base = {
+      model,
+      labels: [] as never[],
+      provenance: PROV,
+      generatedAt: new Date(0),
+    } as const;
     const absent = await buildMapSheetPdf({ ...base });
     const nul = await buildMapSheetPdf({ ...base, purpose: null });
     expect(Buffer.from(nul).equals(Buffer.from(absent))).toBe(true);
