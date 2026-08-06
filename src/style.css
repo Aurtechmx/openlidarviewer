@@ -6734,13 +6734,47 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-summary:empty { display: none; }
 .olv-export-summary.is-warn { color: var(--rating-moderate); }
 .olv-export-summary.is-error { color: var(--rating-weak); }
-/* Collapsed "Products" lane — derived artifacts (measurement GeoJSON/CSV, …). */
-.olv-export-products { margin-top: var(--space-sm); border-top: 1px solid var(--border-subtle); padding-top: var(--space-sm); }
+/*
+ * "Products" section: the artifacts derived FROM a scan (measurement vectors,
+ * the integrity report, the Google Earth outlines), as opposed to the point
+ * cloud the panel's primary flow converts.
+ *
+ * It read as an afterthought: a --text-xs text toggle, collapsed by default,
+ * over a dense strip of small pills. Two of those products (measurements, KML)
+ * are the deliverables people come here for, so the section now carries a real
+ * heading at the panel's own title weight, a firm rule above it, and one full
+ * width button per product under a group label. The rule and the heading also
+ * pick up REAL tokens. The previous --border-subtle / --text-bright are not
+ * defined anywhere in the theme, so the separator never drew and the hover
+ * colour never applied.
+ */
+.olv-export-products { margin-top: var(--space-xl); border-top: 0.5px solid var(--hairline-strong); padding-top: var(--space-xl); }
 .olv-export-products:empty { display: none; border: 0; padding: 0; margin: 0; }
-.olv-export-products-head { background: none; border: 0; color: var(--text-dim); font-size: var(--text-xs); font-weight: 600; cursor: pointer; padding: 0; }
-.olv-export-products-head:hover { color: var(--text-bright); }
-.olv-export-products-body { margin-top: var(--space-xs); }
+.olv-export-products-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--text-sm); font-weight: 700; color: var(--text);
+  letter-spacing: 0.01em;
+}
+.olv-export-products-head:hover { color: var(--accent); }
+.olv-export-products-chevron { color: var(--text-faint); font-size: var(--text-2xs); transition: transform var(--dur-fast) var(--ease-standard); }
+.olv-export-products-chevron.is-closed { transform: rotate(-90deg); }
+.olv-export-products-body { display: flex; flex-direction: column; gap: var(--space-xl); margin-top: var(--space-md); }
 .olv-export-products-body.olv-hidden { display: none; }
+/* One product group: label, its stacked actions, one line of hint. */
+.olv-export-product-group { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-export-body .olv-export-product-group .olv-bc-section-label { margin: 0; }
+.olv-export-product-actions { display: flex; flex-direction: column; gap: var(--space-xs); }
+/* A product action wears the converter's pill treatment, laid out as a row so a
+   stack of them stays scannable at the panel's 222px width. */
+.olv-export-product-btn {
+  width: 100%; text-align: left; box-sizing: border-box;
+  padding: var(--space-md) var(--space-lg); border-radius: var(--radius-sm);
+}
+.olv-export-product-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* The pill hover rule keys off `.is-disabled`, which a `disabled` attribute does
+   not set, so an unavailable product would still light up under the pointer. */
+.olv-export-product-btn:disabled:hover { border-color: var(--hairline); color: var(--text-dim); }
 /* One-line note shown in place of the CRS step when the scan is ungeoreferenced. */
 .olv-export-crs-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin: var(--space-2xs) 0 0; }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }
