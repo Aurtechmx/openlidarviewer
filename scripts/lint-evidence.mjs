@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { releaseDocsFor } from './lib/releaseDocs.mjs';
 
 const GIT = requireBinaryOnPath('git');
 
@@ -150,12 +151,16 @@ for (const k of ['liveEntryKiB', 'ceilingKiB']) {
 // version from package.json ties the list to what actually ships, and the
 // zero-documents guard below turns a vacuous pass into a failure.
 const VERSION = JSON.parse(read('package.json')).version;
+// The four versioned truth documents live under docs/releases/; the paths come
+// from one helper so this list cannot silently point at the repo root, where
+// existsSync → continue would let the guard pass while parsing nothing.
+const releaseDocs = releaseDocsFor(VERSION);
 const DOCS = [
-  `REPRODUCIBILITY_v${VERSION}.md`,
-  `VALIDATION_REPORT_v${VERSION}.md`,
+  releaseDocs.reproducibility,
+  releaseDocs.validationReport,
   `READINESS_REPORT_v${VERSION}.md`,
-  `KNOWN_LIMITATIONS_v${VERSION}.md`,
-  `RELEASE_NOTES_v${VERSION}.md`,
+  releaseDocs.knownLimitations,
+  releaseDocs.releaseNotes,
   'ARTIFACT_EVALUATION.md',
 ];
 if (DOCS.every((d) => !existsSync(resolve(ROOT, d)))) {
