@@ -54,7 +54,7 @@ Unchanged from prior releases: the viewer does not reproject between coordinate 
 
 ## Axis and compound-unit handling is correct but not yet uniform
 
-There is still no single explicit model spanning up-axis, horizontal unit, vertical unit and CRS, so an unusual combination is more likely to be silently plausible than loudly refused. A box measurement is stored as axis-aligned min/max corners and throws on a genuinely tilted up vector rather than reporting the extent along the nearest axis. No scan the viewer sets can currently trigger that, so the refusal guards the contract rather than gating a feature. A single explicit spatial model is a stable-v0.6 requirement.
+An explicit model spanning up-axis, horizontal unit, vertical unit and CRS now exists as `SpatialContext` (`src/geo/SpatialContext.ts`), but not every metric path consumes it yet, so an unusual combination can still be silently plausible where a caller reads the raw fields instead of the model. A box measurement is stored as axis-aligned min/max corners and throws on a genuinely tilted up vector rather than reporting the extent along the nearest axis. No scan the viewer sets can currently trigger that, so the refusal guards the contract rather than gating a feature. Full adoption of `SpatialContext` across every metric path is a stable-v0.6 requirement.
 
 ## Compatibility fallback verified against a forced configuration, not every device
 
