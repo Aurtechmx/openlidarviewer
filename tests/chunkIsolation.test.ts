@@ -33,6 +33,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { workerChunkPins } from '../src/workers/workerRegistry';
 
 const DIST = join(process.cwd(), 'dist', 'assets');
 
@@ -103,7 +104,15 @@ const DIST = join(process.cwd(), 'dist', 'assets');
  */
 const WARNING_THRESHOLD = 532 * 1024;
 
-/** Required chunk-name prefixes — substring-matched against the filename. */
+/**
+ * Required chunk-name prefixes — substring-matched against the filename.
+ *
+ * Worker chunks are NOT listed by hand here: `workerChunkPins()` derives every
+ * registered worker's chunk (and each dynamically-imported client chunk) from
+ * the single-source worker registry, so a newly added worker is asserted to
+ * emit the moment it is declared. This is the same set vite.config.ts pins in
+ * its build-time chunk-emission guard.
+ */
 const REQUIRED_CHUNK_PREFIXES = [
   'vendor-three-webgpu',
   'vendor-pdf',
@@ -112,8 +121,7 @@ const REQUIRED_CHUNK_PREFIXES = [
   'report',
   'export',
   'lazDecode',
-  'copcWorker',
-  'eptLaszipWorker',
+  ...workerChunkPins(),
   'EptStreamingPointCloud',
   'EptChunkDecoder',
   'DebugOverlay',

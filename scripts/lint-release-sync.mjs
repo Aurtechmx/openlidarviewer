@@ -287,6 +287,10 @@ const REFERRERS = [
   'docs/project/AI_ASSISTANCE.md',
   'ARTIFACT_EVALUATION.md',
   'docs-site/reproducibility/validation-report.md',
+  // The unversioned reproducibility entry point points at the current
+  // release's evidence file; it drifted to v0.6.1 after the docs moved under
+  // docs/releases/, and nothing noticed because the old link still resolved.
+  'REPRODUCIBILITY.md',
 ];
 for (const file of REFERRERS) {
   let text;
@@ -310,6 +314,23 @@ for (const file of REFERRERS) {
           `the link still resolves, so it silently sends a reviewer to the wrong release's evidence.`,
       );
     }
+  }
+}
+
+// 8b. The reviewer quickstart tells a reader which tag to check out. It carried
+// `git checkout v0.6.1` after the release moved to v0.6.4 — a stale instruction
+// that lands a reviewer on the wrong release, and one nothing checked because
+// it names a tag, not a versioned filename. Require the checkout tag to be the
+// current release.
+if (existsSync(resolve(ROOT, 'REVIEWER_QUICKSTART.md'))) {
+  const quickstart = read('REVIEWER_QUICKSTART.md');
+  const checkout = /git checkout v([0-9][0-9A-Za-z.\-]*)/.exec(quickstart);
+  if (!checkout) {
+    problems.push('REVIEWER_QUICKSTART.md has no "git checkout vX.Y.Z" line to check.');
+  } else if (checkout[1] !== version) {
+    problems.push(
+      `REVIEWER_QUICKSTART.md says "git checkout v${checkout[1]}", expected v${version} — it sends a reviewer to the wrong release.`,
+    );
   }
 }
 
