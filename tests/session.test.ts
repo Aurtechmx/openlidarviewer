@@ -584,10 +584,12 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     const json = serializeSession(sampleSession());
     const parsed = JSON.parse(json);
     expect(parsed.version).toBe(SESSION_VERSION);
-    // The v7 bump is the R3 coordinated one: per-view state bundles plus the
-    // reserved processingManifest slot land together, so later workstreams
-    // (the manifest writer) do NOT need another version change.
-    expect(SESSION_VERSION).toBe(7);
+    // v8 adds the project frame and per-item ownership: the persistence model
+    // multi-layer work needs before a mount can be enabled. The v7 bump before
+    // it was the R3 coordinated one (per-view state bundles plus the reserved
+    // processingManifest slot), which is why the manifest writer needs no
+    // version change of its own.
+    expect(SESSION_VERSION).toBe(8);
   });
 
   it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
@@ -1015,8 +1017,10 @@ describe('v7 — named restorable view states', () => {
   });
 
   it('still rejects an unsupported (future) version', () => {
+    // One past whatever this build writes, so the check keeps meaning the same
+    // thing after a version bump instead of quietly testing a supported one.
     const doc = {
-      app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8,
+      app: 'OpenLiDARViewer', kind: 'measurement-session', version: SESSION_VERSION + 1,
       upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric',
       views: [], measurements: [], annotations: [],
     };
