@@ -27,6 +27,7 @@ import { isComplete } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
+import { ScanFootprintError, type FootprintRing, type FootprintExtentBasis } from './scanFootprint';
 
 /**
  * A saved camera viewpoint to serialise as a KML <LookAt> placemark.
@@ -411,6 +412,83 @@ export function buildKml(input: KmlExportInput): string {
     '<name>OpenLiDARViewer Export</name>',
     docDesc,
     ...placemarks,
+    '</Document>',
+    '</kml>',
+  ].join('\n');
+}
+
+/** Everything the scan-area document is built from. Coordinates arrive already
+ *  reprojected, by `scanFootprint.footprintLonLatRing`. */
+export interface KmlFootprintInput {
+  /** The scan name, used for the document and placemark labels. */
+  readonly name: string;
+  /** Closed WGS84 ring, first vertex repeated as the last. */
+  readonly ring: FootprintRing;
+  /** The CRS the corners were reprojected FROM, stated in the description. */
+  readonly crsName: string | null;
+  /** Which points the extent was read from, stated in the description. */
+  readonly extentBasis: FootprintExtentBasis;
+  /** The "not survey-grade" caveat, the same one every other product carries. */
+  readonly notSurveyGradeNote: string;
+}
+
+/**
+ * The scanned area as a KML 2.2 `<Polygon>` document.
+ *
+ * Shares this module's serialiser rather than writing a second one: the same
+ * escaping, the same `lon,lat` formatter with its out-of-domain guard, and the
+ * same `<Document>` skeleton, so a footprint file and a site file cannot drift
+ * apart in structure or in what they disclose.
+ *
+ * Always `clampToGround` with two-ordinate coordinates. A footprint is a claim
+ * about WHERE, not about how high; writing a third ordinate would leave a
+ * number in the file that another tool reads back as an elevation.
+ *
+ * The ring is validated here as well as built here, because the whole point of
+ * a LinearRing is that it closes. An open or two-corner ring is refused rather
+ * than closed on the reader's behalf.
+ */
+export function buildFootprintKml(input: KmlFootprintInput): string {
+  const ring = input.ring;
+  if (ring.length < 4) {
+    throw new ScanFootprintError(
+      'A scan outline needs at least three corners plus a repeated first corner.',
+    );
+  }
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    throw new ScanFootprintError(
+      'The scan outline does not close: its last corner must repeat its first.',
+    );
+  }
+  const crs = input.crsName ?? 'unknown CRS';
+  const coords = ring.map(([lon, lat]) => coord([lon, lat, 0], false)).join(' ');
+  const label = `${input.name} scan area`;
+  const lines = [
+    'Bounding rectangle of the scanned area, reprojected to WGS84 longitude/latitude.',
+    `Source CRS: ${crs}. Extent read from ${input.extentBasis}.`,
+    'Heights are clamped to ground: an outline states where the scan is, not how high it is.',
+    input.notSurveyGradeNote,
+  ];
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<kml xmlns="http://www.opengis.net/kml/2.2">',
+    '<Document>',
+    `<name>${esc(label)}</name>`,
+    description(lines),
+    '<Placemark>',
+    `<name>${esc(`${label} (bounding rectangle)`)}</name>`,
+    description(lines),
+    '<Polygon>',
+    '<altitudeMode>clampToGround</altitudeMode>',
+    '<outerBoundaryIs>',
+    '<LinearRing>',
+    `<coordinates>${coords}</coordinates>`,
+    '</LinearRing>',
+    '</outerBoundaryIs>',
+    '</Polygon>',
+    '</Placemark>',
     '</Document>',
     '</kml>',
   ].join('\n');

@@ -378,6 +378,12 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     // verify-dataset-register.mjs (validation:datasets:verify) is the
     // network-free hash/immutability check and still runs here.
     'scripts/acquire-dataset.mjs',
+    // lint-architecture-truth checks that docs/architecture/*.md agree with the
+    // code. Those architecture docs are export-ignored, so the portable archive
+    // omits them and the check has no docs to read against the shipped source.
+    // It belongs in the repo gate (test:release:execute / ci.yml), not the
+    // archive's own self-verification.
+    'scripts/lint-architecture-truth.mjs',
   ]);
   const candidates = Object.entries(c.pkg.scripts)
     .filter(([, cmd]) => /^node scripts\/[\w.-]+\.mjs$/.test(cmd))
