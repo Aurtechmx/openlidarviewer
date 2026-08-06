@@ -1,5 +1,5 @@
 {
-  "purpose": "Every direct `.positions` read in src/, classified by the coordinate frame the reading site expects. Keyed by file plus enclosing symbol so the key survives edits above it. Enforced by scripts/lint-position-access.mjs; a read with no entry fails CI.",
+  "purpose": "Every direct `.positions` read in src/ (scope all-src: every non-test .ts, INCLUDING src/model/, where the accessors are built), classified by the coordinate frame the reading site expects. The migration plan and lint:positions-reads count the narrower outside-model scope, so their total is lower; both count through scripts/lib/positionReads.mjs. Keyed by file plus enclosing symbol so the key survives edits above it. `frame` is one of the four below, or an array of them for a site that genuinely reads more than one (a combined estimator over static layers and streaming nodes). `why` is required and must be the reason, not a restatement of the frame name. Enforced by scripts/lint-position-access.mjs; a read with no entry fails CI.",
   "frames": {
     "source-local": "The buffer as the loader wrote it, relative to the cloud's own sourceOrigin.",
     "project-local": "Source-local plus the layer's Float64 sourceToProject translation, the shared project frame.",
