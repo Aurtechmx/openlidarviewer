@@ -23,12 +23,30 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SCOPES, scanPositionReads } from './lib/positionReads.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (rel) => readFileSync(resolve(ROOT, rel), 'utf8');
+/**
+ * Read a tracked file, turning a missing one into a stated lint failure rather
+ * than an uncaught ENOENT. A stack trace from inside a release stage reads as a
+ * broken toolchain; "required document is missing" reads as what it is, and
+ * names the file the gate expected.
+ */
+const read = (rel) => {
+  try {
+    return readFileSync(resolve(ROOT, rel), 'utf8');
+  } catch (err) {
+    if (err && err.code === 'ENOENT') {
+      throw new Error(`required file is missing: ${rel}`);
+    }
+    throw err;
+  }
+};
 const countLines = (rel) => read(rel).split('\n').length;
 
 const problems = [];
+/** Checks deliberately not performed (absent optional documents). */
+const notes = [];
 const facts = [];
 const fact = (name, value) => {
   facts.push(`${name} = ${value}`);
@@ -145,30 +163,59 @@ const fact = (name, value) => {
 }
 
 // ── Fact 5: direct .positions read surface ──────────────────────────────────
-// Same walk the report-only scanner uses (src/, excluding src/model and tests),
-// counting occurrences outside comments.
+// Counted through scripts/lib/positionReads.mjs, the same module the gate
+// (lint:position-access) and the report (lint:positions-reads) count through.
+//
+// This check is against the migration PLAN, so it uses the plan's scope:
+// `outside-model`. The gate uses `all-src` and therefore reports a LARGER
+// total, because it also counts the reads inside `src/model/` where the
+// accessors are built. That is a scope difference, not a disagreement — and it
+// was previously invisible, because both scanners printed a bare "positions
+// reads" number with no scope attached and each carried its own private copy of
+// the walk and the counting rule. Two unexplained numbers for one fact is the
+// exact drift this lint exists to catch, so both scopes are reported here and
+// both are named in the output.
 {
-  const MODEL = resolve(ROOT, 'src/model');
-  let reads = 0;
-  const files = new Set();
-  for (const f of walk(resolve(ROOT, 'src'), MODEL)) {
-    const n = countPositionReads(readFileSync(f, 'utf8'));
-    if (n > 0) { reads += n; files.add(f); }
-  }
-  fact('positions reads', reads);
-  fact('positions read files', files.size);
+  const SRC = resolve(ROOT, 'src');
+  const PLAN_SCOPE = SCOPES['outside-model'];
+  const GATE_SCOPE = SCOPES['all-src'];
+  const scan = scanPositionReads(SRC, PLAN_SCOPE.id);
+  const gateScan = scanPositionReads(SRC, GATE_SCOPE.id);
+  const reads = scan.total;
+  const files = scan.byFile;
+  fact(`positions reads [${PLAN_SCOPE.id}]`, reads);
+  fact(`positions read files [${PLAN_SCOPE.id}]`, files.size);
+  fact(`positions reads [${GATE_SCOPE.id}, lint:position-access scope]`, gateScan.total);
+  fact(`positions read files [${GATE_SCOPE.id}, lint:position-access scope]`, gateScan.fileCount);
 
+  // This plan is `export-ignore`d (.gitattributes), so it is present in the
+  // repository and ABSENT from the published source archive. Reading it
+  // unguarded made the whole release gate ENOENT when run from that archive —
+  // the gate passed for us and failed for anyone who downloaded the source.
+  // A cross-check against a document that ships nowhere is a repo-only check:
+  // skip it when the document is absent, and say so rather than passing
+  // silently. Fact 7 below already guards its document this way.
   const PLAN = 'docs/architecture/float64-frame-migration-plan.md';
-  const planText = read(PLAN);
-  const claim = planText.match(/([\d,]+)\s+direct\s+`?\.positions`?\s+reads\s+across\s+(\d+)\s+files/i);
+  const planText = existsSync(resolve(ROOT, PLAN)) ? read(PLAN) : null;
+  if (planText === null) {
+    notes.push(`${PLAN} is not present (export-ignored); its position-read claim was not cross-checked.`);
+  }
+  const claim = planText?.match(/([\d,]+)\s+direct\s+`?\.positions`?\s+reads\s+across\s+(\d+)\s+files/i);
   if (claim) {
     const statedReads = Number(claim[1].replace(/,/g, ''));
     const statedFiles = Number(claim[2]);
     if (statedReads !== reads) {
-      problems.push(`${PLAN}: states ${claim[1]} direct .positions reads; the tree has ${reads}.`);
+      problems.push(
+        `${PLAN}: states ${claim[1]} direct .positions reads; the tree has ${reads} `
+        + `in the plan's scope (${PLAN_SCOPE.label}). `
+        + `Run "npm run lint:positions-reads" for the live list.`,
+      );
     }
     if (statedFiles !== files.size) {
-      problems.push(`${PLAN}: states ${statedFiles} files with direct .positions reads; the tree has ${files.size}.`);
+      problems.push(
+        `${PLAN}: states ${statedFiles} files with direct .positions reads; the tree has `
+        + `${files.size} in the plan's scope (${PLAN_SCOPE.label}).`,
+      );
     }
   }
 }
@@ -216,32 +263,22 @@ if (problems.length > 0) {
 
 console.log(`lint:architecture-truth OK — ${facts.length} facts checked against the docs.`);
 console.log(facts.map((f) => `    ${f}`).join('\n'));
+// Printed on the passing path too: a check that did not run is not a check that
+// passed, and the difference is invisible unless it is stated.
+for (const n of notes) console.log(`    (skipped) ${n}`);
 
 // ── helpers ─────────────────────────────────────────────────────────────────
-function walk(dir, exclude) {
+function walk(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
-      if (exclude && full === exclude) continue;
-      out.push(...walk(full, exclude));
+      out.push(...walk(full));
     } else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) {
       out.push(full);
     }
   }
   return out;
-}
-
-/** Count `.positions` occurrences outside comment lines / trailing comments. */
-function countPositionReads(text) {
-  let n = 0;
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (line.startsWith('*') || line.startsWith('//') || line.startsWith('/*')) continue;
-    const stripped = raw.replace(/\/\/.*$/, '');
-    n += (stripped.match(/\.positions\b/g) ?? []).length;
-  }
-  return n;
 }
 
 /** Living architecture docs (the *.md under docs/architecture). */
