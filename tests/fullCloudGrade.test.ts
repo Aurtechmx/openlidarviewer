@@ -75,3 +75,66 @@ describe('fullCloudGradeCoverage', () => {
     expect(cov.sampledPoints * cov.samplePointScale).toBeCloseTo(cov.totalPoints, 5);
   });
 });
+
+describe('fullCloudGradeCoverage — completeness gating (a short hierarchy is never "exact")', () => {
+  // Every case below feeds a plan whose sample IS exhaustive over the loaded
+  // nodes (`plan.exhaustive === true`). Before the fix that alone printed "all N
+  // points (exact)". Completeness now decides whether that claim is honest.
+  const wholeTreePlan = () =>
+    buildSamplingPlan(nodes([[0, 500_000], [1, 1_300_000]]), { maxPoints: 10_000_000 });
+
+  it('a genuinely complete hierarchy within budget is STILL exact (the regression that matters most)', () => {
+    const plan = wholeTreePlan();
+    expect(plan.exhaustive).toBe(true);
+    const cov = fullCloudGradeCoverage(plan, { complete: true, errorCount: 0 });
+    expect(cov.scope).toBe('exhaustive');
+    expect(cov.label).toBe('all 1.8M points (exact)');
+    expect(cov.note).toBe('');
+  });
+
+  it('a hierarchy that hit the page/file ceiling is NOT exact', () => {
+    const plan = wholeTreePlan();
+    expect(plan.exhaustive).toBe(true); // the loaded nodes all fit the budget
+    const cov = fullCloudGradeCoverage(plan, { complete: false, errorCount: 1 });
+    expect(cov.scope).not.toBe('exhaustive');
+    expect(cov.label).not.toMatch(/exact/);
+    expect(cov.label).toMatch(/partial/i);
+  });
+
+  it('a swallowed page-fetch failure is NOT exact and states the reason + error count', () => {
+    const cov = fullCloudGradeCoverage(wholeTreePlan(), { complete: false, errorCount: 2 });
+    expect(cov.scope).toBe('sampled');
+    expect(cov.label).not.toMatch(/exact/);
+    expect(cov.note).toMatch(/did not fully load/i);
+    expect(cov.note).toMatch(/2 load errors were recorded/);
+  });
+
+  it('recorded parse errors are NOT exact', () => {
+    const cov = fullCloudGradeCoverage(wholeTreePlan(), { complete: false, errorCount: 5 });
+    expect(cov.scope).not.toBe('exhaustive');
+    expect(cov.label).not.toMatch(/exact/);
+  });
+
+  it('incompleteness with no recorded error count still downgrades, and omits the count clause', () => {
+    // EPT mid-deepening: the walk has not finished (fullyLoaded false), no error
+    // yet → complete:false, errorCount:0. Still not exact, and the note reads
+    // cleanly without a "0 errors" clause.
+    const cov = fullCloudGradeCoverage(wholeTreePlan(), { complete: false, errorCount: 0 });
+    expect(cov.scope).not.toBe('exhaustive');
+    expect(cov.label).not.toMatch(/exact/);
+    expect(cov.note).toMatch(/did not fully load/i);
+    expect(cov.note).not.toMatch(/load error/);
+  });
+
+  it('completeness does not FORCE exact: a whole tree still over budget stays sampled', () => {
+    const plan = buildSamplingPlan(
+      nodes([[0, 500_000], [1, 1_500_000], [2, 8_000_000]]),
+      { maxPoints: 2_000_000 },
+    );
+    expect(plan.exhaustive).toBe(false);
+    const cov = fullCloudGradeCoverage(plan, { complete: true, errorCount: 0 });
+    expect(cov.scope).toBe('sampled'); // driven by the budget, not completeness
+    expect(cov.label).toMatch(/sampled/);
+    expect(cov.note).toMatch(/representative octree sample/i);
+  });
+});

@@ -12,9 +12,19 @@
  *      unless its density is multiplied back up). Always ≥ 1 and finite.
  *
  *   2. A `scope` + human `label` + `note` that state whether the grade is EXACT
- *      (every node decoded) or ESTIMATED from a representative sample, with the
+ *      (every node decoded from a WHOLE hierarchy) or ESTIMATED, with the
  *      coverage fraction — so a full-cloud grade never implies a completeness it
  *      doesn't have.
+ *
+ * "Exact" needs TWO independent facts, because the sampling plan can only ever
+ * see the nodes the octree actually LOADED. `plan.exhaustive` means "the sample
+ * covered every loaded node"; it says nothing about a hierarchy that stopped
+ * short at its page ceiling, swallowed a page-fetch failure, or skipped a
+ * malformed entry — all of which leave subtrees out of the store while the walk
+ * still reports "finished". So the caller threads the octree's own completeness
+ * ({@link OctreeCompleteness}) in, and a grade is labelled exact ONLY when the
+ * sample was exhaustive AND the hierarchy was whole. A truncated cloud is graded
+ * over the part that loaded and SAID SO — never labelled "exact" over a subset.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
@@ -51,8 +61,41 @@ export interface FullCloudGradeCoverage {
   readonly note: string;
 }
 
+/**
+ * The source octree's completeness, threaded into the coverage decision. The
+ * {@link SamplingPlan} is derived from the LOADED nodes only, so it cannot tell
+ * a whole hierarchy from one that stopped short — this carries that fact from
+ * the octree (`StreamingOctree` / `EptOctree`) to the honesty layer. A grade may
+ * be labelled "exact" ONLY when `complete` is true.
+ */
+export interface OctreeCompleteness {
+  /** false when the hierarchy dropped a node — a page/file ceiling, a fetch failure, or a malformed entry. */
+  readonly complete: boolean;
+  /** How many hierarchy load errors were recorded — surfaced so the count isn't write-only. */
+  readonly errorCount: number;
+}
+
+/** The default when no completeness is supplied: a pure-plan caller grading a whole tree. */
+const COMPLETE: OctreeCompleteness = { complete: true, errorCount: 0 };
+
 const SAMPLED_NOTE =
   'Graded from a representative octree sample — density and coverage are estimated for the whole cloud, not measured exhaustively.';
+
+/**
+ * The caveat for a grade over an INCOMPLETE hierarchy — some of the file never
+ * loaded, so the figures cover only the part that did. Distinct from
+ * {@link SAMPLED_NOTE}: sampling is a deliberate budget choice over a whole
+ * cloud; this is a shortfall in the cloud itself, and it names the recorded
+ * error count so the otherwise write-only `octree.errors` reaches the user.
+ */
+function incompleteNote(sampledPoints: number, errorCount: number): string {
+  const base =
+    `This scan's point hierarchy did not fully load, so the grade covers only the ` +
+    `${formatPointCount(sampledPoints)} points that were read — a partial figure, not the whole file.`;
+  if (errorCount <= 0) return base;
+  const noun = errorCount === 1 ? 'load error was' : 'load errors were';
+  return `${base} ${errorCount} ${noun} recorded.`;
+}
 
 /** Format the coverage percent, collapsing a tiny-but-nonzero fraction to "<1%". */
 function percentLabel(fraction: number, rounded: number): string {
@@ -62,15 +105,32 @@ function percentLabel(fraction: number, rounded: number): string {
 
 /**
  * Derive the honest coverage + density-scale facts for a full-cloud grade from
- * its sampling plan. Defensive against an empty/degenerate plan (returns a
- * scale of 1 and a "no points" label rather than a NaN/Infinity).
+ * its sampling plan and the source octree's {@link OctreeCompleteness}.
+ * Defensive against an empty/degenerate plan (returns a scale of 1 and a "no
+ * points" label rather than a NaN/Infinity).
+ *
+ * `completeness` defaults to complete, so a pure-plan caller that is grading a
+ * whole tree (and the existing tests) keeps the plain exhaustive/sampled
+ * behaviour; the live grade passes the real octree state.
  */
-export function fullCloudGradeCoverage(plan: SamplingPlan): FullCloudGradeCoverage {
+export function fullCloudGradeCoverage(
+  plan: SamplingPlan,
+  completeness: OctreeCompleteness = COMPLETE,
+): FullCloudGradeCoverage {
   const sampledPoints = Math.max(0, plan.sampledPoints);
   const totalPoints = Math.max(0, plan.totalPoints);
   const fraction = totalPoints > 0 ? Math.min(1, sampledPoints / totalPoints) : 0;
   const coveragePercent = Math.round(fraction * 100);
-  const scope: GradeScope = plan.exhaustive ? 'exhaustive' : 'sampled';
+
+  // EXACT demands two independent facts: the sample covered every node the
+  // octree HOLDS (`plan.exhaustive`), and the octree HOLDS every node the file
+  // has (`completeness.complete`). The planner only ever sees loaded nodes, so
+  // `plan.exhaustive` on its own means "sampled everything we loaded" — it is
+  // blind to a hierarchy that stopped at the page ceiling, swallowed a fetch
+  // failure, or skipped a malformed entry. Labelling that "exact" is the silent
+  // under-report this guards against; a partial hierarchy is 'sampled', never
+  // exhaustive.
+  const scope: GradeScope = plan.exhaustive && completeness.complete ? 'exhaustive' : 'sampled';
 
   // Back-scale density from sample → whole cloud. Floored at 1 and guarded
   // against a zero/degenerate sample so a grade can never read 0/NaN/Infinity.
@@ -87,6 +147,13 @@ export function fullCloudGradeCoverage(plan: SamplingPlan): FullCloudGradeCovera
   } else if (scope === 'exhaustive') {
     label = `all ${formatPointCount(totalPoints)} points (exact)`;
     note = '';
+  } else if (!completeness.complete) {
+    // Incomplete hierarchy: report only what loaded and say why. The
+    // percentage-of-total wording is deliberately withheld — the denominator we
+    // have (loaded-node sum) is not the file's true count, so a "% of total"
+    // here would itself be a quiet fabrication.
+    label = `${formatPointCount(sampledPoints)} points graded (partial)`;
+    note = incompleteNote(sampledPoints, completeness.errorCount);
   } else {
     label = `${formatPointCount(sampledPoints)} of ${formatPointCount(totalPoints)} points (${percentLabel(fraction, coveragePercent)}, sampled)`;
     note = SAMPLED_NOTE;
