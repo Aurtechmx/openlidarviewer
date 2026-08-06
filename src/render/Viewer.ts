@@ -121,7 +121,7 @@ import {
 import type { SplatMode } from './splatShader';
 import { filterSelectionToVisible, selectByLasso } from './measure/lassoVolume';
 import { stockpileToastSuffix } from './measure/stockpilePresenter';
-import { computeLassoVolume as computeLassoVolumeWalk, stridePlacedPositions } from './measure/lassoVolumeCompute';
+import { computeLassoVolume as computeLassoVolumeWalk, copyPlacedPositions } from './measure/lassoVolumeCompute';
 import {
   cameraPresetPose,
   standardViewPose,
@@ -2542,8 +2542,8 @@ export class Viewer {
   clipKeptCount(id: string): { kept: number; total: number } | null {
     const entry = this._clouds.get(id);
     if (!entry) return null;
-    const total = (entry.cloud.positions.length / 3) | 0;
-    const placed = stridePlacedPositions(entry.cloud.positions, 1, entry.placement);
+    const total = entry.cloud.pointCount | 0;
+    const placed = copyPlacedPositions(entry.cloud, 1, entry.placement);
     const kept = this._clip ? countKept(this._clip, placed) : total;
     return { kept, total };
   }
@@ -3107,7 +3107,7 @@ export class Viewer {
     recordEdit(this._historyFor(id), buf, () => {
       result = applyPolygonReclassify({
         classification: buf,
-        positions: stridePlacedPositions(entry.cloud.positions, 1, entry.placement),
+        positions: copyPlacedPositions(entry.cloud, 1, entry.placement),
         polygon,
         newClass,
         includeIf,

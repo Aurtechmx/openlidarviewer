@@ -1,5 +1,6 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow, RunOptions } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
+import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
 import { spatialContextFrom } from '../../geo/SpatialContext';
@@ -117,7 +118,7 @@ export const scanReport: AnalysisModule = {
       n = 0;
       minX = minY = minZ = Infinity;
       maxX = maxY = maxZ = -Infinity;
-      const pos = cloud.positions;
+      const pos = sourcePositions(cloud);
       for (let i = 0; i < totalN; i++) {
         if (!isVisible(i)) continue;
         n++;

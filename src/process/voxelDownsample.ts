@@ -1,4 +1,5 @@
 import { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 
 /**
  * Voxel-grid stride for packing a 3-D voxel index into one numeric Map key.
@@ -41,7 +42,7 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     throw new RangeError(`voxelDownsample: voxelSize must be > 0 (got ${voxelSize})`);
   }
 
-  const pos = cloud.positions;
+  const pos = sourcePositions(cloud);
   const count = cloud.pointCount;
   const colors = cloud.colors;
   const intensity = cloud.intensity;

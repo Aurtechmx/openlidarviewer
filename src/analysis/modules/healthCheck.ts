@@ -1,5 +1,6 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
+import { sourcePositions } from '../../model/pointFrames';
 
 /** Compute the median of a sorted numeric array. */
 function medianSorted(sorted: Float64Array): number {
@@ -51,8 +52,9 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
 
 function checkInvalidCoordinates(cloud: PointCloud): AnalysisRow {
   let invalidCount = 0;
-  for (let i = 0; i < cloud.positions.length; i++) {
-    const v = cloud.positions[i];
+  const pos = sourcePositions(cloud);
+  for (let i = 0; i < pos.length; i++) {
+    const v = pos[i];
     if (!isFinite(v)) {
       invalidCount++;
     }
@@ -165,10 +167,11 @@ function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   }
 
   // Build a set of "x,y,z" strings to find duplicates
+  const pos = sourcePositions(cloud);
   const seen = new Set<string>();
   let duplicateCount = 0;
   for (let i = 0; i < n; i++) {
-    const key = `${cloud.positions[i * 3]},${cloud.positions[i * 3 + 1]},${cloud.positions[i * 3 + 2]}`;
+    const key = `${pos[i * 3]},${pos[i * 3 + 1]},${pos[i * 3 + 2]}`;
     if (seen.has(key)) {
       duplicateCount++;
     } else {
@@ -196,14 +199,15 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
     return { label: 'Stray Outliers', value: 'N/A (too few points)', status: 'info' };
   }
 
-  const { median, mad } = computeMedianAndMAD(cloud.positions, n);
+  const pos = sourcePositions(cloud);
+  const { median, mad } = computeMedianAndMAD(pos, n);
   const THRESHOLD = 8;
 
   let outlierCount = 0;
   for (let i = 0; i < n; i++) {
     let isOutlier = false;
     for (let axis = 0; axis < 3; axis++) {
-      const v = cloud.positions[i * 3 + axis];
+      const v = pos[i * 3 + axis];
       const madAxis = mad[axis];
       // If MAD is 0, use a small epsilon to avoid all points being "outliers"
       const range = madAxis === 0 ? 1e-9 : THRESHOLD * madAxis;

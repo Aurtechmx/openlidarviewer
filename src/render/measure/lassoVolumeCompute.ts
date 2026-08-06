@@ -18,6 +18,7 @@
  */
 
 import type { PointCloud } from '../../model/PointCloud';
+import { sourcePositions } from '../../model/pointFrames';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { accumulatorOffset } from '../layerPlacement';
 import type { VolumeBudgetDecision } from './volumeBudget';
@@ -78,6 +79,28 @@ export function stridePlacedPositions(
   return out;
 }
 
+/**
+ * A layer's points in the PROJECT-LOCAL frame: the cloud's source-local buffer
+ * with its Float64 placement folded in, optionally strided.
+ *
+ * The cloud-taking form of {@link stridePlacedPositions}, and the one call
+ * sites should reach for. Passing `cloud.positions` and the placement as two
+ * separate arguments is how a layer gets placed twice or not at all; passing
+ * the cloud lets the accessor own the pairing, and names the frame the result
+ * is in at the call site.
+ *
+ * Identity placement with `stride <= 1` returns the source buffer itself, so
+ * this is byte-identical to a raw read in the shipped single-layer
+ * configuration and allocates nothing.
+ */
+export function copyPlacedPositions(
+  cloud: PointCloud,
+  stride: number,
+  placement?: LayerSpatialTransform | null,
+): Float32Array {
+  return stridePlacedPositions(sourcePositions(cloud), stride, placement);
+}
+
 /** A layer as this walk needs to see it. */
 export interface LassoCloudEntry {
   readonly cloud: PointCloud;
@@ -136,7 +159,7 @@ export function computeLassoVolume(
   // exhaustively. The decision rides on the result so the inspector caption
   // can say "estimated (sampled — n%)".
   let candidatePointCount = 0;
-  for (const [, entry] of host.integrable) candidatePointCount += entry.cloud.positions.length / 3;
+  for (const [, entry] of host.integrable) candidatePointCount += entry.cloud.pointCount;
   for (const positions of host.streamingPositions) candidatePointCount += positions.length / 3;
 
   const budget = decideVolumeBudget({
@@ -167,7 +190,7 @@ export function computeLassoVolume(
   // Static clouds, walked independently so per-cloud indices can go back to
   // the highlight pipeline.
   for (const [id, entry] of host.integrable) {
-    const positions = stridePlacedPositions(entry.cloud.positions, stride, entry.placement);
+    const positions = copyPlacedPositions(entry.cloud, stride, entry.placement);
     const localIndices = selectByLasso({ positions, lasso, project: host.project });
     if (localIndices.length === 0) continue;
     // Strided indices are in the reduced array's space; translate back so the
