@@ -40,17 +40,29 @@
  * It deliberately CANNOT classify a new read: new keys are written as
  * `UNCLASSIFIED` and keep failing until a human names the frame. There is no
  * flag that raises a baseline either. Growth is always a hand-edited act.
+ *
+ * SCOPE: `all-src` — every non-test `.ts` under `src/`, INCLUDING `src/model/`.
+ * The model is in scope on purpose: `PointCloud` and `pointFrames` hold the raw
+ * reads that every accessor other code uses is built out of, so a frame mistake
+ * there is wrong everywhere at once. The migration plan and its report count the
+ * narrower `outside-model` scope, because the model is what consumers migrate
+ * ONTO rather than a consumer to migrate. Both scopes count through the same
+ * rule in scripts/lib/positionReads.mjs, so the two totals differ by the reads
+ * in `src/model/` and by nothing else.
  */
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { resolve, dirname, relative, join, sep } from 'node:path';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { resolve, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SCOPES, readsOnLine, walkPositionSources } from './lib/positionReads.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = resolve(ROOT, 'docs/validation/position-access-baseline.json');
 const FRAMES = resolve(ROOT, 'docs/validation/position-frames.json');
 const FRAME_DOC = 'docs/validation/position-frames.json';
 const SRC = resolve(ROOT, 'src');
+/** The gate's scope. Stated in the output so its number is comparable, not just different. */
+const SCOPE = SCOPES['all-src'];
 
 /** The four frames a position can be in. Anything else is a typo, not a frame. */
 const VALID_FRAMES = ['source-local', 'project-local', 'render-local', 'world'];
@@ -60,32 +72,6 @@ const UNCLASSIFIED = 'UNCLASSIFIED';
 const USE_AN_ACCESSOR =
   'Either read through an accessor (sourcePositions / renderLocalPositions / worldXYZ / '
   + 'projectXYZ / copyPlacedPositions / forEachPlacedPoint), or classify the read.';
-
-/** Every .ts file under src/, excluding tests. */
-function walk(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) out.push(...walk(full));
-    else if (entry.endsWith('.ts') && !entry.endsWith('.test.ts')) out.push(full);
-  }
-  return out;
-}
-
-/**
- * The direct `.positions` reads on one line, ignoring comments.
- *
- * A comment mentioning the field is documentation, not a call site, and
- * counting it would make the ratchet fire on someone explaining the migration.
- * This is the ORIGINAL detection rule, unchanged. The classification layer
- * below must not quietly narrow what counts as a read.
- */
-function readsOnLine(raw) {
-  const line = raw.trim();
-  if (line.startsWith('*') || line.startsWith('//') || line.startsWith('/*')) return 0;
-  const stripped = raw.replace(/\/\/.*$/, '');
-  return (stripped.match(/\.positions\b/g) ?? []).length;
-}
 
 /** Leading whitespace width. Tabs count as one, which is enough to order lines. */
 const indentOf = (line) => line.length - line.trimStart().length;
@@ -229,7 +215,7 @@ const posix = (p) => p.split(sep).join('/');
 const scanned = new Map();
 /** file → total reads, the shape the shrink-only baseline has always used. */
 const current = {};
-for (const file of walk(SRC)) {
+for (const file of walkPositionSources(SRC, SCOPE)) {
   const bySymbol = sitesIn(file);
   if (bySymbol.size === 0) continue;
   const rel = posix(relative(ROOT, file));
@@ -273,8 +259,12 @@ if (update || !existsSync(BASELINE) || !existsSync(FRAMES)) {
   }
   const doc = {
     purpose:
-      'Every direct `.positions` read in src/, classified by the coordinate frame the reading '
-      + 'site expects. Keyed by file plus enclosing symbol so the key survives edits above it. '
+      'Every direct `.positions` read in src/ (scope all-src: every non-test .ts, INCLUDING '
+      + 'src/model/, where the accessors are built), classified by the coordinate frame the '
+      + 'reading site expects. The migration plan and lint:positions-reads count the narrower '
+      + 'outside-model scope, so their total is lower; both count through '
+      + 'scripts/lib/positionReads.mjs. '
+      + 'Keyed by file plus enclosing symbol so the key survives edits above it. '
       + '`frame` is one of the four below, or an array of them for a site that genuinely reads '
       + 'more than one (a combined estimator over static layers and streaming nodes). `why` is '
       + 'required and must be the reason, not a restatement of the frame name. '
@@ -292,7 +282,8 @@ if (update || !existsSync(BASELINE) || !existsSync(FRAMES)) {
   };
   writeFileSync(FRAMES, `${JSON.stringify(doc, null, 2)}\n`);
   console.log(
-    `position-access baseline written: ${total} reads across ${Object.keys(current).length} files, `
+    `position-access baseline written [scope ${SCOPE.id}: ${SCOPE.label}]: `
+    + `${total} reads across ${Object.keys(current).length} files, `
     + `${entries.length} classified sites`
     + (added > 0 ? `, ${added} NEW and still ${UNCLASSIFIED}.` : '.'),
   );
@@ -389,7 +380,8 @@ if (problems.length > 0) {
 
 const shrunk = baseline.total - total;
 console.log(
-  `lint:position-access OK: ${total} direct reads across ${Object.keys(current).length} files, `
+  `lint:position-access OK [scope ${SCOPE.id}: ${SCOPE.label}]: `
+  + `${total} direct reads across ${Object.keys(current).length} files, `
   + 'every one classified by frame'
   + (shrunk > 0 ? ` (${shrunk} fewer than baseline; run --update to lower it)` : '')
   + (stale > 0 ? `; ${stale} stale allowlist entr${stale === 1 ? 'y' : 'ies'}, run --update to prune` : '')
