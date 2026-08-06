@@ -6,6 +6,11 @@ import type { SpatialContext } from '../../geo/SpatialContext';
 import { spatialContextFrom } from '../../geo/SpatialContext';
 import { isZUpFormat } from '../../io/sniffFormat';
 import { heightLabel } from '../../geo/height';
+import {
+  estimateInMemoryPrecision,
+  formatPrecisionMetres,
+  precisionGradeLabel,
+} from '../../geo/inMemoryPrecision';
 
 function rowInfo(label: string, value: string): AnalysisRow {
   return { label, value, status: 'info' };
@@ -202,6 +207,67 @@ export const scanReport: AnalysisModule = {
       const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
       rows.push(withScope(rowInfo('Spacing', spacingValue), scope));
     }
+
+    // In-memory resolution — what the Float32 position buffer can still tell
+    // apart at this extent. The other extent rows describe the survey; this one
+    // describes the REPRESENTATION, and on a wide extent the two diverge: a
+    // millimetre-quantized source file can sit in a buffer whose step is a
+    // centimetre, and nothing else on this card would say so.
+    //
+    // Measured over the WHOLE buffer, never the class subset: every point is
+    // resident regardless of which classes are visible, so the step a filtered
+    // view lands on is the step the full extent produces. That is also why no
+    // row here carries a scope stamp.
+    //
+    // The extent is lifted back into the source frame and paired with the
+    // origin the loader actually subtracted (`sourceOrigin`, the immutable file
+    // origin — the live origin can move when a layer mounts, and the buffer
+    // does not follow it). The vertical factor is passed only for a Z-up
+    // format, because it describes storage axis Z; a Y-up mesh keeps one unit
+    // for all three axes and falls back to the horizontal factor.
+    //
+    // FAIL CLOSED, same rule as the extent block: with no established linear
+    // unit there is no length to report, so the step is shown in source units
+    // and left ungraded rather than stamped with a fabricated millimetre.
+    const so = cloud.sourceOrigin;
+    const precision = estimateInMemoryPrecision({
+      extent: {
+        min: [bounds.min[0] + so[0], bounds.min[1] + so[1], bounds.min[2] + so[2]],
+        max: [bounds.max[0] + so[0], bounds.max[1] + so[1], bounds.max[2] + so[2]],
+      },
+      strategy: { kind: 'shared-origin', origin: [so[0], so[1], so[2]] },
+      unit: {
+        linearUnitKnown: basis.unitKnown,
+        linearUnitToMetres: ctx.linearUnitToMetres,
+        verticalUnitToMetres: zUp ? ctx.verticalUnitToMetres : undefined,
+      },
+    });
+    const pm = precision.metres;
+    rows.push(
+      pm
+        ? {
+            label: 'In-memory resolution',
+            value:
+              `${formatPrecisionMetres(pm.worstCaseSpacing)} worst case, `
+              + `${formatPrecisionMetres(pm.typicalSpacing)} typical `
+              + `(${precisionGradeLabel(precision.grade)})`,
+            status: precision.grade === 'fine' ? 'info' : 'warn',
+          }
+        : rowWarn(
+            'In-memory resolution',
+            `${precision.worstCaseSpacing.toPrecision(3)} (source units) worst case — `
+              + 'no linear unit declared, not graded',
+          ),
+    );
+    rows.push({
+      label: 'Quantization basis',
+      value:
+        `Float32 positions, ${precision.governingAxis} axis, `
+        + `${precision.reach.toFixed(0)} source units from the local origin `
+        + `(${precision.localOrigin.map((n) => n.toFixed(0)).join(', ')})`,
+      status: 'info',
+      advanced: true,
+    });
 
     // Attribute coverage.
     rows.push(rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'));

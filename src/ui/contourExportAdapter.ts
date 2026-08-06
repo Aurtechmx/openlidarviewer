@@ -110,6 +110,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!demPermit.ok) {
         this._flashBlocked(srcBtn, product, demPermit.reasons);
@@ -128,6 +129,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!permit.ok) {
         this._flashBlocked(srcBtn, product, permit.reasons);
@@ -148,6 +150,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!reportPermit.ok) {
         this._flashBlocked(srcBtn, product, reportPermit.reasons);
@@ -165,6 +168,7 @@ export class ContourExportAdapter {
       crsProjected: frame.crsProjected,
       analyticalGeometry: intent.methodId === 'olv.contour.analytical',
       blockedReasons: frame.blockedReasons,
+      precision: frame.precision,
     });
     if (!permit.ok) {
       this._flashBlocked(srcBtn, product, permit.reasons);
