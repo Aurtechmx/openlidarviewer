@@ -171,6 +171,7 @@
     "qs": "^6.15.2",
     "vitepress": {
       "vite": "^6.4.3"
-    }
+    },
+    "texture-compressor": "file:vendor-stubs/texture-compressor"
   }
 }
