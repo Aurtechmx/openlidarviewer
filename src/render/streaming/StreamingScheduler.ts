@@ -26,6 +26,12 @@ import {
 import { selectWithinBudget } from './streamingBudget';
 import type { StreamingBudgets, ScoredCandidate } from './streamingBudget';
 import { CompressedChunkCache } from './StreamingCache';
+import {
+  planEviction,
+  resolveEvictionHysteresis,
+  selectLapsedEvictions,
+} from './evictionPolicy';
+import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -124,8 +130,10 @@ const VELOCITY_EWMA_TAU_S = 0.2;
 const DEFAULT_EVICT_DEFER_MS = 2_000;
 
 /**
- * Resident-point budget multiplier at which deferred-eviction nodes are
- * dropped *immediately* regardless of hysteresis — memory pressure wins.
+ * Resident-point budget multiplier at which the eviction plan runs at all —
+ * memory pressure wins over the per-node defer window. Doubles as the
+ * eviction policy's `triggerRatio`: below it nothing is evicted for pressure,
+ * which is the margin that stops budget-boundary noise from churning a node.
  */
 const DEFAULT_MEMORY_PRESSURE_RATIO = 1.5;
 
@@ -221,8 +229,18 @@ export interface SchedulerOptions {
 
   /** Hysteresis window for eviction, ms. */
   evictDeferMs?: number;
-  /** Total / budget threshold above which deferred nodes are evicted now. */
+  /**
+   * Total / budget threshold above which the eviction plan runs. Feeds the
+   * eviction policy's `triggerRatio`; a very large value disables the pressure
+   * path entirely, which is how the pure-defer tests isolate it.
+   */
   memoryPressureRatio?: number;
+  /**
+   * Overrides for the eviction-side hysteresis (release target and the
+   * on-screen dwell). Omitted fields fall back to the policy defaults; the
+   * trigger ratio always comes from `memoryPressureRatio`.
+   */
+  evictionHysteresis?: Partial<Omit<EvictionHysteresis, 'triggerRatio'>>;
   /** Monotonic clock, injected for deterministic tests. */
   now?: () => number;
 }
@@ -278,6 +296,60 @@ function buildWantedParentKeys(
     if (!node) continue;
     const pk = parentKeyString(node.record.key);
     if (pk !== null) set.add(pk);
+  }
+  return set;
+}
+
+/**
+ * The keys of every node that has finer detail arriving inside its subtree.
+ *
+ * A resident node is "refined away" when the level below it is on its way in:
+ * either it has itself left the wanted set while a finer descendant stayed in
+ * it, or it is still wanted but a wanted descendant has not arrived yet and is
+ * queued behind the budget. Both are the same situation from the eviction
+ * policy's point of view — the points this node holds are the points the
+ * refinement is waiting for — so both land in one set.
+ *
+ * This is the LOD-freeze exemption, and it is deliberately computed from the
+ * live wanted set rather than from residency alone: a node is only released
+ * early when there is real refinement to release it to, so eviction hysteresis
+ * can never be the reason the scene stops refining.
+ *
+ * Exported so the seam has its own test: the eviction policy is only as good as
+ * the flag it is handed, and an ancestor walk that silently marked nothing
+ * would leave the exemption inert while every unit test still passed.
+ */
+export function buildRefinedAwayKeys(
+  wanted: ReadonlySet<string>,
+  cloud: StreamingSource,
+): Set<string> {
+  const store = cloud.octree.store;
+  // The wanted nodes, resolved once, plus their keys — the ancestor walk below
+  // needs to ask "is this ancestor itself wanted?" and a key set answers that
+  // without rebuilding an id per level.
+  const wantedNodes: StreamingNode[] = [];
+  const wantedKeys = new Set<string>();
+  for (const id of wanted) {
+    const node = store.get(id);
+    if (!node) continue;
+    wantedNodes.push(node);
+    wantedKeys.add(voxelKeyString(node.record.key));
+  }
+
+  const set = new Set<string>();
+  for (const node of wantedNodes) {
+    // A wanted node still on its way in supersedes every ancestor, because
+    // those ancestors are what is holding the budget it needs. One that has
+    // already arrived supersedes only the ancestors the selector has dropped.
+    const pending = node.state !== 'resident';
+    let { x, y, z } = node.record.key;
+    for (let d = node.record.key.depth - 1; d >= 0; d--) {
+      x >>= 1;
+      y >>= 1;
+      z >>= 1;
+      const key = `${d}/${x}/${y}/${z}`;
+      if (pending || !wantedKeys.has(key)) set.add(key);
+    }
   }
   return set;
 }
@@ -353,6 +425,8 @@ export class StreamingScheduler {
   private readonly _deferredEvictAt = new Map<string, number>();
   private readonly _evictDeferMs: number;
   private readonly _memoryPressureRatio: number;
+  /** Resolved thresholds handed to the pure eviction policy each pressure run. */
+  private readonly _evictionHysteresis: EvictionHysteresis;
   private readonly _now: () => number;
 
   /** Smoothed linear camera velocity, world units per second. */
@@ -441,6 +515,10 @@ export class StreamingScheduler {
     this._evictDeferMs = options.evictDeferMs ?? DEFAULT_EVICT_DEFER_MS;
     this._memoryPressureRatio =
       options.memoryPressureRatio ?? DEFAULT_MEMORY_PRESSURE_RATIO;
+    this._evictionHysteresis = resolveEvictionHysteresis({
+      ...(options.evictionHysteresis ?? {}),
+      triggerRatio: this._memoryPressureRatio,
+    });
     this._now = options.now ?? nowMs;
     // Seed the stable-since timestamp with the injected clock so a
     // fresh scheduler's first tick already meets the STABLE_SETTLE_MS
@@ -864,9 +942,16 @@ export class StreamingScheduler {
     //   2. parent-protection — children must evict before their parents;
     //   3. sibling-retention — a node whose sibling is still wanted gets
     //      one more window of grace;
-    //   4. collect the remaining lapsed nodes, sort by (depth desc, distance
-    //      desc) so deepest-and-furthest evicts first, then drop in order.
-    const lapsed: { node: StreamingNode; depth: number; distance: number }[] = [];
+    //   4. collect the remaining lapsed nodes and hand them to the eviction
+    //      policy, which drops them in priority order but ONLY while the
+    //      resident set is over its budget.
+    //
+    // Step 4 used to drop every lapsed node unconditionally, and that was the
+    // larger half of the churn a real navigation pays: the camera leaves a
+    // region, the window lapses, the node is dropped and re-decoded and
+    // re-faded when the camera comes back, and the resident set had room for
+    // it the whole time. Keeping what fits is free; dropping it is not.
+    const lapsed: EvictionCandidate[] = [];
     // Iterate the Map directly — JS spec guarantees that deletes during
     // `for...of` on a Map are safe. The previous `[...map.keys()]` snapshot
     // allocated a throwaway array every tick.
@@ -880,6 +965,14 @@ export class StreamingScheduler {
       if (protection.has(voxelKeyString(node.record.key))) {
         // Parent of a resident — reschedule one window. The child eviction
         // on a later tick frees the parent for eviction *then*.
+        //
+        // No refined-away exemption is needed here, and adding one would have
+        // been unreachable code. An entry only exists in this map while the
+        // node is NOT wanted, and the selector is strictly coarse-first over a
+        // nested hierarchy, so a node the selector has dropped can never have a
+        // descendant it still wants. The exemption belongs on the pressure
+        // path, where a node IS wanted and the level below it is still on the
+        // way in.
         this._deferredEvictAt.set(id, nowTs + this._evictDeferMs);
         continue;
       }
@@ -890,51 +983,96 @@ export class StreamingScheduler {
         continue;
       }
       const centre = boxCentre(this._localBoundsFor(node));
-      const dist = distance(centre, view.cameraPosition);
-      lapsed.push({ node, depth: node.record.key.depth, distance: dist });
+      lapsed.push({
+        id,
+        pointCount: node.residentPointCount,
+        depth: node.record.key.depth,
+        distance: distance(centre, view.cameraPosition),
+        visible: node.score > 0,
+        // Everything here has been out of the selection for a whole defer
+        // window. A node the selector dropped cannot have a descendant it still
+        // wants, because the selector is strictly coarse-first over a nested
+        // hierarchy, so nothing in this list is being refined away.
+        wanted: false,
+        supersededByFiner: false,
+        residentSinceMs: node.residentSinceMs,
+      });
     }
-    // Deepest first; within a depth, furthest first.
-    lapsed.sort((a, b) =>
-      b.depth - a.depth || b.distance - a.distance,
-    );
-    for (const { node } of lapsed) {
+    for (const id of selectLapsedEvictions(
+      lapsed,
+      store.residentPointCount,
+      this._pointBudget,
+    )) {
+      const node = store.get(id);
+      if (!node || node.state !== 'resident') continue;
       // Cache hysteresis (hysteresis): bump the compressed chunk so a quick
       // camera return finds it warm.
-      this._cache.touch(node.record.id);
+      this._cache.touch(id);
       this._callbacks.onNodeEvicted(node);
       store.setState(node, 'unloaded');
-      this._deferredEvictAt.delete(node.record.id);
+      this._deferredEvictAt.delete(id);
     }
 
-    // Memory-pressure override: when retained nodes push the resident point
-    // count well past the budget, drop deferred nodes immediately — oldest
-    // deadline first, non-protected before protected.
+    // Memory-pressure eviction, planned by `evictionPolicy`.
+    //
+    // The old shape of this pass walked the deferred map in deadline order and
+    // released all the way down to 1.0 × the budget. Both halves fed the
+    // budget-boundary flicker: it could take a node that had left the wanted
+    // set for a single tick of score noise and was about to be wanted again,
+    // and each run cut a third of the resident set that the very next
+    // selection asked back. The plan replaces the ordering with one that reads
+    // the node's actual situation — superseded, out of frustum, in view but
+    // unselected, on screen — and releases only into the hysteresis band.
+    //
+    // The old non-protected-before-protected split is subsumed rather than
+    // dropped: an ancestor of a resident node that the selector still wants
+    // ranks last in the plan anyway, and one it no longer wants while the
+    // level below is arriving ranks first, which is the case the split existed
+    // to approximate.
     if (
       store.residentPointCount >
       this._pointBudget * this._memoryPressureRatio
     ) {
-      const pending = [...this._deferredEvictAt.entries()].sort(
-        (a, b) => a[1] - b[1],
-      );
-      const evictByProtection = (protectedOnly: boolean): void => {
-        for (const [id] of pending) {
-          if (store.residentPointCount <= this._pointBudget) return;
-          const node = store.get(id);
-          if (!node || node.state !== 'resident') {
-            this._deferredEvictAt.delete(id);
-            continue;
-          }
-          const isProtected = protection.has(voxelKeyString(node.record.key));
-          if (isProtected !== protectedOnly) continue;
-          // cache hysteresis — keep the chunk warm post-eviction.
-          this._cache.touch(id);
-          this._callbacks.onNodeEvicted(node);
-          store.setState(node, 'unloaded');
+      // The one input that costs a walk of the wanted set. Built here rather
+      // than per tick, because this branch is the only reader and it is cold:
+      // a settled camera inside the hysteresis band never pays for it.
+      const refinedAwayKeys = buildRefinedAwayKeys(wanted, this._cloud);
+      const candidates: EvictionCandidate[] = [];
+      for (const node of store.residentNodes()) {
+        const centre = boxCentre(this._localBoundsFor(node));
+        candidates.push({
+          id: node.record.id,
+          pointCount: node.residentPointCount,
+          depth: node.record.key.depth,
+          distance: distance(centre, view.cameraPosition),
+          // `score` is this tick's cull result: > 0 means inside the frustum.
+          // On the stable-camera fast path it is the previous rescore's value,
+          // which is the same answer, because the camera has not moved.
+          visible: node.score > 0,
+          wanted: wanted.has(node.record.id),
+          supersededByFiner: refinedAwayKeys.has(voxelKeyString(node.record.key)),
+          residentSinceMs: node.residentSinceMs,
+        });
+      }
+      const plan = planEviction({
+        candidates,
+        residentPointCount: store.residentPointCount,
+        pointBudget: this._pointBudget,
+        nowMs: nowTs,
+        hysteresis: this._evictionHysteresis,
+      });
+      for (const id of plan.evict) {
+        const node = store.get(id);
+        if (!node || node.state !== 'resident') {
           this._deferredEvictAt.delete(id);
+          continue;
         }
-      };
-      evictByProtection(false); // non-protected first
-      evictByProtection(true); // then protected if still over budget
+        // cache hysteresis — keep the chunk warm post-eviction.
+        this._cache.touch(id);
+        this._callbacks.onNodeEvicted(node);
+        store.setState(node, 'unloaded');
+        this._deferredEvictAt.delete(id);
+      }
     }
 
     // Cancel in-flight decodes for nodes that left the working set — but
@@ -1081,6 +1219,9 @@ export class StreamingScheduler {
     const queue = this._uploadQueue;
     if (!queue) {
       store.setState(node, 'resident', decoded.pointCount);
+      // Stamp the residency clock at the commit, not at the decode: the dwell
+      // rule is about how long the node has been ON SCREEN.
+      node.residentSinceMs = this._now();
       try {
         this._callbacks.onNodeReady(node, decoded);
       } catch (err) {
@@ -1103,6 +1244,7 @@ export class StreamingScheduler {
         // longer wanted must not build a mesh.
         if (node.state !== 'decoded') return;
         store.setState(node, 'resident', decoded.pointCount);
+        node.residentSinceMs = this._now();
         try {
           this._callbacks.onNodeReady(node, decoded);
         } catch (err) {
