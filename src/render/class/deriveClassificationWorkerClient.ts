@@ -15,6 +15,7 @@
  */
 
 import type {
+  ClassifierProvenance,
   DeriveClassificationOptions,
   DeriveClassificationResult,
 } from './deriveClassification';
@@ -39,6 +40,7 @@ interface OkReply {
   confidence: number;
   classConfidence: Record<number, number>;
   warnings: readonly string[];
+  classifier: ClassifierProvenance;
 }
 interface ErrorReply {
   jobId: number;
@@ -177,6 +179,7 @@ export class DeriveClassificationWorkerClient implements DeriveClassificationCli
         confidence: reply.confidence,
         classConfidence: reply.classConfidence,
         warnings: reply.warnings,
+        classifier: reply.classifier,
       });
     } else {
       pending.reject(new Error(reply.error));
