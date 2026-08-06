@@ -159,6 +159,26 @@
   --m-glass-raised: rgba(17, 24, 38, 0.92); /* #111826 focal surface fill */
   --m-glass-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.62);
   --m-on: #4ade80;              /* semantic on/enabled/yes green */
+
+  /*
+   * Phone bottom-chrome geometry (v0.6.x responsive pass), PHONE ONLY.
+   * The tool dock and the collapsed bottom sheet form ONE chrome zone: the
+   * dock sits flush on the sheet's head with no gap and no second border. That
+   * only holds if the dock's offset from the bottom equals the collapsed head's
+   * height EXACTLY, so the height is derived here from its parts instead of
+   * being restated as a magic number at each site. A hand-tuned literal is what
+   * produced the previous defect: the dock was parked 38 px up while the head
+   * measured 43 px, so the sheet painted over the bottom 5 px of every dock
+   * button and sliced the captions in half.
+   *   head = vertical padding + the tab strip's inset + the tab itself
+   */
+  --m-tab-h: 32px;              /* collapsed sheet tab, visual height */
+  --m-tab-hit: 40px;            /* its invisible tap area (padding-free) */
+  --m-tabs-pad: 2px;            /* tab-strip inset inside the head */
+  --m-head-pad-y: 3px;          /* head padding, collapsed */
+  --m-chrome-head-h: calc(
+    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
+  );
 }
 
 /*
@@ -2815,8 +2835,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   right: calc(14px + env(safe-area-inset-right));
 }
 
-/* ── Phone layout (< 768 px) ──────────────────────────────────────────────── */
-@media (max-width: 767px) {
+/* ── Phone layout ─────────────────────────────────────────────────────────
+   CANONICAL MOBILE-LAYOUT CONDITION (mirrors MOBILE_LAYOUT_QUERY in
+   src/ui/isMobileDevice.ts). Every LAYOUT-structural phone block below repeats
+   it verbatim so a phone stays in the mobile layout in BOTH orientations:
+     (max-width: 767px)                              portrait phone / narrow window
+     (max-height: 500px) and (pointer: coarse)       landscape phone (wide but short + touch)
+   The second arm needs a coarse pointer so a short desktop window (fine pointer)
+   is never captured; a real desktop is tall and fine-pointer, so it never
+   matches either arm. Purely cosmetic max-width:767px blocks (dialogs, splash)
+   are left alone since they are harmless in landscape. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* Topbar: tighter padding so the wordmark, badge and link share one row. */
   .olv-topbar {
     padding-left: calc(var(--space-xl) + env(safe-area-inset-left));
@@ -2840,77 +2869,102 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   /* The backend pill is desk-side detail; drop it to declutter the phone. */
   .olv-backend { display: none; }
 
-  /* The live probe is a hover affordance — touch has no hover, so hide it. */
-  .olv-tool-probe { display: none; }
-
-  /* Show the "More" disclosure on phones (hidden on desktop). It un-hides
-     Snapshot + Help when tapped — see the .olv-dock-more-open rules
-     below. The button itself is part of the primary row. */
+  /* Show the "More" disclosure on phones (hidden on desktop). It un-hides the
+     secondary tools when tapped (see the .olv-dock-more-open rules below). The
+     button itself is part of the primary row. */
   .olv-tool-more { display: inline-flex; }
 
-  /* Tool dock — compact phone layout. Previously the 9 buttons wrapped
-     onto two or three rows and ate ~30 % of the cloud's visible area.
-     Now: smaller font + tighter padding, drop the inter-cluster
-     margins, and hide low-value-on-mobile tools (Snapshot via command
-     palette / shortcut sheet; Help via the help overlay; Probe is
-     already hidden because it's a hover affordance). What remains —
-     Frame, Measure, Inspect, Annotate, Share, Close — fits one row on
-     every iPhone width. */
+  /* ── Tool dock: the top half of the single bottom chrome zone ───────────
+     PRIORITY+, NOT A SCROLLER. The dock used to be a sideways-scrolling strip
+     with a fade at its right edge. A scroller always cuts whichever button
+     straddles its edge, which is what rendered "Copy view link" as "Cop…" on a
+     real phone. A half-drawn word reads as a broken layout, not as an
+     affordance. So the row now carries only the tools a phone user reaches for
+     (Frame, Measure, Inspect, Annotate, Close) plus the "More" disclosure, and
+     it WRAPS instead of scrolling: every button is drawn whole or moved to the
+     next line, never sliced. Snapshot, Analyse, Copy view link and Help live
+     behind "More"; Probe stays out (it is a hover affordance).
+
+     Full-bleed, and offset from the bottom by EXACTLY the collapsed sheet
+     head's height, so the dock lands flush on the sheet with no gap, no second
+     hairline and no second shadow: one surface, read as one zone. */
   .olv-dock {
-    /* Span the width (minus safe-area insets) and let the row SCROLL sideways
-       rather than clip. Previously the dock was `width: max-content` capped at
-       the viewport and centred, so any overflow past the screen was hidden —
-       on a narrow phone that silently cut off the end buttons (Frame / Close)
-       at both edges. Anchoring left+right and scrolling keeps every tool
-       reachable with a swipe and nothing is ever clipped. */
-    left: calc(8px + env(safe-area-inset-left));
-    right: calc(8px + env(safe-area-inset-right));
+    left: 0;
+    right: 0;
     width: auto; max-width: none;
     margin: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    /* Clear the bottom sheet's collapsed bar + the iOS home-indicator. */
-    bottom: calc(76px + env(safe-area-inset-bottom));
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: var(--space-xs);
-    padding: var(--space-xs);
-    border-radius: var(--radius-md);
-    /* A soft fade at the right edge hints "more tools — swipe". */
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
-    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+    overflow: visible;
+    bottom: calc(var(--m-chrome-head-h) + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--space-2xs);
+    padding-top: var(--space-2xs);
+    padding-bottom: var(--space-2xs);
+    padding-left: calc(var(--space-xs) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-xs) + env(safe-area-inset-right));
   }
-  .olv-dock::-webkit-scrollbar { display: none; }
-  /* Buttons must not shrink in a scrollable row, or they'd squash instead of
-     overflow. */
-  .olv-dock .olv-tool { flex: 0 0 auto; }
-  .olv-dock > .olv-dock-gap { margin-left: var(--space-xs); }
+  /* Share the row evenly. `min-width` holds the 44 pt tap target and keeps the
+     widest caption ("Annotate", ~38 px at this size) inside its button at 320 px;
+     `flex-grow` spreads the slack so the strip reads as an even control bar
+     rather than a left-packed queue. */
+  .olv-dock .olv-tool { flex: 1 1 auto; min-width: 48px; max-width: 104px; }
+  /* Close keeps its own group, a hair apart from the work tools. */
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-sm); }
+  /* Canvas-first tools: a small icon over a tiny label (the hero left-rail
+     look), compact and low-contrast so the cloud dominates. Ghost by default
+     (transparent fill, no resting border); the single cyan accent lands only on
+     the active tool in the aesthetic block below.
+
+     INTRINSIC HEIGHT. `min-height` sets the 44 pt floor, nothing sets a
+     maximum, and the dock's own height is `auto`, so the button always grows
+     to fit its glyph plus its caption and a caption can never be sliced. */
   .olv-dock .olv-tool {
-    font-size: var(--text-xs);
-    padding: var(--space-sm) var(--space-md);
+    flex-direction: column;
+    gap: 2px;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    padding: var(--space-2xs) var(--space-xs);
     border-radius: var(--radius-sm);
-    /* Touch target: 44 px tall (Apple HIG minimum) so a fingertip reliably
-       lands on a dock button. Width stays content-driven (with a 44 px floor)
-       so the 6-button row still fits the narrowest iPhone — height carries the
-       tap area in a dense horizontal toolbar. Desktop density is untouched:
-       this rule lives inside the phone media query. */
-    min-width: 44px;
+    min-width: 40px;
     min-height: 44px;
+    height: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
   }
-  /* Hide the lower-value buttons on phones — they're reachable via the
-     "More" disclosure to the right of Annotate. The disclosure flips a
-     class on the dock that un-hides them. */
-  .olv-tool-snapshot { display: none; }
-  .olv-tool-help { display: none; }
-  .olv-tool-analyse { display: none; }
+  /* Icon-over-label: stack the glyph above the tiny caption. */
+  .olv-dock .olv-tool-ico { flex-direction: column; gap: 2px; }
+  .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
+  .olv-dock .olv-tool-label {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 500;
+  }
+  /* THE PRIORITY SPLIT. The primary row is Frame, Measure, Inspect, Annotate,
+     "More" and Close; Snapshot, Analyse, Copy view link and Help sit behind the
+     disclosure, and Probe stays out entirely (it is a hover affordance and a
+     touch screen has no hover). Tapping "More" flips a class on the dock that
+     un-hides the rest, and the row wraps to a second line to take them, which
+     is why the dock's height is never fixed.
+
+     These selectors are `.olv-dock .olv-tool-*`, not the bare class, and they
+     sit AFTER the `.olv-dock .olv-tool` block on purpose. The bare form
+     (`.olv-tool-snapshot`) scores one class against that rule's two and lost
+     every cascade, so the disclosure had no effect and all nine tools rendered
+     on every phone. That is what overflowed the row and left "Copy view link"
+     rendering as "Cop…" at the screen edge. */
+  .olv-dock .olv-tool-snapshot,
+  .olv-dock .olv-tool-analyse,
+  .olv-dock .olv-tool-share,
+  .olv-dock .olv-tool-help,
+  .olv-dock .olv-tool-probe {
+    display: none;
+  }
   .olv-dock.olv-dock-more-open .olv-tool-snapshot,
-  .olv-dock.olv-dock-more-open .olv-tool-help,
-  .olv-dock.olv-dock-more-open .olv-tool-analyse {
+  .olv-dock.olv-dock-more-open .olv-tool-analyse,
+  .olv-dock.olv-dock-more-open .olv-tool-share,
+  .olv-dock.olv-dock-more-open .olv-tool-help {
     display: inline-flex;
   }
   /* Subtle accent on the More button so it reads as a disclosure, and a
@@ -2925,6 +2979,33 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     color: var(--accent);
   }
 
+  /* Streaming / Scan info card: a slim dark-glass card docked to the top-right
+     corner, never a half-screen panel over the cloud. Narrow width + a modest
+     max-height keep the point cloud visible behind it.
+
+     CONTAINED, NOT CUT. The card carries far more than a phone can show at
+     once (scan stats, streaming stats, colour and quality chips, the grade
+     action, saved views), so it is capped and scrolls INSIDE itself. A plain
+     cap left the last visible row bisected by the card's edge, which is what
+     sliced "Extent 1000 x 1000 x 322" in half on a real device. Two additions
+     fix the read: a bottom fade that says "there is more below" instead of
+     "this is broken", and a bottom pad taller than the fade so the final row
+     is fully opaque once the user has scrolled to the end. */
+  .olv-streaming-panel {
+    top: calc(52px + env(safe-area-inset-top));
+    right: calc(var(--space-md) + env(safe-area-inset-right));
+    left: auto;
+    width: min(212px, calc(100vw - 2 * var(--space-md)));
+    max-height: 38dvh;
+    padding: var(--space-md);
+    padding-bottom: var(--space-3xl);
+    font-size: var(--text-xs);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+  }
+
   /* The mode switcher lets its speed slider wrap onto a second line. */
   .olv-nav-row { flex-wrap: wrap; justify-content: center; }
 
@@ -2932,6 +3013,39 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-version {
     left: calc(12px + env(safe-area-inset-left));
     right: auto;
+  }
+
+  /* ── Centred transient cards were capped at HALF the screen ──────────────
+     Every hint, toast and bar below is centred with `left: 50%` plus a
+     `translateX(-50%)` and has no width of its own. For an out-of-flow box that
+     leaves only the space from the centre line to the right edge available, so
+     each of them shrink-to-fits inside 50 vw and no `max-width` can widen it:
+     195 px on a 390 px phone, whatever the rule says. Desktop never showed it
+     because half of 1280 is still roomy. The lasso toast showed it worst: its
+     message column collapsed to about one word per line and the "Save to
+     session" button sat on top of the text.
+
+     Pin BOTH edges and drop the translate. The box then measures against the
+     real gutter-to-gutter width and centres its own content. */
+  .olv-toast,
+  .olv-measure-hint,
+  .olv-measure-bar,
+  .olv-anno-hint,
+  .olv-lasso-toast,
+  .olv-touch-hint {
+    left: calc(var(--space-2xl) + env(safe-area-inset-left));
+    right: calc(var(--space-2xl) + env(safe-area-inset-right));
+    transform: none;
+    width: auto;
+    /* Auto side margins keep the box centred when a max-width below leaves it
+       narrower than the gutters allow; without them an over-constrained
+       absolute box snaps to its left edge. */
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+    /* A cap so the same rule does not stretch a one-line hint from edge to edge
+       on the 844 px-wide landscape phone. Below the cap the gutters decide. */
+    max-width: 560px;
   }
 
   /* Transient top-centre cards clear the notch and never exceed the screen. */
@@ -2944,13 +3058,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      the inset-free area. Centred, so this only ever shrinks, never shifts. */
   .olv-toast { max-width: min(360px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
 
-  /* Touch-gesture hint — floats above the dock, fades out on its own. */
+  /* Touch-gesture hint: floats above the dock, fades out on its own. Its
+     horizontal placement comes from the centred-card rule above. */
   .olv-touch-hint {
     position: absolute;
-    left: 50%; transform: translateX(-50%);
     bottom: calc(148px + env(safe-area-inset-bottom));
     display: flex; align-items: center; gap: var(--space-md);
-    max-width: calc(100vw - 24px);
+    max-width: min(420px, calc(100vw - 24px));
     background: rgba(11, 17, 33, 0.92);
     -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
     border: 0.5px solid rgba(0, 178, 255, 0.34);
@@ -3643,7 +3757,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 /* 767, matching MOBILE_LAYOUT_QUERY. At exactly 768 the old pair left the
    desktop panels mounted with their collapse handles hidden. */
-@media (max-width: 767px) { .olv-rail-tab { display: none; } }
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-rail-tab { display: none; } }
 
 /* ── Right rail — one-tap collapse for the right column ──────────────────────
    Mirror of the left rail. A single grabber slides BOTH right panels (the
@@ -3731,7 +3845,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
-@media (max-width: 767px) { .olv-right-rail-tab { display: none; } }
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-right-rail-tab { display: none; } }
 
 /* ── P9 · panel scroll hygiene & wheel ownership ─────────────────────────────
    Scrollable overlay panels CONTAIN their scroll: no chaining to the page and
@@ -5128,7 +5242,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-ap-action-armed { color: var(--rating-weak); border-color: color-mix(in srgb, var(--rating-weak) 60%, transparent); }
 
 /* Touch sizing for the measurement controls on phones */
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .olv-mkind, .olv-measure-undo, .olv-units-toggle, .olv-mp-action {
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -5884,6 +5998,29 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
      (.olv-wordmark-mark) stays visible. */
   .olv-github { display: none; }
   .olv-wordmark { font-size: var(--text-md); gap: var(--space-sm); }
+  /* ── The header must not force a horizontal overflow ─────────────────────
+     Even with the ghost links dropped, the header wanted 476 px at a 390 px
+     viewport: 143 px of lockup, a 157 px trust badge and three icon controls.
+     That is not a cosmetic overflow. A phone browser answers a document wider
+     than the viewport by zooming the whole page out to fit, so every surface,
+     including the canvas, rendered at ~0.84 scale and the point cloud came out
+     small, which is the "everything is tiny" report. Collapsing the lockup to its mark
+     (the standard responsive logo step) recovers 117 px and brings the header
+     inside the viewport at 320 px and up.
+
+     `clip`, not `display: none`: the word stays in the accessibility tree, so
+     the header keeps its name for a screen reader at every width. */
+  .olv-wordmark-text {
+    position: absolute;
+    width: 1px; height: 1px;
+    margin: -1px; padding: 0; border: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  /* Nothing in the header may push past the viewport edge. */
+  .olv-topbar { flex-wrap: nowrap; }
+  .olv-topbar-right { gap: var(--space-md); min-width: 0; }
   .olv-url-input { width: 100%; max-width: none; flex: 1 1 100%; }
   .olv-url-btn { width: 100%; }
   .olv-url-controls { flex-direction: column; gap: var(--space-md); }
@@ -7804,7 +7941,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    ─────────────────────────────────────────────────────────────────────────── */
 .olv-mobile-sheet { display: none; }
 
-@media (max-width: 767px) {
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   .olv-mobile-sheet {
     position: fixed;
     left: 0; right: 0; bottom: 0;
@@ -7874,11 +8011,26 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
     border-radius: 10px; padding: 3px;
   }
   .olv-msheet-tab {
+    position: relative;
     flex: 1 1 0; min-height: 44px;
     border: 0; border-radius: 8px; background: transparent;
     color: var(--text-dim); font: inherit; font-weight: 500;
     cursor: pointer;
     transition: background 160ms ease, color 160ms ease;
+  }
+  /* Touch target vs. visual height. The strip was deliberately slimmed to a
+     32 px chip so the collapsed chrome stays thin, which is below the 44 pt
+     guidance. Padding cannot buy the difference back: the tab's height is what
+     the strip's height IS, so padding would just push the chrome taller again.
+     An overlay pseudo-element does: it enlarges the hit area to 40 px around
+     the chip's centre line and costs zero layout height. 40, not 44, so a few
+     pixels of head remain as drag surface for the sheet gesture. */
+  .olv-msheet-tab::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: var(--m-tab-hit);
+    transform: translateY(-50%);
   }
   .olv-msheet-tab.is-active {
     background: var(--panel);
@@ -7907,6 +8059,37 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet.is-collapsed .olv-msheet-handle::before {
     transform: translateY(2px) rotate(-135deg); /* points up → tap to expand */
   }
+
+  /* ── Collapsed sheet: the lower half of the single bottom chrome zone ─────
+     A collapsed sheet is a thin strip, not a tall empty panel. The tab row
+     STAYS (it is the mobile navigation, and one tap from the canvas) while the
+     surrounding padding tightens.
+
+     Every measurement here comes from the --m-* geometry tokens, because the
+     dock is positioned against this exact height. Change a number by hand at
+     one site only and the two bars stop meeting: too small and a strip of
+     canvas shows between them, too large and the sheet paints over the dock's
+     captions. That second failure is the one that shipped. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head {
+    padding-top: var(--m-head-pad-y);
+    padding-bottom: var(--m-head-pad-y);
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-tabs { padding: var(--m-tabs-pad); }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-tab { min-height: var(--m-tab-h); }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-handle { min-height: var(--m-tab-h); }
+  /* ONE SURFACE. Collapsed, the sheet drops its own top edge, corner radius and
+     lift shadow, and the dock sitting flush above it carries them for the whole
+     zone. Previously each bar drew its own hairline, its own radius and its own
+     shadow with a gap between them, which is what read as two stacked bars of
+     chrome. The grip line goes too: with the dock directly above there is no
+     free edge to draw it on, and the chevron at the right already says
+     "tap to open". */
+  .olv-mobile-sheet.is-collapsed {
+    border-top-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head::before { display: none; }
 
   /* Body: the active tabpanel only; scrolls inside the sheet. */
   .olv-msheet-body {
@@ -7952,6 +8135,30 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-mobile-sheet .olv-inspector .olv-sheet-close { display: none; }
   .olv-mobile-sheet .olv-inspector .olv-panel-head { cursor: default; }
 }
+
+/* ── Landscape phone: keep the canvas usable ────────────────────────────────
+   On a short landscape viewport the sheet's half/full detents would eat most of
+   the scene. Cap the sheet to a shorter bottom sheet so the point cloud stays
+   visible above it, and tighten the head so the peek row is not a large slice of
+   the screen. Gated on a coarse pointer so desktop windows (fine pointer) are
+   never affected. */
+@media (orientation: landscape) and (pointer: coarse) {
+  .olv-mobile-sheet {
+    max-height: 82vh;
+    max-height: min(82dvh, 82vh);
+  }
+  .olv-mobile-sheet.olv-msheet--half {
+    height: 58vh;
+    height: 58dvh;
+  }
+  .olv-mobile-sheet.olv-msheet--full {
+    height: 82vh;
+    height: min(82dvh, 82vh);
+  }
+  /* Shorter head so the collapsed peek leaves more of the scene in view. */
+  .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
+}
+
 
 /* ── Dataset Story card + Export Health (fitness-for-use synthesis) ───────── */
 .olv-story-card {
@@ -8422,8 +8629,9 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
    cyan hairline, one azure->cyan accent for the active tool / titles / key
    values, and a green for on/enabled status. Placed last (before the
    forced-colors reset) so it wins over the earlier phone blocks; scoped
-   entirely to max-width:767px + pointer:coarse so desktop is untouched. */
-@media (max-width: 767px) {
+   entirely to the mobile-layout condition (portrait OR landscape phone) so
+   desktop is untouched. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
   /* ── Dark-glass panels with a cyan hairline ──────────────────────────────
      The unified bottom sheet is the focal surface (raised glass); the tool
      dock, standalone inspector sheet and streaming panel are secondary glass.
@@ -8468,19 +8676,35 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     box-shadow: var(--m-glass-shadow);
   }
 
-  /* ── Tool dock — glass bar, cyan-lit active tool ─────────────────────────
-     Keep it the thumb-reachable bottom strip it already is; just re-skin. */
+  /* ── Tool dock: the visible edge of the merged bottom chrome ────────────
+     In portrait the dock is the TOP HALF of one bottom zone: it sits flush on
+     the collapsed sheet, so it wears the raised glass the sheet wears, rounds
+     only its top corners, drops its bottom border (that edge is interior now)
+     and carries the single lift shadow for both bars. The result is one
+     surface with one hairline and one shadow instead of two floating cards. */
   .olv-dock {
-    background: var(--m-glass);
-    -webkit-backdrop-filter: blur(14px) saturate(1.1);
-    backdrop-filter: blur(14px) saturate(1.1);
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
     border: 1px solid var(--m-edge);
-    border-radius: 14px;
-    box-shadow: var(--m-glass-shadow);
+    border-bottom-width: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
   }
+  /* Ghost-by-default dock tools: transparent fill, NO resting border, dim
+     neutral colour so nothing competes with the cloud. Accent discipline: the
+     single cyan accent lands only on the active tool (below). The dock strip
+     itself carries the glass + faint cyan hairline. */
   .olv-dock .olv-tool {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: var(--m-edge);
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-dim);
+    border-radius: 10px;
+    transition:
+      background 180ms ease-out,
+      border-color 180ms ease-out,
+      color 180ms ease-out,
+      transform 150ms ease-out;
   }
   /* Active tool: cyan glyph + label, a firmer cyan edge, and a short cyan
      indicator bar under the button so the current mode reads at a glance. */
@@ -8490,7 +8714,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
     color: var(--m-accent-2);
     background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
     border-color: var(--m-edge-strong);
-    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 4px 14px -6px rgba(41, 211, 255, 0.35);
+    /* One quiet accent, no heavy glow: an inset cyan hairline plus a soft lift. */
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px rgba(41, 211, 255, 0.28);
   }
   .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
   .olv-dock .olv-tool-active::after {
@@ -8503,9 +8728,40 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   /* ── Segmented sheet tabs — cyan active indicator ────────────────────────
      The active tab keeps its raised chip; add a cyan underline + cyan label
      so the current panel (Layers / Properties / Scan) matches the accent. */
+  /* Compact, evenly-spaced pill tabs: tighter min-height (tap area held at
+     >= 40px), a smoother ease-out, and a lighter resting weight. */
+  /* The tab row is typeset like the tool dock: the same 9px label, uppercase
+     with tracking so it reads as a control rather than body text, on a slim
+     row. The active tab is a cyan label over a hairline underline instead of a
+     raised chip, so the whole strip reads as one refined surface. */
+  .olv-msheet-tabs { gap: 2px; padding: var(--m-tabs-pad); border-radius: 10px; }
+  .olv-msheet-tab {
+    min-height: var(--m-tab-h);
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition:
+      background 180ms ease-out,
+      color 180ms ease-out,
+      box-shadow 180ms ease-out,
+      transform 150ms ease-out;
+  }
+  /* The active marker is a short straight bar under the label, drawn the same
+     way the active dock tool draws its own. An `inset` box-shadow followed the
+     tab's 8 px corner radius and hung a small cyan "U" off the bottom of the
+     strip, which at the very foot of the screen read as a clipped element. */
   .olv-msheet-tab.is-active {
+    background: transparent;
     color: var(--m-accent-2);
-    box-shadow: inset 0 -2px 0 var(--m-accent-2), 0 1px 3px rgba(0, 0, 0, 0.3);
+    box-shadow: none;
+  }
+  .olv-msheet-tab.is-active::before {
+    content: "";
+    position: absolute; left: 26%; right: 26%; bottom: 3px; height: 2px;
+    border-radius: 2px;
+    background: var(--m-accent-grad);
   }
   .olv-msheet-tab:focus-visible,
   .olv-dock .olv-tool:focus-visible,
@@ -8548,6 +8804,125 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-layer-x:active {
     transform: translateY(1px);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDSCAPE PHONE: the tools move to a LEFT RAIL
+   ═══════════════════════════════════════════════════════════════════════════
+   In landscape, height is the scarce axis and width is the plentiful one, so a
+   full-width bottom bar spends the wrong resource. The top bar, the bottom
+   chrome and the streaming card together left the cloud a thin middle band.
+   Reflow rather than shrink: the dock becomes a slim vertical rail pinned to
+   the left edge (the arrangement the project's own hero console uses), the
+   bottom keeps only the slim tab strip, and the vertical band between them
+   belongs to the scene.
+
+   The condition is the landscape arm of the canonical mobile query plus a
+   short-viewport guard. `(orientation: landscape) and (pointer: coarse)` on its
+   own also matches a tablet in landscape, which is 768 px or wider and
+   therefore on the DESKTOP layout. It would have sprouted a left rail while
+   every other panel stayed put. `max-height: 500px` is what makes it a phone.
+
+   Placed after the mobile GUI block so the rail's geometry wins over the
+   portrait bottom-bar geometry declared there. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* Give the band its height back: a 74 px header is a fifth of a 390 px-tall
+     viewport. Only the vertical padding tightens, so the header's own controls
+     keep their 44 pt targets. */
+  .olv-topbar {
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top));
+    padding-bottom: var(--space-sm);
+  }
+
+  .olv-dock {
+    /* Pin both ends of the free band so the rail can never slide under the
+       header or under the sheet, then centre the tools in whatever is left. */
+    top: calc(58px + env(safe-area-inset-top));
+    bottom: calc(var(--m-chrome-head-h) + var(--space-2xs) + env(safe-area-inset-bottom));
+    left: calc(var(--space-xs) + env(safe-area-inset-left));
+    right: auto;
+    width: auto;
+    height: auto;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    /* `safe` matters here. Plain `center` overflows a too-short rail at BOTH
+       ends and the top overflow cannot be scrolled back to, which would strand
+       Frame off-screen. `safe` falls back to start-alignment the moment the
+       content stops fitting. The unprefixed line is the fallback for engines
+       that do not parse the keyword. */
+    justify-content: center;
+    justify-content: safe center;
+    align-items: stretch;
+    gap: var(--space-2xs);
+    padding: var(--space-2xs);
+    /* The rail is a free-floating card again, so it gets a full border and a
+       full radius back (portrait fuses its bottom edge into the sheet). */
+    border-bottom-width: 1px;
+    border-radius: 14px;
+    box-shadow: var(--m-glass-shadow);
+    /* If "More" is open and the full set no longer fits the band, the rail
+       scrolls. Nothing can be clipped mid-word: the buttons are square and
+       captionless here, so a part-scrolled rail cuts only whitespace. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .olv-dock::-webkit-scrollbar { display: none; }
+  /* The fade is scoped to the open disclosure, which is the only state that can
+     make the rail taller than its band. Applying it unconditionally would dim
+     the first and last tool of a rail that fits perfectly well. */
+  .olv-dock.olv-dock-more-open {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  }
+  /* Square, icon-only buttons at the full 44 pt target. A vertical rail has no
+     room for captions and a squeezed caption is worse than none, so the label
+     leaves the page and the accessible name comes from the aria-label ToolDock
+     puts on every button. */
+  .olv-dock .olv-tool {
+    flex: 0 0 auto;
+    width: 44px;
+    min-width: 44px;
+    max-width: none;
+    min-height: 44px;
+    padding: var(--space-2xs);
+  }
+  .olv-dock .olv-tool-label { display: none; }
+  .olv-dock .olv-tool-ico svg { width: 20px; height: 20px; }
+  .olv-dock .olv-tool-more { padding: var(--space-2xs); letter-spacing: 0; }
+  /* The cluster break runs down the rail now, not across a row. */
+  .olv-dock > .olv-dock-gap { margin-left: 0; margin-top: var(--space-sm); }
+
+  /* With the dock off the bottom edge the sheet is the only bottom chrome, so
+     it carries its own top edge and corners again. */
+  .olv-mobile-sheet.is-collapsed {
+    border-top-width: 1px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* Streaming card: a narrow top-right sliver, capped so it covers well under
+     half the short side and never reads as a full right-hand panel. */
+  .olv-streaming-panel {
+    top: calc(60px + env(safe-area-inset-top));
+    width: min(200px, 30vw);
+    max-height: min(46dvh, calc(100dvh - 128px));
+  }
+
+  /* The touch hint sits just above the bottom strip instead of mid-scene. */
+  .olv-touch-hint {
+    bottom: calc(var(--m-chrome-head-h) + var(--space-xl) + env(safe-area-inset-bottom));
+  }
+}
+
+/* On the shortest landscape phones (an SE lying down is 375 px tall) six 44 pt
+   buttons plus the header and the sheet no longer fit the column, and the rail
+   would start scrolling with tools out of sight. Step the target down to 40 pt
+   there rather than hide anything: a slightly small button you can see beats a
+   correctly sized one you have to find. This is the only place in the phone
+   layout that goes under 44 pt, and only under 380 px of height. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 380px) {
+  .olv-dock .olv-tool { width: 40px; min-width: 40px; min-height: 40px; }
+  .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
 }
 
 /* ── Windows High Contrast / forced-colors ──────────────────────────────────
