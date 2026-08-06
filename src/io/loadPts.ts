@@ -55,6 +55,9 @@ export async function loadPts(
   let colorMax = 0;
   // PTS may begin with a lone integer point-count line; it is skipped once.
   let countLineConsumed = false;
+  // The value of that count line, kept only to reconcile against the decoded
+  // total — a decoded count short of it is the fingerprint of a truncated file.
+  let declaredCount: number | undefined;
 
   readTextLines(
     buffer,
@@ -66,6 +69,7 @@ export async function loadPts(
       // The optional first line is a lone non-negative integer — the point
       // count. It is informational; the actual points are counted as decoded.
       if (!countLineConsumed && tok.length === 1 && /^\d+$/.test(tok[0])) {
+        declaredCount = Number(tok[0]);
         countLineConsumed = true;
         return;
       }
@@ -167,6 +171,18 @@ export async function loadPts(
   // floored-min origin the survivors deserve and recentres in float64.
   const clean = sanitizeAndRecenter(global, { colors, intensity });
 
+  // A declared count above the decoded total means point lines went missing —
+  // a truncated or partly-malformed file. The count is informational by spec,
+  // so this warns rather than refusing; every point that decoded is still shown.
+  let metadata = withLoadWarning(
+    undefined,
+    declaredCount !== undefined && count < declaredCount
+      ? `PTS declared ${declaredCount} points but only ${count} were read — the ` +
+          `file may be truncated or contain malformed lines.`
+      : undefined,
+  );
+  metadata = withLoadWarning(metadata, clean.warning);
+
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
@@ -175,6 +191,6 @@ export async function loadPts(
     sourceFormat: 'pts',
     name,
     decodedPointCount: count,
-    metadata: withLoadWarning(undefined, clean.warning),
+    metadata,
   });
 }

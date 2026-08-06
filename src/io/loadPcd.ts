@@ -46,14 +46,55 @@ interface PcdHeaderFacts {
 }
 
 /**
+ * Byte length of the PCD header — the offset just past the newline that closes
+ * the DATA line. The header is ASCII and DATA is always its last line, so a
+ * byte scan locates it without decoding the (possibly binary, possibly huge)
+ * body as text. Returns the whole buffer length when no DATA line is found, so
+ * the regex in {@link parsePcdHeaderFacts} still gets its chance to fail.
+ */
+function pcdHeaderByteLength(buffer: ArrayBuffer): number {
+  const bytes = new Uint8Array(buffer);
+  const n = bytes.length;
+  for (let i = 1; i + 3 < n; i++) {
+    // DATA must OPEN a line — the body regex requires a newline right before
+    // it, which also rules out a FIELDS/comment token that merely spells "data".
+    const prev = bytes[i - 1];
+    if (prev !== 10 && prev !== 13) continue;
+    if (
+      (bytes[i] === 0x44 || bytes[i] === 0x64) && // D d
+      (bytes[i + 1] === 0x41 || bytes[i + 1] === 0x61) && // A a
+      (bytes[i + 2] === 0x54 || bytes[i + 2] === 0x74) && // T t
+      (bytes[i + 3] === 0x41 || bytes[i + 3] === 0x61) // A a
+    ) {
+      // Consume the encoding token and the line's terminator (LF, or CRLF) so
+      // the decoded prefix carries the whitespace the DATA regex needs after
+      // the token — then stop, one line short of any body byte.
+      let j = i + 4;
+      while (j < n && bytes[j] !== 10 && bytes[j] !== 13) j++;
+      if (j < n && bytes[j] === 13) j++; // CR of a CRLF pair
+      if (j < n && bytes[j] === 10) j++; // LF
+      return j;
+    }
+  }
+  return n;
+}
+
+/**
  * Parse the PCD text header. The header is ASCII by spec, so character
  * offsets into the decoded prefix equal byte offsets into the buffer.
  * Returns `null` when the header cannot be resolved — the caller falls back
  * to PCDLoader's positions.
  */
 function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
+  // Decode only the header — up to and including the DATA line — never the
+  // body. A fixed 4 KiB probe silently truncated here: a valid header with many
+  // FIELDS or long comments can push DATA past it, and a miss returned null,
+  // which switched the f64 precision path OFF and let PCDLoader's f32 positions
+  // through with no warning — quantising a UTM easting to a few centimetres.
+  // PCDLoader scans the WHOLE buffer for DATA, so matching that is what keeps
+  // the two parsers agreeing on every file both accept.
   const probe = new TextDecoder().decode(
-    new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 4096)),
+    new Uint8Array(buffer, 0, pcdHeaderByteLength(buffer)),
   );
   // The same pattern PCDLoader uses to locate the body, so `bodyOffset`
   // agrees with its `headerLen` on every file both parsers accept.
@@ -122,7 +163,19 @@ function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
     // each line into tokens held one string per line plus a growing number[]
     // that was then copied again into the typed array — four live copies of the
     // cloud at the peak, to read three columns per row.
-    const maxRows = facts.points > 0 ? facts.points : countPcdRows(body);
+    // Bound the row count by what the body can physically hold before sizing
+    // the buffer. A row needs at least a coordinate token and a separator, so
+    // the body cannot contain more rows than half its length. Without this, a
+    // header that lies about POINTS (or WIDTH×HEIGHT) sizes this Float64Array
+    // from an unchecked number — and because this runs OUTSIDE loadPcd's
+    // try/finally, a wild count throws a raw RangeError (or crashes the
+    // allocator) rather than degrading to the clean "could not be read" path.
+    // The binary branch already cross-checks POINTS against the byte length;
+    // this is the ascii equivalent. The honest row count can never exceed this
+    // ceiling, so a well-formed file reads exactly as before.
+    const rowCeiling = Math.floor(body.length / 2) + 1;
+    const declaredRows = facts.points > 0 ? facts.points : countPcdRows(body);
+    const maxRows = Math.min(declaredRows, rowCeiling);
     const out = new Float64Array(maxRows * 3);
     const n = body.length;
     let pos = 0;
