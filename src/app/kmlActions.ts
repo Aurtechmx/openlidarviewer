@@ -131,7 +131,11 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   const crs = deps.crsCurrent();
   const toLonLat = makeLocalToLonLat(crs, geo.origin);
   if (!toLonLat) return; // gated by siteKmlStatus; defensive no-op if reached
-  const { buildKml, KmlCoordinateError } = await deps.loadKmlExport();
+  // Every input is read BEFORE the serialiser import. The origin and CRS above
+  // were already captured pre-await while the features, up vector and unit scale
+  // were read after it, so a placement made (or a scan opened) during the import
+  // produced a file mixing one moment's frame with another's contents. One
+  // reading of the session, then the load.
   const input: KmlExportInput = {
     annotations: deps.annotations(),
     measurements: deps.measurements(),
@@ -157,6 +161,7 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     notSurveyGradeNote: NOT_SURVEY_GRADE,
   };
   const stem = geo.name ? deps.baseName(geo.name) : 'site';
+  const { buildKml, KmlCoordinateError } = await deps.loadKmlExport();
   let text: string;
   try {
     text = buildKml(input);
