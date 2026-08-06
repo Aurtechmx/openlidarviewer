@@ -18,6 +18,7 @@ import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions 
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
+import { evaluateFullResClassExport } from '../export/fullResClassGuard';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
 
@@ -589,9 +590,24 @@ export class ExportPanel {
       return;
     }
 
+    const useFull = this._fullRes && this._cb.hasFullSource();
+    // Refuse — never silently discard. A full-resolution export re-decodes the
+    // original file and cannot carry in-session classification edits (they are
+    // keyed by display-point index; the re-decode has no stable mapping back).
+    // Block the write and steer the user to a lossless path instead of shipping
+    // a file that quietly drops their edits.
+    const classGate = evaluateFullResClassExport({
+      fullRes: useFull,
+      includeClassification: this._includeClass,
+      hasClassEdits: this._cb.hasClassEdits?.() ?? false,
+    });
+    if (!classGate.allowed) {
+      this._setStatus(classGate.reason ?? 'Export refused.', 'error');
+      return;
+    }
+
     this._busy = true;
     this._exportBtn.disabled = true;
-    const useFull = this._fullRes && this._cb.hasFullSource();
     this._exportBtn.textContent = useFull ? 'Re-decoding…' : 'Exporting…';
     try {
       // Full resolution re-decodes the original file; otherwise convert the
