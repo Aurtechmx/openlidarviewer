@@ -35,7 +35,7 @@ import {
 } from '../../io/ept/eptHierarchy';
 import type { EptHierarchyEntry } from '../../io/ept/eptHierarchy';
 import type { EptBounds, EptKey, EptMetadata } from '../../io/ept/eptTypes';
-import { eptKeyToString } from '../../io/ept/eptTypes';
+import { MAX_EPT_DEPTH, eptKeyToString } from '../../io/ept/eptTypes';
 
 /**
  * Async callback the octree uses to fetch one hierarchy file by its key.
@@ -51,14 +51,12 @@ export type HierarchyFetcher = (
 /** A hard cap on hierarchy files, mirroring COPC's MAX_HIERARCHY_PAGES guard. */
 const MAX_HIERARCHY_FILES = 4096;
 
-/**
- * Hard cap on EPT key depth. EPT keys are 32-bit signed; `x >> 1`
- * parent-key arithmetic wraps into negative space once `x` reaches
- * 2^31. The cap is set well below the wrap edge — practical Entwine
- * output rarely exceeds depth ~20, so this limit only kicks in for
- * pathological or malicious manifests.
- */
-const MAX_EPT_DEPTH = 24;
+// The depth cap this class enforces at ingest now lives with the key type in
+// `io/ept/eptTypes`, because `eptStringToKey` needs the same number to reject
+// an over-deep address at PARSE time. The ingest guard below stays: keys can
+// reach the store from `partitionHierarchyMap` and from tests that build
+// records directly, so the octree keeps checking rather than trusting that
+// every caller came through the parser.
 
 export class EptOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();

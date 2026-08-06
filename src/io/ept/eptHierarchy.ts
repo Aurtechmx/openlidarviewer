@@ -20,8 +20,24 @@
  * fetch + cache; this module is just JSON in, hierarchy out.
  */
 
-import { eptStringToKey } from './eptTypes';
+import { MAX_EPT_DEPTH, eptStringToKey } from './eptTypes';
 import type { EptHierarchyMap, EptKey } from './eptTypes';
+
+/**
+ * Cap on the number of entries in ONE hierarchy file (262 144).
+ *
+ * `EptOctree.MAX_HIERARCHY_FILES` bounds how many files the walk will fetch,
+ * but nothing bounded how many keys a single file could declare — one
+ * response could enumerate millions of nodes and each becomes a store record
+ * with bounds, a voxel key, and a scheduler entry. Entwine splits hierarchy
+ * pages well below this (a page of a few thousand keys is typical), so the cap
+ * sits roughly two orders of magnitude above real output and only bites on a
+ * file that is not a hierarchy page in any meaningful sense.
+ */
+export const MAX_HIERARCHY_ENTRIES_PER_FILE = 262_144;
+
+/** The sentinel value meaning "this subtree continues in another file". */
+const HIERARCHY_LINK = -1;
 
 /** A parsed entry from a hierarchy file. */
 export interface EptHierarchyEntry {
@@ -66,17 +82,44 @@ export function parseHierarchyFile(text: string): ParsedHierarchyFile {
   const nodes: EptHierarchyEntry[] = [];
   let totalPoints = 0;
 
-  for (const [keyStr, val] of Object.entries(obj)) {
+  const rawEntries = Object.entries(obj);
+  if (rawEntries.length > MAX_HIERARCHY_ENTRIES_PER_FILE) {
+    throw new Error(
+      `EPT hierarchy file declares ${rawEntries.length} entries, above the ` +
+        `${MAX_HIERARCHY_ENTRIES_PER_FILE} per-file limit.`,
+    );
+  }
+
+  for (const [keyStr, val] of rawEntries) {
     if (typeof val !== 'number' || !Number.isFinite(val)) {
       throw new Error(`EPT hierarchy entry "${keyStr}" has non-numeric value.`);
     }
+    // The spec admits exactly two things: -1 (this subtree lives in another
+    // file) or a point count. "Any finite number" was too generous in three
+    // separate ways, and each one produced a wrong answer rather than an
+    // error. `3.7` became a node with a fractional pointCount that the
+    // budgeter then arithmetic'd on. `1e300` was added into `totalPoints` and
+    // poisoned every downstream proportion — the progress readout, the
+    // sampling plan's share-of-cloud maths — with a number no dataset can
+    // hold. `-2` fell through both branches and was silently swallowed: not a
+    // link, not a node, no error, the subtree just quietly absent. Reject all
+    // three by name so a broken writer is a load failure, not a wrong number.
+    if (val !== HIERARCHY_LINK && !(Number.isSafeInteger(val) && val >= 0)) {
+      throw new Error(
+        `EPT hierarchy entry "${keyStr}" has value ${val} — must be -1 (a link ` +
+          'to another hierarchy file) or a non-negative whole point count.',
+      );
+    }
     const key = eptStringToKey(keyStr);
     if (!key) {
-      throw new Error(`EPT hierarchy entry "${keyStr}" is not a valid D-X-Y-Z address.`);
+      throw new Error(
+        `EPT hierarchy entry "${keyStr}" is not a valid D-X-Y-Z address ` +
+          `(depth ≤ ${MAX_EPT_DEPTH}, and x/y/z each below 2^depth).`,
+      );
     }
     const entry: EptHierarchyEntry = { key, value: val };
     entries.push(entry);
-    if (val === -1) {
+    if (val === HIERARCHY_LINK) {
       links.push(entry);
     } else if (val > 0) {
       nodes.push(entry);

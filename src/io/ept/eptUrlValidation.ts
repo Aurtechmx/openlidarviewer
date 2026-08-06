@@ -14,6 +14,7 @@ import {
   MAX_REMOTE_COPC_URL_LENGTH,
   validateRemoteCopcUrl,
   sanitizeUrlForDisplay,
+  scrubUrlsForDisplay,
 } from '../range/RangeSource';
 
 /** Maximum acceptable length of an EPT URL — same guard as the COPC entry. */
@@ -61,9 +62,15 @@ export function validateRemoteEptUrl(
  *   - hierarchy / tile fetch failure — same fetch-error shape
  *   - transport error (network down, DNS) — generic but URL-anchored
  *
- * The error message returned is safe to display verbatim; the URL is
- * scrubbed of credentials via {@link sanitizeUrlForDisplay} before
- * inclusion.
+ * The error message returned is safe to display verbatim, and that claim is
+ * now true of the WHOLE message rather than just the part this function
+ * builds. The entry URL is scrubbed via {@link sanitizeUrlForDisplay}, and
+ * the `detail` lifted off the underlying error — which several branches
+ * re-append verbatim — goes through {@link scrubUrlsForDisplay} first. Before
+ * that, a sanitised host was concatenated with a detail string that could
+ * still contain a fully signed URL, so the scrubbing cancelled itself out.
+ * EPT hierarchy and tile URLs carry the manifest's auth query by design (see
+ * `eptUrls.ts`), so any URL reaching here may be a live credential.
  */
 export function describeRemoteEptError(err: unknown, url: string): string {
   const safeUrl = sanitizeUrlForDisplay(url);
@@ -74,7 +81,7 @@ export function describeRemoteEptError(err: unknown, url: string): string {
       return safeUrl;
     }
   })();
-  const detail = err instanceof Error ? err.message : String(err);
+  const detail = scrubUrlsForDisplay(err instanceof Error ? err.message : String(err));
 
   // Pattern-match common failure shapes for clearer messaging.
   if (/CORS|Cross-Origin|Access-Control/i.test(detail)) {

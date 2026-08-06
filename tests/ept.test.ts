@@ -293,7 +293,12 @@ test('eptChildKeys produces the 8 standard octree children', () => {
 });
 
 test('eptKeyToString + eptStringToKey round-trip', () => {
-  const k = { d: 5, x: 17, y: 3, z: 200 };
+  // The original fixture here was `{ d: 5, x: 17, y: 3, z: 200 }`, which no
+  // octree can contain: depth 5 has 2^5 = 32 cells per axis, so z = 200 is
+  // outside the cube. It round-tripped only because the parser checked the
+  // digits and not the geometry. Round-trip on a key that can exist; the
+  // impossible one is asserted rejected below.
+  const k = { d: 5, x: 17, y: 3, z: 31 };
   expect(eptStringToKey(eptKeyToString(k))).toEqual(k);
 });
 

@@ -27,6 +27,7 @@
 
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
+import { readTextAtMost } from '../io/range/boundedRead';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 
@@ -500,7 +501,19 @@ export async function handleRemoteEpt(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
       );
     }
-    const manifestText = await manifestResponse.text();
+    // Bounded read. `ept.json` is a small JSON document — version, span,
+    // schema, bounds, and at most a WKT string — so 4 MiB is already orders of
+    // magnitude of headroom over the largest real manifest (a verbose compound
+    // CRS WKT runs a few kilobytes). Reading it with `.text()` meant an
+    // endless body from a hostile or misconfigured host was materialised in
+    // full before anyone looked at it; this stops at the ceiling and cancels.
+    const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
+    const manifestText = await readTextAtMost(
+      manifestResponse,
+      MAX_MANIFEST_BYTES,
+      'EPT manifest',
+      controller.signal,
+    );
     const detection = parseEptMetadata(manifestText);
     if (!detection.isEpt) {
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);

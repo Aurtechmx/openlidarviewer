@@ -14,14 +14,32 @@
  *     network errors (`fetch` itself rejects)
  *   - Exponential backoff with jitter between attempts
  *   - Aborts cleanly when the outer signal cancels
- *   - Throws typed messages the `describeRemoteEptError` classifier knows:
+ *   - Throws a typed {@link EptFetchError} whose message the
+ *     `describeRemoteEptError` classifier knows:
  *     `EPT hierarchy fetch failed (...)`, `EPT tile fetch failed (...)`
+ *
+ * CREDENTIALS. `eptUrls.ts` re-attaches the manifest's query string to every
+ * hierarchy and tile URL, by design, so that signed datasets (Azure SAS, a CDN
+ * `?token=`, an AWS presigned prefix) keep working past `ept.json`. That makes
+ * the URL a live credential by construction, and this module used to
+ * interpolate it raw into every thrown message. Those messages travel: the
+ * full-cloud grade action paints `err.message` straight into the streaming
+ * panel, which lands in screenshots and support tickets. Every field on
+ * {@link EptFetchError} is therefore scrubbed at construction — the class
+ * carries structured, already-safe values so no downstream formatter can
+ * reassemble the token.
+ *
+ * BYTE CEILINGS. Hierarchy and tile bodies are read through the bounded
+ * readers in `io/range/boundedRead`, so a host cannot answer a hierarchy
+ * request with an endless body.
  *
  * Pure — no DOM, no three.js. The injected `fetchImpl`, `sleep`, and
  * `random` make every retry/timeout path deterministically testable.
  */
 
 import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud';
+import { sanitizeUrlForDisplay } from '../range/RangeSource';
+import { readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -31,6 +49,101 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_BASE_MS = 250;
 /** HTTP statuses we DO retry on (transient transport faults). */
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+
+/**
+ * Byte ceiling for one EPT hierarchy JSON file (16 MiB).
+ *
+ * A hierarchy page is `"D-X-Y-Z": <count>` pairs, roughly 20–25 bytes each,
+ * and Entwine splits pages long before they get large — a few thousand keys
+ * is typical, tens of thousands is already unusual. 16 MiB is around 700k
+ * keys: three orders of magnitude above any real page, so the limit can only
+ * be hit by a host that is not sending a hierarchy file at all.
+ */
+export const MAX_EPT_HIERARCHY_BYTES = 16 * 1024 * 1024;
+
+/**
+ * Byte ceiling for one EPT data tile (128 MiB).
+ *
+ * A tile holds one octree node's points — Entwine's default is a few hundred
+ * thousand. At ~34 bytes per uncompressed LAS point record, half a million
+ * points is ~17 MB before compression, and `binary` tiles are stored
+ * uncompressed. 128 MiB leaves roughly 8× headroom over that worst case while
+ * still bounding the allocation a single hostile response can force.
+ */
+export const MAX_EPT_TILE_BYTES = 128 * 1024 * 1024;
+
+/** Which EPT resource a fetch was for. Drives the message and the classifier. */
+export type EptFetchOperation = 'hierarchy' | 'tile';
+
+/**
+ * A typed EPT fetch failure carrying only already-safe fields.
+ *
+ * The point of the type is that there is no raw URL on it to leak. `host` and
+ * `resource` are derived from the request URL with the query string and any
+ * userinfo removed, and `message` is composed from those same fields — so a
+ * caller that logs the error, serialises it, or interpolates its message into
+ * panel text cannot reintroduce the credential that {@link sanitizeUrlForDisplay}
+ * stripped. Structured fields exist so callers that want to *classify* a
+ * failure (status, operation) don't have to regex the message to do it.
+ */
+export class EptFetchError extends Error {
+  /** Which resource kind failed. */
+  readonly operation: EptFetchOperation;
+  /** HTTP status, when the failure was a response rather than a transport fault. */
+  readonly status?: number;
+  /** HTTP status text, when present. */
+  readonly statusText?: string;
+  /** Host only — no scheme, no userinfo, no query. */
+  readonly host: string;
+  /** Dataset-relative resource path, e.g. `ept-hierarchy/0-0-0-0.json`. */
+  readonly resource: string;
+  /** The full URL with userinfo and query stripped — safe to display. */
+  readonly safeUrl: string;
+
+  constructor(
+    operation: EptFetchOperation,
+    url: string,
+    detail?: { status?: number; statusText?: string; cause?: unknown },
+  ) {
+    const safeUrl = sanitizeUrlForDisplay(url);
+    const status = detail?.status;
+    const statusText = detail?.statusText;
+    const statusPart =
+      status === undefined ? '' : ` (${status}${statusText ? ` ${statusText}` : ''})`;
+    super(`EPT ${operation} fetch failed${statusPart} for ${safeUrl}`);
+    this.name = 'EptFetchError';
+    this.operation = operation;
+    this.status = status;
+    this.statusText = statusText;
+    this.safeUrl = safeUrl;
+    this.host = safeHostOf(safeUrl);
+    this.resource = safeResourceOf(safeUrl);
+    if (detail?.cause !== undefined) this.cause = detail.cause;
+  }
+}
+
+/** Host of an already-sanitised URL; the whole sanitised string if it won't parse. */
+function safeHostOf(safeUrl: string): string {
+  try {
+    return new URL(safeUrl).host;
+  } catch {
+    return safeUrl;
+  }
+}
+
+/**
+ * The last two path segments of an already-sanitised URL — `ept-data/3-1-2-0.laz`
+ * rather than the full deploy path. Enough to say *which* file failed without
+ * echoing a customer's bucket layout back into a screenshot.
+ */
+function safeResourceOf(safeUrl: string): string {
+  try {
+    const segments = new URL(safeUrl).pathname.split('/').filter(Boolean);
+    return segments.slice(-2).join('/');
+  } catch {
+    return safeUrl;
+  }
+}
 
 /** Tunables for {@link createEptTransport}. Defaulted; injected for tests. */
 export interface EptTransportOptions {
@@ -103,7 +216,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
    */
   async function fetchWithRetry(
     url: string,
-    label: 'hierarchy' | 'tile',
+    label: EptFetchOperation,
     outer?: AbortSignal,
   ): Promise<Response> {
     let lastError: unknown = null;
@@ -123,14 +236,18 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
         // 2xx — success.
         if (response.ok) return response;
         // 4xx (except 408/429) — permanent. Don't retry; throw immediately.
+        // `url` is never interpolated here: EptFetchError sanitises it, and
+        // for a signed dataset the query string IS the credential.
         if (!RETRYABLE_STATUSES.has(response.status)) {
-          throw new Error(
-            `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${url}`,
-          );
+          throw new EptFetchError(label, url, {
+            status: response.status,
+            statusText: response.statusText,
+          });
         }
-        lastError = new Error(
-          `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${url}`,
-        );
+        lastError = new EptFetchError(label, url, {
+          status: response.status,
+          statusText: response.statusText,
+        });
       }
       // Backoff before the next attempt (unless we're out of retries).
       if (attempt < maxRetries) {
@@ -138,17 +255,37 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
       }
     }
     if (lastError instanceof Error) throw lastError;
-    throw new Error(`EPT ${label} fetch failed for ${url}`);
+    throw new EptFetchError(label, url);
   }
 
   return {
     fetchText: async (url, signal) => {
       const response = await fetchWithRetry(url, 'hierarchy', signal);
-      return response.text();
+      // Bounded read: the body arrives from a host we don't control, and a
+      // hierarchy page has a knowable order of magnitude. See
+      // MAX_EPT_HIERARCHY_BYTES for why 16 MiB is the ceiling.
+      return readTextAtMost(
+        response,
+        MAX_EPT_HIERARCHY_BYTES,
+        'EPT hierarchy file',
+        signal,
+      );
     },
     fetchBytes: async (url, signal) => {
       const response = await fetchWithRetry(url, 'tile', signal);
-      return response.arrayBuffer();
+      const bytes = await readAtMostBounded(
+        response,
+        MAX_EPT_TILE_BYTES,
+        'EPT tile',
+        signal,
+      );
+      // `readAtMostBounded` may hand back a view into a larger chunk buffer
+      // when the whole body arrived in one read. Callers treat the result as
+      // an owned ArrayBuffer (they transfer it to a worker), so slice when the
+      // view isn't already the whole buffer.
+      return bytes.byteOffset === 0 && bytes.byteLength === bytes.buffer.byteLength
+        ? (bytes.buffer as ArrayBuffer)
+        : (bytes.slice().buffer as ArrayBuffer);
     },
   };
 }
