@@ -4630,21 +4630,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
 .olv-reclass-go { width: 100%; text-align: center; }
-/* Auto-classify: the panel's primary action — a filled accent button that reads
-   above the outline lasso/undo pills, matching the accent-on-dark chip convention. */
+/* Auto-classify: the panel's emphasised action. Only layout lives here. The
+   accent emphasis is declared in the unified button block at the end of this
+   file, because the button also carries `.olv-bc-pill`, whose base rule sits
+   later in the source at the same specificity and would otherwise reset the
+   fill, border and colour back to the plain pill. */
 .olv-reclass-auto {
   width: 100%;
   text-align: center;
   margin-bottom: var(--space-sm);
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #06121a;
-  font-weight: 600;
-}
-.olv-reclass-auto:hover:not(.is-disabled) {
-  filter: brightness(1.08);
-  border-color: var(--accent);
-  color: #06121a;
 }
 /* In-flight derive: dim the button and spin a ring before the label. */
 .olv-reclass-auto-loading {
@@ -6871,13 +6865,47 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-export-summary:empty { display: none; }
 .olv-export-summary.is-warn { color: var(--rating-moderate); }
 .olv-export-summary.is-error { color: var(--rating-weak); }
-/* Collapsed "Products" lane — derived artifacts (measurement GeoJSON/CSV, …). */
-.olv-export-products { margin-top: var(--space-sm); border-top: 1px solid var(--border-subtle); padding-top: var(--space-sm); }
+/*
+ * "Products" section: the artifacts derived FROM a scan (measurement vectors,
+ * the integrity report, the Google Earth outlines), as opposed to the point
+ * cloud the panel's primary flow converts.
+ *
+ * It read as an afterthought: a --text-xs text toggle, collapsed by default,
+ * over a dense strip of small pills. Two of those products (measurements, KML)
+ * are the deliverables people come here for, so the section now carries a real
+ * heading at the panel's own title weight, a firm rule above it, and one full
+ * width button per product under a group label. The rule and the heading also
+ * pick up REAL tokens. The previous --border-subtle / --text-bright are not
+ * defined anywhere in the theme, so the separator never drew and the hover
+ * colour never applied.
+ */
+.olv-export-products { margin-top: var(--space-xl); border-top: 0.5px solid var(--hairline-strong); padding-top: var(--space-xl); }
 .olv-export-products:empty { display: none; border: 0; padding: 0; margin: 0; }
-.olv-export-products-head { background: none; border: 0; color: var(--text-dim); font-size: var(--text-xs); font-weight: 600; cursor: pointer; padding: 0; }
-.olv-export-products-head:hover { color: var(--text-bright); }
-.olv-export-products-body { margin-top: var(--space-xs); }
+.olv-export-products-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-sm);
+  width: 100%; background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+  font: inherit; font-size: var(--text-sm); font-weight: 700; color: var(--text);
+  letter-spacing: 0.01em;
+}
+.olv-export-products-head:hover { color: var(--accent); }
+.olv-export-products-chevron { color: var(--text-faint); font-size: var(--text-2xs); transition: transform var(--dur-fast) var(--ease-standard); }
+.olv-export-products-chevron.is-closed { transform: rotate(-90deg); }
+.olv-export-products-body { display: flex; flex-direction: column; gap: var(--space-xl); margin-top: var(--space-md); }
 .olv-export-products-body.olv-hidden { display: none; }
+/* One product group: label, its stacked actions, one line of hint. */
+.olv-export-product-group { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-export-body .olv-export-product-group .olv-bc-section-label { margin: 0; }
+.olv-export-product-actions { display: flex; flex-direction: column; gap: var(--space-xs); }
+/* A product action wears the converter's pill treatment, laid out as a row so a
+   stack of them stays scannable at the panel's 222px width. */
+.olv-export-product-btn {
+  width: 100%; text-align: left; box-sizing: border-box;
+  padding: var(--space-md) var(--space-lg); border-radius: var(--radius-sm);
+}
+.olv-export-product-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+/* The pill hover rule keys off `.is-disabled`, which a `disabled` attribute does
+   not set, so an unavailable product would still light up under the pointer. */
+.olv-export-product-btn:disabled:hover { border-color: var(--hairline); color: var(--text-dim); }
 /* One-line note shown in place of the CRS step when the scan is ungeoreferenced. */
 .olv-export-crs-note { font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; margin: var(--space-2xs) 0 0; }
 @media (max-width: 767px) { .olv-export-panel { width: auto; } }
@@ -7708,6 +7736,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall,
 .olv-mp-profile-pdf,
 .olv-object-run-anyway,
+.olv-reclass-auto,
 .olv-modal-btn {
   transition: color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard),
@@ -7729,6 +7758,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall:not(:disabled):active,
 .olv-mp-profile-pdf:not(:disabled):active,
 .olv-object-run-anyway:not(:disabled):active,
+.olv-reclass-auto:not(:disabled):active,
 .olv-modal-btn:not(:disabled):active {
   transform: var(--btn-press);
 }
@@ -7746,6 +7776,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall:focus-visible,
 .olv-mp-profile-pdf:focus-visible,
 .olv-object-run-anyway:focus-visible,
+.olv-reclass-auto:focus-visible,
 .olv-modal-btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
@@ -7828,6 +7859,36 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   transform: var(--btn-press);
 }
 
+/*
+ * Auto-classify (Edit classes panel) emphasis.
+ *
+ * The button carries `.olv-bc-pill` for its shape, and that base rule sits
+ * later in this file at the same specificity, so any emphasis declared next to
+ * the panel is reset back to the plain transparent pill. Users read the result
+ * as a low-emphasis control and miss the action. Declaring it here, in the
+ * block that already wins on source order, is what makes it visible.
+ *
+ * It borrows the export CTA's accent language one step down: the same
+ * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
+ * so the panel keeps a single loudest action. Emphasis is carried by border
+ * weight and font weight as well as hue, and the label stays `--text` rather
+ * than `--accent`, which keeps the text contrast well clear of AA in Dark,
+ * Light and High-contrast (all three define `--accent` and `--accent-soft`).
+ */
+.olv-reclass-auto {
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+/* Hover needs the extra `:not(.is-disabled)` to outrank the equally late
+   `.olv-bc-pill:hover:not(.is-disabled):not(.is-active)`. */
+.olv-reclass-auto:not(:disabled):not(.is-disabled):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-color: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .olv-export-btn,
   .olv-analyse-dl,
@@ -7842,6 +7903,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-cl-showall,
   .olv-mp-profile-pdf,
   .olv-object-run-anyway,
+  .olv-reclass-auto,
   .olv-modal-btn {
     transition: color var(--dur-fast) var(--ease-standard),
       background var(--dur-fast) var(--ease-standard),
@@ -7860,6 +7922,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-cl-showall:active,
   .olv-mp-profile-pdf:active,
   .olv-object-run-anyway:active,
+  .olv-reclass-auto:active,
   .olv-modal-btn:active,
   .olv-analyse-run:not(.is-rerun):hover,
   .olv-analyse-dl.is-primary:hover,
