@@ -21,6 +21,10 @@
 import type { ConvertFormat, CrsMode } from '../convert/types';
 import { CONVERT_FORMATS } from '../convert/types';
 import { formatByteSize } from '../io/formatByteSize';
+import {
+  fullResWouldDropClassEdits,
+  FULL_RES_CLASS_EDITS_REFUSAL,
+} from './fullResClassGuard';
 
 /** Where the active classification came from. */
 export type ClassificationProvenance = 'none' | 'source' | 'derived';
@@ -204,13 +208,17 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
         'Validate it before anyone relies on it, or omit it below.',
     });
   }
-  if (input.fullRes && includeClass && input.hasClassEdits) {
-    warnings.push({
-      level: 'warn',
-      message:
-        'Full-resolution export re-decodes the original file — your in-session ' +
-        'classification edits will NOT be included. Untick full resolution to keep them.',
-    });
+  if (
+    fullResWouldDropClassEdits({
+      fullRes: input.fullRes === true,
+      includeClassification: includeClass,
+      hasClassEdits: input.hasClassEdits === true,
+    })
+  ) {
+    // Escalated from a warning to an ERROR: this export is refused at the write
+    // gate (fullResClassGuard), so the preview must read as blocked, not merely
+    // cautioned. Same wording as the enforcement.
+    warnings.push({ level: 'error', message: FULL_RES_CLASS_EDITS_REFUSAL });
   }
   if (includeClass && provenance !== 'none' && input.format === 'las') {
     warnings.push({
