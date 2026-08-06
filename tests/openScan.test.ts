@@ -121,6 +121,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     stage: { hideEmptyState: vi.fn() },
     closeStreaming: calls.closeStreaming,
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
+    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn() },
     inspector: {} as unknown as OpenScanDeps['inspector'],
     inspectorCards: {} as unknown as OpenScanDeps['inspectorCards'],
     crsCoordinator: {} as unknown as OpenScanDeps['crsCoordinator'],

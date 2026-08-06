@@ -10,13 +10,21 @@
  */
 
 import { createAppContext, type AppContext } from './appContext';
+import { createLayerIdentityService, type LayerIdentityService } from './layerIdentityService';
 
 /** The composition root: shared state now, extracted services as they land. */
 export interface AppRuntime {
   readonly context: AppContext;
+  /**
+   * The one owner of layer identity for this session (audit item O). Binds each
+   * loaded cloud to a stable, name-independent id and decides the owner stamped
+   * on new work. Held here so it is constructed once, alongside the shared
+   * state, rather than as a module-level singleton in the shell.
+   */
+  readonly layerIdentity: LayerIdentityService;
 }
 
-/** Construct the runtime with a fresh, empty AppContext. */
+/** Construct the runtime with a fresh, empty AppContext and its services. */
 export function createAppRuntime(): AppRuntime {
-  return { context: createAppContext() };
+  return { context: createAppContext(), layerIdentity: createLayerIdentityService() };
 }

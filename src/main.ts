@@ -5054,14 +5054,14 @@ const openScanDeps: OpenScanDeps = {
     const { LocalFileRangeSource } = await loadLocalFileRangeSource();
     await openStreamingCopc(new LocalFileRangeSource(fileToOpen), fileToOpen.name, signal);
   },
-  loadLocalSource: (fileToLoad, callbacks, options) =>
-    new LocalFileSource(fileToLoad).load(callbacks, options),
+  loadLocalSource: (fileToLoad, callbacks, options) => new LocalFileSource(fileToLoad).load(callbacks, options),
   renderBudget: deviceCapsValue.renderBudget,
   isPhone,
   deviceMemoryGB,
   stage,
   closeStreaming,
   scans,
+  layerIdentity: runtime.layerIdentity,
   inspector,
   inspectorCards,
   crsCoordinator,
