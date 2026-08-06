@@ -262,7 +262,8 @@ import { CatalogPanel } from './ui/CatalogPanel';
 import type { CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
-import { isLinearUnitKnown } from './geo/CoordinateTypes';
+import { spatialContextFrom, verticalMetresPerUnit } from './geo/SpatialContext';
+import { epochFrameFacts, epochFrameOptions } from './geo/frameCompatibility';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -563,13 +564,13 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // Native→metre factor for the source CRS (feet for a state-plane-feet
     // cloud). Handed to computeLassoVolume so the stockpile band it returns is
     // already converted to metres, and reused below for the m³/m² readout.
-    const crsForLasso = crsService.current();
-    const lin = crsForLasso?.linearUnitToMetres ?? 1;
+    const ctx = crsService.context();
+    const lin = ctx.linearUnitToMetres;
     // Whether that factor is real or an assumed 1: an unknown CRS still yields
-    // lin = 1 for display, but its points/m² density is then an assumption, so
-    // the stockpile grade must not claim it.
-    const densityUnitKnown = isLinearUnitKnown(crsForLasso);
-    const vert = crsForLasso?.verticalUnitToMetres ?? lin;
+    // lin = 1 for display, but its points/m² density is then an assumption the
+    // stockpile grade must not claim. One context answers both questions.
+    const densityUnitKnown = ctx.linearUnitKnown;
+    const vert = verticalMetresPerUnit(ctx, 'horizontal') ?? lin;
     const out = viewer.computeLassoVolume(lasso, 0.05, lin, densityUnitKnown, vert);
     if (out === null) {
       pendingLassoSave = null;
@@ -2211,38 +2212,34 @@ const measurePanel = new MeasurePanel({
 // fire seeds the CURRENT factor, covering a CRS that resolved before the
 // viewer chunk did, and every later resolve/override re-fires it.
 void viewerLoaded.then(() => {
-  crsService.subscribe((resolved) => {
-    viewer.measure.setUnitToMetres(resolved?.linearUnitToMetres ?? 1);
-    // Compound CRS: the height axis may carry its OWN linear unit (e.g. UTM
-    // metres + a NAVD88 height in US survey feet). Feed the vertical factor so
-    // heights / box height / cut-fill thickness scale by it — the same seam the
-    // Inspector probe and terrain already honour. Absent an explicit vertical
-    // unit, fall back to the horizontal factor so single-unit CRSs are
-    // unchanged (no mismatch, byte-identical readouts).
-    viewer.measure.setVerticalUnitToMetres(
-      resolved?.verticalUnitToMetres ?? resolved?.linearUnitToMetres ?? 1,
-    );
+  crsService.subscribe(() => {
+    // The ONE context for the active scan (the service invalidates it before it
+    // broadcasts, so this is always the CRS that just landed). Measure scale,
+    // trust grade, geographic refusal and the colorbar unit all read it, so the
+    // HUD and the legend cannot describe different frames.
+    const ctx = crsService.context();
+    viewer.measure.setUnitToMetres(ctx.linearUnitToMetres);
+    // Compound CRS: the height axis may carry its OWN linear unit (UTM metres +
+    // a NAVD88 height in US survey feet). Heights / box height / cut-fill
+    // thickness scale by it, and absent one the GeoTIFF convention follows the
+    // horizontal factor, so single-unit CRSs stay byte-identical.
+    viewer.measure.setVerticalUnitToMetres(verticalMetresPerUnit(ctx, 'horizontal') ?? 1);
     // A CRS is "known" for the measurement trust grade when one resolved with a
     // real linear unit. Distinct from the unit factor: a metric (UTM) survey has
     // factor 1 yet a fully-known CRS, so the factor alone can't certify scale.
-    viewer.measure.setCrsKnown(isLinearUnitKnown(resolved));
+    viewer.measure.setCrsKnown(ctx.linearUnitKnown);
     // A GEOGRAPHIC (degree) CRS can't be repaired by any scalar factor —
     // X/Y are degrees, Z is linear. The controller refuses the affected
     // trust grades + captions the hint; the panel shows the persistent
     // caveat. One boolean, one seam, so the two can never disagree.
-    const isGeo = resolved?.kind === 'geographic';
-    viewer.measure.setGeographicCrs(isGeo);
-    measurePanel.setGeographicNotice(isGeo);
-    // Colorbar legend — the elevation unit comes from the SAME resolved CRS
-    // (overrides included), through the same vertical-unit rule the terrain
-    // runner uses: an explicit vertical unit wins, else the horizontal
-    // linear unit WHEN KNOWN. An unknown CRS reports factor 1 as a pass-through,
-    // so gate via `isLinearUnitKnown` — else units masquerade as metres. `verticalUnitLabel`
-    // returns 'units' for odd factors; that is not a unit, so it maps to
-    // null and the legend shows bare numbers (honesty rule).
-    const vToM =
-      resolved?.verticalUnitToMetres ??
-      (resolved && isLinearUnitKnown(resolved) ? resolved.linearUnitToMetres : null);
+    viewer.measure.setGeographicCrs(ctx.isGeographic);
+    measurePanel.setGeographicNotice(ctx.isGeographic);
+    // Colorbar legend — same context, `'horizontal-when-known'` policy: an
+    // explicit vertical unit wins, else the horizontal one WHEN really declared
+    // (an unknown CRS reports a pass-through 1 that must not read as metres).
+    // `verticalUnitLabel` returns 'units' for odd factors; that is not a unit,
+    // so it maps to null and the legend shows bare numbers (honesty rule).
+    const vToM = verticalMetresPerUnit(ctx, 'horizontal-when-known');
     const vLabel = vToM != null ? verticalUnitLabel(vToM) : 'units';
     viewer.setElevationUnit(vLabel === 'units' ? null : vLabel);
   });
@@ -2362,6 +2359,11 @@ function newAnalysePanel(
       const streaming = cloud ? null : viewer.streamingCloud;
       const origin = cloud?.origin ?? streaming?.renderOrigin;
       const cur = crsService.current();
+      // The ONE context for this export, so sheet, DXF and GeoJSON describe one
+      // frame. `cur` survives only where the RESOLVED object is itself needed
+      // (the lon/lat converter) and for `linearUnit`, where "no scan yet" and
+      // "unknown CRS" differ and the context collapses them.
+      const ctx = crsService.context();
       return {
         // All three axes: contour serialization shifts elevations by `z` so
         // exported contour levels read in real-world (e.g. orthometric) height
@@ -2369,7 +2371,7 @@ function newAnalysePanel(
         worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        isGeographic: cur?.kind === 'geographic', sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
+        isGeographic: ctx.isGeographic, sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
         wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
@@ -2401,9 +2403,7 @@ function newAnalysePanel(
         // elevation unit + the contour interval / relief show an honest
         // "unverified" unit rather than a false metre. The complete deliverable,
         // and the Analyse panel's readiness / recommend / map-sheet notes, read this.
-        verticalUnitToMetres:
-          cur?.verticalUnitToMetres ??
-          (cur && isLinearUnitKnown(cur) ? cur.linearUnitToMetres : undefined),
+        verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal-when-known'),
       };
     },
   });
@@ -3324,15 +3324,15 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
       : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
     // reflects what's actually there for that interpretation; nothing fabricated.
-    // Feed the active scan's linear-unit-to-metres factor so a foot-based CRS
-    // (or any non-metre source units) reports honest metre/feet dimensions —
-    // the same factor the terrain core uses (deriveCoreParams); unknown unit ⇒ 1, unitKnown (below) flags that as assumed.
-    const unitToMetres = crsService.current()?.linearUnitToMetres ?? 1;
+    // The active scan's context, so a foot-based CRS reports honest metre/feet
+    // dimensions from the same object the terrain core reads.
+    const spaceCtx = crsService.context();
+    const unitToMetres = spaceCtx.linearUnitToMetres;
     const space = spaceMetrics(gathered.positions, {
       upAxis: shape.up,
       spaceKind: effective === 'interior' ? 'interior' : 'object',
       unitToMetres,
-      unitKnown: isLinearUnitKnown(crsService.current()),
+      unitKnown: spaceCtx.linearUnitKnown,
       hasRgb,
       sourcePointCount: gathered.totalPoints,
       // A still-streaming cloud is measured on its resident subset only — lead
@@ -5692,23 +5692,19 @@ function compareLoadedLayers(): void {
       // Pass each cloud's origin: the two are recentred by their own origins, so
       // the comparison must align them in a common world frame, not raw local.
       // Unit info rides along so the shared grid's ~0.25 m cell floor is
-      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25.
-      const beforeCloud = {
-        positions: a.positions,
-        origin: a.sourceOrigin, // source frame: the epoch world comparison, not the live project origin
-        crs: a.metadata?.crs?.name ?? null,
-        verticalDatum: a.metadata?.crs?.verticalDatum ?? null,
-        isGeographic: a.metadata?.crs?.isGeographic ?? null,
-        linearUnitToMetres: a.metadata?.crs?.linearUnitToMetres ?? null,
-      };
-      const afterCloud = {
-        positions: b.positions,
-        origin: b.sourceOrigin,
-        crs: b.metadata?.crs?.name ?? null,
-        verticalDatum: b.metadata?.crs?.verticalDatum ?? null,
-        isGeographic: b.metadata?.crs?.isGeographic ?? null,
-        linearUnitToMetres: b.metadata?.crs?.linearUnitToMetres ?? null,
-      };
+      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25 —
+      // and it now comes from ONE context per epoch, built at this boundary, so
+      // alignment, difference and exported raster cannot disagree about the
+      // metre scale (`epochFrameOptions`) or the declared frame
+      // (`declaredFrameLabel` keeps two UNDECLARED scans off the "same frame"
+      // branch instead of matching them on the display placeholder).
+      const ctxA = spatialContextFrom(a.metadata?.crs);
+      const ctxB = spatialContextFrom(b.metadata?.crs);
+      const frames = epochFrameOptions(ctxA, ctxB);
+      // `sourceOrigin`, not the live project origin: this is the epoch world
+      // comparison. The frame facts come from each epoch's context.
+      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) };
+      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) };
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.
@@ -5718,26 +5714,21 @@ function compareLoadedLayers(): void {
       // while the gate option is metres, so convert by the CRS's linear factor —
       // geographic frames don't have one, but alignment refuses those outright.
       const span = horizontalSpanXY(a.positions, a.sourceOrigin);
-      const spanUnitToM = a.metadata?.crs?.linearUnitToMetres ?? 1;
+      const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // both units KNOWN ⇒ summarizeAlignment reports the shift/residual in metres; a missing CRS or 'unknown' unit withholds the metre figures (geographic frames are refused before the fit)
+        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: frames.horizontalUnitKnown, // one shared verdict: the alignment and the difference below read the SAME frame facts, so a shift reported in metres is never followed by a difference that refuses metres
       });
       const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
       if (!dtms) {
         inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
         return;
       }
-      // CRS unit factors (from epoch a — a unit mismatch between epochs is
-      // already flagged) so cut/fill is m³ and Δz/LoD are metres, not source
-      // units. A metre CRS resolves to 1 (no change); a foot CRS to ~0.3048.
-      // A geographic (degree) frame has no such factor at all — flag it so
-      // the comparison refuses the volume figures instead of printing
-      // degree²-based numbers as m³ (the DtmGrids can't carry the frame).
+      // Unit factors so cut/fill is m³ and Δz/LoD metres, not source units; a
+      // geographic frame has no such factor at all, which `frames` flags so the
+      // comparison refuses volumes rather than printing degree² figures as m³.
       const cmp = compareDtms(dtms.before, dtms.after, {
-        horizontalUnitToMetres: a.metadata?.crs?.linearUnitToMetres,
-        verticalUnitToMetres: a.metadata?.crs?.verticalUnitToMetres,
-        isGeographic: a.metadata?.crs?.isGeographic === true || b.metadata?.crs?.isGeographic === true,
-        horizontalUnitKnown: isLinearUnitKnown(a.metadata?.crs) && isLinearUnitKnown(b.metadata?.crs), // KNOWN in both epochs ⇒ compareDtms fails closed instead of leaking source units as metres (a missing CRS or 'unknown' unit = placeholder factor 1; geographic frames go via isGeographic)
+        ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
+        verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
@@ -5755,7 +5746,7 @@ function compareLoadedLayers(): void {
         inspector.setDifferenceAvailable(false);
         return;
       }
-      const gridUnitToMetres = a.metadata?.crs?.linearUnitToMetres ?? 1;
+      const gridUnitToMetres = frames.horizontalUnitToMetres ?? 1;
       const ascDiff =
         gridUnitToMetres === 1
           ? cmp.result.diff

@@ -40,6 +40,7 @@ import {
   validateCrsForMeasurement,
   type CrsValidationResult,
 } from './CrsValidation';
+import { spatialContextFrom, type SpatialContext } from './SpatialContext';
 import {
   latLonToUtm,
   utmZoneFor,
@@ -103,6 +104,13 @@ export class CrsService {
   private readonly _listeners: Set<CrsListener> = new Set();
   private _currentDatasetKey: string | undefined = undefined;
   private _current: ResolvedCrs | null = null;
+  /**
+   * The active scan's {@link SpatialContext}, built ONCE per CRS and handed to
+   * every consumer that needs a unit, datum, axis or metric permission.
+   * Invalidated (not recomputed) on each CRS change, so a swap is still O(1)
+   * and the rebuild happens on the next read.
+   */
+  private _context: SpatialContext | null = null;
 
   constructor(port: CrsOverridePort = DEFAULT_CRS_OVERRIDE_PORT) {
     this._port = port;
@@ -111,6 +119,27 @@ export class CrsService {
   /** The current ResolvedCrs, or `null` when no scan is open. */
   current(): ResolvedCrs | null {
     return this._current;
+  }
+
+  /**
+   * The active scan's spatial context — the single object every metric- and
+   * coordinate-bearing consumer reads instead of re-deriving unit, datum, axis
+   * and metric permission from the `ResolvedCrs` itself.
+   *
+   * This is THE application boundary where the context is built. Build it here
+   * and pass it down; a leaf that calls `spatialContextFrom` while its caller
+   * already holds a context has re-opened the divergence this replaces.
+   *
+   * Never `null`: with no scan open the context resolves to the explicit
+   * unknown frame, whose `metricClaimsPermitted` is `false`, so a consumer that
+   * reads it before a scan loads fails closed instead of dereferencing null.
+   *
+   * Memoised on the resolved CRS, so repeated reads inside one frame return the
+   * same object and cannot disagree with each other.
+   */
+  context(): SpatialContext {
+    if (this._context === null) this._context = spatialContextFrom(this._current);
+    return this._context;
   }
 
   /** The dataset key the active scan resolves against, or `undefined`. */
@@ -270,6 +299,10 @@ export class CrsService {
 
   private _setCurrent(next: ResolvedCrs | null): void {
     this._current = next;
+    // Drop the memoised context so the next `context()` read rebuilds from the
+    // CRS that just landed. Invalidate rather than recompute: a scan swap that
+    // no one asks a spatial question about should not pay for one.
+    this._context = null;
     for (const fn of this._listeners) {
       try {
         fn(next);

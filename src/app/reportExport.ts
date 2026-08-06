@@ -30,7 +30,7 @@
 
 import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
-import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { spatialContextFrom } from '../geo/SpatialContext';
 import { isZUpFormat } from '../io/sniffFormat';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { classify as classifyProvenance } from '../diagnostics/provenance';
@@ -218,19 +218,25 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // cube inflates height ~7× and, for a partial footprint, deflates density.
     const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
+    // ONE spatial context for this report, built here at the export boundary:
+    // the footprint's unit gate, both scale factors, and the CRS row printed in
+    // the Methods appendix all read it, so the file cannot state one unit and
+    // measure in another.
+    //
     // Footprint + density in metres / pts·m⁻², not raw CRS units (see
     // reportFootprint): a foot-CRS scan would otherwise overstate the headline
     // area ~10.76× and be graded against the wrong USGS Quality Level. FAIL
     // CLOSED on an unconfirmed unit: an unknown-unit CRS carries the inert
-    // placeholder factor, so `isLinearUnitKnown` gates whether the report may
-    // claim metres at all — otherwise the extents are emitted in source units
-    // with no density and a "units unconfirmed" warning row.
+    // placeholder factor, so the context's `linearUnitKnown` gates whether the
+    // report may claim metres at all — otherwise the extents are emitted in
+    // source units with no density and a "units unconfirmed" warning row.
+    const ctx = spatialContextFrom(crs);
     const fp = footprintMetres({
       extentX: b[3] - b[0], extentY: b[4] - b[1], extentZ: b[5] - b[2],
       pointCount: streamingCloud.sourcePointCount,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
-      linearUnitKnown: isLinearUnitKnown(crs),
+      linearUnitToMetres: ctx.linearUnitToMetres,
+      verticalUnitToMetres: ctx.verticalUnitToMetres,
+      linearUnitKnown: ctx.linearUnitKnown,
       // COPC and EPT are Z-up by spec.
       zUp: true,
     });
@@ -268,16 +274,18 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // striding reduced the in-memory count, matching the Scan Report panel.
     const fileN = reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
     const crs = staticCloud.metadata?.crs;
+    // Same one-context rule as the streaming path above.
     // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
     // scan would otherwise overstate area ~10.76× and be graded against the
     // wrong USGS Quality Level. FAIL CLOSED on an unconfirmed unit — see the
     // streaming path above.
+    const ctx = spatialContextFrom(crs);
     const fp = footprintMetres({
       extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
       pointCount: fileN,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
-      linearUnitKnown: isLinearUnitKnown(crs),
+      linearUnitToMetres: ctx.linearUnitToMetres,
+      verticalUnitToMetres: ctx.verticalUnitToMetres,
+      linearUnitKnown: ctx.linearUnitKnown,
       // Mesh formats load Y-up, so the PDF reads the same axes as the
       // on-screen Scan Report rather than assuming Z.
       zUp: isZUpFormat(staticCloud.sourceFormat),

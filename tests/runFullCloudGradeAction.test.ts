@@ -88,6 +88,11 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
     vi.mocked(summarizeSampleGrade).mockClear();
   });
 
+  // The action builds the scan's ONE SpatialContext from `source.crs()`, and
+  // the facade reads the whole CrsInfo, so these stand-ins carry the fields a
+  // real detection always supplies. The unit columns under test are unchanged.
+  const CRS_BASE = { source: 'wkt' as const, name: 'Test CRS', isGeographic: false };
+
   const runWithCrs = async (crs: unknown) => {
     const cloud = { crs: () => crs } as FakeViewer['streamingCloud'];
     const panel = makePanel();
@@ -101,17 +106,17 @@ describe('runFullCloudGrade — unit-confirmation gate', () => {
   });
 
   it("summarises unconfirmed for an unknown-unit CRS (linearUnitToMetres:1 placeholder)", async () => {
-    await runWithCrs({ linearUnit: 'unknown', linearUnitToMetres: 1 });
+    await runWithCrs({ ...CRS_BASE, linearUnit: 'unknown', linearUnitToMetres: 1 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(false);
   });
 
   it('summarises confirmed for a real metre CRS', async () => {
-    await runWithCrs({ linearUnit: 'metre', linearUnitToMetres: 1 });
+    await runWithCrs({ ...CRS_BASE, linearUnit: 'metre', linearUnitToMetres: 1 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
   });
 
   it('summarises confirmed for a foot CRS', async () => {
-    await runWithCrs({ linearUnit: 'foot', linearUnitToMetres: 0.3048 });
+    await runWithCrs({ ...CRS_BASE, linearUnit: 'foot', linearUnitToMetres: 0.3048 });
     expect(vi.mocked(summarizeSampleGrade).mock.calls[0][1]).toBe(true);
   });
 });

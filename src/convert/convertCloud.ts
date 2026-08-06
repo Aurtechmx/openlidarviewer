@@ -10,11 +10,13 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
+import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import { isGeographicEpsg, epsgLabel, epsgToProj4 } from './epsg';
@@ -90,7 +92,7 @@ export function convertCloud(
   // same detection the terrain gather uses — a format table alone rotated
   // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
   // identically here. Survey formats skip detection: Z-up by spec.
-  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(cloud.positions).up === 'y') {
+  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
     const { y, z } = g;
     for (let i = 0; i < g.count; i++) {
       const yv = y[i];
@@ -177,6 +179,12 @@ export function convertCloud(
   let bytes: Uint8Array;
   if (opts.format === 'las' || opts.format === 'las14') {
     const srcCrs = cloud.metadata?.crs;
+    // ONE spatial context for the written file: the horizontal unit code, the
+    // vertical datum code and the vertical unit code below all come off it, so
+    // a LAS the reader trusts cannot be tagged with a unit the export did not
+    // use. `srcCrs` survives only for the raw WKT payload, which the context
+    // deliberately does not model.
+    const srcCtx = spatialContextFrom(srcCrs);
     // LAS 1.4 wants the CRS as OGC WKT for point formats 6+. A real WKT only
     // exists when the source carried one AND nothing changed (keep mode) —
     // after assign/reproject the source WKT would describe the wrong CRS,
@@ -202,7 +210,7 @@ export function convertCloud(
     // unit implied by the EPSG. Vertical datum is preserved (no mode moves Z).
     const linearUnitCode =
       mode === 'reproject' && reprojectApplied ? 9001
-      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
+      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCtx.linearUnit)
       : null;
     // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
     // declared vertical unit — falling back to the source's horizontal family
@@ -210,7 +218,7 @@ export function convertCloud(
     // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
     // used to relabel its unchanged Z as metres.
     const verticalUnitCode = srcCrs
-      ? unitToGeoTiff(srcCrs.verticalLinearUnit ?? srcCrs.linearUnit)
+      ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
       : null;
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
@@ -223,7 +231,7 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         wkt,
       });
@@ -249,7 +257,7 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
       });
     }

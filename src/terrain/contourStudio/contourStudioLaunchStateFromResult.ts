@@ -13,6 +13,7 @@
  */
 
 import type { AnalyseContoursResult } from '../contour/analyseContours';
+import type { PrecisionPermit } from '../../geo/inMemoryPrecision';
 import {
   evaluateContourStudioLaunchState,
   type ContourStudioLaunchState,
@@ -46,6 +47,17 @@ export interface LaunchFrameContext {
    * unwired path understates provenance instead of overstating it.
    */
   readonly groundIsDerived?: boolean;
+  /**
+   * The scan's in-memory Float32 precision permit (`app/scanPrecision.ts`), or
+   * `null` when no scan frame was available to measure. Carried through the
+   * mount into the export frame facts, where a refused permit blocks every
+   * registered deliverable.
+   *
+   * Required rather than optional: this field travels three modules to reach
+   * the gate, and an omitted precision term is indistinguishable from a passing
+   * one at every stop along the way. Spelling `null` out is the point.
+   */
+  readonly precision: PrecisionPermit | null;
 }
 
 /**

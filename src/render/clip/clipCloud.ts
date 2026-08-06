@@ -13,6 +13,7 @@
  */
 
 import { PointCloud } from '../../model/PointCloud';
+import { sourcePositions } from '../../model/pointFrames';
 import { type ClipBox, clipKeepsPoint, countKept } from './clipBox';
 
 type TypedArray = Uint8Array | Uint16Array | Uint32Array | Float32Array | Float64Array;
@@ -42,7 +43,7 @@ function filterChannel<T extends TypedArray>(
  */
 export function clipCloud(cloud: PointCloud, clip: ClipBox): PointCloud {
   if (!clip.enabled) return cloud;
-  const pos = cloud.positions;
+  const pos = sourcePositions(cloud);
   const n = (pos.length / 3) | 0;
   const kept = countKept(clip, pos);
   if (kept >= n) return cloud;
