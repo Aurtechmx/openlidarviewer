@@ -236,6 +236,22 @@ export interface InspectionSession {
    * (byte-shape preserved).
    */
   processingManifest?: unknown;
+  /**
+   * The loaded layer's STABLE identity (audit item O). Generated at layer
+   * creation and anchored on the source fingerprint — never derived from the
+   * filename or the display label — so it survives a rename, a duplicate
+   * filename, reordering, and this export/import round trip. Strictly additive
+   * within v7: a session written before the field existed omits it and the
+   * loader leaves it undefined, so the app assigns a fresh id on import. A
+   * non-string value is dropped rather than thrown.
+   */
+  layerId?: string;
+  /**
+   * The layer's display LABEL at export time, stored separately from identity
+   * (`layerId`) so a rename round-trips without ever touching the id. Additive
+   * and tolerantly parsed like {@link layerId}.
+   */
+  layerName?: string;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -307,6 +323,14 @@ export function serializeSession(
   // a literal null and change the byte-shape.
   if (session.processingManifest != null) {
     doc.processingManifest = session.processingManifest;
+  }
+  // Stable layer identity (audit item O) — emitted only when set, so a session
+  // that carries no id keeps the earlier byte-shape.
+  if (typeof session.layerId === 'string' && session.layerId !== '') {
+    doc.layerId = session.layerId;
+  }
+  if (typeof session.layerName === 'string' && session.layerName !== '') {
+    doc.layerName = session.layerName;
   }
   return JSON.stringify(doc, null, 2);
 }
@@ -416,6 +440,11 @@ export function parseSession(text: string): InspectionSession {
   // Deliberately version-independent on read so a file that carries one is
   // never stripped by a round-trip.
   if (raw.processingManifest != null) out.processingManifest = raw.processingManifest;
+  // Stable layer identity — additive within v7, version-independent on read so a
+  // file that carries it is never stripped by a round trip. A non-string is
+  // ignored (treated as absent) rather than throwing.
+  if (typeof raw.layerId === 'string' && raw.layerId !== '') out.layerId = raw.layerId;
+  if (typeof raw.layerName === 'string' && raw.layerName !== '') out.layerName = raw.layerName;
   return out;
 }
 
