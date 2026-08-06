@@ -16,7 +16,9 @@
  *   - The SCAN AREA file publishes only the outline of the capture, so it needs
  *     nothing placed. It does need a coordinate system the user has confirmed,
  *     because a polygon in lon/lat is a claim about where on Earth the scan is;
- *     `footprintCrsRefusal` owns that judgement and supplies the wording.
+ *     `footprintCrsRefusal` owns that judgement and supplies the wording. It
+ *     also needs the extent's own two axes to BE the horizontal plane, which
+ *     only holds for a Z-up frame — `footprintUpAxisRefusal` owns that half.
  *
  * The shell's running state arrives through {@link KmlActionDeps}, accessors
  * rather than snapshots, the same seam `reportExport.ts` uses. The heavy KML
@@ -28,6 +30,7 @@ import {
   footprintCrsRefusal,
   footprintLonLatRing,
   footprintRectangleRing,
+  footprintUpAxisRefusal,
   ScanFootprintError,
   type FootprintExtent,
   type FootprintExtentBasis,
@@ -35,6 +38,7 @@ import {
 import type { KmlExportInput, KmlViewpoint } from '../export/kmlExport';
 import type { GeoExportContext } from './reportExport';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import type { loadKmlExport } from '../lazyChunks';
@@ -50,10 +54,16 @@ export interface KmlActionStatus {
  * from. The note travels into the file: for a streaming scan the extent is the
  * DECLARED header extent, which can be wider than the points downloaded so far,
  * and a reader deserves to know which of the two they are holding.
+ *
+ * `upAxis` travels with it because the extent is read off local X/Y, and X/Y is
+ * the horizontal plane only in a Z-up frame. A reading with no stated axis is a
+ * reading nobody can check, so the field is required rather than optional and
+ * `'unknown'` is a real answer the gate refuses — see `footprintUpAxisRefusal`.
  */
 export interface ScanExtentReading {
   readonly extent: FootprintExtent;
   readonly basis: FootprintExtentBasis;
+  readonly upAxis: SpatialUpAxis;
 }
 
 /** The shell state both exports read, as accessors evaluated at call time. */
@@ -202,9 +212,15 @@ export function scanFootprintStatus(deps: KmlActionDeps): KmlActionStatus {
       reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
     };
   }
-  if (!deps.scanExtent()) {
+  const reading = deps.scanExtent();
+  if (!reading) {
     return { ready: false, reason: 'The scan has no measured extent to outline yet.' };
   }
+  // The frame the extent was measured in, checked at the button for the same
+  // reason the CRS is: a disabled control that states the real obstacle is
+  // better than an enabled one that fails at the click.
+  const axisRefusal = footprintUpAxisRefusal(reading.upAxis);
+  if (axisRefusal) return { ready: false, reason: axisRefusal };
   return { ready: true, reason: '' };
 }
 
@@ -224,6 +240,15 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
   const reading = deps.scanExtent();
   if (!reading) {
     deps.setError('Scan area export stopped. The scan has no measured extent to outline yet.');
+    return;
+  }
+  // Re-checked here for the same reason the CRS gate is: the active scan can
+  // change between the render that enabled the control and the click that uses
+  // it, and a Y-up scan's X/Y rectangle is exactly the kind of wrong answer
+  // that still looks right in Google Earth.
+  const axisRefusal = footprintUpAxisRefusal(reading.upAxis);
+  if (axisRefusal) {
+    deps.setError(`Scan area export stopped. ${axisRefusal}`);
     return;
   }
   const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();

@@ -51,6 +51,14 @@ export interface StreamingNode {
   score: number;
   /** Scheduler tick index when this node was last in the working set (LRU). */
   lastUsedTick: number;
+  /**
+   * Wall-clock time (ms, on the scheduler's injected clock) this node last
+   * became resident; 0 while it never has been. The eviction policy's dwell
+   * rule reads it, so that a node cannot be taken away from the screen while it
+   * is still fading in. Written by the scheduler at the commit, not by the node
+   * store, which owns no clock and stays free of one.
+   */
+  residentSinceMs: number;
 }
 
 /** Create a fresh, unloaded runtime node from a parsed record. */
@@ -62,6 +70,7 @@ export function createStreamingNode(record: StreamingNodeRecord): StreamingNode 
     residentPointCount: 0,
     score: 0,
     lastUsedTick: 0,
+    residentSinceMs: 0,
   };
 }
 

@@ -1,15 +1,38 @@
 /**
  * copcWorkerClient.ts
  *
- * The main-thread client for the COPC decode worker. It implements the
+ * The main-thread client for the COPC decode workers. It implements the
  * `ChunkDecoder` interface, so the streaming scheduler depends only on that
  * interface — and tests can swap in a fake decoder with no worker at all.
  *
- * Each `decode()` carries a request id. An `AbortSignal` rejects that request
- * and posts a `cancel` to the worker so a not-yet-started decode is skipped;
- * a result that arrives for an already-settled request is simply dropped.
+ * The client is a thin adapter over {@link DecodeWorkerPool}: it owns the COPC
+ * wire format (`{ type: 'decode', requestId, chunk, meta }`, the chunk buffer
+ * transferred zero-copy) and the COPC-specific error wording, and delegates
+ * request-id multiplexing, queueing, dispatch, cancellation, worker-failure
+ * isolation and disposal to the pool. Every one of those rules is identical in
+ * the EPT client, which is why they live in one place.
  *
- * Browser-bound (owns a `Worker`) — not imported in Node unit tests.
+ * WHY A POOL. A single worker serialises every decode behind one laz-perf
+ * instance, so a dense cloud's chunks decode one at a time however many cores
+ * the machine has. Several workers decode in parallel; the cost is one WASM
+ * heap each, which is why the size comes from a device-aware policy
+ * ({@link resolveDecodePoolSize}) rather than a constant, and why workers past
+ * the first are created only when there is actually a second chunk to decode.
+ *
+ * POOLING IS OFF BY DEFAULT. Absent a flag this client builds a ONE-worker
+ * pool, which is behaviourally the pre-pool client. `?decodePool=on` opts in at
+ * the policy's size and `?decodeWorkers=N` pins the count; the `poolSize`
+ * option below is the same switch for tests. It stays opt-in until a browser
+ * run on a real dataset measures throughput and the memory cost of N WASM
+ * heaps under a fast camera sweep.
+ *
+ * The file-level RGB bit-depth decision is NOT affected by pooling: it is taken
+ * on the main thread by the streaming source and passed down in
+ * `meta.rgbEightBit`, and the worker only ever consumes it. No worker derives
+ * its own, so a cloud cannot end up rendered at two colour depths.
+ *
+ * Browser-bound by default (the default factory constructs a `Worker`), but the
+ * factory is injectable, so the protocol is exercised in Node.
  */
 
 import type {
@@ -17,163 +40,97 @@ import type {
   ChunkDecodeMetadata,
   DecodedChunk,
 } from '../copcChunkDecode';
+import {
+  DecodeWorkerPool,
+  type DecodePoolStats,
+  type WorkerLike,
+} from '../../workerPool/DecodeWorkerPool';
+import { resolveDecodePoolSize } from '../../workerPool/decodePoolSize';
+import { readDevFlags } from '../../../perf/devFlags';
 
-interface PendingRequest {
-  resolve: (decoded: DecodedChunk) => void;
-  reject: (error: Error) => void;
-  signal?: AbortSignal;
-  onAbort?: () => void;
-  /** ms at request post — wall-time decode timing for the streaming benchmark. */
-  startedAt: number;
+export type { WorkerLike };
+
+/** Create the real module worker. Browser-only — never called in Node tests. */
+function defaultWorkerFactory(): WorkerLike {
+  return new Worker(new URL('./copcWorker.ts', import.meta.url), {
+    type: 'module',
+  }) as unknown as WorkerLike;
 }
 
-interface DecodedReply {
-  type: 'decoded';
-  requestId: number;
-  decoded: DecodedChunk;
-}
-interface ErrorReply {
-  type: 'error';
-  requestId: number;
-  error: string;
-}
-type WorkerReply = DecodedReply | ErrorReply;
-
-/** A `ChunkDecoder` that runs COPC chunk decoding in a dedicated worker. */
-export class CopcWorkerClient implements ChunkDecoder {
-  private readonly _worker: Worker;
-  private readonly _pending = new Map<number, PendingRequest>();
-  private _nextRequestId = 0;
-  private _disposed = false;
-  private _broken = false;
-
+export interface CopcWorkerClientOptions {
   /**
-   * Optional hook called after each successful decode with the wall-time
-   * elapsed from postMessage to result. The streaming benchmark wires this.
+   * Explicit worker count. Both opts into pooling and overrides the device
+   * policy, clamped to the policy's hard cap. Tests pin it so a pool's
+   * behaviour does not depend on the core count of the machine running them.
    */
-  onDecodeMs: ((ms: number) => void) | undefined;
+  readonly poolSize?: number;
+  /** Injectable worker factory — a fake worker makes the pool Node-testable. */
+  readonly workerFactory?: () => WorkerLike;
+}
 
-  /** In-flight request count. Diagnostic — mirrors the EPT client's contract. */
-  get pendingCount(): number {
-    return this._pending.size;
+/** A `ChunkDecoder` that runs COPC chunk decoding in a pool of workers. */
+export class CopcWorkerClient implements ChunkDecoder {
+  private readonly _pool: DecodeWorkerPool<DecodedChunk>;
+
+  constructor(options: CopcWorkerClientOptions = {}) {
+    this._pool = new DecodeWorkerPool<DecodedChunk>({
+      size: resolveDecodePoolSize('copc', readDevFlags(), options.poolSize),
+      createWorker: options.workerFactory ?? defaultWorkerFactory,
+      messages: {
+        disposed: 'The COPC decode worker has been disposed.',
+        failed: 'The COPC decode worker failed.',
+        aborted: 'Decode aborted',
+        queueFull: 'The COPC decode queue is full.',
+      },
+    });
   }
 
-  constructor() {
-    this._worker = new Worker(new URL('./copcWorker.ts', import.meta.url), {
-      type: 'module',
-    });
-    this._worker.onmessage = (event: MessageEvent<WorkerReply>): void => {
-      this._onMessage(event.data);
-    };
-    this._worker.onerror = (): void => {
-      // The worker died. Tear it down and mark the client broken so a later
-      // decode rejects at once instead of posting into a corpse that never
-      // replies — which would leave the scheduler's node stuck 'loading'.
-      this._broken = true;
-      this._failAll(new Error('The COPC decode worker failed.'));
-      this._worker.terminate();
-    };
+  /**
+   * Optional hook called after each successful decode with the time the chunk
+   * spent INSIDE a worker (post to reply). The streaming benchmark wires this.
+   * Queue wait is reported separately by {@link onQueueWaitMs} so a benchmark
+   * never reads scheduling delay as decode cost.
+   */
+  get onDecodeMs(): ((ms: number) => void) | undefined {
+    return this._pool.onDecodeMs;
+  }
+  set onDecodeMs(hook: ((ms: number) => void) | undefined) {
+    this._pool.onDecodeMs = hook;
+  }
+
+  /** Optional hook called with the time a chunk waited for a free worker. */
+  get onQueueWaitMs(): ((ms: number) => void) | undefined {
+    return this._pool.onQueueWaitMs;
+  }
+  set onQueueWaitMs(hook: ((ms: number) => void) | undefined) {
+    this._pool.onQueueWaitMs = hook;
+  }
+
+  /** In-flight request count — queued plus decoding. Diagnostic. */
+  get pendingCount(): number {
+    return this._pool.pendingCount;
+  }
+
+  /** Pool diagnostics. Plain numbers; no worker handle reaches the caller. */
+  poolStats(): DecodePoolStats {
+    return this._pool.stats();
   }
 
   /**
    * Decode a compressed COPC node chunk. The `chunk` buffer is transferred to
-   * the worker — the caller must not reuse it after the call.
+   * a worker — the caller must not reuse it after the call. The pool transfers
+   * it exactly once, and never re-posts a chunk whose buffer has already gone.
    */
   decode(
     chunk: ArrayBuffer,
     meta: ChunkDecodeMetadata,
     signal?: AbortSignal,
   ): Promise<DecodedChunk> {
-    const requestId = this._nextRequestId++;
-    return new Promise<DecodedChunk>((resolve, reject) => {
-      if (this._disposed) {
-        reject(new Error('The COPC decode worker has been disposed.'));
-        return;
-      }
-      if (this._broken) {
-        reject(new Error('The COPC decode worker failed.'));
-        return;
-      }
-      if (signal?.aborted) {
-        reject(new Error('Decode aborted'));
-        return;
-      }
-      const pending: PendingRequest = { resolve, reject, signal, startedAt: nowMs() };
-      if (signal) {
-        pending.onAbort = (): void => {
-          if (!this._pending.delete(requestId)) return;
-          // Reject first, then post the cancel best-effort — a worker dying in
-          // the same tick as the abort makes postMessage throw, and if that ran
-          // before the reject the promise would hang unsettled. The cancel only
-          // skips a not-yet-started decode, so losing it to a dead worker is fine.
-          reject(new Error('Decode aborted'));
-          try {
-            this._worker.postMessage({ type: 'cancel', requestId });
-          } catch {
-            /* worker already gone — the request is settled, the cancel is moot */
-          }
-        };
-        signal.addEventListener('abort', pending.onAbort, { once: true });
-      }
-      this._pending.set(requestId, pending);
-      try {
-        this._worker.postMessage({ type: 'decode', requestId, chunk, meta }, [chunk]);
-      } catch (err) {
-        // A synchronous post failure (e.g. DataCloneError on a detached buffer,
-        // or a terminated worker) would otherwise strand this request in
-        // `_pending` with its abort listener attached. Settle it and surface
-        // the error to the caller.
-        this._settle(requestId);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
+    return this._pool.submit({ payload: { chunk, meta }, transfer: [chunk], signal });
   }
 
-  /** Terminate the worker and reject every in-flight decode. */
+  /** Terminate every worker and reject every queued and in-flight decode. */
   dispose(): void {
-    this._disposed = true;
-    this._failAll(new Error('The COPC decode worker has been disposed.'));
-    this._worker.terminate();
+    this._pool.dispose();
   }
-
-  private _onMessage(reply: WorkerReply): void {
-    const pending = this._settle(reply.requestId);
-    if (!pending) return; // cancelled or already settled — drop the stale reply
-    if (reply.type === 'decoded') {
-      this.onDecodeMs?.(nowMs() - pending.startedAt);
-      pending.resolve(reply.decoded);
-    } else {
-      pending.reject(new Error(reply.error));
-    }
-  }
-
-  /**
-   * Remove a request from `_pending` and detach its abort listener, returning
-   * it (or undefined if already gone). The single teardown path, so a reply, a
-   * sync post failure, and a fail-all all clean up identically.
-   */
-  private _settle(requestId: number): PendingRequest | undefined {
-    const pending = this._pending.get(requestId);
-    if (!pending) return undefined;
-    this._pending.delete(requestId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
-    return pending;
-  }
-
-  private _failAll(error: Error): void {
-    for (const pending of this._pending.values()) {
-      if (pending.onAbort && pending.signal) {
-        pending.signal.removeEventListener('abort', pending.onAbort);
-      }
-      pending.reject(error);
-    }
-    this._pending.clear();
-  }
-}
-
-/** A monotonic millisecond clock, available on both the main thread and workers. */
-function nowMs(): number {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }

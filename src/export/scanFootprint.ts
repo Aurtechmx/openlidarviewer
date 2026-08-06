@@ -8,6 +8,10 @@
  * version of that sentence without a known coordinate system. So the CRS gate
  * lives here as a pure predicate ({@link footprintCrsRefusal}) and returns the
  * user-facing reason, rather than a boolean the caller has to write copy for.
+ * Two more predicates guard the same claim from the other end — the frame the
+ * extent was measured in ({@link footprintUpAxisRefusal}) and the ring's own
+ * geometry once it is in degrees ({@link footprintAntimeridianRefusal}) — and
+ * all three return prose for the same reason.
  *
  * Pure: no DOM, no three.js, no proj4. The reprojection arrives as an injected
  * {@link LocalToLonLatSourceZ}, exactly as `kmlExport.ts` takes its transform,
@@ -25,8 +29,17 @@
 
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
 import { LonLatConversionError } from './lonLatMapper';
+import type { SpatialUpAxis } from '../geo/SpatialContext';
 
-/** The scan's axis-aligned XY extent, in LOCAL (origin-relative) render space. */
+/**
+ * The scan's axis-aligned XY extent, in LOCAL (origin-relative) render space.
+ *
+ * X and Y are the HORIZONTAL pair only in a Z-up frame. A Y-up source stores
+ * its horizontal plane on X/Z, so the same two fields would then describe one
+ * horizontal axis and the elevation axis — a rectangle with a height for a
+ * side. Nothing in this shape can tell the two cases apart, which is why the
+ * caller must state the up-axis and {@link footprintUpAxisRefusal} gates it.
+ */
 export interface FootprintExtent {
   readonly minX: number;
   readonly minY: number;
@@ -93,6 +106,41 @@ export function footprintCrsRefusal(crs: FootprintCrs | null | undefined): strin
 }
 
 /**
+ * Why this scan's up-axis makes a footprint impossible, or null when it does not.
+ *
+ * The extent is read off local X/Y, and every downstream step — the ring, the
+ * reprojection, the `lon,lat` pairs — inherits that choice. X/Y is the ground
+ * plane in a Z-up frame and nowhere else: a Y-up source (a phone scan, a glTF /
+ * OBJ-derived cloud) keeps its horizontal plane on X/Z, so the exported outline
+ * would pair one horizontal axis with the elevation axis and draw a vertical
+ * slice through the site as if it were the area covered. It would still be a
+ * plausible rectangle on the map, which is the whole problem.
+ *
+ * This GATES rather than adapts, and deliberately so. Swapping the accessors
+ * (as `terrain/ground/axisGetters.ts` does for the analysis pipeline) would fix
+ * the extent and leave the rest wrong: `lonLatMapper` reads the local point as
+ * `[easting, northing, height]` when it hands X and Y to the projection, so a
+ * Y-up scan has no correct reprojection to swap axes INTO. Publishing a
+ * footprint for one would need the whole local→CRS placement re-derived, and
+ * this module refuses rather than shipping half of that.
+ *
+ * `'unknown'` refuses too. An undetected axis is not evidence of Z-up, and the
+ * failure it hides is silent — the same reason `SpatialUpAxis` carries the
+ * third state instead of defaulting to `'z'`.
+ */
+export function footprintUpAxisRefusal(upAxis: SpatialUpAxis | null | undefined): string | null {
+  if (upAxis === 'z') return null;
+  if (upAxis === 'y') {
+    return 'This scan is stored Y-up, so its horizontal plane is not the X/Y pair a scan outline '
+      + 'is measured from. Exporting one would draw a vertical slice of the site as if it were '
+      + 'the area covered, so no outline is written for Y-up sources.';
+  }
+  return 'The scan\'s up-axis was not determined, so there is no way to tell which two axes are '
+    + 'horizontal. An outline drawn from the wrong pair would still look like a plausible '
+    + 'rectangle on the map, so it is not written.';
+}
+
+/**
  * The axis-aligned bounding rectangle as a closed, counter-clockwise ring.
  *
  * Winding matters: KML reads an outer boundary by the right-hand rule, and some
@@ -127,6 +175,49 @@ export function footprintRectangleRing(extent: FootprintExtent): FootprintRing {
 }
 
 /**
+ * Why a reprojected ring cannot be published as one polygon, or null when it can.
+ *
+ * Longitude is cyclic and a KML `<LinearRing>` is not: a reader joins two
+ * consecutive vertices along the SHORTER arc between their longitudes. A scan
+ * straddling ±180° therefore comes out inside-out — corners at 179.8° and
+ * -179.8° are 0.4° apart on the ground and 359.6° apart as numbers, so the
+ * polygon drawn between them wraps the long way and outlines nearly the whole
+ * planet. Every corner is individually a valid longitude, which is why the
+ * per-coordinate domain check in `kmlExport.ts` cannot see this: the defect is
+ * in the RING, not in any of its vertices.
+ *
+ * The test is the ring's longitude span. Above 180° the short way round must
+ * cross the antimeridian, because no two points on Earth are more than 180°
+ * apart in longitude by the short arc.
+ *
+ * We REFUSE rather than split at ±180°. A correct split is not just two boxes:
+ * it changes what the file contains (one footprint becomes two polygons, or a
+ * MultiGeometry), it has to decide which side each corner belongs to, and for a
+ * projected source the two halves are no longer the reprojection of anything
+ * the scan actually declared. This module's whole contract is that a footprint
+ * is either the scan's own bounding rectangle placed on Earth or nothing at
+ * all, and a silently invented pair of polygons is a worse trade than a refusal
+ * the user can act on. A wide but non-crossing scan is unaffected — 150° of
+ * honest longitude passes.
+ */
+export function footprintAntimeridianRefusal(ring: FootprintRing): string | null {
+  if (ring.length === 0) return null;
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  for (const [lon] of ring) {
+    if (lon < minLon) minLon = lon;
+    if (lon > maxLon) maxLon = lon;
+  }
+  const span = maxLon - minLon;
+  if (span <= 180) return null;
+  return `The scan crosses the ±180° antimeridian: its corners run from ${minLon}° to ${maxLon}° `
+    + 'longitude, so a single rectangle drawn between them wraps the long way round the Earth and '
+    + 'outlines almost the whole world instead of the scan. No outline is written. Split the scan '
+    + 'at the antimeridian and export each side, or reproject it to a coordinate system that does '
+    + 'not straddle ±180°.';
+}
+
+/**
  * Reproject a local ring to WGS84 lon/lat degrees, or refuse.
  *
  * `toLonLat` is null whenever no honest transform exists, so the null branch is
@@ -138,6 +229,12 @@ export function footprintRectangleRing(extent: FootprintExtent): FootprintRing {
  *
  * The third ordinate is dropped. A horizontal reprojection establishes nothing
  * about the vertical axis, and a footprint claims a location, not a height.
+ *
+ * The finished ring is checked as a WHOLE by {@link footprintAntimeridianRefusal}
+ * before it is returned. Corner-by-corner validation cannot catch a ring that
+ * wraps ±180°, because each of its corners is a perfectly ordinary longitude;
+ * the check belongs here, where the ring first exists in degrees, so no caller
+ * can obtain a wrapped ring and skip it.
  */
 export function footprintLonLatRing(
   ring: FootprintRing,
@@ -149,7 +246,7 @@ export function footprintLonLatRing(
       + 'as KML. UTM and geographic coordinate systems are supported.',
     );
   }
-  return ring.map(([x, y]) => {
+  const lonLatRing = ring.map(([x, y]) => {
     let lonLat: [number, number, number];
     try {
       lonLat = toLonLat([x, y, 0]);
@@ -163,4 +260,7 @@ export function footprintLonLatRing(
     }
     return [lonLat[0], lonLat[1]] as const;
   });
+  const wrapped = footprintAntimeridianRefusal(lonLatRing);
+  if (wrapped) throw new ScanFootprintError(wrapped);
+  return lonLatRing;
 }
