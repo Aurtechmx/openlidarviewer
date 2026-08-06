@@ -64,7 +64,7 @@ has re-opened the divergence this closes.
 | 8 | Contours | carrier | `src/terrain/contour/geojsonContours.ts` | `verticalReference`, carried on `ContourFeatureModel` |
 | 9 | PDF reports | migrated | `src/app/reportExport.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalUnitToMetres` |
 | 10 | LAS export | migrated | `src/convert/convertCloud.ts` | `linearUnit`, `verticalLinearUnit`, `verticalEpsg` |
-| 11 | GeoJSON / KML / DXF export | migrated | `src/main.ts` | `isGeographic`, `verticalDatum`, `verticalMetresPerUnit` |
+| 11 | GeoJSON / KML / DXF export | migrated | `src/main.ts`, `src/app/kmlActions.ts`, `src/export/scanFootprint.ts` | `isGeographic`, `verticalDatum`, `verticalMetresPerUnit`, `upAxis` |
 | 12 | Measurement labels | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
 | 13 | Elevation colorbars | migrated | `src/main.ts`, `src/app/terrainAnalysisRunner.ts` | `verticalMetresPerUnit`, `kind` |
 
