@@ -21,6 +21,17 @@ import type { Viewer } from '../render/Viewer';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
+
+/**
+ * What this runner needs from the CRS service: the resolved CRS and the one
+ * spatial context every metric reads. Asking for the two members it uses rather
+ * than the whole class keeps the dependency honest — and lets a test double be
+ * type-checked against the real shape instead of cast past the compiler, which
+ * is how a double last fell silently behind this interface.
+ *
+ * A full `CrsService` satisfies this, so no caller changes.
+ */
+export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context'>;
 // The one spatial context this pipeline reads its unit / datum / axis facts
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
@@ -59,7 +70,7 @@ import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 export function deriveCoreParams(
   positions: Float32Array,
   classification: Uint8Array | undefined,
-  crsService: CrsService,
+  crsService: TerrainCrsFacts,
   totalPoints?: number,
   residentOnly = false,
   getWorldOriginY?: () => number | null,
@@ -157,7 +168,7 @@ export interface TerrainAnalysisRunnerDeps {
   /** The active static cloud id, snapshotted per run for the stale-result guard. */
   getActiveId: () => string | null;
   /** The centralised CRS service — feeds the resolved CRS into the analysis. */
-  crsService: CrsService;
+  crsService: TerrainCrsFacts;
   /**
    * Fired with the winning run's result right after it lands on the panel. The
    * host uses it to wire post-analysis state that lives outside the panel — e.g.
