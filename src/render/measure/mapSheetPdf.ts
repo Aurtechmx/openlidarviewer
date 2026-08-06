@@ -357,6 +357,15 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   doc.setTitle(input.title ?? 'Contour Map', { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // Pin the document's Info-dictionary dates. pdf-lib defaults CreationDate and
+  // ModDate to the wall clock at `create()`, so two otherwise-identical sheets
+  // built either side of a second boundary embed different timestamps and cease
+  // to be byte-identical — a real determinism hole the visible `generatedAt`
+  // stamp (title block) never covered. Sourcing both from the same generatedAt
+  // makes a build with a fixed date reproducible and matches the printed stamp.
+  const stamp = input.generatedAt ?? new Date();
+  doc.setCreationDate(stamp);
+  doc.setModificationDate(stamp);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 

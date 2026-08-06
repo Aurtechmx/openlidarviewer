@@ -21,6 +21,7 @@ import type { PointMeshHandle } from '../Viewer';
 import type { StreamingSource } from './StreamingSource';
 import type { StreamingNode } from './StreamingNode';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
+import { renderLocalPositions } from '../../model/pointFrames';
 import type { ColorMode } from '../colorModes';
 import { streamingNodeColors, intensityRangeOf, scalarRangeOf } from './streamingColors';
 // Shared sRGB → linear seam (a leaf module — no Viewer cycle). The recolour
@@ -288,7 +289,7 @@ export class StreamingRenderer {
     if (shouldReseedColorRange(this._rangeSeedDepth, seedDepth, decoded.pointCount)) {
       const intensity = intensityRangeOf(decoded);
       const elevation = computeElevationRange({
-        positions: decoded.positions,
+        positions: renderLocalPositions(decoded),
         pointCount: decoded.pointCount,
       });
       // A coarse COPC node is a spatially-uniform sample of the whole cloud,
@@ -337,7 +338,7 @@ export class StreamingRenderer {
     // AFTER a class toggle reads the current mask the moment it is built — no
     // re-application call is needed for late-arriving nodes.
     const handle: PointMeshHandle = this._host.buildPointMesh(
-      decoded.positions,
+      renderLocalPositions(decoded),
       colors,
       decoded.classification,
       decoded.intensity,
@@ -402,7 +403,7 @@ export class StreamingRenderer {
   /** Resident node position arrays — for streaming point picking. */
   positionArrays(): Float32Array[] {
     const out: Float32Array[] = [];
-    for (const entry of this._meshes.values()) out.push(entry.decoded.positions);
+    for (const entry of this._meshes.values()) out.push(renderLocalPositions(entry.decoded));
     return out;
   }
 

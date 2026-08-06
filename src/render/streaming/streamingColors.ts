@@ -21,6 +21,7 @@ import {
 } from '../colorModes';
 import { densityForChunk, defaultCellSizeForSpacing } from '../densityColors';
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
+import { renderLocalPositions } from '../../model/pointFrames';
 import type { CopcMetadata } from '../../io/copc/copcTypes';
 import { applyRgbAppearance, type RgbAppearance } from '../rgbAppearance';
 
@@ -131,7 +132,7 @@ export function streamingNodeColors(
     case 'rgb': {
       const src = decoded.rgb;
       if (!src) {
-        return colorByElevation(decoded.positions, n, ranges.minZ, ranges.maxZ);
+        return colorByElevation(renderLocalPositions(decoded), n, ranges.minZ, ranges.maxZ);
       }
       // When an appearance bundle is active, apply it in sRGB float
       // space (the same room the static-cloud path uses) then quantise
@@ -198,7 +199,7 @@ export function streamingNodeColors(
       // report card carries the per-node mean / max so the global picture
       // can still be reconstructed.
       return densityForChunk({
-        positions: decoded.positions,
+        positions: renderLocalPositions(decoded),
         cellSize: defaultCellSizeForSpacing(
           (ranges as { spacing?: number }).spacing ?? 0,
         ),
@@ -206,6 +207,6 @@ export function streamingNodeColors(
     case 'elevation':
     case 'normal':
     default:
-      return colorByElevation(decoded.positions, n, ranges.minZ, ranges.maxZ);
+      return colorByElevation(renderLocalPositions(decoded), n, ranges.minZ, ranges.maxZ);
   }
 }

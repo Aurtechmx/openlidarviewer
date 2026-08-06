@@ -54,6 +54,12 @@ function makeRunner(
       sampled: totalPoints > positions.length / 3,
       totalPoints,
     }),
+    // The runner measures the loaded scan's in-memory Float32 precision for the
+    // Contour Studio launch frame. This stub holds no cloud, so the measurement
+    // has no frame to read and the frame carries a null permit — which is what
+    // "nothing loaded to measure" means, not "within budget".
+    getCloud: () => null,
+    streamingCloud: null,
   } as unknown as Viewer;
   const fakePanel = {
     isVisible: () => true,
