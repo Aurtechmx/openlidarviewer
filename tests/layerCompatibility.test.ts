@@ -17,6 +17,7 @@ import {
   classifyLayerCompatibility,
   participatesInSharedAnalysis,
   alignsVertically,
+  compatibilityNote,
   type CompatibilityInput,
 } from '../src/model/layerCompatibility';
 
@@ -218,5 +219,25 @@ describe('vertical reference identity', () => {
   it('an unrecognised name still matches itself', () => {
     const s = at([withVertical('a', 'Site benchmark A'), withVertical('b', 'Site benchmark A')]);
     expect(s('a')).toBe('verified');
+  });
+});
+
+describe('compatibilityNote', () => {
+  it('gives a distinct, non-empty sentence for each state', () => {
+    const states = ['verified', 'horizontal-only', 'unknown', 'incompatible'] as const;
+    const notes = states.map(compatibilityNote);
+    for (const n of notes) expect(n.length).toBeGreaterThan(0);
+    expect(new Set(notes).size).toBe(states.length);
+  });
+
+  it('only the verified state omits the "excluded from combined results" caveat', () => {
+    expect(compatibilityNote('verified')).not.toMatch(/excluded from combined/i);
+    for (const c of ['horizontal-only', 'unknown', 'incompatible'] as const) {
+      expect(compatibilityNote(c)).toMatch(/excluded from combined/i);
+    }
+  });
+
+  it('horizontal-only names the X/Y-only placement that defines it', () => {
+    expect(compatibilityNote('horizontal-only')).toMatch(/X\/Y only/);
   });
 });

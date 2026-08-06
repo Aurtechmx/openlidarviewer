@@ -13,6 +13,7 @@ import {
   rayOriginToLayer,
   accumulatorOffset,
   mergePlacedBounds,
+  placeBufferInto,
 } from '../src/render/layerPlacement';
 import {
   createProjectFrame,
@@ -108,5 +109,31 @@ describe('mergePlacedBounds', () => {
   it('returns null for nothing visible', () => {
     expect(mergePlacedBounds([])).toBeNull();
     expect(mergePlacedBounds([], null)).toBeNull();
+  });
+});
+
+describe('placeBufferInto', () => {
+  it('the identity copies positions verbatim and returns the advanced offset', () => {
+    const src = new Float32Array([1, 2, 3, 4, 5, 6]);
+    const dest = new Float32Array(6);
+    const next = placeBufferInto(dest, 0, src, IDENTITY);
+    expect(Array.from(dest)).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(next).toBe(6);
+  });
+
+  it('a real placement folds the translation into every point', () => {
+    const [dx, dy, dz] = accumulatorOffset(OFFSET);
+    const src = new Float32Array([0, 0, 0, 10, 20, 30]);
+    const dest = new Float32Array(6);
+    placeBufferInto(dest, 0, src, OFFSET);
+    expect(Array.from(dest)).toEqual([dx, dy, dz, 10 + dx, 20 + dy, 30 + dz]);
+  });
+
+  it('writes at a non-zero destination offset without touching earlier slots', () => {
+    const src = new Float32Array([7, 8, 9]);
+    const dest = new Float32Array([1, 1, 1, 0, 0, 0]);
+    const next = placeBufferInto(dest, 3, src, IDENTITY);
+    expect(Array.from(dest)).toEqual([1, 1, 1, 7, 8, 9]);
+    expect(next).toBe(6);
   });
 });
