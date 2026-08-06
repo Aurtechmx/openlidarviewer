@@ -117,6 +117,18 @@ The `vite` override is scoped to `vitepress` alone. The application builds on
 Vite 8.1.5 and is not affected by it. `npm run docs:build` passes on the
 overridden tree.
 
+## Stubbed to prune
+
+`texture-compressor` is replaced by a local empty stub through a
+`file:vendor-stubs/texture-compressor` override. It sits under
+`@loaders.gl/textures` on the encode path only, which shells out to `npx
+texture-compressor`. OLV decodes glTF and never encodes, so it never invokes
+that CLI, and there are zero references to it in the built `dist`. The real
+package pulls `image-size@0.7.5`, which carries CVE-2025-71329 and
+CVE-2025-71330 (HIGH, denial of service) with no fixed upstream version. The
+stub removes `image-size` and its own transitives (`argparse`, `sprintf-js`)
+from the installed tree rather than accepting an advisory with no available fix.
+
 ## Deferred upgrades
 
 Remaining open Dependabot bumps are major-version migrations that would
