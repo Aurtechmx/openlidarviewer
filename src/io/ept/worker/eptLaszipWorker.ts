@@ -23,6 +23,7 @@ import { createLazPerf } from 'laz-perf';
 import { LAZ_PERF_WASM_BASE64 } from '../../lazPerfWasm';
 import { decodeEptLaszipTileWith } from '../eptLaszipDecode';
 import { chunkTransferables } from '../../copc/copcChunkDecode';
+import { CancelledRequestSet } from '../../workerPool/cancelledRequestSet';
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
@@ -42,8 +43,13 @@ interface CancelMessage {
 }
 type InMessage = DecodeMessage | CancelMessage;
 
-/** Request ids cancelled before the worker reached them. */
-const cancelled = new Set<number>();
+/**
+ * Request ids cancelled before the worker reached them. Bounded, evicting the
+ * OLDEST ids when it overflows — see `workerPool/cancelledRequestSet` for why
+ * clearing the whole set instead threw away the cancellations that still had
+ * work to save. One instance per worker; a pooled sibling has its own.
+ */
+const cancelled = new CancelledRequestSet();
 
 /** Decode the embedded base64 laz-perf WASM into bytes. */
 function lazPerfWasmBinary(): Uint8Array {
@@ -74,29 +80,22 @@ ctx.onmessage = (event: MessageEvent<InMessage>): void => {
   const msg = event.data;
 
   if (msg.type === 'cancel') {
+    // A cancel always arrives after its decode message, so once the WASM module
+    // is warm many cancel ids are already stale when they are added. The set
+    // bounds itself by evicting the oldest ids, which are exactly the ones
+    // whose decode has already been dealt with.
     cancelled.add(msg.requestId);
-    // A cancel always arrives after its decode message, so once the WASM
-    // module is warm most cancel ids are stale the instant they are added.
-    // Bound the set — a rare missed cancel only lets a superseded decode run,
-    // and the client drops its result regardless.
-    if (cancelled.size > 256) cancelled.clear();
     return;
   }
   if (msg.type !== 'decode') return;
 
   const { requestId, tile, renderOrigin, rgbEightBit } = msg;
-  if (cancelled.has(requestId)) {
-    cancelled.delete(requestId);
-    return;
-  }
+  if (cancelled.consume(requestId)) return;
 
   void (async (): Promise<void> => {
     try {
       const lazPerf = await getLazPerf();
-      if (cancelled.has(requestId)) {
-        cancelled.delete(requestId);
-        return;
-      }
+      if (cancelled.consume(requestId)) return;
       const decoded = decodeEptLaszipTileWith(lazPerf, tile, renderOrigin, rgbEightBit);
       ctx.postMessage(
         { type: 'decoded', requestId, decoded },
