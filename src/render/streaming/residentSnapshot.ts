@@ -19,6 +19,7 @@
 
 import type { DecodedChunk } from '../../io/copc/copcChunkDecode';
 import { PointCloud, type CloudMetadata } from '../../model/PointCloud';
+import { renderLocalPositions } from '../../model/pointFrames';
 import type { SourceFormat } from '../../io/sniffFormat';
 
 /** Non-geometry inputs the snapshot needs from the streaming source. */
@@ -71,7 +72,7 @@ export function buildResidentSnapshot(
   let p = 0; // running point offset
   for (const c of chunks) {
     const n = c.pointCount;
-    positions.set(c.positions.subarray(0, n * 3), p * 3);
+    positions.set(renderLocalPositions(c).subarray(0, n * 3), p * 3);
     intensity.set(c.intensity.subarray(0, n), p);
     classification.set(c.classification.subarray(0, n), p);
     returnNumber.set(c.returnNumber.subarray(0, n), p);
