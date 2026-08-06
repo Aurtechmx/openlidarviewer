@@ -38,6 +38,21 @@ export interface ScanService {
   clearIf(id: string): void;
   /** The active cloud, or null when nothing is selected or it is gone. */
   activeCloud(): PointCloud | null;
+  /**
+   * The identity the export/terrain scan-identity guards compare: the active
+   * STATIC scan's `activeId`, or — when a streaming scan is open (`activeId` is
+   * null for streaming) — that streaming scan's stable shell id, or null when
+   * nothing identifiable is active.
+   *
+   * Deliberately SEPARATE from {@link activeId}, which keeps returning null for
+   * a streaming scan so no `activeId ? … : …` branch shifts. Only the export and
+   * terrain guards read this streaming-aware form, so they can tell one
+   * streaming scan from another where raw `activeId` could not — closing the
+   * blind spot where `sameExportTarget(null, null)` hid a streaming→streaming
+   * swap. Fails closed: a streaming scan now reports a concrete id, never a
+   * wildcard, and a genuinely unidentified state is still null.
+   */
+  activeExportTargetId(): string | null;
 }
 
 export function createScanService(deps: ScanServiceDeps): ScanService {
@@ -59,6 +74,14 @@ export function createScanService(deps: ScanServiceDeps): ScanService {
     activeCloud() {
       const id = scan.activeId;
       return id ? getViewer().getCloud(id) ?? null : null;
+    },
+    activeExportTargetId() {
+      // Static id wins when a static scan is selected (unchanged identity); a
+      // streaming scan leaves `activeId` null, so fall through to the streaming
+      // cloud's stable shell id. Same late-`getViewer()` assumption `activeCloud`
+      // relies on — only the export/terrain guards call this, well after the
+      // viewer is bound and a scan is open.
+      return scan.activeId ?? getViewer().streamingCloud?.id ?? null;
     },
   };
 }

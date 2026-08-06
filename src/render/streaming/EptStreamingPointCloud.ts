@@ -51,6 +51,7 @@ import { decodeEptBinaryTile } from '../../io/ept/eptBinaryDecode';
 import { EptOctree } from './EptOctree';
 import type { CrsInfo } from '../../io/crs';
 import { resolveEptCrs } from './eptCrs';
+import { nextStreamingScanId } from './streamingScanId';
 
 /**
  * Hierarchy files to load before a streaming EPT scan attaches. The root file
@@ -82,6 +83,8 @@ function pickRenderOriginFromCube(cube: Box6): [number, number, number] {
 
 export class EptStreamingPointCloud implements StreamingSource {
   readonly kind: StreamingSourceKind = 'ept';
+  /** Stable shell id for this streaming scan — see {@link StreamingSource.id}. */
+  readonly id: string = nextStreamingScanId();
   readonly name: string;
   readonly renderOrigin: [number, number, number];
   readonly octree: EptOctree;

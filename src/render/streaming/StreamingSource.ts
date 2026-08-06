@@ -65,6 +65,16 @@ export type StreamingSourceKind = 'copc' | 'ept';
 export interface StreamingSource {
   /** Which on-disk format is open. */
   readonly kind: StreamingSourceKind;
+  /**
+   * The scan's stable shell id — the streaming analogue of a static scan's
+   * `cloud_<n>` registry id. A static scan gets its id from the viewer's cloud
+   * registry; a streaming scan is never registered there, so it mints one at
+   * construction (see {@link nextStreamingScanId}). Non-null and distinct per
+   * session, so the export/terrain scan-identity guards can tell one streaming
+   * scan from another — a null here would let a streaming→streaming swap slip
+   * past a guard that treats null as "matches only null".
+   */
+  readonly id: string;
   /** Display name — the file or scan name surfaced in the UI. */
   readonly name: string;
   /** Render origin every node is recentred against (float64-stable). */

@@ -12,6 +12,7 @@
 import type { RangeSource } from '../../io/range/RangeSource';
 import { CopcSource } from '../../io/copc/CopcSource';
 import { StreamingOctree } from './StreamingOctree';
+import { nextStreamingScanId } from './streamingScanId';
 import type {
   CopcMetadata,
   Box6,
@@ -42,6 +43,8 @@ function pickRenderOrigin(
 export class StreamingPointCloud implements StreamingSource {
   /** Identifies this source as COPC-backed for the {@link StreamingSource} contract. */
   readonly kind: StreamingSourceKind = 'copc';
+  /** Stable shell id for this streaming scan — see {@link StreamingSource.id}. */
+  readonly id: string = nextStreamingScanId();
   readonly source: CopcSource;
   readonly octree: StreamingOctree;
   /** The render origin every node is recentred against (float64-stable). */

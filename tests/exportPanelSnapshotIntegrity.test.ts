@@ -22,6 +22,10 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
 import type { ClipBox } from '../src/render/clip/clipBox';
+import { createScanService } from '../src/app/ScanService';
+import { createAppContext } from '../src/app/appContext';
+import type { StreamingSource } from '../src/render/streaming/StreamingSource';
+import type { Viewer } from '../src/render/Viewer';
 
 const hoisted = vi.hoisted(() => ({
   /** Every cloud handed to the converter, so a test can see what was written. */
@@ -209,6 +213,79 @@ describe('ExportPanel — full-resolution export re-verifies before it writes', 
 
     expect(hoisted.downloads).toEqual([]);
     expect(statusText(root)).toBe(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+
+  // ─── ROADMAP #19 — the streaming→streaming swap the guard used to miss ───
+  // A streaming scan leaves `scans.activeId` null, so BOTH scans in a swap used
+  // to read as null and `sameExportTarget(null, null)` passed the export. The
+  // shell now mints a stable id per streaming scan and surfaces it through
+  // `activeExportTargetId()`; these drive the panel through the REAL accessor so
+  // the whole read path (ScanService → viewer.streamingCloud.id) is under test.
+
+  /** A viewer stub exposing only the streaming cloud the service reads. */
+  function streamingViewer(current: () => StreamingSource | null): Viewer {
+    return {
+      getCloud: () => undefined,
+      get streamingCloud() {
+        return current();
+      },
+    } as unknown as Viewer;
+  }
+  const streamingScan = (id: string): StreamingSource => ({ id }) as unknown as StreamingSource;
+
+  it('refuses when one streaming scan is swapped for another during the re-decode', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const { EXPORT_SCAN_CHANGED_REFUSAL } = await import('../src/export/exportScanIdentity');
+    const cloud = twoPointCloud();
+    // Streaming throughout — activeId is never set, so the OLD wiring would have
+    // read null both before and after and written the file. The mint is what
+    // makes the swap visible.
+    let streaming: StreamingSource | null = streamingScan('streaming-scan_1');
+    const scans = createScanService({
+      getViewer: () => streamingViewer(() => streaming),
+      context: createAppContext(),
+    });
+    expect(scans.activeId, 'streaming leaves activeId null (safety pin)').toBeNull();
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => {
+        streaming = streamingScan('streaming-scan_2'); // user opened another streaming scan
+        return cloud;
+      },
+      getActiveScanId: () => scans.activeExportTargetId(),
+    });
+    const root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    await pressExport(root);
+
+    expect(hoisted.downloads, 'a file was written despite the streaming swap').toEqual([]);
+    expect(statusText(root)).toBe(EXPORT_SCAN_CHANGED_REFUSAL);
+  });
+
+  it('exports when the SAME streaming scan stays active through the re-decode (no false refusal)', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = twoPointCloud();
+    const streaming = streamingScan('streaming-scan_1');
+    const scans = createScanService({
+      getViewer: () => streamingViewer(() => streaming),
+      context: createAppContext(),
+    });
+    const panel = new ExportPanel({
+      getCloud: () => cloud,
+      hasFullSource: () => true,
+      isReduced: () => true,
+      getFullCloud: async () => cloud, // same streaming scan the whole time
+      hasClassEdits: () => false,
+      getActiveScanId: () => scans.activeExportTargetId(),
+    });
+    const root = panel.element as unknown as FakeEl;
+    enableFullRes(root);
+    await pressExport(root);
+
+    expect(hoisted.downloads).toEqual(['scan.las']);
+    expect(hoisted.converted[0].pointCount).toBe(2);
   });
 
   it('clips with the box captured BEFORE the decode, not the one set during it', async () => {

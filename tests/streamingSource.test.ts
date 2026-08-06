@@ -99,6 +99,7 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
 
   const stub: StreamingSource = {
     kind: 'ept', // pretending to be an EPT source
+    id: 'stub-streaming-scan',
     name: 'stub.ept',
     renderOrigin: realCloud.renderOrigin,
     octree: realCloud.octree,
