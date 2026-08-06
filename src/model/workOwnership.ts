@@ -115,10 +115,10 @@ export function isWellFormedOwnership(v: unknown): v is WorkOwnership {
 /**
  * Read a stored ownership record, or null when it states nothing usable.
  *
- * Null is the honest answer for a malformed claim: the work is kept (dropping a
- * measurement because its owner field is corrupt would lose the user's actual
- * work), and the missing ownership then goes through the same migration path as
- * a legacy session, which marks what it assigns as inferred. Silently keeping a
+ * Null is the honest answer for a malformed claim: the measurement is kept, since
+ * a corrupt owner field describes the attribution and not the geometry, and the
+ * missing ownership then goes through the same migration path as a legacy
+ * session, which marks what it assigns as inferred. Silently keeping a
  * half-parsed owner would assert an attribution nobody made.
  */
 export function parseWorkOwnership(v: unknown): WorkOwnership | null {
