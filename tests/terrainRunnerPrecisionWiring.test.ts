@@ -22,6 +22,7 @@ import type { PrecisionPermit } from '../src/geo/inMemoryPrecision';
 import type { Viewer } from '../src/render/Viewer';
 import type { AnalysePanel } from '../src/ui/AnalysePanel';
 import type { CrsService } from '../src/geo/CrsService';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
 
 /** A small sloped plane — enough for the pipeline, cheap to analyse. */
 function plane(): Float32Array {
@@ -65,15 +66,28 @@ function runnerOver(span: number, onFrame: (f: Frame) => void) {
     update: () => {},
     setContourFrame: (f: unknown) => onFrame(f as Frame),
   } as unknown as AnalysePanel;
-  const fakeCrs = {
-    current: () => ({
-      kind: 'projected',
-      name: 'Test / metre grid',
-      linearUnit: 'metre',
-      linearUnitToMetres: 1,
-      verticalUnitToMetres: 1,
-    }),
-  } as unknown as CrsService;
+  // The runner reads `current()` AND `context()`. Deriving the context here the
+  // way the service itself does — one `spatialContextFrom` call over the same
+  // resolved CRS — keeps the double honest: a context assembled by hand could
+  // state a unit or a datum its own `current()` contradicts, which is the
+  // divergence this whole migration removes.
+  //
+  // Typed as the subset the runner actually uses rather than `as unknown as
+  // CrsService`. That double cast is why this double silently fell behind the
+  // interface: it defeats the compiler, so adding `context()` to the service
+  // broke the test at runtime with nothing failing at build time.
+  const resolved = {
+    kind: 'projected',
+    name: 'Test / metre grid',
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    verticalUnitToMetres: 1,
+  } as const;
+  const context = spatialContextFrom(resolved as unknown as Parameters<typeof spatialContextFrom>[0]);
+  const fakeCrs: Pick<CrsService, 'current' | 'context'> = {
+    current: () => resolved as unknown as ReturnType<CrsService['current']>,
+    context: () => context,
+  };
   return createTerrainAnalysisRunner({
     getViewer: () => fakeViewer,
     getAnalysePanel: () => fakePanel,

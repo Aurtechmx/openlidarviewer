@@ -53,6 +53,10 @@ ctx.onmessage = (event: MessageEvent<ClassifyMessage>): void => {
         confidence: res.confidence,
         classConfidence: res.classConfidence,
         warnings: res.warnings,
+        // Structured-cloneable: plain strings, numbers and arrays only, so the
+        // classifier identity survives the worker boundary intact. A result
+        // that crossed it without one would describe a run nobody can name.
+        classifier: res.classifier,
       },
       [res.codes.buffer],
     );
