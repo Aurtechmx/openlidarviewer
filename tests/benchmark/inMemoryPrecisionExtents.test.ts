@@ -6,7 +6,7 @@
  * from what those steps mean for a measurement. This file records what they
  * mean for an EXTENT: which project frames stay under each one, measured rather
  * than reasoned about. Every figure below is asserted, so the table in
- * `docs/wide-area-precision.md` cannot drift from the code that produced it.
+ * `docs/coordinate-precision.md` cannot drift from the code that produced it.
  *
  * Two frames are covered, because the runtime has two:
  *   • a single cloud on its own floored minimum — the reach is its extent;
