@@ -100,7 +100,7 @@ export interface CorpusScene {
   readonly unitToMetre: number;
   readonly description: string;
   readonly count: number;
-  readonly positions: Float32Array;
+  readonly xyz: Float32Array;
   /** Truth code per point (ASPRS; {@link TRUTH_LOW_NOISE} for blunders). */
   readonly truth: Uint8Array;
   /** RGB triplets, or null when the scene carries no colour. */
@@ -338,7 +338,7 @@ function buildScene(spec: SceneSpec): CorpusScene {
     unitToMetre: spec.unit === 'usSurveyFoot' ? US_SURVEY_FOOT_M : 1,
     description: spec.description,
     count,
-    positions,
+    xyz: positions,
     truth,
     colors,
     returnNumber,
@@ -514,9 +514,9 @@ export function sceneDigest(scene: CorpusScene): string {
   ];
   for (let i = 0; i < scene.count; i++) {
     parts.push(
-      `${Math.round(scene.positions[i * 3] * 1000)},` +
-        `${Math.round(scene.positions[i * 3 + 1] * 1000)},` +
-        `${Math.round(scene.positions[i * 3 + 2] * 1000)},` +
+      `${Math.round(scene.xyz[i * 3] * 1000)},` +
+        `${Math.round(scene.xyz[i * 3 + 1] * 1000)},` +
+        `${Math.round(scene.xyz[i * 3 + 2] * 1000)},` +
         `${scene.truth[i]},` +
         `${scene.colors ? scene.colors[i * 3] : -1}:` +
         `${scene.colors ? scene.colors[i * 3 + 1] : -1}:` +

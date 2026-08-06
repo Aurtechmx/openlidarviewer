@@ -67,7 +67,7 @@ describe('corpus immutability', () => {
     expect(a.length).toBe(b.length);
     for (let i = 0; i < a.length; i++) {
       expect(sceneDigest(a[i])).toBe(sceneDigest(b[i]));
-      expect(Array.from(a[i].positions)).toEqual(Array.from(b[i].positions));
+      expect(Array.from(a[i].xyz)).toEqual(Array.from(b[i].xyz));
       expect(Array.from(a[i].truth)).toEqual(Array.from(b[i].truth));
     }
   });
@@ -75,8 +75,8 @@ describe('corpus immutability', () => {
   it('the digest moves when one coordinate moves', () => {
     const scenes = buildCorpus();
     const before = sceneDigest(scenes[0]);
-    const tampered = { ...scenes[0], positions: scenes[0].positions.slice() };
-    tampered.positions[7] += 0.002; // two millimetres, past the quantiser
+    const tampered = { ...scenes[0], positions: scenes[0].xyz.slice() };
+    tampered.xyz[7] += 0.002; // two millimetres, past the quantiser
     expect(sceneDigest(tampered)).not.toBe(before);
   });
 
@@ -130,7 +130,7 @@ describe('corpus coverage', () => {
     for (const scene of buildCorpus()) {
       expect(scene.count).toBeGreaterThan(1000);
       expect(scene.truth.length).toBe(scene.count);
-      expect(scene.positions.length).toBe(scene.count * 3);
+      expect(scene.xyz.length).toBe(scene.count * 3);
       expect(scene.cellSize).toBeGreaterThan(0);
       if (scene.colors) expect(scene.colors.length).toBe(scene.count * 3);
       if (scene.returnCount) expect(scene.returnCount.length).toBe(scene.count);
@@ -154,7 +154,7 @@ describe('corpus coverage', () => {
     for (let i = 0; i < metre.count * 3; i++) {
       // Quantised to millimetres on both sides, so the tolerance is the
       // quantiser, not a float epsilon.
-      expect(foot.positions[i] * US_SURVEY_FOOT_M).toBeCloseTo(metre.positions[i], 2);
+      expect(foot.xyz[i] * US_SURVEY_FOOT_M).toBeCloseTo(metre.xyz[i], 2);
     }
   });
 

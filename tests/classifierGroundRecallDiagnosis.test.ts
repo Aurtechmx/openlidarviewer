@@ -67,7 +67,7 @@ function groundRecall(
   extra: Partial<DeriveClassificationOptions> = {},
   points = s.count,
 ): number {
-  const positions = points === s.count ? s.positions : s.positions.slice(0, points * 3);
+  const positions = points === s.count ? s.xyz : s.xyz.slice(0, points * 3);
   const truth = points === s.count ? s.truth : s.truth.slice(0, points);
   const result = deriveClassification(positions, points, { ...optionsFor(s), ...extra });
   const score = scoreScene(s.id, truth, result.codes);
@@ -101,8 +101,8 @@ function terrainDrop(s: CorpusScene, radiusCells: number): number {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (let i = 0; i < s.count; i++) {
-    const x = s.positions[i * 3];
-    const y = s.positions[i * 3 + 1];
+    const x = s.xyz[i * 3];
+    const y = s.xyz[i * 3 + 1];
     if (x < minX) minX = x;
     if (x > maxX) maxX = x;
     if (y < minY) minY = y;
@@ -113,10 +113,10 @@ function terrainDrop(s: CorpusScene, radiusCells: number): number {
   const grid = new Float64Array(W * H).fill(NaN);
   for (let i = 0; i < s.count; i++) {
     if (s.truth[i] !== TRUTH_GROUND) continue;
-    const cx = Math.min(W - 1, Math.floor((s.positions[i * 3] - minX) / cell));
-    const cy = Math.min(H - 1, Math.floor((s.positions[i * 3 + 1] - minY) / cell));
+    const cx = Math.min(W - 1, Math.floor((s.xyz[i * 3] - minX) / cell));
+    const cy = Math.min(H - 1, Math.floor((s.xyz[i * 3 + 1] - minY) / cell));
     const c = cy * W + cx;
-    const z = s.positions[i * 3 + 2];
+    const z = s.xyz[i * 3 + 2];
     if (!Number.isFinite(grid[c]) || z < grid[c]) grid[c] = z;
   }
   let worst = 0;
@@ -183,14 +183,14 @@ describe('why the low-outlier scene collapsed', () => {
     // Height above ground is clamped at zero, so a return below the surface
     // lands in the ground band. v2 stops a blunder from dragging the surface;
     // it does not give the classifier a noise class to put the blunder in.
-    const result = deriveClassification(s.positions, s.count, optionsFor(s));
+    const result = deriveClassification(s.xyz, s.count, optionsFor(s));
     const score = scoreScene(s.id, s.truth, result.codes);
     expect(score.lowNoisePoints).toBe(30);
     expect(score.lowNoiseCalledGround).toBe(30);
   });
 
   it('rejecting an outlier is reported, never silent', () => {
-    const result = deriveClassification(s.positions, s.count, optionsFor(s));
+    const result = deriveClassification(s.xyz, s.count, optionsFor(s));
     expect(result.warnings.some((w) => w.includes('low outlier'))).toBe(true);
   });
 });
@@ -267,7 +267,7 @@ describe('what the diagnosis does not claim', () => {
   it('the corpus keeps a class the classifier cannot emit, so the gap stays visible', () => {
     expect(TRUTH_LOW_NOISE).toBe(7);
     const s = scene('low-outliers');
-    const result = deriveClassification(s.positions, s.count, optionsFor(s));
+    const result = deriveClassification(s.xyz, s.count, optionsFor(s));
     expect(Array.from(result.codes)).not.toContain(TRUTH_LOW_NOISE);
   });
 });
