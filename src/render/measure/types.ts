@@ -13,6 +13,7 @@
 
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
+import type { WorkOwnership } from '../../model/workOwnership';
 
 export type { Vec3 };
 export type { MeasurementTrust };
@@ -196,6 +197,19 @@ export interface Measurement {
    * placed with no cloud loaded, or one from a pre-grade session file, omits it.
    */
   trust?: MeasurementTrust;
+  /**
+   * Which layer this measurement belongs to, and which frame `points` are
+   * already in: the layer's own source-local frame, or the project frame (see
+   * `model/workOwnership.ts`). The owning layer is named by its STABLE id,
+   * never by a filename or a display label, so ownership survives a rename, a
+   * duplicate filename, layer reordering, removal of a sibling layer, and a
+   * session round trip.
+   *
+   * Optional: a measurement from a session written before ownership existed
+   * carries none, and `io/sessionOwnership.ts` attributes it to the anchor
+   * layer with the assignment marked inferred rather than asserted.
+   */
+  owner?: WorkOwnership;
 }
 
 /** Minimum vertex count for a measurement of each kind to be meaningful. */

@@ -162,3 +162,47 @@ rather than silently mislocated — the documented no-reprojection limitation,
 made explicit at the seam. Because the frame carries the authoritative up-axis
 and units, this step also removes the mixed-format multi-cloud divergence where
 the colorbar and inspector read elevation off different axes.
+
+## Naming the frame at every position read
+
+A raw `cloud.positions` read is not wrong by itself, but it is silent. The
+buffer is the same `Float32Array` in every frame, so a site that means world
+coordinates and a site that means source-local coordinates are spelled
+identically, and a mistake between them survives review because there is
+nothing in the code to review. That was the residual risk left over from the
+coordinate-integrity work: not too much raw access, but unlabelled raw access.
+
+Two mechanisms close it.
+
+**Accessors, where one is honest.** `src/model/pointFrames.ts` holds
+`sourcePositions(cloud)` and `renderLocalPositions(chunk)`; both return the
+buffer unchanged, so the label costs nothing and a hot path has no reason to
+route around it. The frames that need arithmetic already had their boundary:
+`PointCloud.worldXYZ` and `PointCloud.projectXYZ` for a single point,
+`forEachPlacedPoint` / `iteratePlacedPoints` in `src/geo/placementIterator.ts`
+for a placement-aware walk, and `copyPlacedPositions` in
+`src/render/measure/lassoVolumeCompute.ts` for a placed copy.
+
+**A classification for the rest.** Reads that should stay raw (loaders writing
+the buffer, model internals, the GPU upload boundary, reviewed numeric kernels)
+are listed in `docs/validation/position-frames.json`, keyed by file plus the
+enclosing symbol, each naming the frame it expects and why:
+
+| Frame | Meaning |
+|---|---|
+| `source-local` | The buffer as the loader wrote it, relative to the cloud's own `sourceOrigin`. |
+| `project-local` | Source-local plus the layer's Float64 `sourceToProject` translation. |
+| `render-local` | Relative to a render origin picked for float precision: streaming node buffers, GPU uploads. |
+| `world` | Source-local plus `sourceOrigin`, in the file's own CRS. |
+
+A site that genuinely reads more than one frame lists them all. The terrain
+gather is the clearest case: static layer buffers go in source-local, resident
+streaming nodes go in render-local, and the strided sample that comes back out
+is project-local, because the assembler folds each layer's placement while it
+copies.
+
+`npm run lint:position-access` enforces both halves. Counts may fall and never
+rise, as before, and now a read with no entry fails the gate with the accessor
+list and the file to edit. `node scripts/lint-position-access.mjs --update`
+banks a reduction and carries every existing classification across; it writes
+new keys as `UNCLASSIFIED`, which keeps failing until a human names the frame.

@@ -33,6 +33,7 @@ import type { StreamingQuality } from './streamingBudget';
 import { streamingBudgets } from './streamingBudget';
 import { makeStreamingCommit, type StreamingCommit } from './meteredCommit';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
+import { renderLocalPositions } from '../../model/pointFrames';
 import { loadStreamingRenderer, loadStreamingScheduler } from '../../lazyChunks';
 import { readDevFlags } from '../../perf/devFlags';
 
@@ -135,7 +136,7 @@ export function buildSchedulerCallbacks(deps: {
         benchmark.recordFirstPaint();
         benchmark.recordNodeReady(node.record.id);
         // Position bytes are a stable proxy for "decoded points" volume.
-        benchmark.recordDecodedBytes(decoded.positions.byteLength);
+        benchmark.recordDecodedBytes(renderLocalPositions(decoded).byteLength);
       }
     },
     onNodeEvicted: (node: StreamingNode): void => {

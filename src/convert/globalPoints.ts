@@ -11,6 +11,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 
 /** Global-space points plus the attributes the output writers consume. */
 export interface GlobalPoints {
@@ -41,7 +42,7 @@ export function cloudToGlobal(cloud: PointCloud): GlobalPoints {
   const x = new Float64Array(n);
   const y = new Float64Array(n);
   const z = new Float64Array(n);
-  const p = cloud.positions;
+  const p = sourcePositions(cloud);
   const [ox, oy, oz] = cloud.sourceOrigin;
   for (let i = 0; i < n; i++) {
     x[i] = p[i * 3] + ox;

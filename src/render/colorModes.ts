@@ -9,6 +9,7 @@
 
 import { clamp, clamp01 } from '../numeric';
 import type { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 import { densityForChunk, defaultCellSizeForSpacing } from './densityColors';
 import { computeElevationRange, computeScalarRange } from './elevationRange';
 import {
@@ -715,7 +716,7 @@ export function rampRangeForMode(
       const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
       const upAxis = opts?.upAxis ?? 2;
       const r = computeElevationRange({
-        positions: cloud.positions,
+        positions: sourcePositions(cloud),
         pointCount: n,
         lowerPercentile: trim,
         upperPercentile: 100 - trim,
@@ -822,7 +823,7 @@ export function colorForMode(
       // the colorbar labels exactly the window these colours ramp across.
       const upAxis = opts?.upAxis ?? 2;
       const range = mustRampRange(rampRangeForMode('elevation', cloud, opts), 'elevation');
-      return colorByElevation(cloud.positions, n, range.min, range.max, undefined, upAxis);
+      return colorByElevation(sourcePositions(cloud), n, range.min, range.max, undefined, upAxis);
     }
 
     // ── normal ──────────────────────────────────────────────────────────────
@@ -871,7 +872,7 @@ export function colorForMode(
       const spacing = (cloud as { spacing?: number }).spacing ?? 0;
       const cellSize = defaultCellSizeForSpacing(spacing);
       return densityForChunk({
-        positions: cloud.positions,
+        positions: sourcePositions(cloud),
         cellSize,
       }).colors;
     }
@@ -891,7 +892,7 @@ export function colorForMode(
         }
         return out;
       }
-      return colorByCoverage(cloud.positions, n, opts.coverageGrid);
+      return colorByCoverage(sourcePositions(cloud), n, opts.coverageGrid);
     }
 
     // ── confidence (colourblind-safe trust overlay) ───────────────────────────
@@ -908,7 +909,7 @@ export function colorForMode(
         }
         return out;
       }
-      return colorByConfidence(cloud.positions, n, opts.coverageGrid);
+      return colorByConfidence(sourcePositions(cloud), n, opts.coverageGrid);
     }
   }
 }

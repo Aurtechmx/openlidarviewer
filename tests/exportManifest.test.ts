@@ -17,6 +17,9 @@ import { exportGate } from '../src/validation/evidenceRegistry';
 const ctx = (over: Partial<ExportDecisionContext> = {}): ExportDecisionContext => ({
   launchStatus: 'available',
   unitClaim: 'metric-supported',
+  // No scan frame in these fixtures, so nothing was measured. Spelled out
+  // rather than defaulted: `null` is "not measured", never "within budget".
+  precision: null,
   ...over,
 });
 
