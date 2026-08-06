@@ -237,6 +237,24 @@ describe('buildMapSheetPdf', () => {
     expect(Buffer.from(off).equals(Buffer.from(absent))).toBe(true);
   });
 
+  it('sources the document date from generatedAt, so a fixed date is byte-reproducible', async () => {
+    // Guards the pdf-lib Info-dictionary dates (CreationDate/ModDate), which
+    // default to the wall clock at build time. Two builds either side of a
+    // second boundary used to differ there even with a fixed visible stamp.
+    const base = { model, labels: [] as never[], crs: model.crs, sheet: 'letter' as const };
+    const a1 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    const a2 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    expect(Buffer.from(a1).equals(Buffer.from(a2))).toBe(true);
+
+    // Two instants in the SAME minute but different seconds: the visible stamp
+    // (minute precision) is identical, so the only thing that can move the bytes
+    // is the document date being pinned to generatedAt. Without the pin both
+    // builds would take the wall clock and land in the same second — equal bytes.
+    const atSecond00 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    const atSecond30 = await buildMapSheetPdf({ ...base, generatedAt: new Date(30_000) });
+    expect(Buffer.from(atSecond00).equals(Buffer.from(atSecond30))).toBe(false);
+  });
+
   it('draws additional content when annotations are included', async () => {
     const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const };
     const plain = await buildMapSheetPdf({ ...base });

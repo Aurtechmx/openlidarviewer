@@ -10,6 +10,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
@@ -91,7 +92,7 @@ export function convertCloud(
   // same detection the terrain gather uses — a format table alone rotated
   // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
   // identically here. Survey formats skip detection: Z-up by spec.
-  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(cloud.positions).up === 'y') {
+  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
     const { y, z } = g;
     for (let i = 0; i < g.count; i++) {
       const yv = y[i];
