@@ -75,6 +75,7 @@ const okFrame: ContourExportFrameFacts = {
   launchStatus: 'available',
   verticalUnitsKnown: true,
   crsProjected: true,
+  precision: null,
 };
 
 describe('ContourExportAdapter — gated dispatch', () => {
@@ -123,6 +124,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No usable ground points.'],
     });
     expect(calls.vector).toHaveLength(0);
@@ -154,6 +156,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.dem).toHaveLength(0);
@@ -184,6 +187,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.complete).toHaveLength(0);
@@ -212,6 +216,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     new ContourExportAdapter(host).handle('report', btn(), intent(), {
       launchStatus: 'available',
       verticalUnitsKnown: false, // cartographic-only ⇒ exploratory
+      precision: null,
       crsProjected: true,
     });
     expect(calls.report).toHaveLength(1);
@@ -227,6 +232,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.report).toHaveLength(0);
@@ -244,6 +250,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     new ContourExportAdapter(host).handle('dxf', btn(), intent(), {
       launchStatus: 'available',
       verticalUnitsKnown: false, // cartographic-only ⇒ exploratory
+      precision: null,
       crsProjected: true,
     });
     expect(calls.vector).toHaveLength(1);

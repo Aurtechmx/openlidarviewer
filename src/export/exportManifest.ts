@@ -32,6 +32,7 @@ import {
 // the gate is reached eagerly (Contour Studio mints permits synchronously), so
 // pulling in exportProvenance here would collapse its deliberately-lazy chunk.
 import { NOT_SURVEY_GRADE_NOTE } from '../terrain/export/exportNotes';
+import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 
 export type ScientificProduct =
   | 'contour-map-pdf'
@@ -86,6 +87,19 @@ export interface ExportDecisionContext {
   readonly unitClaim: 'metric-supported' | 'cartographic-only';
   /** Reasons to attach when blocked (from the launch state). */
   readonly blockedReasons?: readonly string[];
+  /**
+   * The in-memory Float32 precision permit for the scan this product is built
+   * from (`app/scanPrecision.ts`), or `null` when no scan frame was available
+   * to measure.
+   *
+   * REQUIRED, not optional, and deliberately so: an optional field is a field a
+   * call site can forget, and a forgotten precision term reads exactly like a
+   * passing one. `null` is the honest "not measured" and is spelled out at each
+   * call site; a refused permit is a hard block, on the same footing as a failed
+   * launch prerequisite, because a deliverable minted past the budget would
+   * carry coordinates finer than the buffer it came from can distinguish.
+   */
+  readonly precision: PrecisionPermit | null;
   /** Injectable evidence lookup (defaults to the claim registry) — for tests. */
   readonly evidenceStatusOf?: (claimId: string) => EvidenceStatus;
 }
@@ -117,6 +131,13 @@ export function resolveExportDecision(
         ? ctx.blockedReasons
         : ['No usable terrain deliverable is available for this scan.'],
     };
+  }
+
+  // Hard block: the representation cannot hold the precision this product
+  // would claim. Checked after the launch block, because "there is no surface"
+  // is the more fundamental answer when both are true.
+  if (ctx.precision !== null && !ctx.precision.ok) {
+    return { status: 'blocked', reasons: ctx.precision.reasons };
   }
 
   const status = (ctx.evidenceStatusOf ?? registryEvidenceStatus)(reg.claimId);

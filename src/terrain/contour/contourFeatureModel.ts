@@ -25,6 +25,9 @@ import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { ContourPolyline, StitchedLevel } from './stitchContours';
 import type { StyledLevel } from './contourStyle';
 import { defaultContourShapeStyle, type ContourShapeStyle } from './contourShapeStyle';
+// The vertical-reference classifier the SpatialContext façade wraps. Called
+// ONCE here, so the model carries the answer and no writer re-derives it.
+import { verticalReferenceFromDatum, type VerticalReference } from '../../geo/height';
 
 /** One exportable contour feature: a single-grade run at one elevation. */
 export interface ContourFeature {
@@ -81,6 +84,22 @@ export interface ContourFeatureModel {
    * not "metre".
    */
   readonly verticalUnitToMetres?: number | null;
+  /**
+   * The vertical REFERENCE SURFACE the elevations sit on, classified once when
+   * the model is built and read by every writer.
+   *
+   * This is the field that removes the export layer's duplicate datum
+   * allow-lists. The RFC 7946 GeoJSON writer used to keep its own two-entry
+   * list of "is this WGS 84 ellipsoidal height", the KML writer its own set of
+   * metric orthometric codes, and the measure tool a third call to the
+   * classifier — three answers to one question about one scan. The model now
+   * carries the answer the {@link SpatialContext} would give (`verticalReference`
+   * is exactly `verticalReferenceFromDatum` over the declared datum), so a
+   * writer reads it instead of deciding for itself. Read it through
+   * {@link modelVerticalReference}, which also classifies a model assembled by
+   * hand (older callers, fixtures) rather than through {@link buildFeatureModel}.
+   */
+  readonly verticalReference?: VerticalReference;
   /**
    * Spacing of the levels this model's features were built from — the emitted
    * interval, not necessarily the one that was asked for (see
@@ -145,12 +164,35 @@ export function shiftFeatureModelToWorld(
   return { ...model, features, bbox };
 }
 
+/**
+ * The vertical reference surface a model's elevations sit on — the ONE answer
+ * every writer reads.
+ *
+ * A model built by {@link buildFeatureModel} already carries it; one assembled
+ * by hand is classified here, with the same `verticalReferenceFromDatum` the
+ * {@link SpatialContext} façade uses. There is exactly one classifier either
+ * way, so no writer can reach a different verdict about the same datum.
+ */
+export function modelVerticalReference(model: ContourFeatureModel): VerticalReference {
+  return (
+    model.verticalReference
+    ?? verticalReferenceFromDatum({ verticalDatum: model.verticalDatum ?? undefined })
+  );
+}
+
 /** Options for {@link buildFeatureModel}. */
 export interface FeatureModelParams {
   readonly crs: string | null;
   readonly verticalDatum?: string | null;
   /** Metres per unit of the source vertical axis; null when unresolved. */
   readonly verticalUnitToMetres?: number | null;
+  /**
+   * The vertical reference surface, when the caller already holds a
+   * {@link SpatialContext} and can hand its `verticalReference` straight over.
+   * Omitted, the model classifies the declared datum itself with the same
+   * function the context uses, so the two can never disagree.
+   */
+  readonly verticalReference?: VerticalReference;
   readonly intervalM: number;
   /** The interval originally requested, before any level thinning. */
   readonly requestedIntervalM?: number | null;
@@ -266,6 +308,9 @@ export function buildFeatureModel(
     crs: params.crs,
     verticalDatum: params.verticalDatum ?? null,
     verticalUnitToMetres: params.verticalUnitToMetres ?? null,
+    verticalReference:
+      params.verticalReference
+      ?? verticalReferenceFromDatum({ verticalDatum: params.verticalDatum ?? undefined }),
     intervalM: params.intervalM,
     requestedIntervalM: params.requestedIntervalM ?? null,
     contourStyle: params.contourStyle ?? defaultContourShapeStyle,

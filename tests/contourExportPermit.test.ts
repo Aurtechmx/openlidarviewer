@@ -36,6 +36,7 @@ function ctx(over: Partial<ContourPermitContext> = {}): ContourPermitContext {
     verticalUnitsKnown: true,
     crsProjected: true,
     analyticalGeometry: false,
+    precision: null,
     evidenceStatusOf: () => 'validated',
     ...over,
   };

@@ -25,6 +25,7 @@
 import type { StreamingNode } from './StreamingNode';
 import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 import type { ChunkDecodeMetadata, ChunkDecoder } from '../../io/copc/copcChunkDecode';
+import { renderLocalPositions } from '../../model/pointFrames';
 import type { SamplingPlanOptions, SampleNode } from './samplingPlan';
 import {
   runFullCloudGrade,
@@ -101,12 +102,13 @@ export function makeDecodeNode(
     // Invariant: positions are XYZ triples. The runner's `decodedPoints`
     // accounting and the grade both assume `length % 3 === 0`; a decoder that
     // ever broke this would silently skew density, so fail loud instead.
-    if (decoded.positions.length % 3 !== 0) {
+    const positions = renderLocalPositions(decoded);
+    if (positions.length % 3 !== 0) {
       throw new Error(
-        `Full-cloud grade: node ${id} decoded ${decoded.positions.length} position floats, not a multiple of 3.`,
+        `Full-cloud grade: node ${id} decoded ${positions.length} position floats, not a multiple of 3.`,
       );
     }
-    return decoded.positions;
+    return positions;
   };
 }
 

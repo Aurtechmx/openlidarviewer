@@ -160,6 +160,7 @@ function exploratoryPermitStamp(): ExportPermitStamp {
   const permit = resolveContourExportPermit('geojson', {
     launchStatus: 'exploratory',
     verticalUnitsKnown: true,
+    precision: null,
     crsProjected: true,
     analyticalGeometry: true,
   });
@@ -295,6 +296,7 @@ describe('completeness — what the artifact declares on its own', () => {
       const decision = resolveExportDecision(reg.exporterId, {
         launchStatus: 'available',
         unitClaim: 'metric-supported',
+        precision: null,
       });
       expect(decision.status === 'blocked' || decision.caveats.length > 0).toBe(true);
     }
@@ -302,6 +304,7 @@ describe('completeness — what the artifact declares on its own', () => {
       resolveExportDecision('contour.unregistered', {
         launchStatus: 'available',
         unitClaim: 'metric-supported',
+        precision: null,
       }),
     ).toThrow(/not a registered scientific exporter/);
   });
@@ -833,6 +836,7 @@ describe('limitation propagation — a downgraded product says so in the file', 
     const refused = resolveContourExportPermit('geojson', {
       launchStatus: 'not-analyzed',
       verticalUnitsKnown: true,
+      precision: null,
       crsProjected: true,
       analyticalGeometry: true,
     });

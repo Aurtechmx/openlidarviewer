@@ -29,6 +29,7 @@ import {
   type ScientificExportDecision,
   type ExportDecisionContext,
 } from './exportManifest';
+import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 
 /**
  * The products that produce a downloadable file gated by this permit. The four
@@ -63,6 +64,12 @@ export interface ContourPermitContext {
   readonly analyticalGeometry: boolean;
   /** Reasons to attach when the launch state itself blocked. */
   readonly blockedReasons?: readonly string[];
+  /**
+   * The scan's in-memory Float32 precision permit (`app/scanPrecision.ts`), or
+   * `null` when no scan frame was available to measure. Passed straight through
+   * to {@link resolveExportDecision}, which refuses on it.
+   */
+  readonly precision: PrecisionPermit | null;
   /** Injectable evidence lookup (defaults to the claim registry) — for tests. */
   readonly evidenceStatusOf?: ExportDecisionContext['evidenceStatusOf'];
 }
@@ -75,7 +82,7 @@ export interface ContourPermitContext {
  */
 export type ContourExportFrameFacts = Pick<
   ContourPermitContext,
-  'launchStatus' | 'verticalUnitsKnown' | 'crsProjected' | 'blockedReasons'
+  'launchStatus' | 'verticalUnitsKnown' | 'crsProjected' | 'blockedReasons' | 'precision'
 >;
 
 /** A granted permit — the file MAY be written, stamped with `decision`. */
@@ -148,6 +155,7 @@ export function resolveContourExportPermit(
     launchStatus: ctx.launchStatus,
     unitClaim,
     blockedReasons: ctx.blockedReasons,
+    precision: ctx.precision,
     evidenceStatusOf: ctx.evidenceStatusOf,
   });
 
