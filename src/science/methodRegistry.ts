@@ -66,7 +66,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.class.derived-heuristic': {
     id: 'olv.class.derived-heuristic',
-    version: 1,
+    version: 2,
     name: 'Derived point classification (heuristic)',
     summary:
       'Unsupervised ASPRS-aligned point classification for clouds with no producer ' +

@@ -85,14 +85,14 @@ export const FROZEN_BASELINE = {
     'walls-roofs': { macroF1: 0.32544967041385714, groundRecall: 1 },
     'low-vegetation': { macroF1: 0.9987985556475145, groundRecall: 1 },
     'steep-terrain': { macroF1: 0.38020672712009773, groundRecall: 0.63625 },
-    'rolling-terrain': { macroF1: 0.28191705148677226, groundRecall: 0.4 },
-    'low-outliers': { macroF1: 0.08274159159891112, groundRecall: 0 },
+    'rolling-terrain': { macroF1: 0.28287608247826823, groundRecall: 0.40175 },
+    'low-outliers': { macroF1: 0.9932479050722092, groundRecall: 1 },
     'urban-no-rgb': { macroF1: 0.9991111111111112, groundRecall: 1 },
     'vegetation-no-returns': { macroF1: 0.9901007905138339, groundRecall: 1 },
     'units-metre': { macroF1: 0.989786971754634, groundRecall: 1 },
     'units-foot': { macroF1: 0.989786971754634, groundRecall: 1 },
   },
-  pooled: { macroF1: 0.6113389074840996, groundRecall: 0.8342782817502669 },
+  pooled: { macroF1: 0.7017404908380184, groundRecall: 0.9144432586268232 },
 };
 
 const f3 = (v) => (v === null || v === undefined ? 'n/a' : Number(v).toFixed(4));

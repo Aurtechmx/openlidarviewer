@@ -58,6 +58,25 @@ const PUBLISHED = {
       vegGreennessMin: 0.06,
     },
   },
+  2: {
+    id: 'derived-heuristic-v2',
+    digest: 'sha256:a4270700486436d01a1c5a2d0a8987faca2a92d6f3a0059e542bd3f256c6e35f',
+    params: {
+      buildingMinHagM: 2.5,
+      buildingMinSupport: 0.66,
+      buildingRoughnessMaxM: 1.5,
+      despikeNeighbourFactor: 1,
+      elevThresholdM: 0.3,
+      groundBandM: 0.5,
+      lowVegBandM: 2,
+      maxGridDim: 768,
+      maxObjectSizeM: 20,
+      medVegBandM: 5,
+      minGroundSupport: 0.5,
+      slope: 0.15,
+      vegGreennessMin: 0.06,
+    },
+  },
 } as const;
 
 describe('classifier version and preset freeze', () => {

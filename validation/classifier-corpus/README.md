@@ -36,7 +36,8 @@ validation, it is not survey truth, and it does not describe accuracy on a real
 scan. Returns are uniform-random in plan with no sensor geometry, no scan
 pattern and no range noise, and the objects are boxes and clumps of points.
 
-Three scenes score badly and stay in the record: `low-outliers` at 0.00 ground
-recall, `rolling-terrain` at 0.40, and `walls-roofs` at 0.33 macro-F1. The gate
-refuses a drop below those figures; it does not call them good. The diagnosis is
-in `docs/validation/classifier-corpus-eval.md`.
+Two scenes score badly and stay in the record: `rolling-terrain` at 0.40 ground
+recall and 0.28 macro-F1, and `walls-roofs` at 0.33 macro-F1. `steep-terrain`
+sits at 0.64 ground recall. The gate refuses a drop below those figures; it does
+not call them good. The diagnosis, and what changed in classifier v2, is in
+`docs/validation/classifier-corpus-eval.md`.
