@@ -38,13 +38,6 @@ async function loadOnPhoneAndOpenSheet(
   // Analyse / Layers tabs (MobileSheet). The Inspector (Scan Intelligence +
   // Visuals Studio) is re-parented into the "View" tab; selecting it expands
   // the sheet and activates that tab's slot.
-  // Canvas-first default: the sheet rests collapsed as a slim grip strip so the
-  // point cloud is not covered, and the tab row appears only once the sheet is
-  // expanded. Expand it first, then select the View tab.
-  const handle = page.locator('.olv-mobile-sheet .olv-msheet-handle');
-  await expect(handle).toBeVisible({ timeout: 8_000 });
-  await handle.click();
-
   const viewTab = page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="view"]');
   await expect(viewTab).toBeVisible({ timeout: 8_000 });
   await viewTab.click();
