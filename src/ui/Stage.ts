@@ -256,7 +256,10 @@ export class Stage {
     const wordmark = el('div', { className: 'olv-wordmark' });
     wordmark.append(
       brandMarkImg('olv-wordmark-mark'),
-      el('span', { text: 'OpenLiDARViewer' }),
+      // The word carries its own class so the narrow-phone stylesheet can
+      // collapse the lockup to the mark alone. It is clipped, not removed,
+      // so the header keeps its accessible name at every width.
+      el('span', { className: 'olv-wordmark-text', text: 'OpenLiDARViewer' }),
     );
 
     const privacy = el('div', {
