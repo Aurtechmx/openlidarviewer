@@ -19,12 +19,12 @@ unaffected.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.1 |
+| Release line | v0.6.4 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.1`, 59 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.4`, 59 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
@@ -45,7 +45,7 @@ These ship in the deploy archive.
 | @loaders.gl/ply | ^4.4.2 | 4.4.3 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
-| proj4 | ^2.20.8 | 2.20.9 | MIT |
+| proj4 | ^2.21.0 | 2.21.0 | MIT |
 | three | ^0.184.0 | 0.184.0 | MIT |
 
 ## Direct development dependencies
