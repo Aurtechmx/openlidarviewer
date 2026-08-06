@@ -21,6 +21,10 @@ import type { Viewer } from '../render/Viewer';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 import type { CrsService } from '../geo/CrsService';
+// The one spatial context this pipeline reads its unit / datum / axis facts
+// from, plus the named vertical-fallback policy that replaces the local
+// `verticalUnitToMetres ?? linearUnitToMetres` chains.
+import { verticalMetresPerUnit } from '../geo/SpatialContext';
 import type {
   AnalyseContoursResult,
   TerrainCoreParams,
@@ -70,17 +74,27 @@ export function deriveCoreParams(
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   }
-  const cur = crsService.current();
-  const isGeographic = cur?.kind === 'geographic';
+  // ONE spatial context for this derivation. Every frame fact below — the
+  // geographic flag, the horizontal factor, the vertical factor, the datum, the
+  // CRS label and both EPSG codes — is read off it, so the params handed to the
+  // terrain core cannot disagree with each other about the same scan.
+  const ctx = crsService.context();
+  const isGeographic = ctx.isGeographic;
   // Aim for a grid ~256 cells across, clamped to a sane floor. The floor is
   // 0.25 METRES expressed in SOURCE units — the old raw `0.25` was unit-blind:
   // on a geographic (degree) CRS it forced 0.25° ≈ 28 km cells, collapsing any
   // scan under ~64° of extent to 1–2 cells (the v0.4.3 audit finding). Degrees
   // divide by metres-per-degree; feet by metres-per-foot; metres unchanged.
+  //
+  // This reads the declared factor WITHOUT the `linearUnitKnown` gate, on
+  // purpose. A cell size is grid geometry, not a metric claim: the floor only
+  // has to keep the raster self-consistent with the coordinates it is built
+  // over. The metric claims downstream (densities, areas, volumes) are the ones
+  // that gate on the context's `metricClaimsPermitted`.
   const metresPerUnit = isGeographic
     ? METRES_PER_DEGREE
-    : cur?.linearUnitToMetres && cur.linearUnitToMetres > 0
-      ? cur.linearUnitToMetres
+    : ctx.linearUnitToMetres > 0
+      ? ctx.linearUnitToMetres
       : 1;
   const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
   const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
@@ -92,7 +106,7 @@ export function deriveCoreParams(
     isGeographic && Number.isFinite(minY) && Number.isFinite(maxY)
       ? (getWorldOriginY?.() ?? 0) + (minY + maxY) / 2
       : null;
-  const crsName = cur && (cur.kind === 'projected' || cur.kind === 'geographic') ? cur.name : null;
+  const crsName = ctx.kind === 'projected' || ctx.kind === 'geographic' ? ctx.crsName : null;
   // Stride honesty: the gather caps huge clouds (≤ 300 k points), so per-cell
   // densities — and the USGS QL graded from them — must be scaled back up by
   // scan-points-per-analysed-point or a stride-50 gather reads 50× too sparse.
@@ -107,16 +121,19 @@ export function deriveCoreParams(
     crs: crsName,
     // Numeric codes travel beside the label so no export ever recovers a code
     // from display prose again.
-    horizontalEpsg: cur?.epsg ?? null,
-    verticalEpsg: cur?.verticalEpsg ?? null,
+    horizontalEpsg: ctx.epsg ?? null,
+    verticalEpsg: ctx.verticalEpsg ?? null,
     isGeographic,
     latitudeDeg,
     // Elevation converts by the Z-axis's OWN unit when the file declares one
     // (e.g. feet height over a metre grid); otherwise it follows the horizontal
     // unit — the GeoTIFF default that vertical units track the model's units.
-    verticalUnitToMetres: cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres ?? 1,
-    horizontalUnitToMetres: cur?.linearUnitToMetres ?? 1,
-    verticalDatum: cur?.verticalDatum ?? null,
+    // Same reasoning as the cell floor: the raster has to be internally
+    // consistent, so the unconditional GeoTIFF fallback is the right policy
+    // HERE, and it is named rather than re-spelled as a `??` chain.
+    verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
+    horizontalUnitToMetres: ctx.linearUnitToMetres,
+    verticalDatum: ctx.verticalDatum ?? null,
     classification,
     samplePointScale,
     residentOnly,
@@ -352,17 +369,17 @@ export function createTerrainAnalysisRunner(
       // The panel lazily loads the launcher (adapter + render), computes the
       // launch state from this result, and gates the contour export controls
       // behind it — keeping Contour Studio out of the eager shell (§26.1).
-      const cur = crsService.current();
+      const ctx = crsService.context();
       // The vertical UNIT is known when the CRS actually declared a linear/
       // vertical unit scale — NOT when the vertical DATUM is known (datum ≠
       // unit: foot data can have a known datum). Carry the REAL scale + label so
       // Contour Studio labels a foot interval "ft", never "m". Unknown unit →
       // the launcher caps to exploratory and claims no metric-supported interval.
-      const vScale = cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres ?? null;
-      const vUnitKnown = vScale != null && Number.isFinite(vScale) && vScale > 0;
+      const vScale = verticalMetresPerUnit(ctx, 'horizontal') ?? null;
+      const vUnitKnown = vScale != null;
       analysePanel.setContourFrame({
         streaming: false,
-        crsProjected: cur?.kind === 'projected',
+        crsProjected: ctx.kind === 'projected',
         verticalUnitsKnown: vUnitKnown,
         verticalUnitToMetres: vUnitKnown ? vScale : null,
         verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,

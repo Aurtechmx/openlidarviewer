@@ -26,7 +26,11 @@
  * Pure data: no DOM, no three.js, no I/O. Returns a string / object.
  */
 
-import { contourEvidence, type ContourFeatureModel } from './contourFeatureModel';
+import {
+  contourEvidence,
+  modelVerticalReference,
+  type ContourFeatureModel,
+} from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
 import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
@@ -166,26 +170,20 @@ export function geojsonString(
 }
 
 /**
- * Whether a declared vertical datum IS WGS 84 ellipsoidal height — the only
- * thing RFC 7946 allows in a position's third element.
+ * Whether the model's heights ARE WGS 84 ellipsoidal height — the only thing
+ * RFC 7946 allows in a position's third element.
  *
- * Deliberately a short allow-list rather than a pattern: EPSG:4979 is WGS 84
- * 3D and EPSG:7662 / "WGS 84 (ellipsoid)" name the same surface. Anything
- * else — an orthometric datum, a local one, or silence — is NOT this, and
- * guessing in the permissive direction is what puts a contour tens of metres
- * out with nothing in the file to reveal it.
+ * This no longer keeps its own datum allow-list. It reads the vertical
+ * reference the model was built with, which is the same classification the
+ * SpatialContext carries, so the contour file, the scan report, the measure
+ * tool and the inspector cannot disagree about what a datum is. The narrowness
+ * is preserved by that classifier: only EPSG:4979 (WGS 84 3D) resolves to
+ * `'ellipsoidal'`, and an unrecognised datum resolves to `'unknown'` rather
+ * than being guessed in the permissive direction — which is what puts a
+ * contour tens of metres out with nothing in the file to reveal it.
  */
-function isWgs84EllipsoidalHeight(verticalDatum: string | null | undefined): boolean {
-  const v = verticalDatum?.trim().toLowerCase();
-  if (!v) return false;
-  // EPSG:4979 only. An earlier version of this list also accepted 7662, which
-  // is a GEOCENTRIC Cartesian CRS, not a geographic 3D one — its "height" is a
-  // Z axis from the Earth's centre, roughly 6,371 km from the ellipsoidal
-  // height RFC 7946 asks for. That was a guess dressed as an allow-list, and a
-  // guess in the permissive direction is exactly what this function exists to
-  // prevent. Free-text names are gone for the same reason: "WGS 84
-  // (ellipsoid)" is written by humans and means whatever they meant.
-  return v === 'epsg:4979' || v === '4979';
+function isWgs84EllipsoidalHeight(model: ContourFeatureModel): boolean {
+  return modelVerticalReference(model) === 'ellipsoidal';
 }
 
 /** Thrown when a standards-compliant GeoJSON cannot be produced honestly. */
@@ -245,12 +243,12 @@ export function toGeoJSONWgs84(
   const vScale = model.verticalUnitToMetres;
   const metresPerVerticalUnit =
     vScale != null && Number.isFinite(vScale) && vScale > 0 ? vScale : null;
-  const ellipsoidal = isWgs84EllipsoidalHeight(model.verticalDatum) && metresPerVerticalUnit != null;
+  const ellipsoidal = isWgs84EllipsoidalHeight(model) && metresPerVerticalUnit != null;
   metadata.elevationIn3d = ellipsoidal;
   if (ellipsoidal) {
     metadata.elevationOrdinateUnit = 'metre';
   } else {
-    metadata.elevationNote = isWgs84EllipsoidalHeight(model.verticalDatum)
+    metadata.elevationNote = isWgs84EllipsoidalHeight(model)
       ? 'Geometry is 2D: the source vertical unit could not be resolved, so the height '
         + 'cannot be expressed in the metres RFC 7946 requires in the third position element. '
         + 'Elevations are carried per feature as elevation / elevationUnit / elevationDatum.'
