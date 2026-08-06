@@ -78,10 +78,10 @@ excludes `src/model/` (where `PointCloud` legitimately owns the buffer and the
 `worldXYZ` / `projectXYZ` accessors), strips comments, and counts `.positions`
 occurrences the same way the enforcing ratchet `lint:position-access` does.
 
-Measured: 162 direct `.positions` reads across 42 files. The 42 files match the
-figure the roadmap recorded. The occurrence count has drifted up from 154 as the
-code moved, which is why the count is regenerated from the tree rather than
-quoted from memory. Run `npm run lint:positions-reads` for the live list with
+Measured: 162 direct `.positions` reads across 43 files. Both the read count and
+the file count are regenerated from the tree rather than quoted from memory,
+because they drift as code moves (the reads rose from an earlier 154, the files
+from 42). Run `npm run lint:positions-reads` for the live list with
 `file:line`.
 
 Two categories are counted but are not consumer reads to migrate:
