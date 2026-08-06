@@ -1,0 +1,218 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Measure tool — active button, SVG overlay, instruction hint
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-tool-active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(0, 178, 255, 0.65);
+  box-shadow: 0 0 16px rgba(0, 178, 255, 0.22);
+}
+
+/* The SVG layer that draws markers, lines and labels */
+.olv-measure-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible;
+}
+/* line + dot stroke widths bumped ~10% so measurements
+   read clearly against detailed scans without crowding handle hit-zones. */
+.olv-measure-line {
+  stroke: var(--accent); stroke-width: 1.75; stroke-dasharray: 6 4;
+}
+.olv-measure-dot {
+  fill: var(--accent); stroke: #0a0e1a; stroke-width: 1.65;
+}
+.olv-measure-dot-pending {
+  fill: none; stroke: var(--accent); stroke-width: 2.2;
+  animation: olv-measure-pulse 1.5s ease-in-out infinite;
+}
+@keyframes olv-measure-pulse {
+  0%, 100% { r: 4.5; opacity: 1; }
+  50% { r: 7; opacity: 0.6; }
+}
+/*
+ * v0.3.8 / v0.3.9 click-first-vertex affordance — the first vertex of
+ * a closable polygon glows in cyan with a pulsing dashed ring around
+ * it so the user sees the "click here to finish" target from across
+ * the canvas without reading the tooltip.
+ */
+.olv-measure-dot-snap {
+  fill: var(--cyan, #00f0ff); stroke: #0a0e1a; stroke-width: 1.65;
+}
+/*
+ * Profile-station markers — the small dim dots at evenly-spaced chainages
+ * along a profile section line. Dim by default so they sit quietly under the
+ * measurement's own vertices; `.is-active` brightens the ONE dot coupled to a
+ * hovered profile-chart tick or station-table row. The dim base mirrors the
+ * inline `SNAPSHOT_CSS` in MeasureOverlay.ts so the live overlay and the
+ * screenshot export read identically — keep the two in sync.
+ */
+.olv-measure-dot-station {
+  fill: rgba(0, 178, 255, 0.55); stroke: #0a0e1a; stroke-width: 1;
+}
+.olv-measure-dot-station.is-active {
+  fill: rgba(0, 178, 255, 0.98); stroke: #0a0e1a; stroke-width: 1.4;
+}
+.olv-measure-snap-ring {
+  fill: none;
+  stroke: var(--cyan, #00f0ff);
+  stroke-width: 1.4;
+  stroke-dasharray: 3 3;
+  opacity: 0.85;
+  animation: olv-measure-snap-pulse 1.2s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes olv-measure-snap-pulse {
+  0%, 100% { r: 10; opacity: 0.85; }
+  50% { r: 13; opacity: 0.45; }
+}
+.olv-measure-label {
+  fill: var(--accent);
+  font: 600 12px var(--mono);
+  paint-order: stroke;
+  stroke: #0a0e1a; stroke-width: 4px; stroke-linejoin: round;
+}
+
+/* The instruction hint shown while measuring */
+.olv-measure-hint {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--space-2xl);
+  background: rgba(11, 17, 33,0.9);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-xl);
+}
+/* The live instruction ("Tap the first point…") sits as a tidy inline row
+ * between the kind tools and the actions on desktop. (On the phone rail it is
+ * hidden — the on-canvas pulsing dot carries the guidance there.) */
+.olv-measure-hint-row {
+  display: inline-flex; align-items: center; gap: var(--space-md);
+  white-space: nowrap;
+}
+.olv-measure-badge {
+  font-size: var(--text-2xs); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.olv-measure-hint-text { font-size: var(--text-sm); color: var(--text); }
+.olv-measure-actions {
+  display: flex; flex-direction: row; align-items: center; gap: var(--space-sm);
+}
+.olv-measure-clear, .olv-measure-done {
+  font-size: var(--text-xs);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+/*
+ * Clear is destructive — it deletes every measurement in the panel.
+ * Gestalt similarity: borrow the same rose vocabulary already used
+ * by .olv-tool-close and .olv-mp-del so the eye reads the action
+ * type without parsing the label. Done (cyan, constructive) stays
+ * the only primary affordance in the row.
+ */
+.olv-measure-clear {
+  color: #ffb3b3;
+  background: rgba(255, 100, 100, 0.06);
+  border: 0.5px solid rgba(255, 120, 120, 0.32);
+}
+.olv-measure-clear:hover {
+  color: #ff7a7a;
+  background: rgba(255, 100, 100, 0.12);
+  border-color: rgba(255, 120, 120, 0.7);
+}
+.olv-measure-done {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+}
+.olv-measure-done:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-clear:active, .olv-measure-done:active { transform: scale(0.95); }
+.olv-measure-clear:focus-visible, .olv-measure-done:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Inspect tool — selected-point marker and floating info card
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-inspect-halo { fill: var(--accent); opacity: 0.2; }
+.olv-inspect-dot {
+  fill: var(--cyan); stroke: #0a0e1a; stroke-width: 1.5;
+}
+
+.olv-inspect-card {
+  position: absolute; width: 212px;
+  /* Above the navbar (z:10) so its rows and the photometric-witness summary
+     stay clickable where the point-info card overlaps the centred nav HUD —
+     the card is the focused pick result, the HUD is ambient. Below the dock
+     (z:20). */
+  z-index: 16;
+  background: rgba(11, 17, 33, 0.94);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(0, 178, 255, 0.34);
+  border-radius: var(--radius-lg); padding: var(--space-xl) var(--space-xl);
+  pointer-events: auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.olv-inspect-card-title {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text); margin-bottom: var(--space-lg);
+}
+.olv-inspect-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+/* Coordinate-group header — small uppercase divider between Local /
+ * World / Geographic / Attributes sections so the dense card scans as
+ * four distinct intents instead of one long list. First-of-type has
+ * no top margin so it stays tight against the card title. */
+.olv-inspect-group {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-inspect-group:first-of-type {
+  margin-top: 0; padding-top: 0; border-top: none;
+}
+.olv-inspect-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-lg);
+}
+.olv-inspect-row-label { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-inspect-row-value {
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text);
+  text-align: right; max-width: 128px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-inspect-card-foot {
+  display: flex; align-items: center; gap: var(--space-lg);
+  margin-top: var(--space-xl); padding-top: var(--space-lg);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-inspect-copy {
+  font-size: var(--text-xs); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-xl);
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-inspect-copy:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-inspect-copy:active { transform: scale(0.95); }
+.olv-inspect-copy:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-inspect-copied { font-size: var(--text-xs); color: var(--teal); }
+
+/* Respect the OS "reduce motion" setting — disable all non-essential motion */
+@media (prefers-reduced-motion: reduce) {
+  .olv-inspector, .olv-navbar, .olv-dock, .olv-backend,
+  .olv-status-warn, .olv-status-fail, .olv-nav-prompt.olv-visible,
+  .olv-pc-countdown, .olv-measure-dot-pending, .olv-measure-snap-ring {
+    animation: none;
+  }
+  .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
+  .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
+  .olv-view-name, .olv-view-save, .olv-advanced-summary,
+  .olv-advanced-summary::before,
+  .olv-measure-clear, .olv-measure-done, .olv-inspect-copy { transition: none; }
+}
+

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
+import { readAppCss } from './support/appCss';
 import {
   PROFILE_CHART_MIN_HEIGHT_PX,
   PROFILE_CHART_MAX_HEIGHT_PX,
@@ -13,7 +12,7 @@ import {
  * Pin the resizable profile chart's height bounds together across
  * TypeScript and CSS. The range is enforced in two places:
  *
- *   - `src/style.css` → `.olv-mp-chart { min-height: 80px;
+ *   - `src/styles/*.css` → `.olv-mp-chart { min-height: 80px;
  *     max-height: 360px; height: 140px; }` — the native
  *     `resize: vertical` handle is clamped by these CSS values.
  *   - `src/ui/MeasurePanel.ts` → the ResizeObserver callback only
@@ -34,10 +33,7 @@ import {
  * the `.olv-mp-chart` rule.
  */
 describe('profile chart height bounds — CSS vs TS source-of-truth', () => {
-  const css = readFileSync(
-    fileURLToPath(new URL('../src/style.css', import.meta.url)),
-    'utf8',
-  );
+  const css = readAppCss();
 
   /**
    * Extract a single numeric pixel value for `<prop>` from the

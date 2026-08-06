@@ -1,0 +1,545 @@
+/* Composite terrain quality score in the Analyse panel. */
+/* Terrain assessment — the single top-level verdict above all metrics. */
+/*
+ * v0.4.6 verdict-as-hero (design audit 1.1 + 1.2). The assessment is
+ * the single richest, most differentiated output of the engine, so it
+ * reads as the one RAISED surface in the left stack: a lift shadow, a
+ * firmer 4px left-accent rail, and a faint FULL-CARD tint keyed to the
+ * rating (extended from the old blocked-only treatment to every
+ * state). The verdict word jumps to --text-2xl and the surrounding
+ * eyebrows drop to --text-faint so the verdict is the only loud thing
+ * in the card — the eye's natural landing point.
+ */
+.olv-analyse-assessment {
+  margin-bottom: var(--space-lg); padding: var(--space-xl) var(--space-2xl); border-radius: var(--radius-md);
+  border: 0.5px solid var(--hairline-strong); border-left-width: 4px;
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-raised);
+  /* Arrival motion (design audit 1.1 + 3.4): the verdict rises + fades in
+     a touch slower than the readiness cards so it resolves LAST and loudest,
+     the eye's natural landing point. Reuses the canonical olv-ready-in. */
+  animation: olv-ready-in 260ms 120ms ease both;
+  /* The rating tint is layered ON the raised fill via a low-alpha
+     gradient set per state below, so the card carries the verdict
+     colour as a coherent region, not just a stripe. */
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-analyse-assessment { animation: none; }
+}
+.olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
+.olv-analyse-assess-label {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+/* The hero word — large, the unmistakable focal point of the panel. */
+.olv-analyse-assess-verdict { font-size: var(--text-2xl); font-weight: 700; line-height: 1.05; letter-spacing: -0.01em; }
+.olv-analyse-assess-reason { font-size: var(--text-xs); color: var(--text-dim); margin-top: var(--space-sm); overflow-wrap: anywhere; }
+.olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
+.olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
+/* Full-card rating tint — ALL states now (was blocked-only). Low-alpha
+   color-mix over the raised fill so the verdict colour subtly suffuses
+   the whole region. Colour is reinforcement; the WORD carries it. */
+.olv-analyse-assessment.is-good {
+  border-left-color: var(--rating-excellent);
+  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-excellent) 6%, transparent), color-mix(in srgb, var(--rating-excellent) 6%, transparent)), var(--panel-raised);
+}
+.olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
+.olv-analyse-assessment.is-preview {
+  border-left-color: var(--rating-moderate);
+  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-moderate) 6%, transparent), color-mix(in srgb, var(--rating-moderate) 6%, transparent)), var(--panel-raised);
+}
+.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-limited {
+  border-left-color: var(--rating-weak);
+  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-weak) 6%, transparent), color-mix(in srgb, var(--rating-weak) 6%, transparent)), var(--panel-raised);
+}
+.olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
+.olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
+/* Blocked — a distinct, accessible violet so it never reads as "just a worse
+   Limited". The gate stopped this surface; the colour says so unambiguously. */
+.olv-analyse-assessment.is-blocked {
+  border-left-color: var(--rating-blocked);
+  background: linear-gradient(0deg, color-mix(in srgb, var(--rating-blocked) 8%, transparent), color-mix(in srgb, var(--rating-blocked) 8%, transparent)), var(--panel-raised);
+}
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-verdict { color: var(--rating-blocked); }
+.olv-analyse-assessment.is-blocked .olv-analyse-assess-caution { color: var(--rating-blocked); }
+.olv-analyse-assess-not { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
+
+/*
+ * v0.4.6 Light-theme verdict contrast (design audit 1.1 + 3.5). The
+ * verdict word is now a large --text-2xl hero on a near-white raised
+ * card, so the bright dark-theme rating hues (amber/red/emerald) fail
+ * WCAG AA on white. Darken JUST the verdict + caution word in Light
+ * (the rating tokens stay bright for borders/tints elsewhere). Each
+ * value clears ≥4.5:1 on the tinted-white card. Blocked already uses
+ * the Light-darkened --rating-blocked (#7c3aed), so it's left alone.
+ */
+body.olv-theme-light .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: #0a7a47; }
+body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-verdict,
+body.olv-theme-light .olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: #a8480a; }
+body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict,
+body.olv-theme-light .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: #b91c1c; }
+/* The second-axis (export) verdict word shares the same hues — keep it AA too. */
+body.olv-theme-light .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: #0a7a47; }
+body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: #a8480a; }
+
+/* Export readiness — the SECOND axis, distinct from surface quality. Its colour
+   reuses the rating tokens so it never introduces a new hardcoded hue. */
+.olv-analyse-assess-export {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs);
+  margin-top: var(--space-sm); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-assess-export-label {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+.olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
+.olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
+.olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: var(--rating-excellent); }
+.olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--rating-moderate); }
+.olv-analyse-assess-export.is-blocked .olv-analyse-assess-export-verdict { color: var(--rating-blocked); }
+
+/* Derived complexity (v0.5.4) — one compact line under the assessment: the
+   VRM/TPI figures with window and units, pre-formatted by the analysis chunk.
+   Descriptive (never a good/bad colour); the density caveat below it reuses
+   the .olv-caveat honesty primitive. */
+.olv-analyse-derived {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs);
+  margin-top: var(--space-sm); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-derived-label {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+.olv-analyse-derived-value {
+  font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
+.olv-analyse-derived-caveat { margin-top: var(--space-xs); }
+
+/* Supporting metrics — compact pills under the hero; colour from each metric's
+   own rating, not the overall status, so one weak signal stays visible. */
+.olv-analyse-assess-metrics {
+  display: flex; flex-wrap: wrap; gap: var(--space-xs) var(--space-sm); margin-top: var(--space-md);
+}
+.olv-analyse-assess-metric {
+  display: inline-flex; align-items: baseline; gap: var(--space-xs);
+  padding: var(--space-2xs) 7px; border-radius: var(--radius-pill);
+  border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.03);
+}
+/* v0.4.6 (design audit 2.1): metric sublabel demoted from uppercase-mono to
+   calm sentence-case sans — it's a caption, not a section header. The VALUE
+   keeps its tabular treatment + rating colour (real numeric readout). */
+.olv-analyse-assess-metric-label {
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: none; letter-spacing: 0; color: var(--text-faint);
+}
+.olv-analyse-assess-metric-value { font-size: var(--text-xs); font-weight: 600; color: var(--text-dim); }
+.olv-analyse-assess-metric.is-good { border-color: color-mix(in srgb, var(--rating-excellent) 45%, transparent); }
+.olv-analyse-assess-metric.is-good .olv-analyse-assess-metric-value { color: var(--rating-excellent); }
+.olv-analyse-assess-metric.is-fair { border-color: color-mix(in srgb, var(--rating-good) 45%, transparent); }
+.olv-analyse-assess-metric.is-fair .olv-analyse-assess-metric-value { color: var(--rating-good); }
+.olv-analyse-assess-metric.is-poor { border-color: color-mix(in srgb, var(--rating-weak) 45%, transparent); }
+.olv-analyse-assess-metric.is-poor .olv-analyse-assess-metric-value { color: var(--rating-weak); }
+.olv-analyse-assess-metric.is-unknown .olv-analyse-assess-metric-value { color: var(--text-faint); font-style: italic; }
+
+/* Density reduction (v0.4.6 saturation audit): the nine chips are tiered. A
+   PRIMARY row of the decisive few stays always-visible; the full grouped set
+   lives in an "All metrics" disclosure (default open on desktop, collapsed on
+   mobile, set imperatively). Nothing is hidden from a trust decision — only the
+   full numeric breakdown is tiered, with the headline numbers promoted up. */
+.olv-analyse-assess-metricwrap { margin-top: var(--space-md); }
+.olv-analyse-assess-metricwrap .olv-analyse-assess-metrics { margin-top: 0; }
+.olv-analyse-assess-metrics.is-primary { margin-bottom: var(--space-sm); }
+.olv-analyse-assess-metrics-all { margin-top: var(--space-2xs); }
+.olv-analyse-assess-metrics-summary {
+  cursor: pointer; list-style: none;
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 500;
+  color: var(--text-faint); letter-spacing: 0.02em;
+  padding: var(--space-2xs) 0; user-select: none;
+}
+.olv-analyse-assess-metrics-summary::-webkit-details-marker { display: none; }
+.olv-analyse-assess-metrics-summary::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-analyse-assess-metrics-all[open] > .olv-analyse-assess-metrics-summary::before {
+  transform: rotate(90deg);
+}
+.olv-analyse-assess-metricgroup { margin-top: var(--space-xs); }
+.olv-analyse-assess-metricgroup-name {
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint);
+  margin-bottom: var(--space-2xs);
+}
+/* A cluster whose chips are all "unknown" (e.g. Georef with no CRS/datum) is
+   not informative beyond the export-readiness line already shown above — dim it
+   so the always-unknown pair never reads as fresh signal. Chips stay visible. */
+.olv-analyse-assess-metricgroup.is-uninformative { opacity: 0.62; }
+
+/* Recommended workflow — the checklist that turns the two axes into decisions.
+   Each row's glyph is coloured from the rating tokens via its status class; the
+   word/glyph stays for colourblind safety, never hue alone. Kept quiet. */
+.olv-analyse-workflow {
+  margin-top: var(--space-md); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+/* v0.4.6 (design audit 2.1): in-card sub-group eyebrow → sentence-case sans. */
+.olv-analyse-workflow-head {
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
+  text-transform: none; letter-spacing: 0; color: var(--text-faint);
+  margin-bottom: var(--space-xs);
+}
+.olv-analyse-workflow-list { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-workflow-row { display: flex; align-items: baseline; gap: var(--space-sm); }
+.olv-analyse-workflow-glyph {
+  flex: 0 0 auto; width: 1em; text-align: center; font-weight: 700; line-height: 1;
+}
+.olv-analyse-workflow-main {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs); min-width: 0;
+}
+.olv-analyse-workflow-label { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-analyse-workflow-note { font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
+.olv-analyse-workflow-row.is-good .olv-analyse-workflow-glyph { color: var(--rating-excellent); }
+.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--rating-good); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
+.olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
+
+/* Terrain Products (v0.4.5) — the compact per-product status list rendered
+   ABOVE the workflow checklist. Real <ul>/<li> semantics (the reset below
+   strips the marker, not the role); the verdict is carried by the status
+   WORD next to the glyph, so colour is reinforcement, never the message. */
+.olv-analyse-products {
+  margin-top: var(--space-md); padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+/* v0.4.6 (design audit 2.1): in-card sub-group eyebrow → sentence-case sans. */
+.olv-analyse-products-head {
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
+  text-transform: none; letter-spacing: 0; color: var(--text-faint);
+  margin-bottom: var(--space-xs);
+}
+.olv-analyse-products-list {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  margin: 0; padding: 0; list-style: none;
+}
+.olv-analyse-product {
+  display: flex; flex-direction: column; gap: 1px; min-width: 0;
+}
+.olv-analyse-product-head {
+  display: grid; grid-template-columns: 1em auto 1fr;
+  align-items: baseline; column-gap: var(--space-sm); min-width: 0;
+}
+.olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
+.olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
+.olv-analyse-product-status {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 600;
+  letter-spacing: 0.04em; justify-self: start;
+}
+/* Line two: the engine-selected reason, IN FULL — it wraps, never ellipsizes,
+   and indents under the label so the glyph column stays a clean rail. Absent
+   on Ready rows (a ready product needs no excuse). */
+/* v0.4.6: the per-product reason is an honest limit — it rides the
+   caveat primitive (tinted bg + left-rule), keeping its indent under
+   the glyph rail. The rule hue is set per status below (preview amber,
+   blocked violet). */
+.olv-analyse-product-reason {
+  font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.45;
+  margin-left: calc(1em + var(--space-sm)); margin-top: var(--space-2xs);
+  white-space: normal; overflow-wrap: break-word; min-width: 0;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--caveat-tint);
+  border-left: 2px solid var(--caveat-rule);
+  border-radius: 2px;
+}
+.olv-analyse-product.is-blocked .olv-analyse-product-reason {
+  --caveat-rule: var(--rating-blocked);
+  background: color-mix(in srgb, var(--rating-blocked) 9%, transparent);
+}
+/* v0.4.6 (design audit 2.1): "Reason" → quiet sentence-case sans.
+   The reason is now a collapsed <details> toggle (a product whose reason simply
+   repeats the verdict is suppressed entirely; only a product-specific reason
+   renders, collapsed). The <summary> is the clickable label. */
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex; align-items: center; gap: var(--space-2xs);
+  -webkit-tap-highlight-color: transparent;
+}
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label::-webkit-details-marker {
+  display: none;
+}
+/* A small disclosure caret that rotates when the reason is opened. */
+.olv-analyse-product-reason > summary.olv-analyse-product-reason-label::before {
+  content: "›";
+  display: inline-block;
+  transition: transform 160ms ease;
+  color: var(--text-faint);
+}
+.olv-analyse-product-reason[open] > summary.olv-analyse-product-reason-label::before {
+  transform: rotate(90deg);
+}
+.olv-analyse-product-reason-label {
+  font-family: var(--font); font-weight: 600; letter-spacing: 0;
+  text-transform: none; font-size: 1em; color: var(--text-faint);
+  margin-right: var(--space-2xs);
+}
+.olv-analyse-product-reason-text { margin-top: var(--space-2xs); display: block; }
+.olv-analyse-product.is-ready .olv-analyse-product-glyph,
+.olv-analyse-product.is-ready .olv-analyse-product-status { color: var(--rating-excellent); }
+.olv-analyse-product.is-preview .olv-analyse-product-glyph,
+.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--rating-good); }
+.olv-analyse-product.is-blocked .olv-analyse-product-glyph,
+.olv-analyse-product.is-blocked .olv-analyse-product-status { color: var(--rating-blocked); }
+.olv-analyse-product.is-blocked .olv-analyse-product-label { color: var(--text-faint); }
+
+/* The original "Recommended workflow" checklist, kept available but collapsed
+   beneath the products list (same expander vocabulary as .olv-analyse-why). */
+.olv-analyse-workflow-details { margin-top: var(--space-xs); }
+.olv-analyse-workflow-details-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  letter-spacing: 0.04em; color: var(--text-faint);
+}
+.olv-analyse-workflow-details-summary::-webkit-details-marker { display: none; }
+.olv-analyse-workflow-details-summary::before { content: '▸ '; }
+.olv-analyse-workflow-details[open] .olv-analyse-workflow-details-summary::before { content: '▾ '; }
+/* Inside the expander the checklist doesn't need its own top rule — the
+   summary line already separates it. */
+.olv-analyse-workflow-details .olv-analyse-workflow {
+  margin-top: var(--space-xs); padding-top: 0; border-top: none;
+}
+
+/* "Why? — what's holding this back" — a collapsed honest cause/fix surface,
+   shown only when the verdict is short of fully-good. */
+.olv-analyse-why { margin-top: var(--space-sm); }
+.olv-analyse-why-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  letter-spacing: 0.04em; color: var(--rating-moderate);
+}
+.olv-analyse-why-summary::-webkit-details-marker { display: none; }
+.olv-analyse-why-summary::before { content: '▸ '; }
+.olv-analyse-why[open] .olv-analyse-why-summary::before { content: '▾ '; }
+/* v0.4.6 (design audit 2.1): cause/fix sub-eyebrow → sentence-case sans. */
+.olv-analyse-why-subhead {
+  font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
+  text-transform: none; letter-spacing: 0; color: var(--text-faint);
+  margin-top: var(--space-sm);
+}
+.olv-analyse-why-list { margin: var(--space-2xs) 0 0; padding-left: var(--space-lg); }
+.olv-analyse-why-cause, .olv-analyse-why-fix {
+  font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-2xs);
+  overflow-wrap: anywhere;
+}
+.olv-analyse-why-cause { color: var(--text-faint); }
+
+/* Collapsible "Details" expander — holds the drill-down metrics under the hero. */
+.olv-analyse-details { margin-bottom: var(--space-lg); }
+.olv-analyse-details-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
+  padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-analyse-details-summary::-webkit-details-marker { display: none; }
+.olv-analyse-details-summary::before {
+  content: '▸'; font-size: 9px; color: var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.olv-analyse-details[open] > .olv-analyse-details-summary::before { transform: rotate(90deg); }
+.olv-analyse-details-summary:hover { color: var(--text); }
+.olv-analyse-details[open] > .olv-analyse-details-summary { margin-bottom: var(--space-md); }
+
+.olv-analyse-score { margin-bottom: var(--space-xl); }
+.olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.olv-analyse-score-num { font-size: var(--text-3xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
+.olv-analyse-score-num.is-good { color: var(--rating-good); }
+.olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
+.olv-analyse-score-num.is-poor { color: var(--rating-weak); }
+.olv-analyse-score-of { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-analyse-score-band { margin-left: auto; font-size: var(--text-xs); font-weight: 600; text-transform: capitalize; color: var(--text-dim); }
+.olv-analyse-score-band.is-excellent { color: var(--rating-excellent); }
+.olv-analyse-score-band.is-good { color: var(--rating-good); }
+.olv-analyse-score-band.is-fair { color: var(--rating-moderate); }
+.olv-analyse-score-band.is-poor { color: var(--rating-weak); }
+
+/* Surface models section in the Analyse panel (DSM / slope / hillshade). */
+.olv-analyse-surface { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-analyse-surface-stats { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-surface-stat { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-analyse-surface-stat.is-dim { font-size: var(--text-2xs); color: var(--text-faint); }
+.olv-analyse-hillshade,
+.olv-analyse-raster {
+  width: 100%; height: auto; display: block; border-radius: var(--radius-md);
+  border: 0.5px solid var(--hairline); background: #05080f;
+  image-rendering: auto;
+}
+/* A labelled preview tile — heading, raster, optional legend, caption, export. */
+.olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-sublabel {
+  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
+}
+.olv-analyse-caption { font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
+/* Colour-ramp legend under a raster tile. */
+.olv-analyse-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-legend-bar { height: 6px; border-radius: var(--radius-xs); border: 0.5px solid var(--hairline); }
+.olv-analyse-legend-ticks {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+}
+/* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
+.olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-coverage-legend-item {
+  display: flex; align-items: center; gap: var(--space-2xs);
+  font-size: var(--text-2xs); color: var(--text-faint);
+}
+.olv-analyse-coverage-swatch {
+  width: 10px; height: 10px; border-radius: var(--radius-xs);
+  border: 0.5px solid var(--hairline); flex: 0 0 auto;
+}
+/* Bare-earth elevation histogram. */
+.olv-analyse-hist { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-hist-svg {
+  width: 100%; height: 56px; display: block;
+  border-bottom: 1px solid var(--hairline);
+}
+.olv-analyse-hist-bar { fill: var(--accent); opacity: 0.78; }
+/* Relief tile — adjustable-sun controls. */
+.olv-analyse-relief-controls { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-analyse-relief-toggle {
+  display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
+  font-size: var(--text-xs); color: var(--text-dim); user-select: none;
+}
+.olv-analyse-relief-toggle input { accent-color: var(--accent); cursor: pointer; }
+.olv-analyse-relief-slider { display: flex; align-items: center; gap: var(--space-md); }
+.olv-analyse-relief-tag {
+  font-family: var(--mono); font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
+}
+.olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
+.olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
+.olv-analyse-relief-val {
+  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  width: 34px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
+}
+/* Click-to-sample readout under a raster tile. */
+.olv-analyse-raster.is-samplable { cursor: crosshair; }
+.olv-analyse-sample {
+  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
+  border-top: 0.5px dashed var(--hairline);
+}
+.olv-analyse-sample.is-empty { color: var(--text-faint); }
+/* Sampled-cell crosshair — rides above the raster, survives re-light/resize. */
+.olv-analyse-raster-wrap { position: relative; line-height: 0; }
+.olv-analyse-xhair {
+  position: absolute; width: 12px; height: 12px; pointer-events: none;
+  transform: translate(-50%, -50%); border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  animation: olv-xhair-in 140ms ease both;
+}
+.olv-analyse-xhair::after {
+  content: ''; position: absolute; inset: 3.5px; border-radius: 50%;
+  background: var(--accent);
+}
+@keyframes olv-xhair-in { from { opacity: 0; transform: translate(-50%, -50%) scale(0.6); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+/* Hover affordance: a faint ring signals the raster is interactive. */
+.olv-analyse-raster.is-samplable:hover { outline: 1px solid var(--accent-soft); outline-offset: -1px; }
+/* Disabled (multi-directional) sun row reads as intentionally off. */
+.olv-analyse-relief-slider.is-off { opacity: 0.55; }
+.olv-analyse-relief-slider.is-off .olv-analyse-relief-val { font-style: italic; }
+/* Caption colour transitions gently when the relief mode changes. */
+.olv-analyse-caption { transition: color var(--dur-fast) var(--ease-standard); }
+/* Histogram bars grow in on first render (motion-safe). */
+@media (prefers-reduced-motion: no-preference) {
+  .olv-analyse-hist-bar {
+    transform-box: fill-box; transform-origin: bottom;
+    animation: olv-bar-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+}
+@keyframes olv-bar-in { from { transform: scaleY(0); opacity: 0; } to { transform: scaleY(1); opacity: 1; } }
+.olv-analyse-surface-dl {
+  align-self: flex-start; font: inherit; font-size: var(--text-xs); font-weight: 600;
+  color: var(--accent); background: var(--accent-soft);
+  border: 0.5px solid var(--accent); border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md); cursor: pointer;
+}
+.olv-analyse-surface-dl:hover { border-color: var(--accent); }
+/* v0.5.5 P12 — compact per-tile footer: the click-to-sample readout and the
+   tile's Export PNG action share ONE line, so adjacent raster tiles
+   (coverage / relief / canopy) stop repeating full-width hint + button
+   blocks. The readout truncates rather than wraps; its full text stays
+   available to assistive tech via the live region. */
+.olv-analyse-tile-footer {
+  display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
+}
+.olv-analyse-tile-footer .olv-analyse-sample {
+  flex: 1 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-analyse-tile-footer .olv-analyse-surface-dl {
+  flex: 0 0 auto; align-self: center;
+  padding: var(--space-2xs) var(--space-sm);
+}
+
+/* Stratified RMSE breakdown (by slope band / surface zone). */
+.olv-analyse-strata { font-size: var(--text-2xs); color: var(--text-faint); margin-top: var(--space-2xs); }
+
+/* USGS 3DEP Quality Level badge in the Analyse panel validation section. */
+.olv-analyse-ql {
+  align-self: flex-start; margin-top: var(--space-2xs);
+  font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-soft);
+  border: 0.5px solid var(--accent); border-radius: var(--radius-sm);
+  padding: 1px var(--space-xs);
+}
+
+/* Splash reorg: primary action row (Open hero + small Convert chip). */
+.olv-empty-actions {
+  display: flex; align-items: center; justify-content: center;
+  gap: var(--space-xl); flex-wrap: wrap; margin: var(--space-xs) 0 var(--space-2xs);
+}
+/* Demoted from an outlined pill to a quiet text link: as a pill it sat
+ * directly under the gradient CTA at near-equal visual weight, splitting
+ * the primary decision. It is a secondary utility — one accent-colored
+ * line with an underline on hover reads as exactly that. Padding kept for
+ * the 44 pt touch target. */
+.olv-convert-chip {
+  font: inherit; font-size: var(--text-sm); font-weight: 500;
+  color: var(--accent); background: transparent;
+  border: none;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg); cursor: pointer;
+  min-height: 40px;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  transition: text-decoration-color var(--dur-fast) var(--ease-standard);
+  white-space: nowrap;
+}
+.olv-convert-chip:hover { text-decoration-color: var(--accent); }
+.olv-convert-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Splash reorg: one bounded "Explore public LiDAR" card (Gestalt common region). */
+.olv-explore-card {
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-lg);
+  /* Stay in the centred content column — without a cap the card stretches to
+   * the full viewport width on desktop (it lives in a full-width flex column). */
+  width: 100%; max-width: 460px; box-sizing: border-box;
+  margin: var(--space-md) auto; padding: var(--space-2xl) 14px;
+  /* Deliberately hairline-led with no fill. Enclosure is the strongest grouping
+   * cue on a page, and a filled bordered box was making the SECONDARY way in
+   * (browse a public dataset) outweigh the primary one (open your own file).
+   * The demoted panel token exists for exactly this — a lane, not a card. */
+  border: 0.5px solid var(--hairline); border-radius: 14px;
+  background: var(--panel-recessive);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+.olv-explore-card > .olv-empty-section-label { margin: 0; }
+
