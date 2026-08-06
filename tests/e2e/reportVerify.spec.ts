@@ -40,7 +40,12 @@ async function exportReport(page: Page): Promise<string> {
   if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) {
     await panel.locator('.olv-panel-head').click();
   }
-  await panel.locator('.olv-export-products-head').click();
+  // Products is open by default; open it only if it is currently collapsed
+  // (clicking an already-open head would toggle it shut and hide the actions).
+  const productsHead = panel.locator('.olv-export-products-head');
+  if ((await productsHead.getAttribute('aria-expanded')) === 'false') {
+    await productsHead.click();
+  }
   const reportBtn = panel.locator('[data-testid="export-integrity-report"]');
   await expect(reportBtn).toBeEnabled();
 
