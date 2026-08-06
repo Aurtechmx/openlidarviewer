@@ -20,6 +20,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { releaseDocPaths } from './lib/releaseDocs.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -92,14 +93,10 @@ export function validateReleaseRef({ env = {}, git = {}, files = {}, requireTag 
     } catch { problems.push('sbom.json is not valid JSON'); }
   }
 
-  // 5. Every document a reader is promised for this release.
-  for (const name of [
-    `RELEASE_NOTES_v${version}.md`,
-    `KNOWN_LIMITATIONS_v${version}.md`,
-    `VALIDATION_REPORT_v${version}.md`,
-    `REPRODUCIBILITY_v${version}.md`,
-  ]) {
-    if (read(name) === null) problems.push(`${name} is missing`);
+  // 5. Every document a reader is promised for this release. These live under
+  // docs/releases/; the paths come from one helper so they cannot drift.
+  for (const path of releaseDocPaths(version)) {
+    if (read(path) === null) problems.push(`${path} is missing`);
   }
 
   return { ok: problems.length === 0, problems, version, expectedTag };

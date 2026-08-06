@@ -18,10 +18,10 @@ function files(over: Record<string, string | null> = {}) {
     'package-lock.json': JSON.stringify({ version: VERSION, packages: { '': { version: VERSION } } }),
     'CITATION.cff': `version: ${VERSION}\n`,
     'sbom.json': JSON.stringify({ metadata: { component: { version: VERSION } } }),
-    [`RELEASE_NOTES_v${VERSION}.md`]: 'notes',
-    [`KNOWN_LIMITATIONS_v${VERSION}.md`]: 'limits',
-    [`VALIDATION_REPORT_v${VERSION}.md`]: 'validation',
-    [`REPRODUCIBILITY_v${VERSION}.md`]: 'repro',
+    [`docs/releases/RELEASE_NOTES_v${VERSION}.md`]: 'notes',
+    [`docs/releases/KNOWN_LIMITATIONS_v${VERSION}.md`]: 'limits',
+    [`docs/releases/VALIDATION_REPORT_v${VERSION}.md`]: 'validation',
+    [`docs/releases/REPRODUCIBILITY_v${VERSION}.md`]: 'repro',
     ...over,
   };
   return { read: (p: string) => (p in base ? base[p] : null) };
@@ -82,10 +82,10 @@ describe('validateReleaseRef', () => {
 
   it('refuses when a promised evidence document is missing', () => {
     for (const doc of [
-      `RELEASE_NOTES_v${VERSION}.md`,
-      `KNOWN_LIMITATIONS_v${VERSION}.md`,
-      `VALIDATION_REPORT_v${VERSION}.md`,
-      `REPRODUCIBILITY_v${VERSION}.md`,
+      `docs/releases/RELEASE_NOTES_v${VERSION}.md`,
+      `docs/releases/KNOWN_LIMITATIONS_v${VERSION}.md`,
+      `docs/releases/VALIDATION_REPORT_v${VERSION}.md`,
+      `docs/releases/REPRODUCIBILITY_v${VERSION}.md`,
     ]) {
       const r = run({ files: files({ [doc]: null }) });
       expect(r.problems.some((p) => p.includes(doc))).toBe(true);

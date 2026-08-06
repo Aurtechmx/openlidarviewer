@@ -162,13 +162,15 @@ describe('buildExportSummary — CRS label + line', () => {
 });
 
 describe('buildExportSummary — full-res drops in-session class edits', () => {
-  const dropRe = /class(ification)? edits will NOT/i;
+  const dropRe = /cannot carry your in-session classification edits/i;
 
-  it('warns when a full-res export would drop in-session class edits', () => {
+  it('refuses (error) when a full-res export would drop in-session class edits', () => {
     expect(
       warns({ ...base, fullRes: true, hasClassEdits: true, includeClassification: true }),
     ).toEqual(
-      expect.arrayContaining([expect.stringMatching(/warn:.*edits will NOT be included/i)]),
+      expect.arrayContaining([
+        expect.stringMatching(/error:.*cannot carry your in-session classification edits/i),
+      ]),
     );
   });
 

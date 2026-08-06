@@ -124,7 +124,7 @@ jobs:
           cp "release/test-evidence-v${V}.json" release/payload/
           cp release/production-audit.json release/payload/
           cp sbom.json release/payload/
-          cp "RELEASE_NOTES_v${V}.md" release/payload/
+          cp "docs/releases/RELEASE_NOTES_v${V}.md" release/payload/
           ls -la release/payload
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
