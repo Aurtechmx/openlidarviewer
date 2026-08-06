@@ -119,8 +119,15 @@ import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import type { MeasurementExportContext } from './export/measurementExport';
-import type { KmlExportInput } from './export/kmlExport';
-import { makeLocalToLonLat, LonLatConversionError } from './export/lonLatMapper';
+import { makeLocalToLonLat } from './export/lonLatMapper';
+import {
+  crsIsKnown,
+  exportScanFootprintKml,
+  exportSiteKml,
+  scanFootprintStatus,
+  siteKmlStatus,
+  type KmlActionDeps,
+} from './app/kmlActions';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -2914,6 +2921,52 @@ function exportGeoContext(): GeoExportContext {
   return runExportGeoContext(reportExportDeps);
 }
 
+/**
+ * The running-app seam the two Google Earth products write through (see
+ * `src/app/kmlActions.ts`). Accessors, not snapshots, so the lazily-bound Viewer
+ * and the current CRS are read at call time.
+ */
+const kmlDeps: KmlActionDeps = {
+  hasViewer: () => Boolean(viewer),
+  geo: exportGeoContext,
+  crsCurrent: () => crsService.current(),
+  annotations: () => viewer?.annotate.getAnnotations() ?? [],
+  measurements: () => viewer?.measure.getMeasurements() ?? [],
+  viewpoints: () =>
+    viewBookmarks.savedViews.map((v) => ({
+      name: v.name,
+      position: v.pose.position,
+      target: v.pose.target,
+    })),
+  worldUp: () => viewer.measure.worldUp,
+  unitToMetres: () => viewer.measure.unitToMetres,
+  // Static: the bounds of the points actually loaded. Streaming: the LAS header
+  // extent, which is what the source DECLARES and can be wider than the nodes
+  // downloaded so far. The basis travels into the file rather than being
+  // smoothed over, because the two are different claims about the same scan.
+  scanExtent: () => {
+    const c = scans.activeCloud();
+    if (c) {
+      const b = c.bounds();
+      return {
+        extent: { minX: b.min[0], minY: b.min[1], maxX: b.max[0], maxY: b.max[1] },
+        basis: 'the resident points',
+      };
+    }
+    const sc = viewer?.streamingCloud;
+    if (!sc) return null;
+    const b = sc.dataBounds();
+    return {
+      extent: { minX: b[0], minY: b[1], maxX: b[3], maxY: b[4] },
+      basis: 'the declared header extent',
+    };
+  },
+  baseName: (name) => baseName(name),
+  downloadText: (filename, text) => downloadText(filename, text),
+  setError: (message) => dropZone.setError(message),
+  loadKmlExport,
+};
+
 const exportPanel = new ExportPanel({
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
@@ -3041,109 +3094,11 @@ const exportPanel = new ExportPanel({
     );
     downloadText(f.filename, f.text);
   },
-  exportKml: async () => {
-    if (!viewer) return;
-    const geo = exportGeoContext();
-    const origin = geo.origin;
-    const toLonLat = makeLocalToLonLat(crsService.current(), origin);
-    if (!toLonLat) return; // gated by kmlStatus; defensive no-op if reached
-    const { buildKml, KmlCoordinateError } = await loadKmlExport();
-    // ONE context for the exported file: its altitude mode and its height scale
-    // must be decided by the same frame the coordinates were written in.
-    const kmlCtx = crsService.context();
-    const input: KmlExportInput = {
-      annotations: viewer.annotate.getAnnotations(),
-      measurements: viewer.measure.getMeasurements(),
-      // Saved views become <LookAt> placemarks — same LOCAL render frame as the
-      // measurements, so the injected transform places them correctly.
-      viewpoints: viewBookmarks.savedViews.map((v) => ({
-        name: v.name,
-        position: v.pose.position,
-        target: v.pose.target,
-      })),
-      crsName: geo.crsName ?? crsService.current()?.name ?? null,
-      // The exporter reports metres (keys end in _m); unitToMetres scales render
-      // units, so the label is always metres.
-      unitLabel: 'm',
-      up: viewer.measure.worldUp,
-      unitToMetres: viewer.measure.unitToMetres,
-      // The context's vertical scale under the `'none'` policy, not the
-      // measurement controller's — that one falls back to the horizontal factor
-      // when the CRS declares no vertical unit of its own. Harmless on screen,
-      // wrong for a published file: it would let a foot-based scan look metric
-      // and be stamped as absolute metres above sea level.
-      verticalUnitToMetres: verticalMetresPerUnit(kmlCtx, 'none'),
-      // Drives the geometry's altitudeMode: absolute only for a declared
-      // metric vertical datum, otherwise clamped with the reason stated.
-      verticalDatum: kmlCtx.verticalDatum ?? null,
-      toLonLat,
-      notSurveyGradeNote:
-        'Estimates only — not survey-grade. Validate against ground control where survey-grade accuracy is required.',
-    };
-    const stem = geo.name ? baseName(geo.name) : 'site';
-    let text: string;
-    try {
-      text = buildKml(input);
-    } catch (err) {
-      // Every KML coordinate is geographic by specification, so one
-      // unconvertible point makes the whole file wrong. Decline it.
-      // Both refusals mean the same thing to the user: something in this scan
-      // has no honest place on a map. The mapper raises the first when a point
-      // leaves the projection's domain; the exporter raises the second when a
-      // value reaches it that is not a real geographic position.
-      if (err instanceof LonLatConversionError || err instanceof KmlCoordinateError) {
-        dropZone.setError(
-          `KML export stopped: a point could not be placed in longitude/latitude. ${err.message}`,
-        );
-        return;
-      }
-      throw err;
-    }
-    downloadText(`${stem}.kml`, text);
-  },
-  kmlStatus: () => {
-    if (!viewer) return { ready: false, reason: 'Open a scan first.' };
-    // Resolve origin/CRS for static AND streaming — a georeferenced streaming
-    // scan can place KML too; gating on the static `scans.activeId` disabled it.
-    const geo = exportGeoContext();
-    if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
-    const features =
-      viewer.measure.getMeasurements().length + viewer.annotate.getAnnotations().length;
-    if (features === 0) {
-      return { ready: false, reason: 'Add a measurement or annotation to place on the map.' };
-    }
-    const resolved = crsService.current();
-    if (!crsIsKnown(resolved)) {
-      return {
-        ready: false,
-        reason: 'KML needs a georeferenced scan (it places features on a lat/lon map).',
-      };
-    }
-    if (!makeLocalToLonLat(resolved, geo.origin)) {
-      return {
-        ready: false,
-        reason: "This scan's CRS isn't supported for lat/lon export yet (UTM and geographic are).",
-      };
-    }
-    return { ready: true, reason: '' };
-  },
+  exportKml: () => void exportSiteKml(kmlDeps),
+  kmlStatus: () => siteKmlStatus(kmlDeps),
+  exportScanFootprint: () => void exportScanFootprintKml(kmlDeps),
+  scanFootprintStatus: () => scanFootprintStatus(kmlDeps),
 });
-
-/** True when the resolved CRS is a real-world frame (projected / geographic). */
-function crsIsKnown(resolved: ReturnType<typeof crsService.current>): boolean {
-  return resolved != null && (resolved.kind === 'projected' || resolved.kind === 'geographic');
-}
-
-/**
- * Build a LOCAL render-space → geographic [lon, lat, altMetres] transform for
- * the active scan, or null when the resolved CRS can't be taken to lat/lon —
- * a local/unknown scan, or a projected CRS the vendored converter doesn't cover
- * (no silent fallback; the KML option is declined honestly instead).
- *
- * Measurement / annotation points are LOCAL (recentered); adding the origin back
- * lands them in the source frame — already lon/lat for a geographic CRS, or the
- * projected easting/northing that the UTM converter takes to WGS84.
- */
 
 // Drive the Export panel's Coordinate-System auto-collapse from the CRS service:
 // an ungeoreferenced (local / unknown) scan has no real-world CRS to keep /
@@ -3961,8 +3916,8 @@ void viewerLoaded.then(() => {
       leftPanels.append(...desktopPanels);
     };
 
-    // Layout swap stays keyed to the WIDTH breakpoint so JS layout and the CSS
-    // `@media` rules never disagree; input-aware detection drives behaviour only.
+    // Layout swap stays keyed to the shared mobile-layout condition (orientation-
+    // independent, so a phone stays mobile in landscape) so JS and CSS agree.
     const mobileMql =
       typeof window.matchMedia === 'function'
         ? window.matchMedia(MOBILE_LAYOUT_QUERY)
