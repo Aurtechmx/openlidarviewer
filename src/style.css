@@ -4516,21 +4516,15 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
 .olv-reclass-go { width: 100%; text-align: center; }
-/* Auto-classify: the panel's primary action — a filled accent button that reads
-   above the outline lasso/undo pills, matching the accent-on-dark chip convention. */
+/* Auto-classify: the panel's emphasised action. Only layout lives here. The
+   accent emphasis is declared in the unified button block at the end of this
+   file, because the button also carries `.olv-bc-pill`, whose base rule sits
+   later in the source at the same specificity and would otherwise reset the
+   fill, border and colour back to the plain pill. */
 .olv-reclass-auto {
   width: 100%;
   text-align: center;
   margin-bottom: var(--space-sm);
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #06121a;
-  font-weight: 600;
-}
-.olv-reclass-auto:hover:not(.is-disabled) {
-  filter: brightness(1.08);
-  border-color: var(--accent);
-  color: #06121a;
 }
 /* In-flight derive: dim the button and spin a ring before the label. */
 .olv-reclass-auto-loading {
@@ -7605,6 +7599,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall,
 .olv-mp-profile-pdf,
 .olv-object-run-anyway,
+.olv-reclass-auto,
 .olv-modal-btn {
   transition: color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard),
@@ -7626,6 +7621,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall:not(:disabled):active,
 .olv-mp-profile-pdf:not(:disabled):active,
 .olv-object-run-anyway:not(:disabled):active,
+.olv-reclass-auto:not(:disabled):active,
 .olv-modal-btn:not(:disabled):active {
   transform: var(--btn-press);
 }
@@ -7643,6 +7639,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-cl-showall:focus-visible,
 .olv-mp-profile-pdf:focus-visible,
 .olv-object-run-anyway:focus-visible,
+.olv-reclass-auto:focus-visible,
 .olv-modal-btn:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
@@ -7725,6 +7722,36 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   transform: var(--btn-press);
 }
 
+/*
+ * Auto-classify (Edit classes panel) emphasis.
+ *
+ * The button carries `.olv-bc-pill` for its shape, and that base rule sits
+ * later in this file at the same specificity, so any emphasis declared next to
+ * the panel is reset back to the plain transparent pill. Users read the result
+ * as a low-emphasis control and miss the action. Declaring it here, in the
+ * block that already wins on source order, is what makes it visible.
+ *
+ * It borrows the export CTA's accent language one step down: the same
+ * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
+ * so the panel keeps a single loudest action. Emphasis is carried by border
+ * weight and font weight as well as hue, and the label stays `--text` rather
+ * than `--accent`, which keeps the text contrast well clear of AA in Dark,
+ * Light and High-contrast (all three define `--accent` and `--accent-soft`).
+ */
+.olv-reclass-auto {
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+/* Hover needs the extra `:not(.is-disabled)` to outrank the equally late
+   `.olv-bc-pill:hover:not(.is-disabled):not(.is-active)`. */
+.olv-reclass-auto:not(:disabled):not(.is-disabled):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-color: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .olv-export-btn,
   .olv-analyse-dl,
@@ -7739,6 +7766,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-cl-showall,
   .olv-mp-profile-pdf,
   .olv-object-run-anyway,
+  .olv-reclass-auto,
   .olv-modal-btn {
     transition: color var(--dur-fast) var(--ease-standard),
       background var(--dur-fast) var(--ease-standard),
@@ -7757,6 +7785,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   .olv-cl-showall:active,
   .olv-mp-profile-pdf:active,
   .olv-object-run-anyway:active,
+  .olv-reclass-auto:active,
   .olv-modal-btn:active,
   .olv-analyse-run:not(.is-rerun):hover,
   .olv-analyse-dl.is-primary:hover,
