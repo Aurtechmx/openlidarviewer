@@ -36,7 +36,17 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic — same input, same
  * output, so it runs identically in a Web Worker, in Node tests, and on the
  * main thread.
+ *
+ * VERSIONING. The rules above and the parameter defaults below are frozen
+ * together as a numbered preset (see {@link CLASSIFIER_PRESETS}). Every result
+ * carries the method tag, the preset id and the preset digest, so an export can
+ * state exactly which classifier and which parameters produced it.
+ * `tests/classifierFreeze.test.ts` fails when a default moves without
+ * {@link CLASSIFIER_VERSION} moving with it.
  */
+
+import { canonicalize, sha256 } from '../measure/auditLog';
+import type { ProcessingOpInput } from '../../science/processingManifest';
 
 /** ASPRS codes this heuristic can emit. */
 export const DERIVED_GROUND = 2;
@@ -158,6 +168,30 @@ export interface DeriveClassificationOptions {
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
   /**
+   * Low-outlier rejection, as a multiple of the one-cell drop the classifier's
+   * own terrain model allows (`elevThresholdM + slope × cellSize`). A cell whose
+   * lowest return sits further below the MEDIAN of its measured neighbours than
+   * that is treated as a gross below-ground blunder — multipath, a water return,
+   * sensor noise — and the cell falls back to its second-lowest return, or
+   * becomes a hole when it has none.
+   *
+   * WHY THE COMPARISON IS AGAINST THE NEIGHBOURS AND NOT WITHIN THE CELL. A cell
+   * on a building edge legitimately holds one ground return under several roof
+   * returns, so a within-cell gap rule would throw the ground away and lift the
+   * surface onto the roof. A blunder is low relative to the terrain AROUND it;
+   * a ground return under a roof is not.
+   *
+   * WHY IT MATTERS. Grayscale opening removes peaks, not pits, so a below-ground
+   * return is never carved out by the morphology that follows: it seeds the
+   * minimum grid, the erosion propagates it across the whole structuring
+   * element, and above a critical blunder density the opened surface collapses
+   * to blunder level everywhere. Measured on the frozen corpus in
+   * `docs/validation/classifier-corpus-eval.md`.
+   *
+   * `0` disables it and restores the strict per-cell minimum.
+   */
+  readonly despikeNeighbourFactor?: number;
+  /**
    * Optional producer classification to PRESERVE (same point order). Any point
    * whose existing code is a real producer class — anything other than
    * 0 (Created, never classified) or 1 (Unclassified) — keeps that code
@@ -198,9 +232,72 @@ export interface DeriveClassificationResult {
    * ground, coarse grid, …). Empty when the scan classified cleanly.
    */
   readonly warnings: readonly string[];
+  /** Which classifier, at which version, on which parameters. */
+  readonly classifier: ClassifierProvenance;
 }
 
-const DEFAULTS = {
+/**
+ * The stable id of this classifier in the scientific method catalogue
+ * (`src/science/methodRegistry.ts`). It never changes once published.
+ */
+export const CLASSIFIER_METHOD_ID = 'olv.class.derived-heuristic';
+
+/**
+ * The revision of the classifier's RULES and DEFAULTS, as an integer.
+ *
+ * BUMP DISCIPLINE. Increment it whenever a rule changes or a default moves —
+ * anything that could move the codes this module emits for an unchanged cloud.
+ * A pure refactor that leaves every code identical does NOT bump it. The
+ * registry entry for {@link CLASSIFIER_METHOD_ID} carries the same integer, and
+ * `tests/classifierFreeze.test.ts` fails when the two disagree or when a
+ * default moves without a bump.
+ */
+export const CLASSIFIER_VERSION = 2;
+
+/** The numeric parameters a run is fully determined by, defaults included. */
+export interface ClassifierParams {
+  readonly vegGreennessMin: number;
+  readonly minGroundSupport: number;
+  readonly buildingMinSupport: number;
+  readonly maxObjectSizeM: number;
+  readonly elevThresholdM: number;
+  readonly slope: number;
+  readonly groundBandM: number;
+  readonly lowVegBandM: number;
+  readonly medVegBandM: number;
+  readonly buildingRoughnessMaxM: number;
+  readonly buildingMinHagM: number;
+  readonly maxGridDim: number;
+  readonly despikeNeighbourFactor: number;
+}
+
+/**
+ * One published, immutable parameter preset.
+ *
+ * `params` is a loose numeric record rather than {@link ClassifierParams}
+ * because a HISTORICAL preset is a record of what shipped: v1 carries no
+ * `despikeNeighbourFactor` because v1 had no despike, and back-filling one to
+ * satisfy a type would rewrite history and change its digest. The CURRENT
+ * preset is the strongly typed one — see `CURRENT_PARAMS`.
+ */
+export interface ClassifierPreset {
+  /** Human-stable name, e.g. `derived-heuristic-v1`. */
+  readonly id: string;
+  /** The {@link CLASSIFIER_VERSION} this preset belongs to. */
+  readonly version: number;
+  /** The frozen defaults, as published. */
+  readonly params: Readonly<Record<string, number>>;
+  /** `sha256:` digest over `{id, version, params}` — see {@link classifierPresetDigest}. */
+  readonly digest: string;
+}
+
+/**
+ * The parameters the CURRENT version runs on, typed so a missing key is a
+ * compile error rather than an undefined at runtime. This object is the one the
+ * preset table holds for {@link CLASSIFIER_VERSION}, so the published record and
+ * the running defaults are the same object and cannot drift.
+ */
+const CURRENT_PARAMS = Object.freeze({
   vegGreennessMin: 0.06,
   minGroundSupport: 0.5,
   buildingMinSupport: 0.66,
@@ -213,7 +310,139 @@ const DEFAULTS = {
   buildingRoughnessMaxM: 1.5,
   buildingMinHagM: 2.5,
   maxGridDim: 768,
-} as const;
+  despikeNeighbourFactor: 1,
+  // `satisfies` rather than an annotation: the check that every parameter is
+  // present and numeric still runs, and the inferred literal type keeps the
+  // implicit index signature the preset table needs.
+}) satisfies ClassifierParams;
+
+/**
+ * Every published preset, by version. Entries are APPEND-ONLY: an existing one
+ * is a record of what shipped, and editing it in place is the move the freeze
+ * test exists to make visible.
+ *
+ * Each default is anchored in the literature cited on
+ * {@link DeriveClassificationOptions}, not chosen to make a fixture pass.
+ */
+export const CLASSIFIER_PRESETS: Readonly<Record<number, ClassifierPreset>> = Object.freeze({
+  1: Object.freeze({
+    id: 'derived-heuristic-v1',
+    version: 1,
+    params: Object.freeze({
+      vegGreennessMin: 0.06,
+      minGroundSupport: 0.5,
+      buildingMinSupport: 0.66,
+      maxObjectSizeM: 20,
+      elevThresholdM: 0.3,
+      slope: 0.15,
+      groundBandM: 0.5,
+      lowVegBandM: 2,
+      medVegBandM: 5,
+      buildingRoughnessMaxM: 1.5,
+      buildingMinHagM: 2.5,
+      maxGridDim: 768,
+    }),
+    digest: 'sha256:58e3e9083d776a6306e1b032d177f5a531536ee746097906805b9a99567dd43a',
+  }),
+  // v2 turns on low-outlier rejection. v1 took the strict per-cell minimum, so a
+  // below-ground blunder seeded the ground surface, and the morphology that
+  // follows removes peaks and not pits: on the frozen corpus's low-outlier scene
+  // thirty gross returns took ground recall to zero. No other rule and no other
+  // default moved; see docs/validation/classifier-corpus-eval.md for the
+  // measured before and after on every scene.
+  2: Object.freeze({
+    id: 'derived-heuristic-v2',
+    version: 2,
+    params: CURRENT_PARAMS,
+    digest: 'sha256:a4270700486436d01a1c5a2d0a8987faca2a92d6f3a0059e542bd3f256c6e35f',
+  }),
+});
+
+/** The preset the running code uses. */
+export const CLASSIFIER_PRESET: ClassifierPreset = CLASSIFIER_PRESETS[CLASSIFIER_VERSION];
+
+/**
+ * The digest of a preset: `sha256:` over a canonical (key-sorted) serialisation
+ * of its id, version and parameters. Recomputed by the freeze test against the
+ * stored value, so a parameter edited without a new preset fails rather than
+ * passing quietly.
+ */
+export function classifierPresetDigest(preset: {
+  readonly id: string;
+  readonly version: number;
+  readonly params: Readonly<Record<string, number>>;
+}): string {
+  return `sha256:${sha256(
+    canonicalize({ id: preset.id, version: preset.version, params: preset.params }),
+  )}`;
+}
+
+/**
+ * The defaults the classifier runs on ARE the frozen preset. The single
+ * assignment is what keeps the published record and the running code from
+ * drifting apart; nothing else in this module states a default.
+ */
+const DEFAULTS: ClassifierParams = CURRENT_PARAMS;
+
+/** Which optional cues a run actually had data for, in a stable order. */
+const CUE_RGB = 'rgb-greenness';
+const CUE_RETURNS = 'multi-return';
+const CUE_PRESERVED = 'producer-classes-preserved';
+
+/**
+ * The identity of the classifier that produced a result: which method at which
+ * version, which frozen preset, the parameters the run actually used (the
+ * resolved grid included, not just the requested one), and which optional cues
+ * had data. This is what an export states so a reader can reproduce the run.
+ */
+export interface ClassifierProvenance {
+  /** `olv.class.derived-heuristic@N`. */
+  readonly method: string;
+  readonly presetId: string;
+  readonly presetDigest: string;
+  /** Effective numeric parameters, including the resolved `cellSizeM`. */
+  readonly parameters: Readonly<Record<string, number>>;
+  /** Optional cues that were active, in a stable order. */
+  readonly cues: readonly string[];
+}
+
+/** `olv.class.derived-heuristic@N` — the tag every result and export states. */
+export const CLASSIFIER_METHOD_TAG = `${CLASSIFIER_METHOD_ID}@${CLASSIFIER_VERSION}`;
+
+/**
+ * The numeric parameters of a run, keyed by name: every frozen preset key read
+ * from the merged options, plus the RESOLVED cell size. Enumerating the preset
+ * keys (rather than spreading the merged object) is what keeps the caller's
+ * typed arrays out of a record that gets serialised into an export.
+ */
+function numericParameters(
+  merged: ClassifierParams,
+  resolvedCellSizeM: number,
+): Readonly<Record<string, number>> {
+  const out: Record<string, number> = { cellSizeM: resolvedCellSizeM };
+  for (const key of Object.keys(CLASSIFIER_PRESET.params) as (keyof ClassifierParams)[]) {
+    out[key] = merged[key];
+  }
+  return out;
+}
+
+/**
+ * The processing-manifest op for a classification run — the shape
+ * `src/science/processingManifest.ts` chains, so an export's provenance can
+ * carry the classifier beside the ground filter and the DTM fill.
+ */
+export function classifierProcessingOp(result: DeriveClassificationResult): ProcessingOpInput {
+  const c = result.classifier;
+  return {
+    method: c.method,
+    params: {
+      presetId: c.presetId,
+      presetDigest: c.presetDigest,
+      parameters: { ...c.parameters },
+      cues: [...c.cues],
+    },
+  };
+}
 
 /** Clamp to [0, 1]. */
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
@@ -347,6 +576,86 @@ function fillHoles(grid: Float32Array, W: number, H: number): void {
 }
 
 /**
+ * Reject gross below-ground returns from the minimum-elevation grid, in place.
+ *
+ * A cell is a spike when its lowest return sits more than `gap` below the MEDIAN
+ * of its measured 8-neighbours. The comparison is against the NEIGHBOURS and not
+ * within the cell on purpose: a cell on a building edge legitimately holds one
+ * ground return under several roof returns, and a within-cell rule would discard
+ * that ground and lift the surface onto the roof. A blunder is low relative to
+ * the terrain around it; a ground return under a roof is not.
+ *
+ * A spike falls back to the cell's SECOND-lowest return, which on a blunder cell
+ * is the real bare earth. A cell holding only ONE return is left alone: one
+ * return is one measurement, and discarding it would leave a void where there
+ * was data, which the void gates then read as ground that was never observed.
+ * `classifyGroundSmrf` takes the same position for the same reason — a cell with
+ * too few returns carries no evidence that either of them is a blunder — and
+ * measuring it on the corpus showed the alternative trading a rejected spike for
+ * an abstention on a point above it.
+ *
+ * ONE PASS, and it says so: a cell holding TWO blunders falls back to the second
+ * one and stays low. `gap <= 0` disables the step entirely.
+ *
+ * A cell with fewer than three measured neighbours is left alone. At the
+ * footprint edge there is not enough surrounding terrain to call anything an
+ * outlier, and guessing there would trade a blunder for an invented cliff.
+ *
+ * Returns the number of cells rejected, for the warning list.
+ */
+export function rejectLowOutliers(
+  gridMin: Float32Array,
+  gridMin2: Float32Array,
+  measured: Uint8Array,
+  W: number,
+  H: number,
+  gap: number,
+): number {
+  if (!(gap > 0) || !Number.isFinite(gap)) return 0;
+  // Snapshot so the pass is order-independent: a cell already rejected must not
+  // change the median its neighbour is judged against.
+  const snap = gridMin.slice();
+  const neigh = new Float64Array(8);
+  let rejected = 0;
+  for (let cy = 0; cy < H; cy++) {
+    for (let cx = 0; cx < W; cx++) {
+      const c = cy * W + cx;
+      // Measured, and holding a runner-up to fall back to. A single-return cell
+      // is left alone rather than emptied — see the doc comment.
+      if (measured[c] === 0 || !Number.isFinite(gridMin2[c])) continue;
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yy = cy + dy;
+        if (yy < 0 || yy >= H) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const xx = cx + dx;
+          if (xx < 0 || xx >= W) continue;
+          const j = yy * W + xx;
+          if (measured[j] === 0) continue;
+          const v = snap[j];
+          // Insertion sort into a fixed 8-slot buffer: eight elements, so this
+          // is cheaper than allocating and sorting an array per cell.
+          let k = n;
+          while (k > 0 && neigh[k - 1] > v) {
+            neigh[k] = neigh[k - 1];
+            k--;
+          }
+          neigh[k] = v;
+          n++;
+        }
+      }
+      if (n < 3) continue;
+      const median = n % 2 === 1 ? neigh[(n - 1) / 2] : (neigh[n / 2 - 1] + neigh[n / 2]) / 2;
+      if (!(snap[c] < median - gap)) continue;
+      gridMin[c] = gridMin2[c];
+      rejected++;
+    }
+  }
+  return rejected;
+}
+
+/**
  * Derive a coarse ASPRS classification for an unclassified cloud. Returns the
  * per-point codes plus honest provenance. Deterministic.
  */
@@ -371,6 +680,17 @@ export function deriveClassification(
     confidence: NaN,
     classConfidence: {},
     warnings: [`Classification not computed (${reason}).`],
+    // The run produced nothing, but WHICH classifier declined still belongs in
+    // the record: a reader holding the file has to be able to tell an empty
+    // result from a missing one. No grid was resolved, so no `cellSizeM` is
+    // stated and no cue is claimed.
+    classifier: {
+      method: CLASSIFIER_METHOD_TAG,
+      presetId: CLASSIFIER_PRESET.id,
+      presetDigest: CLASSIFIER_PRESET.digest,
+      parameters: { ...DEFAULTS },
+      cues: [],
+    },
   });
 
   if (count <= 0 || b.finite < 3 || !(b.maxX > b.minX) || !(b.maxY > b.minY)) {
@@ -389,15 +709,23 @@ export function deriveClassification(
     return cy * W + cx;
   };
 
-  // 1. Grid-minimum surface.
+  // 1. Grid-minimum surface. The SECOND lowest return per cell is tracked
+  //    alongside it, so the low-outlier rejection below has something real to
+  //    fall back to rather than an interpolated guess.
   phase('Building ground surface');
   const gridMin = new Float32Array(W * H).fill(NaN);
+  const gridMin2 = new Float32Array(W * H).fill(NaN);
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     const c = cellOf(x, y);
     const cur = gridMin[c];
-    if (!Number.isFinite(cur) || z < cur) gridMin[c] = z;
+    if (!Number.isFinite(cur) || z < cur) {
+      gridMin2[c] = cur; // the old minimum becomes the runner-up (NaN first time)
+      gridMin[c] = z;
+    } else if (!Number.isFinite(gridMin2[c]) || z < gridMin2[c]) {
+      gridMin2[c] = z;
+    }
   }
   // MEASURED mask — which ground cells actually saw a point, captured BEFORE the
   // holes are filled. fillHoles fabricates a plausible bare earth inside voids
@@ -409,6 +737,15 @@ export function deriveClassification(
   for (let c = 0; c < gridMin.length; c++) {
     if (Number.isFinite(gridMin[c])) measured[c] = 1;
   }
+
+  // 1b. Low-outlier rejection, BEFORE the morphology. Grayscale opening removes
+  //     peaks and not pits, so a below-ground blunder is never carved out by
+  //     the steps that follow: it seeds the minimum grid, the erosion carries it
+  //     across the whole structuring element, and once blunders are closer
+  //     together than the largest window the opened surface collapses to
+  //     blunder level everywhere.
+  const despiked = rejectLowOutliers(gridMin, gridMin2, measured, W, H, o.despikeNeighbourFactor * (o.elevThresholdM + o.slope * cell));
+
   fillHoles(gridMin, W, H);
 
   // 2. Progressive morphological opening → bare-earth grid. Geometric window
@@ -686,12 +1023,38 @@ export function deriveClassification(
       `Coarse classification grid (${cell.toFixed(1)} m) — fine structure may be missed.`,
     );
   }
+  if (despiked > 0) {
+    warnings.push(
+      `${despiked} grid cell${despiked === 1 ? '' : 's'} held a return well below the ` +
+        `surrounding terrain; it was rejected as a low outlier before the ground surface ` +
+        `was built.`,
+    );
+  }
 
   const modeNotes: string[] = [];
   if (useGreen) modeNotes.push('RGB vegetation index');
   if (useReturns) modeNotes.push('multi-return vegetation cue');
   if (preserved) modeNotes.push('producer classes preserved (gaps only)');
   const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
+
+  const cues: string[] = [];
+  if (useGreen) cues.push(CUE_RGB);
+  if (useReturns) cues.push(CUE_RETURNS);
+  if (preserved) cues.push(CUE_PRESERVED);
+
+  const classifier: ClassifierProvenance = {
+    method: CLASSIFIER_METHOD_TAG,
+    presetId: CLASSIFIER_PRESET.id,
+    presetDigest: CLASSIFIER_PRESET.digest,
+    // Numeric parameters only, projected key by key: `o` also carries the
+    // caller's typed arrays (colours, returns, producer classes), and a record
+    // meant to be serialised into an export must not drag a point buffer with
+    // it. The RESOLVED grid is stated, not the requested one — `cellSizeM` is
+    // derived from the point spacing when the caller omits it and grows again
+    // to respect `maxGridDim`, so the request would misdescribe the run.
+    parameters: numericParameters(o, cell),
+    cues,
+  };
 
   return {
     codes,
@@ -703,9 +1066,11 @@ export function deriveClassification(
     provenance:
       `Derived (heuristic) classification — progressive morphological ground ` +
       `filter + height-above-ground at ${cell.toFixed(2)} m grid${modeSuffix}. ` +
+      `${CLASSIFIER_METHOD_TAG}, preset ${CLASSIFIER_PRESET.id}. ` +
       `Not a survey-grade or producer classification; validate before relying on it.`,
     confidence,
     classConfidence,
     warnings,
+    classifier,
   };
 }

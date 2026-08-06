@@ -13,6 +13,8 @@ import { describe, it, expect } from 'vitest';
 import { deriveCoreParams } from '../src/app/terrainAnalysisRunner';
 import { METRES_PER_DEGREE } from '../src/terrain/ground/horizontalScale';
 import type { CrsService } from '../src/geo/CrsService';
+import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
 
 /** Flat square of points spanning `extent` source units per axis at `origin`. */
 function square(extent: number, n = 4): Float32Array {
@@ -26,7 +28,14 @@ function square(extent: number, n = 4): Float32Array {
 }
 
 function fakeCrs(current: unknown): CrsService {
-  return { current: () => current } as unknown as CrsService;
+  // `deriveCoreParams` now reads the ONE SpatialContext for the scan rather
+  // than re-deriving unit / datum / axis from the ResolvedCrs itself, so the
+  // fake service answers the same question the real one does. The expectations
+  // below are unchanged: the context is a façade over these same fields.
+  return {
+    current: () => current,
+    context: () => spatialContextFrom(current as ResolvedCrs | null),
+  } as unknown as CrsService;
 }
 
 const GEOGRAPHIC = { kind: 'geographic', name: 'WGS 84', linearUnitToMetres: 1, verticalDatum: null };

@@ -24,6 +24,8 @@ import {
   footprintRectangleRing,
   footprintCrsRefusal,
   footprintLonLatRing,
+  footprintAntimeridianRefusal,
+  footprintUpAxisRefusal,
   ScanFootprintError,
   type FootprintExtent,
 } from '../src/export/scanFootprint';
@@ -258,6 +260,123 @@ describe('footprintLonLatRing', () => {
     // this guards.
     const far = footprintRectangleRing({ minX: 0, minY: 0, maxX: 400_001, maxY: 800 });
     expect(() => footprintLonLatRing(far, mapper)).toThrow(ScanFootprintError);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The antimeridian
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A ring that straddles ±180° is the one wrong footprint that every existing
+ * check passes. Each corner is a valid longitude, so the per-coordinate domain
+ * guard in `kmlExport.ts` is silent; the extent is finite and non-degenerate, so
+ * `footprintRectangleRing` is silent; the reprojection succeeds, so the mapper
+ * is silent. What comes out is a rectangle from -179.8° to 179.8° — 359.6° of
+ * longitude, a box around nearly the whole planet, delivered as "the scanned
+ * area" with the not-survey-grade caveat attached and nothing else to warn on.
+ *
+ * The defect lives in the RING rather than in any vertex, so the test does too.
+ */
+describe('the antimeridian', () => {
+  const wgs84: ResolvedCrs = {
+    kind: 'geographic',
+    name: 'WGS 84',
+    epsg: 4326,
+    linearUnit: 'unknown',
+    linearUnitToMetres: 1,
+    source: 'las-vlr',
+    confidence: 'high',
+    userConfirmed: false,
+  };
+  /** Degrees in, degrees out: local coordinates ARE lon/lat for this frame. */
+  const degrees = makeLocalToLonLat(wgs84, [0, 0, 0]);
+
+  /** A scan a few hundred metres wide sitting on top of the 180th meridian. */
+  const crossing: FootprintExtent = { minX: -179.8, minY: -0.2, maxX: 179.8, maxY: 0.2 };
+
+  it('REFUSES a ring whose corners wrap ±180° instead of drawing a world-sized box', () => {
+    expect(() => footprintLonLatRing(footprintRectangleRing(crossing), degrees))
+      .toThrow(ScanFootprintError);
+  });
+
+  it('says the antimeridian is the reason and how to proceed', () => {
+    const refusal = footprintAntimeridianRefusal(footprintRectangleRing(crossing));
+    expect(refusal).toMatch(/antimeridian/i);
+    expect(refusal).toMatch(/180/);
+    expect(refusal).toMatch(/split|reproject/i);
+  });
+
+  it('does not clamp, wrap or otherwise repair the coordinates', () => {
+    // The failure mode this replaces is a plausible file. Anything that returns
+    // a ring here — normalised, clipped or split — is the defect in a new shape.
+    let produced: unknown = 'not called';
+    try {
+      produced = footprintLonLatRing(footprintRectangleRing(crossing), degrees);
+    } catch {
+      produced = null;
+    }
+    expect(produced).toBeNull();
+  });
+
+  it('leaves a normal, small, non-crossing scan untouched', () => {
+    const local: FootprintExtent = { minX: -111.05, minY: 39.7, maxX: -110.95, maxY: 39.8 };
+    const ring = footprintLonLatRing(footprintRectangleRing(local), degrees);
+    expect(ring).toHaveLength(5);
+    expect(ring[0]).toEqual([-111.05, 39.7]);
+    expect(ring[4]).toEqual(ring[0]);
+  });
+
+  it('allows a legitimately wide extent that never crosses ±180°', () => {
+    // 160° of longitude is enormous for a scan and still entirely honest: the
+    // short way between -100° and 60° does not pass through the antimeridian.
+    const wide: FootprintExtent = { minX: -100, minY: -10, maxX: 60, maxY: 10 };
+    expect(footprintAntimeridianRefusal(footprintRectangleRing(wide))).toBeNull();
+    expect(footprintLonLatRing(footprintRectangleRing(wide), degrees)).toHaveLength(5);
+  });
+
+  it('treats exactly 180° of span as the last honest case, not the first bad one', () => {
+    // At exactly 180° the two arcs are equal, so nothing is being wrapped; the
+    // refusal starts above it. Pinned so the comparison cannot drift to `<`.
+    expect(footprintAntimeridianRefusal([[-90, 0], [90, 0], [90, 1], [-90, 1], [-90, 0]]))
+      .toBeNull();
+    expect(footprintAntimeridianRefusal([[-90.1, 0], [90, 0], [90, 1], [-90.1, 1], [-90.1, 0]]))
+      .toBeTruthy();
+  });
+
+  it('says nothing about an ordinary projected footprint', () => {
+    expect(footprintAntimeridianRefusal(
+      footprintLonLatRing(footprintRectangleRing(extent), makeLocalToLonLat(utm12, UTM12_ORIGIN)),
+    )).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The horizontal plane
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The extent is read off local X/Y, and X/Y is the ground plane only when Z is
+ * up. A Y-up source keeps its horizontal plane on X/Z, so the same two fields
+ * describe one horizontal axis and the elevation axis — and the rectangle that
+ * comes out is a vertical slice of the site published as the area covered. It
+ * lands on the map looking exactly like a footprint.
+ */
+describe('footprintUpAxisRefusal', () => {
+  it('allows a Z-up frame, which is what the X/Y reading assumes', () => {
+    expect(footprintUpAxisRefusal('z')).toBeNull();
+  });
+
+  it('refuses a Y-up source rather than outlining its X/Y plane', () => {
+    const refusal = footprintUpAxisRefusal('y');
+    expect(refusal).toMatch(/Y-up/i);
+    expect(refusal).toMatch(/horizontal/i);
+  });
+
+  it('refuses an undetermined up-axis: absence of evidence is not Z-up', () => {
+    expect(footprintUpAxisRefusal('unknown')).toBeTruthy();
+    expect(footprintUpAxisRefusal(null)).toBeTruthy();
+    expect(footprintUpAxisRefusal(undefined)).toBeTruthy();
   });
 });
 
