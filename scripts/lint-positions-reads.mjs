@@ -92,6 +92,8 @@ console.log('Direct `.positions` reads outside src/model/ (excludes *.test.ts).'
 console.log('Destination: docs/architecture/float64-frame-migration-plan.md · roadmap P1 #2.');
 console.log(report.join('\n'));
 console.log(`\nTotal: ${totalReads} direct .positions reads across ${totalFiles} files.`);
-console.log('This is a report, not a gate. The shrink-only ratchet is `npm run lint:position-access`.');
+console.log('This is a report, not a gate. The gate is `npm run lint:position-access`, which holds');
+console.log('the count shrink-only AND requires every read to name its coordinate frame in');
+console.log('docs/validation/position-frames.json.');
 
 process.exit(0);
