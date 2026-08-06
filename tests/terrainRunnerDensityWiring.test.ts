@@ -16,6 +16,7 @@ import { clearTerrainCoreCache } from '../src/terrain/contour/terrainCoreCache';
 import type { Viewer } from '../src/render/Viewer';
 import type { AnalysePanel } from '../src/ui/AnalysePanel';
 import type { CrsService } from '../src/geo/CrsService';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
 
 /** Gently sloped plane sampled at exactly 4 pts/m² (0.5 m grid) over 30×30 m. */
 function densePlane(): Float32Array {
@@ -68,7 +69,13 @@ function makeRunner(
     update: () => {},
     setContourFrame: (f: unknown) => opts.onFrame?.(f),
   } as unknown as AnalysePanel;
-  const fakeCrs = { current: () => null } as unknown as CrsService;
+  // The runner reads the scan's ONE SpatialContext instead of re-deriving unit
+  // / datum / axis from the ResolvedCrs, so the fake answers that too. A null
+  // CRS resolves to the explicit unknown frame, exactly as in production.
+  const fakeCrs = {
+    current: () => null,
+    context: () => spatialContextFrom(null),
+  } as unknown as CrsService;
   return createTerrainAnalysisRunner({
     getViewer: () => fakeViewer,
     getAnalysePanel: () => fakePanel,

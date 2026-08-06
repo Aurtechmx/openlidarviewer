@@ -20,7 +20,7 @@ import type { Viewer } from '../Viewer';
 import type { StreamingPanel } from '../../ui/StreamingPanel';
 import { gradeFullCloud } from './fullCloudGradeAdapter';
 import { gradeSampleDensity, summarizeSampleGrade } from './sampleGrade';
-import { isLinearUnitKnown } from '../../geo/CoordinateTypes';
+import { spatialContextFrom, verticalMetresPerUnit } from '../../geo/SpatialContext';
 
 /**
  * Decode + grade the active streaming cloud's full extent and render the result
@@ -51,19 +51,23 @@ export async function runFullCloudGrade(deps: {
   // gate the scan-report rows (streamingExtentRows) and the measure tool apply;
   // otherwise the factor stays 1 and the summary labels the figures per source
   // unit (see summarizeSampleGrade's unitConfirmed argument).
-  const crs = source.crs();
-  const unitConfirmed = isLinearUnitKnown(crs);
-  const metresPerUnit = unitConfirmed ? (crs?.linearUnitToMetres ?? 1) : 1;
+  // ONE context for this grade, built here at the streaming boundary; the unit
+  // gate, the horizontal factor and the vertical factor are all read off it.
+  const ctx = spatialContextFrom(source.crs());
+  const unitConfirmed = ctx.linearUnitKnown;
+  const metresPerUnit = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88
   // feet over a metre grid); otherwise it follows the horizontal factor.
-  const verticalMetresPerUnit = unitConfirmed ? (crs?.verticalUnitToMetres ?? metresPerUnit) : 1;
+  const verticalMpu = unitConfirmed
+    ? (verticalMetresPerUnit(ctx, 'horizontal') ?? metresPerUnit)
+    : 1;
   try {
     const run = await gradeFullCloud({
       source,
       decoder,
       signal,
       grade: (positions, scale) =>
-        gradeSampleDensity(positions, scale, metresPerUnit, verticalMetresPerUnit),
+        gradeSampleDensity(positions, scale, metresPerUnit, verticalMpu),
       onProgress: (p) => {
         // Don't paint progress for a scan that's no longer the active one — a
         // detach/replace mid-decode must not write into the new cloud's panel.
