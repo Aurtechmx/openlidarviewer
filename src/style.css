@@ -7884,10 +7884,17 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
      tab bar. The tab row only appears once the user expands the sheet, so the
      point cloud is never covered by chrome at rest. Tapping the grip expands. */
   .olv-mobile-sheet.is-collapsed .olv-msheet-tabs { display: none; }
+  /* Collapsed = a genuinely thin grip strip, not a tall empty panel. The head
+     shrinks to the grip line plus a small chevron so the canvas reaches almost
+     to the bottom edge in both orientations. */
   .olv-mobile-sheet.is-collapsed .olv-msheet-head {
     justify-content: center;
-    padding-top: 12px;
-    padding-bottom: 6px;
+    min-height: 0;
+    padding-top: 10px;
+    padding-bottom: 2px;
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-handle {
+    min-height: 20px; height: 20px;
   }
 
   /* Body: the active tabpanel only; scrolls inside the sheet. */
