@@ -20,6 +20,7 @@
 
 /** A category grouping for the method catalogue. */
 export type MethodCategory =
+  | 'classification'
   | 'ground'
   | 'terrain'
   | 'validation'
@@ -62,6 +63,21 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'object returns on a rasterised surface.',
     citation: 'Pingel, Clarke & McBride (2013), doi:10.1016/j.isprsjprs.2012.12.002',
     category: 'ground',
+  },
+  'olv.class.derived-heuristic': {
+    id: 'olv.class.derived-heuristic',
+    version: 1,
+    name: 'Derived point classification (heuristic)',
+    summary:
+      'Unsupervised ASPRS-aligned point classification for clouds with no producer ' +
+      'classification: grid-minimum surface, progressive morphological opening, ' +
+      'height above ground, then per-cell roughness with optional RGB-greenness and ' +
+      'multi-return cues. Coarse and heuristic, not a producer classification.',
+    citation:
+      'Zhang et al. (2003), doi:10.1109/TGRS.2003.810682 (progressive morphological ' +
+      'filter); Amolins et al. (2008) roughness separation; internal composition of ' +
+      'the cues.',
+    category: 'classification',
   },
   'olv.terrain.slope-horn': {
     id: 'olv.terrain.slope-horn',

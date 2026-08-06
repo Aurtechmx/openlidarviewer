@@ -36,7 +36,17 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic — same input, same
  * output, so it runs identically in a Web Worker, in Node tests, and on the
  * main thread.
+ *
+ * VERSIONING. The rules above and the parameter defaults below are frozen
+ * together as a numbered preset (see {@link CLASSIFIER_PRESETS}). Every result
+ * carries the method tag, the preset id and the preset digest, so an export can
+ * state exactly which classifier and which parameters produced it.
+ * `tests/classifierFreeze.test.ts` fails when a default moves without
+ * {@link CLASSIFIER_VERSION} moving with it.
  */
+
+import { canonicalize, sha256 } from '../measure/auditLog';
+import type { ProcessingOpInput } from '../../science/processingManifest';
 
 /** ASPRS codes this heuristic can emit. */
 export const DERIVED_GROUND = 2;
@@ -198,22 +208,171 @@ export interface DeriveClassificationResult {
    * ground, coarse grid, …). Empty when the scan classified cleanly.
    */
   readonly warnings: readonly string[];
+  /** Which classifier, at which version, on which parameters. */
+  readonly classifier: ClassifierProvenance;
 }
 
-const DEFAULTS = {
-  vegGreennessMin: 0.06,
-  minGroundSupport: 0.5,
-  buildingMinSupport: 0.66,
-  maxObjectSizeM: 20,
-  elevThresholdM: 0.3,
-  slope: 0.15,
-  groundBandM: 0.5,
-  lowVegBandM: 2,
-  medVegBandM: 5,
-  buildingRoughnessMaxM: 1.5,
-  buildingMinHagM: 2.5,
-  maxGridDim: 768,
-} as const;
+/**
+ * The stable id of this classifier in the scientific method catalogue
+ * (`src/science/methodRegistry.ts`). It never changes once published.
+ */
+export const CLASSIFIER_METHOD_ID = 'olv.class.derived-heuristic';
+
+/**
+ * The revision of the classifier's RULES and DEFAULTS, as an integer.
+ *
+ * BUMP DISCIPLINE. Increment it whenever a rule changes or a default moves —
+ * anything that could move the codes this module emits for an unchanged cloud.
+ * A pure refactor that leaves every code identical does NOT bump it. The
+ * registry entry for {@link CLASSIFIER_METHOD_ID} carries the same integer, and
+ * `tests/classifierFreeze.test.ts` fails when the two disagree or when a
+ * default moves without a bump.
+ */
+export const CLASSIFIER_VERSION = 1;
+
+/** The numeric parameters a run is fully determined by, defaults included. */
+export interface ClassifierParams {
+  readonly vegGreennessMin: number;
+  readonly minGroundSupport: number;
+  readonly buildingMinSupport: number;
+  readonly maxObjectSizeM: number;
+  readonly elevThresholdM: number;
+  readonly slope: number;
+  readonly groundBandM: number;
+  readonly lowVegBandM: number;
+  readonly medVegBandM: number;
+  readonly buildingRoughnessMaxM: number;
+  readonly buildingMinHagM: number;
+  readonly maxGridDim: number;
+}
+
+/** One published, immutable parameter preset. */
+export interface ClassifierPreset {
+  /** Human-stable name, e.g. `derived-heuristic-v1`. */
+  readonly id: string;
+  /** The {@link CLASSIFIER_VERSION} this preset belongs to. */
+  readonly version: number;
+  /** The frozen defaults. */
+  readonly params: ClassifierParams;
+  /** `sha256:` digest over `{id, version, params}` — see {@link classifierPresetDigest}. */
+  readonly digest: string;
+}
+
+/**
+ * Every published preset, by version. Entries are APPEND-ONLY: an existing one
+ * is a record of what shipped, and editing it in place is the move the freeze
+ * test exists to make visible.
+ *
+ * Each default is anchored in the literature cited on
+ * {@link DeriveClassificationOptions}, not chosen to make a fixture pass.
+ */
+export const CLASSIFIER_PRESETS: Readonly<Record<number, ClassifierPreset>> = Object.freeze({
+  1: Object.freeze({
+    id: 'derived-heuristic-v1',
+    version: 1,
+    params: Object.freeze({
+      vegGreennessMin: 0.06,
+      minGroundSupport: 0.5,
+      buildingMinSupport: 0.66,
+      maxObjectSizeM: 20,
+      elevThresholdM: 0.3,
+      slope: 0.15,
+      groundBandM: 0.5,
+      lowVegBandM: 2,
+      medVegBandM: 5,
+      buildingRoughnessMaxM: 1.5,
+      buildingMinHagM: 2.5,
+      maxGridDim: 768,
+    }),
+    digest: 'sha256:58e3e9083d776a6306e1b032d177f5a531536ee746097906805b9a99567dd43a',
+  }),
+});
+
+/** The preset the running code uses. */
+export const CLASSIFIER_PRESET: ClassifierPreset = CLASSIFIER_PRESETS[CLASSIFIER_VERSION];
+
+/**
+ * The digest of a preset: `sha256:` over a canonical (key-sorted) serialisation
+ * of its id, version and parameters. Recomputed by the freeze test against the
+ * stored value, so a parameter edited without a new preset fails rather than
+ * passing quietly.
+ */
+export function classifierPresetDigest(preset: {
+  readonly id: string;
+  readonly version: number;
+  readonly params: ClassifierParams;
+}): string {
+  return `sha256:${sha256(
+    canonicalize({ id: preset.id, version: preset.version, params: preset.params }),
+  )}`;
+}
+
+/**
+ * The defaults the classifier runs on ARE the frozen preset. The single
+ * assignment is what keeps the published record and the running code from
+ * drifting apart; nothing else in this module states a default.
+ */
+const DEFAULTS: ClassifierParams = CLASSIFIER_PRESET.params;
+
+/** Which optional cues a run actually had data for, in a stable order. */
+const CUE_RGB = 'rgb-greenness';
+const CUE_RETURNS = 'multi-return';
+const CUE_PRESERVED = 'producer-classes-preserved';
+
+/**
+ * The identity of the classifier that produced a result: which method at which
+ * version, which frozen preset, the parameters the run actually used (the
+ * resolved grid included, not just the requested one), and which optional cues
+ * had data. This is what an export states so a reader can reproduce the run.
+ */
+export interface ClassifierProvenance {
+  /** `olv.class.derived-heuristic@N`. */
+  readonly method: string;
+  readonly presetId: string;
+  readonly presetDigest: string;
+  /** Effective numeric parameters, including the resolved `cellSizeM`. */
+  readonly parameters: Readonly<Record<string, number>>;
+  /** Optional cues that were active, in a stable order. */
+  readonly cues: readonly string[];
+}
+
+/** `olv.class.derived-heuristic@N` — the tag every result and export states. */
+export const CLASSIFIER_METHOD_TAG = `${CLASSIFIER_METHOD_ID}@${CLASSIFIER_VERSION}`;
+
+/**
+ * The numeric parameters of a run, keyed by name: every frozen preset key read
+ * from the merged options, plus the RESOLVED cell size. Enumerating the preset
+ * keys (rather than spreading the merged object) is what keeps the caller's
+ * typed arrays out of a record that gets serialised into an export.
+ */
+function numericParameters(
+  merged: ClassifierParams,
+  resolvedCellSizeM: number,
+): Readonly<Record<string, number>> {
+  const out: Record<string, number> = { cellSizeM: resolvedCellSizeM };
+  for (const key of Object.keys(CLASSIFIER_PRESET.params) as (keyof ClassifierParams)[]) {
+    out[key] = merged[key];
+  }
+  return out;
+}
+
+/**
+ * The processing-manifest op for a classification run — the shape
+ * `src/science/processingManifest.ts` chains, so an export's provenance can
+ * carry the classifier beside the ground filter and the DTM fill.
+ */
+export function classifierProcessingOp(result: DeriveClassificationResult): ProcessingOpInput {
+  const c = result.classifier;
+  return {
+    method: c.method,
+    params: {
+      presetId: c.presetId,
+      presetDigest: c.presetDigest,
+      parameters: { ...c.parameters },
+      cues: [...c.cues],
+    },
+  };
+}
 
 /** Clamp to [0, 1]. */
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
@@ -371,6 +530,17 @@ export function deriveClassification(
     confidence: NaN,
     classConfidence: {},
     warnings: [`Classification not computed (${reason}).`],
+    // The run produced nothing, but WHICH classifier declined still belongs in
+    // the record: a reader holding the file has to be able to tell an empty
+    // result from a missing one. No grid was resolved, so no `cellSizeM` is
+    // stated and no cue is claimed.
+    classifier: {
+      method: CLASSIFIER_METHOD_TAG,
+      presetId: CLASSIFIER_PRESET.id,
+      presetDigest: CLASSIFIER_PRESET.digest,
+      parameters: { ...DEFAULTS },
+      cues: [],
+    },
   });
 
   if (count <= 0 || b.finite < 3 || !(b.maxX > b.minX) || !(b.maxY > b.minY)) {
@@ -693,6 +863,25 @@ export function deriveClassification(
   if (preserved) modeNotes.push('producer classes preserved (gaps only)');
   const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
 
+  const cues: string[] = [];
+  if (useGreen) cues.push(CUE_RGB);
+  if (useReturns) cues.push(CUE_RETURNS);
+  if (preserved) cues.push(CUE_PRESERVED);
+
+  const classifier: ClassifierProvenance = {
+    method: CLASSIFIER_METHOD_TAG,
+    presetId: CLASSIFIER_PRESET.id,
+    presetDigest: CLASSIFIER_PRESET.digest,
+    // Numeric parameters only, projected key by key: `o` also carries the
+    // caller's typed arrays (colours, returns, producer classes), and a record
+    // meant to be serialised into an export must not drag a point buffer with
+    // it. The RESOLVED grid is stated, not the requested one — `cellSizeM` is
+    // derived from the point spacing when the caller omits it and grows again
+    // to respect `maxGridDim`, so the request would misdescribe the run.
+    parameters: numericParameters(o, cell),
+    cues,
+  };
+
   return {
     codes,
     counts,
@@ -703,9 +892,11 @@ export function deriveClassification(
     provenance:
       `Derived (heuristic) classification — progressive morphological ground ` +
       `filter + height-above-ground at ${cell.toFixed(2)} m grid${modeSuffix}. ` +
+      `${CLASSIFIER_METHOD_TAG}, preset ${CLASSIFIER_PRESET.id}. ` +
       `Not a survey-grade or producer classification; validate before relying on it.`,
     confidence,
     classConfidence,
     warnings,
+    classifier,
   };
 }
