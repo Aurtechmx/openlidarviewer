@@ -35,6 +35,9 @@ import {
 import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
 // Honest vertical-unit label for the Contour Studio launch frame (feet vs metres).
 import { verticalUnitLabel } from '../units/units';
+// The in-memory Float32 precision policy the Contour Studio deliverables gate on.
+import { scanPrecisionPermit } from './scanPrecision';
+import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -262,6 +265,24 @@ export function createTerrainAnalysisRunner(
     return Number.isFinite(canonical[1]) ? canonical[1] : null;
   };
 
+  /**
+   * The active scan's in-memory Float32 precision permit, or null when nothing
+   * is loaded. Reads the SAME two seams as `worldOriginY` — a static cloud's
+   * `sourceOrigin` + `bounds()`, else the streaming source's `renderOrigin` +
+   * `dataBounds()` — because those are the origin and the residual set each
+   * shape actually holds. `dataBounds` rather than `localBounds`: the latter is
+   * the octree root cube, which would report a reach the data never occupies.
+   */
+  const framePrecision = (): PrecisionPermit | null => {
+    const viewer = getViewer();
+    const id = getActiveId();
+    return scanPrecisionPermit({
+      cloud: id ? viewer.getCloud(id) : null,
+      streaming: viewer.streamingCloud,
+      crs: crsService.current(),
+    });
+  };
+
   async function run(intervalM?: number): Promise<void> {
     const viewer = getViewer();
     // The panel is lazy-mounted; every run() caller fires post-mount, so this
@@ -367,6 +388,11 @@ export function createTerrainAnalysisRunner(
         verticalUnitToMetres: vUnitKnown ? vScale : null,
         verticalUnitLabel: vUnitKnown ? verticalUnitLabel(vScale) : null,
         groundIsDerived: gathered.groundIsDerived,
+        // What the Float32 position buffer can still resolve at this extent.
+        // Read from the same seams `worldOriginY` uses, so the precision term
+        // and the latitude recovery can never disagree about which frame the
+        // scan is in. A refused permit blocks every registered deliverable.
+        precision: framePrecision(),
       });
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
