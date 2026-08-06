@@ -123,6 +123,7 @@
     "lint:positions-reads": "node scripts/lint-positions-reads.mjs",
     "lint:monolith-size": "node scripts/lint-monolith-size.mjs",
     "lint:architecture-truth": "node scripts/lint-architecture-truth.mjs",
+    "verify:archive-gate": "node scripts/verify-archive-gate.mjs",
     "lint:claims-language": "node scripts/lint-claims-language.mjs",
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",
     "lint:csp-html": "node scripts/lint-csp-html.mjs",
