@@ -72,7 +72,7 @@ function runCorpus(): Run[] {
   for (const scene of buildCorpus()) {
     const before = process.memoryUsage().rss;
     const t0 = performance.now();
-    const result = deriveClassification(scene.positions, scene.count, optionsFor(scene));
+    const result = deriveClassification(scene.xyz, scene.count, optionsFor(scene));
     const runtimeMs = performance.now() - t0;
     const peakRssMb = Math.max(before, process.memoryUsage().rss) / (1024 * 1024);
     runs.push({
@@ -181,7 +181,7 @@ describe('classifier corpus evaluation', () => {
     const scenes = buildCorpus();
     const run = (id: string) => {
       const scene = scenes.find((s) => s.id === id)!;
-      const result = deriveClassification(scene.positions, scene.count, optionsFor(scene));
+      const result = deriveClassification(scene.xyz, scene.count, optionsFor(scene));
       return scoreScene(scene.id, scene.truth, result.codes);
     };
     const metre = run('units-metre');
