@@ -39,6 +39,17 @@ import type {
   SessionSpatialVerdict,
 } from '../io/session';
 
+/**
+ * Whole-file byte ceiling for a `.olvsession`, checked on the File's size BEFORE
+ * it is read. A shared session is untrusted input, and `parseSession` runs
+ * `JSON.parse` over the entire text — an unbounded file can exhaust memory
+ * before the parser's per-dimension caps ever apply (and before the try/catch
+ * can surface it). An inspection session is analysis metadata, not the scan, so
+ * even a rich Evidence Capsule is a few MB; 256 MB is far above any real session
+ * while bounding the parse. Over-limit is rejected onto the drop zone.
+ */
+export const MAX_SESSION_BYTES = 256 * 1024 * 1024;
+
 /** The streaming-source slice `scanFactsFromStreaming` reads — a structural subset of {@link StreamingSource}. */
 export interface StreamingScanSource {
   readonly name: string;
@@ -216,6 +227,16 @@ export async function importSession(
   deps: SessionIoDeps,
 ): Promise<void> {
   try {
+    // A shared `.olvsession` is untrusted; reject an over-large file up front,
+    // before it is read, so `JSON.parse` of the whole text can't exhaust memory.
+    // This is the whole-file ceiling; the parser's per-dimension caps (item
+    // counts, per-measurement points) bound the rest once the JSON is in hand.
+    if (file.size > MAX_SESSION_BYTES) {
+      throw new Error(
+        `This session file is too large (${Math.round(file.size / (1024 * 1024))} MB; ` +
+          `limit ${Math.round(MAX_SESSION_BYTES / (1024 * 1024))} MB).`,
+      );
+    }
     // The session path's imports are light (no three.js), so a session restore
     // can finish before the lazily-imported Viewer chunk resolves — leaving
     // `viewer` as its null sentinel. Await viewerReady so every `viewer.*`
@@ -286,6 +307,31 @@ export async function importSession(
           return;
         }
       }
+      // Roadmap P1 #5 — validate the session's spatial FRAME here, in the SAME
+      // preflight as the scan-identity match and BEFORE any state is attached. A
+      // session whose extents match the scan (so `matchSessionToScan` returned
+      // strong/partial, not conflict) can still declare a divergent up-axis, unit
+      // or CRS — a Z-up survey re-exported Y-up keeps identical extents. Rebasing
+      // geometry is TRANSLATION only, never rotation or rescale, so attaching a
+      // session under the wrong frame lands every measurement silently wrong.
+      // Detect the conflict against the FILE's own declaration and refuse the
+      // whole restore, exactly as the identity `conflict` verdict does above,
+      // rather than mutating the scene and disclosing after the fact. (The
+      // "Apply anyway" path overrides identity CONFIDENCE only; a spatial-frame
+      // conflict is a harder, different failure and is never waved through.)
+      const declaredSpatial = declaredSpatialForActiveScan(viewer, deps);
+      const spatial = detectSessionSpatialConflict(
+        { upAxis: session.upAxis, epsg: session.crs?.epsg, linearUnit: session.crs?.linearUnit },
+        declaredSpatial,
+      );
+      if (spatial.hasConflict) {
+        const why = spatial.conflicts.map((c) => c.reason).join('; ');
+        deps.showToast(
+          `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
+            `The scan's own frame is kept; load the session on its own scan to restore it.`,
+        );
+        return;
+      }
     }
     const geo = haveCloud
       ? rebaseSessionGeometry(session, deps.exportOrigin())
@@ -341,36 +387,17 @@ export async function importSession(
       clip: geo.clip,
       camera: geo.camera,
     });
-    // Roadmap P1 #5 — the session's stored spatial metadata must never silently
-    // redefine the loaded scan's own frame. Compare the session's CRS code,
-    // up-axis and linear unit against what the FILE declares; any divergence is a
-    // conflict, not a disclosure. On a conflict we keep the file's declaration
-    // and refuse the session's spatial claim (disclosing it), rather than
-    // reinterpreting the scan's coordinates. The scan-identity gate already
-    // refuses a mismatched EPSG summary; this covers the rest — a differing
-    // up-axis or unit, and a scan whose declaration exists but was absent from
-    // the session's summary. With no cloud loaded the file declares nothing, so
-    // nothing can conflict and the session's CRS (if any) still round-trips.
-    const declaredSpatial: DeclaredSpatialFacts = haveCloud
-      ? declaredSpatialForActiveScan(viewer, deps)
-      : {};
-    const spatial = detectSessionSpatialConflict(
-      { upAxis: session.upAxis, epsg: session.crs?.epsg, linearUnit: session.crs?.linearUnit },
-      declaredSpatial,
-    );
-    if (spatial.hasConflict) {
-      const why = spatial.conflicts.map((c) => c.reason).join('; ');
-      deps.showToast(
-        `The session's spatial metadata conflicts with this scan (${why}) — ` +
-          `the scan's own declaration is kept and the session's was not applied.`,
-      );
-    } else if (
+    // Roadmap P1 #5 — the spatial FRAME was already validated in the preflight
+    // above (a divergent up-axis / unit / CRS refuses the whole restore before
+    // any state is attached), so reaching here means the session's frame agrees
+    // with the file's, or no cloud is loaded for it to disagree with. Restore the
+    // author's CRS override so an Evidence Capsule round-trips without
+    // re-prompting; a session that declared no usable CRS leaves the file's own.
+    if (
       session.crs &&
       session.crs.epsg != null &&
       (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
     ) {
-      // No conflict — restore the author's CRS override so a capsule round-trips
-      // without re-prompting.
       deps.setCrsOverride({
         override: { epsg: session.crs.epsg, kind: session.crs.kind },
         detected: deps.getActiveScanId()

@@ -3,6 +3,7 @@ import {
   importSession,
   scanFactsFromStreaming,
   scanFactsFromStatic,
+  MAX_SESSION_BYTES,
   type SessionIoDeps,
   type SessionModule,
 } from '../src/app/sessionIo';
@@ -365,16 +366,20 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
   });
   const strongSummary = () => summary({ width: 10, depth: 10, height: 3, sourcePoints: 1000 });
 
-  it('refuses the session CRS when the file declares a DIFFERENT EPSG (no silent adopt)', async () => {
+  it('REFUSES the whole restore when the file declares a DIFFERENT EPSG (no geometry under the wrong frame)', async () => {
     const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32614 }) });
     await importSession(
       asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613 }), scanSummary: strongSummary() })),
       {},
       deps,
     );
-    // Geometry still restores — the scan IS a spatial match — but the session's
-    // CRS claim is refused and disclosed, not applied.
-    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    // FIX A: a hard spatial conflict is validated in the preflight now, BEFORE
+    // any mutation, so nothing is attached (measurements included) — it is not
+    // restored-then-disclosed. The scan-identity gate saw a strong extents match
+    // (the summary carried no EPSG); the resolved CRS-code divergence is the
+    // conflict, and it refuses rather than realigning geometry onto the wrong
+    // frame — the same stance the identity gate takes on a differing summary EPSG.
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
     expect(calls.setCrsOverride).not.toHaveBeenCalled();
     const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
     expect(warn).toBeTruthy();
@@ -402,22 +407,31 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 
-  it('refuses the session CRS on a UNIT mismatch even when the EPSG agrees', async () => {
+  it('REFUSES the restore on a UNIT mismatch even when the EPSG agrees', async () => {
     const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613, linearUnit: 'metre' }) });
     await importSession(
       asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613, linearUnit: 'foot', linearUnitToMetres: 0.3048 }), scanSummary: strongSummary() })),
       {},
       deps,
     );
+    // A metre-vs-foot unit divergence silently rescales every distance, and the
+    // rebase only translates (never rescales), so the geometry can't be made
+    // right — FIX A refuses before attaching it.
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
     expect(calls.setCrsOverride).not.toHaveBeenCalled();
     const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
     expect(warn).toMatch(/linear unit/);
     expect(warn).toMatch(/foot/);
   });
 
-  it('flags an up-axis mismatch against the file’s detected axis', async () => {
-    // A Y-up mesh format (GLB) loaded; the session was captured Z-up. Extents
-    // match so the identity gate passes; the axis divergence is the conflict.
+  it('REFUSES a Z-up session dropped onto a Y-up scan — no measurements under the wrong frame', async () => {
+    // The headline FIX A case. A Y-up mesh format (GLB) is loaded; the session
+    // was captured Z-up. Extents match so the identity gate returns strong, so
+    // the OLD code rebased and attached the measurements, then fired a toast that
+    // under-disclosed (the geometry was already applied). A Z-up→Y-up frame needs
+    // a ROTATION to line up, but the rebase only ever translates — so every
+    // attached measurement lands silently wrong. FIX A validates the axis in the
+    // preflight and refuses the whole restore before any state is touched.
     const { deps, calls } = makeDeps({
       static: {
         name: 'loaded.glb',
@@ -432,12 +446,32 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
       {},
       deps,
     );
-    // Geometry restores; the axis conflict is surfaced, not silently adopted.
-    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    // Nothing spatial is attached — not measurements, not annotations, not views.
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+    expect(calls.loadAnnotations).not.toHaveBeenCalled();
+    expect(calls.applyViewState).not.toHaveBeenCalled();
     const warn = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /conflicts with this scan/.test(m));
     expect(warn).toBeTruthy();
     expect(warn).toMatch(/up-axis/);
     expect(warn).toMatch(/Y-up/);
+  });
+
+  it('regression guard — a fully matching session (axis, unit, CRS all agree) STILL restores everything', async () => {
+    // The clean-restore path FIX A must leave byte-for-byte intact: no conflict,
+    // so the preflight falls through and every piece of state is committed and
+    // the CRS override round-trips, exactly as before.
+    const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613, linearUnit: 'metre' }) });
+    await importSession(
+      asFile(sessionJson({ upAxis: 'z', crs: resolvedCrs({ epsg: 32613, linearUnit: 'metre' }), scanSummary: strongSummary() })),
+      {},
+      deps,
+    );
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(calls.loadAnnotations).toHaveBeenCalledTimes(1);
+    expect(calls.restore).toHaveBeenCalledTimes(1);
+    expect(calls.applyViewState).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 
   it('restores cleanly when the file’s axis AGREES with the session', async () => {
@@ -454,5 +488,26 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     await importSession(asFile(sessionJson({ upAxis: 'z', scanSummary: strongSummary() })), {}, deps);
     expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
+  });
+});
+
+describe('importSession — whole-file byte ceiling (OOM hardening)', () => {
+  it('rejects an over-size session file before reading or mutating anything', async () => {
+    const { deps, calls } = makeDeps();
+    const text = vi.fn(async () => sessionJson());
+    const overSize = { size: MAX_SESSION_BYTES + 1, text } as unknown as File;
+    await importSession(overSize, {}, deps);
+    expect(calls.setDropError).toHaveBeenCalledWith(expect.stringContaining('too large'));
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+    // Rejected on size alone — the file's bytes are never even read.
+    expect(text).not.toHaveBeenCalled();
+  });
+
+  it('reads a file whose size is under the ceiling (regression guard)', async () => {
+    const { deps, calls } = makeDeps();
+    const okFile = { size: 1024, text: async () => sessionJson() } as unknown as File;
+    await importSession(okFile, {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(calls.setDropError).not.toHaveBeenCalled();
   });
 });
