@@ -99,6 +99,9 @@ export class ToolDock {
       false,
       ICON_LINK,
     );
+    // Stable hook for the phone stylesheet, which files this meta tool under
+    // the "More" disclosure instead of the primary row.
+    this._share.classList.add('olv-tool-share');
     this._share.addEventListener('click', () => {
       this._share.blur();
       callbacks.onShare();
@@ -203,7 +206,7 @@ export class ToolDock {
     this._more = el('button', {
       className: 'olv-tool olv-tool-more',
       text: '•••',
-      title: 'More tools — Snapshot, Analyse, Help',
+      title: 'More tools: Snapshot, Analyse, Copy view link, Help',
       ariaLabel: 'Show more tools',
     });
     this._more.setAttribute('aria-expanded', 'false');
@@ -355,6 +358,10 @@ export class ToolDock {
     const span = button.querySelector('.olv-tool-label');
     if (span) span.textContent = text;
     else button.textContent = text;
+    // Keep the accessible name with the visible one. The label span is
+    // hidden in the icon-only landscape rail, so aria-label is what a screen
+    // reader reads there.
+    button.setAttribute('aria-label', text);
   }
 
   private _tool(
@@ -371,6 +378,12 @@ export class ToolDock {
     const button = el('button', { className: icon ? 'olv-tool olv-tool-ico' : 'olv-tool', title });
     if (icon) button.append(el('span', { className: 'olv-tool-ico-glyph', unsafeHtml: icon }));
     button.append(el('span', { className: 'olv-tool-label', text: label }));
+    // The landscape-phone rail renders the dock icon-only (a vertical strip has
+    // no room for captions and a squeezed caption is worse than none). The
+    // accessible name would then come from an invisible span, so mirror the
+    // label onto aria-label here. It wins over the hidden text in every
+    // orientation and keeps the button announced identically on desktop.
+    button.setAttribute('aria-label', label);
     button.disabled = disabled;
     return button;
   }
