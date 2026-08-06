@@ -290,6 +290,27 @@ describe('HttpRangeSource — identity pinning', () => {
 // FIX 3 — bounded remote reads
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A body that delivers headers and then nothing, ever — the shape a byte
+ * ceiling cannot catch, because zero bytes is under every limit.
+ */
+function stallingStream(): {
+  stream: ReadableStream<Uint8Array>;
+  cancelled: () => boolean;
+} {
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    pull() {
+      // Never resolves: the connection is open and silent.
+      return new Promise<void>(() => {});
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+  return { stream, cancelled: () => cancelled };
+}
+
 /** A stream that yields `chunks` and reports whether it was cancelled. */
 function trackedStream(chunks: Uint8Array[]): {
   stream: ReadableStream<Uint8Array>;
@@ -337,8 +358,11 @@ describe('bounded reads', () => {
   it('readExactlyBounded stops reading at the first over-long chunk', async () => {
     const { stream, pulls } = trackedStream([kb(4), kb(4), kb(4), kb(4), kb(4)]);
     await readExactlyBounded(new Response(stream), 6).catch(() => undefined);
-    // 4 fits, the next 4 overflows 6 → two pulls, not five.
-    expect(pulls()).toBe(2);
+    // 4 fits, the next 4 overflows 6 and the read stops there. The exact pull
+    // count is the stream's business (its high-water mark pre-pulls, and
+    // cancelling can provoke one more); what this pins is that the reader
+    // stopped early rather than draining all five chunks.
+    expect(pulls()).toBeLessThanOrEqual(3);
   });
 
   it('readExactlyBounded rejects a SHORT body', async () => {
@@ -465,6 +489,208 @@ describe('bounded reads', () => {
     expect(MAX_EPT_HIERARCHY_BYTES).toBe(16 * 1024 * 1024);
     expect(MAX_EPT_TILE_BYTES).toBe(128 * 1024 * 1024);
     expect(MAX_EPT_TILE_BYTES).toBeGreaterThan(MAX_EPT_HIERARCHY_BYTES);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Bounded in TIME as well as bytes
+//
+// A byte ceiling is not a bound on its own. A server that sends headers and
+// then goes quiet stays under every limit forever, and so does one trickling a
+// byte a minute. Worse, the deadline used to be cleared the moment `fetch`
+// resolved — which is when the HEADERS arrive — taking the caller's abort
+// listener with it, so after that point neither the timeout nor the user's
+// Cancel could reach the body at all.
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('stalled bodies', () => {
+  it('readExactlyBounded gives up on a body that never yields', async () => {
+    const { stream, cancelled } = stallingStream();
+    const err = await readExactlyBounded(new Response(stream), 8, {
+      idleTimeoutMs: 25,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RangeReadError);
+    expect((err as RangeReadError).code).toBe('timeout');
+    expect((err as Error).message).toMatch(/stalled/i);
+    expect(cancelled()).toBe(true);
+  });
+
+  it('readAtMostBounded gives up on a body that never yields', async () => {
+    const { stream } = stallingStream();
+    const err = await readAtMostBounded(new Response(stream), 1024, 'thing', {
+      idleTimeoutMs: 25,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BoundedReadError);
+    expect((err as BoundedReadError).reason).toBe('stalled');
+  });
+
+  it('a caller abort reaches a stalled body', async () => {
+    // The abort must WIN the race against a pending read, not be polled for
+    // before one. Polling checked the flag and then left for an await that
+    // never returned.
+    const { stream, cancelled } = stallingStream();
+    const controller = new AbortController();
+    const reading = readAtMostBounded(new Response(stream), 1024, 'thing', {
+      signal: controller.signal,
+      // Far beyond the test's lifetime: only the abort can end this.
+      idleTimeoutMs: 60_000,
+    });
+    controller.abort();
+    const err = await reading.catch((e: unknown) => e);
+    expect((err as Error).name).toBe('AbortError');
+    expect(cancelled()).toBe(true);
+  });
+
+  it('the whole-body clock stops a trickle that never breaches the idle budget', async () => {
+    // One byte every 10 ms forever: every gap is well inside the idle budget,
+    // the byte total stays far below the ceiling, and only the total deadline
+    // can end it.
+    let cancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            // The trickle keeps firing after the read gives up and cancels;
+            // enqueueing onto a closed controller throws, so let it go.
+            try {
+              controller.enqueue(new Uint8Array(1));
+            } catch {
+              /* already cancelled — that is the outcome under test */
+            }
+            resolve();
+          }, 10);
+        });
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const err = await readAtMostBounded(new Response(stream), 1_000_000, 'thing', {
+      idleTimeoutMs: 10_000,
+      totalTimeoutMs: 60,
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BoundedReadError);
+    expect((err as BoundedReadError).reason).toBe('stalled');
+    expect((err as Error).message).toMatch(/did not finish within 60 ms/);
+    expect(cancelled).toBe(true);
+  });
+
+  it('HttpRangeSource.readRange times out on a body that stalls after the headers', async () => {
+    const { stream, cancelled } = stallingStream();
+    const fn = (async (_url: string, init: RequestInit = {}) =>
+      init.method === 'HEAD'
+        ? headResponse({ 'accept-ranges': 'bytes', 'content-length': '100' })
+        : new Response(stream, {
+            status: 206,
+            headers: { 'content-range': 'bytes 0-2/100' },
+          })) as typeof fetch;
+    const src = new HttpRangeSource(URL_A, {
+      fetchImpl: fn,
+      requestTimeoutMs: 30,
+      maxRetries: 0,
+      ...FAST,
+    });
+    // The request deadline — which now stays armed through the body — wins
+    // this race and surfaces as a timeout, NOT as a user abort.
+    await expect(src.readRange(0, 3)).rejects.toMatchObject({ code: 'timeout' });
+    expect(cancelled()).toBe(true);
+  });
+
+  it('a caller abort reaches a stalled range body', async () => {
+    const { stream } = stallingStream();
+    const fn = (async (_url: string, init: RequestInit = {}) =>
+      init.method === 'HEAD'
+        ? headResponse({ 'accept-ranges': 'bytes', 'content-length': '100' })
+        : new Response(stream, {
+            status: 206,
+            headers: { 'content-range': 'bytes 0-2/100' },
+          })) as typeof fetch;
+    const src = new HttpRangeSource(URL_A, {
+      fetchImpl: fn,
+      // Long enough that only the abort can end the read.
+      requestTimeoutMs: 60_000,
+      maxRetries: 0,
+      ...FAST,
+    });
+    await src.probe();
+    const controller = new AbortController();
+    const reading = src.readRange(0, 3, controller.signal);
+    controller.abort();
+    await expect(reading).rejects.toThrow();
+  });
+
+  it('the EPT transport times out a hierarchy body that stalls after the headers', async () => {
+    const { stream, cancelled } = stallingStream();
+    const fn = (async () => new Response(stream, { status: 200 })) as typeof fetch;
+    const t = createEptTransport({
+      fetchImpl: fn,
+      requestTimeoutMs: 30,
+      maxRetries: 0,
+      sleep: () => Promise.resolve(),
+    });
+    const err = await t
+      .fetchText('https://example.com/ept-hierarchy/0-0-0-0.json')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BoundedReadError);
+    expect((err as BoundedReadError).reason).toBe('stalled');
+    expect(cancelled()).toBe(true);
+  });
+
+  it('the EPT transport times out a tile body that stalls after the headers', async () => {
+    const { stream } = stallingStream();
+    const fn = (async () => new Response(stream, { status: 200 })) as typeof fetch;
+    const t = createEptTransport({
+      fetchImpl: fn,
+      requestTimeoutMs: 30,
+      maxRetries: 0,
+      sleep: () => Promise.resolve(),
+    });
+    const err = await t
+      .fetchBytes('https://example.com/ept-data/0-0-0-0.laz')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BoundedReadError);
+    expect((err as BoundedReadError).reason).toBe('stalled');
+  });
+
+  it('a caller abort reaches a stalled EPT tile body', async () => {
+    const { stream } = stallingStream();
+    const fn = (async () => new Response(stream, { status: 200 })) as typeof fetch;
+    const t = createEptTransport({
+      fetchImpl: fn,
+      requestTimeoutMs: 60_000,
+      maxRetries: 0,
+      sleep: () => Promise.resolve(),
+    });
+    const controller = new AbortController();
+    const reading = t.fetchBytes(
+      'https://example.com/ept-data/0-0-0-0.laz',
+      controller.signal,
+    );
+    controller.abort();
+    await expect(reading).rejects.toThrow();
+  });
+
+  it('a healthy body still completes well inside the budgets', async () => {
+    // The guard must not fire on a slow-but-progressing transfer, which is
+    // why the idle budget re-arms per chunk instead of capping the total at
+    // the header timeout.
+    const chunks = [kb(4), kb(4)];
+    let i = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        return new Promise<void>((resolve) => {
+          setTimeout(() => {
+            if (i < chunks.length) controller.enqueue(chunks[i++]);
+            else controller.close();
+            resolve();
+          }, 15);
+        });
+      },
+    });
+    const out = await readExactlyBounded(new Response(stream), 8, {
+      idleTimeoutMs: 200,
+    });
+    expect(out.byteLength).toBe(8);
   });
 });
 

@@ -76,6 +76,24 @@ export const MAX_EPT_TILE_BYTES = 128 * 1024 * 1024;
 export type EptFetchOperation = 'hierarchy' | 'tile';
 
 /**
+ * A response whose request deadline is still running, so the body can be read
+ * under it. See {@link createEptTransport}'s `fetchOnce` for why the timer
+ * outlives the headers.
+ */
+interface TimedEptResponse {
+  readonly response: Response;
+  /** The composed signal the request was issued with — caller cancel + deadline. */
+  readonly signal: AbortSignal;
+  /**
+   * The deadline half of {@link signal}, so the body reader can report an
+   * expired deadline as a stalled server rather than as a user cancel.
+   */
+  readonly timeoutSignal: AbortSignal;
+  /** Drop the timer and listeners. Call once the body is consumed. */
+  readonly release: () => void;
+}
+
+/**
  * A typed EPT fetch failure carrying only already-safe fields.
  *
  * The point of the type is that there is no raw URL on it to leak. `host` and
@@ -177,9 +195,17 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
 
   /**
    * Issue one GET with a hard timeout, composed with the caller's outer abort
-   * signal. Returns the Response; throws on transport / timeout / abort.
+   * signal. Returns a {@link TimedEptResponse}; throws on transport / timeout
+   * / abort.
+   *
+   * The timer and listeners are NOT dropped when `fetch` resolves. A resolved
+   * fetch means the headers arrived, nothing more — the body is still in
+   * flight. Tearing the deadline down at that point left a server free to
+   * stall the body forever with no clock running and no route for the caller's
+   * cancel to reach the stream. The caller `release()`s once it has read the
+   * body.
    */
-  async function fetchOnce(url: string, outer?: AbortSignal): Promise<Response> {
+  async function fetchOnce(url: string, outer?: AbortSignal): Promise<TimedEptResponse> {
     if (outer?.aborted) throw new Error('aborted');
     const timeoutController = new AbortController();
     const timer = setTimeout(() => timeoutController.abort(), requestTimeoutMs);
@@ -189,13 +215,23 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
     if (outer) outer.addEventListener('abort', onOuterAbort, { once: true });
     const onTimeoutAbort = (): void => composed.abort();
     timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true });
-    try {
-      const response = await fetchFn(url, { signal: composed.signal });
-      return response;
-    } finally {
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
       clearTimeout(timer);
       if (outer) outer.removeEventListener('abort', onOuterAbort);
       timeoutController.signal.removeEventListener('abort', onTimeoutAbort);
+    };
+    try {
+      // `redirect: 'follow'` is the platform default, stated so it reads as a
+      // decision — see the matching note in `HttpRangeSource` and the residual
+      // written up in `docs/threat-model.md`.
+      const response = await fetchFn(url, { signal: composed.signal, redirect: 'follow' });
+      return { response, signal: composed.signal, timeoutSignal: timeoutController.signal, release };
+    } catch (err) {
+      release();
+      throw err;
     }
   }
 
@@ -218,23 +254,27 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
     url: string,
     label: EptFetchOperation,
     outer?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<TimedEptResponse> {
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (outer?.aborted) throw new Error('aborted');
-      let response: Response | null = null;
+      let timed: TimedEptResponse | null = null;
       // Only the transport / timeout call is inside the try; the status
       // classification below is intentionally outside so a permanent-error
       // throw isn't swallowed back into the retry loop.
       try {
-        response = await fetchOnce(url, outer);
+        timed = await fetchOnce(url, outer);
       } catch (err) {
         if (outer?.aborted) throw err;
         lastError = err;
       }
-      if (response) {
-        // 2xx — success.
-        if (response.ok) return response;
+      if (timed) {
+        const response = timed.response;
+        // 2xx — success. NOT released: the body still has to be read, under
+        // the same deadline and the same cancellation.
+        if (response.ok) return timed;
+        // Every non-2xx path discards the body, so the deadline is done.
+        timed.release();
         // 4xx (except 408/429) — permanent. Don't retry; throw immediately.
         // `url` is never interpolated here: EptFetchError sanitises it, and
         // for a signed dataset the query string IS the credential.
@@ -260,25 +300,44 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
 
   return {
     fetchText: async (url, signal) => {
-      const response = await fetchWithRetry(url, 'hierarchy', signal);
-      // Bounded read: the body arrives from a host we don't control, and a
-      // hierarchy page has a knowable order of magnitude. See
-      // MAX_EPT_HIERARCHY_BYTES for why 16 MiB is the ceiling.
-      return readTextAtMost(
-        response,
-        MAX_EPT_HIERARCHY_BYTES,
-        'EPT hierarchy file',
-        signal,
-      );
+      const timed = await fetchWithRetry(url, 'hierarchy', signal);
+      try {
+        // Bounded read: the body arrives from a host we don't control, and a
+        // hierarchy page has a knowable order of magnitude. See
+        // MAX_EPT_HIERARCHY_BYTES for why 16 MiB is the ceiling. Bounded in
+        // TIME too — `timed.signal` is still wired to the deadline and the
+        // caller's cancel, and the idle budget kills a body that goes silent.
+        return await readTextAtMost(
+          timed.response,
+          MAX_EPT_HIERARCHY_BYTES,
+          'EPT hierarchy file',
+          {
+            signal: timed.signal,
+            timeoutSignal: timed.timeoutSignal,
+            idleTimeoutMs: requestTimeoutMs,
+          },
+        );
+      } finally {
+        timed.release();
+      }
     },
     fetchBytes: async (url, signal) => {
-      const response = await fetchWithRetry(url, 'tile', signal);
-      const bytes = await readAtMostBounded(
-        response,
-        MAX_EPT_TILE_BYTES,
-        'EPT tile',
-        signal,
-      );
+      const timed = await fetchWithRetry(url, 'tile', signal);
+      let bytes: Uint8Array;
+      try {
+        bytes = await readAtMostBounded(
+          timed.response,
+          MAX_EPT_TILE_BYTES,
+          'EPT tile',
+          {
+            signal: timed.signal,
+            timeoutSignal: timed.timeoutSignal,
+            idleTimeoutMs: requestTimeoutMs,
+          },
+        );
+      } finally {
+        timed.release();
+      }
       // `readAtMostBounded` may hand back a view into a larger chunk buffer
       // when the whole body arrived in one read. Callers treat the result as
       // an owned ArrayBuffer (they transfer it to a worker), so slice when the

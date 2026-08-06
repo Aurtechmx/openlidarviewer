@@ -17,13 +17,33 @@ release changes what the app reads or where it reaches.
    loopback, private, link-local, CGNAT and metadata hosts (`isBlockedHost`,
    including `169.254.169.254`). The Content-Security-Policy restricts
    `connect-src` to `self` and `https:`.
+
+   The validator applies to the URL the user entered, and only to that URL. It
+   is a literal check on a string — its own docstring notes it does not resolve
+   DNS — so a host that passes can still redirect to a private address, and a
+   name that resolves publicly once can resolve privately the next time (DNS
+   rebinding). Redirects are followed deliberately: `redirect: 'error'` would
+   break the ordinary signed-URL and CDN chains that public LiDAR hosting runs
+   on (S3 to CloudFront, GCS signed redirects, DOI resolvers), so the residual
+   is accepted rather than traded for a broken feature. What that residual
+   amounts to is a blind request: no credentials are attached, CORS stops the
+   response from being read, and the CSP is re-evaluated against each redirect
+   target, which keeps `http://` destinations out entirely — including cloud
+   metadata endpoints, which are http-only. The achievable maximum is an
+   unreadable, credential-less GET to an `https` host inside the user's
+   network, which is no more than any web page can already do with an `<img>`
+   tag pointing at the same address.
 3. URL parameters and the embed `postMessage` API. Treated as untrusted input;
    no path leads to dynamic code execution.
 
 ## Threats and mitigations
 
 Server-side request forgery via a remote URL is handled by the URL validators
-above and the CSP; the validators run before the fetch, not after.
+above and the CSP; the validators run before the fetch, not after — which is
+also their limit. They see the entered URL and nothing that happens afterwards,
+so redirects and DNS rebinding remain out of their reach, and the CSP is what
+bounds those. The residual is described under input 2 and is accepted as
+equivalent to ambient browser capability.
 
 Cross-site scripting is handled by a strict Content-Security-Policy. The single
 `innerHTML` sink is enforced static-only by `lint:unsafe-html`, and there is no

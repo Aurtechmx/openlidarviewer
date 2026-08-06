@@ -24,6 +24,15 @@
  * isn't available, and still with a pre-read `Content-Length` refusal in front
  * of it.
  *
+ * A BYTE ceiling alone is not a bound. A server that returns headers promptly
+ * and then never sends a body sits under every byte limit forever, and so does
+ * one trickling a byte a minute. Bounding size without bounding time turns a
+ * hostile host into a hang, which in the manifest path wedged the app's
+ * `loading` flag until a page reload. So every chunk read RACES the caller's
+ * abort and two clocks — an idle timeout (silence between chunks) and a
+ * whole-body ceiling (the trickle) — rather than checking a flag before an
+ * unbounded await, where a body that goes quiet never reaches the check again.
+ *
  * Pure — no DOM, no three.js. Uses only `Response` and web streams, both of
  * which exist on the main thread and in workers.
  */
@@ -31,21 +40,176 @@
 import { RangeReadError } from './RangeSource';
 
 /**
- * A remote body that blew past the caller's byte ceiling, or arrived short.
- * Distinct from {@link RangeReadError} because the non-range callers (the EPT
- * transport, the EPT manifest) have no range semantics to report — they have a
- * limit and a resource name.
+ * Default silence budget between two chunks, in ms.
+ *
+ * Matches the per-request header timeout the transports already use: 20 s of a
+ * connection saying nothing at all is the same evidence of a dead host either
+ * side of the response headers.
+ */
+export const DEFAULT_IDLE_TIMEOUT_MS = 20_000;
+
+/**
+ * Default ceiling on consuming ONE body, in ms.
+ *
+ * Deliberately far above the idle budget. A total deadline as tight as the
+ * header deadline would fail a large tile on a slow-but-healthy mobile link —
+ * trading a rare hostile-host hang for a common legitimate failure. Five
+ * minutes is past any real read (a 128 MiB tile at 500 KB/s is four) while
+ * still terminating a byte-a-minute trickle that the idle budget alone would
+ * let run forever.
+ */
+export const DEFAULT_TOTAL_TIMEOUT_MS = 300_000;
+
+/** Timing and cancellation for one bounded body read. */
+export interface BoundedReadOptions {
+  /**
+   * Aborts the read.
+   *
+   * The transports pass the SAME composed signal the `fetch` was issued with,
+   * still wired to the caller's cancel and the request deadline, so aborting
+   * it errors the underlying body stream rather than leaving a dangling read.
+   * That wiring is the fix for a subtler half of the same bug: the transports
+   * used to tear the listener down as soon as the headers arrived, after which
+   * neither the deadline nor the user's Cancel could reach the body at all.
+   */
+  readonly signal?: AbortSignal;
+  /**
+   * The deadline half of `signal`, when the caller composed one.
+   *
+   * Both a user cancel and an expired request deadline arrive here as the same
+   * event — the composed signal aborting — but they are not the same thing to
+   * a person. A cancel should surface as a cancel (the app shows nothing; the
+   * user already knows) and an expired deadline should surface as an error
+   * naming a server that stopped responding. Handing the deadline's own signal
+   * in is what lets the read tell them apart instead of reporting every
+   * stalled host as something the user did.
+   */
+  readonly timeoutSignal?: AbortSignal;
+  /** Silence budget between chunks. Default {@link DEFAULT_IDLE_TIMEOUT_MS}. */
+  readonly idleTimeoutMs?: number;
+  /** Whole-body ceiling. Default {@link DEFAULT_TOTAL_TIMEOUT_MS}. */
+  readonly totalTimeoutMs?: number;
+}
+
+/** Why a bounded read failed. */
+export type BoundedReadReason = 'too-large' | 'stalled';
+
+/**
+ * A remote body that blew past the caller's byte ceiling, arrived short, or
+ * stopped arriving. Distinct from {@link RangeReadError} because the non-range
+ * callers (the EPT transport, the EPT manifest) have no range semantics to
+ * report — they have a limit and a resource name.
  */
 export class BoundedReadError extends Error {
   /** The ceiling that was exceeded, in bytes. */
   readonly limitBytes: number;
   /** What was being read — "EPT hierarchy file", "EPT manifest", … */
   readonly what: string;
-  constructor(what: string, limitBytes: number, message: string) {
+  /** Size failure or time failure. */
+  readonly reason: BoundedReadReason;
+  constructor(
+    what: string,
+    limitBytes: number,
+    message: string,
+    reason: BoundedReadReason = 'too-large',
+  ) {
     super(message);
     this.name = 'BoundedReadError';
     this.what = what;
     this.limitBytes = limitBytes;
+    this.reason = reason;
+  }
+}
+
+/** The abort shape a cancelled `fetch` produces, so callers classify it alike. */
+function abortError(): Error {
+  return new DOMException('The read was aborted.', 'AbortError');
+}
+
+/**
+ * Read ONE chunk, racing the reader against the caller's abort and the two
+ * clocks.
+ *
+ * The ordering matters and is the whole point. Polling `signal.aborted` before
+ * `await reader.read()` bounds nothing: the check happens, then control leaves
+ * for an await that may never return, and the check is never reached again.
+ * Racing puts the timer and the abort listener on the same footing as the read
+ * itself, so whichever settles first wins.
+ *
+ * When a clock or the abort wins, the underlying `read()` is left pending. The
+ * caller cancels the reader on its error path, which settles it.
+ */
+function readChunkRacing(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal | undefined,
+  timeoutSignal: AbortSignal | undefined,
+  idleTimeoutMs: number,
+  totalTimeoutMs: number,
+  msLeftOfTotal: () => number,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = (act: () => void): void => {
+      if (settled) return;
+      settled = true;
+      if (timer !== undefined) clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      act();
+    };
+    // An abort that the caller's deadline caused is a stalled server, not a
+    // cancel — the transports arm the request deadline through the body now,
+    // so it is the deadline, not the idle timer, that usually wins that race.
+    const abortReason = (): Error =>
+      timeoutSignal?.aborted
+        ? new BoundedReadStall(
+            'the request deadline expired while the body was still arriving',
+            'total',
+          )
+        : abortError();
+    function onAbort(): void {
+      settle(() => reject(abortReason()));
+    }
+    if (signal?.aborted) {
+      settle(() => reject(abortReason()));
+      return;
+    }
+    const totalLeft = msLeftOfTotal();
+    // Whichever clock expires first governs this chunk. `totalLeft` shrinks
+    // across chunks, so a trickle eventually gets a zero budget even though
+    // every individual gap stayed under the idle limit.
+    const budget = Math.max(0, Math.min(idleTimeoutMs, totalLeft));
+    // Which clock we were actually waiting on, decided up front: if the total
+    // budget is what capped this chunk, expiry means the whole body ran out of
+    // time, not that this one gap was too long.
+    const cappedByTotal = totalLeft <= idleTimeoutMs;
+    timer = setTimeout(() => {
+      settle(() =>
+        reject(
+          cappedByTotal
+            ? new BoundedReadStall(
+                `body did not finish within ${totalTimeoutMs} ms`,
+                'total',
+              )
+            : new BoundedReadStall(`body sent nothing for ${idleTimeoutMs} ms`, 'idle'),
+        ),
+      );
+    }, budget);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    reader.read().then(
+      (result) => settle(() => resolve(result)),
+      (err) => settle(() => reject(err)),
+    );
+  });
+}
+
+/** Internal marker for a body that stopped arriving; translated per caller. */
+class BoundedReadStall extends Error {
+  readonly kind: 'idle' | 'total';
+  constructor(message: string, kind: 'idle' | 'total') {
+    super(message);
+    this.name = 'BoundedReadStall';
+    this.kind = kind;
   }
 }
 
@@ -99,6 +263,22 @@ async function discardBody(response: Response): Promise<void> {
   }
 }
 
+/** Resolve the timing options once and start the whole-body clock. */
+function startClock(options: BoundedReadOptions): {
+  idleTimeoutMs: number;
+  totalTimeoutMs: number;
+  msLeftOfTotal: () => number;
+} {
+  const idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_IDLE_TIMEOUT_MS;
+  const totalTimeoutMs = options.totalTimeoutMs ?? DEFAULT_TOTAL_TIMEOUT_MS;
+  const startedAt = Date.now();
+  return {
+    idleTimeoutMs,
+    totalTimeoutMs,
+    msLeftOfTotal: () => totalTimeoutMs - (Date.now() - startedAt),
+  };
+}
+
 /** True when the response exposes a real streaming body we can read in chunks. */
 function streamableBody(
   response: Response,
@@ -122,7 +302,7 @@ function streamableBody(
 export async function readExactlyBounded(
   response: Response,
   expectedBytes: number,
-  signal?: AbortSignal,
+  options: BoundedReadOptions = {},
 ): Promise<ArrayBuffer> {
   if (!Number.isSafeInteger(expectedBytes) || expectedBytes < 0) {
     throw new RangeReadError(
@@ -156,10 +336,17 @@ export async function readExactlyBounded(
   const out = new Uint8Array(expectedBytes);
   let filled = 0;
   const reader = body.getReader();
+  const clock = startClock(options);
   try {
     for (;;) {
-      if (signal?.aborted) throw new RangeReadError('aborted', 'Range read aborted');
-      const { done, value } = await reader.read();
+      const { done, value } = await readChunkRacing(
+        reader,
+        options.signal,
+        options.timeoutSignal,
+        clock.idleTimeoutMs,
+        clock.totalTimeoutMs,
+        clock.msLeftOfTotal,
+      );
       if (done) break;
       if (!value || value.byteLength === 0) continue;
       if (filled + value.byteLength > expectedBytes) {
@@ -173,6 +360,12 @@ export async function readExactlyBounded(
     }
   } catch (err) {
     await cancelQuietly(reader);
+    if (err instanceof BoundedReadStall) {
+      throw new RangeReadError(
+        'timeout',
+        `Range read stalled — ${err.message}. The server sent headers but stopped sending data.`,
+      );
+    }
     throw err;
   }
   if (filled !== expectedBytes) {
@@ -197,7 +390,7 @@ export async function readAtMostBounded(
   response: Response,
   maxBytes: number,
   what: string,
-  signal?: AbortSignal,
+  options: BoundedReadOptions = {},
 ): Promise<Uint8Array> {
   if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
     throw new BoundedReadError(
@@ -230,10 +423,17 @@ export async function readAtMostBounded(
   const chunks: Uint8Array[] = [];
   let total = 0;
   const reader = body.getReader();
+  const clock = startClock(options);
   try {
     for (;;) {
-      if (signal?.aborted) throw new Error('aborted');
-      const { done, value } = await reader.read();
+      const { done, value } = await readChunkRacing(
+        reader,
+        options.signal,
+        options.timeoutSignal,
+        clock.idleTimeoutMs,
+        clock.totalTimeoutMs,
+        clock.msLeftOfTotal,
+      );
       if (done) break;
       if (!value || value.byteLength === 0) continue;
       if (total + value.byteLength > maxBytes) {
@@ -248,6 +448,14 @@ export async function readAtMostBounded(
     }
   } catch (err) {
     await cancelQuietly(reader);
+    if (err instanceof BoundedReadStall) {
+      throw new BoundedReadError(
+        what,
+        maxBytes,
+        `${what} stalled — ${err.message}. The server sent headers but stopped sending data.`,
+        'stalled',
+      );
+    }
     throw err;
   }
   if (chunks.length === 1) return chunks[0];
@@ -265,8 +473,8 @@ export async function readTextAtMost(
   response: Response,
   maxBytes: number,
   what: string,
-  signal?: AbortSignal,
+  options: BoundedReadOptions = {},
 ): Promise<string> {
-  const bytes = await readAtMostBounded(response, maxBytes, what, signal);
+  const bytes = await readAtMostBounded(response, maxBytes, what, options);
   return new TextDecoder('utf-8').decode(bytes);
 }

@@ -37,6 +37,14 @@
  * {@link readExactlyBounded}, which stops at the requested length instead of
  * materialising whatever the server chose to send and checking afterwards.
  *
+ * DEADLINES THAT OUTLIVE THE HEADERS. The per-attempt timer used to be cleared
+ * — and the composed abort listener torn down — the instant `fetch` resolved,
+ * which is when the HEADERS arrive, not the body. After that moment a server
+ * could stall the body forever with no deadline running and no way for the
+ * user's Cancel to reach the stream. `_fetchWithRetryAndTimeout` therefore
+ * hands back a {@link TimedResponse} whose timer and listeners stay armed, and
+ * the caller `release()`s only once the body has been consumed.
+ *
  * Pure of three.js; uses `fetch`, which is available on both the main thread
  * and in workers.
  */
@@ -62,6 +70,33 @@ const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
  * prevent.
  */
 const PRECONDITION_FAILED = 412;
+
+/**
+ * A response whose request deadline is still running.
+ *
+ * The whole point is `release`. Everything a `fetch` promise settling tells you
+ * is that the response HEADERS arrived; the body is still in flight, still on
+ * the same connection, and still needs both a deadline and a route for the
+ * user's cancel. Holding the timer and the composed signal until the caller
+ * says it is done reading is what makes a stalled body terminate.
+ */
+interface TimedResponse {
+  readonly response: Response;
+  /**
+   * The signal the request was issued with — caller cancel composed with the
+   * per-attempt deadline. Pass it to the body reader so an abort errors the
+   * stream instead of leaving a read pending forever.
+   */
+  readonly signal: AbortSignal | undefined;
+  /**
+   * The deadline half of {@link signal}, so the body reader can tell an
+   * expired deadline (a stalled server — an error) from the user's Cancel (not
+   * an error). Both reach it as the same composed abort otherwise.
+   */
+  readonly timeoutSignal: AbortSignal;
+  /** Drop the timer and the listeners. Call once the body is consumed. */
+  readonly release: () => void;
+}
 
 /** Tunables for {@link HttpRangeSource}. Defaulted, injected for unit tests. */
 export interface HttpRangeSourceOptions {
@@ -146,10 +181,13 @@ export class HttpRangeSource implements RangeSource {
    */
   async probe(signal?: AbortSignal): Promise<number> {
     try {
-      const head = await this._fetchWithRetryAndTimeout(
+      const headAttempt = await this._fetchWithRetryAndTimeout(
         { method: 'HEAD' },
         signal,
       );
+      // A HEAD has no body to read, so the deadline has nothing left to cover.
+      headAttempt.release();
+      const head = headAttempt.response;
       if (!head.ok) {
         // A 4xx HEAD often means the CDN refuses HEADs but happily serves
         // GETs — try the bytes=0-0 fallback before giving up.
@@ -232,7 +270,23 @@ export class HttpRangeSource implements RangeSource {
     if (clamped === 0) return new ArrayBuffer(0);
 
     const end = offset + clamped - 1;
-    const response = await this._readRangeResponse(offset, end, signal);
+    const attempt = await this._readRangeResponse(offset, end, signal);
+    try {
+      return await this._consumeRangeResponse(attempt, offset, end);
+    } finally {
+      // The deadline stays armed until the body is fully read — releasing at
+      // the headers is what let a stalled body hang with no clock running.
+      attempt.release();
+    }
+  }
+
+  /** Validate a range response and read its body under the attempt's deadline. */
+  private async _consumeRangeResponse(
+    attempt: TimedResponse,
+    offset: number,
+    end: number,
+  ): Promise<ArrayBuffer> {
+    const response = attempt.response;
     // The server evaluated our `If-Match` and says the object is no longer
     // the one we pinned. Distinct from every transport code on purpose: the
     // read cannot be retried into correctness, because the bytes already
@@ -285,8 +339,14 @@ export class HttpRangeSource implements RangeSource {
       this._assertSameObject(response, null);
     }
     // Bounded body read for every path: the length is fixed by the request,
-    // so anything longer is refused mid-stream rather than allocated first.
-    return readExactlyBounded(response, expected, signal);
+    // so anything longer is refused mid-stream rather than allocated first —
+    // and, with the attempt's signal, anything SLOWER than the idle budget is
+    // refused too rather than waited on forever.
+    return readExactlyBounded(response, expected, {
+      signal: attempt.signal,
+      timeoutSignal: attempt.timeoutSignal,
+      idleTimeoutMs: this._requestTimeoutMs,
+    });
   }
 
   /**
@@ -308,15 +368,15 @@ export class HttpRangeSource implements RangeSource {
     offset: number,
     end: number,
     signal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<TimedResponse> {
     const conditional =
       this._useConditionalRead && this._etag !== null && this._etagIsStrong;
     const headers: Record<string, string> = { Range: `bytes=${offset}-${end}` };
     if (conditional) headers['If-Match'] = this._etag as string;
     try {
-      const response = await this._fetchWithRetryAndTimeout({ headers }, signal);
+      const attempt = await this._fetchWithRetryAndTimeout({ headers }, signal);
       if (conditional) this._conditionalReadProven = true;
-      return response;
+      return attempt;
     } catch (err) {
       const preflightSuspect =
         conditional &&
@@ -406,10 +466,25 @@ export class HttpRangeSource implements RangeSource {
     signal?: AbortSignal,
     sizeHint?: number,
   ): Promise<number> {
-    const response = await this._fetchWithRetryAndTimeout(
+    const attempt = await this._fetchWithRetryAndTimeout(
       { headers: { Range: 'bytes=0-0' } },
       signal,
     );
+    try {
+      return await this._probeFromRangedResponse(attempt, sizeHint);
+    } finally {
+      // Released only after the drain below has finished with the body, so a
+      // probe whose one byte never arrives still hits the deadline.
+      attempt.release();
+    }
+  }
+
+  /** The body of {@link _probeViaRangedGet}, under the attempt's deadline. */
+  private async _probeFromRangedResponse(
+    attempt: TimedResponse,
+    sizeHint?: number,
+  ): Promise<number> {
+    const response = attempt.response;
     if (response.status === 200) {
       throw new RangeReadError(
         'range-unsupported',
@@ -436,7 +511,11 @@ export class HttpRangeSource implements RangeSource {
     // buffered. A server that can't produce even that is not a probe failure —
     // the 206 status already proved range support — so the drain's own outcome
     // stays advisory.
-    await readAtMostBounded(response, 1, 'range probe', signal).catch(() => undefined);
+    await readAtMostBounded(response, 1, 'range probe', {
+      signal: attempt.signal,
+      timeoutSignal: attempt.timeoutSignal,
+      idleTimeoutMs: this._requestTimeoutMs,
+    }).catch(() => undefined);
     const total = parseContentRange(response.headers.get('content-range'))?.total ?? null;
     if (total !== null && total > 0) {
       this._size = total;
@@ -462,11 +541,16 @@ export class HttpRangeSource implements RangeSource {
    * exponential-backoff retries on transient transport failures (retry-with-backoff),
    * and proper signal composition so the caller's cancel still wins. Every
    * non-retryable response is returned unchanged for the caller to inspect.
+   *
+   * Returns a {@link TimedResponse}, not a bare `Response`: the timer and the
+   * composed signal survive past the headers so the caller can read the body
+   * under the same deadline and the same cancellation. Every caller MUST
+   * `release()` on every exit path.
    */
   private async _fetchWithRetryAndTimeout(
     init: RequestInit,
     callerSignal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<TimedResponse> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this._maxRetries; attempt++) {
       if (callerSignal?.aborted) {
@@ -481,12 +565,26 @@ export class HttpRangeSource implements RangeSource {
         callerSignal,
         timeoutController.signal,
       );
-      let response: Response;
-      try {
-        response = await this._fetch(this._url, { ...init, signal });
-      } catch (err) {
+      // Idempotent: the retry paths below release before looping, and the
+      // caller releases after reading the body.
+      let released = false;
+      const release = (): void => {
+        if (released) return;
+        released = true;
         clearTimeout(timer);
         cleanup();
+      };
+      let response: Response;
+      try {
+        // `redirect: 'follow'` is the platform default, stated here so it reads
+        // as a decision rather than an oversight. `'error'` would refuse the
+        // signed-URL and CDN chains public LiDAR hosting is built on (S3 to
+        // CloudFront, GCS signed redirects, DOI resolvers). The residual —
+        // a validated public host redirecting somewhere private — is bounded
+        // by the CSP and by CORS, and is written up in `docs/threat-model.md`.
+        response = await this._fetch(this._url, { ...init, signal, redirect: 'follow' });
+      } catch (err) {
+        release();
         if (callerSignal?.aborted) {
           throw new RangeReadError('aborted', 'Range read aborted');
         }
@@ -510,12 +608,13 @@ export class HttpRangeSource implements RangeSource {
           `Could not reach ${sanitizeUrlForDisplay(this._url)} — check the URL and that the server allows cross-origin requests.`,
         );
       }
-      clearTimeout(timer);
-      cleanup();
       if (!RETRYABLE_STATUSES.has(response.status)) {
-        return response;
+        // NOT released here — the body still has to be read, and it needs the
+        // deadline and the caller's cancel to stay wired while it is.
+        return { response, signal, timeoutSignal: timeoutController.signal, release };
       }
       // Retryable HTTP status — discard the body, back off, try again.
+      release();
       lastError = new RangeReadError(
         response.status >= 500 ? 'server-error' : 'transport',
         `Server returned ${response.status} for ${sanitizeUrlForDisplay(this._url)}`,
