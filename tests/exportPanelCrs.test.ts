@@ -29,9 +29,13 @@ class FakeEl {
     _set: new Set<string>(),
     add: (c: string): void => { this.classList._set.add(c); },
     remove: (c: string): void => { this.classList._set.delete(c); },
-    toggle: (c: string): void => {
-      if (this.classList._set.has(c)) this.classList._set.delete(c);
-      else this.classList._set.add(c);
+    // The two-argument `force` form is part of the real DOM contract and the
+    // panel uses it to drive the Products disclosure; a stub that ignored it
+    // toggled the section shut on the very render meant to open it.
+    toggle: (c: string, force?: boolean): void => {
+      const on = force ?? !this.classList._set.has(c);
+      if (on) this.classList._set.add(c);
+      else this.classList._set.delete(c);
     },
     contains: (c: string): boolean => this.classList._set.has(c),
   };
@@ -188,6 +192,71 @@ describe('ExportPanel — Products lane resilience (regression)', () => {
       const hit = root.findOwnText(lbl)[0];
       expect(hit, `products pill "${lbl}" missing`).toBeDefined();
     }
+  });
+});
+
+/**
+ * The Products section is where a session's actual deliverables live, so its
+ * prominence and its honesty are both behaviour, not decoration: it opens by
+ * default, and an unavailable product states the reason the host gave rather
+ * than going quiet.
+ */
+describe('ExportPanel: Products section', () => {
+  const base = {
+    getCloud: () => null,
+    hasFullSource: () => false,
+    isReduced: () => false,
+    getFullCloud: async () => null,
+    measurementCount: () => 0,
+    exportMeasurements: () => { /* present so the Products section renders */ },
+  };
+
+  it('opens the section by default rather than hiding the products', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({ ...base });
+    const root = panel.element as unknown as FakeEl;
+    const body = root.findByClass('olv-export-products-body')[0];
+    expect(body).toBeDefined();
+    expect(body.classList.contains('olv-hidden')).toBe(false);
+    const head = root.findByClass('olv-export-products-head')[0];
+    expect(head.attrs['aria-expanded']).toBe('true');
+  });
+
+  it('offers the scan-area polygon as its own action', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      ...base,
+      exportScanFootprint: () => { /* no-op */ },
+      scanFootprintStatus: () => ({ ready: true, reason: '' }),
+    });
+    const root = panel.element as unknown as FakeEl;
+    const btn = root.findOwnText('Scan area (KML polygon)')[0];
+    expect(btn).toBeDefined();
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('disables the scan-area polygon and shows the CRS refusal', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      ...base,
+      exportScanFootprint: () => { /* no-op */ },
+      scanFootprintStatus: () => ({
+        ready: false,
+        reason: 'The scan has no known coordinate system, so its outline cannot be placed on a map.',
+      }),
+    });
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findOwnText('Scan area (KML polygon)')[0].disabled).toBe(true);
+    expect(root.textContent).toContain('no known coordinate system');
+  });
+
+  it('survives a scanFootprintStatus callback that throws', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    expect(() => new ExportPanel({
+      ...base,
+      exportScanFootprint: () => { /* no-op */ },
+      scanFootprintStatus: () => { throw new TypeError('viewer not ready'); },
+    })).not.toThrow();
   });
 });
 

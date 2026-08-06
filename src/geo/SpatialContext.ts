@@ -28,9 +28,11 @@
  *
  * Pure — no DOM, no three.js, no proj4. Runs unchanged in Node tests.
  *
- * NOTE (scope): this PR adds the model, its cross-product matrix test, and the
- * consumer inventory ONLY. No consumer is routed through it here; that is the
- * atomic follow-up. Nothing imports this module yet by design.
+ * NOTE (status): migration has begun. Point inspection (`render/pointInfo.ts`)
+ * and the scan report (`analysis/modules/scanReport.ts`) route through
+ * `spatialContextFrom` today; the remaining consumers in
+ * docs/architecture/spatial-context-consumers.md still re-derive their own
+ * answers and move over one at a time.
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';

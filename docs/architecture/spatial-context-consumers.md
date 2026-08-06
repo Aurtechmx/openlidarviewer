@@ -9,9 +9,10 @@ reference, up axis, project-frame placement, and the single fail-closed gate
 
 This file is the inventory of the consumers that each re-derive unit, datum,
 axis, or frame today, and the order they should later route through
-`SpatialContext`. **No consumer is routed in the PR that adds this document.**
-Routing is the atomic follow-up: the value of the model is that every consumer
-reads the same object, and that only lands when they all move to it.
+`SpatialContext`. **Routing has begun: point inspection (1) and the scan report
+(2) read `spatialContextFrom` today; the rest still re-derive their own answers.**
+Each consumer moves over on its own: the value of the model is that every
+consumer reads the same object, and that lands consumer by consumer.
 
 ## Why the inventory matters
 
@@ -80,10 +81,11 @@ and the exporters last (a wrong reading there ships in a file a reader trusts).
    metadata should all come from one context so an override can never label a
    file with a CRS it did not use.
 
-## Not in this PR
+## Migration status
 
-The PR that adds `SpatialContext.ts`, its matrix test, and this inventory routes
-**zero** consumers. `SpatialContext.ts` has no importers yet, by design: a
-half-migrated tree where some consumers read the model and others still re-derive
-is worse than today's, because the two can disagree silently. The migration lands
+`SpatialContext.ts` has two importers today: point inspection (1,
+`render/pointInfo.ts`) and the scan report (2, `analysis/modules/scanReport.ts`),
+the first two rows of Phase A. The rest still re-derive their own answers. A
+half-migrated tree carries a known cost: where one consumer reads the model and
+another still re-derives, the two can disagree silently, so the migration lands
 consumer by consumer, in the phases above, each behind the existing gates.
