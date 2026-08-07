@@ -504,9 +504,10 @@ describe('buildMeasurementRows', () => {
       expect(rows[2].value).toBe('91.4 cm'); // 3 ft height
     });
 
-    it('scales areas ×f²: a 10×10 ft footprint reads 9.29 m²', () => {
+    it('scales areas ×f²: a 10×10 ft footprint reads 9.2903 m²', () => {
       const rows = buildMeasurementRows(measurements, 'metric', FT);
-      expect(rows[1].value).toBe('9.29 m²'); // 100 sq ft × 0.3048²
+      // 100 sq ft × 0.3048² = 9.290304 m² → adaptive 5-sig-fig "9.2903 m²".
+      expect(rows[1].value).toBe('9.2903 m²');
     });
 
     it('round-trips imperial: a 10 ft span on a foot CRS reads 10.00 ft', () => {
@@ -537,7 +538,7 @@ describe('buildMeasurementRows', () => {
       const rows = buildMeasurementRows(vols, 'metric', FT);
       // 24 cu render-units × 0.3048³ = 0.679604… m³
       expect(rows[0].value).toBe('0.68 m³');
-      expect(rows[1].value).toContain('9.29 m²'); // footprint ×f²
+      expect(rows[1].value).toContain('9.2903 m²'); // footprint ×f²
       expect(rows[1].value).toContain('+0.68 m³ fill'); // fill ×f³
     });
 

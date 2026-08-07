@@ -150,7 +150,7 @@
     "@loaders.gl/core": "^4.4.4",
     "@loaders.gl/gltf": "^4.4.2",
     "@loaders.gl/obj": "^4.4.2",
-    "@loaders.gl/ply": "^4.4.2",
+    "@loaders.gl/ply": "^4.4.4",
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.21.0",

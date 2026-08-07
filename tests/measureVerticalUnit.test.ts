@@ -20,10 +20,11 @@ const strong = { snappedToPoint: true, pointsWithinRadius: 40 } as const;
 
 describe('measurement vertical unit (compound CRS)', () => {
   it('a height reads through the VERTICAL factor, not the horizontal one', () => {
-    // Δz of 10 render units on a foot-height CRS is 10 ft ≈ 3.05 m.
-    expect(formatLengthRender(10, 0.3048, 'metric')).toBe('3.05 m');
+    // Δz of 10 render units on a foot-height CRS is 10 ft = 3.048 m.
+    // Adaptive precision (5 sig figs) prints "3.0480 m", not the old "3.05 m".
+    expect(formatLengthRender(10, 0.3048, 'metric')).toBe('3.0480 m');
     // The pre-fix path multiplied by the horizontal factor (1) — 3.28× too large.
-    expect(formatLengthRender(10, 1, 'metric')).toBe('10.00 m');
+    expect(formatLengthRender(10, 1, 'metric')).toBe('10.000 m');
   });
 
   it('box volume scales linear²·vertical on a mixed-unit CRS', () => {
