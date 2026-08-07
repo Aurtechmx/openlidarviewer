@@ -6,7 +6,6 @@ import {
   formatGrade,
   formatBearing,
 } from '../src/render/measure/format';
-import { formatDistance } from '../src/render/navMath';
 
 describe('formatBearing', () => {
   it('zero-pads whole-degree azimuths to three digits', () => {
@@ -22,22 +21,33 @@ describe('formatBearing', () => {
 });
 
 describe('formatLength', () => {
-  it('metric matches the v0.1.0 distance formatter', () => {
-    for (const m of [0.25, 0.5, 5, 42.7, 1500]) {
-      expect(formatLength(m, 'metric')).toBe(formatDistance(m));
-    }
+  it('metric uses cm / m / km bands with adaptive (5-sig-fig) precision', () => {
+    expect(formatLength(0.5, 'metric')).toBe('50.000 cm');
+    expect(formatLength(5, 'metric')).toBe('5.0000 m');
+    expect(formatLength(1500, 'metric')).toBe('1.5000 km');
   });
 
-  it('metric uses cm / m / km bands', () => {
-    expect(formatLength(0.5, 'metric')).toBe('50.0 cm');
-    expect(formatLength(5, 'metric')).toBe('5.00 m');
-    expect(formatLength(1500, 'metric')).toBe('1.500 km');
+  it('imperial uses in / ft / mi bands with adaptive (5-sig-fig) precision', () => {
+    expect(formatLength(0.1, 'imperial')).toBe('3.9370 in');
+    expect(formatLength(1, 'imperial')).toBe('3.2808 ft');
+    expect(formatLength(2000, 'imperial')).toBe('1.2427 mi');
   });
 
-  it('imperial uses in / ft / mi bands', () => {
-    expect(formatLength(0.1, 'imperial')).toBe('3.9 in');
-    expect(formatLength(1, 'imperial')).toBe('3.28 ft');
-    expect(formatLength(2000, 'imperial')).toBe('1.243 mi');
+  it('keeps sub-centimetre and sub-millimetre baselines readable, not "0.00 m"', () => {
+    // 2 mm — the smallest horizontal baseline in the precision datasets. The old
+    // 2-decimal metre readout printed "0.00 m"; the cm band now shows the digits.
+    expect(formatLength(0.002, 'metric')).toBe('0.2000 cm');
+    // A single step of the 0.5 mm vertical staircase — still non-zero, distinct
+    // from a 1.0 mm ("0.1000 cm") or 1.5 mm ("0.1500 cm") step.
+    expect(formatLength(0.0005, 'metric')).toBe('0.0500 cm');
+    // A GCP baseline with millimetre-significant truth: the millimetre place is
+    // shown instead of being rounded away to "50.01 m".
+    expect(formatLength(50.009999, 'metric')).toBe('50.010 m');
+  });
+
+  it('sheds decimals as magnitude grows so large spans stay readable', () => {
+    expect(formatLength(500, 'metric')).toBe('500.00 m');
+    expect(formatLength(1289.968, 'metric')).toBe('1.2900 km');
   });
 
   it('returns a dash for a non-finite length', () => {
@@ -47,14 +57,20 @@ describe('formatLength', () => {
 });
 
 describe('formatArea', () => {
-  it('metric uses m² then km²', () => {
+  it('metric uses m² then km² with adaptive (5-sig-fig) precision', () => {
     expect(formatArea(100, 'metric')).toBe('100.00 m²');
-    expect(formatArea(2_000_000, 'metric')).toBe('2.000 km²');
+    expect(formatArea(2_000_000, 'metric')).toBe('2.0000 km²');
   });
 
-  it('imperial uses ft² then acres', () => {
+  it('imperial uses ft² then acres with adaptive (5-sig-fig) precision', () => {
     expect(formatArea(100, 'imperial')).toBe('1,076.4 ft²');
-    expect(formatArea(5000, 'imperial')).toBe('1.236 acre');
+    expect(formatArea(5000, 'imperial')).toBe('1.2355 acre');
+  });
+
+  it('keeps a tiny feature area non-zero instead of collapsing to "0.00 m²"', () => {
+    // A 5 mm baseline encloses ~2.5e-5 m²; the wider decimal ceiling reads it.
+    expect(formatArea(0.000025, 'metric')).toBe('0.000025 m²');
+    expect(formatArea(0.000004, 'metric')).toBe('0.000004 m²');
   });
 
   it('returns a dash for an invalid area', () => {
@@ -104,10 +120,10 @@ const US_SURVEY_FOOT = 1200 / 3937; // 0.30480060960121924 m
 
 describe('formatLengthRender (B2 foot-CRS fixture)', () => {
   it('labels a 10 sft span correctly in both unit systems', () => {
-    // 3.0480060960121924 m → "3.05 m"; NOT the pre-B2 "10.00 m".
-    expect(formatLengthRender(10, US_SURVEY_FOOT, 'metric')).toBe('3.05 m');
-    // 10.00002 ft → "10.00 ft" — the span reads back as the feet it is.
-    expect(formatLengthRender(10, US_SURVEY_FOOT, 'imperial')).toBe('10.00 ft');
+    // 3.0480060960121924 m → "3.0480 m" (5 sig figs); NOT the pre-B2 "10.00 m".
+    expect(formatLengthRender(10, US_SURVEY_FOOT, 'metric')).toBe('3.0480 m');
+    // 10.00002 ft → "10.000 ft" — the span reads back as the feet it is.
+    expect(formatLengthRender(10, US_SURVEY_FOOT, 'imperial')).toBe('10.000 ft');
   });
 
   it('factor 1 is a byte-identical passthrough (metric/local scans)', () => {
@@ -116,16 +132,16 @@ describe('formatLengthRender (B2 foot-CRS fixture)', () => {
   });
 
   it('invalid factors fall back to 1, never multiply by garbage', () => {
-    expect(formatLengthRender(10, Number.NaN, 'metric')).toBe('10.00 m');
-    expect(formatLengthRender(10, 0, 'metric')).toBe('10.00 m');
-    expect(formatLengthRender(10, -2, 'metric')).toBe('10.00 m');
+    expect(formatLengthRender(10, Number.NaN, 'metric')).toBe('10.000 m');
+    expect(formatLengthRender(10, 0, 'metric')).toBe('10.000 m');
+    expect(formatLengthRender(10, -2, 'metric')).toBe('10.000 m');
   });
 });
 
 describe('formatAreaRender (B2: areas scale by the factor squared)', () => {
   it('1000 sft² = 92.90 m² = 1,000.0 ft²', () => {
-    // 1000 × (1200/3937)² = 92.90341161327482 m².
-    expect(formatAreaRender(1000, US_SURVEY_FOOT, 'metric')).toBe('92.90 m²');
+    // 1000 × (1200/3937)² = 92.90341161327482 m² → "92.903 m²" (5 sig figs).
+    expect(formatAreaRender(1000, US_SURVEY_FOOT, 'metric')).toBe('92.903 m²');
     // 92.903411… m² × 10.76391042 ft²/m² = 1000.004000004 ft².
     expect(formatAreaRender(1000, US_SURVEY_FOOT, 'imperial')).toBe('1,000.0 ft²');
   });

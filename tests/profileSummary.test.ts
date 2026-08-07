@@ -132,8 +132,9 @@ describe('profileSummaryRows', () => {
   it('metric rows carry the hand-computed values', () => {
     const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'metric');
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
-    expect(byLabel.get('Length')).toBe('50.00 m');
-    expect(byLabel.get('Elevation gain / loss')).toBe('+2.00 m / −2.00 m');
+    // Length is a distance → adaptive 5-sig-fig precision ("50.000 m").
+    expect(byLabel.get('Length')).toBe('50.000 m');
+    expect(byLabel.get('Elevation gain / loss')).toBe('+2.0000 m / −2.0000 m');
     expect(byLabel.get('Avg grade')).toBe('6.00%');
     expect(byLabel.get('Max grade')).toBe('20.00%');
     expect(byLabel.get('Steepest section')).toBe('0+000.00 → 0+010.00 (20.00%)');
