@@ -76,7 +76,7 @@ test('a Latin-1 entry is spliced as one tEXt chunk immediately before IEND', () 
   ]);
 
   // 12 bytes of chunk framing + 8 (keyword) + 1 (NUL) + 15 (text) = 36.
-  expect(out.length).toBe(TINY_PNG.length + 36);
+  expect(out).toHaveLength(TINY_PNG.length + 36);
   // Everything before the insert point is byte-identical to the input.
   expect([...out.slice(0, IEND_OFFSET)]).toEqual([...TINY_PNG.slice(0, IEND_OFFSET)]);
   // The IEND chunk is untouched and still terminates the file.

@@ -242,9 +242,9 @@ test('parseHierarchyFile partitions nodes vs links correctly', () => {
     '2-3-3-3': 20,
   });
   const result = parseHierarchyFile(text);
-  expect(result.entries.length).toBe(5);
-  expect(result.nodes.length).toBe(4);   // four entries with positive value
-  expect(result.links.length).toBe(1);   // one with -1
+  expect(result.entries).toHaveLength(5);
+  expect(result.nodes).toHaveLength(4);   // four entries with positive value
+  expect(result.links).toHaveLength(1);   // one with -1
   expect(result.totalPoints).toBe(220);  // 100 + 50 + 50 + 20
 });
 
@@ -267,7 +267,7 @@ test('partitionHierarchyMap helper round-trips a typed map', () => {
 test('synthetic fixture hierarchy file parses cleanly', () => {
   const text = readFileSync(join(FIXTURE_DIR, 'ept-hierarchy', '0-0-0-0.json'), 'utf8');
   const result = parseHierarchyFile(text);
-  expect(result.nodes.length).toBe(1);
+  expect(result.nodes).toHaveLength(1);
   expect(result.nodes[0].key).toEqual({ d: 0, x: 0, y: 0, z: 0 });
   expect(result.nodes[0].value).toBe(100);
 });
@@ -279,7 +279,7 @@ test('synthetic fixture hierarchy file parses cleanly', () => {
 test('eptChildKeys produces the 8 standard octree children', () => {
   const root = { d: 0, x: 0, y: 0, z: 0 };
   const children = eptChildKeys(root);
-  expect(children.length).toBe(8);
+  expect(children).toHaveLength(8);
   // Every child is at depth 1 with coords in {0,1}.
   for (const c of children) {
     expect(c.d).toBe(1);

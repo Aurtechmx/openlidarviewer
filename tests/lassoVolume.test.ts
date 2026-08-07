@@ -186,7 +186,7 @@ describe('convexHull2D — Andrew\'s monotone chain', () => {
       { x: 2, y: 3 },
     ];
     const hull = convexHull2D(tri);
-    expect(hull.length).toBe(3);
+    expect(hull).toHaveLength(3);
   });
 
   it('drops interior points from a square', () => {
@@ -198,7 +198,7 @@ describe('convexHull2D — Andrew\'s monotone chain', () => {
       { x: 2, y: 2 }, // interior — must NOT be in the hull
     ];
     const hull = convexHull2D(square);
-    expect(hull.length).toBe(4);
+    expect(hull).toHaveLength(4);
     for (const p of hull) {
       // Interior point (2, 2) is excluded.
       expect(p.x === 2 && p.y === 2).toBe(false);

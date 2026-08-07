@@ -74,7 +74,7 @@ describe('analyseContours', () => {
   it('is deterministic', () => {
     const r2 = analyseContours(pts, { cellSizeM: 2, crs: 'EPSG:32610' });
     expect(r2.intervalM).toBe(r.intervalM);
-    expect(r2.model.features.length).toBe(r.model.features.length);
+    expect(r2.model.features).toHaveLength(r.model.features.length);
   });
 
   it('handles a flat surface honestly (no interval, no contours)', () => {
@@ -82,7 +82,7 @@ describe('analyseContours', () => {
     for (let x = 0; x <= 10; x++) for (let y = 0; y <= 10; y++) flat.push({ x, y, z: 5 });
     const fr = analyseContours(flat, { cellSizeM: 2, crs: 'EPSG:32610' });
     expect(fr.intervalM).toBeNull();
-    expect(fr.contours.levels.length).toBe(0);
+    expect(fr.contours.levels).toHaveLength(0);
     expect(fr.warnings.join(' ')).toMatch(/no reliable contour interval/i);
   });
 

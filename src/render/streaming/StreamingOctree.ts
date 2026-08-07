@@ -44,6 +44,21 @@ export class StreamingOctree {
     return this._fullyLoaded;
   }
 
+  /**
+   * Whether the hierarchy index is KNOWN-COMPLETE: the walk terminated (see
+   * {@link fullyLoaded}) AND it dropped nothing. `fullyLoaded` alone only says
+   * the breadth-first walk stopped — it is set true even when the walk stopped
+   * because it hit the {@link MAX_HIERARCHY_PAGES} ceiling, swallowed a page
+   * fetch failure, or skipped a malformed entry. Each of those pushes into
+   * {@link errors} and leaves whole subtrees out of the store, so a grade that
+   * decodes every node it can see still covers less than the file. Consumers
+   * that must not overclaim completeness (the full-cloud grade's "exact" label)
+   * gate on THIS, not on `fullyLoaded`.
+   */
+  get isComplete(): boolean {
+    return this._fullyLoaded && this._errors.length === 0;
+  }
+
   /** Every known node. */
   nodes(): StreamingNode[] {
     return this.store.all();

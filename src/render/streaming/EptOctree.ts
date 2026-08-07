@@ -96,6 +96,21 @@ export class EptOctree implements StreamingOctreeView {
   }
 
   /**
+   * Whether the hierarchy index is KNOWN-COMPLETE: the walk terminated (see
+   * {@link fullyLoaded}) AND it dropped nothing. `fullyLoaded` alone only says
+   * the walk stopped — it is set true even when the walk stopped at the
+   * {@link MAX_HIERARCHY_FILES} ceiling, swallowed a sub-file fetch failure, or
+   * skipped a malformed file. Each of those pushes into {@link errors} and
+   * leaves subtrees out of the store. A completeness-sensitive consumer (the
+   * full-cloud grade's "exact" label) gates on THIS — never on `fullyLoaded`,
+   * which stays true for a half-loaded cloud. Mirrors `StreamingOctree` so COPC
+   * and EPT grade identically.
+   */
+  get isComplete(): boolean {
+    return this._fullyLoaded && this._errors.length === 0;
+  }
+
+  /**
    * Load the whole hierarchy up front, ingesting every node. Kept for callers
    * that want the complete index before rendering (small datasets, tests).
    */

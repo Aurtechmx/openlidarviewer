@@ -339,7 +339,7 @@ describe('KML altitude — only proven sea-level heights are claimed', () => {
     // 2D geometry: "lon,lat" pairs only, never a third ordinate.
     for (const m of kml.matchAll(/<coordinates>([^<]*)<\/coordinates>/g)) {
       for (const tuple of m[1].split(' ')) {
-        expect(tuple.split(',').length).toBe(2);
+        expect(tuple.split(',')).toHaveLength(2);
       }
     }
   });

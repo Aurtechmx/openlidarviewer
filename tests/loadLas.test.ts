@@ -54,9 +54,9 @@ describe('loadLas — tiny.las fixture (uncompressed)', () => {
   test('intensity and classification are decoded', async () => {
     const pc = await loadLas(loadFixture('tiny.las'), 'las');
     expect(pc.intensity).toBeInstanceOf(Uint16Array);
-    expect(pc.intensity!.length).toBe(12);
+    expect(pc.intensity!).toHaveLength(12);
     expect(pc.classification).toBeInstanceOf(Uint8Array);
-    expect(pc.classification!.length).toBe(12);
+    expect(pc.classification!).toHaveLength(12);
   });
 });
 
@@ -91,9 +91,9 @@ describe('loadLas — tiny.laz fixture (compressed)', () => {
   test('intensity and classification are decoded', async () => {
     const pc = await loadLas(loadFixture('tiny.laz'), 'laz');
     expect(pc.intensity).toBeInstanceOf(Uint16Array);
-    expect(pc.intensity!.length).toBe(12);
+    expect(pc.intensity!).toHaveLength(12);
     expect(pc.classification).toBeInstanceOf(Uint8Array);
-    expect(pc.classification!.length).toBe(12);
+    expect(pc.classification!).toHaveLength(12);
   });
 });
 
@@ -324,7 +324,7 @@ describe('loadLas — inspection extras', () => {
     ]);
     const pc = await loadLas(buf, 'las');
     expect(pc.gpsTime).toBeInstanceOf(Float64Array);
-    expect(pc.gpsTime!.length).toBe(2);
+    expect(pc.gpsTime!).toHaveLength(2);
     expect(pc.gpsTime![0]).toBeCloseTo(123456.789, 3);
     expect(pc.gpsTime![1]).toBeCloseTo(987654.321, 3);
   });
@@ -337,7 +337,7 @@ describe('loadLas — inspection extras', () => {
       { x: 3, y: 0, z: 0, intensity: 1, classByte: 1, returnBits: 0x1a, sourceId: 100 },
     ]);
     const strided = await loadLas(buf, 'las', 'x.las', 2);
-    expect(strided.returnNumber!.length).toBe(strided.pointCount);
-    expect(strided.pointSourceId!.length).toBe(strided.pointCount);
+    expect(strided.returnNumber!).toHaveLength(strided.pointCount);
+    expect(strided.pointSourceId!).toHaveLength(strided.pointCount);
   });
 });

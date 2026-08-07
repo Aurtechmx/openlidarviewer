@@ -21,7 +21,11 @@
  */
 
 import { buildSamplingPlan, type SampleNode, type SamplingPlanOptions } from './samplingPlan';
-import { fullCloudGradeCoverage, type FullCloudGradeCoverage } from './fullCloudGrade';
+import {
+  fullCloudGradeCoverage,
+  type FullCloudGradeCoverage,
+  type OctreeCompleteness,
+} from './fullCloudGrade';
 
 /** Decode one node's points into local-space XYZ triples. Live = range read + worker. */
 export type DecodeNodeFn = (nodeId: string, signal?: AbortSignal) => Promise<Float32Array>;
@@ -73,11 +77,18 @@ export async function runFullCloudGrade<G>(args: {
    * is skipped by an abort.
    */
   readonly onProgress?: (progress: GradeProgress) => void;
+  /**
+   * The source octree's completeness, forwarded to {@link fullCloudGradeCoverage}
+   * so a grade over a truncated hierarchy is never labelled "exact". Omitted by
+   * pure-plan callers (tests grading an explicit node list) → treated as
+   * complete, preserving the exhaustive/sampled behaviour for whole octrees.
+   */
+  readonly completeness?: OctreeCompleteness;
 }): Promise<FullCloudGradeRun<G>> {
-  const { nodes, decodeNode, grade, options, signal, onProgress } = args;
+  const { nodes, decodeNode, grade, options, signal, onProgress, completeness } = args;
 
   const plan = buildSamplingPlan(nodes, options);
-  const coverage = fullCloudGradeCoverage(plan);
+  const coverage = fullCloudGradeCoverage(plan, completeness);
 
   // Decode each selected node in plan order, copying its points STRAIGHT into one
   // pre-sized buffer and dropping the chunk reference immediately — so the sample

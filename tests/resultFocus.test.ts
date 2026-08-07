@@ -222,36 +222,36 @@ describe('openResultFocus', () => {
   it('closes on Escape and restores focus to the trigger', async () => {
     const { trigger } = await openFocus();
     winKeydown('Escape');
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
     expect(trigger.focused).toBe(true);
   });
 
   it('closes on a backdrop click (outside the card)', async () => {
     const { backdrop } = await openFocus();
     backdrop.dispatch('click', { target: backdrop });
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('closes on the close-X control', async () => {
     const { backdrop } = await openFocus();
     backdrop.find('olv-modal-x')!.dispatch('click');
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('closes via the returned handle', async () => {
     const { handle } = await openFocus();
     handle.close();
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('with motion, defers teardown for the exit transition, then removes', async () => {
     const { handle, backdrop } = await openFocus(false);
     handle.close();
     // Still mounted, marked closing/inert while the fade plays.
-    expect(BODY.children.length).toBe(1);
+    expect(BODY.children).toHaveLength(1);
     expect(backdrop.classList.contains('olv-modal-closing')).toBe(true);
     // Flush the exit timer → the node is dropped.
     for (const fn of TIMERS.splice(0)) fn();
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 });

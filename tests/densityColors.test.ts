@@ -31,12 +31,12 @@ describe('densityForChunk — voxel-grid heatmap colours', () => {
     ]);
     const out = densityForChunk({ positions, cellSize: 1 });
     expect(out.colors).toBeInstanceOf(Uint8Array);
-    expect(out.colors.length).toBe(4 * 3);
+    expect(out.colors).toHaveLength(4 * 3);
   });
 
   it('reports zero mean density on an empty chunk', () => {
     const out = densityForChunk({ positions: new Float32Array(0), cellSize: 1 });
-    expect(out.colors.length).toBe(0);
+    expect(out.colors).toHaveLength(0);
     expect(out.meanDensity).toBe(0);
     expect(out.maxObservedDensity).toBe(0);
   });

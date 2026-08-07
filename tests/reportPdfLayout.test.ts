@@ -229,7 +229,7 @@ describe('technical-report layout — heading underline', () => {
       'Measurements (0)', 'Annotations (0)', 'Visuals', 'Technical notes',
     ]);
     const headings = runs.filter((r) => r.size === 14 && HEADINGS.has(r.text));
-    expect(headings.length).toBe(HEADINGS.size);
+    expect(headings).toHaveLength(HEADINGS.size);
     for (const h of headings) {
       // The underline is the 1.5 pt-high rect drawn 4 pt under the heading.
       const underline = rects.find(

@@ -128,7 +128,7 @@ describe('deriveClassification — degenerate inputs', () => {
   it('returns all-unclassified for an empty cloud', () => {
     const res = deriveClassification(new Float32Array(0), 0);
     expect(res.derived).toBe(true);
-    expect(res.codes.length).toBe(0);
+    expect(res.codes).toHaveLength(0);
   });
 
   it('returns all-unclassified for a degenerate (single-footprint) cloud', () => {
@@ -142,7 +142,7 @@ describe('deriveClassification — degenerate inputs', () => {
   it('does not crash on NaN coordinates', () => {
     const pos = new Float32Array([0, 0, 0, NaN, NaN, NaN, 10, 10, 0, 5, 5, 3]);
     const res = deriveClassification(pos, 4);
-    expect(res.codes.length).toBe(4);
+    expect(res.codes).toHaveLength(4);
   });
 });
 
