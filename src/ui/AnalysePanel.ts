@@ -863,21 +863,24 @@ export class AnalysePanel {
     // measured nothing (no fabricated band).
     const cx = this._result.complexity;
     if (cx?.band) {
-      const line = el('div', { className: 'olv-analyse-derived' });
-      line.append(
-        el('span', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
-        el('span', {
+      // Collapsed by default: the VRM/TPI detail and its cited reliability
+      // caveat are deep metrics, kept one tap away so the assessment reads at
+      // a glance instead of ending in a wall of statistics.
+      const details = el('details', { className: 'olv-analyse-derived' });
+      details.append(
+        el('summary', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
+        el('div', {
           className: 'olv-analyse-derived-value',
           text: `${cx.bandLabel} — ${cx.detail}`,
         }),
       );
-      this._assessmentRow.append(line);
       const caveat = cx.warnings.find((w) => w.includes('reliability threshold'));
       if (caveat) {
-        this._assessmentRow.append(
+        details.append(
           el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: caveat }),
         );
       }
+      this._assessmentRow.append(details);
     }
   }
 

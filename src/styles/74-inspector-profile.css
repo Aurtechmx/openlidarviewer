@@ -560,7 +560,7 @@
   border-top: 0.5px solid var(--hairline);
 }
 .olv-mp-action {
-  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
+  flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-sm);
