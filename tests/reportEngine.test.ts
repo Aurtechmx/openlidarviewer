@@ -31,7 +31,7 @@ import type { Measurement } from '../src/render/measure/types';
 
 describe('templates', () => {
   it('ships exactly two report templates (v0.5.5 P12 consolidation)', () => {
-    expect(REPORT_TEMPLATES.length).toBe(2);
+    expect(REPORT_TEMPLATES).toHaveLength(2);
     expect(REPORT_TEMPLATES.map((t) => t.id)).toEqual(['survey-summary', 'technical-report']);
   });
 

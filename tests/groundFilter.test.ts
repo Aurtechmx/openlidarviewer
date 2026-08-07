@@ -142,7 +142,7 @@ describe('classifyGroundSmrf — degenerate inputs', () => {
   it('returns an empty, warned result for no points', () => {
     const res = classifyGroundSmrf([], PARAMS);
     expect(res.sourcePointCount).toBe(0);
-    expect(res.isGround.length).toBe(0);
+    expect(res.isGround).toHaveLength(0);
     expect(res.warnings.join(' ')).toMatch(/no points/i);
   });
 

@@ -47,7 +47,7 @@ describe('decimalsForInterval', () => {
 describe('placeLabels', () => {
   it('places evenly spaced labels along a confident line', () => {
     const labels = placeLabels([straightLine(() => 90)], { spacingM: 25 });
-    expect(labels.length).toBe(4); // at 12.5, 37.5, 62.5, 87.5
+    expect(labels).toHaveLength(4); // at 12.5, 37.5, 62.5, 87.5
     for (const l of labels) {
       expect(Math.abs(l.angleRad)).toBeLessThan(1e-6); // horizontal
       expect(l.value).toBe(50);
@@ -59,7 +59,7 @@ describe('placeLabels', () => {
       spacingM: 25,
     });
     // 37.5 and 62.5 fall in/next to the uncertain span and are dropped.
-    expect(labels.length).toBe(2);
+    expect(labels).toHaveLength(2);
     for (const l of labels) expect(l.x < 37 || l.x > 63).toBe(true);
   });
 
@@ -75,6 +75,6 @@ describe('placeLabels', () => {
 
   it('places no labels on a line shorter than the first offset', () => {
     const short: ContourPolyline = { value: 1, vertices: [v(0, 0), v(10, 0)], closed: false };
-    expect(placeLabels([short], { spacingM: 25 }).length).toBe(0);
+    expect(placeLabels([short], { spacingM: 25 })).toHaveLength(0);
   });
 });

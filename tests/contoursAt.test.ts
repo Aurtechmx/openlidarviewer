@@ -81,7 +81,7 @@ describe('contoursAt', () => {
     // midway BETWEEN the cell centres. The pre-v0.4.4 corner registration
     // placed it at x = 0.5 (half a cell south-west of the true crossing).
     const set = contoursAt(grid((x) => x, 2, 2), { intervalM: 1, levels: [0.5] });
-    expect(set.levels.length).toBe(1);
+    expect(set.levels).toHaveLength(1);
     const segs = set.levels[0].segments;
     expect(segs.length).toBeGreaterThan(0);
     for (const s of segs) {
@@ -173,7 +173,7 @@ describe('contoursAt', () => {
       levels,
       maxLevels: 200,
     });
-    expect(set.levels.length).toBe(200);
+    expect(set.levels).toHaveLength(200);
     const kept = set.levels.map((l) => l.value);
     expect(kept[0]).toBe(0); // the minimum survives
     expect(kept[kept.length - 1]).toBe(399); // the summit level survives
@@ -186,7 +186,7 @@ describe('contoursAt', () => {
 
   it('returns no levels for an all-gap grid', () => {
     const set = contoursAt(grid((x) => x, 6, 6, { cov: () => 0 }), { intervalM: 1 });
-    expect(set.levels.length).toBe(0);
+    expect(set.levels).toHaveLength(0);
     expect(set.warnings.join(' ')).toMatch(/insufficient/i);
   });
 });
@@ -233,7 +233,7 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
       levels: [0.6],
     });
     const segs = set.levels[0].segments;
-    expect(segs.length).toBe(2);
+    expect(segs).toHaveLength(2);
     expect(isolatedCorners(segs)).toEqual([1, 3]);
     // Pin one hand-computed segment exactly: (1.3,0.5) → (1.5,0.7) around v1.
     const brSeg = segs.find((s) => nearest((s.x1 + s.x2) / 2, (s.y1 + s.y2) / 2, CORNERS) === 1)!;
@@ -253,7 +253,7 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
       levels: [0.9],
     });
     const segs = set.levels[0].segments;
-    expect(segs.length).toBe(2);
+    expect(segs).toHaveLength(2);
     expect(isolatedCorners(segs)).toEqual([0, 2]);
   });
 
@@ -265,7 +265,7 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
       levels: [0.6],
     });
     const segs = set.levels[0].segments;
-    expect(segs.length).toBe(2);
+    expect(segs).toHaveLength(2);
     expect(isolatedCorners(segs)).toEqual([0, 2]);
   });
 
@@ -283,7 +283,7 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
       levels: [1.1],
     });
     const segs = set.levels[0].segments;
-    expect(segs.length).toBe(2);
+    expect(segs).toHaveLength(2);
     expect(isolatedCorners(segs)).toEqual([0, 2]);
     // Pin the v0 (BL) segment exactly. Crossings at level 1.1:
     //   left  edge v3→v0 (0→10): t = 0.11 → (0.5, 1.39)
@@ -308,7 +308,7 @@ describe('contoursAt — marching-squares saddle disambiguation (exact bilinear 
       levels: [1.1],
     });
     const segs = set.levels[0].segments;
-    expect(segs.length).toBe(2);
+    expect(segs).toHaveLength(2);
     expect(isolatedCorners(segs)).toEqual([1, 3]);
   });
 });

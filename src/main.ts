@@ -2299,7 +2299,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(),
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeId,
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -3015,9 +3015,8 @@ const exportPanel = new ExportPanel({
   // Pending = a streaming cloud is attached but its export frontier is still
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.
-  isStreamingPending: () =>
-    viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
-  getActiveClip: () => viewer.getClip(),
+  isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
+  getActiveClip: () => viewer.getClip(), getActiveScanId: () => scans.activeId,
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
   hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
   // A streaming snapshot exports only resident points, so it is a reduced subset
@@ -3053,22 +3052,23 @@ const exportPanel = new ExportPanel({
     if (!viewer) return;
     const measurements = viewer.measure.getMeasurements();
     if (measurements.length === 0) return;
-    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
     // Measurement points are LOCAL (recentered); add the origin back to land them
     // in the source projected/local frame. `exportGeoContext` resolves the
     // origin for streaming scans too (renderOrigin) — a plain static-only read
     // would export at render-frame coordinates. Geographic reprojection
     // (→ lon/lat) is a later option — for now we emit in the scan's own frame.
+    // Resolved BEFORE the import below (as exportIntegrityReport already does),
+    // so the frame and the measurements come from one instant, not two.
     const geo = exportGeoContext();
-    const origin = geo.origin;
     const ctx: MeasurementExportContext = {
-      toOutput: (p) => [p[0] + origin[0], p[1] + origin[1], p[2] + origin[2]],
+      toOutput: (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
       up: viewer.measure.worldUp,
       unitToMetres: viewer.measure.unitToMetres,
       verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       crsName: geo.crsName,
       geographic: false,
     };
+    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
     const text = format === 'geojson'
       ? measurementsToGeoJSON(measurements, ctx)
       : measurementsToCsv(measurements, ctx);

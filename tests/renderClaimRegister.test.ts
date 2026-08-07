@@ -66,7 +66,7 @@ describe('parseClaimRegister', () => {
     const real = parseClaimRegister(yaml);
     // One parsed claim per `claimId:` line — a claim the parser silently drops
     // would be a claim silently missing from the published table.
-    expect(real.claims.length).toBe((yaml.match(/claimId:/g) ?? []).length);
+    expect(real.claims).toHaveLength((yaml.match(/claimId:/g) ?? []).length);
     expect(real.claims.length).toBeGreaterThanOrEqual(20);
     for (const c of real.claims) {
       expect(c.product, `claim ${c.id} product`).toBeTruthy();

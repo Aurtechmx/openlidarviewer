@@ -33,7 +33,7 @@ describe('buildContourOverlayBuffers', () => {
   it('emits one segment per consecutive coordinate pair with elevation as Z', () => {
     const b = buildContourOverlayBuffers(model([feat('solid', [[0, 0], [1, 0], [2, 0]], 10, true)]));
     expect(b.segmentCount).toBe(2);
-    expect(b.positions.length).toBe(12); // 2 segs * 2 verts * 3
+    expect(b.positions).toHaveLength(12); // 2 segs * 2 verts * 3
     // First vertex (0,0) at elevation 10 → z slot.
     expect(Array.from(b.positions.slice(0, 3))).toEqual([0, 0, 10]);
     expect(Array.from(b.grades)).toEqual([0, 0]); // solid
@@ -58,6 +58,6 @@ describe('buildContourOverlayBuffers', () => {
   it('returns empty buffers for an empty model', () => {
     const b = buildContourOverlayBuffers(model([]));
     expect(b.segmentCount).toBe(0);
-    expect(b.positions.length).toBe(0);
+    expect(b.positions).toHaveLength(0);
   });
 });

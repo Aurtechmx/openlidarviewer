@@ -57,7 +57,7 @@ describe('the seeded synthetic cloud', () => {
   test('declares the count and bounds a driver hands to the pipeline', () => {
     const cloud = generateSyntheticCloud({ seed: 7, pointCount: 4_000 });
     expect(cloud.pointCount).toBe(4_000);
-    expect(cloud.positions.length).toBe(4_000 * 3);
+    expect(cloud.positions).toHaveLength(4_000 * 3);
     expect(cloud.groundPointCount + cloud.aboveGroundPointCount).toBe(4_000);
     // The declared bounds must be the real extremes of the emitted points —
     // a driver passes them straight to the pipeline's grid, so a declared box

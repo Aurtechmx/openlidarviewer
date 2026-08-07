@@ -74,6 +74,19 @@ export interface WriteLasOptions {
    * No effect when the chosen point format carries no GPS time.
    */
   readonly gpsStandardTime?: boolean;
+  /**
+   * Free-text provenance/caveat note to embed as a LASF_Spec Text Area
+   * Description VLR (user id `LASF_Spec`, record id 3 — the LAS spec's
+   * plain-text "description of the file content" slot). The converter uses it
+   * to stamp an APPROXIMATE-datum caveat INTO the file, so the disclosure
+   * travels with the coordinates instead of living only in the UI report: a
+   * reprojection across a grid-less/identity datum pair is proj4's honest
+   * best-effort, but the metres-to-tens-of-metres approximation must not vanish
+   * once the file leaves the app. Written verbatim (folded to 7-bit ASCII, the
+   * VLR text encoding) and NUL-terminated. Empty/absent ⇒ no VLR, so the
+   * exact-transform path stays byte-clean.
+   */
+  readonly description?: string | null;
 }
 
 /** LAS 1.4 options: everything LAS 1.2 takes, plus the OGC WKT CRS payload. */
@@ -268,6 +281,62 @@ function writeGeoKeyVlr(
 }
 
 /**
+ * LASF_Spec Text Area Description (record id 3) — the LAS spec's free-text
+ * "description of the file content" VLR (user id `LASF_Spec`). It is the
+ * standard slot for a human-readable note about a file, which is where the
+ * converter records an APPROXIMATE-datum caveat so a reader (lasinfo, PDAL)
+ * surfaces it.
+ */
+const TEXT_AREA_DESCRIPTION_RECORD_ID = 3;
+
+/**
+ * Fold a note to the 7-bit ASCII a LAS VLR text field carries. The datum
+ * caveats use typographic glyphs (—, ≈, →) that a bare `& 0x7f` would corrupt
+ * into a different character; map the ones that appear to their ASCII sense and
+ * replace anything else non-ASCII with `?`, so a stray glyph never silently
+ * drops a word from a caveat. ASC/XYZ notes are UTF-8 and never come here.
+ */
+function asciiFold(s: string): string {
+  return s
+    .replace(/[—–]/g, '-')
+    .replace(/≈/g, '~=')
+    .replace(/→/g, '->')
+    .replace(/[^\x00-\x7f]/g, '?');
+}
+
+/**
+ * The Text Area Description payload to actually write, or null to omit the VLR.
+ * NUL-terminated ASCII like the WKT VLR; a note too long for the uint16 VLR
+ * length field is dropped WHOLE rather than truncated, because a half-sentence
+ * caveat can read as a milder claim than the truth. None of the converter's
+ * caveats come close to the limit — guarded anyway.
+ */
+function textAreaPayload(description: string | null | undefined): string | null {
+  if (description == null) return null;
+  const ascii = asciiFold(description).trim();
+  if (ascii.length === 0) return null;
+  if (ascii.length + 1 > 0xffff) return null;
+  return ascii;
+}
+
+/**
+ * Write a LASF_Spec Text Area Description VLR (header + NUL-terminated payload)
+ * starting at byte `p`. `text` is already folded to ASCII by {@link
+ * textAreaPayload}, so the `& 0x7f` here is a no-op guard, and the trailing NUL
+ * is the buffer's zero-init (exactly like the OGC WKT VLR).
+ */
+function writeTextAreaVlr(view: DataView, bytes: Uint8Array, p: number, text: string): void {
+  view.setUint16(p, 0, true); // reserved
+  writeFixedString(bytes, p + 2, 16, 'LASF_Spec'); // user id
+  view.setUint16(p + 18, TEXT_AREA_DESCRIPTION_RECORD_ID, true); // record id 3
+  view.setUint16(p + 20, text.length + 1, true); // record length after header (+NUL)
+  writeFixedString(bytes, p + 22, 32, 'OpenLiDARViewer datum note');
+  for (let i = 0; i < text.length; i++) {
+    bytes[p + VLR_HEADER_SIZE + i] = text.charCodeAt(i) & 0x7f;
+  }
+}
+
+/**
  * Write scale, offset, and max/min bounds — bytes 131–226, identical layout
  * in every LAS version (bounds are stored MAX-then-MIN per axis).
  */
@@ -337,8 +406,13 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   const geo = opts.isGeographic === true;
   const geoKeys = buildGeoKeys(opts, geo);
   const geoKeyDataBytes = geoKeys.length > 0 ? 8 + geoKeys.length * 8 : 0;
-  const vlrBytes = geoKeyDataBytes > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
-  const pointDataOffset = HEADER_SIZE + vlrBytes;
+  const geoKeyVlrBytes = geoKeyDataBytes > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
+  // Optional provenance/caveat VLR (Text Area Description) — the CRS GeoKey VLR
+  // stays first so readers that assume the GeoKeys lead still find them.
+  const descText = textAreaPayload(opts.description);
+  const descVlrBytes = descText != null ? VLR_HEADER_SIZE + descText.length + 1 : 0;
+  const vlrCount = (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
+  const pointDataOffset = HEADER_SIZE + geoKeyVlrBytes + descVlrBytes;
   const total = pointDataOffset + n * recLen;
 
   const buf = new ArrayBuffer(total);
@@ -364,7 +438,7 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   view.setUint16(92, 0, true); // file creation year
   view.setUint16(94, HEADER_SIZE, true); // header size
   view.setUint32(96, pointDataOffset, true); // offset to point data
-  view.setUint32(100, geoKeys.length > 0 ? 1 : 0, true); // number of VLRs
+  view.setUint32(100, vlrCount, true); // number of VLRs
   view.setUint8(104, fmt); // point data record format
   view.setUint16(105, recLen, true); // point data record length
   view.setUint32(107, n >>> 0, true); // legacy number of point records
@@ -378,6 +452,10 @@ export function writeLas(g: GlobalPoints, opts: WriteLasOptions = {}): Uint8Arra
   // ── GeoKeyDirectory VLR (CRS) ──────────────────────────────────────────
   if (geoKeys.length > 0) {
     writeGeoKeyVlr(view, bytes, HEADER_SIZE, geoKeys);
+  }
+  // ── Text Area Description VLR (datum caveat), after the GeoKeys ─────────
+  if (descText != null) {
+    writeTextAreaVlr(view, bytes, HEADER_SIZE + geoKeyVlrBytes, descText);
   }
 
   // ── Point records ──────────────────────────────────────────────────────
@@ -441,11 +519,15 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const geoKeys = wkt == null ? buildGeoKeys(opts, geo) : buildVerticalGeoKeys(opts);
   const geoKeyDataBytes = geoKeys.length > 0 ? 8 + geoKeys.length * 8 : 0;
   const wktDataBytes = wkt != null ? wkt.length + 1 : 0;
-  const vlrCount = (wkt != null ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0);
-  const vlrBytes =
-    (wkt != null ? VLR_HEADER_SIZE + wktDataBytes : 0) +
-    (geoKeys.length > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0);
-  const pointDataOffset = HEADER_SIZE_14 + vlrBytes;
+  const wktVlrBytes = wkt != null ? VLR_HEADER_SIZE + wktDataBytes : 0;
+  const geoKeyVlrBytes = geoKeys.length > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
+  // Optional provenance/caveat VLR (Text Area Description), placed after the CRS
+  // VLR(s) so nothing that navigates by the leading WKT/GeoKey VLR is disturbed.
+  const descText = textAreaPayload(opts.description);
+  const descVlrBytes = descText != null ? VLR_HEADER_SIZE + descText.length + 1 : 0;
+  const vlrCount =
+    (wkt != null ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
+  const pointDataOffset = HEADER_SIZE_14 + wktVlrBytes + geoKeyVlrBytes + descVlrBytes;
   const total = pointDataOffset + n * recLen;
 
   const buf = new ArrayBuffer(total);
@@ -505,12 +587,11 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   }
   if (geoKeys.length > 0) {
     // Placed after the WKT VLR when both are present.
-    writeGeoKeyVlr(
-      view,
-      bytes,
-      HEADER_SIZE_14 + (wkt != null ? VLR_HEADER_SIZE + wktDataBytes : 0),
-      geoKeys,
-    );
+    writeGeoKeyVlr(view, bytes, HEADER_SIZE_14 + wktVlrBytes, geoKeys);
+  }
+  // ── Text Area Description VLR (datum caveat), after the CRS VLR(s) ──────
+  if (descText != null) {
+    writeTextAreaVlr(view, bytes, HEADER_SIZE_14 + wktVlrBytes + geoKeyVlrBytes, descText);
   }
 
   // ── Point records (extended layout, 30/36 bytes) ───────────────────────

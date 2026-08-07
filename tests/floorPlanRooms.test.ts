@@ -78,7 +78,7 @@ describe('detectRooms — flood fill against walls + closed doorway spans', () =
     // (which has its own test); production uses the default floor.
     const res = detectRooms(twoRoomGrid(), [dividerDoor], null, { minRoomAreaM2: 1.0 });
     expect(res.closedDoorways).toBe(1);
-    expect(res.rooms.length).toBe(2);
+    expect(res.rooms).toHaveLength(2);
     // Hand truth: 18 × 18 = 324 free cells per side. The door barrier
     // (radius 1.1 cells, so a DIAGONAL span can never be slipped by the
     // 4-connected flood) provably also paints col 19, rows 9–12: distance
@@ -96,7 +96,7 @@ describe('detectRooms — flood fill against walls + closed doorway spans', () =
 
   it('open-plan (no classified door): ONE merged region — no fake wall', () => {
     const res = detectRooms(twoRoomGrid(), []);
-    expect(res.rooms.length).toBe(1);
+    expect(res.rooms).toHaveLength(1);
     // 324 + 324 + the 2×4-cell gap corridor = 656 cells = 6.56 m².
     expect(res.rooms[0].cellCount).toBe(656);
     expect(res.rooms[0].areaM2).toBeCloseTo(6.56, 10);
@@ -106,14 +106,14 @@ describe('detectRooms — flood fill against walls + closed doorway spans', () =
     const unknownGap: PlanGap = { ...dividerDoor, kind: 'unknown' };
     const res = detectRooms(twoRoomGrid(), [unknownGap]);
     expect(res.closedDoorways).toBe(0);
-    expect(res.rooms.length).toBe(1);
+    expect(res.rooms).toHaveLength(1);
   });
 
   it('unenclosed walls yield no rooms (free space leaks to the border)', () => {
     const { mask, box } = blank(40, 20);
     box(0, 0, 39, 1); box(0, 18, 39, 19); // two parallel walls, open ends
     const res = detectRooms(toGrid(mask, 40, 20), []);
-    expect(res.rooms.length).toBe(0);
+    expect(res.rooms).toHaveLength(0);
   });
 
   it(`enclosures under ${ROOM_MIN_AREA_M2} m² are slivers, not rooms`, () => {
@@ -121,7 +121,7 @@ describe('detectRooms — flood fill against walls + closed doorway spans', () =
     const { mask, box } = blank(12, 12);
     box(0, 0, 11, 1); box(0, 10, 11, 11); box(0, 0, 1, 11); box(10, 0, 11, 11);
     const res = detectRooms(toGrid(mask, 12, 12), []);
-    expect(res.rooms.length).toBe(0);
+    expect(res.rooms).toHaveLength(0);
   });
 
   it('an L-shaped enclosure is one room with the exact cell-count area', () => {
@@ -131,7 +131,7 @@ describe('detectRooms — flood fill against walls + closed doorway spans', () =
     box(0, 0, 31, 1); box(0, 30, 31, 31); box(0, 0, 1, 31); box(30, 0, 31, 31);
     box(16, 16, 31, 31);
     const res = detectRooms(toGrid(mask, 32, 32), []);
-    expect(res.rooms.length).toBe(1);
+    expect(res.rooms).toHaveLength(1);
     expect(res.rooms[0].cellCount).toBe(28 * 28 - 14 * 14);
     expect(res.rooms[0].areaM2).toBeCloseTo(5.88, 10);
     // The pole-of-inaccessibility label sits in free space inside the L.
@@ -168,7 +168,7 @@ describe('extractFloorPlan — rooms end-to-end', () => {
     const model = extractFloorPlan(twoRoomCloud([3.5, 4.4]), { upAxis: 'z' });
     expect(model.doorways.length).toBeGreaterThanOrEqual(1); // door classified
     expect(model.fromWallGraph).toBe(true);
-    expect(model.rooms.length).toBe(2);
+    expect(model.rooms).toHaveLength(2);
     // Hand truth (200×160 grid, 5 cm cells, walls on cols 0 / 100 / 199):
     // left interior 99 × 158 cells = 39.105 m², right 98 × 158 = 38.71 m².
     const areas = model.rooms.map((r) => r.areaM2).sort((a, b) => b - a);
@@ -181,8 +181,8 @@ describe('extractFloorPlan — rooms end-to-end', () => {
     // The 2 m gap is wider than any door — never classified as one. The two
     // halves merge into one connected, unpartitioned region: FIX 1 reports
     // that honestly as a single OPEN SPACE, not "Room 1" of a schedule.
-    expect(model.doorways.length).toBe(0);
-    expect(model.rooms.length).toBe(0); // no numbered room
+    expect(model.doorways).toHaveLength(0);
+    expect(model.rooms).toHaveLength(0); // no numbered room
     expect(model.roomSegmentation).toBe('open-space');
     // The open space spans both halves (≈ 78 m² minus the divider stubs).
     expect(model.openSpaceAreaM2).toBeGreaterThan(70);
@@ -209,7 +209,7 @@ describe('extractFloorPlan — rooms end-to-end', () => {
     const model = extractFloorPlan(Float32Array.from(t), { upAxis: 'z' });
     // One connected, unpartitioned region → reported as a single open space
     // (FIX 1), with the open-space area at the hand-counted cell area.
-    expect(model.rooms.length).toBe(0);
+    expect(model.rooms).toHaveLength(0);
     expect(model.roomSegmentation).toBe('open-space');
     expect(Math.abs(model.openSpaceAreaM2 - 58.66)).toBeLessThan(0.02 * 58.66);
   });
@@ -251,13 +251,13 @@ describe('detectRooms — architectural min-room-area floor (ROOM_MIN_AREA_M2)',
     const big = blank(64, 64); // 60×60 free = 3×3 m at 5 cm = 9 m²
     big.box(0, 0, 63, 1); big.box(0, 62, 63, 63); big.box(0, 0, 1, 63); big.box(62, 0, 63, 63);
     const resBig = detectRooms(toGrid(big.mask, 64, 64, 0.05), []);
-    expect(resBig.rooms.length).toBe(1);
+    expect(resBig.rooms).toHaveLength(1);
     expect(resBig.rooms[0].areaM2).toBeCloseTo(9.0, 1);
 
     const small = blank(40, 40); // 36×36 free = 1.8×1.8 m = 3.24 m² < 4 m²
     small.box(0, 0, 39, 1); small.box(0, 38, 39, 39); small.box(0, 0, 1, 39); small.box(38, 0, 39, 39);
     const resSmall = detectRooms(toGrid(small.mask, 40, 40, 0.05), []);
-    expect(resSmall.rooms.length).toBe(0); // dropped, not "Room 1 · 3.2 m²"
+    expect(resSmall.rooms).toHaveLength(0); // dropped, not "Room 1 · 3.2 m²"
   });
 });
 
@@ -286,7 +286,7 @@ describe('detectRooms — coverage guard (open-space vs unsegmented)', () => {
   it('leaking open plan + small pockets → NOT a room schedule (unsegmented)', () => {
     const floorAreaM2 = 16; // the scanned floor — pockets cover ~1% of it
     const res = detectRooms(leakyGrid(), [], floorAreaM2);
-    expect(res.rooms.length).toBe(0); // no fake "Room 1..N"
+    expect(res.rooms).toHaveLength(0); // no fake "Room 1..N"
     expect(res.segmentation).toBe('unsegmented');
     expect(res.roomCoverageFrac).toBeLessThan(ROOM_COVERAGE_MIN_FRAC);
   });
@@ -306,7 +306,7 @@ describe('detectRooms — coverage guard (open-space vs unsegmented)', () => {
     const { mask, box } = blank(80, 80);
     box(0, 0, 79, 1); box(0, 78, 79, 79); box(0, 0, 1, 79); box(78, 0, 79, 79);
     const res = detectRooms(toGrid(mask, 80, 80, 0.05), [], 16);
-    expect(res.rooms.length).toBe(0); // not numbered
+    expect(res.rooms).toHaveLength(0); // not numbered
     expect(res.segmentation).toBe('open-space');
     expect(res.dominantRegionAreaM2).toBeCloseTo(14.44, 2);
   });

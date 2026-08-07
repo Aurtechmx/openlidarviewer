@@ -80,8 +80,8 @@ describe('computeLassoVolume', () => {
     const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
     expect(out).not.toBeNull();
     expect(out.selectedCount).toBe(64);
-    expect(out.selectionByCloudId.get('layer-1')!.length).toBe(64);
-    expect(out.selectedPositions.length).toBe(64 * 3);
+    expect(out.selectionByCloudId.get('layer-1')!).toHaveLength(64);
+    expect(out.selectedPositions).toHaveLength(64 * 3);
     // The grid has a raised disc in the middle, so a top-down lasso over the
     // whole thing must find fill above the reference plane and a real footprint.
     expect(out.result.fill).toBeGreaterThan(0);
@@ -118,7 +118,7 @@ describe('computeLassoVolume', () => {
     const out = computeLassoVolume({ host: h, lasso: fullBox(10), referencePercentile: 0.05 })!;
     expect(out.selectedCount).toBe(72);
     expect([...out.selectionByCloudId.keys()]).toEqual(['layer-1']);
-    expect(out.selectionByCloudId.get('layer-1')!.length).toBe(36);
+    expect(out.selectionByCloudId.get('layer-1')!).toHaveLength(36);
   });
 
   it('carries the reduced-source caveat when any contributing layer was reduced', () => {
@@ -157,13 +157,13 @@ describe('stridePositions', () => {
   it('keeps every nth point, and the kept values are the source values', () => {
     const p = Float32Array.from([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5]);
     const out = stridePositions(p, 2);
-    expect(out.length).toBe(9);
+    expect(out).toHaveLength(9);
     expect([...out]).toEqual([0, 0, 0, 2, 2, 2, 4, 4, 4]);
   });
 
   it('drops the tail rather than emitting a partial point', () => {
     // 5 points at stride 2 keeps floor(5/2) = 2, not 3 with a half-read.
     const p = Float32Array.from([0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
-    expect(stridePositions(p, 2).length).toBe(6);
+    expect(stridePositions(p, 2)).toHaveLength(6);
   });
 });
