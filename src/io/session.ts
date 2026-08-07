@@ -437,6 +437,48 @@ function parseUpAxis(raw: unknown): 'y' | 'z' {
   );
 }
 
+// --- session resource ceilings ---------------------------------------------
+// A shared, corrupt or hostile `.olvsession` is untrusted input. These cap the
+// dimensions an over-large file can blow up on; each is far beyond any real
+// session and truncates/rejects BEFORE the value reaches app state. (The whole-
+// file byte ceiling is enforced one layer up, in `app/sessionIo.ts`, on the
+// File's size before this parser ever reads it.)
+
+/** Hard cap on parsed list lengths (views, measurements, chart samples, annotations) — a hostile/corrupt file can't hang the tab. */
+export const MAX_SESSION_ITEMS = 100_000;
+
+/**
+ * Cap on a SINGLE measurement's vertex list. A real measurement holds at most a
+ * few thousand hand-placed / traced vertices, so a million is orders beyond any
+ * legitimate one while still bounding the per-measurement heap: one hostile
+ * entry carrying tens of millions of points would otherwise OOM the tab — an
+ * allocation the `importSession` try/catch can't catch, because the tab dies
+ * first.
+ */
+export const MAX_MEASUREMENT_POINTS = 1_000_000;
+
+/** Cap on an annotation title's length — a multi-MB string is a DoS, not a label. */
+export const MAX_ANNOTATION_TITLE = 512;
+/** Cap on an annotation note's length — generous for a paragraph, bounded against abuse. */
+export const MAX_ANNOTATION_NOTE = 8_192;
+
+/**
+ * Cap on the opaque `processingManifest`'s serialized size. The slot is passed
+ * through verbatim (never validated), so a size bound is the only guard on it; a
+ * real manifest is a few KB of provenance, so 4 MB is far above any legitimate
+ * one while rejecting a slot inflated to exhaust memory.
+ */
+export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
+
+/** True when the opaque manifest serialises within the byte cap; a non-serialisable or over-cap value is rejected (dropped, treated as absent). */
+function withinManifestByteCap(manifest: unknown): boolean {
+  try {
+    return JSON.stringify(manifest).length <= MAX_MANIFEST_BYTES;
+  } catch {
+    return false;
+  }
+}
+
 export function parseSession(text: string): InspectionSession {
   let raw: unknown;
   try {
@@ -496,7 +538,12 @@ export function parseSession(text: string): InspectionSession {
   // passthrough until the processing-manifest workstream defines its shape).
   // Deliberately version-independent on read so a file that carries one is
   // never stripped by a round-trip.
-  if (raw.processingManifest != null) out.processingManifest = raw.processingManifest;
+  // Opaque passthrough (never validated), so the one guard on this untrusted
+  // slot is its serialized SIZE — an over-cap manifest is dropped (treated as
+  // absent) rather than carried, verbatim, into app state.
+  if (raw.processingManifest != null && withinManifestByteCap(raw.processingManifest)) {
+    out.processingManifest = raw.processingManifest;
+  }
   // Stable layer identity — additive within v7, version-independent on read so a
   // file that carries it is never stripped by a round trip. A non-string is
   // ignored (treated as absent) rather than throwing.
@@ -1024,7 +1071,9 @@ function parseCameraState(v: unknown): SavedCameraState {
 function parseViews(v: unknown): SavedView[] {
   if (!Array.isArray(v)) return [];
   const out: SavedView[] = [];
-  v.forEach((item, i) => {
+  // Cap the count, matching the three sibling parsers below — a hostile file
+  // can't hang the tab by declaring an unbounded number of views.
+  v.slice(0, MAX_SESSION_ITEMS).forEach((item, i) => {
     if (!isRecord(item)) return;
     const name =
       typeof item.name === 'string' && item.name.trim().length > 0
@@ -1049,9 +1098,6 @@ function parseViews(v: unknown): SavedView[] {
   return out;
 }
 
-/** Hard cap on parsed list lengths — a hostile/corrupt file can't hang the tab. */
-const MAX_SESSION_ITEMS = 100_000;
-
 function parseMeasurements(v: unknown): Measurement[] {
   if (!Array.isArray(v)) return [];
   const out: Measurement[] = [];
@@ -1060,8 +1106,10 @@ function parseMeasurements(v: unknown): Measurement[] {
     const kind = item.kind;
     if (typeof kind !== 'string' || !KINDS.includes(kind as MeasurementKind)) continue;
     const k = kind as MeasurementKind;
+    // Slice BEFORE filter/map so the cap bounds the WORK, not just the output —
+    // a single measurement carrying tens of millions of points can't OOM the tab.
     const points = Array.isArray(item.points)
-      ? item.points.filter(isVec3).map((p): Vec3 => [p[0], p[1], p[2]])
+      ? item.points.slice(0, MAX_MEASUREMENT_POINTS).filter(isVec3).map((p): Vec3 => [p[0], p[1], p[2]])
       : [];
     if (points.length < MIN_POINTS[k]) continue;
     const m: Measurement = {
@@ -1208,13 +1256,19 @@ function parseAnnotations(v: unknown): Annotation[] {
     const updated = isFiniteNumber(item.updatedAt) ? item.updatedAt : created;
     const annotation: Annotation = {
       id: typeof item.id === 'string' && item.id.length > 0 ? item.id : freshAnnotationId(),
-      title: typeof item.title === 'string' && item.title.length > 0 ? item.title : 'Annotation',
+      // Cap the length — a title is a label, not a payload; a multi-MB string is abuse.
+      title:
+        typeof item.title === 'string' && item.title.length > 0
+          ? item.title.slice(0, MAX_ANNOTATION_TITLE)
+          : 'Annotation',
       type: isAnnotationType(item.type) ? item.type : 'note',
       createdAt: created,
       updatedAt: updated,
       localPosition: local,
     };
-    if (typeof item.note === 'string' && item.note.length > 0) annotation.note = item.note;
+    if (typeof item.note === 'string' && item.note.length > 0) {
+      annotation.note = item.note.slice(0, MAX_ANNOTATION_NOTE);
+    }
     const world = parseVec3Object(item.worldPosition);
     if (world) annotation.worldPosition = world;
     // The owning layer + CRS label — the world frame's provenance, kept so a
