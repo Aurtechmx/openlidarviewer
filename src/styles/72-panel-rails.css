@@ -260,7 +260,7 @@
   .olv-mp-stations-wrap,
   .olv-shortcuts-list {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--accent) 55%, var(--hairline)) transparent;
+    scrollbar-color: color-mix(in srgb, var(--accent) 44%, var(--panel)) transparent;
   }
 }
 
@@ -279,7 +279,7 @@
 /* The outer column carries the whole stack, so its bar sits a touch wider
    than the slim inner-panel bars while sharing their thumb colour. */
 .olv-left-panels::-webkit-scrollbar {
-  width: 11px; height: 11px;
+  width: 9px; height: 9px;
 }
 .olv-left-panels::-webkit-scrollbar-track,
 .olv-analyse-panel::-webkit-scrollbar-track,
@@ -291,7 +291,7 @@
 .olv-streaming-panel::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
 .olv-measure-panel::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--accent) 55%, var(--hairline)); border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 44%, var(--panel)); border-radius: 999px;
   border: 2px solid transparent; background-clip: padding-box;
 }
 .olv-left-panels::-webkit-scrollbar-thumb:hover,
