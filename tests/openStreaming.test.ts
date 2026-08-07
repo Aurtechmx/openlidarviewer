@@ -136,7 +136,7 @@ function makeDeps(
   over: { loading?: boolean; validate?: { ok: boolean; reason?: string }; loadEptRejects?: boolean } = {},
 ) {
   let loading = over.loading ?? false;
-  const validateRemoteEptUrl = vi.fn((_url: string) => over.validate ?? { ok: true });
+  const validateRemoteEptUrl = vi.fn((url: string) => over.validate ?? { ok: true, url });
   const describeRemoteEptError = vi.fn((_err: unknown, _url: string) => 'classified EPT error');
   const calls = {
     isLoading: vi.fn(() => loading),
