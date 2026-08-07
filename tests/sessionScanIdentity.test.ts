@@ -12,11 +12,14 @@ import { describe, test, expect } from 'vitest';
 import {
   matchSessionToScan,
   detectSessionSpatialConflict,
+  serializeSession,
+  parseSession,
   type ScanFacts,
   type DeclaredSpatialFacts,
   type SessionSpatialClaims,
 } from '../src/io/session';
 import type { SessionScanSummary } from '../src/io/session';
+import { scanFactsFromStatic, type StaticScanCloud } from '../src/app/sessionIo';
 
 const SCAN_A: SessionScanSummary = {
   fileName: 'site-a.laz',
@@ -175,5 +178,96 @@ describe('detectSessionSpatialConflict', () => {
       file({ epsg: 32614, upAxis: 'y', linearUnit: 'foot' }),
     );
     expect(v.conflicts.map((c) => c.field)).toEqual(['crs', 'axis', 'unit']);
+  });
+});
+
+/**
+ * The WRITER side of the same identity fact, round-tripped. `exportSession`
+ * (main.ts) builds its `scanSummary` inline from the active cloud and is only
+ * reachable through the app entry's viewer / DOM wiring, so it is not
+ * unit-addressable here. The behaviour under test is its field rule: the exported
+ * summary must store the SOURCE point count — `declaredPointCount ??
+ * decodedPointCount ?? pointCount`, the SAME ladder the reader's
+ * `scanFactsFromStatic` uses — so a session exported under one device's point
+ * budget reimports strongly under another's. Pinned here at the serialize /
+ * parse + match layer; the one-line writer change in main.ts (the static
+ * `scanSummary.sourcePoints`) is what makes the real export emit it.
+ */
+describe('session round-trip — the exported scan count is source-stable across devices', () => {
+  // The SAME source file loaded at two very different budgets. Its header count
+  // is device-independent; the held `pointCount` is not. Extents are held equal
+  // so the point count is the only variable — the field the writer change fixes.
+  const HEADER = 4_000_000;
+  const bounds = () => ({ min: [0, 0, 0] as const, max: [120, 80, 25] as const });
+  const crsMeta = { crs: { name: 'NAD83 / UTM 13N', epsg: 26913 } };
+  const exportDeviceCloud: StaticScanCloud = {
+    name: 'site-a.laz',
+    pointCount: 250_000, // heavily strided + voxel-downsampled on the export device
+    declaredPointCount: HEADER,
+    decodedPointCount: 250_000,
+    bounds,
+    metadata: crsMeta,
+  };
+  const reimportDeviceCloud: StaticScanCloud = {
+    name: 'site-a.laz',
+    pointCount: 3_900_000, // near-full load on a larger device
+    declaredPointCount: HEADER,
+    decodedPointCount: 3_900_000,
+    bounds,
+    metadata: crsMeta,
+  };
+
+  // The summary the fixed writer emits for the static branch: `sourcePoints` via
+  // the source-stable ladder (mirrored through the reader's shared rule), every
+  // other field exactly as exportSession builds it.
+  const exported = scanFactsFromStatic(exportDeviceCloud);
+  const exportedSummary: SessionScanSummary = {
+    fileName: exported.fileName!,
+    sourcePoints: exported.sourcePoints!,
+    width: exported.width!,
+    depth: exported.depth!,
+    height: exported.height!,
+    ...(exported.crs ? { crs: exported.crs } : {}),
+    ...(exported.epsg != null ? { epsg: exported.epsg } : {}),
+  };
+
+  const roundTrip = (summary: SessionScanSummary): SessionScanSummary | undefined =>
+    parseSession(
+      serializeSession({
+        upAxis: 'z',
+        origin: [0, 0, 0],
+        unitSystem: 'imperial',
+        views: [],
+        measurements: [],
+        annotations: [],
+        scanSummary: summary,
+      }),
+    ).scanSummary;
+
+  test('the serialized scanSummary stores the DECLARED header count, not the strided display sample', () => {
+    const back = roundTrip(exportedSummary);
+    expect(back?.sourcePoints).toBe(HEADER);
+    // The pre-fix writer stored the decimated held count; that value is gone.
+    expect(back?.sourcePoints).not.toBe(exportDeviceCloud.pointCount);
+  });
+
+  test('a strided export reimports STRONGLY on a fuller device', () => {
+    const back = roundTrip(exportedSummary);
+    const reimport = scanFactsFromStatic(reimportDeviceCloud);
+    expect(matchSessionToScan(back, reimport).verdict).toBe('strong');
+  });
+
+  test('the pre-fix decimated count would downgrade that reimport to partial — the instability removed', () => {
+    // What the writer stored BEFORE main.ts aligned to the ladder: the held
+    // count (250k), against a 3.9M-point reimport of the same file.
+    const preFix: SessionScanSummary = {
+      ...exportedSummary,
+      sourcePoints: exportDeviceCloud.pointCount,
+    };
+    const back = roundTrip(preFix);
+    const reimport = scanFactsFromStatic(reimportDeviceCloud);
+    const m = matchSessionToScan(back, reimport);
+    expect(m.verdict).toBe('partial');
+    expect(m.reasons.some((r) => /point count differs/.test(r))).toBe(true);
   });
 });
