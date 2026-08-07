@@ -3908,7 +3908,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-mp-stations-wrap,
   .olv-shortcuts-list {
     scrollbar-width: thin;
-    scrollbar-color: var(--hairline) transparent;
+    scrollbar-color: color-mix(in srgb, var(--hairline) 50%, var(--panel)) transparent;
   }
 }
 
@@ -3931,7 +3931,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-streaming-panel::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
 .olv-measure-panel::-webkit-scrollbar-thumb {
-  background: var(--hairline); border-radius: 999px;
+  background: color-mix(in srgb, var(--hairline) 50%, var(--panel)); border-radius: 999px;
   border: 2px solid transparent; background-clip: padding-box;
 }
 .olv-analyse-panel::-webkit-scrollbar-thumb:hover,
