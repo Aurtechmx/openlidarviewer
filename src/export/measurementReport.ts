@@ -85,7 +85,17 @@ export function measurementsToFindings(
       const k = Object.keys(metrics).find((key) => Number.isFinite(metrics[key]));
       if (k) {
         value = metrics[k];
-        unit = k.endsWith('_m2') ? 'm²' : k.endsWith('_m3') ? 'm³' : k.endsWith('_deg') ? '°' : k.endsWith('_pct') ? '%' : 'm';
+        if (k.endsWith('_m2')) {
+          unit = 'm²';
+        } else if (k.endsWith('_m3')) {
+          unit = 'm³';
+        } else if (k.endsWith('_deg')) {
+          unit = '°';
+        } else if (k.endsWith('_pct')) {
+          unit = '%';
+        } else {
+          unit = 'm';
+        }
       }
     }
     if (value === null) return; // an incomplete measurement contributes nothing

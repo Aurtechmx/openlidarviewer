@@ -198,7 +198,7 @@ export function method(id: string): MethodEntry | null {
 
 /** True when `id` names a registered method. */
 export function isMethodId(id: string): boolean {
-  return Object.prototype.hasOwnProperty.call(METHOD_REGISTRY, id);
+  return Object.hasOwn(METHOD_REGISTRY, id);
 }
 
 /**

@@ -138,7 +138,7 @@ export class CrsService {
    * same object and cannot disagree with each other.
    */
   context(): SpatialContext {
-    if (this._context === null) this._context = spatialContextFrom(this._current);
+    this._context ??= spatialContextFrom(this._current);
     return this._context;
   }
 
@@ -340,6 +340,7 @@ export class CrsService {
       detected?.name && detected.epsg === override.epsg
         ? detected.name
         : (entry?.label ?? `EPSG:${override.epsg}`);
+    const fallbackLinearUnit = override.kind === 'geographic' ? 'unknown' : 'metre';
     return {
       kind: override.kind,
       name,
@@ -355,7 +356,7 @@ export class CrsService {
       linearUnit:
         detected?.epsg === override.epsg
           ? detected.linearUnit
-          : (entry?.linearUnit ?? (override.kind === 'geographic' ? 'unknown' : 'metre')),
+          : (entry?.linearUnit ?? fallbackLinearUnit),
       linearUnitToMetres:
         detected?.epsg === override.epsg
           ? detected.linearUnitToMetres

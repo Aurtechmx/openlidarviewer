@@ -1138,8 +1138,12 @@ async function renderAnnotations(
     // Label the coordinate FRAME so a render-local fallback is never presented
     // as a surveyed location. `world` names the CRS when the annotation carries
     // one; anything else is the scan's render-local anchor.
-    const frameLabel =
-      a.frame === 'world' ? (a.crs ? `world · ${a.crs}` : 'world') : 'render-local';
+    let frameLabel: string;
+    if (a.frame === 'world') {
+      frameLabel = a.crs ? `world · ${a.crs}` : 'world';
+    } else {
+      frameLabel = 'render-local';
+    }
     cursor = drawBodyLine(
       cursor,
       `Position (${frameLabel}): ${a.position.x.toFixed(3)}, ${a.position.y.toFixed(3)}, ${a.position.z.toFixed(3)}`,
@@ -1182,9 +1186,10 @@ async function renderMeasurements(
     // vertical space needed before drawing so a row never splits
     // across a page boundary.
     const extras = m.profileExtras;
-    const rowH = extras
-      ? 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0)
-      : 16;
+    let rowH = 16;
+    if (extras) {
+      rowH = 16 + 12 * 4 + (extras.coverageCaveat ? 12 : 0) + (extras.chart ? 68 : 0);
+    }
     cursor = ensureSpace(cursor, rowH, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, `${m.kind} · ${m.name}`, m.value, body, bold, theme);
     if (extras) {

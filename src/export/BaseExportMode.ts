@@ -191,9 +191,11 @@ export function baseReportRows(
     const w = box[3] - box[0];
     const d = box[4] - box[1];
     const h = box[5] - box[2];
-    rows.push({ label: 'Width',  value: formatLinear(w, unit) });
-    rows.push({ label: 'Depth',  value: formatLinear(d, unit) });
-    rows.push({ label: 'Height', value: formatLinear(h, unit) });
+    rows.push(
+      { label: 'Width',  value: formatLinear(w, unit) },
+      { label: 'Depth',  value: formatLinear(d, unit) },
+      { label: 'Height', value: formatLinear(h, unit) },
+    );
     // Density — points per square unit on the XY footprint.
     if (w > 0 && d > 0) {
       const density = adapter.sourcePointCount() / (w * d);
@@ -204,30 +206,35 @@ export function baseReportRows(
   }
   // Capability summary — which channels the export can honour. Matches the
   // Scan Intelligence panel's RGB/Intensity/Classification rows.
-  rows.push({ label: 'RGB',           value: adapter.hasRgb() ? 'Yes' : 'No' });
-  rows.push({ label: 'Intensity',     value: adapter.hasIntensity() ? 'Yes' : 'No' });
+  rows.push(
+    { label: 'RGB',           value: adapter.hasRgb() ? 'Yes' : 'No' },
+    { label: 'Intensity',     value: adapter.hasIntensity() ? 'Yes' : 'No' },
+  );
   // Presence gates the classification RENDER; coverage is what a reader of the
   // report needs. An all-code-0 file has the channel and no classes, and a bare
   // "Yes" for it contradicted the Scan Report panel on the same scan. Fall back
   // to presence only when coverage genuinely cannot be counted — never invent a
   // percentage.
   const assigned = adapter.classificationAssignedFraction?.() ?? null;
-  rows.push({
-    label: 'Classification',
-    value: !adapter.hasClassification()
-      ? 'No'
-      : assigned === null
-        ? 'Yes'
-        : `Present, ${assigned > 0 ? 'classified' : 'unclassified'} ` +
-          `(${(assigned * 100).toFixed(1)} % coverage)`,
-  });
+  let classificationValue: string;
+  if (!adapter.hasClassification()) {
+    classificationValue = 'No';
+  } else if (assigned === null) {
+    classificationValue = 'Yes';
+  } else {
+    const classified = assigned > 0 ? 'classified' : 'unclassified';
+    classificationValue = `Present, ${classified} (${(assigned * 100).toFixed(1)} % coverage)`;
+  }
+  rows.push({ label: 'Classification', value: classificationValue });
   // CRS provenance, when the source file declares one. This
   // is the row that makes the export research-grade: an analyst reading the
   // PNG later knows the datum and the linear unit the dimensions are in.
   const crs = adapter.crsLabel();
   if (crs) {
-    rows.push({ label: 'CRS',   value: crs.name });
-    rows.push({ label: 'Units', value: crs.unit });
+    rows.push(
+      { label: 'CRS',   value: crs.name },
+      { label: 'Units', value: crs.unit },
+    );
   }
   // Capture-type row — auto-computed from the provenance classifier so
   // every exported image carries the same Research-Derived capture

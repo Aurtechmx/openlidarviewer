@@ -56,9 +56,8 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
 function checkInvalidCoordinates(cloud: PointCloud): AnalysisRow {
   let invalidCount = 0;
   const pos = sourcePositions(cloud);
-  for (let i = 0; i < pos.length; i++) {
-    const v = pos[i];
-    if (!isFinite(v)) {
+  for (const v of pos) {
+    if (!Number.isFinite(v)) {
       invalidCount++;
     }
   }
@@ -186,7 +185,7 @@ const EMPTY_SLOT = -1;
  * close.
  */
 function sameValueZero(a: number, b: number): boolean {
-  return a === b || (a !== a && b !== b);
+  return a === b || (Number.isNaN(a) && Number.isNaN(b));
 }
 
 /**
@@ -200,7 +199,7 @@ function sameValueZero(a: number, b: number): boolean {
 function foldCoord(hash: number, v: number): number {
   let lo: number;
   let hi: number;
-  if (v !== v) {
+  if (Number.isNaN(v)) {
     // One bucket for every NaN, whatever its payload. Reading a NaN out of a
     // Float32Array yields the canonical quiet NaN on the engines we ship to, so
     // no test can currently distinguish this branch from falling through to the

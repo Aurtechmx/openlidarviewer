@@ -903,7 +903,9 @@ window.addEventListener('keydown', (e) => {
     const tag = target?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) return;
     const k = e.key.toLowerCase();
-    const preset = k === 't' ? 'top' : k === 'o' ? 'oblique' : 'planar';
+    let preset: 'top' | 'oblique' | 'planar' = 'planar';
+    if (k === 't') preset = 'top';
+    else if (k === 'o') preset = 'oblique';
     const fired = viewer?.setCameraPreset(preset);
     // Mark the keystroke consumed so any later bare-key handler
     // (`bindShortcuts`) sees `defaultPrevented` and stays quiet.
@@ -1421,7 +1423,7 @@ const inspector = new Inspector({
     const id = scans.activeId;
     if (!id) return;
     const cloud = viewer.getCloud(id);
-    if (!cloud || !cloud.colors) return;
+    if (!cloud?.colors) return;
     void loadRgbAutoNormalize().then(({ rgbAutoNormalize }) => {
       if (scans.activeId !== id) return; // scan changed while we waited
       const suggestion = rgbAutoNormalize({ colorsU8: cloud.colors! });
@@ -1531,19 +1533,17 @@ let workflowConfigPanelLoading: Promise<WorkflowConfigPanel> | null = null;
 let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
 function ensureWorkflowConfigPanel(): Promise<WorkflowConfigPanel> {
   if (workflowConfigPanel) return Promise.resolve(workflowConfigPanel);
-  if (!workflowConfigPanelLoading) {
-    workflowConfigPanelLoading = loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
-      const panel = new WorkflowConfigPanel();
-      stage.overlay.append(panel.element);
-      panel.onChange((cfg) => {
-        workflowController.setConfig(cfg);
-        persistPrefs();
-      });
-      if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
-      workflowConfigPanel = panel;
-      return panel;
+  workflowConfigPanelLoading ??= loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
+    const panel = new WorkflowConfigPanel();
+    stage.overlay.append(panel.element);
+    panel.onChange((cfg) => {
+      workflowController.setConfig(cfg);
+      persistPrefs();
     });
-  }
+    if (pendingWorkflowConfig !== undefined) panel.setConfig(pendingWorkflowConfig);
+    workflowConfigPanel = panel;
+    return panel;
+  });
   return workflowConfigPanelLoading;
 }
 
@@ -1615,15 +1615,13 @@ let shortcutSheet: ShortcutSheet | null = null;
 let shortcutSheetLoading: Promise<ShortcutSheet> | null = null;
 function ensureShortcutSheet(): Promise<ShortcutSheet> {
   if (shortcutSheet) return Promise.resolve(shortcutSheet);
-  if (!shortcutSheetLoading) {
-    shortcutSheetLoading = loadShortcutSheet().then(({ ShortcutSheet }) => {
-      const sheet = new ShortcutSheet();
-      stage.overlay.append(sheet.element);
-      sheet.setActions(ACTION_REGISTRY);
-      shortcutSheet = sheet;
-      return sheet;
-    });
-  }
+  shortcutSheetLoading ??= loadShortcutSheet().then(({ ShortcutSheet }) => {
+    const sheet = new ShortcutSheet();
+    stage.overlay.append(sheet.element);
+    sheet.setActions(ACTION_REGISTRY);
+    shortcutSheet = sheet;
+    return sheet;
+  });
   return shortcutSheetLoading;
 }
 
@@ -1860,7 +1858,9 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
       metaCrsKnown = !!crs?.name;
       metaDatumKnown = !!crs?.verticalDatum;
-      classification = cloud.classificationIsDerived ? 'derived' : cloud.classification ? 'source' : 'none';
+      if (cloud.classificationIsDerived) classification = 'derived';
+      else if (cloud.classification) classification = 'source';
+      else classification = 'none';
     } else if (streaming) {
       // Tight data AABB, not the octree cube — the cube overstates footprint
       // area (and understates density) for a partial-footprint scan.
@@ -2473,20 +2473,18 @@ async function showReclassifyUi(): Promise<void> {
     return;
   }
   // Dedupe concurrent first-mounts so the panel is only ever created once.
-  if (!reclassifyUiLoading) {
-    reclassifyUiLoading = (async () => {
-      const { createReclassifyUi } = await loadReclassifyUi();
-      const ui = createReclassifyUi({
-        canvas: stage.canvas,
-        getViewer: () => viewer,
-        getActiveId: () => scans.activeId,
-        onToast: showLassoToast,
-        onAutoClassify: () => runDeriveClassification(),
-      });
-      classLegendPanel.element.after(ui.element);
-      reclassifyUi = ui;
-    })();
-  }
+  reclassifyUiLoading ??= (async () => {
+    const { createReclassifyUi } = await loadReclassifyUi();
+    const ui = createReclassifyUi({
+      canvas: stage.canvas,
+      getViewer: () => viewer,
+      getActiveId: () => scans.activeId,
+      onToast: showLassoToast,
+      onAutoClassify: () => runDeriveClassification(),
+    });
+    classLegendPanel.element.after(ui.element);
+    reclassifyUi = ui;
+  })();
   await reclassifyUiLoading;
   // Cast: TS can't see the async IIFE reassign the outer `let` across the await.
   (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
@@ -2752,7 +2750,7 @@ function newObjectPanel(
   // Dimension / scale-bar units follow the live measurement unit system.
   onExportFloorPlan: async () => {
     const ctx = lastSpaceExport;
-    if (!ctx || ctx.spaceKind !== 'interior') return;
+    if (ctx?.spaceKind !== 'interior') return;
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
@@ -2864,7 +2862,7 @@ const terrainRunner = createTerrainAnalysisRunner({
     // run that measured nothing (null summary/band) leaves the row honest.
     const cx = result.complexity;
     inspectorCards.noteTerrainComplexity(
-      cx && cx.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
+      cx?.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
     );
   },
 });
@@ -2982,15 +2980,14 @@ const exportPanel = new ExportPanel({
       const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
       const crs = c.metadata?.crs ?? null;
+      const declaredProvenance = c.classification != null ? 'source' : 'none';
       return {
         pointCount: c.pointCount,
         hasRgb: c.colors != null,
         hasGpsTime: c.gpsTime != null,
         crsName: crs?.name ?? null,
         hasWkt: crs?.wkt != null,
-        classProvenance: c.classificationIsDerived
-          ? 'derived'
-          : c.classification != null ? 'source' : 'none',
+        classProvenance: c.classificationIsDerived ? 'derived' : declaredProvenance,
       };
     }
     const sc = viewer?.streamingCloud;
@@ -3265,7 +3262,8 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
   // never flips the session TO terrain (it only rescues interiors/objects
   // misread on a sparse frame), and `runTerrain` is true ONLY for the explicit
   // hatch / manual Terrain override — auto-detection never starts an analysis.
-  const detected: SpaceKind | null = shape ? (shape.nonTerrain ? shape.spaceKind : 'terrain') : null;
+  let detected: SpaceKind | null = null;
+  if (shape) detected = shape.nonTerrain ? shape.spaceKind : 'terrain';
   const plan = planScanRoute({
     detected,
     override: routing.typeOverride,
@@ -3321,7 +3319,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     const streamingCloud = viewer.streamingCloud;
     const hasRgb = streamingCloud
       ? streamingCloud.availableColorModes().includes('rgb')
-      : !!(activeCloud && activeCloud.colors && activeCloud.colors.length > 0);
+      : !!activeCloud?.colors?.length;
     // Compute REAL metrics for the EFFECTIVE type — when forced, the report
     // reflects what's actually there for that interpretation; nothing fabricated.
     // The active scan's context, so a foot-based CRS reports honest metre/feet
@@ -4452,7 +4450,7 @@ function prewarmForUrl(url: string): void {
     void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
     void loadCopcWorkerClient()
       .then(({ CopcWorkerClient }) => {
-        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+        copcDecoder ??= new CopcWorkerClient();
       })
       .catch(() => { /* swallow — actual COPC open retries */ });
   }
@@ -4502,7 +4500,7 @@ function schedulePrewarm(): void {
     // painful one to debug or demo against.
     void loadCopcWorkerClient()
       .then(({ CopcWorkerClient }) => {
-        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+        copcDecoder ??= new CopcWorkerClient();
       })
       .catch(() => { /* swallow — actual COPC open retries */ });
     // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
@@ -4647,7 +4645,7 @@ function refreshMeasurePanel(): void {
   measurePanel.setVisible(viewer.measureMode || hasMeasurements);
   // Local-first counter, categorical (the kind) only — never coordinates or names.
   if (measurements.length > _lastMeasurementCount) {
-    const newest = measurements[measurements.length - 1];
+    const newest = measurements.at(-1);
     if (newest) recordUsage('measurement', newest.kind);
   }
   _lastMeasurementCount = measurements.length;
@@ -4896,9 +4894,9 @@ async function exportSession(): Promise<void> {
   // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
   // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
   // and mis-oriented.
-  const upAxis: 'y' | 'z' = cloud
-    ? isZUpFormat(cloud.sourceFormat) ? 'z' : 'y'
-    : viewer.streamingCloud ? 'z' : 'y';
+  let upAxis: 'y' | 'z';
+  if (cloud) upAxis = isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+  else upAxis = viewer.streamingCloud ? 'z' : 'y';
 
   // populate the v3 fields so the .olvsession captures
   // the full working state, not just the inspection annotations. The
@@ -4981,7 +4979,7 @@ async function exportSession(): Promise<void> {
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
-    views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
+    views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...v.state })),
     measurements: viewer.measure.getMeasurements(),
     annotations: viewer.annotate.getAnnotations(),
     camera: viewState.camera,

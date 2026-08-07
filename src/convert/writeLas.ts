@@ -145,7 +145,8 @@ export function composeGeneratingSoftware(
   id: Pick<BuildIdentity, 'version' | 'commit' | 'dirty'> = BUILD_IDENTITY,
 ): string {
   const hasCommit = id.commit.length > 0 && id.commit !== 'unknown';
-  const commit = hasCommit ? `${id.commit}${id.dirty ? '+dirty' : ''}` : null;
+  const dirtySuffix = id.dirty ? '+dirty' : '';
+  const commit = hasCommit ? `${id.commit}${dirtySuffix}` : null;
   const candidates = [
     commit ? `${PRODUCT_NAME} ${id.version} ${commit}` : null,
     `${PRODUCT_NAME} ${id.version}`,
@@ -236,8 +237,10 @@ function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, numbe
   const hasCrs = opts.epsg != null && Number.isFinite(opts.epsg) && opts.epsg > 0 && opts.epsg <= 65535;
   const geoKeys: Array<[number, number]> = [];
   if (hasCrs) {
-    geoKeys.push([1024, geo ? 2 : 1]); // GTModelType: geographic / projected
-    geoKeys.push([geo ? 2048 : 3072, opts.epsg as number]); // Geographic/ProjectedCSType
+    geoKeys.push(
+      [1024, geo ? 2 : 1], // GTModelType: geographic / projected
+      [geo ? 2048 : 3072, opts.epsg as number], // Geographic/ProjectedCSType
+    );
     if (!geo && opts.linearUnitCode != null && opts.linearUnitCode > 0) {
       geoKeys.push([3076, opts.linearUnitCode]); // ProjLinearUnits (metre/foot/US ft)
     }
@@ -298,10 +301,10 @@ const TEXT_AREA_DESCRIPTION_RECORD_ID = 3;
  */
 function asciiFold(s: string): string {
   return s
-    .replace(/[—–]/g, '-')
-    .replace(/≈/g, '~=')
-    .replace(/→/g, '->')
-    .replace(/[^\x00-\x7f]/g, '?');
+    .replaceAll(/[—–]/g, '-')
+    .replaceAll(/≈/g, '~=')
+    .replaceAll(/→/g, '->')
+    .replaceAll(/[^\x00-\x7f]/g, '?');
 }
 
 /**

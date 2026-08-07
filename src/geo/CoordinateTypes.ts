@@ -156,7 +156,8 @@ export interface ResolvedCrs {
 export function isLinearUnitKnown(
   crs: { readonly linearUnit?: string } | null | undefined,
 ): boolean {
-  return crs != null && crs.linearUnit !== undefined && crs.linearUnit !== 'unknown';
+  const unit = crs?.linearUnit;
+  return unit !== undefined && unit !== 'unknown';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -206,12 +207,14 @@ export function resolvedFromCrsInfo(
   const kind: CrsKind = info.isGeographic ? 'geographic' : 'projected';
   // Confidence: EPSG + WKT = high, EPSG OR a recognisable name = medium.
   // The CrsInfo always has a `name`, so the discriminator is EPSG.
-  const confidence: CrsConfidence =
-    typeof info.epsg === 'number' && info.wkt
-      ? 'high'
-      : typeof info.epsg === 'number' || info.name.startsWith('EPSG:')
-        ? 'medium'
-        : 'low';
+  let confidence: CrsConfidence;
+  if (typeof info.epsg === 'number' && info.wkt) {
+    confidence = 'high';
+  } else if (typeof info.epsg === 'number' || info.name.startsWith('EPSG:')) {
+    confidence = 'medium';
+  } else {
+    confidence = 'low';
+  }
   return {
     kind,
     name: info.name,

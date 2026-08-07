@@ -53,10 +53,10 @@ const U32 = new Uint32Array(F32.buffer);
  */
 export function float32Spacing(magnitude: number): number {
   const m = Math.abs(magnitude);
-  if (!Number.isFinite(m)) return NaN;
+  if (!Number.isFinite(m)) return Number.NaN;
   F32[0] = m;
   const stored = F32[0];
-  if (!Number.isFinite(stored)) return NaN; // overflowed the Float32 range
+  if (!Number.isFinite(stored)) return Number.NaN; // overflowed the Float32 range
   const bits = U32[0];
   U32[0] = bits + 1;
   const above = F32[0];

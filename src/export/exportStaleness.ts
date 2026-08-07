@@ -26,7 +26,7 @@ export function parseVersion(version: string): readonly number[] {
     .replace(/^v/i, '')
     .split('.')
     .map((p) => {
-      const n = parseInt(p, 10);
+      const n = Number.parseInt(p, 10);
       return Number.isFinite(n) ? n : 0;
     });
 }

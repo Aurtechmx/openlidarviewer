@@ -213,12 +213,14 @@ export function spatialContextFrom(
   // needs-confirmation. A ResolvedCrs (identified by its `kind` discriminant,
   // which CrsInfo lacks) is already resolved and is used as-is; a CrsInfo is
   // bridged CrsInfo → ResolvedCrs via the canonical mapper.
-  const resolved =
-    crs == null
-      ? unknownCrs()
-      : 'kind' in crs
-        ? crs
-        : (resolvedFromCrsInfo(crs, FACADE_SOURCE) ?? unknownCrs());
+  let resolved: ResolvedCrs;
+  if (crs == null) {
+    resolved = unknownCrs();
+  } else if ('kind' in crs) {
+    resolved = crs;
+  } else {
+    resolved = resolvedFromCrsInfo(crs, FACADE_SOURCE) ?? unknownCrs();
+  }
 
   const verdict = validateCrsForMeasurement(resolved);
   const linearUnitKnown = isLinearUnitKnown(resolved);

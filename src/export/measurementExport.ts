@@ -254,7 +254,7 @@ function csvCell(v: string | number): string {
   const s = String(v);
   const neutralise = typeof v === 'string' && /^[=+\-@\t\r]/.test(s);
   const cell = neutralise ? `'${s}` : s;
-  return neutralise || /[",\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell;
+  return neutralise || /[",\n]/.test(cell) ? `"${cell.replaceAll(/"/g, '""')}"` : cell;
 }
 
 /** Serialise measurements to a CSV — one row per measurement, metres throughout. */

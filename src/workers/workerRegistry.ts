@@ -84,7 +84,7 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
 
 /** Escape a string for safe embedding inside a `RegExp`. */
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 /** The basename (with extension) of a `src/...` module path. */

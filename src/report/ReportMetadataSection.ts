@@ -15,7 +15,7 @@ import type { ReportDatasetRow } from './types';
 /** What `buildDatasetSummary` needs to know about the scan. */
 export interface MetadataInputs {
   readonly fileName: string;
-  readonly format: 'COPC' | 'EPT' | 'LAS' | 'LAZ' | 'PLY' | 'E57' | 'PCD' | 'PTX' | 'PTS' | 'OBJ' | 'GLTF' | 'XYZ' | string;
+  readonly format: 'COPC' | 'EPT' | 'LAS' | 'LAZ' | 'PLY' | 'E57' | 'PCD' | 'PTX' | 'PTS' | 'OBJ' | 'GLTF' | 'XYZ' | (string & {});
   readonly sourcePointCount: number;
   /** Bounds in metres: width × depth × height. Pass NaN when unknown. */
   readonly width: number;
@@ -137,7 +137,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     const pct =
       Number.isFinite(total) && total > 0
         ? Math.min(100, Math.round((sr.points / total) * 100))
-        : NaN;
+        : Number.NaN;
     const nodePart =
       Number.isFinite(sr.totalNodes) && sr.totalNodes > 0
         ? ` · ${sr.nodes}/${sr.totalNodes} nodes`
@@ -155,11 +155,8 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   // confirmed unit (or the absent default) is byte-identical to before.
   const unitsUnconfirmed = inputs.extentUnitStatus === 'unknown';
   if (unitsUnconfirmed) {
-    rows.push({
-      label: 'Units',
-      value: 'Unconfirmed — extents in source units',
-    });
     rows.push(
+      { label: 'Units',  value: 'Unconfirmed — extents in source units' },
       { label: 'Width',  value: formatSourceUnits(inputs.width) },
       { label: 'Depth',  value: formatSourceUnits(inputs.depth) },
       { label: 'Height', value: formatSourceUnits(inputs.height) },
@@ -176,9 +173,11 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
     rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m²` });
   }
-  rows.push({ label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' });
-  rows.push({ label: 'Intensity',      value: inputs.hasIntensity ? 'Yes' : 'No' });
-  rows.push({ label: 'Classification', value: inputs.hasClassification ? 'Yes' : 'No' });
+  rows.push(
+    { label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' },
+    { label: 'Intensity',      value: inputs.hasIntensity ? 'Yes' : 'No' },
+    { label: 'Classification', value: inputs.hasClassification ? 'Yes' : 'No' },
+  );
   if (inputs.crsName) {
     rows.push({ label: 'CRS',   value: inputs.crsName });
   }

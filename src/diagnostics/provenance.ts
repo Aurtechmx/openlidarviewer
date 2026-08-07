@@ -48,6 +48,9 @@ export type CaptureType =
   | 'spaceborne'        // GEDI, ICESat-2, CALIOP
   | 'unknown';
 
+/** The classifier's confidence in its verdict. */
+export type Confidence = 'low' | 'medium' | 'high';
+
 /**
  * A single literature-derived bound. Plain prose so the UI can render it
  * verbatim; each one names the source paper so the user (and a reviewer of
@@ -62,7 +65,7 @@ export interface AccuracyBound {
 /** The classifier's verdict for a loaded scan. */
 export interface ProvenanceFingerprint {
   readonly captureType: CaptureType;
-  readonly confidence: 'low' | 'medium' | 'high';
+  readonly confidence: Confidence;
   /** Short human-readable label, e.g. "iPhone / handheld LiDAR". */
   readonly label: string;
   /** Why the classifier picked this — surfaced in the UI under "Signals". */
@@ -469,7 +472,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function phoneLidarFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
@@ -509,7 +512,7 @@ function phoneLidarFingerprint(
 }
 
 function droneLidarFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
@@ -539,7 +542,7 @@ function droneLidarFingerprint(
 }
 
 function terrestrialFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
@@ -564,7 +567,7 @@ function terrestrialFingerprint(
 }
 
 function mobileSlamFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
@@ -594,7 +597,7 @@ function mobileSlamFingerprint(
 }
 
 function aerialAlsFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
@@ -632,7 +635,7 @@ function aerialAlsFingerprint(
 }
 
 function spaceborneFingerprint(
-  confidence: 'low' | 'medium' | 'high',
+  confidence: Confidence,
   signals: readonly string[],
 ): ProvenanceFingerprint {
   return {
