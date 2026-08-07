@@ -1,0 +1,333 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Measurement toolkit — polygon fills, preview rubber-bands, leader lines,
+   and headline value labels. The dot / line / label base styles are shared
+   with the legacy distance measure tool above.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-m-fill {
+  fill: rgba(0, 178, 255, 0.14);
+  stroke: var(--accent);
+  /* fill outline + leader strokes bumped ~10%. */
+  stroke-width: 1.45;
+  stroke-dasharray: 5 4;
+}
+.olv-m-preview { opacity: 0.5; }
+.olv-m-leader { stroke: rgba(0, 178, 255, 0.5); stroke-width: 1.1; }
+.olv-m-label-primary { font-size: var(--text-md); }
+.olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
+.olv-m-handle:active { cursor: grabbing; }
+
+/* ── Annotation markers ──────────────────────────────────────────────────── */
+.olv-anno-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  pointer-events: none; /* clicks pass through except on markers */
+  overflow: visible;
+}
+.olv-anno-marker { pointer-events: auto; cursor: pointer; }
+/* Dark halo keeps the marker readable over a dense, bright cloud. */
+.olv-anno-halo { fill: rgba(8, 13, 20, 0.82); }
+.olv-anno-disc { stroke: rgba(8, 13, 20, 0.9); stroke-width: 1; }
+.olv-anno-num {
+  font-size: var(--text-sm); font-weight: 700; user-select: none;
+}
+/* Type colours — note (blue), info (cyan), warning (amber), issue (red). */
+.olv-anno-note .olv-anno-disc { fill: #5b9bd5; }
+.olv-anno-info .olv-anno-disc { fill: #22dcff; }
+.olv-anno-warning .olv-anno-disc { fill: var(--rating-good); }
+.olv-anno-issue .olv-anno-disc { fill: var(--rating-weak); }
+.olv-anno-note .olv-anno-num,
+.olv-anno-info .olv-anno-num,
+.olv-anno-warning .olv-anno-num,
+.olv-anno-issue .olv-anno-num { fill: #06121a; }
+/* Hover lifts the marker; selection draws a white ring. */
+.olv-anno-marker:hover .olv-anno-disc,
+.olv-anno-hover .olv-anno-disc { filter: brightness(1.18); }
+.olv-anno-selected .olv-anno-disc { stroke: #ffffff; stroke-width: 2.25; }
+
+/* ── Annotation inline editor ────────────────────────────────────────────── */
+.olv-anno-editor {
+  position: absolute; z-index: 30;
+  display: flex; flex-direction: column; gap: var(--space-md);
+  width: 264px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+.olv-anno-editor-heading { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.olv-anno-editor-title,
+.olv-anno-editor-note {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04); color: var(--text);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); font: inherit; font-size: var(--text-sm);
+}
+.olv-anno-editor-note { resize: vertical; min-height: 52px; }
+.olv-anno-editor-types { display: flex; gap: var(--space-xs); }
+.olv-anno-chip {
+  flex: 1; font-size: var(--text-xs); padding: var(--space-xs) 0; cursor: pointer;
+  background: transparent; color: var(--text); opacity: 0.6;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+}
+.olv-anno-chip-active { opacity: 1; border-color: var(--accent); }
+.olv-anno-chip-note.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #5b9bd5; }
+.olv-anno-chip-info.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #22dcff; }
+.olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-good); }
+.olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-weak); }
+.olv-anno-editor-camera {
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; user-select: none;
+}
+.olv-anno-editor-camera-box { margin: 0; cursor: pointer; accent-color: var(--accent); }
+.olv-anno-editor-link { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-anno-editor-link-label { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-anno-editor-link-select {
+  width: 100%; box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.04); color: var(--text);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-md); font: inherit; font-size: var(--text-sm);
+}
+.olv-anno-editor-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; }
+.olv-anno-editor-cancel,
+/*
+ * Save (primary action) — aligned with the rest of the app's primary
+ * vocabulary: cyan text on accent-soft fill, NOT solid-cyan. This is
+ * the same treatment used by .olv-measure-done, .olv-inspect-copy and
+ * .olv-streaming-view-save, so a user who learned "this is the primary
+ * action" anywhere in the app reads it the same way here (Gestalt
+ * similarity).
+ */
+.olv-anno-editor-save {
+  font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  font-weight: 600;
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-anno-editor-save:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-anno-editor-save:active { transform: scale(0.96); }
+
+/* ── Annotation hint bar ─────────────────────────────────────────────────── */
+.olv-anno-hint {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--space-md);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
+}
+.olv-anno-hint-badge {
+  font-size: var(--text-2xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--accent);
+}
+.olv-anno-hint-text { font-size: var(--text-sm); color: var(--text); }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Measurement toolbar (kind picker + actions) and the Measurements panel
+   ─────────────────────────────────────────────────────────────────────────── */
+/*
+ * DESKTOP: the measurement toolbar is a horizontal glass bar pinned to the top
+ * centre — clear of the left-docked panels, the right-hand inspector, and the
+ * bottom dock. (A left-edge vertical rail would collide with the left-docked
+ * panel column, which on desktop also lives at left:14; that rail layout is
+ * therefore scoped to the phone breakpoint, where the panels move into the
+ * bottom sheet and free the left column.) Three stacked rows: the kind tools,
+ * the live instruction, then the action buttons.
+ */
+.olv-measure-bar {
+  position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  gap: var(--space-sm); z-index: 36;
+  background: rgba(11, 17, 33, 0.82);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border-radius: var(--radius-lg); padding: var(--space-sm) var(--space-lg);
+  /* Stay clear of the side panels (~300 px each) so it never overlaps them. */
+  width: max-content; max-width: calc(100vw - 680px);
+  overflow: visible;
+}
+.olv-mkinds {
+  display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center;
+  gap: var(--space-xs);
+}
+.olv-mkind {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-mkind:hover { color: var(--text); }
+.olv-mkind:active { transform: scale(0.96); }
+.olv-mkind-active {
+  color: var(--accent); background: var(--accent-soft);
+  border-color: rgba(0, 178, 255, 0.4);
+}
+/* Auxiliary kind button (Lasso volume).
+ *
+ * Gestalt proximity + similarity: rendered DIRECTLY AFTER its anchor
+ * kind (Volume) at a tight 2 px margin so the pair reads as one
+ * cluster. The dashed border carries the semantic load: same
+ * measurement kind, different input mode. A larger margin here
+ * would read as a separator between groups, which is wrong — Lasso
+ * is a sub-action of Volume, not a sibling group. */
+.olv-mkind-aux {
+  margin-left: var(--space-2xs);
+  border-style: dashed;
+}
+.olv-mkind-aux.olv-mkind-active {
+  border-style: solid;
+}
+.olv-measure-undo {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-measure-undo:hover { color: var(--text); }
+.olv-measure-undo:active { transform: scale(0.96); }
+/*
+ * Units toggle — demoted from cyan-filled primary to a neutral chip
+ * with a small cyan glyph identifying the active unit. Done is now
+ * the only cyan-accent button in the actions row, so the user reads
+ * "modifier" vs "exit / primary" by colour alone (Gestalt similarity).
+ */
+.olv-units-toggle {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg); min-width: 70px;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-units-toggle:hover { color: var(--text); border-color: var(--accent); }
+.olv-units-toggle:active { transform: scale(0.96); }
+/*
+ * Done anchors the actions row at the far right — modifiers (undo,
+ * clear, units) cluster left of the free-space gap, exit anchors
+ * right (Gestalt continuity + proximity).
+ */
+.olv-measure-done { margin-left: 0; }
+
+/*
+ * Finish-polygon button — shown only while a polygon-kind draft has
+ * enough vertices to close. Same cyan vocabulary as Done because both
+ * are constructive primaries; visual differentiation comes from the
+ * solid checkmark glyph in the label ("Finish polygon" vs. "Done")
+ * and from contextual presence — Finish only appears when its job
+ * makes sense.
+ */
+.olv-measure-finish {
+  font-size: var(--text-xs); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  font-weight: 500;
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-measure-finish:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-measure-finish:active { transform: scale(0.96); }
+
+/* ── Icon-first measurement controls (v0.4.6) ──────────────────────────────
+ * The kind picker is now glyph-driven: a custom line-icon per
+ * measurement kind, with the text label kept in the DOM (`.olv-mkind-name`)
+ * but visually hidden — the name surfaces on hover (title) and to assistive
+ * tech (aria-label). The action controls pair a glyph with a small label.
+ * On phones these reflow into a vertical left rail (see the mobile block). */
+.olv-mkind-icon {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; width: auto; min-width: 48px; padding: var(--space-2xs) var(--space-xs);
+}
+.olv-mkind-icon svg { width: 20px; height: 20px; display: block; }
+/* The kind name is a VISIBLE caption under the glyph (evidence: unlabeled icon
+ * tools fail first-time users, and hover tooltips don't work on touch). */
+.olv-mkind-icon .olv-mkind-name {
+  font-size: 8px; line-height: 1; letter-spacing: 0.02em;
+  color: inherit; white-space: nowrap;
+}
+/* Action buttons (Undo / Metric / Done / Finish / Clear): glyph over label. */
+.olv-micon-btn {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 1px; line-height: 1.05;
+}
+.olv-micon-btn svg { width: 16px; height: 16px; display: block; }
+.olv-micon-btn .olv-mlabel { font-size: var(--text-2xs); }
+
+/* ── hover tooltip (custom, replaces the native title bubble) ────
+ * A glass readout that slides out to the RIGHT of each rail control, with a
+ * cyan hairline, mono type, a faint glow and a small diamond connector. Shown
+ * on hover and keyboard focus; hidden from touch (no hover) and from reduced-
+ * motion users' transitions. The accessible name still rides on aria-label. */
+.olv-mkind, .olv-micon-btn { position: relative; }
+.olv-measure-bar [data-tip]::after {
+  content: attr(data-tip);
+  position: absolute; top: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  padding: 4px 9px; border-radius: var(--radius-sm);
+  background: rgba(8, 13, 26, 0.94);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  color: var(--text); font-size: var(--text-2xs); font-family: var(--mono);
+  letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
+  opacity: 0; pointer-events: none; z-index: 60;
+  transition: opacity 140ms var(--ease-standard), transform 140ms var(--ease-standard);
+}
+.olv-measure-bar [data-tip]::before {
+  content: ''; position: absolute; top: calc(100% + 3px); left: 50%;
+  width: 7px; height: 7px; transform: translateX(-50%) rotate(45deg);
+  background: rgba(8, 13, 26, 0.94);
+  border-left: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-top: 0.5px solid rgba(0, 178, 255, 0.42);
+  opacity: 0; pointer-events: none; z-index: 60;
+  transition: opacity 140ms var(--ease-standard);
+}
+.olv-measure-bar [data-tip]:hover::after,
+.olv-measure-bar [data-tip]:focus-visible::after {
+  opacity: 1; transform: translateX(-50%) translateY(0);
+}
+.olv-measure-bar [data-tip]:hover::before,
+.olv-measure-bar [data-tip]:focus-visible::before { opacity: 1; }
+@media (hover: none) {
+  /* Touch devices: no hover, so suppress the tooltip entirely. */
+  .olv-measure-bar [data-tip]::after,
+  .olv-measure-bar [data-tip]::before { display: none; }
+}
+.olv-measure-finish:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.olv-mkind:focus-visible,
+.olv-measure-undo:focus-visible,
+.olv-units-toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* The measurement and annotation panels stack in one left-side column.
+ *
+ * `--olv-measure-bar-clear` (v0.4.5 overlap fix) is the measured height of the
+ * measure toolbar plus a column gap while the toolbar is visible — written
+ * by a ResizeObserver in main.ts — and 0px whenever it is hidden. The
+ * toolbar is centred at the same `top: 56px` band this column anchors to,
+ * and activating Measure auto-opens the Measurements panel, so without the
+ * offset the panel painted OVER the toolbar's left half (hiding the first
+ * kind pills). Pushing the column's top down by the toolbar's real height
+ * keeps both fully visible at every viewport width, including phones where
+ * the wrapped toolbar is tall and spans the full row. */
+.olv-left-panels {
+  position: absolute; top: calc(56px + var(--olv-measure-bar-clear, 0px)); left: 14px;
+  display: flex; flex-direction: column; gap: var(--space-md);
+  max-height: calc(100% - 80px - var(--olv-measure-bar-clear, 0px)); overflow-y: auto;
+  pointer-events: none;
+}
+.olv-left-panels > * { pointer-events: auto; }
+/* A scrollbar belongs to the scroll container, so `pointer-events: none` above
+   makes it un-hittable and the pointer passes through it. Invisible with the
+   overlay scrollbars macOS uses; on Windows the classic 15px scrollbar cannot
+   be dragged and the rail reads as stalled. wireRailScrollAffordance() adds
+   this class only while the column actually overflows, so the canvas keeps its
+   pass-through everywhere a scrollbar is not present. */
+.olv-classic-scrollbars .olv-left-panels.olv-rail-scrollable { pointer-events: auto; }
+/* The debug overlay is the same collision: it scrolls and ignores the pointer,
+   so its scrollbar cannot be dragged on Windows. Scoped the same way, and only
+   while the pointer is over it, so the canvas keeps the overlay's pass-through
+   everywhere else. */
+.olv-classic-scrollbars .olv-debug:hover { pointer-events: auto; }
+

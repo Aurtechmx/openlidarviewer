@@ -1,0 +1,93 @@
+/*
+ * v0.3.9 Theme system — Light + High-contrast.
+ *
+ * The :root palette above is the Dark default. Switching themes is
+ * a body-class swap (`olv-theme-light` / `olv-theme-high-contrast`)
+ * that overrides the same CSS variables — no per-component
+ * rewrites, no JS-side colour poking. See `src/ui/themes.ts` for
+ * the pure registry and the persistence path.
+ *
+ * Light theme — inverted background, preserved cyan accent. Tuned
+ * for office-lighting readability: panels lift to a near-white,
+ * text drops to a near-black, hairlines deepen to a visible
+ * indigo, and the accent stays the brand's electric-blue so a
+ * returning user reads the same affordances.
+ */
+body.olv-theme-light {
+  color-scheme: light;
+  --bg: #f4f6fb;
+  --panel: #ffffff;
+  --hairline: rgba(35, 60, 110, 0.20);
+  --text: #0a1430;
+  --text-dim: #46546e;
+  --text-faint: #5d6a87; /* darkened from #7682a0 to clear WCAG AA (≥4.5:1) on the light --bg */
+  --accent: #0088c8;
+  --accent-soft: rgba(0, 136, 200, 0.18);
+  /* Deeper violet so the blocked verdict stays legible on the near-white panel. */
+  --rating-blocked: #7c3aed;
+  /*
+   * v0.4.6 two-tier surfaces in Light. The default --panel is pure
+   * white, so a RAISED surface must read by going *up* (it can't —
+   * white is the ceiling) — instead it stays crisp white and earns a
+   * firmer edge + lift shadow, while RECESSIVE panels drop to the
+   * page tint so the rank survives on near-white. WCAG AA holds: text
+   * tokens are unchanged and both fills stay light.
+   */
+  --panel-raised: #ffffff;
+  --panel-recessive: rgba(244, 246, 251, 0.72); /* the --bg tint — recedes against white raised */
+  --shadow-raised: 0 8px 22px -12px rgba(30, 50, 95, 0.28), 0 0 0 0.5px rgba(35, 60, 110, 0.10);
+  --hairline-strong: rgba(35, 60, 110, 0.34);
+  --caveat-tint: color-mix(in srgb, var(--rating-good) 16%, white);
+}
+
+/*
+ * High-contrast theme — maximum readability for low-vision users.
+ * Pure black background, pure white text, every hairline becomes a
+ * solid 1 px border at full opacity. WCAG AA on every text-on-bg
+ * pair (text 21:1, dim 12.6:1, faint 4.6:1).
+ */
+body.olv-theme-high-contrast {
+  color-scheme: dark;
+  --bg: #000000;
+  --panel: #0a0a0a;
+  --hairline: rgba(255, 255, 255, 0.55);
+  --text: #ffffff;
+  --text-dim: #d9d9d9;
+  --text-faint: #b3b3b3;
+  --accent: #5cd7ff;
+  --accent-soft: rgba(92, 215, 255, 0.28);
+  /* Bright violet — high luminance against pure black, holds WCAG AA. */
+  --rating-blocked: #d8b4fe;
+  /*
+   * v0.4.6 two-tier surfaces in High-contrast. The palette is
+   * intentionally flattened, so the rank is carried by a FULL-opacity
+   * border (not fill alpha) on the raised surface and a near-black
+   * recessive fill — the verdict still reads by its word + colour, per
+   * the audit's high-contrast rule. Caveat keeps a solid full-strength
+   * rule so it never disappears.
+   */
+  --panel-raised: #141414;
+  --panel-recessive: #050505;
+  --shadow-raised: none;
+  --hairline-strong: rgba(255, 255, 255, 0.85);
+  --caveat-tint: rgba(250, 204, 21, 0.16);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; width: 100%; }
+html, body {
+  /* Mobile touch hygiene. overscroll-behavior stops pull-to-refresh and
+     scroll-chaining bouncing the whole page while orbiting; text-size-adjust
+     stops iOS inflating UI text in landscape; tap-highlight removes the grey
+     flash on tap; touch-action:manipulation drops the 300 ms double-tap-zoom
+     delay on controls (the canvas opts out to `none` below). */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+body { background: var(--bg); font-family: var(--font); color: var(--text); overflow: hidden; }
+button { font-family: inherit; cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+

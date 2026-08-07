@@ -22,8 +22,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { readAppCss } from './support/appCss';
+
 const PANEL = readFileSync(resolve(__dirname, '../src/ui/MeasurePanel.ts'), 'utf8');
-const CSS_RAW = readFileSync(resolve(__dirname, '../src/style.css'), 'utf8');
+const CSS_RAW = readAppCss();
 
 /** Stylesheet with every comment removed, so prose cannot satisfy an assertion. */
 const CSS = CSS_RAW.replace(/\/\*[\s\S]*?\*\//g, '');

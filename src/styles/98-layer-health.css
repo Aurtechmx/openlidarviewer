@@ -1,0 +1,123 @@
+/* ── Colorbar legend overlay (lazy chunk — ui/ColorbarOverlay.ts) ──────────
+   The live labelled colorbar for the active continuous colour mode. Sits at
+   mid-height, just left of the right rail (Inspector column) so it hugs the
+   viewport edge without sliding under the rail; on mobile the rail becomes a
+   bottom sheet, so the legend moves flush to the edge. Deliberately a LIGHT
+   card in BOTH themes: the SVG inside is the shared print/figure generator's
+   output (dark ink on light paper — the same bytes a PDF renders), so the
+   card supplies the paper rather than restyling the figure per theme. */
+.olv-colorbar {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  right: calc(var(--olv-right-rail-width, 232px) + 28px);
+  z-index: 60;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  pointer-events: auto;
+}
+.olv-colorbar-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+}
+.olv-colorbar-range {
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.olv-colorbar-close {
+  border: none; background: none; color: var(--text-dim); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 2px 5px; border-radius: 4px;
+}
+.olv-colorbar-close:hover { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.olv-colorbar-svg { line-height: 0; }
+.olv-colorbar-note { font-size: var(--text-2xs); color: var(--text-dim); max-width: 150px; }
+@media (max-width: 768px) {
+  .olv-colorbar { right: 14px; }
+}
+
+/* ─── Layer Health card ──────────────────────────────────────────────
+ * Per-layer spatial facts (CRS, units, datum, compatibility, frame
+ * membership, mount precision) plus the cross-layer Spatial
+ * Compatibility report. Same rhythm as the Dataset Intelligence card;
+ * status dots reuse the honest rating scale and are always paired
+ * with the word (WCAG 1.4.1). Monospace is reserved for numeric
+ * values via `.is-mono`; labels stay in the UI face.
+ */
+.olv-layerhealth-card {
+  margin-top: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.olv-layerhealth-title { margin-bottom: var(--space-sm); }
+.olv-layerhealth-layers { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-layerhealth-layer-name {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  margin-bottom: var(--space-2xs); overflow-wrap: anywhere;
+}
+/* dl/dt/dd rows — neutralise browser defaults, keep the tight layout
+ * (same additive-semantics pattern as .olv-di-rows). */
+.olv-layerhealth-rows { margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-layerhealth-rows dt, .olv-layerhealth-rows dd { margin: 0; padding: 0; }
+.olv-layerhealth-row {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: var(--space-md);
+  font-size: var(--text-xs); line-height: 1.45;
+}
+.olv-layerhealth-row-name { color: var(--text-dim); flex: none; }
+.olv-layerhealth-row-value {
+  color: var(--text); text-align: right; overflow-wrap: anywhere;
+}
+.olv-layerhealth-row-value.is-mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+/* Quiet status dot before the value: ok = established (green),
+ * warn = doubt gating something (amber), info = neutral fact (grey). */
+.olv-layerhealth-row-value[data-status]::before {
+  content: "";
+  display: inline-block;
+  width: 7px; height: 7px; border-radius: 50%;
+  margin-right: var(--space-xs);
+  vertical-align: 0.04em;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+}
+.olv-layerhealth-row-value[data-status="ok"]::before   { background: var(--rating-excellent); }
+.olv-layerhealth-row-value[data-status="warn"]::before { background: var(--rating-good); }
+.olv-layerhealth-row-value[data-status="info"]::before { background: color-mix(in srgb, var(--text) 28%, transparent); }
+/* Colourblind-safe mode — same Okabe-Ito swap the Dataset Intelligence
+ * dots make; the word always carries the meaning. */
+body.olv-cvd .olv-layerhealth-row-value[data-status="ok"]::before   { background: #0072b2; }
+body.olv-cvd .olv-layerhealth-row-value[data-status="warn"]::before { background: #e69f00; }
+body.olv-cvd .olv-layerhealth-report-line[data-status="ok"]   { color: #56b4e9; }
+body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; }
+
+/* Spatial Compatibility report block — checklist lines + one-sentence
+ * verdict, separated from the per-layer rows by a hairline. */
+.olv-layerhealth-report {
+  margin-top: var(--space-md);
+  padding-top: var(--space-sm);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-layerhealth-report-title {
+  font-size: var(--text-xs); color: var(--text-dim);
+  margin-bottom: var(--space-2xs);
+}
+.olv-layerhealth-report-line {
+  margin: 0 0 var(--space-2xs);
+  font-size: var(--text-xs); line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.olv-layerhealth-report-line[data-status="ok"]   { color: var(--rating-excellent); }
+.olv-layerhealth-report-line[data-status="warn"] { color: var(--rating-good); }
+.olv-layerhealth-verdict {
+  margin: var(--space-xs) 0 0;
+  font-size: var(--text-xs); line-height: 1.45;
+  color: var(--text-dim);
+}
+.olv-layerhealth-empty {
+  font-size: var(--text-xs); color: var(--text-dim);
+}
+

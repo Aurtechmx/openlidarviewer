@@ -1,0 +1,438 @@
+/* Inspector */
+.olv-inspector {
+  position: absolute; top: 56px; right: 14px; width: 232px;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
+  max-height: calc(100% - 80px); overflow-y: auto;
+  /* Above the persistent navbar HUD (z-index 10) so the Inspector's
+   * scrollable content (Photometric witness, Visuals Studio chips,
+   * etc.) always wins pointer events on any vertical overlap with
+   * the legend group at the bottom of the navbar. */
+  z-index: 15;
+}
+/* Streaming-mode layout — the StreamingPanel anchors top-right at the
+ * same 232 px width. The Inspector starts BELOW the streaming panel's
+ * 50 vh ceiling so a tall streaming card never covers the Visuals
+ * Studio chips. Bottom inset clears the tool dock and version chip. */
+.olv-inspector.olv-inspector-streaming {
+  top: calc(50vh + 20px);
+  bottom: 64px;
+  max-height: calc(50vh - 84px);
+}
+.olv-panel-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
+/*
+ * Inter-section spacing in the Inspector — proximity does the grouping,
+ * hairline only reinforces. Inspector stacks 13 collapsible sections on
+ * a 232 px column; the larger margin (14 px) lets the eye see "new
+ * section" before it reaches the hairline. The hairline drops to half
+ * opacity so it doesn't compete with the typographic eyebrow below it.
+ */
+.olv-section { margin-top: var(--space-2xl); padding-top: var(--space-md); border-top: 0.5px solid rgba(255, 255, 255, 0.05); }
+.olv-section:first-of-type { margin-top: 0; padding-top: 0; border-top: none; }
+.olv-section-label {
+  font-size: var(--text-xs); color: var(--text-faint);
+  letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: var(--space-md);
+}
+
+/* Collapsible section (<details>) — matches the static section
+ * styling exactly so the panel reads as a uniform list. The only
+ * visual signal is a small caret on the summary that rotates on
+ * open. List-style markers are suppressed so the native browser
+ * triangle doesn't compete with the custom one. */
+.olv-section-collapsible[open] > summary { margin-bottom: var(--space-md); }
+.olv-section-collapsible:not([open]) > .olv-section-label { margin-bottom: 0; }
+.olv-section-summary {
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.olv-section-summary::-webkit-details-marker { display: none; }
+.olv-section-summary::before {
+  content: '';
+  display: inline-block;
+  width: 0; height: 0;
+  border-left: 4px solid var(--text-faint);
+  border-top: 3px solid transparent;
+  border-bottom: 3px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-standard);
+  flex-shrink: 0;
+}
+.olv-section-collapsible[open] > .olv-section-summary::before {
+  transform: rotate(90deg);
+}
+.olv-section-summary:hover { color: var(--text-dim); }
+.olv-section-summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.olv-layers { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-layer { display: flex; align-items: center; gap: var(--space-md); }
+.olv-layer input { accent-color: var(--accent); }
+.olv-layer-name {
+  /* min-width:0 lets ellipsis engage so long layer names truncate
+   * instead of overflowing the Inspector panel. */
+  flex: 1; min-width: 0; font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-layer-count { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+/* Per-layer CRS badge: short, faint, truncates; turns warning-coloured when the
+ * layer's coordinate system doesn't match the others. */
+.olv-layer-crs {
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint);
+  max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-layer-solo, .olv-layer-lock {
+  background: none; border: none; color: var(--text-faint); font-size: var(--text-sm);
+  line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.olv-layer-solo:hover, .olv-layer-lock:hover { color: var(--text); }
+.olv-layer-solo.is-active, .olv-layer-lock.is-active { color: var(--accent); }
+.olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: var(--text-lg); line-height: 1; }
+.olv-layer-x:hover { color: var(--text); }
+/* A layer whose CRS differs from the others — flag the row + badge. */
+.olv-layer-crs-mismatch .olv-layer-crs { color: var(--warn, #e0a030); }
+/* A layer excluded from combined results reads as set-aside, not broken —
+   it is still shown, still measurable on its own, just not merged. The row
+   title carries the reason. */
+.olv-layer-frame-excluded .olv-layer-name { opacity: 0.72; font-style: italic; }
+.olv-layer-frame-excluded .olv-layer-name::after {
+  content: ' · own frame';
+  font-style: normal;
+  font-size: 0.85em;
+  color: var(--warn, #e0a030);
+}
+.olv-layer-note { margin: var(--space-sm) 0 0; font-size: var(--text-xs); color: var(--warn, #e0a030); }
+.olv-layer-compare { margin-top: var(--space-sm); }
+.olv-layer-compare-result {
+  margin: var(--space-sm) 0 0; padding: var(--space-sm);
+  background: var(--panel-2, rgba(255,255,255,0.04)); border-radius: var(--radius-sm, 6px);
+  font-size: var(--text-xs); font-family: var(--mono); color: var(--text);
+  white-space: pre-wrap; word-break: break-word; line-height: 1.4;
+}
+.olv-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.olv-color-by-body { display: flex; flex-direction: column; gap: var(--space-md); }
+/* Gate reason for the disabled Coverage / Confidence chips — visible (not a
+   hover-only title) so the explanation reaches touch users too. */
+.olv-chips-note { margin: 0; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.4; }
+
+/* Visuals Studio — Visuals Studio. Three chip rails grouped under
+ * named labels, plus an Advanced disclosure for white-balance sliders
+ * and auto-balance. Sits as a collapsible Inspector section so the
+ * panel stays compact when an analyst doesn't need it. */
+.olv-visuals-body { display: flex; flex-direction: column; gap: var(--space-sm); }
+/*
+ * Visuals Studio sub-group eyebrow (RGB / Depth / Background).
+ * 10 px top margin gives the chip rail above room to breathe before
+ * the next eyebrow — at 4 px the chips visually attached to the
+ * wrong label (Gestalt proximity ambiguity).
+ */
+/* v0.4.6 (design audit 2.1): sub-group eyebrow demoted from uppercase-mono
+   micro-caps to a calm sentence-case sans label. Uppercase-mono is now
+   reserved for top-level section labels + honest-status WORDS only, so the
+   "loud rail / quiet detail" rhythm reads at a glance. */
+.olv-visuals-group-label {
+  font-family: var(--font);
+  font-size: var(--text-2xs);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+  color: var(--text-faint);
+  margin-top: var(--space-lg);
+  margin-bottom: var(--space-xs);
+}
+.olv-visuals-group-label:first-child { margin-top: 0; }
+.olv-visuals-advanced-details { margin-top: var(--space-md); }
+.olv-visuals-advanced-hint {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  padding: var(--space-sm) 0 var(--space-md);
+  font-style: italic;
+}
+
+/* Lasso volume toast — bottom-centred chip-style banner that surfaces
+ * the result of a freehand volumetric pick. Press L to arm the tool;
+ * draw a shape on the canvas; the result appears here for 6 seconds. */
+/* Recommended-view chip — top-centre, below the header, dismissible. */
+.olv-rvc {
+  position: fixed;
+  left: 50%;
+  top: calc(64px + env(safe-area-inset-top));
+  transform: translateX(-50%);
+  z-index: 80;
+  display: inline-flex; align-items: center; gap: var(--space-xs);
+  padding: 4px 6px 4px 10px;
+  background: rgba(11, 17, 33, 0.92);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: olv-rvc-in 200ms var(--ease-standard, ease);
+}
+@keyframes olv-rvc-in { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.olv-rvc-apply {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--text-sm); color: var(--text);
+  background: none; border: none; cursor: pointer; padding: 2px 6px; border-radius: 6px;
+}
+.olv-rvc-apply:hover { color: var(--accent); }
+.olv-rvc-spark { color: var(--accent); font-size: 0.85em; }
+.olv-rvc-dismiss {
+  font-size: 16px; line-height: 1; color: var(--text-dim);
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+}
+.olv-rvc-dismiss:hover { color: var(--text); }
+
+.olv-lasso-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 80;
+  /* Subtract the horizontal display cut-outs too (landscape notch / rounded
+     corners) so the toast never tucks under a sensor housing. env() is 0 on
+     inset-free displays, so desktop width is unchanged. */
+  max-width: min(720px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  padding: var(--space-lg) var(--space-2xl);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: rgba(11, 17, 33, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 0.5px solid rgba(0, 178, 255, 0.42);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms var(--ease-standard);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+}
+/* Visible toast stays click-through — it's a passive notification. The
+ * action button inside (when present) re-claims pointer events so
+ * "Save to session" still works. v0.3.9 fix: previously the whole
+ * toast captured pointer events, which blocked the user (and the
+ * e2e suite) from clicking anything underneath the toast region —
+ * for example, a rapid sequence of camera-preset chip clicks fired
+ * the "Camera · Top view." toast first, which then sat for six
+ * seconds intercepting the next chip. */
+.olv-lasso-toast.olv-visible {
+  opacity: 1;
+  pointer-events: none;
+}
+.olv-lasso-toast.olv-visible .olv-lasso-toast-action {
+  pointer-events: auto;
+}
+.olv-lasso-toast-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* "Save to session" affordance inside the lasso toast — primary
+ * action shape so the eye lands on it after reading the result. */
+.olv-lasso-toast-action {
+  flex: 0 0 auto;
+  padding: var(--space-sm) var(--space-xl);
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--on-accent);
+  background: var(--accent);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 85%, transparent);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+}
+.olv-lasso-toast-action:hover {
+  background: color-mix(in srgb, var(--accent) 82%, white);
+}
+.olv-lasso-toast-action:active {
+  transform: translateY(1px);
+}
+.olv-lasso-toast-action:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: 2px;
+}
+.olv-visuals-advanced-summary {
+  cursor: pointer;
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  list-style: none;
+  user-select: none;
+  padding: var(--space-xs) 0;
+}
+.olv-visuals-advanced-summary::-webkit-details-marker { display: none; }
+.olv-visuals-advanced-summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: var(--space-xs);
+  transition: transform var(--dur-fast) ease-out;
+}
+.olv-visuals-advanced-details[open] .olv-visuals-advanced-summary::before {
+  transform: rotate(90deg);
+}
+.olv-visuals-advanced { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-xs); }
+.olv-visuals-row { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); }
+.olv-visuals-row-name { width: 84px; flex-shrink: 0; color: var(--text-dim); }
+.olv-wb-slider { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.olv-wb-label {
+  width: 32px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.olv-wb-auto { margin-top: var(--space-2xs); }
+/* v0.3.7 final-polish — height percentile-trim slider.
+ * Sits beneath the Color By chips when "Height" is the active mode. */
+.olv-height-trim-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  padding-top: var(--space-2xs);
+}
+.olv-height-trim-name { flex-shrink: 0; }
+.olv-height-trim-slider { flex: 1; min-width: 80px; accent-color: var(--accent); }
+.olv-height-trim-label {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  width: 32px;
+  text-align: right;
+}
+/* Elevation filter — two number inputs (Min/Max in world units) plus a
+   Show-all reset. Mirrors the height-trim row rhythm so the section reads as
+   part of the same family of range controls. */
+.olv-elev-body { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-elev-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+}
+.olv-elev-cap { flex-shrink: 0; }
+.olv-elev-input {
+  flex: 1;
+  min-width: 60px;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  accent-color: var(--accent);
+}
+.olv-elev-reset {
+  align-self: flex-start;
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-sm);
+  cursor: pointer;
+}
+.olv-elev-reset:hover { color: var(--text); }
+/* Filter-active cue — when a range filter is narrower than the cloud's extent
+   (points are hidden), the section label gains a subtle accent tag so a scan
+   never reads as "missing data" when it is really just filtered. */
+.olv-section.olv-filter-active > .olv-section-label::after {
+  content: ' · filtering';
+  color: var(--accent);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
+}
+.olv-chip {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
+}
+.olv-chip:hover { color: var(--text); }
+.olv-chip-active {
+  color: var(--accent); background: var(--accent-soft);
+  border-color: rgba(0, 178, 255, 0.4);
+}
+.olv-chip-disabled {
+  opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
+}
+.olv-chip-disabled:hover { color: var(--text-faint); }
+/* Workflow rail (v0.4.5): "Custom" is a STATE chip, not an action — muted
+   until the user's knobs deviate from every preset, then it lights via the
+   shared .olv-chip-active vocabulary. */
+.olv-chip-custom { cursor: default; opacity: 0.55; }
+.olv-chip-custom:hover { color: var(--text-dim); }
+.olv-chip-custom.olv-chip-active { opacity: 1; }
+.olv-slider { width: 100%; accent-color: var(--accent); }
+/* Rendering controls — stacked groups and a labelled slider row. */
+.olv-render-group { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-render-row,
+.olv-navpref-row { display: flex; align-items: center; gap: var(--space-md); }
+/* Sub-group label inside Rendering — "Point size" / "Eye Dome
+ * Lighting". Smaller and dimmer than the main section label so the
+ * hierarchy reads "section > sub-group > control". */
+/*
+ * Rendering sub-group eyebrow (Point size / Splat mode / EDL).
+ * 10 px top margin separates each sub-group from the chip rail
+ * above it. At 4 px the chip rail visually attached to the wrong
+ * label (Gestalt proximity ambiguity).
+ */
+/* v0.4.6 (design audit 2.1): sub-group eyebrow demoted to calm sentence-case
+   sans (matches .olv-visuals-group-label). */
+.olv-render-sublabel {
+  font-family: var(--font);
+  font-size: var(--text-2xs);
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 600;
+  color: var(--text-faint);
+  margin-top: var(--space-lg);
+}
+.olv-render-sublabel:first-child { margin-top: 0; }
+/* Sublabel that carries a right-aligned value readout (e.g. "Point size · 1.0 px"). */
+.olv-render-sublabel-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.olv-render-value { font-family: var(--mono); font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-render-label { font-size: var(--text-xs); color: var(--text-faint); min-width: 52px; }
+.olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
+.olv-detail-fill { height: 100%; background: var(--brand-gradient); }
+.olv-detail-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); margin-top: var(--space-sm); }
+.olv-report { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-report-empty { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-report-row { display: flex; align-items: center; gap: var(--space-md); }
+.olv-report-label { flex: 1; font-size: var(--text-xs); color: var(--text-dim); }
+.olv-report-value { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim); text-align: right; }
+/* Honesty stamp appended to a class-scoped (or not-class-scoped header) metric */
+.olv-report-scope { font-size: var(--text-2xs); color: var(--text-faint); opacity: 0.85; }
+.olv-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.olv-status-pass { background: var(--teal); }
+.olv-status-info { background: #6b7079; }
+.olv-status-warn { background: #ef9f27; }
+.olv-status-fail { background: var(--rating-weak); }
+
+/* Advanced report — collapsible diagnostics under the headline metrics */
+.olv-advanced { margin-top: var(--space-2xs); }
+.olv-advanced-summary {
+  list-style: none; cursor: pointer; user-select: none;
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); color: var(--text-faint); padding: var(--space-sm) 0;
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.olv-advanced-summary::-webkit-details-marker { display: none; }
+.olv-advanced-summary::before {
+  content: ""; width: 0; height: 0;
+  border-left: 4px solid currentColor;
+  border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.olv-advanced[open] .olv-advanced-summary::before { transform: rotate(90deg); }
+.olv-advanced-summary:hover { color: var(--text-dim); }
+.olv-advanced-body { display: flex; flex-direction: column; gap: var(--space-sm); padding-top: var(--space-xs); }
+

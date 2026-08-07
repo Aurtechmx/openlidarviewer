@@ -1,0 +1,77 @@
+/* ── Windows High Contrast / forced-colors ──────────────────────────────────
+   Windows High Contrast replaces the author palette with a small system one.
+   Backgrounds, borders and shadows are forced, `backdrop-filter` stops
+   compositing, and gradients are dropped. Anything whose meaning lives only in
+   a colour or a frosted fill stops carrying that meaning.
+
+   Most of the interface already survives, and this block deliberately does not
+   restate what already works: 44 icon strokes and 12 fills use `currentColor`
+   so they follow the forced text colour, and 52 focus rules use `outline`
+   rather than `box-shadow`, which forced-colors keeps. What follows covers the
+   two places where meaning was carried by colour alone.
+
+   System colour keywords, not tokens: in this mode the tokens are overridden
+   anyway, and the keywords are what the user actually chose. */
+@media (forced-colors: active) {
+  /* 1 · Frosted surfaces. Twenty-six panels separate from the 3D canvas
+     through a translucent fill and a blur. Neither survives, so each panel
+     would read as a floating block of text over the scene. A real border is
+     the only separation this mode can express. */
+  .olv-inspector,
+  .olv-streaming-panel,
+  .olv-left-panels > *,
+  .olv-inspect-card,
+  .olv-project-card,
+  .olv-shortcuts-card,
+  .olv-tour-card,
+  .olv-wfc-card,
+  .olv-nav-hud,
+  .olv-nav-prompt,
+  .olv-probe-readout,
+  .olv-measure-bar,
+  .olv-measure-hint,
+  .olv-lasso-toast,
+  .olv-toast,
+  .olv-rvc,
+  .olv-dock,
+  .olv-rail-tab,
+  .olv-right-rail-tab {
+    border: 1px solid CanvasText;
+    background: Canvas;
+  }
+
+  /* 2 · States that were a colour change only. `is-active` and `is-on` set a
+     background and nothing else, so with backgrounds forced, on and off render
+     identically and the control stops reporting its own state. An outline is
+     structural, so it survives. */
+  .olv-layer-solo.is-active,
+  .olv-layer-lock.is-active,
+  .olv-ortho-toggle.is-on,
+  .olv-wfc-seg-btn.is-active,
+  .olv-tool.is-active,
+  .olv-tool[aria-pressed='true'] {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+    /* Forced-colors permits these two, which is what makes the pair readable. */
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+
+  /* 3 · The scrollbar thumb is drawn from a token that no longer resolves. */
+  .olv-left-panels::-webkit-scrollbar-thumb,
+  .olv-inspector::-webkit-scrollbar-thumb,
+  .olv-palette-list::-webkit-scrollbar-thumb,
+  .olv-modal-body::-webkit-scrollbar-thumb {
+    background: ButtonBorder;
+  }
+
+  /* 4 · Disabled controls must stay distinguishable without opacity, which
+     forced-colors ignores. */
+  .olv-tool:disabled,
+  .olv-btn:disabled,
+  button:disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+
+import { readAppCss } from './support/appCss';
 
 /**
  * tests/analyseExportLayout.test.ts
@@ -21,10 +21,7 @@ import { fileURLToPath } from 'node:url';
  * contract can catch a future removal of `flex-wrap`.
  */
 describe('Analyse export row — must wrap so 100%-basis children get their own line', () => {
-  const css = readFileSync(
-    fileURLToPath(new URL('../src/style.css', import.meta.url)),
-    'utf8',
-  );
+  const css = readAppCss();
 
   function ruleBody(selector: string): string | null {
     // Escape regex metacharacters in the selector, then grab the first

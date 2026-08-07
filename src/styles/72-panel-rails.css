@@ -1,0 +1,385 @@
+/* ── P11 · premium left rail — dock clearance, one-tap collapse, even sizing ─────
+   Desktop/tablet only (mobile bottom-sheet owns small screens). Token-driven so
+   sizes stay even by system; one spring curve for the slide; reduced-motion fades. */
+:root {
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Single source of truth for the rail width — the column width and the
+     grabber-tab offset both derive from this, so they can never drift. The
+     floor is the widest panel's design need (Analyse, 285px) so making every
+     panel fill the column never squeezes one narrower than it was built for. */
+  --olv-rail-width: clamp(285px, 21vw, 312px);
+  /* Right column width (Inspector + Streaming card both sit at 232px). Single
+     source for the right grabber-tab offset so it can't drift from the panels. */
+  --olv-right-rail-width: 232px;
+}
+
+/* Even width + clear the REAL dock height. --olv-dock-clear is measured by
+   wireDockClearance(); the 80px fallback preserves prior behaviour if it never fires. */
+.olv-left-panels {
+  width: var(--olv-rail-width);
+  max-height: calc(100% - 56px
+    - var(--olv-measure-bar-clear, 0px)
+    - var(--olv-dock-clear, 80px));
+  transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+  scrollbar-gutter: stable;
+}
+/* Collapsed — slide the whole column out (transform only; GPU, no reflow),
+   revealing full-width canvas. A soft entrance stagger settles it on expand. */
+.olv-left-panels.olv-rail-collapsed {
+  transform: translateX(calc(-100% - var(--space-lg, 16px)));
+  opacity: 0;
+  pointer-events: none;
+}
+.olv-left-panels:not(.olv-rail-collapsed) > * {
+  animation: olv-rail-panel-in 380ms var(--ease-spring) both;
+}
+/* Every panel in the open rail fills the column, so their right edges line up
+   as one clean column and the grabber tab (pinned to the shared rail edge)
+   rides against them instead of floating in a gap. This (0,2,0) selector beats
+   each panel's own legacy width (Analyse 285 / Classes 248 / Export·Clip·
+   Annotate·Measure 218) without editing them one by one. Desktop only — the
+   mobile bottom-sheet reparents these panels and owns their sizing. The Measure
+   panel stays user-resizable: a drag writes an inline width that wins over this. */
+@media (min-width: 768px) {
+  .olv-left-panels:not(.olv-rail-collapsed) > * {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+@keyframes olv-rail-panel-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+/* The grabber tab — a handle that grows out of the rail's right edge rather than
+   floating beside it: flush to the edge, left corners squared, left border merged
+   into the rail (a −1px overlap hides the shared hairline), only the outer corners
+   rounded. A hairline inset lifts the top edge for depth. The chevron flips to
+   point the way the rail will move. Solid-token fallbacks precede color-mix. */
+.olv-rail-tab {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  /* Flush to the rail edge (column: left 14px + its width), overlapping the
+     shared hairline by 1px so panel and handle read as one surface. */
+  left: calc(14px + var(--olv-rail-width) - 1px);
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 64px; padding: 0;
+  color: var(--text-dim);
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 0.5px solid var(--hairline);
+  border-left: none;                                   /* merges into the rail */
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
+  cursor: pointer; pointer-events: auto; z-index: 20;
+  transition: left 420ms var(--ease-spring), width 200ms var(--ease-standard),
+    color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
+    box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
+}
+/* Collapsed — the same handle, now emerging from the screen edge as the single
+   "show panels" affordance (geometry is inherited from the base rule). */
+.olv-left-panels.olv-rail-collapsed ~ .olv-rail-tab {
+  left: 0;
+}
+/* Hover — the handle reaches out a touch and the chevron picks up the accent;
+   restrained, no loud fill. */
+.olv-rail-tab:hover {
+  width: 25px;
+  color: var(--accent);
+  border-color: var(--hairline-strong);
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    6px 6px 20px rgba(0, 0, 0, 0.26), 0 1px 2px rgba(0, 0, 0, 0.26);
+}
+/* Keyboard focus keeps a clear accent ring for accessibility. */
+.olv-rail-tab:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+.olv-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
+.olv-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .olv-left-panels { transition: opacity 120ms linear; }
+  .olv-left-panels.olv-rail-collapsed { transform: none; }
+  .olv-left-panels:not(.olv-rail-collapsed) > * { animation: none; }
+  .olv-rail-tab, .olv-rail-tab svg { transition: none; }
+}
+/* 767, matching MOBILE_LAYOUT_QUERY. At exactly 768 the old pair left the
+   desktop panels mounted with their collapse handles hidden. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-rail-tab { display: none; } }
+
+/* ── Right rail — one-tap collapse for the right column ──────────────────────
+   Mirror of the left rail. A single grabber slides BOTH right panels (the
+   Streaming/COPC card and the Inspector) out to the screen's right edge. The
+   two panels are separate absolutely-positioned elements, so the collapse
+   transform is applied to each; the grabber is a handle growing out of the
+   column's left (canvas-facing) edge. Desktop only — the mobile sheet owns
+   small screens. Motion/opacity are scoped to desktop so the mobile bottom
+   sheet's own transforms are never touched. */
+@media (min-width: 768px) {
+  .olv-inspector,
+  .olv-streaming-panel {
+    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+  }
+  /* Collapsed — slide the panel fully past the right edge (its own width plus
+     the 14px inset and a small margin), GPU transform only, no reflow.
+     `animation: none` releases the `olv-rise-in` entrance animation's hold: it
+     runs with fill-mode `both`, so its held end-state would otherwise pin the
+     Inspector's transform/opacity and override this rule (the Streaming card has
+     no such animation, which is why only it collapsed before). */
+  .olv-inspector.olv-right-collapsed,
+  .olv-streaming-panel.olv-right-collapsed {
+    animation: none;
+    transform: translateX(calc(100% + var(--space-lg, 16px)));
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+/* The grabber — a handle growing out of the right column's LEFT edge: flush to
+   the edge, right corners squared, right border merged into the column (−1px
+   overlap hides the shared hairline), only the outer (left) corners rounded.
+   The mirror of .olv-rail-tab. */
+.olv-right-rail-tab {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  /* Flush to the column's left edge (column: right 14px + its width), overlapping
+     the shared hairline by 1px so panel and handle read as one surface. */
+  right: calc(14px + var(--olv-right-rail-width) - 1px);
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 64px; padding: 0;
+  color: var(--text-dim);
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border: 0.5px solid var(--hairline);
+  border-right: none;                                  /* merges into the rail */
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    -4px 4px 14px rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.24);
+  cursor: pointer; pointer-events: auto; z-index: 20;
+  transition: right 420ms var(--ease-spring), width 200ms var(--ease-standard),
+    color 160ms var(--ease-standard), border-color 160ms var(--ease-standard),
+    box-shadow 200ms var(--ease-standard), background 200ms var(--ease-standard);
+}
+/* Collapsed — the handle emerges from the screen's right edge as the "show
+   panel" affordance. Keyed on the tab's own state so the two right handles
+   (Streaming, Inspector) snap independently. */
+.olv-right-rail-tab.is-collapsed {
+  right: 0;
+}
+/* Hover — the handle reaches out a touch (leftward, into the canvas) and the
+   chevron picks up the accent; restrained, no loud fill. */
+.olv-right-rail-tab:hover {
+  width: 25px;
+  color: var(--accent);
+  border-color: var(--hairline-strong);
+  background: var(--panel);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    -6px 6px 20px rgba(0, 0, 0, 0.26), 0 1px 2px rgba(0, 0, 0, 0.26);
+}
+.olv-right-rail-tab:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 2px;
+}
+.olv-right-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
+.olv-right-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .olv-inspector, .olv-streaming-panel { transition: none; }
+  /* No slide under reduced motion, but still release the entrance animation so
+     the collapse's opacity:0 / pointer-events:none actually take (the panel
+     fades out in place instead of staying a dead, visible layer). */
+  .olv-inspector.olv-right-collapsed,
+  .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
+  .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
+}
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-right-rail-tab { display: none; } }
+
+/* ── P9 · panel scroll hygiene & wheel ownership ─────────────────────────────
+   Scrollable overlay panels CONTAIN their scroll: no chaining to the page and
+   no touch rubber-band leaking to the canvas underneath; a stable gutter so
+   content doesn't shift when a scrollbar appears; momentum scrolling on iOS.
+   Wheel OWNERSHIP itself is enforced in JS — panels stop wheel propagation and
+   the canvas controller only dollies events that target the canvas (see
+   NavController `_handleWheel`). `content-visibility` and list virtualization
+   are intentionally NOT applied here: the program gates them on profiling. */
+.olv-palette-list,
+.olv-modal-body,
+.olv-help-body,
+.olv-msheet-body,
+.olv-measure-panel,
+.olv-bc-dialog,
+.olv-wfc-card,
+.olv-left-panels,
+.olv-inspector,
+.olv-streaming-panel,
+.olv-catalog-results,
+.olv-mp-stations-wrap,
+.olv-shortcuts-list {
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar styling for the same surfaces.
+   Windows and most Linux browsers draw a classic scrollbar that occupies
+   layout width, is always visible, and is dragged. Left at the platform
+   default it renders as a light-grey system widget sitting inside a dark
+   panel, which is the one piece of chrome that ignores the theme.
+
+   Sized at 10px rather than the hairline a dark UI invites: the thumb is a
+   drag target, and the panel it scrolls was just made hit-testable so it
+   could be dragged at all. Both colours are tokens, so light, dark and the
+   high-contrast theme all follow without a second rule. The track stays
+   transparent, letting the panel fill show through, so the gutter reads as
+   part of the surface instead of a channel cut into it. */
+/* The standard properties are scoped to Firefox on purpose. Setting
+   `scrollbar-color` in Chromium switches the element to the standard scrollbar
+   and silently disables every ::-webkit-scrollbar rule below, so declaring
+   both un-styles the scrollbar rather than styling it twice. Measured in
+   Chromium: webkit rules alone give a 10px themed bar, the two together give
+   the 0px platform default. `-moz-appearance` is the narrowest reliable
+   Firefox probe. */
+@supports (-moz-appearance: none) {
+  .olv-palette-list,
+  .olv-modal-body,
+  .olv-help-body,
+  .olv-msheet-body,
+  .olv-measure-panel,
+  .olv-bc-dialog,
+  .olv-wfc-card,
+  .olv-left-panels,
+  .olv-inspector,
+  .olv-streaming-panel,
+  .olv-catalog-results,
+  .olv-mp-stations-wrap,
+  .olv-shortcuts-list {
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-strong) transparent;
+  }
+}
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-track,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong);
+  border-radius: 999px;
+  /* Inset the thumb without shrinking the 10px hit area: the border is
+     transparent and the fill is clipped to the padding box, so the pointer
+     still catches the full width while the visible bar reads as 6px. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-thumb:hover,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+  background-clip: padding-box;
+}
+/* The corner where two scrollbars meet defaults to opaque white. */
+.olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-help-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-msheet-body::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-measure-panel::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-bc-dialog::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-wfc-card::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-left-panels::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-inspector::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-catalog-results::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-mp-stations-wrap::-webkit-scrollbar-corner,
+.olv-classic-scrollbars .olv-shortcuts-list::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/*
+ * v0.4.6 two-tier surfaces (design audit 1.2). The single
+ * highest-leverage move: demote the secondary stacked panels
+ * (Measure / Annotation / ClassLegend / Export / Object) to a
+ * RECESSIVE treatment — a near-transparent fill, hairline-led — so
+ * they recede until the user works in them. The verdict card and the
+ * active control rail (Inspector) stay RAISED. On hover / focus-within
+ * a recessive panel lifts back to the full --panel fill so it never
+ * feels disabled — calm by default, present on demand.
+ *
+ * Restyle-in-place: class names are untouched; only the fill + shadow
+ * tier changes, so every existing selector / test still resolves.
+ */
+.olv-measure-panel,
+.olv-anno-panel,
+.olv-class-panel,
+.olv-export-panel,
+.olv-object-panel {
+  background: var(--panel-recessive);
+  box-shadow: none;
+  transition: background var(--dur-base) var(--ease-standard),
+    border-color var(--dur-base) var(--ease-standard);
+}
+.olv-measure-panel:hover, .olv-measure-panel:focus-within,
+.olv-anno-panel:hover, .olv-anno-panel:focus-within,
+.olv-class-panel:hover, .olv-class-panel:focus-within,
+.olv-export-panel:hover, .olv-export-panel:focus-within,
+.olv-object-panel:hover, .olv-object-panel:focus-within {
+  background: var(--panel);
+  border-color: var(--hairline-strong);
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-measure-panel, .olv-anno-panel, .olv-class-panel,
+  .olv-export-panel, .olv-object-panel { transition: none; }
+}
+
