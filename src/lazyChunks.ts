@@ -244,6 +244,19 @@ export const loadReclassifyUi = () => import('./ui/reclassifyUi');
 export const loadAnalysePanel = () => import('./ui/AnalysePanel');
 
 /**
+ * Load the Measurements panel (measurement list + the profile-as-deliverable
+ * chart, its sampler/summary/civil-stats chain, and the profile export controls)
+ * on the FIRST scan load, never in the initial shell. The panel and its profile
+ * modules are dead weight in the empty-state boot — no measurement can exist
+ * before a scan opens — so holding the whole chain behind this lazy boundary
+ * releases it (and `render/measure/profileSampler` + `profileSummary`) from the
+ * eager index chunk. `main.ts` constructs the panel exactly once through
+ * `ensureMeasurePanel()`. MUST live here (not inlined in main.ts) so the live
+ * source-transform doesn't scramble the import() literal into a runtime 404.
+ */
+export const loadMeasurePanel = () => import('./ui/MeasurePanel');
+
+/**
  * Load the Object / Space panel (non-terrain compact-scan analysis: object &
  * interior metrics, floor-plan + space-report export UI) on the first SCAN
  * LOAD, never in the initial shell (v0.6 P1, step 2). Like the Analyse panel it

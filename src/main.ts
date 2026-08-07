@@ -72,7 +72,10 @@ import {
   downloadText,
 } from './io/download';
 import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
-import { MeasurePanel } from './ui/MeasurePanel';
+// MeasurePanel is lazy-mounted on the first scan load (never in the empty-state
+// shell) — the class itself arrives through `loadMeasurePanel()` inside
+// `ensureMeasurePanel()`. Only the TYPE is needed eagerly.
+import type { MeasurePanel } from './ui/MeasurePanel';
 import { aggregate as aggregateMeasurements } from './render/measure/measurementChains';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
@@ -238,6 +241,7 @@ import {
   loadColorbarOverlay,
   loadAnalysePanel,
   loadObjectPanel,
+  loadMeasurePanel,
 } from './lazyChunks';
 // Local-first usage counter. Categorical event counts only; stays in
 // localStorage; never transmitted. The `?notelemetry=1` URL flag suppresses
@@ -2143,8 +2147,30 @@ const streamingPanel = new StreamingPanel({
   onCancelGrade: () => cancelFullCloudGrade(),
 });
 
+// --- Lazy Measurements-panel mount (index-trim) -------------------------------
+// The Measurements panel is constructed on the FIRST scan load, not at boot, so
+// its whole profile-as-deliverable chain (profileSampler / profileSummary /
+// civilProfileStats) stays out of the empty-state shell — no measurement can
+// exist before a scan opens. Until then `measurePanel` is a null sentinel: every
+// call site is null-guarded (or routes through `ensureMeasurePanel()`), and the
+// desired-visible + geographic-notice intent is tracked below so
+// `hydrateMeasurePanel()` can replay it the instant the panel mounts.
+let measurePanel: MeasurePanel = null as unknown as MeasurePanel;
+let _measureReady: Promise<MeasurePanel> | null = null;
+// The lazy Measurements panel inserts itself into the left column (or the mobile
+// sheet) through this hook, assigned once the layout is built. Null in
+// bare/embed mode, where the force-measurements path mounts the element itself.
+let mountMeasurePanelElement: ((el: HTMLElement) => void) | null = null;
+// Desired panel state, mirrored so a panel mounted a beat AFTER a scan event
+// (the dynamic import resolves later) replays the correct state on hydrate.
+let measureDesiredVisible = false;
+let measureGeographicNotice = false;
+
 // The Measurements panel lists placed measurements; the controller drives it.
-const measurePanel = new MeasurePanel({
+function newMeasurePanel(
+  Ctor: Awaited<ReturnType<typeof loadMeasurePanel>>['MeasurePanel'],
+): MeasurePanel {
+  return new Ctor({
   onDelete: (id) => viewer.measure.removeMeasurement(id),
   onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
   onExport: () => void exportSession(),
@@ -2196,7 +2222,49 @@ const measurePanel = new MeasurePanel({
   onProfileResample: (id, params) => viewer.measure.resampleProfile(id, params),
   // Profile-station hover → highlight the matching scene dot; repaint only when the dot changed.
   onStationHover: (id, i) => { if (viewer.measure.setHoveredStation(id, i)) viewer.requestFrame(); },
-});
+  });
+}
+
+/**
+ * Construct + mount the Measurements panel exactly once, pulling its chunk
+ * through `loadMeasurePanel()`. Idempotent and memoised: concurrent first-mounts
+ * share the single in-flight promise, and the double-construct guard means only
+ * one panel is ever built. After construction it inserts into the DOM (desktop
+ * left column, or the mobile sheet when that layout is active) and hydrates the
+ * tracked state. Mirrors `ensureAnalysePanel`.
+ */
+function ensureMeasurePanel(): Promise<MeasurePanel> {
+  if (measurePanel) return Promise.resolve(measurePanel);
+  if (_measureReady) return _measureReady;
+  _measureReady = loadMeasurePanel().then(({ MeasurePanel: Ctor }) => {
+    // A concurrent caller may have won the race while the import was in flight.
+    if (!measurePanel) {
+      measurePanel = newMeasurePanel(Ctor);
+      // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+      // where no left column was built (the force path mounts it directly).
+      mountMeasurePanelElement?.(measurePanel.element);
+      hydrateMeasurePanel();
+    }
+    return measurePanel;
+  });
+  return _measureReady;
+}
+
+/**
+ * Replay the tracked Measurements-panel state onto the freshly-mounted panel —
+ * the geographic-CRS caveat and the live measurement contents/visibility — so a
+ * panel that mounted a beat after a scan event shows exactly what the app asked
+ * for. Called once from `ensureMeasurePanel()`.
+ */
+function hydrateMeasurePanel(): void {
+  if (!measurePanel) return;
+  measurePanel.setGeographicNotice(measureGeographicNotice);
+  // Recompute contents + visibility from live controller state (summaries,
+  // confidence context, measure mode). This also replays `measureDesiredVisible`
+  // when the profile-kind switch asked the panel forward before it existed.
+  refreshMeasurePanel();
+  if (measureDesiredVisible) measurePanel.setVisible(true);
+}
 
 // B2 (v0.4.5) — feed the measure stack the SAME render-units → metres seam
 // the terrain/space paths already read (`crsService.linearUnitToMetres`,
@@ -2234,7 +2302,8 @@ void viewerLoaded.then(() => {
     // trust grades + captions the hint; the panel shows the persistent
     // caveat. One boolean, one seam, so the two can never disagree.
     viewer.measure.setGeographicCrs(ctx.isGeographic);
-    measurePanel.setGeographicNotice(ctx.isGeographic);
+    measureGeographicNotice = ctx.isGeographic;
+    measurePanel?.setGeographicNotice(ctx.isGeographic);
     // Colorbar legend — same context, `'horizontal-when-known'` policy: an
     // explicit vertical unit wins, else the horizontal one WHEN really declared
     // (an unknown CRS reports a pass-through 1 that must not read as metres).
@@ -3496,6 +3565,10 @@ function revealAnalysePanel(name: string, settled = true): void {
   // Fire-and-forget: nothing here awaits the panels.
   void ensureAnalysePanel();
   void ensureObjectPanel();
+  // Mount the Measurements panel on this scan load too — its profile chain stays
+  // out of the empty-state shell, and the panel is ready before the user can
+  // place a measurement (the Viewer chunk is itself still resolving here).
+  void ensureMeasurePanel();
   // A scan is now loaded — let the phone sheet show (no-op on desktop).
   syncMobileSheet?.();
 }
@@ -3586,7 +3659,8 @@ void viewerLoaded.then(() => {
       analyseDesiredVisible = false;
       analysePanel?.setVisible(false);
       dock.setAnalyseActive(false);
-      measurePanel.setVisible(true);
+      measureDesiredVisible = true;
+      measurePanel?.setVisible(true);
     }
   });
   // Persist the unit choice whenever it changes.
@@ -3793,7 +3867,11 @@ void viewerLoaded.then(() => {
     // panel inserts itself just before the class-legend panel, and the Analyse
     // panel between the class-legend and export panels, via
     // `mountObjectPanelElement` / `mountAnalysePanelElement` below.
-    leftPanels.append(measurePanel.element, annotationPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
+    // NOTE: measurePanel.element is intentionally ABSENT here — the Measurements
+    // panel is lazy-mounted on first scan load and inserts itself at the FRONT of
+    // this column via `mountMeasurePanelElement` below (alongside analysePanel /
+    // objectPanel, which mount the same way).
+    leftPanels.append(annotationPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
@@ -3875,14 +3953,14 @@ void viewerLoaded.then(() => {
       // `mountObjectPanelElement` when it later mounts.
       if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
       if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
-      mobileSheet
-        .slot('layers')
-        .append(
-          classLegendPanel.element,
-          measurePanel.element,
-          annotationPanel.element,
-          exportPanel.element,
-        );
+      // The Measurements panel is lazy-mounted; include it (between the class
+      // legend and annotations, its canonical order) only once it exists. A
+      // mobile empty-state boot runs this with it still null — it slots itself in
+      // via `mountMeasurePanelElement` when it later mounts.
+      const layersPanels: HTMLElement[] = [classLegendPanel.element];
+      if (measurePanel) layersPanels.push(measurePanel.element);
+      layersPanels.push(annotationPanel.element, exportPanel.element);
+      mobileSheet.slot('layers').append(...layersPanels);
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
       analysePanel?.element.classList.remove('olv-collapsed');
@@ -3906,10 +3984,11 @@ void viewerLoaded.then(() => {
       // (Object before the class-legend panel, Analyse between the class-legend
       // and export panels — via mountObjectPanelElement / mountAnalysePanelElement).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      const desktopPanels: HTMLElement[] = [
-        measurePanel.element,
-        annotationPanel.element,
-      ];
+      // Measurements panel is lazy-mounted — front of the column when it exists,
+      // else it inserts itself there via `mountMeasurePanelElement` on mount.
+      const desktopPanels: HTMLElement[] = [];
+      if (measurePanel) desktopPanels.push(measurePanel.element);
+      desktopPanels.push(annotationPanel.element);
       if (objectPanel) desktopPanels.push(objectPanel.element);
       desktopPanels.push(classLegendPanel.element);
       if (analysePanel) desktopPanels.push(analysePanel.element);
@@ -3973,10 +4052,29 @@ void viewerLoaded.then(() => {
         leftPanels.append(el);
       }
     };
-    // If either panel already mounted before this wiring ran (possible only if a
+    // The lazy Measurements panel inserts itself here once its chunk resolves.
+    // When the mobile sheet is active it goes into the Layers slot before the
+    // annotations panel (its canonical order); otherwise at the FRONT of the left
+    // column. Robust to the target not being where we expect (falls back to
+    // append) so a mid-flip mount can never throw.
+    mountMeasurePanelElement = (el: HTMLElement): void => {
+      if (mobileApplied) {
+        const slot = mobileSheet.slot('layers');
+        if (annotationPanel.element.parentElement === slot) {
+          slot.insertBefore(el, annotationPanel.element);
+        } else {
+          slot.append(el);
+        }
+      } else {
+        // Front of the left column — measure sits above annotations/analyse.
+        leftPanels.insertBefore(el, leftPanels.firstChild);
+      }
+    };
+    // If any panel already mounted before this wiring ran (possible only if a
     // scan's import resolved between column build and here), place it now.
     if (analysePanel) mountAnalysePanelElement(analysePanel.element);
     if (objectPanel) mountObjectPanelElement(objectPanel.element);
+    if (measurePanel) mountMeasurePanelElement(measurePanel.element);
 
     // The help overlay is a modal — appended last so it sits above everything.
     stage.overlay.append(helpOverlay.element);
@@ -4030,11 +4128,26 @@ void viewerLoaded.then(() => {
     });
   } else {
     // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
-    // ?measurements=1 / ?annotations=1 can each surface one tool's layer.
-    const panels: HTMLElement[] = [];
+    // ?measurements=1 / ?annotations=1 can each surface one tool's layer. The
+    // left column is created on demand so a single forced tool still gets it.
+    let bareLeftPanels: HTMLDivElement | null = null;
+    const ensureBareLeftPanels = (): HTMLDivElement => {
+      if (!bareLeftPanels) {
+        bareLeftPanels = document.createElement('div');
+        bareLeftPanels.className = 'olv-left-panels';
+        stage.overlay.append(bareLeftPanels);
+      }
+      return bareLeftPanels;
+    };
     if (embedConfig.forceMeasurements) {
       stage.overlay.append(viewer.measureElements.overlay, viewer.measureElements.hint);
-      panels.push(measurePanel.element);
+      // The Measurements panel is lazy-mounted; bare mode has no left-column
+      // `mountMeasurePanelElement`, so append its element directly once the chunk
+      // resolves. Wire the toolbar-overlap guard on the column up front (same as
+      // the full app's ?measurements=1 path) so it holds regardless of order.
+      const col = ensureBareLeftPanels();
+      wireMeasureBarClearance(viewer.measureElements.hint, col);
+      void ensureMeasurePanel().then((p) => col.append(p.element));
     }
     if (embedConfig.forceAnnotations) {
       stage.overlay.append(
@@ -4042,19 +4155,7 @@ void viewerLoaded.then(() => {
         viewer.annotateElements.hint,
         viewer.annotateElements.editor,
       );
-      panels.push(annotationPanel.element);
-    }
-    if (panels.length > 0) {
-      const leftPanels = document.createElement('div');
-      leftPanels.className = 'olv-left-panels';
-      leftPanels.append(...panels);
-      stage.overlay.append(leftPanels);
-      // Same toolbar-overlap guard as the full app — the embed's
-      // ?measurements=1 path shows the same centred toolbar over the
-      // same left column.
-      if (embedConfig.forceMeasurements) {
-        wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
-      }
+      ensureBareLeftPanels().append(annotationPanel.element);
     }
   }
 });
@@ -4641,17 +4742,23 @@ function applyPrefs(): void {
 let _lastMeasurementCount = 0;
 /** Refresh the Measurements panel's contents and visibility. */
 function refreshMeasurePanel(): void {
-  measurePanel.update(viewer.measure.getSummaries());
-  measurePanel.setConfidenceContext(buildMeasureConfidenceContext(viewer, crsService.current()));
-  const measurements = viewer.measure.getMeasurements();
-  const hasMeasurements = measurements.length > 0;
-  measurePanel.setVisible(viewer.measureMode || hasMeasurements);
-  // Local-first counter, categorical (the kind) only — never coordinates or names.
-  if (measurements.length > _lastMeasurementCount) {
-    const newest = measurements[measurements.length - 1];
-    if (newest) recordUsage('measurement', newest.kind);
+  if (measurePanel) {
+    measurePanel.update(viewer.measure.getSummaries());
+    measurePanel.setConfidenceContext(buildMeasureConfidenceContext(viewer, crsService.current()));
+    const measurements = viewer.measure.getMeasurements();
+    const hasMeasurements = measurements.length > 0;
+    measurePanel.setVisible(viewer.measureMode || hasMeasurements);
+    // Local-first counter, categorical (the kind) only — never coordinates or names.
+    if (measurements.length > _lastMeasurementCount) {
+      const newest = measurements[measurements.length - 1];
+      if (newest) recordUsage('measurement', newest.kind);
+    }
+    _lastMeasurementCount = measurements.length;
+  } else {
+    // Panel not mounted yet (pre-first-scan, or the chunk is still loading) —
+    // kick the lazy mount; `hydrateMeasurePanel()` re-runs this once it lands.
+    void ensureMeasurePanel();
   }
-  _lastMeasurementCount = measurements.length;
   // Keep the Export panel's Products lane in sync with the measurement count.
   exportPanel.refresh();
 }
@@ -5565,6 +5672,11 @@ function resetToEmptyState(): void {
   objectPanel?.setVisible(false);
   objectDesiredVisible = false;
   objectContent = null;
+  // Hide the Measurements panel and drop its tracked desired state so a fresh
+  // open starts hidden. Null-safe: the panel is lazy-mounted, so a reset before
+  // any scan simply has nothing to clear.
+  measurePanel?.setVisible(false);
+  measureDesiredVisible = false;
   // No scan → hide the phone bottom-sheet (no-op on desktop).
   syncMobileSheet?.();
   // Abort any in-flight terrain compute (worker job + its reply) so a result
