@@ -89,10 +89,17 @@ export function isEptUrl(url: string): boolean {
  * The Stage URL-field Cancel aborts the linked signal while a fetch or range
  * probe is in flight; neither rejection is our `LoadCancelledError`, so cancel
  * handling must recognise all three shapes.
+ *
+ * An internal request timeout is NOT one of them: the COPC transport surfaces it
+ * as `RangeReadError` code `'timeout'` and the EPT transport as `EptTimeoutError`
+ * (`code: 'timeout'`), and both stay VISIBLE failures rather than silent
+ * cancellations. The explicit `'timeout'` guard below keeps that true even if a
+ * timeout ever reached here carrying an abort-ish name.
  */
 export function isAbortError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { name?: unknown; code?: unknown };
+  if (e.code === 'timeout') return false;
   if (e.name === 'AbortError') return true;
   return e.name === 'RangeReadError' && e.code === 'aborted';
 }
