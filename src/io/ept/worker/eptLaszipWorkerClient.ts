@@ -1,51 +1,50 @@
 /**
  * eptLaszipWorkerClient.ts
  *
- * The main-thread client for the EPT laszip decode worker. Mirrors
- * `copc/worker/copcWorkerClient.ts`: each `decodeTile()` carries a request id;
- * an `AbortSignal` rejects that request and posts a `cancel` so a not-yet-
- * started decode is skipped; a result for an already-settled request is dropped.
+ * The main-thread client for the EPT laszip decode workers. The EPT sibling of
+ * `copc/worker/copcWorkerClient.ts`, and like it a thin adapter over
+ * {@link DecodeWorkerPool}: this file owns the EPT wire format
+ * (`{ type: 'decode', requestId, tile, renderOrigin, rgbEightBit }`, the tile
+ * buffer transferred zero-copy) and the EPT error wording; the pool owns
+ * request-id multiplexing, queueing, dispatch, cancellation, worker-failure
+ * isolation, disposal and timing.
  *
  * The EPT chunk decoder (`EptChunkDecoder`) holds one of these and routes the
- * `laszip` data-type through it. The worker is created lazily by `main.ts` and
- * lives as long as the session, like the COPC decode worker.
+ * `laszip` data-type through it. It is created lazily by the streaming open
+ * path and lives as long as the session.
  *
- * The `Worker` is created through an injectable factory so the request-id
- * multiplexing, abort, and error-mapping logic can be unit-tested against a
- * fake worker with no browser. The default factory creates the real module
+ * `rgbEightBit` is decided ONCE per dataset on the main thread (the streaming
+ * source pins it from the first decoded RGB tile) and passed down per tile. No
+ * worker derives its own, so pooling several workers cannot produce a cloud
+ * with two colour depths.
+ *
+ * POOLING IS OFF BY DEFAULT. Absent a flag this client builds a ONE-worker
+ * pool, which is behaviourally the pre-pool client. `?decodePool=on` opts in at
+ * the device policy's size and `?decodeWorkers=N` pins the count; the
+ * `poolSize` option below is the same switch for tests. It stays opt-in until a
+ * browser run on a real dataset measures throughput and the memory cost of one
+ * laz-perf WASM heap per worker under a fast camera sweep.
+ *
+ * The workers are created through an injectable factory, so the whole protocol
+ * — including the pool's dispatch and failure handling — is unit-tested against
+ * fake workers with no browser. The default factory creates the real module
  * worker.
  */
 
 import type { DecodedChunk } from '../../copc/copcChunkDecode';
+import {
+  DecodeWorkerPool,
+  type DecodePoolStats,
+  type WorkerLike,
+} from '../../workerPool/DecodeWorkerPool';
+import { resolveDecodePoolSize } from '../../workerPool/decodePoolSize';
+import { readDevFlags } from '../../../perf/devFlags';
 
-/** The minimal `Worker` surface this client uses — lets tests supply a fake. */
-export interface WorkerLike {
-  postMessage(message: unknown, transfer?: Transferable[]): void;
-  terminate(): void;
-  onmessage: ((event: MessageEvent) => void) | null;
-  onerror: ((event: unknown) => void) | null;
-}
-
-interface PendingRequest {
-  resolve: (decoded: DecodedChunk) => void;
-  reject: (error: Error) => void;
-  signal?: AbortSignal;
-  onAbort?: () => void;
-  /** ms at request post — wall-time decode timing for the streaming benchmark. */
-  startedAt: number;
-}
-
-interface DecodedReply {
-  type: 'decoded';
-  requestId: number;
-  decoded: DecodedChunk;
-}
-interface ErrorReply {
-  type: 'error';
-  requestId: number;
-  error: string;
-}
-type WorkerReply = DecodedReply | ErrorReply;
+/**
+ * The minimal `Worker` surface this client uses — lets tests supply a fake.
+ * Re-exported from the pool, which is where the protocol that needs it lives.
+ */
+export type { WorkerLike };
 
 /** Create the real module worker. Browser-only — never called in Node tests. */
 function defaultWorkerFactory(): WorkerLike {
@@ -54,47 +53,74 @@ function defaultWorkerFactory(): WorkerLike {
   }) as unknown as WorkerLike;
 }
 
-/** Decodes EPT laszip tiles in a dedicated worker, off the main thread. */
-export class EptLaszipWorkerClient {
-  private readonly _worker: WorkerLike;
-  private readonly _pending = new Map<number, PendingRequest>();
-  private _nextRequestId = 0;
-  private _disposed = false;
-  private _broken = false;
-
+export interface EptLaszipWorkerClientOptions {
   /**
-   * Optional hook called after each successful decode with the wall-time
-   * elapsed from postMessage to result. The streaming benchmark wires this.
+   * Explicit worker count. Both opts into pooling and overrides the device
+   * policy, clamped to the policy's hard cap. Tests pin it so a pool's
+   * behaviour does not depend on the core count of the machine running them.
    */
-  onDecodeMs: ((ms: number) => void) | undefined;
+  readonly poolSize?: number;
+}
 
-  /** In-flight request count. Diagnostic — asserted by the settlement tests. */
-  get pendingCount(): number {
-    return this._pending.size;
-  }
+/** Decodes EPT laszip tiles in a pool of workers, off the main thread. */
+export class EptLaszipWorkerClient {
+  private readonly _pool: DecodeWorkerPool<DecodedChunk>;
 
-  constructor(workerFactory: () => WorkerLike = defaultWorkerFactory) {
-    this._worker = workerFactory();
-    this._worker.onmessage = (event: MessageEvent): void => {
-      this._onMessage(event.data as WorkerReply);
-    };
-    this._worker.onerror = (): void => {
-      // The worker died. Tear it down and mark the client broken so a later
-      // decode rejects at once instead of posting into a corpse that never
-      // replies — a promise that would otherwise hang forever.
-      this._broken = true;
-      this._failAll(new Error('The EPT laszip decode worker failed.'));
-      this._worker.terminate();
-    };
+  constructor(
+    workerFactory: () => WorkerLike = defaultWorkerFactory,
+    options: EptLaszipWorkerClientOptions = {},
+  ) {
+    this._pool = new DecodeWorkerPool<DecodedChunk>({
+      size: resolveDecodePoolSize('ept', readDevFlags(), options.poolSize),
+      createWorker: workerFactory,
+      messages: {
+        disposed: 'The EPT laszip decode worker has been disposed.',
+        failed: 'The EPT laszip decode worker failed.',
+        aborted: 'EPT decode aborted',
+        queueFull: 'The EPT laszip decode queue is full.',
+      },
+    });
   }
 
   /**
-   * Decode one complete EPT laszip tile. The `tile` buffer is transferred to
-   * the worker — the caller must not reuse it after the call. `renderOrigin` is
-   * the EPT cloud's per-cloud Float64 shift, applied inside the worker.
-   * `rgbEightBit` is the dataset-level RGB bit-depth decision (pinned from
-   * the first decoded RGB tile), forwarded to the decode core so every tile
-   * narrows colour identically.
+   * Optional hook called after each successful decode with the time the tile
+   * spent INSIDE a worker (post to reply). The streaming benchmark wires this.
+   * Queue wait is reported separately by {@link onQueueWaitMs} so a benchmark
+   * never reads scheduling delay as decode cost.
+   */
+  get onDecodeMs(): ((ms: number) => void) | undefined {
+    return this._pool.onDecodeMs;
+  }
+  set onDecodeMs(hook: ((ms: number) => void) | undefined) {
+    this._pool.onDecodeMs = hook;
+  }
+
+  /** Optional hook called with the time a tile waited for a free worker. */
+  get onQueueWaitMs(): ((ms: number) => void) | undefined {
+    return this._pool.onQueueWaitMs;
+  }
+  set onQueueWaitMs(hook: ((ms: number) => void) | undefined) {
+    this._pool.onQueueWaitMs = hook;
+  }
+
+  /** In-flight request count — queued plus decoding. Diagnostic. */
+  get pendingCount(): number {
+    return this._pool.pendingCount;
+  }
+
+  /** Pool diagnostics. Plain numbers; no worker handle reaches the caller. */
+  poolStats(): DecodePoolStats {
+    return this._pool.stats();
+  }
+
+  /**
+   * Decode one complete EPT laszip tile. The `tile` buffer is transferred to a
+   * worker — the caller must not reuse it after the call, and the pool
+   * transfers it exactly once. `renderOrigin` is the EPT cloud's per-cloud
+   * Float64 shift, applied inside the worker. `rgbEightBit` is the
+   * dataset-level RGB bit-depth decision (pinned from the first decoded RGB
+   * tile), forwarded to the decode core so every tile narrows colour
+   * identically.
    */
   decodeTile(
     tile: ArrayBuffer,
@@ -102,101 +128,15 @@ export class EptLaszipWorkerClient {
     signal?: AbortSignal,
     rgbEightBit?: boolean,
   ): Promise<DecodedChunk> {
-    const requestId = this._nextRequestId++;
-    return new Promise<DecodedChunk>((resolve, reject) => {
-      if (this._disposed) {
-        reject(new Error('The EPT laszip decode worker has been disposed.'));
-        return;
-      }
-      if (this._broken) {
-        reject(new Error('The EPT laszip decode worker failed.'));
-        return;
-      }
-      if (signal?.aborted) {
-        reject(new Error('EPT decode aborted'));
-        return;
-      }
-      const pending: PendingRequest = { resolve, reject, signal, startedAt: nowMs() };
-      if (signal) {
-        pending.onAbort = (): void => {
-          if (!this._pending.delete(requestId)) return;
-          // Reject first, then post the cancel best-effort. If the worker is
-          // dying in the same tick the abort fires, postMessage throws — and if
-          // that ran before the reject, this promise would never settle. The
-          // cancel is only an optimisation (skip a not-yet-started decode), so
-          // losing it to a dead worker costs nothing.
-          reject(new Error('EPT decode aborted'));
-          try {
-            this._worker.postMessage({ type: 'cancel', requestId });
-          } catch {
-            /* worker already gone — the request is settled, the cancel is moot */
-          }
-        };
-        signal.addEventListener('abort', pending.onAbort, { once: true });
-      }
-      this._pending.set(requestId, pending);
-      try {
-        this._worker.postMessage(
-          { type: 'decode', requestId, tile, renderOrigin: [...renderOrigin], rgbEightBit },
-          [tile],
-        );
-      } catch (err) {
-        // A synchronous post failure (e.g. DataCloneError on a detached buffer,
-        // or a terminated worker) would otherwise leave this request stranded
-        // in `_pending` with its abort listener still attached. Settle it and
-        // surface the error so the caller's reject path runs.
-        this._settle(requestId);
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
+    return this._pool.submit({
+      payload: { tile, renderOrigin: [...renderOrigin], rgbEightBit },
+      transfer: [tile],
+      signal,
     });
   }
 
-  /** Terminate the worker and reject every in-flight decode. */
+  /** Terminate every worker and reject every queued and in-flight decode. */
   dispose(): void {
-    this._disposed = true;
-    this._failAll(new Error('The EPT laszip decode worker has been disposed.'));
-    this._worker.terminate();
+    this._pool.dispose();
   }
-
-  private _onMessage(reply: WorkerReply): void {
-    const pending = this._settle(reply.requestId);
-    if (!pending) return; // cancelled or already settled — drop the stale reply
-    if (reply.type === 'decoded') {
-      this.onDecodeMs?.(nowMs() - pending.startedAt);
-      pending.resolve(reply.decoded);
-    } else {
-      pending.reject(new Error(reply.error));
-    }
-  }
-
-  /**
-   * Remove a request from `_pending` and detach its abort listener, returning
-   * it (or undefined if already gone). The single place request state is torn
-   * down, so a reply, a sync post failure, and a fail-all all clean up
-   * identically — no map entry or signal listener is ever left behind.
-   */
-  private _settle(requestId: number): PendingRequest | undefined {
-    const pending = this._pending.get(requestId);
-    if (!pending) return undefined;
-    this._pending.delete(requestId);
-    if (pending.onAbort && pending.signal) {
-      pending.signal.removeEventListener('abort', pending.onAbort);
-    }
-    return pending;
-  }
-
-  private _failAll(error: Error): void {
-    for (const pending of this._pending.values()) {
-      if (pending.onAbort && pending.signal) {
-        pending.signal.removeEventListener('abort', pending.onAbort);
-      }
-      pending.reject(error);
-    }
-    this._pending.clear();
-  }
-}
-
-/** A monotonic millisecond clock, available on both the main thread and workers. */
-function nowMs(): number {
-  return typeof performance !== 'undefined' ? performance.now() : Date.now();
 }

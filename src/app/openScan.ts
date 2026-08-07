@@ -19,13 +19,15 @@
  */
 
 import { isSessionFile } from '../io/sessionFile';
+import { scanFactsFromStatic } from './sessionIo';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError } from '../io/loadErrors';
 import { formatTelemetry } from '../io/loadTelemetry';
 import { buildBenchmarkResult, formatBenchmarkResult } from '../io/benchmark';
 import { LoadCancelledError } from '../io/loadFile';
-import { defaultMode, availableModes } from '../render/colorModes';
+import { availableModes } from '../render/colorModes';
+import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 
 import type { LoadResult, LoadCallbacks, LoadOptions } from '../io/loadFile';
@@ -43,6 +45,7 @@ import type { DropZone } from '../ui/DropZone';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
+import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
@@ -121,6 +124,13 @@ export interface OpenScanDeps {
   closeStreaming: () => void;
   /** Active-scan selection + lookup. */
   scans: Pick<ScanService, 'setActive' | 'activeId'>;
+  /**
+   * The session's layer-identity owner. On load, the freshly attached cloud is
+   * bound to a stable, name-independent id from its SOURCE facts; the work
+   * stores are wired so new measurements/annotations record which layer they
+   * belong to once more than one is open.
+   */
+  layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired'>;
   /** The Inspector panel. */
   inspector: Inspector;
   /** Provenance / dataset-intelligence card refreshers. */
@@ -185,26 +195,36 @@ export interface OpenScanDeps {
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
 export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   // SINGLE ROUTER for every file that enters the app (drop zone, Open picker,
-  // Measurements Import). An `.olvsession` is a saved analysis, not a scan, so
-  // it goes to the one session loader — never the cloud worker — and every
-  // entry point therefore opens sessions the same way. A session restore is
-  // cheap (read + apply state) and safe to run even mid-load, so it routes
-  // ahead of the cloud-loading guard.
-  if (isSessionFile(file.name)) {
-    await deps.importSession(file);
-    return;
-  }
-  // One load at a time. The shared parse worker decodes a single file; a
-  // second load started mid-flight would hijack the first one's worker. The
-  // in-progress load carries a Cancel control if the user wants to switch.
+  // Measurements Import). It splits three ways: an `.olvsession` is a saved
+  // analysis (→ the one session loader), a COPC file streams, everything else
+  // takes the static loader. The one-load-at-a-time guard below now covers ALL
+  // three — including the session reroute, which used to run AHEAD of it.
+  //
+  // One load at a time. The shared parse worker decodes a single file; a second
+  // load started mid-flight would hijack the first one's worker. The session
+  // reroute sits under this guard too: an embed `load-file` is wrapped as a File
+  // whose NAME the host controls (main.ts), so a `x.olvsession` name could
+  // otherwise reach the session loader unthrottled and stack repeated restores.
   if (deps.isLoading()) {
     deps.showToast('Already loading — cancel the current load first.');
     return;
   }
-  // Claim the flag SYNCHRONOUSLY — the `await viewerReady` below yields to
-  // the event loop, and a second drop in that window used to pass the
-  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
+  // Claim the flag SYNCHRONOUSLY — the `await`s below yield to the event loop,
+  // and a second drop in that window used to pass the `loading` guard too
+  // (TOCTOU). Every return path from here on releases it.
   deps.setLoading(true);
+  // An `.olvsession` is a saved analysis, not a scan: route it to the one
+  // session loader (never the cloud worker) and release the flag in its own
+  // finally — the session path has no cancel / progress affordance, so it does
+  // not share the cloud path's dropzone setup below.
+  if (isSessionFile(file.name)) {
+    try {
+      await deps.importSession(file);
+    } finally {
+      deps.setLoading(false);
+    }
+    return;
+  }
   const controller = new AbortController();
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
@@ -262,6 +282,18 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     deps.scans.setActive(id);
+    // Bind this cloud to a stable, name-independent identity from its SOURCE
+    // facts (declared count + tolerant extents + CRS), so ownership survives a
+    // rename, a duplicate filename, and a reopen at a different stride; then wire
+    // the work stores — once — so new measurements/annotations record their
+    // owning layer as soon as a second layer joins. Additive: a single-layer
+    // scene keeps its exact byte shape, because the provider returns no owner.
+    deps.layerIdentity.bindOnLoad(id, scanFactsFromStatic(result.cloud), result.cloud.name);
+    deps.layerIdentity.ensureStoresWired(
+      [viewer.measure, viewer.annotate],
+      () => deps.scans.activeId,
+      () => viewer.clouds().length,
+    );
     // A freshly opened scan has no terrain analysis yet — drop any prior grid so
     // the Coverage colour chip starts disabled until this scan is analysed.
     viewer.setCoverageGrid(null);
@@ -292,7 +324,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     viewer.frameAll();
     const firstRenderMs = performance.now() - renderStartedAt;
 
-    const mode = defaultMode(result.cloud);
+    // Colour the fresh scan by the mode its attributes best support (RGB →
+    // classification → intensity → elevation), gated so it never picks a mode
+    // the cloud can't render. The rail syncs off `mode` below, so this single
+    // seam keeps the render and the COLOR BY chips in step.
+    const mode = recommendColorMode(result.cloud).mode;
     deps.setCurrentColorMode(mode);
     viewer.setColorMode(id, mode);
 

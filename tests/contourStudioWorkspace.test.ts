@@ -11,11 +11,13 @@ import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { createContourStudioController } from '../src/terrain/contourStudio/contourStudioController';
 import { renderContourStudioWorkspace } from '../src/ui/contourStudioWorkspace';
 import type { ContourStudioLaunchState } from '../src/terrain/contourStudio/contourStudioLaunchState';
+import { PURPOSE_META } from '../src/terrain/contourStudio/contourStudioPurpose';
 
 class FakeEl {
   readonly tagName: string;
   className = '';
   textContent = '';
+  title = '';
   type = '';
   disabled = false;
   readonly children: FakeEl[] = [];
@@ -77,14 +79,18 @@ describe('renderContourStudioWorkspace', () => {
     const c = createContourStudioController();
     const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE }) as unknown as FakeEl;
     const cards = root.byClass('olv-cs-purpose-card');
-    expect(cards.length).toBe(5);
+    expect(cards).toHaveLength(5);
     // The Survey Review card is the 2nd in order.
     const survey = cards[1];
+    // Declutter: the description moved off-card onto hover (title) + aria-label.
+    const meta = PURPOSE_META['survey-review'];
+    expect(survey.title).toBe(meta.summary);
+    expect(survey.getAttribute('aria-label')).toBe(`${meta.label}. ${meta.summary}`);
     survey.click();
     expect(c.getState().purpose).toBe('survey-review');
     // After re-render, survey is now the selected card.
     const selected = root.byClass('is-selected');
-    expect(selected.length).toBe(1);
+    expect(selected).toHaveLength(1);
   });
 
   it('evidence ladder claim reflects the launch state', () => {
@@ -102,9 +108,9 @@ describe('renderContourStudioWorkspace', () => {
     const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, onExport }) as unknown as FakeEl;
     const btns = root.byClass('olv-cs-export-btn');
     // Vector (GeoJSON, DXF, SVG) + Map sheet (PDF) + Data package (DEM, Complete) + Report.
-    expect(btns.length).toBe(7);
+    expect(btns).toHaveLength(7);
     // Gestalt grouping is present (labelled groups).
-    expect(root.byClass('olv-cs-export-group-label').length).toBe(4);
+    expect(root.byClass('olv-cs-export-group-label')).toHaveLength(4);
   });
 
   it('an available launch fires onExport for a chosen product', () => {
@@ -120,12 +126,12 @@ describe('renderContourStudioWorkspace', () => {
     const onExport = vi.fn();
     const root = renderContourStudioWorkspace({ controller: c, launch: UNAVAILABLE, onExport }) as unknown as FakeEl;
     const btns = root.byClass('olv-cs-export-btn');
-    expect(btns.length).toBe(7);
+    expect(btns).toHaveLength(7);
     expect(btns.every((b) => b.disabled)).toBe(true);
     btns[0].click();
     expect(onExport).not.toHaveBeenCalled();
     const claim = root.byClass('olv-cs-ladder-claim');
-    expect(claim.length).toBe(1);
+    expect(claim).toHaveLength(1);
     expect(claim[0].allText()).toContain('Blocked');
     expect(root.byClass('is-blocked').length).toBeGreaterThan(0);
   });
@@ -139,7 +145,7 @@ describe('renderContourStudioWorkspace', () => {
       ],
     };
     const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, review }) as unknown as FakeEl;
-    expect(root.byClass('olv-cs-review').length).toBe(1);
+    expect(root.byClass('olv-cs-review')).toHaveLength(1);
     expect(root.allText()).toContain('0.25 m · recommended');
   });
 

@@ -36,6 +36,7 @@
  */
 
 import { nearestPointAlongRay, type Vec3 } from '../navMath';
+import { renderLocalPositions } from '../../model/pointFrames';
 
 /**
  * One resident streaming node's contribution to the pick pass — its decoded
@@ -128,7 +129,7 @@ export function selectStreamingPick(
     // for no filtering — in which case `nearestPointAlongRay` keeps its
     // untouched hot path.
     const accept = acceptForNode?.(node);
-    const hit = nearestPointAlongRay(node.positions, origin, direction, accept);
+    const hit = nearestPointAlongRay(renderLocalPositions(node), origin, direction, accept);
     if (!hit) continue;
     const score = hit.offset / hit.along;
     if (score >= STREAMING_PICK_ANGULAR_TOLERANCE) continue;

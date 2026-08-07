@@ -112,3 +112,97 @@ describe('loadPtx — line indexing', () => {
     expect(pc.pointCount).toBe(1);
   });
 });
+
+/** A one-block PTX with an explicit 4×4 matrix (four rows of four tokens). */
+function ptxWithMatrix(matrixRows: string[], points: string[]): ArrayBuffer {
+  const lines = [
+    String(points.length), '1',        // cols, rows
+    '0 0 0', '1 0 0', '0 1 0', '0 0 1', // scanner pose
+    ...matrixRows,                      // the 4×4 registration transform
+    ...points,
+  ];
+  return new TextEncoder().encode(lines.join('\n') + '\n').buffer as ArrayBuffer;
+}
+
+describe('loadPtx — registration honesty', () => {
+  const identity = ['1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1'];
+
+  test('a corrupt registration matrix warns that the block fell back to identity', async () => {
+    // Row 4 (the translation) carries a non-numeric token, so parseRow4 seeds a
+    // NaN and matrixIsFinite rejects the transform. The intended +100 X offset
+    // is lost — the point renders in scanner-local space — and the ONLY signal
+    // that a registration was dropped is the warning this asserts.
+    const pc = await loadPtx(
+      ptxWithMatrix(['1 0 0 0', '0 1 0 0', '0 0 1 0', '100 0 x 1'], ['1 2 3 0.5']),
+    );
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /registration|transform/i.test(w))).toBe(true);
+    expect(warnings.some((w) => /block/i.test(w))).toBe(true);
+  });
+
+  test('a legitimately identity single-block PTX does not warn', async () => {
+    // A single-scan PTX correctly registers with the identity matrix; that is
+    // normal, not a corrupt transform. This is the critical regression guard.
+    const pc = await loadPtx(ptxWithMatrix(identity, ['1 2 3 0.5']));
+    expect(pc.metadata?.loadWarnings ?? []).toEqual([]);
+  });
+
+  test('in a multi-block PTX only the block with the bad matrix is named', async () => {
+    // Block 1 registers cleanly; block 2's matrix is corrupt. The warning must
+    // point at block 2, not block 1, so the displacement is attributable.
+    const text =
+      '1\n1\n0 0 0\n1 0 0\n0 1 0\n0 0 1\n1 0 0 0\n0 1 0 0\n0 0 1 0\n0 0 0 1\n5 0 0 0.5\n' +
+      '1\n1\n0 0 0\n1 0 0\n0 1 0\n0 0 1\n1 0 0 0\n0 1 0 0\n0 0 1 0\n1 nan 0 1\n5 0 0 0.5\n';
+    const pc = await loadPtx(new TextEncoder().encode(text).buffer as ArrayBuffer);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /\b2\b/.test(w) && /registration|transform/i.test(w))).toBe(true);
+    expect(warnings.some((w) => /block\s*1\b/i.test(w))).toBe(false);
+  });
+});
+
+describe('loadPtx — truncation honesty', () => {
+  test('a block that runs out of lines before its declared cells warns', async () => {
+    // Declares a 5×1 grid but only two point lines follow: the inner loop hits
+    // end-of-input with the declared cells unconsumed. No trailing newline, so
+    // nothing pads the count up.
+    const lines = [
+      '5', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1',
+      '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1',
+      '1 2 3 0.5', '4 5 6 0.5',
+    ];
+    const buf = new TextEncoder().encode(lines.join('\n')).buffer as ArrayBuffer;
+    const pc = await loadPtx(buf);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /truncat|ran out|ended/i.test(w))).toBe(true);
+  });
+
+  test('a complete block does not warn about truncation', async () => {
+    // 2×1 grid with both points present — skipping empty/short cells never
+    // leaves the count short, so a whole file must stay silent.
+    const lines = [
+      '2', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1',
+      '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1',
+      '1 2 3 0.5', '4 5 6 0.5',
+    ];
+    const buf = new TextEncoder().encode(lines.join('\n') + '\n').buffer as ArrayBuffer;
+    const pc = await loadPtx(buf);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /truncat|ran out|ended/i.test(w))).toBe(false);
+  });
+
+  test('a block whose grid is padded with empty 0 0 0 cells is not truncated', async () => {
+    // Declares 3 cells; two are real returns and one is an empty 0 0 0 cell.
+    // The empty cell is skipped as a non-return but still consumes a line, so
+    // the block is complete — no truncation warning.
+    const lines = [
+      '3', '1', '0 0 0', '1 0 0', '0 1 0', '0 0 1',
+      '1 0 0 0', '0 1 0 0', '0 0 1 0', '0 0 0 1',
+      '1 2 3 0.5', '0 0 0 0', '4 5 6 0.5',
+    ];
+    const buf = new TextEncoder().encode(lines.join('\n') + '\n').buffer as ArrayBuffer;
+    const pc = await loadPtx(buf);
+    expect(pc.pointCount).toBe(2); // the 0 0 0 non-return is not a point
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /truncat|ran out|ended/i.test(w))).toBe(false);
+  });
+});

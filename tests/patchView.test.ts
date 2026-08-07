@@ -219,7 +219,7 @@ describe('buildPatchView — buffer integrity', () => {
       size: 64,
     });
     expect(patch).not.toBeNull();
-    expect(patch!.rgba.length).toBe(64 * 64 * 4);
+    expect(patch!.rgba).toHaveLength(64 * 64 * 4);
   });
 
   it('every alpha channel is either 0 or 255', () => {

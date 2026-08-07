@@ -1,0 +1,371 @@
+{
+  "purpose": "Every direct `.positions` read in src/ (scope all-src: every non-test .ts, INCLUDING src/model/, where the accessors are built), classified by the coordinate frame the reading site expects. The migration plan and lint:positions-reads count the narrower outside-model scope, so their total is lower; both count through scripts/lib/positionReads.mjs. Keyed by file plus enclosing symbol so the key survives edits above it. `frame` is one of the four below, or an array of them for a site that genuinely reads more than one (a combined estimator over static layers and streaming nodes). `why` is required and must be the reason, not a restatement of the frame name. Enforced by scripts/lint-position-access.mjs; a read with no entry fails CI.",
+  "frames": {
+    "source-local": "The buffer as the loader wrote it, relative to the cloud's own sourceOrigin.",
+    "project-local": "Source-local plus the layer's Float64 sourceToProject translation, the shared project frame.",
+    "render-local": "Relative to a render origin picked for float precision: streaming node buffers, GPU uploads.",
+    "world": "Source-local plus sourceOrigin, in the file's own CRS."
+  },
+  "entries": [
+    {
+      "file": "src/app/terrainAnalysisRunner.ts",
+      "symbol": "createTerrainAnalysisRunner.buildResultForExport",
+      "frame": "project-local",
+      "reads": 2,
+      "why": "gatherTerrainPositions returns one assembled sample with every layer placement already folded in, and the contour export grids it in that single frame."
+    },
+    {
+      "file": "src/app/terrainAnalysisRunner.ts",
+      "symbol": "createTerrainAnalysisRunner.run",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "Same assembled gather as the export path: placement is folded before the buffer arrives, so the analysis core reads project coordinates."
+    },
+    {
+      "file": "src/io/copc/copcChunkDecode.ts",
+      "symbol": "chunkTransferables",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "Lists the decoded chunk buffers for a zero-copy postMessage. No arithmetic happens; the buffer stays recentred on the streaming render origin."
+    },
+    {
+      "file": "src/io/lasDecodeShared.ts",
+      "symbol": "decodeRecord",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "The loader WRITES the buffer here: scaled record value plus header offset minus the load-time origin is the definition of source-local."
+    },
+    {
+      "file": "src/io/loadE57.ts",
+      "symbol": "loadE57",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadGltf.ts",
+      "symbol": "loadGltf",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadLas.ts",
+      "symbol": "loadLas",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadObj.ts",
+      "symbol": "loadObj",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadPcd.ts",
+      "symbol": "loadPcd",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadPly.ts",
+      "symbol": "loadPly",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadPts.ts",
+      "symbol": "loadPts",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadPtx.ts",
+      "symbol": "loadPtx",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/loadXyz.ts",
+      "symbol": "loadXyz",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
+    },
+    {
+      "file": "src/io/parseWorker.ts",
+      "symbol": "ctx.onmessage",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Worker transport: the freshly parsed buffer is transferred to the main thread in exactly the frame the loader wrote it, untouched."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "applyScanRoute",
+      "frame": "project-local",
+      "reads": 6,
+      "why": "Every read is the gather result from Viewer.gatherTerrainPositions, whose assembler folds each layer placement as it copies."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "compareLoadedLayers",
+      "frame": "world",
+      "reads": 3,
+      "why": "Each buffer is paired with its own sourceOrigin so the two epochs are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "floorPlanPositions",
+      "frame": "project-local",
+      "reads": 4,
+      "why": "Both branches are gather output: the denser re-gather, or the space-export context that was itself copied from a gather."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "revealAnalysePanel",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The measure snap index is built from the active STATIC layer own buffer. Identity placement makes this equal to the project frame today; it is one of the consumers the fold must reach before multi-layer mounting is enabled."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "runDeriveClassification",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The heuristic ground classifier scores a single layer against itself, so it works in that layer own frame."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "runFillUnclassified",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Same single-layer classifier input as the derive path."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "seedUniformClass",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Reads only the buffer length to size a class array. The frame is still named because the length must match the layer this class array will be attached to."
+    },
+    {
+      "file": "src/model/PointCloud.ts",
+      "symbol": "PointCloud.bounds",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "Model internals: the cached min/max span is in the cloud own frame, and every caller adds sourceOrigin or a placement itself."
+    },
+    {
+      "file": "src/model/PointCloud.ts",
+      "symbol": "PointCloud.constructor",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "Model internals: the constructor validates and stores the buffer the loader produced, which is the definition of this cloud source frame."
+    },
+    {
+      "file": "src/model/PointCloud.ts",
+      "symbol": "PointCloud.pointCount",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Model internals: a length divided by three. Frame-independent, but the buffer it reads is the source-local one."
+    },
+    {
+      "file": "src/model/PointCloud.ts",
+      "symbol": "PointCloud.projectXYZ",
+      "frame": "project-local",
+      "reads": 5,
+      "why": "The project-frame accessor itself: source-local position plus the Float64 sourceToProject translation, computed at read time."
+    },
+    {
+      "file": "src/model/PointCloud.ts",
+      "symbol": "PointCloud.worldXYZ",
+      "frame": "world",
+      "reads": 5,
+      "why": "The world accessor itself: source-local position plus sourceOrigin, both fixed at construction."
+    },
+    {
+      "file": "src/model/pointFrames.ts",
+      "symbol": "renderLocalPositions",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "The render-local accessor itself. This is the one place the label is attached to a streaming chunk buffer."
+    },
+    {
+      "file": "src/model/pointFrames.ts",
+      "symbol": "sourcePositions",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The source-local accessor itself. This is the one place the label is attached to a cloud buffer."
+    },
+    {
+      "file": "src/render/densityColors.ts",
+      "symbol": "densityForChunk",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Numeric kernel. The grid is anchored on the buffer own bounds, so the result is invariant under a pure translation: static callers pass source-local, the streaming recolour passes render-local, and both are correct. What it must never be given is two frames concatenated."
+    },
+    {
+      "file": "src/render/elevationRange.ts",
+      "symbol": "computeElevationRange",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Numeric kernel over one buffer. Static callers pass source-local and the streaming range seed passes render-local; the percentile band is meaningful in either, provided the buffer is all one frame."
+    },
+    {
+      "file": "src/render/hillshadeColors.ts",
+      "symbol": "hillshadeShading",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Numeric kernel: slope shading from local gradients, which a translation cannot change. It is handed a single layer buffer in that layer own frame."
+    },
+    {
+      "file": "src/render/InspectTool.ts",
+      "symbol": "InspectTool._buildWitnessSection",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The patch provider returns the picked layer own neighbourhood buffer, and the patch is built around a point index in that same layer."
+    },
+    {
+      "file": "src/render/localDensitySize.ts",
+      "symbol": "localDensitySizes",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Numeric kernel: per-point spacing from nearest neighbours within one buffer, unchanged by a translation."
+    },
+    {
+      "file": "src/render/measure/classificationEditor.ts",
+      "symbol": "applyPolygonReclassify",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "The Viewer hands it copyPlacedPositions output, so the polygon test runs against placed coordinates that match the screen the polygon was drawn on."
+    },
+    {
+      "file": "src/render/measure/lassoVolume.ts",
+      "symbol": "selectByLasso",
+      "frame": [
+        "source-local",
+        "project-local"
+      ],
+      "reads": 4,
+      "why": "Two callers, two frames, both consistent with the projector they arrive with: the lasso volume walk passes copyPlacedPositions output with a plain camera projector, and the Viewer class edit passes the raw layer buffer with a projector that folds the placement itself. The invariant is that the points and the projector agree, not that the frame is fixed."
+    },
+    {
+      "file": "src/render/measure/lassoVolume.ts",
+      "symbol": "volumeFromLassoWithFootprint",
+      "frame": "project-local",
+      "reads": 6,
+      "why": "Receives the packed selection built from copyPlacedPositions, so the footprint and the reference plane are computed in the shared project frame."
+    },
+    {
+      "file": "src/render/measure/profileSampler.ts",
+      "symbol": "sampleProfile",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "assembleProfileBuffers folds each contributing layer placement while flattening, so the corridor walk reads project coordinates."
+    },
+    {
+      "file": "src/render/measure/stockpileVolume.ts",
+      "symbol": "stockpileVolume",
+      "frame": "project-local",
+      "reads": 5,
+      "why": "The stockpile input is the lasso selection, which is packed from placed positions."
+    },
+    {
+      "file": "src/render/measure/volume.ts",
+      "symbol": "volumeCutFill",
+      "frame": "project-local",
+      "reads": 4,
+      "why": "Every caller (the Viewer volume sampler, the stockpile estimator, the lasso walk) supplies placed positions."
+    },
+    {
+      "file": "src/render/patchView.ts",
+      "symbol": "buildPatchView",
+      "frame": "source-local",
+      "reads": 9,
+      "why": "The photometric witness patch is a neighbourhood of one picked point inside one layer, taken from that layer own buffer; a tangent basis over neighbours is translation-invariant anyway."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer._pickDetailed",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Placement fold on the RAY, not the points: the ray drops into the layer source frame, the pick runs over the raw buffer, and the hit lifts back."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer._pickStreamingDetailed",
+      "frame": "render-local",
+      "reads": 2,
+      "why": "Streaming nodes are picked in the streaming render frame, which is where their decoded buffers and the ray both already are."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.addCloud",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "GPU upload boundary: the buffer goes to the mesh unchanged and the layer placement is applied at MESH level by setLayerPlacement, never written into the points."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor",
+      "frame": [
+        "source-local",
+        "render-local"
+      ],
+      "reads": 27,
+      "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.gatherTerrainPositions",
+      "frame": [
+        "source-local",
+        "render-local",
+        "project-local"
+      ],
+      "reads": 13,
+      "why": "The gather is the frame boundary itself: static layer buffers (source-local) and resident streaming node buffers (render-local) go IN with their placements, and sampleStridedTerrain folds each placement while striding, so the sample buffer that comes back out and is up-axis normalised is project-local."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.reclassifyLasso",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "The projector and the clip predicate add the layer placement offset themselves, so the raw layer buffer is the correct input; folding it again would place the layer twice."
+    },
+    {
+      "file": "src/terrain/change/alignEpochs.ts",
+      "symbol": "alignEpochClouds",
+      "frame": "world",
+      "reads": 3,
+      "why": "Each epoch buffer is sampled and transformed together with its own origin, because a registration fit between two scans is only meaningful once both are in a common world frame."
+    },
+    {
+      "file": "src/terrain/change/compareEpochs.ts",
+      "symbol": "dtmOnGrid",
+      "frame": "world",
+      "reads": 1,
+      "why": "The epoch buffer is lifted by its own origin before gridding, so both epochs land on the shared world grid."
+    },
+    {
+      "file": "src/terrain/change/compareEpochs.ts",
+      "symbol": "sharedGrid",
+      "frame": "world",
+      "reads": 2,
+      "why": "The grid must span both epochs, so each buffer bounds are taken in world coordinates rather than in its own local frame."
+    },
+    {
+      "file": "src/terrain/worker/terrainCoreWorker.ts",
+      "symbol": "ctx.onmessage",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Reproducibility
 
-This page is the single entry point for reproducing OpenLiDARViewer's build, tests, and reported analysis figures. It stitches together the pieces that also live in `README.md`, `REVIEWER_QUICKSTART.md`, and `docs/benchmarks.md`. The exact figures reported for the current release, each tied to the command that regenerates it, are in [REPRODUCIBILITY_v0.6.1.md](docs/releases/REPRODUCIBILITY_v0.6.1.md).
+This page is the single entry point for reproducing OpenLiDARViewer's build, tests, and reported analysis figures. It stitches together the pieces that also live in `README.md`, `REVIEWER_QUICKSTART.md`, and `docs/benchmarks.md`. The exact figures reported for the current release, each tied to the command that regenerates it, are in [REPRODUCIBILITY_v0.6.4.md](docs/releases/REPRODUCIBILITY_v0.6.4.md).
 
 ## Environment
 
@@ -25,7 +25,7 @@ npm ci
 | Regenerate analysis/benchmark figures | `npm run repro` |
 | Package source + deploy archives | `npm run package` |
 
-The authoritative deterministic gate is `npm run test:release` (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke). The broader browser matrix that a device varies — the full end-to-end suite and the mobile responsive job — runs in CI (`.github/workflows/ci.yml`), not in `test:release`. The remaining physical-device coverage gaps for a tagged release are recorded in `RELEASE_NOTES_v0.6.1.md`.
+The authoritative deterministic gate is `npm run test:release` (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke). The broader browser matrix that a device varies — the full end-to-end suite and the mobile responsive job — runs in CI (`.github/workflows/ci.yml`), not in `test:release`. The remaining physical-device coverage gaps for a tagged release are recorded in `docs/releases/RELEASE_NOTES_v0.6.4.md`.
 
 ### End-to-end browsers
 
@@ -40,7 +40,7 @@ npm run e2e:browsers
 ## Determinism
 
 - The analysis reproduction pack (`tests/reproPack.test.ts`, run via `npm run repro`) is fully deterministic: every input is generated from a fixed seed (an LCG plus Box–Muller), so the emitted metrics under `benchmarks/out/` reproduce bit-for-bit on any machine. The report digest is content-addressed (tamper-evident).
-- Test fixtures under `tests/` are synthetic and seed-generated (see `scripts/make-*.py` and `tests/fixtures/FIXTURES.md`), or explicitly licensed (see `THIRD_PARTY_NOTICES.md`).
+- Test fixtures under `tests/` are synthetic and seed-generated (see `scripts/make-*.py` and `tests/fixtures/FIXTURES.md`), or explicitly licensed (see `docs/project/THIRD_PARTY_NOTICES.md`).
 - Build identity is reproducible: the build honours `SOURCE_DATE_EPOCH`, and when git metadata is unavailable the commit is reported as `unknown` rather than fabricated.
 
 ## Not deterministic (by nature)

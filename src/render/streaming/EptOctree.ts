@@ -60,6 +60,20 @@ const MAX_HIERARCHY_FILES = 4096;
  */
 const MAX_EPT_DEPTH = 24;
 
+/**
+ * The error to throw when the walk observes its signal has aborted. Propagating
+ * the signal's own reason keeps the outcome classifiable: a user cancel
+ * (`controller.abort()`) carries a DOMException named `AbortError`, which
+ * `isAbortError` treats as a silent cancellation; a signal aborted with a
+ * timeout reason carries a distinct error that stays a visible failure. A plain
+ * `Error` here was neither, so a user cancel surfaced as an ordinary load error.
+ * The fallback covers a signal aborted without a reason. Mirrors the COPC
+ * `StreamingOctree` cancel-vs-timeout convention.
+ */
+function hierarchyAbortError(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('EPT hierarchy load aborted', 'AbortError');
+}
+
 export class EptOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();
   private readonly _meta: EptMetadata;
@@ -95,6 +109,21 @@ export class EptOctree implements StreamingOctreeView {
 
   get fullyLoaded(): boolean {
     return this._fullyLoaded;
+  }
+
+  /**
+   * Whether the hierarchy index is KNOWN-COMPLETE: the walk terminated (see
+   * {@link fullyLoaded}) AND it dropped nothing. `fullyLoaded` alone only says
+   * the walk stopped — it is set true even when the walk stopped at the
+   * {@link MAX_HIERARCHY_FILES} ceiling, swallowed a sub-file fetch failure, or
+   * skipped a malformed file. Each of those pushes into {@link errors} and
+   * leaves subtrees out of the store. A completeness-sensitive consumer (the
+   * full-cloud grade's "exact" label) gates on THIS — never on `fullyLoaded`,
+   * which stays true for a half-loaded cloud. Mirrors `StreamingOctree` so COPC
+   * and EPT grade identically.
+   */
+  get isComplete(): boolean {
+    return this._fullyLoaded && this._errors.length === 0;
   }
 
   /**
@@ -149,7 +178,7 @@ export class EptOctree implements StreamingOctreeView {
       // (already loaded, or beyond the budget) stay on the frontier for later.
       const toFetch: EptKey[] = [];
       for (const fileKey of this._frontier) {
-        if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
+        if (signal?.aborted) throw hierarchyAbortError(signal);
         const fileId = eptKeyToString(fileKey);
         if (this._loadedFiles.has(fileId)) continue;
         if (this._filesLoaded + toFetch.length >= cap) break;
@@ -179,7 +208,7 @@ export class EptOctree implements StreamingOctreeView {
           }),
         );
         for (const r of results) if (r) fetched.push(r);
-        if (signal?.aborted) throw new Error('EPT hierarchy load aborted');
+        if (signal?.aborted) throw hierarchyAbortError(signal);
       }
 
       // Parse + ingest, collecting the ids ingested this wave. Their parents are

@@ -31,6 +31,7 @@ import type {
   VolumeRecord,
 } from './types';
 import { MIN_POINTS, isFull } from './types';
+import type { WorkOwnership } from '../../model/workOwnership';
 import {
   distance,
   bearingDegrees,
@@ -73,7 +74,7 @@ import {
 // metres in `getSummaries` by the same module the panel/CSV/PDF read, so
 // labels and raw numerals can never drift apart.
 import { scaleProfileSamples } from './profileSummary';
-import { stationsAlongLine } from './profileStations';
+import { stationsAlongLine, type ProfileStation } from './profileStations';
 // B7/B8 (v0.4.5) — pure clamp + unit conversion for the resample path, read
 // from the sampler module so panel inputs, clamp and tests share one rule.
 // The encode/decode pair is the persistence seam: the user's last-applied
@@ -289,6 +290,15 @@ export interface MeasurementSummary {
   /** Profile only — the sampler's bare-earth percentile (dimensionless). */
   profileGroundPercentile?: number;
   /**
+   * Profile only — the cumulative chainages (in METRES, through the same B2
+   * factor the chart/table read) of the intermediate station dots drawn on the
+   * scene, in dot order. The panel uses these to couple a hovered chart tick or
+   * station-table row to the matching scene dot by nearest chainage: index `i`
+   * here is the same `i` the panel passes to `setHoveredStation`. Empty/absent
+   * for a degenerate or non-profile measurement.
+   */
+  profileStationChainages?: number[];
+  /**
    * Volume only — when true, the cut/fill record was sampled from
    * streaming resident nodes only. The panel surfaces a coverage caption
    * beneath the volume headline so the analyst understands the cubic
@@ -369,6 +379,15 @@ export class MeasureController {
         referenceZ: number,
       ) => VolumeRecord | { record: VolumeRecord; residentOnly: boolean } | null)
     | null = null;
+  /**
+   * Owner provider — injected by the app once identity is wired. Consulted when
+   * a measurement is created, so the record names which layer it belongs to (by
+   * stable id, in that layer's source-local frame). Returns undefined for a
+   * single-layer scene, where the session's one origin already anchors the work
+   * and stamping an owner would break the byte-identical round trip; null until
+   * set, so a controller with no app wiring behaves exactly as before.
+   */
+  private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
   private _drag: { id: string; vi: number } | null = null;
   private _dragNdcX = 0;
@@ -381,6 +400,15 @@ export class MeasureController {
   private _measurements: Measurement[] = [];
   /** The measurement currently being placed, if any. */
   private _draft: Measurement | null = null;
+  /**
+   * The one profile-station dot currently highlighted, as a pure
+   * `{ measurement id, dot index }` pair — never a DOM reference. Set by the
+   * panel when a profile-chart tick or station-table row is hovered, cleared on
+   * mouse-leave / panel re-render / panel close. A stale pair (a deleted
+   * measurement, or an index past the current dot count) simply matches nothing
+   * in `_appendMeasurement`, so it can never light the wrong dot.
+   */
+  private _activeStation: { id: string; index: number } | null = null;
   /** The active measurement kind new drafts are created as. */
   private _kind: MeasurementKind = 'distance';
   /** The live-preview point under the cursor, or null when off the cloud. */
@@ -862,9 +890,44 @@ export class MeasureController {
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
       profileGroundPercentile: m.profileGroundPercentile,
+      // Station-dot chainages in metres (× the same B2 factor as the samples),
+      // in dot order, so the panel can couple a hovered tick/row to the scene
+      // dot at the matching index. Only meaningful for profiles.
+      profileStationChainages:
+        m.kind === 'profile'
+          ? this._profileStations(m).map((s) => s.chainage * f)
+          : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
       trust: m.trust,
     }));
+  }
+
+  /**
+   * Highlight a single profile-station dot on the scene, or clear the
+   * highlight. `index` indexes the intermediate station dots of measurement
+   * `id`, in the same order as `MeasurementSummary.profileStationChainages` —
+   * the panel resolves a hovered chart tick / table row to that index and calls
+   * this. Passing a null id or index (or an out-of-range index) clears the
+   * highlight; a stale pair simply matches no dot next frame.
+   *
+   * Returns `true` only when the active dot actually changed, so the host can
+   * skip a redraw request on a redundant hover event. The controller does not
+   * own the render loop — the caller pairs a `true` result with its own
+   * `requestFrame()`; the next rendered frame reprojects the overlay and the
+   * `is-active` class appears or clears.
+   */
+  setHoveredStation(id: string | null, index: number | null): boolean {
+    const next =
+      id != null && index != null && Number.isInteger(index) && index >= 0
+        ? { id, index }
+        : null;
+    const cur = this._activeStation;
+    const same =
+      (cur === null && next === null) ||
+      (cur !== null && next !== null && cur.id === next.id && cur.index === next.index);
+    if (same) return false;
+    this._activeStation = next;
+    return true;
   }
 
   /** Register a callback fired whenever the completed-measurement list changes. */
@@ -1010,6 +1073,19 @@ export class MeasureController {
     this._volumeSampler = sampler;
   }
 
+  /**
+   * Inject the owner provider consulted when a measurement is created. The app
+   * sets it once identity is wired; passing `null` restores the unowned default.
+   */
+  setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
+    this._ownerProvider = provider;
+  }
+
+  /** The owner to stamp on a freshly created measurement, when one is provided. */
+  private _newOwner(): WorkOwnership | undefined {
+    return this._ownerProvider ? this._ownerProvider() : undefined;
+  }
+
   /** Whether a vertex handle is currently being dragged. */
   get dragging(): boolean {
     return this._drag !== null;
@@ -1059,6 +1135,9 @@ export class MeasureController {
       volume: input.volume,
     };
     if (input.residentOnly) m.volumeResidentOnly = true;
+    // Same source-local ownership a hand-drawn volume gets (see `_commitDraft`).
+    const owner = this._newOwner();
+    if (owner) m.owner = owner;
     this._measurements.push(m);
     this._updateHint();
     this._emitChange();
@@ -1443,6 +1522,11 @@ export class MeasureController {
       }
     }
     m.trust = this._gradeMeasurement(m);
+    // Record which layer this measurement belongs to, by stable id, in that
+    // layer's source-local frame. Undefined for a single-layer scene, so the
+    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
+    const owner = this._newOwner();
+    if (owner) m.owner = owner;
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();
@@ -1735,6 +1819,22 @@ export class MeasureController {
     }
   }
 
+  /**
+   * The intermediate station dots of a profile measurement, in dot order —
+   * the single source both the scene dots (`_appendMeasurement`) and the
+   * panel-coupling chainages (`getSummaries`) read, so the two can never
+   * disagree on how many stations exist or where they sit. The endpoints carry
+   * their own vertices, so they are dropped (`slice(1, -1)`). Empty for a
+   * non-profile or horizontally-degenerate measurement.
+   */
+  private _profileStations(m: Measurement): ProfileStation[] {
+    if (m.kind !== 'profile' || m.points.length < 2) return [];
+    const [a, b] = m.points;
+    const horizontal = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (horizontal <= 0) return [];
+    return stationsAlongLine({ a, b, intervalM: horizontal / 7 }).slice(1, -1);
+  }
+
   private _buildModel(): OverlayModel {
     const vertices: OverlayVertex[] = [];
     const edges: OverlayEdge[] = [];
@@ -1888,14 +1988,16 @@ export class MeasureController {
       // Station markers on the cloud — small dim dots at evenly-spaced
       // chainages along the section line, so the profile's stations are visible
       // in 3D, not just on the chart. The endpoints already carry their own
-      // vertices, so only the intermediate stations are drawn.
-      const horizontal = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (horizontal > 0) {
-        const stations = stationsAlongLine({ a, b, intervalM: horizontal / 7 });
-        for (const s of stations.slice(1, -1)) {
-          V.push({ p: s.position, role: 'station' });
-        }
-      }
+      // vertices, so only the intermediate stations are drawn. The one dot whose
+      // (measurement, index) matches `_activeStation` brightens (`is-active`) —
+      // the scene half of the chart/table hover coupling.
+      this._profileStations(m).forEach((s, idx) => {
+        V.push({
+          p: s.position,
+          role: 'station',
+          active: this._activeStation?.id === m.id && this._activeStation.index === idx,
+        });
+      });
     }
     if (m.kind === 'volume' && pts.length >= MIN_POINTS.volume) {
       // Volume renders as the same closed polygon idiom as `area` — the

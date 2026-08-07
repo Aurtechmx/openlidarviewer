@@ -83,7 +83,7 @@ describe('WIN 2 — capture-quality coverage label is honest to its computation'
     const root = panel.element as unknown as FakeEl;
 
     const labelEls = root.findAll((e) => e.ownText === 'Bounding area filled');
-    expect(labelEls.length).toBe(1);
+    expect(labelEls).toHaveLength(1);
 
     // The OLD dishonest phrasing must be gone.
     const allText = root.textContent;
@@ -94,7 +94,7 @@ describe('WIN 2 — capture-quality coverage label is honest to its computation'
     // "of footprint" qualifier the math doesn't support). Find the value node
     // whose title carries the honest fill-ratio definition.
     const honestHint = root.findAll((e) => /bounding-box footprint grid/.test(e.titleAttr));
-    expect(honestHint.length).toBe(1);
+    expect(honestHint).toHaveLength(1);
     // Its text is a plain "NN%" with nothing implying a traced outline.
     expect(honestHint[0].ownText).toMatch(/^\d+%$/);
   });

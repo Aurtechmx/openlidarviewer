@@ -474,7 +474,7 @@ describe('unsafeHtml static-analysis guard (src/ui/dom.ts contract)', () => {
 
     // Belt-and-braces: the bijection above implies this, but state it
     // plainly so a failure mode is obvious in the report.
-    expect(callSites.length).toBe(ALLOWLIST.length);
+    expect(callSites).toHaveLength(ALLOWLIST.length);
   });
 
   it('no raw .innerHTML assignment exists outside dom.ts (allowlist, one-to-one)', () => {
@@ -529,6 +529,6 @@ describe('unsafeHtml static-analysis guard (src/ui/dom.ts contract)', () => {
         'stays a faithful review record.',
     ).toEqual([]);
 
-    expect(rawInnerHtmlSites.length).toBe(RAW_INNERHTML_ALLOWLIST.length);
+    expect(rawInnerHtmlSites).toHaveLength(RAW_INNERHTML_ALLOWLIST.length);
   });
 });

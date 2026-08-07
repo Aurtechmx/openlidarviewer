@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest';
-import { serializeSession, parseSession, SESSION_VERSION, isSessionFile, SESSION_EXTENSION, matchSessionToScan } from '../src/io/session';
+import {
+  serializeSession,
+  parseSession,
+  SESSION_VERSION,
+  isSessionFile,
+  SESSION_EXTENSION,
+  matchSessionToScan,
+  MAX_SESSION_ITEMS,
+  MAX_MEASUREMENT_POINTS,
+  MAX_ANNOTATION_TITLE,
+  MAX_ANNOTATION_NOTE,
+  MAX_MANIFEST_BYTES,
+} from '../src/io/session';
 import type { InspectionSession, SavedView } from '../src/io/session';
 import {
   buildProcessingManifest,
@@ -584,10 +596,12 @@ describe('parseSession / serializeSession — v4 CRS persistence', () => {
     const json = serializeSession(sampleSession());
     const parsed = JSON.parse(json);
     expect(parsed.version).toBe(SESSION_VERSION);
-    // The v7 bump is the R3 coordinated one: per-view state bundles plus the
-    // reserved processingManifest slot land together, so later workstreams
-    // (the manifest writer) do NOT need another version change.
-    expect(SESSION_VERSION).toBe(7);
+    // v8 adds the project frame and per-item ownership: the persistence model
+    // multi-layer work needs before a mount can be enabled. The v7 bump before
+    // it was the R3 coordinated one (per-view state bundles plus the reserved
+    // processingManifest slot), which is why the manifest writer needs no
+    // version change of its own.
+    expect(SESSION_VERSION).toBe(8);
   });
 
   it('a v4 file with a non-finite linearUnitToMetres rejects the crs', () => {
@@ -1015,8 +1029,10 @@ describe('v7 — named restorable view states', () => {
   });
 
   it('still rejects an unsupported (future) version', () => {
+    // One past whatever this build writes, so the check keeps meaning the same
+    // thing after a version bump instead of quietly testing a supported one.
     const doc = {
-      app: 'OpenLiDARViewer', kind: 'measurement-session', version: 8,
+      app: 'OpenLiDARViewer', kind: 'measurement-session', version: SESSION_VERSION + 1,
       upAxis: 'z', origin: [0, 0, 0], unitSystem: 'metric',
       views: [], measurements: [], annotations: [],
     };
@@ -1210,5 +1226,67 @@ describe('matchSessionToScan — a differing EPSG code caps the verdict', () => 
     const m = matchSessionToScan({ ...base, crs: 'A' }, { ...base, crs: 'B' });
     expect(m.verdict).toBe('strong');
     expect(m.reasons.join(' ')).toContain('CRS label differs');
+  });
+});
+
+describe('session resource ceilings (hostile / corrupt input)', () => {
+  const baseDoc = (over: Record<string, unknown> = {}): Record<string, unknown> => ({
+    app: 'OpenLiDARViewer',
+    kind: 'measurement-session',
+    version: SESSION_VERSION,
+    upAxis: 'z',
+    origin: [0, 0, 0],
+    unitSystem: 'metric',
+    views: [],
+    measurements: [],
+    annotations: [],
+    ...over,
+  });
+
+  it('truncates parseViews at MAX_SESSION_ITEMS (the sibling-parser cap it was missing)', () => {
+    const views = new Array(MAX_SESSION_ITEMS + 5).fill({});
+    const session = parseSession(JSON.stringify(baseDoc({ views })));
+    expect(session.views).toHaveLength(MAX_SESSION_ITEMS);
+  });
+
+  it('caps the vertex list of a single measurement at MAX_MEASUREMENT_POINTS', () => {
+    // Built as a raw JSON string so the over-cap array is one string allocation,
+    // not a materialised JS array on the test side. All points are valid vec3s,
+    // so the result is truncated to exactly the cap.
+    const n = MAX_MEASUREMENT_POINTS + 3;
+    const pointsJson = '[' + '[0,0,0],'.repeat(n - 1) + '[0,0,0]]';
+    const doc =
+      `{"app":"OpenLiDARViewer","kind":"measurement-session","version":${SESSION_VERSION},` +
+      '"upAxis":"z","origin":[0,0,0],"unitSystem":"metric","views":[],"annotations":[],' +
+      `"measurements":[{"kind":"distance","points":${pointsJson}}]}`;
+    const session = parseSession(doc);
+    expect(session.measurements).toHaveLength(1);
+    expect(session.measurements[0].points).toHaveLength(MAX_MEASUREMENT_POINTS);
+  });
+
+  it('caps an annotation title and note length', () => {
+    const annotations = [
+      {
+        localPosition: { x: 0, y: 0, z: 0 },
+        title: 'T'.repeat(MAX_ANNOTATION_TITLE + 100),
+        note: 'N'.repeat(MAX_ANNOTATION_NOTE + 100),
+      },
+    ];
+    const session = parseSession(JSON.stringify(baseDoc({ annotations })));
+    expect(session.annotations).toHaveLength(1);
+    expect(session.annotations[0].title).toHaveLength(MAX_ANNOTATION_TITLE);
+    expect(session.annotations[0].note?.length).toBe(MAX_ANNOTATION_NOTE);
+  });
+
+  it('drops a processingManifest whose serialized size exceeds the cap', () => {
+    const bigManifest = { note: 'x'.repeat(MAX_MANIFEST_BYTES + 100) };
+    const session = parseSession(JSON.stringify(baseDoc({ processingManifest: bigManifest })));
+    expect(session.processingManifest).toBeUndefined();
+  });
+
+  it('keeps a normal-sized processingManifest (the cap never rejects a legitimate one)', () => {
+    const manifest = { schema: 'olv@1', steps: [{ op: 'crop' }] };
+    const session = parseSession(JSON.stringify(baseDoc({ processingManifest: manifest })));
+    expect(session.processingManifest).toEqual(manifest);
   });
 });

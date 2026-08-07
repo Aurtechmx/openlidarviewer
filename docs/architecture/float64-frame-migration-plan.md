@@ -76,12 +76,28 @@ acceptance battery in `coordinate-integrity-roadmap.md` P1 #1):
 `scripts/lint-positions-reads.mjs` walks every non-test `.ts` under `src/`,
 excludes `src/model/` (where `PointCloud` legitimately owns the buffer and the
 `worldXYZ` / `projectXYZ` accessors), strips comments, and counts `.positions`
-occurrences the same way the enforcing ratchet `lint:position-access` does.
+occurrences. It counts through `scripts/lib/positionReads.mjs`, the single
+module the enforcing ratchet `lint:position-access` and the doc cross-check
+`lint:architecture-truth` also count through, so a change to what counts as a
+read cannot land in one scanner and miss the others.
 
-Measured: 162 direct `.positions` reads across 42 files. The 42 files match the
-figure the roadmap recorded. The occurrence count has drifted up from 154 as the
-code moved, which is why the count is regenerated from the tree rather than
-quoted from memory. Run `npm run lint:positions-reads` for the live list with
+The scanners report two totals, and the difference is scope, not disagreement:
+
+| Scope | Covers | Who reports it |
+|---|---|---|
+| `outside-model` | `src/` minus `src/model/` and `*.test.ts` | this plan, `lint:positions-reads`, `lint:architecture-truth` |
+| `all-src` | all of `src/` minus `*.test.ts` | `lint:position-access` (the gate) |
+
+The gate's number is the larger one because it also counts the reads inside
+`src/model/`, where the accessors this plan migrates consumers ONTO are built. A
+frame mistake there is wrong everywhere at once, so the gate has to see it. This
+plan's number is the migration surface, which is consumers only.
+
+Measured, `outside-model`: 128 direct `.positions` reads across 29 files. Both
+numbers are regenerated from the tree rather than quoted from memory, because
+they drift as code moves — they rose to 162 across 43 files while the placement
+architecture was landing, and have since fallen as consumers moved onto the
+accessors. Run `npm run lint:positions-reads` for the live list with
 `file:line`.
 
 Two categories are counted but are not consumer reads to migrate:
@@ -95,6 +111,11 @@ Two categories are counted but are not consumer reads to migrate:
   not call sites.
 
 ## The surface, bucketed by concern
+
+HISTORICAL SNAPSHOT, at 162 reads across 42 files. This is the surface the
+migration was planned against, kept because the buckets are what the phases
+below are ordered by; it is not the live count and the `file:line` references
+have moved. The live list is `npm run lint:positions-reads`.
 
 Counts are `.positions` occurrences (a line may hold more than one). `main.ts`
 and `Viewer.ts` span several concerns and are split by line.

@@ -1,0 +1,305 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE GUI REFRESH (v0.6.x) — hero-console material + accent on phones
+   ═══════════════════════════════════════════════════════════════════════════
+   A styling pass, not a re-layout: it re-skins the already-built mobile
+   surfaces (unified bottom sheet, tool dock, standalone inspector sheet,
+   streaming panel) to match the marketing hero — dark glass edged in a faint
+   cyan hairline, one azure->cyan accent for the active tool / titles / key
+   values, and a green for on/enabled status. Placed last (before the
+   forced-colors reset) so it wins over the earlier phone blocks; scoped
+   entirely to the mobile-layout condition (portrait OR landscape phone) so
+   desktop is untouched. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* ── Dark-glass panels with a cyan hairline ──────────────────────────────
+     The unified bottom sheet is the focal surface (raised glass); the tool
+     dock, standalone inspector sheet and streaming panel are secondary glass.
+     All earn a 1px low-opacity cyan edge and a soft (not neon) lift shadow. */
+  .olv-mobile-sheet {
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    border-top: 1px solid var(--m-edge);
+    border-left: 1px solid var(--m-edge);
+    border-right: 1px solid var(--m-edge);
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+  }
+  /* Re-parented panels sit on the sheet's glass, so they go transparent and
+     let the one backdrop carry the material (no stacked opaque cards). */
+  .olv-mobile-sheet .olv-inspector,
+  .olv-mobile-sheet .olv-analyse-panel,
+  .olv-mobile-sheet .olv-object-panel,
+  .olv-mobile-sheet .olv-class-panel,
+  .olv-mobile-sheet .olv-measure-panel,
+  .olv-mobile-sheet .olv-anno-panel,
+  .olv-mobile-sheet .olv-export-panel {
+    background: transparent;
+  }
+
+  /* Standalone inspector sheet (used when the unified sheet isn't mounted). */
+  .olv-inspector {
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    border-top: 1px solid var(--m-edge);
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+  }
+
+  /* Streaming COPC panel reads as the same dark glass. */
+  .olv-streaming-panel {
+    background: var(--m-glass);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    backdrop-filter: blur(14px) saturate(1.1);
+    border: 1px solid var(--m-edge);
+    border-radius: 14px;
+    box-shadow: var(--m-glass-shadow);
+  }
+
+  /* ── Tool dock: the visible edge of the merged bottom chrome ────────────
+     In portrait the dock is the TOP HALF of one bottom zone: it sits flush on
+     the collapsed sheet, so it wears the raised glass the sheet wears, rounds
+     only its top corners, drops its bottom border (that edge is interior now)
+     and carries the single lift shadow for both bars. The result is one
+     surface with one hairline and one shadow instead of two floating cards. */
+  .olv-dock {
+    background: var(--m-glass-raised);
+    -webkit-backdrop-filter: blur(16px) saturate(1.1);
+    backdrop-filter: blur(16px) saturate(1.1);
+    border: 1px solid var(--m-edge);
+    border-bottom-width: 0;
+    border-radius: 14px 14px 0 0;
+    box-shadow: 0 -14px 40px -14px rgba(0, 0, 0, 0.62);
+  }
+  /* Ghost-by-default dock tools: transparent fill, NO resting border, dim
+     neutral colour so nothing competes with the cloud. Accent discipline: the
+     single cyan accent lands only on the active tool (below). The dock strip
+     itself carries the glass + faint cyan hairline. */
+  .olv-dock .olv-tool {
+    background: transparent;
+    border-color: transparent;
+    color: var(--text-dim);
+    border-radius: 10px;
+    transition:
+      background 180ms ease-out,
+      border-color 180ms ease-out,
+      color 180ms ease-out,
+      transform 150ms ease-out;
+  }
+  /* Active tool: cyan glyph + label, a firmer cyan edge, and a short cyan
+     indicator bar under the button so the current mode reads at a glance. */
+  .olv-dock .olv-tool.olv-tool-active,
+  .olv-dock .olv-tool-active {
+    position: relative;
+    color: var(--m-accent-2);
+    background: color-mix(in srgb, var(--m-accent-2) 12%, transparent);
+    border-color: var(--m-edge-strong);
+    /* One quiet accent, no heavy glow: an inset cyan hairline plus a soft lift. */
+    box-shadow: 0 0 0 1px var(--m-edge) inset, 0 2px 8px -6px rgba(41, 211, 255, 0.28);
+  }
+  .olv-dock .olv-tool-active .olv-tool-ico svg { color: var(--m-accent-2); }
+  .olv-dock .olv-tool-active::after {
+    content: "";
+    position: absolute; left: 22%; right: 22%; bottom: 3px; height: 2px;
+    border-radius: 2px;
+    background: var(--m-accent-grad);
+  }
+
+  /* ── Segmented sheet tabs — cyan active indicator ────────────────────────
+     The active tab keeps its raised chip; add a cyan underline + cyan label
+     so the current panel (Layers / Properties / Scan) matches the accent. */
+  /* Compact, evenly-spaced pill tabs: tighter min-height (tap area held at
+     >= 40px), a smoother ease-out, and a lighter resting weight. */
+  /* The tab row is typeset like the tool dock: the same 9px label, uppercase
+     with tracking so it reads as a control rather than body text, on a slim
+     row. The active tab is a cyan label over a hairline underline instead of a
+     raised chip, so the whole strip reads as one refined surface. */
+  .olv-msheet-tabs { gap: 2px; padding: var(--m-tabs-pad); border-radius: 10px; }
+  .olv-msheet-tab {
+    min-height: var(--m-tab-h);
+    border-radius: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition:
+      background 180ms ease-out,
+      color 180ms ease-out,
+      box-shadow 180ms ease-out,
+      transform 150ms ease-out;
+  }
+  /* The active marker is a short straight bar under the label, drawn the same
+     way the active dock tool draws its own. An `inset` box-shadow followed the
+     tab's 8 px corner radius and hung a small cyan "U" off the bottom of the
+     strip, which at the very foot of the screen read as a clipped element. */
+  .olv-msheet-tab.is-active {
+    background: transparent;
+    color: var(--m-accent-2);
+    box-shadow: none;
+  }
+  .olv-msheet-tab.is-active::before {
+    content: "";
+    position: absolute; left: 26%; right: 26%; bottom: 3px; height: 2px;
+    border-radius: 2px;
+    background: var(--m-accent-grad);
+  }
+  .olv-msheet-tab:focus-visible,
+  .olv-dock .olv-tool:focus-visible,
+  .olv-panel-head:focus-visible {
+    outline-color: var(--m-accent-2);
+  }
+
+  /* ── Section titles / labels get a small cyan accent lead ────────────────
+     A short gradient bar before each panel/section title picks up the hero's
+     "section-title accent" without shouting. */
+  .olv-inspector .olv-panel-title,
+  .olv-streaming-title {
+    display: flex; align-items: center; gap: var(--space-md);
+  }
+  .olv-inspector .olv-panel-title::before,
+  .olv-streaming-title::before {
+    content: "";
+    width: 3px; height: 0.95em; border-radius: 2px;
+    background: var(--m-accent-grad);
+    flex: 0 0 auto;
+  }
+
+  /* ── Key values ──────────────────────────────────────────────────────────
+     Streaming phase + progress readout are the live "throughput" numerals;
+     lift them to the cyan accent, tabular + mono, so they read as the hero's
+     key metrics. On/enabled Scan-Intelligence values stay semantic green. */
+  .olv-streaming-phase { color: var(--m-accent-2); }
+  .olv-stream-prog-readout { color: var(--m-accent-2); font-variant-numeric: tabular-nums; }
+  .olv-di-row-value[data-tier="strong"] { color: var(--m-on); }
+  .olv-di-row-value { font-variant-numeric: tabular-nums; }
+
+  /* ── Tactile press feedback ──────────────────────────────────────────────
+     A 1px downward nudge on tappable controls (design brief), overriding the
+     desktop scale() press inside the phone scope only. `:not(:disabled)` /
+     extra qualifiers keep specificity above the base `:active` rules. */
+  .olv-dock .olv-tool:active:not(:disabled),
+  .olv-msheet-tab:active,
+  .olv-mobile-sheet .olv-chip:active:not(:disabled),
+  .olv-streaming-btn:active:not(:disabled),
+  .olv-layer-x:active {
+    transform: translateY(1px);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LANDSCAPE PHONE: the tools move to a LEFT RAIL
+   ═══════════════════════════════════════════════════════════════════════════
+   In landscape, height is the scarce axis and width is the plentiful one, so a
+   full-width bottom bar spends the wrong resource. The top bar, the bottom
+   chrome and the streaming card together left the cloud a thin middle band.
+   Reflow rather than shrink: the dock becomes a slim vertical rail pinned to
+   the left edge (the arrangement the project's own hero console uses), the
+   bottom keeps only the slim tab strip, and the vertical band between them
+   belongs to the scene.
+
+   The condition is the landscape arm of the canonical mobile query plus a
+   short-viewport guard. `(orientation: landscape) and (pointer: coarse)` on its
+   own also matches a tablet in landscape, which is 768 px or wider and
+   therefore on the DESKTOP layout. It would have sprouted a left rail while
+   every other panel stayed put. `max-height: 500px` is what makes it a phone.
+
+   Placed after the mobile GUI block so the rail's geometry wins over the
+   portrait bottom-bar geometry declared there. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 500px) {
+  /* Give the band its height back: a 74 px header is a fifth of a 390 px-tall
+     viewport. Only the vertical padding tightens, so the header's own controls
+     keep their 44 pt targets. */
+  .olv-topbar {
+    padding-top: calc(var(--space-sm) + env(safe-area-inset-top));
+    padding-bottom: var(--space-sm);
+  }
+
+  .olv-dock {
+    /* Pin both ends of the free band so the rail can never slide under the
+       header or under the sheet, then centre the tools in whatever is left. */
+    top: calc(58px + env(safe-area-inset-top));
+    bottom: calc(var(--m-chrome-head-h) + var(--space-2xs) + env(safe-area-inset-bottom));
+    left: calc(var(--space-xs) + env(safe-area-inset-left));
+    right: auto;
+    width: auto;
+    height: auto;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    /* `safe` matters here. Plain `center` overflows a too-short rail at BOTH
+       ends and the top overflow cannot be scrolled back to, which would strand
+       Frame off-screen. `safe` falls back to start-alignment the moment the
+       content stops fitting. The unprefixed line is the fallback for engines
+       that do not parse the keyword. */
+    justify-content: center;
+    justify-content: safe center;
+    align-items: stretch;
+    gap: var(--space-2xs);
+    padding: var(--space-2xs);
+    /* The rail is a free-floating card again, so it gets a full border and a
+       full radius back (portrait fuses its bottom edge into the sheet). */
+    border-bottom-width: 1px;
+    border-radius: 14px;
+    box-shadow: var(--m-glass-shadow);
+    /* If "More" is open and the full set no longer fits the band, the rail
+       scrolls. Nothing can be clipped mid-word: the buttons are square and
+       captionless here, so a part-scrolled rail cuts only whitespace. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+  }
+  .olv-dock::-webkit-scrollbar { display: none; }
+  /* The fade is scoped to the open disclosure, which is the only state that can
+     make the rail taller than its band. Applying it unconditionally would dim
+     the first and last tool of a rail that fits perfectly well. */
+  .olv-dock.olv-dock-more-open {
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
+  }
+  /* Square, icon-only buttons at the full 44 pt target. A vertical rail has no
+     room for captions and a squeezed caption is worse than none, so the label
+     leaves the page and the accessible name comes from the aria-label ToolDock
+     puts on every button. */
+  .olv-dock .olv-tool {
+    flex: 0 0 auto;
+    width: 44px;
+    min-width: 44px;
+    max-width: none;
+    min-height: 44px;
+    padding: var(--space-2xs);
+  }
+  .olv-dock .olv-tool-label { display: none; }
+  .olv-dock .olv-tool-ico svg { width: 20px; height: 20px; }
+  .olv-dock .olv-tool-more { padding: var(--space-2xs); letter-spacing: 0; }
+  /* The cluster break runs down the rail now, not across a row. */
+  .olv-dock > .olv-dock-gap { margin-left: 0; margin-top: var(--space-sm); }
+
+  /* With the dock off the bottom edge the sheet is the only bottom chrome, so
+     it carries its own top edge and corners again. */
+  .olv-mobile-sheet.is-collapsed {
+    border-top-width: 1px;
+    border-radius: 14px 14px 0 0;
+  }
+
+  /* Streaming card: a narrow top-right sliver, capped so it covers well under
+     half the short side and never reads as a full right-hand panel. */
+  .olv-streaming-panel {
+    top: calc(60px + env(safe-area-inset-top));
+    width: min(200px, 30vw);
+    max-height: min(46dvh, calc(100dvh - 128px));
+  }
+
+  /* The touch hint sits just above the bottom strip instead of mid-scene. */
+  .olv-touch-hint {
+    bottom: calc(var(--m-chrome-head-h) + var(--space-xl) + env(safe-area-inset-bottom));
+  }
+}
+
+/* On the shortest landscape phones (an SE lying down is 375 px tall) six 44 pt
+   buttons plus the header and the sheet no longer fit the column, and the rail
+   would start scrolling with tools out of sight. Step the target down to 40 pt
+   there rather than hide anything: a slightly small button you can see beats a
+   correctly sized one you have to find. This is the only place in the phone
+   layout that goes under 44 pt, and only under 380 px of height. */
+@media (orientation: landscape) and (pointer: coarse) and (max-height: 380px) {
+  .olv-dock .olv-tool { width: 40px; min-width: 40px; min-height: 40px; }
+  .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
+}
+

@@ -21,6 +21,10 @@
 import type { ConvertFormat, CrsMode } from '../convert/types';
 import { CONVERT_FORMATS } from '../convert/types';
 import { formatByteSize } from '../io/formatByteSize';
+import {
+  fullResWouldDropClassEdits,
+  FULL_RES_CLASS_EDITS_REFUSAL,
+} from './fullResClassGuard';
 
 /** Where the active classification came from. */
 export type ClassificationProvenance = 'none' | 'source' | 'derived';
@@ -49,6 +53,12 @@ export interface ExportSummaryInput {
   readonly viewDecimated?: boolean;
   /** User ticked "convert at full resolution". */
   readonly fullRes?: boolean;
+  /**
+   * The active cloud carries in-session classification edits (manual reclassify)
+   * that live only in the display-resolution buffer. A full-resolution export
+   * re-decodes the original file and would silently drop them.
+   */
+  readonly hasClassEdits?: boolean;
   /** User ticked "Compress (.gz)" — gzip the LAS output (LAS formats only). */
   readonly gzip?: boolean;
 }
@@ -197,6 +207,18 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
         'This writes the DERIVED (heuristic) classification — not survey-grade. ' +
         'Validate it before anyone relies on it, or omit it below.',
     });
+  }
+  if (
+    fullResWouldDropClassEdits({
+      fullRes: input.fullRes === true,
+      includeClassification: includeClass,
+      hasClassEdits: input.hasClassEdits === true,
+    })
+  ) {
+    // Escalated from a warning to an ERROR: this export is refused at the write
+    // gate (fullResClassGuard), so the preview must read as blocked, not merely
+    // cautioned. Same wording as the enforcement.
+    warnings.push({ level: 'error', message: FULL_RES_CLASS_EDITS_REFUSAL });
   }
   if (includeClass && provenance !== 'none' && input.format === 'las') {
     warnings.push({

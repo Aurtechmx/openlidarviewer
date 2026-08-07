@@ -183,8 +183,8 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     const out = await backend.derivatives(z, cols, rows, 0.5);
 
     // Output shape (zeros from the mock readback, but correctly sized).
-    expect(out.slope.length).toBe(cols * rows);
-    expect(out.aspect.length).toBe(cols * rows);
+    expect(out.slope).toHaveLength(cols * rows);
+    expect(out.aspect).toHaveLength(cols * rows);
 
     // One compute dispatch with ceil(40/16)=3 × ceil(33/16)=3 groups.
     expect(log.dispatches).toEqual([{ x: 3, y: 3, z: undefined }]);
@@ -260,7 +260,7 @@ describe('gpuBackend.derivatives — dispatch plumbing on a mock device', () => 
     const { device, log } = makeMockDevice();
     const backend = createGpuBackend(device);
     const empty = await backend.derivatives(new Float32Array(0), 0, 0, 1);
-    expect(empty.slope.length).toBe(0);
+    expect(empty.slope).toHaveLength(0);
     const badCell = await backend.derivatives(new Float32Array(4), 2, 2, 0);
     expect(Array.from(badCell.slope)).toEqual([0, 0, 0, 0]);
     // A non-positive Y cell is guarded exactly like the X cell.
@@ -297,7 +297,7 @@ describe('gpuBackend.hillshade — dispatch plumbing on a mock device', () => {
 
     const out = await backend.hillshade(slope, aspect, cov, cols, rows, { azimuthDeg: 315 });
 
-    expect(out.shade.length).toBe(n);
+    expect(out.shade).toHaveLength(n);
     expect(out.cols).toBe(cols);
     expect(out.rows).toBe(rows);
     // Coverage mask reproduces shadeFromSlopeAspect's skip rule.
@@ -327,7 +327,7 @@ describe('gpuBackend.hillshade — dispatch plumbing on a mock device', () => {
     const { device, log } = makeMockDevice();
     const backend = createGpuBackend(device);
     const out = await backend.hillshade(new Float32Array(0), new Float32Array(0), new Uint8Array(0), 0, 0);
-    expect(out.shade.length).toBe(0);
+    expect(out.shade).toHaveLength(0);
     expect(log.buffers).toHaveLength(0);
   });
 });
@@ -349,8 +349,8 @@ describe('gpuBackend.scatterMinCount — dispatch plumbing on a mock device', ()
     };
 
     const out = await backend.scatterMinCount!(pts, grid);
-    expect(out.z.length).toBe(nCells);
-    expect(out.counts.length).toBe(nCells);
+    expect(out.z).toHaveLength(nCells);
+    expect(out.counts).toHaveLength(nCells);
 
     // Two compute passes: scatter (ceil 600/256 = 3) then finalize
     // (ceil 384/256 = 2). Entry points in order.
@@ -377,7 +377,7 @@ describe('gpuBackend.scatterMinCount — dispatch plumbing on a mock device', ()
     );
     expect(keyBufs.length).toBeGreaterThanOrEqual(1);
     const seeded = keyBufs[0].written as Uint32Array;
-    expect(seeded.length).toBe(nCells);
+    expect(seeded).toHaveLength(nCells);
     expect(seeded.every((k) => k === SCATTER_MIN_SENTINEL)).toBe(true);
 
     // The scatter uniform (32 bytes) packs origin (f32×2), cols/rows (u32×2),
@@ -409,7 +409,7 @@ describe('gpuBackend.scatterMinCount — dispatch plumbing on a mock device', ()
       { h1: new Float32Array(0), h2: new Float32Array(0), v: new Float32Array(0), count: 0 },
       grid,
     );
-    expect(out.z.length).toBe(16);
+    expect(out.z).toHaveLength(16);
     // No scatter dispatch (no points); finalize still runs.
     expect(log.entryPoints).toEqual(['finalize_main']);
     expect(log.dispatches).toEqual([{ x: 1, y: undefined, z: undefined }]);
@@ -422,7 +422,7 @@ describe('gpuBackend.scatterMinCount — dispatch plumbing on a mock device', ()
       { h1: new Float32Array(0), h2: new Float32Array(0), v: new Float32Array(0), count: 0 },
       { originH1: 0, originH2: 0, cols: 0, rows: 0, cellSizeM: 1 },
     );
-    expect(out.z.length).toBe(0);
+    expect(out.z).toHaveLength(0);
     expect(log.buffers).toHaveLength(0);
   });
 

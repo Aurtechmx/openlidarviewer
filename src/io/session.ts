@@ -32,9 +32,19 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from './crs';
 import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
+import { parseResolvedCrs } from './sessionCrs';
+import {
+  assertOwnershipWithinFrame,
+  frameAnchorLayerId,
+  parseSessionProjectFrame,
+  serializeSessionProjectFrame,
+} from './sessionFrame';
+import type { SessionProjectFrame } from './sessionFrame';
+import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnership';
+import type { WorkOwnership } from '../model/workOwnership';
 
 /**
- * Current session-file schema version (v7). The history, oldest first: v3 added
+ * Current session-file schema version (v8). The history, oldest first: v3 added
  *   • the live camera state (not just saved views) so a re-import lands
  *     the viewer on the exact viewpoint the user saved;
  *   • render settings (point size, EDL, antialiasing, size mode) so the
@@ -54,13 +64,23 @@ import type { ClipBox, ClipMode } from '../render/clip/clipBox';
  * passthrough) so the verifiable-processing workstream can populate it
  * without another version bump.
  *
- * Older v1 + v2 files parse with no loss — the new optional fields just
- * read as undefined, and the Viewer falls back to its current state.
+ * v8 adds the PROJECT FRAME: one project origin plus a record per layer
+ * (stable id, source fingerprint, display name, source origin, the Float64
+ * transform into the project frame, CRS, up axis), and per-item ownership on
+ * measurements and annotations. Through v7 a session described one scan with
+ * one origin, so saved work had no way to say which layer it belonged to,
+ * which is why multi-layer mounting is disabled. v8 is the persistence half of
+ * removing that block; the mount flag itself stays off (see `LayerService.ts`).
+ *
+ * Older v1..v7 files parse with no loss: the new optional fields just
+ * read as undefined, and the Viewer falls back to its current state. A v7
+ * file's work carries no owner, and `io/sessionOwnership.ts` attributes it to
+ * the anchor layer with the assignment MARKED inferred rather than asserted.
  */
-export const SESSION_VERSION = 7;
+export const SESSION_VERSION = 8;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7];
+const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -81,7 +101,15 @@ export interface SessionScanSummary {
   fileName: string;
   /** Source point count. */
   sourcePoints: number;
-  /** Source extents in metres: width × depth × height. */
+  /**
+   * Source extents in the scan's OWN CRS linear units (width × depth × height) —
+   * NOT metres. The writer stores the raw bounding-box spans (`b.max - b.min`)
+   * with no unit conversion, so a foot-CRS scan records feet here. The unit is
+   * disclosed by {@link crsUnit}; a metre value is never asserted. These raw
+   * spans are what `matchSessionToScan` compares (`extentRelDiff`), so the
+   * stored values must stay unconverted — this is a documentation correction
+   * only, not a value change.
+   */
   width: number;
   depth: number;
   height: number;
@@ -228,6 +256,34 @@ export interface InspectionSession {
    * (byte-shape preserved).
    */
   processingManifest?: unknown;
+  /**
+   * The loaded layer's STABLE identity (audit item O). Generated at layer
+   * creation and anchored on the source fingerprint — never derived from the
+   * filename or the display label — so it survives a rename, a duplicate
+   * filename, reordering, and this export/import round trip. Strictly additive
+   * within v7: a session written before the field existed omits it and the
+   * loader leaves it undefined, so the app assigns a fresh id on import. A
+   * non-string value is dropped rather than thrown.
+   */
+  layerId?: string;
+  /**
+   * The layer's display LABEL at export time, stored separately from identity
+   * (`layerId`) so a rename round-trips without ever touching the id. Additive
+   * and tolerantly parsed like {@link layerId}.
+   */
+  layerName?: string;
+  /**
+   * v8. The project frame: the one origin the project's layers map into, plus
+   * a record per layer (see `io/sessionFrame.ts`). Present only for a session
+   * that actually describes a project frame; absent means the pre-v8 reading
+   * applies, where {@link origin} is the single frame everything is local to.
+   *
+   * Unlike every other optional field, this one is NOT tolerantly dropped when
+   * malformed. A dropped display setting costs a display setting; a dropped or
+   * repaired frame changes where saved geometry is read back, invisibly. An
+   * inconsistent frame is therefore refused on read and on write.
+   */
+  projectFrame?: SessionProjectFrame;
 }
 
 const KINDS: readonly MeasurementKind[] = [
@@ -272,8 +328,11 @@ export function serializeSession(
     // discipline as the top-level fields, so a camera-only view stays
     // byte-identical to its v6 form.
     views: session.views.map(serializeSavedView),
-    measurements: session.measurements,
-    annotations: session.annotations,
+    // v8. Ownership is validated on the way out, never rewritten. Work that
+    // carries no owner is passed through as the SAME object, so a session with
+    // no ownership keeps its pre-v8 byte-shape exactly.
+    measurements: session.measurements.map((m) => withCheckedOwner(m, `Measurement ${m.id}`)),
+    annotations: session.annotations.map((a) => withCheckedOwner(a, `Annotation ${a.id}`)),
   };
   if (session.camera) doc.camera = session.camera;
   if (session.render) doc.render = session.render;
@@ -300,7 +359,37 @@ export function serializeSession(
   if (session.processingManifest != null) {
     doc.processingManifest = session.processingManifest;
   }
+  // Stable layer identity (audit item O) — emitted only when set, so a session
+  // that carries no id keeps the earlier byte-shape.
+  if (typeof session.layerId === 'string' && session.layerId !== '') {
+    doc.layerId = session.layerId;
+  }
+  if (typeof session.layerName === 'string' && session.layerName !== '') {
+    doc.layerName = session.layerName;
+  }
+  // v8. The project frame, validated here as well as on read, so this app can
+  // never write a session it would itself refuse to open.
+  if (session.projectFrame) {
+    const frame = serializeSessionProjectFrame(session.projectFrame);
+    assertOwnershipWithinFrame(frame, doc.measurements, 'measurements');
+    assertOwnershipWithinFrame(frame, doc.annotations, 'annotations');
+    doc.projectFrame = frame;
+  }
   return JSON.stringify(doc, null, 2);
+}
+
+/**
+ * Pass a measurement or annotation through the ownership check unchanged.
+ *
+ * Returns the SAME object when there is no owner, which is what keeps the
+ * pre-v8 byte-shape intact for work that carries none. An owner that would not
+ * survive its own parser throws rather than being dropped: dropping it would
+ * turn a stated attribution into an inferred one on the next import, and the
+ * work would be read in whatever frame happened to be open.
+ */
+function withCheckedOwner<T extends { owner?: WorkOwnership }>(item: T, context: string): T {
+  if (item.owner === undefined) return item;
+  return { ...item, owner: serializeWorkOwnership(item.owner, context) };
 }
 
 /**
@@ -346,6 +435,48 @@ function parseUpAxis(raw: unknown): 'y' | 'z' {
       `Refusing rather than guessing, because the up-axis decides which ` +
       `direction every restored measurement treats as elevation.`,
   );
+}
+
+// --- session resource ceilings ---------------------------------------------
+// A shared, corrupt or hostile `.olvsession` is untrusted input. These cap the
+// dimensions an over-large file can blow up on; each is far beyond any real
+// session and truncates/rejects BEFORE the value reaches app state. (The whole-
+// file byte ceiling is enforced one layer up, in `app/sessionIo.ts`, on the
+// File's size before this parser ever reads it.)
+
+/** Hard cap on parsed list lengths (views, measurements, chart samples, annotations) — a hostile/corrupt file can't hang the tab. */
+export const MAX_SESSION_ITEMS = 100_000;
+
+/**
+ * Cap on a SINGLE measurement's vertex list. A real measurement holds at most a
+ * few thousand hand-placed / traced vertices, so a million is orders beyond any
+ * legitimate one while still bounding the per-measurement heap: one hostile
+ * entry carrying tens of millions of points would otherwise OOM the tab — an
+ * allocation the `importSession` try/catch can't catch, because the tab dies
+ * first.
+ */
+export const MAX_MEASUREMENT_POINTS = 1_000_000;
+
+/** Cap on an annotation title's length — a multi-MB string is a DoS, not a label. */
+export const MAX_ANNOTATION_TITLE = 512;
+/** Cap on an annotation note's length — generous for a paragraph, bounded against abuse. */
+export const MAX_ANNOTATION_NOTE = 8_192;
+
+/**
+ * Cap on the opaque `processingManifest`'s serialized size. The slot is passed
+ * through verbatim (never validated), so a size bound is the only guard on it; a
+ * real manifest is a few KB of provenance, so 4 MB is far above any legitimate
+ * one while rejecting a slot inflated to exhaust memory.
+ */
+export const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
+
+/** True when the opaque manifest serialises within the byte cap; a non-serialisable or over-cap value is rejected (dropped, treated as absent). */
+function withinManifestByteCap(manifest: unknown): boolean {
+  try {
+    return JSON.stringify(manifest).length <= MAX_MANIFEST_BYTES;
+  } catch {
+    return false;
+  }
 }
 
 export function parseSession(text: string): InspectionSession {
@@ -407,7 +538,27 @@ export function parseSession(text: string): InspectionSession {
   // passthrough until the processing-manifest workstream defines its shape).
   // Deliberately version-independent on read so a file that carries one is
   // never stripped by a round-trip.
-  if (raw.processingManifest != null) out.processingManifest = raw.processingManifest;
+  // Opaque passthrough (never validated), so the one guard on this untrusted
+  // slot is its serialized SIZE — an over-cap manifest is dropped (treated as
+  // absent) rather than carried, verbatim, into app state.
+  if (raw.processingManifest != null && withinManifestByteCap(raw.processingManifest)) {
+    out.processingManifest = raw.processingManifest;
+  }
+  // Stable layer identity — additive within v7, version-independent on read so a
+  // file that carries it is never stripped by a round trip. A non-string is
+  // ignored (treated as absent) rather than throwing.
+  if (typeof raw.layerId === 'string' && raw.layerId !== '') out.layerId = raw.layerId;
+  if (typeof raw.layerName === 'string' && raw.layerName !== '') out.layerName = raw.layerName;
+  // v8. The project frame. Version-independent on read, like the other
+  // additive fields, so a file that carries one is never stripped by a round
+  // trip. An inconsistent frame THROWS (see `sessionFrame.ts`): it decides
+  // where every owned measurement is read back, so there is nothing safe to
+  // fall back to.
+  if (raw.projectFrame != null) {
+    out.projectFrame = parseSessionProjectFrame(raw.projectFrame);
+    assertOwnershipWithinFrame(out.projectFrame, out.measurements, 'measurements');
+    assertOwnershipWithinFrame(out.projectFrame, out.annotations, 'annotations');
+  }
   return out;
 }
 
@@ -432,6 +583,14 @@ export interface RebasedSessionGeometry {
   clip?: ClipBox;
   /** `session.origin − cloudOrigin`, in f64. All-zero when the frames match. */
   delta: Vec3;
+  /**
+   * v8. Ids of the measurements and annotations left where they were because
+   * their stored ownership says they are NOT in the session's global frame:
+   * work already declared project-frame, or owned by a layer other than the one
+   * `session.origin` describes. Shifting those by this delta would move them.
+   * Empty for every pre-v8 session, where all work shares the one frame.
+   */
+  unrebased: readonly string[];
 }
 
 /**
@@ -473,8 +632,27 @@ export function rebaseSessionGeometry(
     ...c,
     box: { min: shiftVec(c.box.min), max: shiftVec(c.box.max) },
   });
+  const copyVec = (v: readonly [number, number, number]): Vec3 => [v[0], v[1], v[2]];
+
+  // `session.origin` is the frame of ONE layer, the anchor. Work owned by any
+  // other layer, or already declared project-frame, is in a different frame and
+  // this delta does not describe it. Pre-v8 work carries no owner and is in the
+  // session's single frame by construction, so it rebases exactly as before.
+  const anchorLayerId = session.projectFrame
+    ? frameAnchorLayerId(session.projectFrame)
+    : (session.layerId ?? null);
+  const unrebased: string[] = [];
+  const inSessionFrame = (owner: WorkOwnership | undefined): boolean => {
+    if (!owner) return true;
+    if (owner.frame === 'project') return false;
+    return anchorLayerId !== null && owner.layerId === anchorLayerId;
+  };
 
   const measurements = session.measurements.map((m) => {
+    if (!inSessionFrame(m.owner)) {
+      unrebased.push(m.id);
+      return { ...m, points: m.points.map(copyVec) };
+    }
     const next: Measurement = { ...m, points: m.points.map(shiftVec) };
     if (m.profileChart) {
       next.profileChart = m.profileChart.map((s) => ({
@@ -489,6 +667,22 @@ export function rebaseSessionGeometry(
     return next;
   });
   const annotations = session.annotations.map((a) => {
+    if (!inSessionFrame(a.owner)) {
+      unrebased.push(a.id);
+      return { ...a, localPosition: { ...a.localPosition } };
+    }
+    // The world (survey) position is frame-INVARIANT: a render-frame rebase
+    // shifts the local anchor by `delta` and the active origin by `-delta`, so
+    // `local + origin` is unchanged. Honour the "recomputed on load" contract on
+    // annotate/types.ts by (re)deriving it here — keep a stored value, else
+    // compute it from the OLD local plus the session's capture origin (which
+    // equals the rebased local plus the new cloud origin). This is what lets a
+    // deliverable report state a real survey coordinate after a reopen.
+    const world = a.worldPosition ?? {
+      x: a.localPosition.x + session.origin[0],
+      y: a.localPosition.y + session.origin[1],
+      z: a.localPosition.z + session.origin[2],
+    };
     const next: Annotation = {
       ...a,
       localPosition: {
@@ -496,9 +690,7 @@ export function rebaseSessionGeometry(
         y: a.localPosition.y + dy,
         z: a.localPosition.z + dz,
       },
-      // Drop the cached world position — it was derived against the OLD frame and
-      // the viewer recomputes it from the rebased local plus the active origin.
-      worldPosition: undefined,
+      worldPosition: { x: world.x, y: world.y, z: world.z },
     };
     // The jump-to-view camera is in the same local frame as the vertices.
     if (a.cameraState) next.cameraState = shiftCamera(a.cameraState);
@@ -516,6 +708,7 @@ export function rebaseSessionGeometry(
     camera: session.camera ? shiftCamera(session.camera) : undefined,
     clip: session.clip ? shiftClip(session.clip) : undefined,
     delta: [dx, dy, dz],
+    unrebased,
   };
 }
 
@@ -878,7 +1071,9 @@ function parseCameraState(v: unknown): SavedCameraState {
 function parseViews(v: unknown): SavedView[] {
   if (!Array.isArray(v)) return [];
   const out: SavedView[] = [];
-  v.forEach((item, i) => {
+  // Cap the count, matching the three sibling parsers below — a hostile file
+  // can't hang the tab by declaring an unbounded number of views.
+  v.slice(0, MAX_SESSION_ITEMS).forEach((item, i) => {
     if (!isRecord(item)) return;
     const name =
       typeof item.name === 'string' && item.name.trim().length > 0
@@ -903,9 +1098,6 @@ function parseViews(v: unknown): SavedView[] {
   return out;
 }
 
-/** Hard cap on parsed list lengths — a hostile/corrupt file can't hang the tab. */
-const MAX_SESSION_ITEMS = 100_000;
-
 function parseMeasurements(v: unknown): Measurement[] {
   if (!Array.isArray(v)) return [];
   const out: Measurement[] = [];
@@ -914,8 +1106,10 @@ function parseMeasurements(v: unknown): Measurement[] {
     const kind = item.kind;
     if (typeof kind !== 'string' || !KINDS.includes(kind as MeasurementKind)) continue;
     const k = kind as MeasurementKind;
+    // Slice BEFORE filter/map so the cap bounds the WORK, not just the output —
+    // a single measurement carrying tens of millions of points can't OOM the tab.
     const points = Array.isArray(item.points)
-      ? item.points.filter(isVec3).map((p): Vec3 => [p[0], p[1], p[2]])
+      ? item.points.slice(0, MAX_MEASUREMENT_POINTS).filter(isVec3).map((p): Vec3 => [p[0], p[1], p[2]])
       : [];
     if (points.length < MIN_POINTS[k]) continue;
     const m: Measurement = {
@@ -931,6 +1125,12 @@ function parseMeasurements(v: unknown): Measurement[] {
     // was actually found), which is the point of evidence.
     const trust = parseMeasurementTrust(item.trust);
     if (trust) m.trust = trust;
+    // v8. Which layer this measurement belongs to, and which frame its stored
+    // vertices are already in. A malformed claim leaves the field undefined:
+    // the measurement is kept, and the ownership migration attributes it the
+    // same way it attributes legacy work, marked inferred rather than asserted.
+    const owner = parseWorkOwnership(item.owner);
+    if (owner) m.owner = owner;
     // Kind-specific specialised data. Serialised as part of the Measurement
     // object; parsed here so a round-tripped profile/volume keeps its chart,
     // corridor width, ground percentile, cut/fill record, and resident-only
@@ -1056,15 +1256,33 @@ function parseAnnotations(v: unknown): Annotation[] {
     const updated = isFiniteNumber(item.updatedAt) ? item.updatedAt : created;
     const annotation: Annotation = {
       id: typeof item.id === 'string' && item.id.length > 0 ? item.id : freshAnnotationId(),
-      title: typeof item.title === 'string' && item.title.length > 0 ? item.title : 'Annotation',
+      // Cap the length — a title is a label, not a payload; a multi-MB string is abuse.
+      title:
+        typeof item.title === 'string' && item.title.length > 0
+          ? item.title.slice(0, MAX_ANNOTATION_TITLE)
+          : 'Annotation',
       type: isAnnotationType(item.type) ? item.type : 'note',
       createdAt: created,
       updatedAt: updated,
       localPosition: local,
     };
-    if (typeof item.note === 'string' && item.note.length > 0) annotation.note = item.note;
+    if (typeof item.note === 'string' && item.note.length > 0) {
+      annotation.note = item.note.slice(0, MAX_ANNOTATION_NOTE);
+    }
     const world = parseVec3Object(item.worldPosition);
     if (world) annotation.worldPosition = world;
+    // The owning layer + CRS label — the world frame's provenance, kept so a
+    // report can attribute the annotation and name the survey frame on reload.
+    if (typeof item.layerId === 'string' && item.layerId.length > 0) {
+      annotation.layerId = item.layerId;
+    }
+    if (typeof item.crs === 'string' && item.crs.length > 0) annotation.crs = item.crs;
+    // v8. The owning layer's STABLE id plus the frame the stored position is
+    // in. Distinct from `layerId` above, which holds the cloud's display name
+    // for report attribution and is not an identity. Malformed ⇒ left
+    // undefined, and the migration marks what it assigns as inferred.
+    const owner = parseWorkOwnership(item.owner);
+    if (owner) annotation.owner = owner;
     if (isRecord(item.cameraState)) annotation.cameraState = parseCameraState(item.cameraState);
     if (typeof item.linkedMeasurementId === 'string') {
       annotation.linkedMeasurementId = item.linkedMeasurementId;
@@ -1178,62 +1396,5 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
   return out;
 }
 
-const CRS_KINDS = ['local', 'projected', 'geographic', 'unknown'] as const;
-const CRS_SOURCES = [
-  'las-vlr',
-  'copc-meta',
-  'ept-srs',
-  'catalog-tile',
-  'user-override',
-  'default-assumption',
-] as const;
-const CRS_CONFIDENCES = ['high', 'medium', 'low', 'none'] as const;
-const CRS_LINEAR_UNITS = ['metre', 'foot', 'us-survey-foot', 'unknown'] as const;
-
-/**
- * Tolerantly parse the v4 `crs` field. Returns null when the object is
- * missing, not a record, or fails the required-field set. Optional fields
- * (`epsg`, `wkt`) are dropped individually on bad shape; the rest of the
- * resolved CRS still imports. This matches the "v3 optional fields"
- * discipline — a partly-broken record never blocks the rest of the
- * session.
- */
-function parseResolvedCrs(v: unknown): ResolvedCrs | null {
-  if (!isRecord(v)) return null;
-  // Required fields.
-  if (typeof v.name !== 'string' || v.name.length === 0) return null;
-  if (typeof v.kind !== 'string' || !CRS_KINDS.includes(v.kind as never)) return null;
-  if (typeof v.source !== 'string' || !CRS_SOURCES.includes(v.source as never)) return null;
-  if (typeof v.confidence !== 'string' || !CRS_CONFIDENCES.includes(v.confidence as never)) return null;
-  if (typeof v.linearUnit !== 'string' || !CRS_LINEAR_UNITS.includes(v.linearUnit as never)) {
-    return null;
-  }
-  if (!isFiniteNumber(v.linearUnitToMetres)) return null;
-  if (typeof v.userConfirmed !== 'boolean') return null;
-  const out: ResolvedCrs = {
-    kind: v.kind as ResolvedCrs['kind'],
-    name: v.name,
-    linearUnit: v.linearUnit as ResolvedCrs['linearUnit'],
-    linearUnitToMetres: v.linearUnitToMetres,
-    source: v.source as ResolvedCrs['source'],
-    confidence: v.confidence as ResolvedCrs['confidence'],
-    userConfirmed: v.userConfirmed,
-    ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
-    ...(typeof v.wkt === 'string' && v.wkt.length > 0 ? { wkt: v.wkt } : {}),
-    // The vertical + datum fields. The serializer has always written the whole
-    // ResolvedCrs; only these were dropped on the way back in, so a
-    // compound-CRS session reopened with its geometry intact and the metadata
-    // needed to interpret its heights silently gone.
-    ...(isFiniteNumber(v.verticalEpsg) ? { verticalEpsg: v.verticalEpsg } : {}),
-    ...(typeof v.verticalDatum === 'string' && v.verticalDatum.length > 0
-      ? { verticalDatum: v.verticalDatum }
-      : {}),
-    ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
-      ? { verticalUnitToMetres: v.verticalUnitToMetres }
-      : {}),
-    ...(typeof v.horizontalDatum === 'string' && v.horizontalDatum.length > 0
-      ? { horizontalDatum: v.horizontalDatum }
-      : {}),
-  };
-  return out;
-}
+// The resolved-CRS parser lives in `./sessionCrs` so the session document and
+// the v8 project-frame records validate a persisted CRS through one definition.

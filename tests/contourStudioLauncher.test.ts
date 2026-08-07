@@ -157,6 +157,6 @@ describe('renderContourStudioLauncher', () => {
 
   it('the available state carries no reasons list', () => {
     const card = renderContourStudioLauncher(AVAILABLE) as unknown as FakeEl;
-    expect(card.byClass('olv-contour-launcher-reasons').length).toBe(0);
+    expect(card.byClass('olv-contour-launcher-reasons')).toHaveLength(0);
   });
 });

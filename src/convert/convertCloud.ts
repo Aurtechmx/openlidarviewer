@@ -10,13 +10,16 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
+import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
 import { isZUpFormat } from '../io/sniffFormat';
 import { wktForEpsg } from '../io/epsgWkt';
 import { cloudToGlobal } from './globalPoints';
 import { writeLas, writeLas14 } from './writeLas';
+import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
+import type { TransformProvenance } from './transformProvenance';
 import { isGeographicEpsg, epsgLabel, epsgToProj4 } from './epsg';
 import {
   CONVERT_FORMATS,
@@ -90,7 +93,7 @@ export function convertCloud(
   // same detection the terrain gather uses — a format table alone rotated
   // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
   // identically here. Survey formats skip detection: Z-up by spec.
-  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(cloud.positions).up === 'y') {
+  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
     const { y, z } = g;
     for (let i = 0; i < g.count; i++) {
       const yv = y[i];
@@ -109,6 +112,14 @@ export function convertCloud(
   // Output-CRS-dependent stamps below (the metre GeoKey) key off this, not off
   // the requested mode — a skipped reproject leaves the file in its SOURCE CRS.
   let reprojectApplied = false;
+  // The APPROXIMATE-datum caveat to EMBED in the deliverable (LAS VLR / ASCII
+  // header comment), not just the UI report. Non-null only when a transform
+  // that DID move coordinates crossed a grid-less/identity datum leg — so the
+  // exact-transform path leaves it null and the output stays byte-clean.
+  let datumNote: string | null = null;
+  // Machine-readable provenance of the transform, threaded into the report so
+  // the reproject path stops discarding it (present on every reproject outcome).
+  let transformProvenance: TransformProvenance | null = null;
 
   if (mode === 'keep') {
     crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS (local coordinates)';
@@ -141,6 +152,9 @@ export function convertCloud(
     // reprojected coordinates.
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs: cloud.metadata?.crs ?? null });
     g = r.points;
+    // Provenance is present on every reproject outcome (applied / approximate /
+    // skipped) — keep it for the report instead of discarding it.
+    transformProvenance = r.provenance;
     if (r.transformed && r.datumCaveat == null) {
       reprojectApplied = true;
       outEpsg = opts.targetEpsg;
@@ -155,6 +169,11 @@ export function convertCloud(
       outEpsg = opts.targetEpsg;
       crsNote = `${r.note} — APPROXIMATE datum shift`;
       log.push({ level: 'warn', message: `${r.note}, but ${r.datumCaveat}.` });
+      // Carry that same caveat INTO the file. The UI report is not the
+      // deliverable; a downstream reader only has the bytes, so the
+      // approximation must be recorded there too (LAS Text Area Description
+      // VLR, ASCII `# datum-transform:` header). Coordinates are untouched.
+      datumNote = `APPROXIMATE — ${r.datumCaveat}`;
     } else {
       // Could not resolve a transform — keep source CRS, warn loudly.
       outEpsg = sourceEpsg;
@@ -177,6 +196,12 @@ export function convertCloud(
   let bytes: Uint8Array;
   if (opts.format === 'las' || opts.format === 'las14') {
     const srcCrs = cloud.metadata?.crs;
+    // ONE spatial context for the written file: the horizontal unit code, the
+    // vertical datum code and the vertical unit code below all come off it, so
+    // a LAS the reader trusts cannot be tagged with a unit the export did not
+    // use. `srcCrs` survives only for the raw WKT payload, which the context
+    // deliberately does not model.
+    const srcCtx = spatialContextFrom(srcCrs);
     // LAS 1.4 wants the CRS as OGC WKT for point formats 6+. A real WKT only
     // exists when the source carried one AND nothing changed (keep mode) —
     // after assign/reproject the source WKT would describe the wrong CRS,
@@ -202,7 +227,7 @@ export function convertCloud(
     // unit implied by the EPSG. Vertical datum is preserved (no mode moves Z).
     const linearUnitCode =
       mode === 'reproject' && reprojectApplied ? 9001
-      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCrs.linearUnit)
+      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCtx.linearUnit)
       : null;
     // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
     // declared vertical unit — falling back to the source's horizontal family
@@ -210,7 +235,7 @@ export function convertCloud(
     // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
     // used to relabel its unchanged Z as metres.
     const verticalUnitCode = srcCrs
-      ? unitToGeoTiff(srcCrs.verticalLinearUnit ?? srcCrs.linearUnit)
+      ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
       : null;
     if (opts.format === 'las14') {
       if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
@@ -223,9 +248,10 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         wkt,
+        description: datumNote,
       });
     } else {
       // LAS 1.2 stores the classification in 5 bits — count what the mask
@@ -249,22 +275,31 @@ export function convertCloud(
         epsg: outEpsg ?? undefined,
         isGeographic: geo,
         linearUnitCode,
-        verticalEpsg: srcCrs?.verticalEpsg ?? null,
+        verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
+        description: datumNote,
       });
     }
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo })
-        : writeXyz(g, opts.asciiPrecision ?? 3, geo);
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo, datumNote })
+        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote);
     bytes = new TextEncoder().encode(text);
   }
 
   log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });
   return {
     file: { filename, mime: MIME[opts.format], bytes },
-    report: { source: cloud.name, ok: true, pointCount: g.count, crsNote, log },
+    report: {
+      source: cloud.name,
+      ok: true,
+      pointCount: g.count,
+      crsNote,
+      log,
+      // Only reproject mode produces provenance; keep/assign omit the field.
+      ...(transformProvenance ? { provenance: transformProvenance } : {}),
+    },
   };
   }
 }

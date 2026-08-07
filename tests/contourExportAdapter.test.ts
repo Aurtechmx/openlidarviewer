@@ -52,6 +52,21 @@ const intent = (over: Partial<ContourExportIntent> = {}): ContourExportIntent =>
   methodId: 'olv.contour.analytical',
   methodVersion: 1,
   methodTag: 'olv.contour.analytical@1',
+  deliverable: {
+    label: 'Survey Review',
+    statement: 'Exact analytical geometry.',
+    analytical: true,
+    cartographic: false,
+    cartographicSmoothing: false,
+    generalizeToleranceCells: 0,
+    indexEvery: 5,
+    labelsIndexOnly: true,
+    hillshade: false,
+    hypsometricTint: false,
+    allowExploratory: false,
+    completePackage: false,
+    appendixRequired: true,
+  },
   ...over,
 });
 
@@ -60,6 +75,7 @@ const okFrame: ContourExportFrameFacts = {
   launchStatus: 'available',
   verticalUnitsKnown: true,
   crsProjected: true,
+  precision: null,
 };
 
 describe('ContourExportAdapter — gated dispatch', () => {
@@ -108,6 +124,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No usable ground points.'],
     });
     expect(calls.vector).toHaveLength(0);
@@ -139,6 +156,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.dem).toHaveLength(0);
@@ -169,6 +187,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.complete).toHaveLength(0);
@@ -197,6 +216,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     new ContourExportAdapter(host).handle('report', btn(), intent(), {
       launchStatus: 'available',
       verticalUnitsKnown: false, // cartographic-only ⇒ exploratory
+      precision: null,
       crsProjected: true,
     });
     expect(calls.report).toHaveLength(1);
@@ -212,6 +232,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
       launchStatus: 'unavailable',
       verticalUnitsKnown: true,
       crsProjected: true,
+      precision: null,
       blockedReasons: ['No terrain surface has been computed.'],
     });
     expect(calls.report).toHaveLength(0);
@@ -229,6 +250,7 @@ describe('ContourExportAdapter — gated dispatch', () => {
     new ContourExportAdapter(host).handle('dxf', btn(), intent(), {
       launchStatus: 'available',
       verticalUnitsKnown: false, // cartographic-only ⇒ exploratory
+      precision: null,
       crsProjected: true,
     });
     expect(calls.vector).toHaveLength(1);

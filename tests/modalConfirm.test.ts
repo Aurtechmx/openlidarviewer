@@ -188,21 +188,21 @@ describe('openConfirm', () => {
     backdrop.find('olv-confirm-ok')!.dispatch('click');
     await expect(promise).resolves.toBe(true);
     // Dialog is torn down after a decision.
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('resolves false when the cancel button is clicked', async () => {
     const { promise, backdrop } = await open();
     backdrop.find('olv-confirm-cancel')!.dispatch('click');
     await expect(promise).resolves.toBe(false);
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('resolves false on Escape (window keydown trap)', async () => {
     const { promise } = await open();
     winKeydown('Escape');
     await expect(promise).resolves.toBe(false);
-    expect(BODY.children.length).toBe(0);
+    expect(BODY.children).toHaveLength(0);
   });
 
   it('resolves false when the backdrop is clicked outside the card', async () => {

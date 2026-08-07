@@ -128,7 +128,7 @@ describe('deriveClassification — degenerate inputs', () => {
   it('returns all-unclassified for an empty cloud', () => {
     const res = deriveClassification(new Float32Array(0), 0);
     expect(res.derived).toBe(true);
-    expect(res.codes.length).toBe(0);
+    expect(res.codes).toHaveLength(0);
   });
 
   it('returns all-unclassified for a degenerate (single-footprint) cloud', () => {
@@ -142,7 +142,7 @@ describe('deriveClassification — degenerate inputs', () => {
   it('does not crash on NaN coordinates', () => {
     const pos = new Float32Array([0, 0, 0, NaN, NaN, NaN, 10, 10, 0, 5, 5, 3]);
     const res = deriveClassification(pos, 4);
-    expect(res.codes.length).toBe(4);
+    expect(res.codes).toHaveLength(4);
   });
 });
 
@@ -208,6 +208,48 @@ describe('deriveClassification — RGB greenness fusion', () => {
     }
     const res = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: allGreen });
     expect(frac(scene.groundIdx, res.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+  });
+
+  it('opt-in lowVegByGreenness promotes a GREEN ground return to Low vegetation (ASPRS 3)', () => {
+    // Same all-green paint, but the caller opts to honour greenness in the
+    // ground band: Excess-Green is well above the threshold, so those returns
+    // are live foliage (cover crop), not bare earth. Default stays Ground.
+    const allGreen = new Uint8Array(scene.count * 3);
+    for (let i = 0; i < scene.count; i++) {
+      allGreen[i * 3] = 50;
+      allGreen[i * 3 + 1] = 200;
+      allGreen[i * 3 + 2] = 50;
+    }
+    const off = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: allGreen });
+    const on = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      colors: allGreen,
+      lowVegByGreenness: true,
+    });
+    expect(frac(scene.groundIdx, off.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+    expect(frac(scene.groundIdx, on.codes, DERIVED_LOW_VEG)).toBeGreaterThan(0.9);
+    expect(frac(scene.groundIdx, on.codes, DERIVED_GROUND)).toBeLessThan(0.1);
+  });
+
+  it('opt-in lowVegByGreenness leaves BARE (non-green) ground as Ground', () => {
+    // Neutral grey ground: Excess-Green ≈ 0, below the threshold. The toggle
+    // promotes live foliage only — it must never turn bare earth into vegetation.
+    const grey = new Uint8Array(scene.count * 3).fill(128);
+    const on = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      colors: grey,
+      lowVegByGreenness: true,
+    });
+    expect(frac(scene.groundIdx, on.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+  });
+
+  it('lowVegByGreenness is a no-op without colours (geometry-only byte-identical)', () => {
+    const base = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
+    const flagged = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      lowVegByGreenness: true,
+    });
+    expect(Array.from(flagged.codes)).toEqual(Array.from(base.codes));
   });
 
   it('colours absent ⇒ byte-identical to geometry-only', () => {
@@ -370,5 +412,52 @@ describe('deriveClassification — void-aware confidence', () => {
     const res = deriveClassification(new Float32Array(pts), pts.length / 3, { cellSizeM: 1 });
     expect(res.warnings.some((m) => /void/i.test(m))).toBe(false);
     expect(res.confidence).toBeGreaterThan(0.5);
+  });
+});
+
+describe('deriveClassification — multi-return vegetation cue', () => {
+  const scene = buildScene();
+  const n = scene.count;
+  const baseline = deriveClassification(scene.positions, n, { cellSizeM: 1 });
+
+  it('a multi-return smooth roof reads as vegetation, not a building', () => {
+    // Baseline (no return data): the smooth roof classifies as a building.
+    expect(frac(scene.buildingIdx, baseline.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+    // Mark every pulse as multi-return (returnCount = 2): a solid roof reflects
+    // the whole pulse in ONE return, so multi-return means the pulse penetrated
+    // foliage — the roof points now fall through to the vegetation bands.
+    const returnNumber = new Uint8Array(n).fill(1);
+    const returnCount = new Uint8Array(n).fill(2);
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnNumber, returnCount });
+    const roofAsVeg =
+      frac(scene.buildingIdx, res.codes, DERIVED_HIGH_VEG) +
+      frac(scene.buildingIdx, res.codes, DERIVED_MED_VEG) +
+      frac(scene.buildingIdx, res.codes, DERIVED_LOW_VEG);
+    expect(roofAsVeg).toBeGreaterThan(0.7);
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeLessThan(0.1);
+    // The cue only touches TALL points — ground below the band stays Ground.
+    expect(frac(scene.groundIdx, res.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+    // Provenance discloses that return data informed the classification.
+    expect(res.provenance).toContain('multi-return');
+  });
+
+  it('single-return keeps the smooth roof a building (cue fires only on multi-return)', () => {
+    const returnNumber = new Uint8Array(n).fill(1);
+    const returnCount = new Uint8Array(n).fill(1);
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnNumber, returnCount });
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+  });
+
+  it('needs BOTH return arrays — returnCount alone leaves the cue off', () => {
+    const returnCount = new Uint8Array(n).fill(2); // no returnNumber
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1, returnCount });
+    expect(frac(scene.buildingIdx, res.codes, DERIVED_BUILDING)).toBeGreaterThan(0.7);
+    expect(res.provenance).not.toContain('multi-return');
+  });
+
+  it('absent return data is byte-identical to the geometry-only path', () => {
+    const res = deriveClassification(scene.positions, n, { cellSizeM: 1 });
+    expect(Array.from(res.codes)).toEqual(Array.from(baseline.codes));
+    expect(res.provenance).not.toContain('multi-return');
   });
 });

@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,927 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,861 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -98,7 +98,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,927)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,861)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -154,6 +154,16 @@ predicate that rules out an aerial density guess for a compact object / interior
 alongside `exportGeoContext`'s static → streaming → zero frame resolution
 (`tests/reportExport.test.ts`). `main.ts` keeps thin `generateReportPdf` /
 `exportGeoContext` delegates that bind its running state to the deps.
+
+Done: `exportKml` / `kmlStatus` (~83 lines) now live in `src/app/kmlActions.ts`
+alongside the new scan-area export, driven through a `KmlActionDeps` object of
+accessor functions. Keeping the two Google Earth products together puts each
+one's readiness rule next to its export path, so a button cannot report ready for
+a reason the exporter does not honour. The polygon geometry and its fail-closed
+CRS gate are a separate pure module, `src/export/scanFootprint.ts`, testable with
+no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
+`buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
+four thin delegates and the deps object.
 
 **`src/render/Viewer.ts` (6,376)** — the constructor and a handful of large
 methods dominate:

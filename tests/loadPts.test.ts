@@ -64,3 +64,30 @@ describe('loadPts — robustness', () => {
     await expect(loadPts(pts('# just a comment\n'))).rejects.toThrow();
   });
 });
+
+describe('loadPts — declared-count honesty', () => {
+  test('a leading count larger than the points read warns about the shortfall', async () => {
+    // Declares 5 points; only three follow — a truncated capture. The count is
+    // informational by spec, so this warns rather than refusing.
+    const pc = await loadPts(pts('5\n0 0 0\n1 1 1\n2 2 2\n'));
+    expect(pc.pointCount).toBe(3);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /declared 5/i.test(w) && /\b3\b/.test(w))).toBe(true);
+  });
+
+  test('a leading count matching the points read does not warn', async () => {
+    const pc = await loadPts(pts('3\n0 0 0\n1 1 1\n2 2 2\n'));
+    expect(pc.pointCount).toBe(3);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /declared|count/i.test(w))).toBe(false);
+  });
+
+  test('a file with no leading count line does not warn', async () => {
+    // The first line is a 3-token point, not a lone integer, so there is no
+    // declared count to reconcile against.
+    const pc = await loadPts(pts('0 0 0\n1 1 1\n2 2 2\n'));
+    expect(pc.pointCount).toBe(3);
+    const warnings = pc.metadata?.loadWarnings ?? [];
+    expect(warnings.some((w) => /declared|count/i.test(w))).toBe(false);
+  });
+});

@@ -143,6 +143,39 @@ describe('FullscreenToggle teardown', () => {
     expect(fullscreenSupported(bare as unknown as Document)).toBe(false);
   });
 
+  it('treats iPhone WebKit (request method present, no enabled flag true) as UNSUPPORTED', () => {
+    // The iOS regression: iPhone Safari/Brave expose a webkit request method on
+    // the element but never report fullscreenEnabled / webkitFullscreenEnabled
+    // as true for the document. Trusting the bare method left a dead button on
+    // screen. Detection must return false here.
+    const iosDoc = {
+      documentElement: {
+        // Only the prefixed request exists on iOS, and only usefully on <video>.
+        webkitRequestFullscreen: () => Promise.resolve(),
+      },
+      // Neither enabled flag is true (undefined on iOS).
+      fullscreenEnabled: undefined,
+      webkitFullscreenEnabled: undefined,
+    } as unknown as Document;
+    expect(fullscreenSupported(iosDoc)).toBe(false);
+  });
+
+  it('treats a bare standard request method with no enabled flag as UNSUPPORTED', () => {
+    const bareStd = {
+      documentElement: { requestFullscreen: () => Promise.resolve() },
+      fullscreenEnabled: undefined,
+    } as unknown as Document;
+    expect(fullscreenSupported(bareStd)).toBe(false);
+  });
+
+  it('accepts the prefixed API only when webkitFullscreenEnabled is true (old desktop Safari)', () => {
+    const oldSafari = {
+      documentElement: { webkitRequestFullscreen: () => Promise.resolve() },
+      webkitFullscreenEnabled: true,
+    } as unknown as Document;
+    expect(fullscreenSupported(oldSafari)).toBe(true);
+  });
+
   it('registers both the standard and the prefixed change event', () => {
     install(() => Promise.resolve());
     expect(doc.added.map((r) => r.type)).toEqual(CHANGE_EVENTS);
@@ -235,7 +268,7 @@ describe('FullscreenToggle refusal status', () => {
     press(toggle);
     await Promise.resolve();
     await Promise.resolve();
-    expect(announced.length).toBe(1);
+    expect(announced).toHaveLength(1);
     expect(announced[0]).toBe((toggle.status as unknown as NodeStub).textContent);
   });
 

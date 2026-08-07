@@ -237,6 +237,24 @@ describe('buildMapSheetPdf', () => {
     expect(Buffer.from(off).equals(Buffer.from(absent))).toBe(true);
   });
 
+  it('sources the document date from generatedAt, so a fixed date is byte-reproducible', async () => {
+    // Guards the pdf-lib Info-dictionary dates (CreationDate/ModDate), which
+    // default to the wall clock at build time. Two builds either side of a
+    // second boundary used to differ there even with a fixed visible stamp.
+    const base = { model, labels: [] as never[], crs: model.crs, sheet: 'letter' as const };
+    const a1 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    const a2 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    expect(Buffer.from(a1).equals(Buffer.from(a2))).toBe(true);
+
+    // Two instants in the SAME minute but different seconds: the visible stamp
+    // (minute precision) is identical, so the only thing that can move the bytes
+    // is the document date being pinned to generatedAt. Without the pin both
+    // builds would take the wall clock and land in the same second — equal bytes.
+    const atSecond00 = await buildMapSheetPdf({ ...base, generatedAt: new Date(0) });
+    const atSecond30 = await buildMapSheetPdf({ ...base, generatedAt: new Date(30_000) });
+    expect(Buffer.from(atSecond00).equals(Buffer.from(atSecond30))).toBe(false);
+  });
+
   it('draws additional content when annotations are included', async () => {
     const base = { model, labels: [], crs: model.crs, verticalDatum: model.verticalDatum, sheet: 'letter' as const };
     const plain = await buildMapSheetPdf({ ...base });
@@ -314,5 +332,53 @@ describe('readinessNote', () => {
 
   it('keeps the preview note negated', () => {
     expect(readinessNote('previewOnly').toLowerCase()).toMatch(/not\s+survey-grade/);
+  });
+});
+
+describe('buildMapSheetPdf — purpose deliverable content', () => {
+  const engineering = {
+    label: 'Engineering Plan', statement: 'Clear contours for planning.',
+    analytical: true, cartographic: true, cartographicSmoothing: true,
+    generalizeToleranceCells: 0.5, indexEvery: 5, labelsIndexOnly: false,
+    hillshade: false, hypsometricTint: false, allowExploratory: true,
+    completePackage: false, appendixRequired: false,
+  } as const;
+  const survey = {
+    label: 'Survey Review', statement: 'Exact analytical geometry; does not imply survey certification.',
+    analytical: true, cartographic: false, cartographicSmoothing: false,
+    generalizeToleranceCells: 0, indexEvery: 5, labelsIndexOnly: true,
+    hillshade: false, hypsometricTint: false, allowExploratory: false,
+    completePackage: false, appendixRequired: true,
+  } as const;
+
+  it('is byte-identical to the pre-purpose sheet when purpose is absent or null', async () => {
+    // A fixed generatedAt: the sheet stamps the generation time to the minute,
+    // so two builds that straddle a boundary differ in bytes for a reason this
+    // test is not about.
+    const base = {
+      model,
+      labels: [] as never[],
+      provenance: PROV,
+      generatedAt: new Date(0),
+    } as const;
+    const absent = await buildMapSheetPdf({ ...base });
+    const nul = await buildMapSheetPdf({ ...base, purpose: null });
+    expect(Buffer.from(nul).equals(Buffer.from(absent))).toBe(true);
+  });
+
+  it('adds a page (appendix) only when appendixRequired', async () => {
+    const noApx = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: engineering });
+    const withApx = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: survey });
+    // A required appendix means an extra page → measurably larger output.
+    expect(withApx.length).toBeGreaterThan(noApx.length);
+    // And both differ from the no-purpose sheet.
+    const plain = await buildMapSheetPdf({ model, labels: [], provenance: PROV });
+    expect(noApx).not.toHaveLength(plain.length);
+  });
+
+  it('produces different bytes for two different purposes (purposes are real)', async () => {
+    const a = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: engineering });
+    const b = await buildMapSheetPdf({ model, labels: [], provenance: PROV, purpose: survey });
+    expect(Buffer.from(a).equals(Buffer.from(b))).toBe(false);
   });
 });

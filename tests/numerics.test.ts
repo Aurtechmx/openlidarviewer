@@ -100,3 +100,20 @@ describe('neumaierSum / NeumaierSum', () => {
     expect(neumaierSum([])).toBe(0);
   });
 });
+
+describe('WelfordStats sample vs population spread', () => {
+  it('sampleStd uses the n-1 divisor, so it exceeds populationStd', () => {
+    const w = new WelfordStats();
+    for (const x of [2, 4, 4, 4, 5, 5, 7, 9]) w.push(x);
+    // Deviations from the mean of 5 sum to 32 in square; n = 8.
+    expect(w.populationStd).toBeCloseTo(2, 12); // sqrt(32/8)
+    expect(w.sampleStd).toBeCloseTo(Math.sqrt(32 / 7), 12); // sqrt(32/7)
+    expect(w.sampleStd).toBeGreaterThan(w.populationStd);
+  });
+
+  it('a single sample has zero sample spread rather than dividing by zero', () => {
+    const w = new WelfordStats();
+    w.push(42);
+    expect(w.sampleStd).toBe(0);
+  });
+});

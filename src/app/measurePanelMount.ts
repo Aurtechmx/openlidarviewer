@@ -1,0 +1,230 @@
+/**
+ * measurePanelMount.ts — the lazy Measurements-panel mount lifted out of main.ts.
+ *
+ * The Measurements panel is constructed on the FIRST scan load, not at boot, so
+ * its whole profile-as-deliverable chain (profileSampler / profileSummary /
+ * civilProfileStats) stays out of the empty-state shell — no measurement can
+ * exist before a scan opens. This module owns that lifecycle: the single-flight
+ * lazy construction through `loadMeasurePanel()`, the DOM mount hook, the tracked
+ * desired-visible / geographic-notice intent replayed on hydrate, and the
+ * contents/visibility refresh. `main.ts` keeps only thin call sites (and the
+ * null-guards that genuinely sit at its own layout call sites) driven through a
+ * structural {@link MeasurePanelMountDeps} of accessor functions closing over the
+ * shell's services — the same seam `openScan` / `sessionIo` use. Part of the v0.6
+ * decomposition (see `docs/architecture/architecture-map.md`).
+ *
+ * MeasurePanel arrives through `loadMeasurePanel()` (a dynamic import) so this
+ * module is safe to statically import from the shell: only the TYPE is eager.
+ */
+
+import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
+import { buildMeasureConfidenceContext } from './measureConfidenceContext';
+import { loadMeasurePanel } from '../lazyChunks';
+
+import type { MeasurePanel } from '../ui/MeasurePanel';
+import type { Viewer } from '../render/Viewer';
+import type { CrsService } from '../geo/CrsService';
+
+/** Constructor pulled through the lazy chunk — the panel's real class. */
+type MeasurePanelCtor = Awaited<ReturnType<typeof loadMeasurePanel>>['MeasurePanel'];
+
+/**
+ * Accessor functions closing over the shell's late-bound services. `getViewer`
+ * and `getExportPanel` are thunks because the Viewer resolves from a lazy chunk
+ * and the Export panel is constructed after this mount is wired; both are only
+ * dereferenced at call time (after a scan opens), never at construction.
+ */
+export interface MeasurePanelMountDeps {
+  getViewer: () => Viewer;
+  crsService: CrsService;
+  getExportPanel: () => { refresh(): void };
+  exportSession: () => unknown;
+  handleFile: (file: File) => unknown;
+  recordUsage: (category: 'measurement', kind: string) => void;
+}
+
+/** The Measurements-panel mount controller `main.ts` drives. */
+export interface MeasurePanelMount {
+  /** The mounted panel, or null before the first scan load resolves it. */
+  readonly panel: MeasurePanel | null;
+  /** Construct + mount the panel exactly once; idempotent and single-flight. */
+  ensure(): Promise<MeasurePanel>;
+  /** Refresh the panel's contents and visibility from live controller state. */
+  refresh(): void;
+  /**
+   * Register the DOM insertion hook (desktop left column / mobile sheet). Passing
+   * a hook while the panel already exists mounts it immediately, covering a scan
+   * whose import resolved before the layout wiring ran.
+   */
+  setMountElement(fn: ((el: HTMLElement) => void) | null): void;
+  /** Track + apply the geographic-CRS caveat (replayed on a later mount). */
+  setGeographicNotice(value: boolean): void;
+  /** Mark the panel as desired-visible and show it if already mounted. */
+  showDesired(): void;
+  /** Hide the panel and drop the tracked desired-visible intent. */
+  hide(): void;
+}
+
+/**
+ * Build the Measurements-panel mount controller. Mirrors the AnalysePanel /
+ * ObjectPanel lazy mounts that remain inline in `main.ts`, but extracted so the
+ * scaffolding does not weigh on the shell monolith.
+ */
+export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePanelMount {
+  let panel: MeasurePanel | null = null;
+  let ready: Promise<MeasurePanel> | null = null;
+  let mountElement: ((el: HTMLElement) => void) | null = null;
+  // Desired panel state, mirrored so a panel mounted a beat AFTER a scan event
+  // (the dynamic import resolves later) replays the correct state on hydrate.
+  let desiredVisible = false;
+  let geographicNotice = false;
+  // High-water mark for measurement count — used to detect new placements.
+  let lastMeasurementCount = 0;
+
+  /** Construct the panel; the controller drives its measurement list. */
+  function construct(Ctor: MeasurePanelCtor): MeasurePanel {
+    const viewer = deps.getViewer();
+    return new Ctor({
+      onDelete: (id) => viewer.measure.removeMeasurement(id),
+      onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
+      onExport: () => void deps.exportSession(),
+      // Route through the single file router so the Import button, the Open
+      // picker, and a drag-drop all open a session identically (and a scan
+      // picked here still loads as a scan).
+      onImport: (file) => void deps.handleFile(file),
+      onChainAggregate: (ids, dimension, operation) => {
+        // Filter the controller's measurements to the panel-selected set
+        // and aggregate via the pure-data module. The panel owns the
+        // selection state; the controller owns the data + unit context.
+        // The CRS unit factor (B2, v0.4.5) rides along so chain sums over a
+        // foot-CRS scan come back in true metres like every other readout.
+        const all = viewer.measure.getMeasurements();
+        const wanted = new Set(ids);
+        const selected = all.filter((m) => wanted.has(m.id));
+        return aggregateMeasurements(
+          selected,
+          operation,
+          dimension,
+          [0, 0, 1],
+          viewer.measure.unitToMetres,
+        );
+      },
+      // v0.3.10 Profile-as-Deliverable — expose the controller's unit
+      // system to the panel so the profile chart's axis labels (chainage,
+      // elevation) read in the user's preferred units.
+      getUnitSystem: () => viewer.measure.unitSystem,
+      // v0.4.5 (B4) — CRS provenance for the profile PDF header, resolved at
+      // export time so a late confirmation/override lands on the sheet. Local
+      // and unknown frames return nulls and the PDF keeps its honest
+      // "— (not georeferenced)" fallback.
+      getProfileExportContext: () => {
+        const cur = deps.crsService.current();
+        if (!cur || (cur.kind !== 'projected' && cur.kind !== 'geographic')) {
+          return { crs: null, verticalDatum: null };
+        }
+        return {
+          // "EPSG:NNNN — name" when the code is known; the resolved name alone
+          // otherwise (it already falls back to the WKT name / EPSG label).
+          crs: cur.epsg != null ? `EPSG:${cur.epsg} — ${cur.name}` : cur.name,
+          verticalDatum: cur.verticalDatum ?? null,
+        };
+      },
+      // B7/B8 (v0.4.5) — the panel's sampler controls re-sample through the
+      // controller, which clamps the values, converts the metre corridor back to
+      // render units, and emits a change so the panel re-renders with the values
+      // that actually shaped the new chart.
+      onProfileResample: (id, params) => viewer.measure.resampleProfile(id, params),
+      // Profile-station hover → highlight the matching scene dot; repaint only when the dot changed.
+      onStationHover: (id, i) => { if (viewer.measure.setHoveredStation(id, i)) viewer.requestFrame(); },
+    });
+  }
+
+  /** Refresh the panel's contents and visibility; kicks the mount if unbuilt. */
+  function refresh(): void {
+    if (panel) {
+      const viewer = deps.getViewer();
+      panel.update(viewer.measure.getSummaries());
+      panel.setConfidenceContext(buildMeasureConfidenceContext(viewer, deps.crsService.current()));
+      const measurements = viewer.measure.getMeasurements();
+      const hasMeasurements = measurements.length > 0;
+      panel.setVisible(viewer.measureMode || hasMeasurements);
+      // Local-first counter, categorical (the kind) only — never coordinates or names.
+      if (measurements.length > lastMeasurementCount) {
+        const newest = measurements[measurements.length - 1];
+        if (newest) deps.recordUsage('measurement', newest.kind);
+      }
+      lastMeasurementCount = measurements.length;
+    } else {
+      // Panel not mounted yet (pre-first-scan, or the chunk is still loading) —
+      // kick the lazy mount; `hydrate()` re-runs this once it lands.
+      void ensure();
+    }
+    // Keep the Export panel's Products lane in sync with the measurement count.
+    deps.getExportPanel().refresh();
+  }
+
+  /**
+   * Replay the tracked state onto the freshly-mounted panel — the geographic-CRS
+   * caveat and the live measurement contents/visibility — so a panel that
+   * mounted a beat after a scan event shows exactly what the app asked for.
+   */
+  function hydrate(): void {
+    if (!panel) return;
+    panel.setGeographicNotice(geographicNotice);
+    // Recompute contents + visibility from live controller state (summaries,
+    // confidence context, measure mode). This also replays `desiredVisible`
+    // when the profile-kind switch asked the panel forward before it existed.
+    refresh();
+    if (desiredVisible) panel.setVisible(true);
+  }
+
+  /**
+   * Construct + mount the Measurements panel exactly once, pulling its chunk
+   * through `loadMeasurePanel()`. Idempotent and memoised: concurrent
+   * first-mounts share the single in-flight promise, and the double-construct
+   * guard means only one panel is ever built. After construction it inserts into
+   * the DOM (via the registered mount hook) and hydrates the tracked state.
+   */
+  function ensure(): Promise<MeasurePanel> {
+    if (panel) return Promise.resolve(panel);
+    if (ready) return ready;
+    ready = loadMeasurePanel().then(({ MeasurePanel: Ctor }) => {
+      // A concurrent caller may have won the race while the import was in flight.
+      if (!panel) {
+        panel = construct(Ctor);
+        // Insert into the DOM in its canonical spot; no-op in bare/embed mode
+        // where no left column was built (the force path mounts it directly).
+        mountElement?.(panel.element);
+        hydrate();
+      }
+      return panel;
+    });
+    return ready;
+  }
+
+  return {
+    get panel() {
+      return panel;
+    },
+    ensure,
+    refresh,
+    setMountElement(fn) {
+      mountElement = fn;
+      // If the panel already mounted before this wiring ran (a scan's import
+      // resolved between column build and here), place it now.
+      if (fn && panel) fn(panel.element);
+    },
+    setGeographicNotice(value) {
+      geographicNotice = value;
+      panel?.setGeographicNotice(value);
+    },
+    showDesired() {
+      desiredVisible = true;
+      panel?.setVisible(true);
+    },
+    hide() {
+      panel?.setVisible(false);
+      desiredVisible = false;
+    },
+  };
+}

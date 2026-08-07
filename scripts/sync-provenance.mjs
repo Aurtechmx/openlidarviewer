@@ -5,7 +5,7 @@
  * Every Dependabot npm bump (e.g. proj4 2.20.9 -> 2.21.0) moves the resolved
  * version in package-lock.json — and sometimes the declared range in
  * package.json — out from under three HAND-MAINTAINED provenance files:
- *   - THIRD_PARTY_NOTICES.md  (curated: license text, upstream URLs)
+ *   - docs/project/THIRD_PARTY_NOTICES.md  (curated: license text, upstream URLs)
  *   - codemeta.json           (curated: authorship, citations, identifiers)
  *   - sbom.json               (curated CycloneDX: descriptions, hashes, refs)
  * When they drift, `lint:release-truth` and `lint:sbom` fail. Before this tool
@@ -13,7 +13,7 @@
  * CycloneDX bom-ref / purl / dependency-graph formats right each time.
  *
  * WHY SYNC, NOT REGENERATE. These files are not machine output we can rebuild.
- * Regenerating THIRD_PARTY_NOTICES.md would drop the reproduced MIT text, the
+ * Regenerating docs/project/THIRD_PARTY_NOTICES.md would drop the reproduced MIT text, the
  * per-license attribution, and the test-fixture provenance notes. Regenerating
  * codemeta.json would drop the DOI/SWH identifiers, authors, and citations.
  * Regenerating sbom.json with cyclonedx-npm would rewrite descriptions,
@@ -23,7 +23,7 @@
  * exactly the values the two linters derive from those two machine files.
  *
  * What it syncs, per file:
- *   THIRD_PARTY_NOTICES.md  each dependency row's "Declared range" (package.json)
+ *   docs/project/THIRD_PARTY_NOTICES.md  each dependency row's "Declared range" (package.json)
  *                           and "Resolved" (lockfile) columns.
  *   codemeta.json           each softwareRequirements entry's `version`
  *                           (the DECLARED range, matching package.json).
@@ -78,7 +78,7 @@ function replaceCellToken(cell, value) {
 }
 
 /**
- * THIRD_PARTY_NOTICES.md: for every table row whose package (column 1) is a
+ * docs/project/THIRD_PARTY_NOTICES.md: for every table row whose package (column 1) is a
  * declared dependency, rewrite column 2 (Declared range) from package.json and
  * column 3 (Resolved) from the lockfile. Header/separator rows and prose are
  * left untouched; a row for a package we don't declare is left alone.
@@ -191,7 +191,7 @@ function syncSbom(text, { pkg, lockedVersion }) {
 
 // ── Driver ────────────────────────────────────────────────────────────────
 const TARGETS = [
-  { path: 'THIRD_PARTY_NOTICES.md', sync: syncNotices },
+  { path: 'docs/project/THIRD_PARTY_NOTICES.md', sync: syncNotices },
   { path: 'codemeta.json', sync: syncCodemeta },
   { path: 'sbom.json', sync: syncSbom },
 ];

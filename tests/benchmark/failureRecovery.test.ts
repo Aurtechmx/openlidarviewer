@@ -236,7 +236,7 @@ describe('a body shorter than its header promised', () => {
       copcChunkMeta(50),
     );
     expect(healthy.pointCount).toBe(50);
-    expect(healthy.positions.length).toBe(150);
+    expect(healthy.positions).toHaveLength(150);
 
     // Injection: the hierarchy declared 50 points, the transport delivered 18.
     const injected = decodeRecords(
@@ -246,9 +246,9 @@ describe('a body shorter than its header promised', () => {
     expect(injected.pointCount).toBe(18);
     // The arrays are sized to what was decoded, not to what was declared — a
     // padded array would present 32 points at the origin as real returns.
-    expect(injected.positions.length).toBe(18 * 3);
-    expect(injected.intensity.length).toBe(18);
-    expect(injected.classification.length).toBe(18);
+    expect(injected.positions).toHaveLength(18 * 3);
+    expect(injected.intensity).toHaveLength(18);
+    expect(injected.classification).toHaveLength(18);
   });
 
   test('an EPT binary tile refuses a short body with a tagged error carrying both byte counts', () => {

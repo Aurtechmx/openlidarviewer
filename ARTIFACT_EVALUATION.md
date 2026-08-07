@@ -1,6 +1,6 @@
 # Artifact evaluation
 
-This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `VALIDATION_REPORT_v0.6.3.md` (what is and is not validated for this release; the terrain and measurement algorithms are inherited from `VALIDATION_REPORT_v0.5.9.md`).
+This guide lets a reviewer evaluate the OpenLiDARViewer software artifact without special hardware or private data. It complements `REVIEWER_QUICKSTART.md` (fast start) and `docs/releases/VALIDATION_REPORT_v0.6.4.md` (what is and is not validated for this release; the terrain and measurement algorithms are inherited from `VALIDATION_REPORT_v0.5.9.md`).
 
 ## What the artifact is
 
@@ -28,7 +28,7 @@ npm run build:live && npm run check:bundle
 
 - Every scientific claim is registered in `docs/validation/claim-register.yaml` with its current evidence level, the level required to be called validated, the tests that support it, and the wording that is allowed or prohibited. `scripts/lint-claim-register.mjs` fails the build if the runtime registry drifts from that file or if prohibited wording appears.
 - The evidence ladder (E0–E6) is defined in `docs/validation/EVIDENCE_MODEL.md`. Three products are at E4: the slope raster, the aspect raster and the hillshade were cross-implementation validated against GDAL 3.13.1 on one analytic fixture (see `tests/slopeCrossCheck.test.ts`, `tests/aspectCrossCheck.test.ts` and `tests/hillshadeCrossCheck.test.ts`). Every other product tops out at E3 (synthetic known-truth checks).
-- `VALIDATION_REPORT_v0.6.3.md` lists exactly what was and was not tested for this release (inheriting the terrain and measurement algorithms from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
+- `docs/releases/VALIDATION_REPORT_v0.6.4.md` lists exactly what was and was not tested for this release (inheriting the terrain and measurement algorithms from `VALIDATION_REPORT_v0.5.9.md`); `docs/validation/THREATS_TO_VALIDITY.md` aggregates the limitations.
 
 ## Integrity
 
@@ -36,7 +36,7 @@ Release archives are produced by `npm run package`, which emits `SHA256SUMS` and
 
 ## Data availability
 
-No proprietary dataset is required. Bundled fixtures are synthetic or explicitly licensed (`THIRD_PARTY_NOTICES.md`); external point clouds are user-supplied or streamed from third-party open-data hosts and are not redistributed here (`DATA_AVAILABILITY.md`).
+No proprietary dataset is required. Bundled fixtures are synthetic or explicitly licensed (`docs/project/THIRD_PARTY_NOTICES.md`); external point clouds are user-supplied or streamed from third-party open-data hosts and are not redistributed here (`DATA_AVAILABILITY.md`).
 
 ## Scope of evaluation
 

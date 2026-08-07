@@ -27,6 +27,7 @@ import { isComplete } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
+import { ScanFootprintError, type FootprintRing, type FootprintExtentBasis } from './scanFootprint';
 
 /**
  * A saved camera viewpoint to serialise as a KML <LookAt> placemark.
@@ -329,6 +330,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
       '<Placemark>',
       `<name>${esc(m.name)}</name>`,
       desc,
+      POLYGON_STYLE_URL,
       '<Polygon>',
       '<outerBoundaryIs>',
       '<LinearRing>',
@@ -388,6 +390,27 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
   ].join('');
 }
 
+/**
+ * The shared style for every filled polygon this module emits — the area /
+ * volume measurement and the scan-area footprint.
+ *
+ * A `<Polygon>` with no `<PolyStyle>` is drawn with the reader's default, which
+ * in Google Earth is an opaque white fill: it hides the map under a white
+ * block and buries the outline. This declares an explicit outline with a light
+ * translucent fill, so the region reads as a highlight over the imagery.
+ *
+ * KML colour is `aabbggrr` (alpha, blue, green, red), NOT rgba. This is
+ * OpenLiDARViewer's blue #38bdf8 as a solid 2.5px outline and a ~15% fill.
+ */
+const POLYGON_STYLE_ID = 'olv-area';
+const POLYGON_STYLE = [
+  `<Style id="${POLYGON_STYLE_ID}">`,
+  '<LineStyle><color>fff8bd38</color><width>2.5</width></LineStyle>',
+  '<PolyStyle><color>26f8bd38</color><fill>1</fill><outline>1</outline></PolyStyle>',
+  '</Style>',
+].join('');
+const POLYGON_STYLE_URL = `<styleUrl>#${POLYGON_STYLE_ID}</styleUrl>`;
+
 /** Serialise the full input to a complete KML 2.2 document string. */
 export function buildKml(input: KmlExportInput): string {
   const placemarks: string[] = [];
@@ -397,6 +420,7 @@ export function buildKml(input: KmlExportInput): string {
     if (pm) placemarks.push(pm);
   }
   for (const v of input.viewpoints) placemarks.push(viewpointPlacemark(v, input));
+  const hasPolygon = placemarks.some((p) => p.includes('<Polygon>'));
 
   const crs = input.crsName ?? 'unknown CRS';
   const docDesc = description([
@@ -410,7 +434,89 @@ export function buildKml(input: KmlExportInput): string {
     '<Document>',
     '<name>OpenLiDARViewer Export</name>',
     docDesc,
+    // The shared style is only referenced by a <Polygon>; declare it only when
+    // one is present, so a points-and-lines export carries no unused style.
+    ...(hasPolygon ? [POLYGON_STYLE] : []),
     ...placemarks,
+    '</Document>',
+    '</kml>',
+  ].join('\n');
+}
+
+/** Everything the scan-area document is built from. Coordinates arrive already
+ *  reprojected, by `scanFootprint.footprintLonLatRing`. */
+export interface KmlFootprintInput {
+  /** The scan name, used for the document and placemark labels. */
+  readonly name: string;
+  /** Closed WGS84 ring, first vertex repeated as the last. */
+  readonly ring: FootprintRing;
+  /** The CRS the corners were reprojected FROM, stated in the description. */
+  readonly crsName: string | null;
+  /** Which points the extent was read from, stated in the description. */
+  readonly extentBasis: FootprintExtentBasis;
+  /** The "not survey-grade" caveat, the same one every other product carries. */
+  readonly notSurveyGradeNote: string;
+}
+
+/**
+ * The scanned area as a KML 2.2 `<Polygon>` document.
+ *
+ * Shares this module's serialiser rather than writing a second one: the same
+ * escaping, the same `lon,lat` formatter with its out-of-domain guard, and the
+ * same `<Document>` skeleton, so a footprint file and a site file cannot drift
+ * apart in structure or in what they disclose.
+ *
+ * Always `clampToGround` with two-ordinate coordinates. A footprint is a claim
+ * about WHERE, not about how high; writing a third ordinate would leave a
+ * number in the file that another tool reads back as an elevation.
+ *
+ * The ring is validated here as well as built here, because the whole point of
+ * a LinearRing is that it closes. An open or two-corner ring is refused rather
+ * than closed on the reader's behalf.
+ */
+export function buildFootprintKml(input: KmlFootprintInput): string {
+  const ring = input.ring;
+  if (ring.length < 4) {
+    throw new ScanFootprintError(
+      'A scan outline needs at least three corners plus a repeated first corner.',
+    );
+  }
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first[0] !== last[0] || first[1] !== last[1]) {
+    throw new ScanFootprintError(
+      'The scan outline does not close: its last corner must repeat its first.',
+    );
+  }
+  const crs = input.crsName ?? 'unknown CRS';
+  const coords = ring.map(([lon, lat]) => coord([lon, lat, 0], false)).join(' ');
+  const label = `${input.name} scan area`;
+  const lines = [
+    'Bounding rectangle of the scanned area, reprojected to WGS84 longitude/latitude.',
+    `Source CRS: ${crs}. Extent read from ${input.extentBasis}.`,
+    'Heights are clamped to ground: an outline states where the scan is, not how high it is.',
+    input.notSurveyGradeNote,
+  ];
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<kml xmlns="http://www.opengis.net/kml/2.2">',
+    '<Document>',
+    `<name>${esc(label)}</name>`,
+    description(lines),
+    POLYGON_STYLE,
+    '<Placemark>',
+    `<name>${esc(`${label} (bounding rectangle)`)}</name>`,
+    description(lines),
+    POLYGON_STYLE_URL,
+    '<Polygon>',
+    '<altitudeMode>clampToGround</altitudeMode>',
+    '<outerBoundaryIs>',
+    '<LinearRing>',
+    `<coordinates>${coords}</coordinates>`,
+    '</LinearRing>',
+    '</outerBoundaryIs>',
+    '</Polygon>',
+    '</Placemark>',
     '</Document>',
     '</kml>',
   ].join('\n');

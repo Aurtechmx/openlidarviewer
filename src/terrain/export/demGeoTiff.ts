@@ -82,6 +82,24 @@ function align2(n: number): number {
 
 export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   const { cols, rows, cellSize, xllCorner, yllCorner } = input;
+  // Guard for a coordinate-bearing writer: the strip loop reads values[i] /
+  // coverage[i] for every one of rows*cols cells, so an array SHORTER than the
+  // grid reads `undefined` past its end → Number.isFinite(undefined) is false →
+  // the cell is silently written as NODATA. A truncated input would then emit a
+  // plausible-looking DEM riddled with holes instead of failing. Refuse it.
+  // (Both current callers pass dtm.z-derived cols*rows arrays, so this is a
+  // guard against a future caller, not a live bug.)
+  const cellCount = rows * cols;
+  if (input.values.length !== cellCount) {
+    throw new Error(
+      `writeGeoTiff: values.length (${input.values.length}) must equal rows*cols (${rows}*${cols}=${cellCount})`,
+    );
+  }
+  if (input.coverage.length !== cellCount) {
+    throw new Error(
+      `writeGeoTiff: coverage.length (${input.coverage.length}) must equal rows*cols (${rows}*${cols}=${cellCount})`,
+    );
+  }
   const noData = input.noData ?? -9999;
   const epsg = input.epsg ?? null;
   const verticalEpsg = input.verticalEpsg ?? null;

@@ -121,6 +121,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     stage: { hideEmptyState: vi.fn() },
     closeStreaming: calls.closeStreaming,
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
+    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn() },
     inspector: {} as unknown as OpenScanDeps['inspector'],
     inspectorCards: {} as unknown as OpenScanDeps['inspectorCards'],
     crsCoordinator: {} as unknown as OpenScanDeps['crsCoordinator'],
@@ -154,15 +155,28 @@ function makeDeps(over: { loading?: boolean } = {}) {
 }
 
 describe('openScan — the file router', () => {
-  it('routes an .olvsession to the session loader, never the cloud worker', async () => {
+  it('routes an .olvsession to the session loader UNDER the load guard, never the cloud worker', async () => {
     const { deps, calls } = makeDeps();
     await openScan(fakeFile('survey.olvsession'), deps);
     expect(calls.importSession).toHaveBeenCalledTimes(1);
-    // A session restore routes AHEAD of the loading guard and touches no loader.
-    expect(calls.isLoading).not.toHaveBeenCalled();
-    expect(calls.setLoading).not.toHaveBeenCalled();
+    // FIX C: the session reroute now runs UNDER the one-load-at-a-time guard.
+    // An embed `load-file` is wrapped as a File whose NAME the host controls, so
+    // a `x.olvsession` name reaching the session loader unthrottled could stack
+    // repeated restores. It still touches no cloud loader, and it claims then
+    // releases the flag around the restore.
+    expect(calls.isLoading).toHaveBeenCalled();
+    expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
     expect(calls.loadLocalSource).not.toHaveBeenCalled();
     expect(calls.openLocalCopc).not.toHaveBeenCalled();
+  });
+
+  it('refuses a second .olvsession while a load is in flight (no stacking)', async () => {
+    const { deps, calls } = makeDeps({ loading: true });
+    await openScan(fakeFile('survey.olvsession'), deps);
+    expect(calls.showToast).toHaveBeenCalledWith(expect.stringContaining('Already loading'));
+    expect(calls.importSession).not.toHaveBeenCalled();
+    expect(calls.setLoading).not.toHaveBeenCalled(); // guard rejects before claiming the flag
   });
 
   it('refuses a second load while one is in flight, without starting anything', async () => {

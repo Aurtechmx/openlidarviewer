@@ -137,7 +137,11 @@ function renderPurposeCards(
     card.type = 'button';
     card.setAttribute('aria-pressed', id === current ? 'true' : 'false');
     card.append(el('span', { className: 'olv-cs-purpose-label', text: meta.label }));
-    card.append(el('span', { className: 'olv-cs-purpose-summary', text: meta.summary }));
+    // The summary moves to hover (native tooltip) + the a11y label, matching the
+    // review bar's title-attribute pattern. Keeps each card a compact pill so the
+    // purpose picker stops crowding the panel.
+    card.title = meta.summary;
+    card.setAttribute('aria-label', `${meta.label}. ${meta.summary}`);
     card.addEventListener('click', () => onPick(id));
     grid.append(card);
   }

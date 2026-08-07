@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+
+import { readAppCss } from './support/appCss';
 
 /**
  * tests/flexAxisReuse.test.ts
@@ -16,10 +16,7 @@ import { fileURLToPath } from 'node:url';
  * (mirroring the existing `.olv-report-row .olv-export-btn { flex: 0 0 auto }`).
  */
 describe('flex-axis reuse — column-context buttons must not inherit row grow', () => {
-  const css = readFileSync(
-    fileURLToPath(new URL('../src/style.css', import.meta.url)),
-    'utf8',
-  );
+  const css = readAppCss();
 
   function ruleBody(selector: string): string | null {
     const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

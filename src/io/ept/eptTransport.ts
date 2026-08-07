@@ -32,6 +32,23 @@ const DEFAULT_RETRY_BASE_MS = 250;
 /** HTTP statuses we DO retry on (transient transport faults). */
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 
+/**
+ * An internal per-attempt request deadline elapsed. This is deliberately a
+ * distinct type from a user cancel: a timeout is a real failure the user
+ * should see, not a silent cancellation. It carries `code: 'timeout'` to mirror
+ * the COPC path's `RangeReadError('timeout', …)`, keeping one cancel-vs-timeout
+ * convention across EPT and COPC. The streaming `isAbortError` classifier does
+ * NOT match this (its name is not `AbortError`), so a timeout never gets
+ * swallowed as a cancel; `describeRemoteEptError` renders it as a timeout.
+ */
+export class EptTimeoutError extends Error {
+  readonly code = 'timeout' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'EptTimeoutError';
+  }
+}
+
 /** Tunables for {@link createEptTransport}. Defaulted; injected for tests. */
 export interface EptTransportOptions {
   /** Per-attempt timeout, in ms. Default {@link DEFAULT_REQUEST_TIMEOUT_MS}. */
@@ -67,7 +84,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
    * signal. Returns the Response; throws on transport / timeout / abort.
    */
   async function fetchOnce(url: string, outer?: AbortSignal): Promise<Response> {
-    if (outer?.aborted) throw new Error('aborted');
+    if (outer?.aborted) throw outer.reason ?? new DOMException('EPT fetch aborted before request', 'AbortError');
     const timeoutController = new AbortController();
     const timer = setTimeout(() => timeoutController.abort(), requestTimeoutMs);
     // Compose: abort when either the outer signal or our timeout fires.
@@ -79,6 +96,20 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
     try {
       const response = await fetchFn(url, { signal: composed.signal });
       return response;
+    } catch (err) {
+      // A per-attempt timeout aborts the in-flight fetch exactly as a user
+      // cancel does, so the raw rejection is an indistinguishable AbortError.
+      // Recover the distinction from which controller fired: the timeout
+      // controller aborting while the OUTER signal has not is an internal
+      // deadline. Surface that as a distinct EptTimeoutError so it stays a
+      // visible timeout and is never classified as a silent user cancel; a real
+      // outer-signal abort propagates unchanged for the caller to treat as one.
+      if (timeoutController.signal.aborted && !outer?.aborted) {
+        throw new EptTimeoutError(
+          `EPT request timed out after ${requestTimeoutMs} ms for ${url}`,
+        );
+      }
+      throw err;
     } finally {
       clearTimeout(timer);
       if (outer) outer.removeEventListener('abort', onOuterAbort);
@@ -108,7 +139,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
   ): Promise<Response> {
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      if (outer?.aborted) throw new Error('aborted');
+      if (outer?.aborted) throw outer.reason ?? new DOMException('EPT fetch aborted between retries', 'AbortError');
       let response: Response | null = null;
       // Only the transport / timeout call is inside the try; the status
       // classification below is intentionally outside so a permanent-error

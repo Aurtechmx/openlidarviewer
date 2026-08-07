@@ -1,0 +1,274 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Phone bottom-sheet (design audit 1.3 follow-up)
+
+   Below the mobile breakpoint the floating desktop panels are re-parented (in
+   main.ts) into one bottom sheet behind a View · Analyse · Layers tablist. The
+   sheet is the single phone surface — it supersedes both the capped left-panel
+   stack and the Inspector's standalone "Scan Info" sheet. Desktop never shows
+   it (display:none below), so this whole block is mobile-only.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-mobile-sheet { display: none; }
+
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-mobile-sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    /* Above the canvas (0), left panels and dock (20); below the help modal
+       (80) and command palette (200). */
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    /* Height is driven by the active snap detent (peek/half/full) below. The
+       dynamic viewport unit (dvh) accounts for the mobile URL bar; a vh line
+       first is the fallback where dvh is unsupported. The cap keeps 'full'
+       clear of the status bar. */
+    height: auto;
+    max-height: 92vh;
+    max-height: min(92dvh, 92vh);
+    background: var(--panel-raised, var(--panel));
+    border-top: 1px solid var(--hairline-strong, var(--hairline));
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--shadow-raised, 0 -14px 38px rgba(0, 0, 0, 0.5));
+    padding-bottom: env(safe-area-inset-bottom);
+    pointer-events: auto;
+    /* Smooth snapping between detents; the drag disables it for 1:1 tracking. */
+    transition: height 260ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    will-change: height;
+  }
+  .olv-mobile-sheet.olv-hidden { display: none; }
+  .olv-mobile-sheet.is-dragging { transition: none; }
+
+  /* ── Snap detents ─────────────────────────────────────────────────────────
+     'peek' leaves height:auto so the collapsed sheet is just its head (the body
+     is display:none via .olv-hidden). 'half' and 'full' set explicit dynamic-
+     viewport heights and let the body scroll inside. */
+  .olv-mobile-sheet.olv-msheet--half {
+    height: 50vh;
+    height: 50dvh;
+  }
+  .olv-mobile-sheet.olv-msheet--full {
+    height: 88vh;
+    height: min(88dvh, 92vh);
+  }
+
+  /* Head: a grip line, the segmented tablist, and the collapse handle. */
+  .olv-msheet-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 14px var(--space-md) var(--space-sm);
+    flex: 0 0 auto;
+    cursor: pointer;
+    /* The head is the drag surface: claim vertical gestures so a drag moves the
+       sheet instead of scrolling the page behind it. */
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .olv-msheet-head::before {
+    content: "";
+    position: absolute; top: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 2px;
+    background: rgba(140, 170, 230, 0.42);
+  }
+  .olv-msheet-tabs {
+    display: flex; flex: 1 1 auto; gap: 2px;
+    background: var(--panel-recessive, rgba(255, 255, 255, 0.05));
+    border-radius: 10px; padding: 3px;
+  }
+  .olv-msheet-tab {
+    position: relative;
+    flex: 1 1 0; min-height: 44px;
+    border: 0; border-radius: 8px; background: transparent;
+    color: var(--text-dim); font: inherit; font-weight: 500;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease;
+  }
+  /* Touch target vs. visual height. The strip was deliberately slimmed to a
+     32 px chip so the collapsed chrome stays thin, which is below the 44 pt
+     guidance. Padding cannot buy the difference back: the tab's height is what
+     the strip's height IS, so padding would just push the chrome taller again.
+     An overlay pseudo-element does: it enlarges the hit area to 40 px around
+     the chip's centre line and costs zero layout height. 40, not 44, so a few
+     pixels of head remain as drag surface for the sheet gesture. */
+  .olv-msheet-tab::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 50%;
+    height: var(--m-tab-hit);
+    transform: translateY(-50%);
+  }
+  .olv-msheet-tab.is-active {
+    background: var(--panel);
+    color: var(--text);
+    box-shadow: var(--shadow-raised, 0 1px 3px rgba(0, 0, 0, 0.28));
+  }
+  .olv-msheet-tab:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  .olv-msheet-handle {
+    position: relative;
+    width: 44px; min-width: 44px; min-height: 44px; flex: 0 0 auto;
+    border: 0; background: transparent; color: var(--text-dim);
+    border-radius: 8px; cursor: pointer;
+  }
+  .olv-msheet-handle::before {
+    content: "";
+    position: absolute; inset: 0; margin: auto;
+    width: 11px; height: 11px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: translateY(-2px) rotate(45deg); /* points down → tap to collapse */
+    transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-handle::before {
+    transform: translateY(2px) rotate(-135deg); /* points up → tap to expand */
+  }
+
+  /* ── Collapsed sheet: the lower half of the single bottom chrome zone ─────
+     A collapsed sheet is a thin strip, not a tall empty panel. The tab row
+     STAYS (it is the mobile navigation, and one tap from the canvas) while the
+     surrounding padding tightens.
+
+     Every measurement here comes from the --m-* geometry tokens, because the
+     dock is positioned against this exact height. Change a number by hand at
+     one site only and the two bars stop meeting: too small and a strip of
+     canvas shows between them, too large and the sheet paints over the dock's
+     captions. That second failure is the one that shipped. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head {
+    padding-top: var(--m-head-pad-y);
+    padding-bottom: var(--m-head-pad-y);
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-tabs { padding: var(--m-tabs-pad); }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-tab { min-height: var(--m-tab-h); }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-handle { min-height: var(--m-tab-h); }
+  /* ONE SURFACE. Collapsed, the sheet drops its own top edge, corner radius and
+     lift shadow, and the dock sitting flush above it carries them for the whole
+     zone. Previously each bar drew its own hairline, its own radius and its own
+     shadow with a gap between them, which is what read as two stacked bars of
+     chrome. The grip line goes too: with the dock directly above there is no
+     free edge to draw it on, and the chevron at the right already says
+     "tap to open". */
+  .olv-mobile-sheet.is-collapsed {
+    border-top-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head::before { display: none; }
+
+  /* Body: the active tabpanel only; scrolls inside the sheet. */
+  .olv-msheet-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 var(--space-md) var(--space-md);
+  }
+  .olv-msheet-body.olv-hidden { display: none; }
+  .olv-msheet-slot { display: none; }
+  .olv-msheet-slot.is-active { display: block; }
+
+  /* Re-parented panels flow normally, full width, opaque, no fixed position or
+     drag-resize. Each panel keeps its own internal markup + logic. */
+  .olv-mobile-sheet .olv-inspector,
+  .olv-mobile-sheet .olv-analyse-panel,
+  .olv-mobile-sheet .olv-object-panel,
+  .olv-mobile-sheet .olv-class-panel,
+  .olv-mobile-sheet .olv-measure-panel,
+  .olv-mobile-sheet .olv-anno-panel,
+  .olv-mobile-sheet .olv-export-panel {
+    position: static;
+    inset: auto;
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    max-height: none;
+    margin: 0 0 var(--space-md) 0;
+    transform: none;
+    background: var(--panel);
+    box-shadow: none;
+    resize: none;
+    overflow: visible;
+    animation: none;
+  }
+  .olv-mobile-sheet .olv-msheet-slot > *:last-child { margin-bottom: 0; }
+
+  /* The Inspector loses its standalone-sheet furniture inside the unified sheet:
+     the grip line, the tap-to-toggle chevron, and the close button are the
+     parent sheet's job now. Its content shows in full (no peek/translate). */
+  .olv-mobile-sheet .olv-inspector::before { display: none; }
+  .olv-mobile-sheet .olv-inspector .olv-sheet-chevron,
+  .olv-mobile-sheet .olv-inspector .olv-sheet-close { display: none; }
+  .olv-mobile-sheet .olv-inspector .olv-panel-head { cursor: default; }
+}
+
+/* ── Landscape phone: keep the canvas usable ────────────────────────────────
+   On a short landscape viewport the sheet's half/full detents would eat most of
+   the scene. Cap the sheet to a shorter bottom sheet so the point cloud stays
+   visible above it, and tighten the head so the peek row is not a large slice of
+   the screen. Gated on a coarse pointer so desktop windows (fine pointer) are
+   never affected. */
+@media (orientation: landscape) and (pointer: coarse) {
+  .olv-mobile-sheet {
+    max-height: 82vh;
+    max-height: min(82dvh, 82vh);
+  }
+  .olv-mobile-sheet.olv-msheet--half {
+    height: 58vh;
+    height: 58dvh;
+  }
+  .olv-mobile-sheet.olv-msheet--full {
+    height: 82vh;
+    height: min(82dvh, 82vh);
+  }
+  /* Shorter head so the collapsed peek leaves more of the scene in view. */
+  .olv-msheet-head { padding-top: 10px; padding-bottom: 4px; }
+}
+
+
+/* ── Dataset Story card + Export Health (fitness-for-use synthesis) ───────── */
+.olv-story-card {
+  display: flex; flex-direction: column; gap: 7px;
+  font-size: 12px; line-height: 1.4; min-width: 0;
+}
+.olv-story-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.olv-story-title { font-weight: 600; letter-spacing: 0.02em; }
+.olv-story-assess {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+.olv-story-assess.is-good { color: var(--ok, #2e9e5b); }
+.olv-story-assess.is-preview,
+.olv-story-assess.is-limited { color: var(--warn, #b8860b); }
+.olv-story-assess.is-blocked { color: var(--bad, #c0392b); }
+.olv-story-assess.is-unknown { color: var(--muted, #8a8f98); }
+.olv-story-headline { font-size: 12.5px; opacity: 0.92; }
+.olv-story-row { display: grid; grid-template-columns: 116px 1fr; gap: 8px; align-items: baseline; }
+.olv-story-k { color: var(--muted, #8a8f98); font-size: 11px; }
+.olv-story-v { min-width: 0; word-break: break-word; }
+.olv-story-next {
+  margin-top: 2px; padding-top: 7px; font-weight: 500;
+  border-top: 0.5px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.olv-health { display: flex; flex-direction: column; gap: 10px; font-size: 12px; min-width: 280px; }
+.olv-health-verdict {
+  font-weight: 600; font-size: 13px; padding: 7px 10px; border-radius: 8px;
+  border: 0.5px solid color-mix(in srgb, currentColor 35%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.olv-health-verdict.is-ready { color: var(--ok, #2e9e5b); }
+.olv-health-verdict.is-caution { color: var(--warn, #b8860b); }
+.olv-health-verdict.is-blocked { color: var(--bad, #c0392b); }
+.olv-health-rows { display: flex; flex-direction: column; gap: 4px; }
+.olv-health-row { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: baseline; }
+.olv-health-row .olv-health-k { color: var(--muted, #8a8f98); }
+.olv-health-row.is-caution .olv-health-v { color: var(--warn, #b8860b); }
+.olv-health-row.is-blocked .olv-health-v { color: var(--bad, #c0392b); }
+.olv-health-row.is-good .olv-health-v { color: var(--ok, #2e9e5b); }
+.olv-health-blockers-title { font-weight: 600; font-size: 11.5px; margin-top: 2px; }
+.olv-health-blockers { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.olv-health-blockers li { font-size: 11.5px; opacity: 0.9; }
+

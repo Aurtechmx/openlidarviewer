@@ -29,6 +29,8 @@
  */
 
 import { footprintMetres } from '../report/reportFootprint';
+import type { Footprint } from '../report/reportFootprint';
+import { spatialContextFrom } from '../geo/SpatialContext';
 import { isZUpFormat } from '../io/sniffFormat';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { classify as classifyProvenance } from '../diagnostics/provenance';
@@ -90,6 +92,35 @@ export function reportPointCount(
  */
 export function isNonTerrainVerdict(verdict: SpaceKind | null): boolean {
   return verdict === 'object' || verdict === 'interior';
+}
+
+/**
+ * The extent-carrying subset of {@link MetadataInputs}, mapped from a
+ * {@link Footprint}. A confirmed footprint carries metre extents + a pts·m⁻²
+ * density (byte-identical to the historical build). An unconfirmed footprint
+ * carries the RAW source-unit spans, a NaN density (so the density row / QL
+ * grading is omitted), and the `extentUnitStatus: 'unknown'` flag that makes the
+ * dataset summary print a "units unconfirmed — extents in source units" warning
+ * instead of a metre label.
+ */
+export function footprintToMetadataExtent(
+  fp: Footprint,
+): Pick<MetadataInputs, 'width' | 'depth' | 'height' | 'density' | 'extentUnitStatus'> {
+  if (fp.unitStatus === 'confirmed') {
+    return {
+      width: fp.widthMetres,
+      depth: fp.depthMetres,
+      height: fp.heightMetres,
+      density: fp.densityPerM2,
+    };
+  }
+  return {
+    width: fp.widthSourceUnits,
+    depth: fp.depthSourceUnits,
+    height: fp.heightSourceUnits,
+    density: Number.NaN,
+    extentUnitStatus: 'unknown',
+  };
 }
 
 /**
@@ -187,17 +218,29 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // cube inflates height ~7× and, for a partial footprint, deflates density.
     const b = streamingCloud.dataBounds();
     const crs = streamingCloud.crs();
+    // ONE spatial context for this report, built here at the export boundary:
+    // the footprint's unit gate, both scale factors, and the CRS row printed in
+    // the Methods appendix all read it, so the file cannot state one unit and
+    // measure in another.
+    //
     // Footprint + density in metres / pts·m⁻², not raw CRS units (see
     // reportFootprint): a foot-CRS scan would otherwise overstate the headline
-    // area ~10.76× and be graded against the wrong USGS Quality Level.
-    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
+    // area ~10.76× and be graded against the wrong USGS Quality Level. FAIL
+    // CLOSED on an unconfirmed unit: an unknown-unit CRS carries the inert
+    // placeholder factor, so the context's `linearUnitKnown` gates whether the
+    // report may claim metres at all — otherwise the extents are emitted in
+    // source units with no density and a "units unconfirmed" warning row.
+    const ctx = spatialContextFrom(crs);
+    const fp = footprintMetres({
       extentX: b[3] - b[0], extentY: b[4] - b[1], extentZ: b[5] - b[2],
       pointCount: streamingCloud.sourcePointCount,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
+      linearUnitToMetres: ctx.linearUnitToMetres,
+      verticalUnitToMetres: ctx.verticalUnitToMetres,
+      linearUnitKnown: ctx.linearUnitKnown,
       // COPC and EPT are Z-up by spec.
       zUp: true,
     });
+    const ext = footprintToMetadataExtent(fp);
     const modes = streamingCloud.availableColorModes();
     // Streaming-preview accounting — how much of the cloud is resident at
     // export time. Surfaced as a "Loaded" row so the PDF discloses that a
@@ -208,7 +251,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       fileName: streamingCloud.name,
       format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
       sourcePointCount: streamingCloud.sourcePointCount,
-      width: wM, depth: dM, height: hM, density,
+      ...ext,
       hasRgb: modes.includes('rgb'),
       hasIntensity: modes.includes('intensity'),
       hasClassification: modes.includes('classification'),
@@ -231,23 +274,28 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // striding reduced the in-memory count, matching the Scan Report panel.
     const fileN = reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
     const crs = staticCloud.metadata?.crs;
+    // Same one-context rule as the streaming path above.
     // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
     // scan would otherwise overstate area ~10.76× and be graded against the
-    // wrong USGS Quality Level.
-    const { width: wM, depth: dM, height: hM, density } = footprintMetres({
+    // wrong USGS Quality Level. FAIL CLOSED on an unconfirmed unit — see the
+    // streaming path above.
+    const ctx = spatialContextFrom(crs);
+    const fp = footprintMetres({
       extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
       pointCount: fileN,
-      linearUnitToMetres: crs?.linearUnitToMetres,
-      verticalUnitToMetres: crs?.verticalUnitToMetres,
+      linearUnitToMetres: ctx.linearUnitToMetres,
+      verticalUnitToMetres: ctx.verticalUnitToMetres,
+      linearUnitKnown: ctx.linearUnitKnown,
       // Mesh formats load Y-up, so the PDF reads the same axes as the
       // on-screen Scan Report rather than assuming Z.
       zUp: isZUpFormat(staticCloud.sourceFormat),
     });
+    const ext = footprintToMetadataExtent(fp);
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.sourceFormat.toUpperCase(),
       sourcePointCount: fileN,
-      width: wM, depth: dM, height: hM, density,
+      ...ext,
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,

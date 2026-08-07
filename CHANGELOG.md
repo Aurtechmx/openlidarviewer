@@ -2,6 +2,57 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.4] - 2026-08-05
+
+### Added
+
+- A building ground-support gate for classification (`buildingMinSupport`,
+  default 0.66, in `src/render/class/deriveClassification.ts`). A candidate
+  roof classifies as a building only where the ground beneath it is measured
+  above the threshold, so scan-edge void artifacts are dropped while real
+  buildings on fully measured ground are kept. `docs/validation/building-support-gate-eval.md`
+  records a synthetic evaluation: on one labelled corpus the gate removes 480
+  of 528 artifact roof points and keeps every real-building point.
+- A standalone Auto-classify button in the Edit-classes panel, so
+  classification runs on demand rather than only on load.
+- `llms.txt` and `robots.txt` for automated-reader discoverability.
+
+### Changed
+
+- Automatic classification is return-number aware: a multi-return point is
+  treated as vegetation rather than as a single hard surface.
+- Auto-classify keeps the scan's natural colour instead of forcing the class
+  palette, so a run no longer overwrites an RGB display the user chose.
+- The Contour Studio purpose selection threads into the map-sheet PDF, and the
+  purpose picker is compact with each option's description shown on hover.
+- Four report and UI surfaces fail closed on an unknown CRS linear unit rather
+  than presenting a length in an unstated unit. Annotation `worldPosition` is
+  populated and the report frame is labelled.
+- Remote COPC streaming replacement is transactional (gate F4): a failed swap
+  no longer leaves the previous session partly torn down.
+- The mobile GUI is restyled to match the console layout used on desktop, and
+  the README is decluttered and leads with a hero image.
+
+### Fixed
+
+- WebGPU falls back to WebGL 2 when no adapter is present, which fixes an open
+  crash on iOS WebKit.
+- The classifier worker chunk is emitted in the obfuscated build, so on-demand
+  classification loads on the shipped artifact.
+- The contour-readiness card renders its value on one line instead of stacking
+  it into a vertical column.
+
+### Internal
+
+- Multi-layer mounting is disabled (`MULTI_LAYER_MOUNT_ENABLED = false`) while
+  the per-layer frame fixes land, and the flag is guarded so the shipped state
+  cannot drift on.
+- Streaming session assembly moved behind a `StreamingHost`, and the report and
+  scan-open paths moved behind structural dependency objects, continuing the
+  `Viewer.ts` decomposition.
+- Loose documents at the repository root moved into `docs/project` and
+  `docs/releases`.
+
 ## [0.6.3] - 2026-08-01
 
 ### Added

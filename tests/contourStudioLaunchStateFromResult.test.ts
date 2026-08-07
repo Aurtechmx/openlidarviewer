@@ -43,6 +43,7 @@ const OK_FRAME: LaunchFrameContext = {
   streaming: false,
   crsProjected: true,
   verticalUnitsKnown: true,
+  precision: null,
 };
 
 describe('contourStudioLaunchStateFromResult', () => {

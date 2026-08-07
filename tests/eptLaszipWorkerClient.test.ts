@@ -6,6 +6,13 @@
  * worker body itself (laz-perf + WASM) is browser-bound and exercised by the
  * decode-core tests (`eptLaszipDecode.test.ts`); here we drive the client with a
  * fake worker so the request bookkeeping is verified with no browser.
+ *
+ * Every client here pins `poolSize: 1`. These cases are about the wire protocol,
+ * not the pool — multi-worker dispatch, queueing and failure isolation live in
+ * `decodeWorkerPool.test.ts` and `eptLaszipWorkerPool.test.ts` — and the default
+ * size comes from the host's core count, which would make the assertions below
+ * depend on the machine running them. A one-worker pool is also the exact shape
+ * `?decodePool=off` produces, so this file doubles as that path's regression test.
  */
 
 import { describe, test, expect, vi } from 'vitest';
@@ -51,8 +58,29 @@ function fakeDecoded(tag = 1): DecodedChunk {
 
 function mkClient(): { client: EptLaszipWorkerClient; worker: FakeWorker } {
   const worker = new FakeWorker();
-  const client = new EptLaszipWorkerClient(() => worker);
+  const client = new EptLaszipWorkerClient(() => worker, { poolSize: 1 });
   return { client, worker };
+}
+
+/**
+ * A client over `size` DISTINCT fake workers — one per pool slot, as the real
+ * factory produces. Needed wherever two decodes must be in flight at once: a
+ * one-slot pool queues the second rather than posting it.
+ */
+function mkPoolClient(size: number): {
+  client: EptLaszipWorkerClient;
+  workers: FakeWorker[];
+} {
+  const workers: FakeWorker[] = [];
+  const client = new EptLaszipWorkerClient(
+    () => {
+      const worker = new FakeWorker();
+      workers.push(worker);
+      return worker;
+    },
+    { poolSize: size },
+  );
+  return { client, workers };
 }
 
 describe('EptLaszipWorkerClient protocol', () => {
@@ -82,15 +110,19 @@ describe('EptLaszipWorkerClient protocol', () => {
   });
 
   test('concurrent decodes resolve to their own replies (id multiplexing)', async () => {
-    const { client, worker } = mkClient();
+    // Two slots so both decodes are genuinely in flight; ids are issued from
+    // one space across the whole pool, and a reply carries its own id home
+    // however the two workers are ordered.
+    const { client, workers } = mkPoolClient(2);
     const pA = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
     const pB = client.decodeTile(new ArrayBuffer(8), [0, 0, 0]);
-    const idA = worker.posted[0].requestId;
-    const idB = worker.posted[1].requestId;
+    expect(workers).toHaveLength(2);
+    const idA = workers[0].posted[0].requestId;
+    const idB = workers[1].posted[0].requestId;
     expect(idA).not.toBe(idB);
     // Reply out of order: B first, then A.
-    worker.reply({ type: 'decoded', requestId: idB, decoded: fakeDecoded(2) });
-    worker.reply({ type: 'decoded', requestId: idA, decoded: fakeDecoded(1) });
+    workers[1].reply({ type: 'decoded', requestId: idB, decoded: fakeDecoded(2) });
+    workers[0].reply({ type: 'decoded', requestId: idA, decoded: fakeDecoded(1) });
     expect((await pA).pointCount).toBe(1);
     expect((await pB).pointCount).toBe(2);
   });
@@ -123,7 +155,7 @@ describe('EptLaszipWorkerClient protocol', () => {
     // cancel postMessage throws. That must not leave the decode promise hanging —
     // the reject has to win regardless of the cancel.
     const worker = new FakeWorker();
-    const client = new EptLaszipWorkerClient(() => worker);
+    const client = new EptLaszipWorkerClient(() => worker, { poolSize: 1 });
     const ctrl = new AbortController();
     const promise = client.decodeTile(new ArrayBuffer(8), [0, 0, 0], ctrl.signal);
     // The decode posted fine; only the LATER cancel post throws.
@@ -201,7 +233,7 @@ describe('EptLaszipWorkerClient protocol', () => {
       if (throwOnPost) throw new Error('DataCloneError: could not be cloned');
       realPost(m, t);
     };
-    const client = new EptLaszipWorkerClient(() => worker);
+    const client = new EptLaszipWorkerClient(() => worker, { poolSize: 1 });
     const ctrl = new AbortController();
     const removeSpy = vi.spyOn(ctrl.signal, 'removeEventListener');
 

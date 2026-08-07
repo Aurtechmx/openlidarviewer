@@ -111,7 +111,7 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
 
     // Exactly one banner element carries the DEM caveat…
     const dem = root.findContaining('Preliminary DEM');
-    expect(dem.length).toBe(1);
+    expect(dem).toHaveLength(1);
     // …and that single banner states BOTH facts (nothing disclosed is lost).
     expect(dem[0].ownText).toContain('not survey-grade');
     expect(dem[0].ownText).toContain('README');
@@ -119,7 +119,7 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
 
     // The old second banner no longer renders as a separate element.
     const previewBanners = root.findContaining('Preview export — not survey-grade');
-    expect(previewBanners.length).toBe(0);
+    expect(previewBanners).toHaveLength(0);
 
     // Two elements state the limitation, and they are different things: the
     // consolidated banner above (conditional) and the panel's standing footer
@@ -127,7 +127,7 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
     // two stacked BANNERS; the footer is not a banner and is not conditional.
     const stating = root.findContaining('not survey-grade');
     const footers = stating.filter((e) => e.className.includes('olv-analyse-footer'));
-    expect(footers.length).toBe(1);
+    expect(footers).toHaveLength(1);
     expect(footers[0].ownText).toBe(NOT_SURVEY_GRADE_NOTE);
     // Exactly one banner states it — the consolidated one, and no other.
     expect(stating.length - footers.length).toBe(1);
@@ -144,8 +144,8 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
     panel.update(result);
     const root = panel.element as unknown as FakeEl;
     if (result.quality.exportReadiness === 'available' && result.dtm.coverageMode === 'full') {
-      expect(root.findContaining('Preliminary DEM').length).toBe(0);
-      expect(root.findContaining('Preview export').length).toBe(0);
+      expect(root.findContaining('Preliminary DEM')).toHaveLength(0);
+      expect(root.findContaining('Preview export')).toHaveLength(0);
     } else {
       // Georeferenced but still partial → a single banner, never two. The
       // standing footer is excluded: it always states the limitation and is
@@ -176,14 +176,14 @@ describe('AnalysePanel — compact per-tile footers', () => {
     expect(footers.length).toBeGreaterThanOrEqual(2);
     for (const footer of footers) {
       // The hint readout and the export action share the single footer line.
-      expect(footer.findByClass('olv-analyse-sample').length).toBe(1);
-      expect(footer.findContaining('Export PNG').length).toBe(1);
+      expect(footer.findByClass('olv-analyse-sample')).toHaveLength(1);
+      expect(footer.findContaining('Export PNG')).toHaveLength(1);
     }
 
     // Nothing disclosed was removed: every hint readout still exists, one per
     // tile footer (none stacked as standalone full-width rows any more).
     const hints = root.findContaining('Click the map to sample a point.');
-    expect(hints.length).toBe(footers.length);
+    expect(hints).toHaveLength(footers.length);
     for (const hint of hints) {
       expect(footers.some((f) => f.findByClass('olv-analyse-sample').includes(hint))).toBe(true);
     }

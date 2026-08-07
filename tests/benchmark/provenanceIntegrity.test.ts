@@ -160,6 +160,7 @@ function exploratoryPermitStamp(): ExportPermitStamp {
   const permit = resolveContourExportPermit('geojson', {
     launchStatus: 'exploratory',
     verticalUnitsKnown: true,
+    precision: null,
     crsProjected: true,
     analyticalGeometry: true,
   });
@@ -295,6 +296,7 @@ describe('completeness — what the artifact declares on its own', () => {
       const decision = resolveExportDecision(reg.exporterId, {
         launchStatus: 'available',
         unitClaim: 'metric-supported',
+        precision: null,
       });
       expect(decision.status === 'blocked' || decision.caveats.length > 0).toBe(true);
     }
@@ -302,6 +304,7 @@ describe('completeness — what the artifact declares on its own', () => {
       resolveExportDecision('contour.unregistered', {
         launchStatus: 'available',
         unitClaim: 'metric-supported',
+        precision: null,
       }),
     ).toThrow(/not a registered scientific exporter/);
   });
@@ -326,7 +329,7 @@ describe('completeness — what the artifact declares on its own', () => {
         bytes.byteOffset + 58,
         32,
       );
-      expect(field.length).toBe(32);
+      expect(field).toHaveLength(32);
       expect(lasGeneratingSoftware().length).toBeLessThanOrEqual(32);
       for (const part of lasGeneratingSoftware().split(' ').slice(1)) {
         expect([BUILD_IDENTITY.version, BUILD_IDENTITY.commit, `${BUILD_IDENTITY.commit}+dirty`])
@@ -833,6 +836,7 @@ describe('limitation propagation — a downgraded product says so in the file', 
     const refused = resolveContourExportPermit('geojson', {
       launchStatus: 'not-analyzed',
       verticalUnitsKnown: true,
+      precision: null,
       crsProjected: true,
       analyticalGeometry: true,
     });

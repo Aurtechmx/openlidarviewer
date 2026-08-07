@@ -5,10 +5,11 @@
  * consumer that is about to make a metric claim — a distance in metres, an area
  * in m², a volume in m³, a density in pts/m², an elevation against a datum — can
  * read a single object instead of re-deriving unit, datum, axis and frame from
- * `metadata.crs` five different ways. Today ~13 consumers each reach into a
- * `CrsInfo` / `ResolvedCrs` and re-answer the same questions (see
- * docs/architecture/spatial-context-consumers.md); the divergence between those
- * answers is exactly the class of defect the coordinate-integrity roadmap
+ * `metadata.crs` five different ways. The inventory tracks 13 consumers that
+ * each used to reach into a `CrsInfo` / `ResolvedCrs` and re-answer the same
+ * questions (see docs/architecture/spatial-context-consumers.md, which
+ * `scripts/lint-spatial-context.mjs` holds to the tree); the divergence between
+ * those answers is exactly the class of defect the coordinate-integrity roadmap
  * tracks — plausible output on the wrong unit or axis.
  *
  * This module is a FAÇADE, not a replacement. It builds nothing new: it reuses
@@ -28,9 +29,17 @@
  *
  * Pure — no DOM, no three.js, no proj4. Runs unchanged in Node tests.
  *
- * NOTE (scope): this PR adds the model, its cross-product matrix test, and the
- * consumer inventory ONLY. No consumer is routed through it here; that is the
- * atomic follow-up. Nothing imports this module yet by design.
+ * WHERE THE CONTEXT IS BUILT. Once, at an application boundary, then passed
+ * down: `CrsService.context()` for the active scan, and `spatialContextFrom`
+ * over a cloud's own `metadata.crs` where several scans are in play at the same
+ * time (epoch comparison). A leaf that calls `spatialContextFrom` while its
+ * caller already holds a context has re-opened the divergence this closes, and
+ * `scripts/lint-spatial-context.mjs` fails the build when a migrated consumer
+ * goes back to deriving unit, datum or axis for itself.
+ *
+ * `docs/architecture/spatial-context-consumers.md` is the inventory of which
+ * consumers read this today and which have not moved yet; that lint keeps the
+ * document and the tree in agreement.
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';
@@ -98,6 +107,31 @@ export interface SpatialContext {
    * metres (a height built from it has no metres value, per `heightInMetres`).
    */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Linear unit TOKEN of the Z axis when the source declared one distinct from
+   * the horizontal unit. Only a raw {@link CrsInfo} carries this; a
+   * {@link ResolvedCrs} does not model it, so a context built from one reports
+   * `undefined` — the honest "not stated here", never the horizontal token
+   * standing in for it.
+   */
+  readonly verticalLinearUnit?: CrsLinearUnit;
+  /**
+   * Whether the VERTICAL scale is a real measurement: a finite, positive
+   * metres-per-vertical-unit factor. The vertical counterpart to
+   * {@link linearUnitKnown}, and deliberately independent of it — a consumer
+   * must be able to refuse a height claim while still permitting a horizontal
+   * one, and vice versa. An absent factor is `false`, never a defaulted 1.
+   */
+  readonly verticalScaleKnown: boolean;
+  /**
+   * Whether the vertical REFERENCE SURFACE is known, i.e.
+   * `verticalReference !== 'unknown'`. Separate from
+   * {@link verticalScaleKnown}: a file can state NAVD88 without stating
+   * whether its heights are feet or metres, and can state metres without
+   * stating what surface they are measured from. Both must hold before a
+   * height is a datum-referenced metre value.
+   */
+  readonly verticalReferenceKnown: boolean;
 
   // ── Up axis / basis ──────────────────────────────────────────────────────
   /** Which storage axis is elevation; `'unknown'` when undetected. */
@@ -161,7 +195,7 @@ export interface SpatialContextPlacement {
  * project-frame placement. A `null` / `undefined` CRS fails closed: the context
  * resolves to `unknown`, and `metricClaimsPermitted` is `false`.
  *
- * Accepting both inputs is what lets the ~13 consumers route through this one
+ * Accepting both inputs is what lets all 13 consumers route through this one
  * façade without hand-building anything: a `CrsInfo` is bridged through the
  * canonical `resolvedFromCrsInfo` mapper, while a `ResolvedCrs` — which already
  * carries the resolved `kind` (including `local` / `unknown`, which a `CrsInfo`
@@ -203,6 +237,17 @@ export function spatialContextFrom(
 
   const layerTransform = placement.layerTransform;
 
+  // The vertical unit TOKEN exists only on the raw CrsInfo shape. Reading it
+  // off a ResolvedCrs would need a field that type does not have, so the
+  // discriminant that told the two apart above tells them apart here too, and
+  // a ResolvedCrs-built context reports `undefined` rather than borrowing the
+  // horizontal token.
+  const verticalLinearUnit =
+    crs != null && !('kind' in crs) ? crs.verticalLinearUnit : undefined;
+  const verticalScale = crs?.verticalUnitToMetres;
+  const verticalScaleKnown =
+    verticalScale !== undefined && Number.isFinite(verticalScale) && verticalScale > 0;
+
   return {
     crsName: resolved.name,
     epsg: resolved.epsg,
@@ -217,6 +262,9 @@ export function spatialContextFrom(
     verticalDatum: crs?.verticalDatum,
     verticalEpsg: crs?.verticalEpsg,
     verticalUnitToMetres: crs?.verticalUnitToMetres,
+    verticalLinearUnit,
+    verticalScaleKnown,
+    verticalReferenceKnown: verticalReference !== 'unknown',
 
     upAxis: placement.upAxis ?? 'unknown',
 
@@ -230,4 +278,56 @@ export function spatialContextFrom(
 
     metricClaimsPermitted,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vertical scale — the three policies, named once
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * How a consumer treats a MISSING vertical unit. The three answers already
+ * exist in the tree, hand-written as `??` chains that look alike and are not,
+ * which is how two surfaces end up reporting the same height differently.
+ *
+ * `'none'` — no fallback. The vertical scale is whatever the source declared
+ *     for the Z axis, or nothing. The strictest, and correct wherever the
+ *     output states a metre value for a height (RFC 7946 ordinates, KML
+ *     absolute altitude): a horizontal unit is not evidence about Z.
+ *
+ * `'horizontal-when-known'` — fall back to the horizontal factor only when
+ *     that factor is itself a real declared unit. The fail-closed form of the
+ *     GeoTIFF convention, and correct for a LABEL that names the unit.
+ *
+ * `'horizontal'` — fall back to the horizontal factor unconditionally, which
+ *     for an unknown CRS is the inert placeholder 1. The GeoTIFF convention as
+ *     written, and correct only where a factor is needed to keep a GEOMETRY
+ *     self-consistent (grid spacing, cell floors) rather than to make a claim.
+ */
+export type VerticalScaleFallback = 'none' | 'horizontal-when-known' | 'horizontal';
+
+/**
+ * Metres per unit of the Z axis under an explicitly chosen fallback policy.
+ * `undefined` means the vertical scale is genuinely unknown, and a caller that
+ * receives it must withhold the metre value rather than treat the magnitude as
+ * metres (the same contract as `heightInMetres`).
+ *
+ * Every consumer that used to write its own `verticalUnitToMetres ?? …` chain
+ * reads this instead, so the policy it applies is stated in the call rather
+ * than inferred from the shape of an expression.
+ */
+export function verticalMetresPerUnit(
+  ctx: SpatialContext,
+  fallback: VerticalScaleFallback,
+): number | undefined {
+  // A DECLARED vertical unit ends the question either way. When it is
+  // degenerate (zero, negative, non-finite) the source is corrupt, and
+  // borrowing the horizontal factor would answer a question the file already
+  // answered wrongly — so that case fails closed rather than falling through.
+  if (ctx.verticalUnitToMetres !== undefined) {
+    return ctx.verticalScaleKnown ? ctx.verticalUnitToMetres : undefined;
+  }
+  if (fallback === 'none') return undefined;
+  if (fallback === 'horizontal-when-known' && !ctx.linearUnitKnown) return undefined;
+  const h = ctx.linearUnitToMetres;
+  return Number.isFinite(h) && h > 0 ? h : undefined;
 }

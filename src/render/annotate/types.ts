@@ -12,6 +12,7 @@
  */
 
 import type { NavMode } from '../NavController';
+import type { WorkOwnership } from '../../model/workOwnership';
 
 /** The four annotation categories — each drives a distinct marker style. */
 export type AnnotationType = 'note' | 'info' | 'warning' | 'issue';
@@ -61,8 +62,40 @@ export interface Annotation {
    * against any particular node's mesh.
    */
   localPosition: Vec3Object;
-  /** Georeferenced position (local + cloud origin); recomputed on load. */
+  /**
+   * Georeferenced (survey) position — the picked point's `localPosition` folded
+   * with the owning cloud's source origin (`cloud.worldXYZ(index)`). Populated
+   * at creation from the picked cloud, and recomputed on load from the session's
+   * capture origin when a stored value is absent (see `rebaseSessionGeometry`),
+   * so a deliverable report can state a real survey coordinate rather than a
+   * small render-local one. Absent only when no owning cloud can be resolved.
+   */
   worldPosition?: Vec3Object;
+  /**
+   * The cloud the point was picked on — its display name / source filename.
+   *
+   * A LABEL, despite the field name: it is written from the cloud's display
+   * name (`annotate/pickGeoref.ts`) so a report can say which scan an
+   * annotation came from. It is NOT an identity and must never be used to
+   * decide ownership. Two scans routinely share a filename, and a renamed
+   * layer changes this string. Ownership lives in {@link owner}, which carries
+   * the layer's stable id.
+   */
+  layerId?: string;
+  /**
+   * Which layer this annotation belongs to, and which frame `localPosition` is
+   * already in: the layer's own source-local frame, or the project frame (see
+   * `model/workOwnership.ts`). Names the owning layer by its STABLE id, so
+   * ownership survives a rename, a duplicate filename, layer reordering,
+   * removal of a sibling layer, and a session round trip.
+   *
+   * Optional: an annotation from a session written before ownership existed
+   * carries none, and `io/sessionOwnership.ts` attributes it to the anchor
+   * layer with the assignment marked inferred rather than asserted.
+   */
+  owner?: WorkOwnership;
+  /** Human-readable CRS label of the world frame (e.g. `EPSG:25830`), when known. */
+  crs?: string;
   /** Camera viewpoint captured at creation, for "jump to annotation". */
   cameraState?: SavedCameraState;
   /** Optional link to a measurement by its id. */
@@ -113,6 +146,8 @@ export interface NewAnnotation {
   type: AnnotationType;
   localPosition: Vec3Object;
   worldPosition?: Vec3Object;
+  layerId?: string;
+  crs?: string;
   cameraState?: SavedCameraState;
   linkedMeasurementId?: string;
 }
@@ -134,6 +169,8 @@ export function createAnnotation(input: NewAnnotation, now: number = Date.now())
   const note = cleanNote(input.note);
   if (note !== undefined) a.note = note;
   if (input.worldPosition) a.worldPosition = cloneVec3(input.worldPosition);
+  if (input.layerId) a.layerId = input.layerId;
+  if (input.crs) a.crs = input.crs;
   if (input.cameraState) a.cameraState = input.cameraState;
   if (input.linkedMeasurementId) a.linkedMeasurementId = input.linkedMeasurementId;
   return a;

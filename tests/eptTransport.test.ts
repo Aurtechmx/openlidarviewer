@@ -7,7 +7,30 @@
  */
 
 import { describe, expect, test } from 'vitest';
-import { createEptTransport } from '../src/io/ept/eptTransport';
+import { createEptTransport, EptTimeoutError } from '../src/io/ept/eptTransport';
+
+/**
+ * A fetch that never answers on its own; it rejects only when the signal handed
+ * to it aborts, with that signal's reason. The transport composes its per-attempt
+ * timeout into that signal, so a small `requestTimeoutMs` makes this time out
+ * deterministically — the shape of a server that accepts the connection but never
+ * responds. Reused to prove a timeout is a distinct outcome from a user cancel.
+ */
+function neverAnsweringFetch(): { fn: typeof fetch; calls: number } {
+  const handle = { calls: 0, fn: undefined as unknown as typeof fetch };
+  handle.fn = ((_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    handle.calls++;
+    return new Promise<Response>((_resolve, reject) => {
+      const sig = init?.signal;
+      if (!sig) return;
+      const onAbort = (): void =>
+        reject(sig.reason ?? new DOMException('Aborted', 'AbortError'));
+      if (sig.aborted) onAbort();
+      else sig.addEventListener('abort', onAbort, { once: true });
+    });
+  }) as typeof fetch;
+  return handle;
+}
 
 /** Build a fetch fake that returns a scripted sequence of responses. */
 function scriptedFetch(
@@ -146,5 +169,90 @@ describe('createEptTransport — abort composition', () => {
       t.fetchText('https://example.com/ept.json', controller.signal),
     ).rejects.toThrow(/aborted/);
     expect(handle.calls).toBe(0);
+  });
+});
+
+describe('createEptTransport — internal timeout is a distinct outcome from a user cancel', () => {
+  test('a per-attempt timeout throws a typed EptTimeoutError, not an abort', async () => {
+    const handle = neverAnsweringFetch();
+    const t = createEptTransport({
+      fetchImpl: handle.fn,
+      sleep: () => Promise.resolve(),
+      requestTimeoutMs: 5,
+      maxRetries: 0,
+    });
+    const err = await t
+      .fetchText('https://example.com/ept-hierarchy/0-0-0-0.json')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EptTimeoutError);
+    expect((err as EptTimeoutError).code).toBe('timeout');
+    expect((err as Error).message).toMatch(/timed out/i);
+    // A timeout must never wear the AbortError name the cancel classifier reads
+    // as a silent user cancellation.
+    expect((err as Error).name).not.toBe('AbortError');
+  });
+
+  test('a timeout retries like a transient fault, then still surfaces as a timeout', async () => {
+    const handle = neverAnsweringFetch();
+    const t = createEptTransport({
+      fetchImpl: handle.fn,
+      sleep: () => Promise.resolve(),
+      requestTimeoutMs: 5,
+      maxRetries: 2,
+    });
+    await expect(
+      t.fetchBytes('https://example.com/ept-data/0-0-0-0.bin'),
+    ).rejects.toBeInstanceOf(EptTimeoutError);
+    // 1 initial + 2 retries: the deadline was retried, never silently cancelled.
+    expect(handle.calls).toBe(3);
+  });
+
+  test('a real user cancel mid-flight surfaces as an abort, distinct from a timeout', async () => {
+    const handle = neverAnsweringFetch();
+    const t = createEptTransport({
+      fetchImpl: handle.fn,
+      sleep: () => Promise.resolve(),
+      requestTimeoutMs: 60_000, // long, so only the user cancel can fire
+      maxRetries: 3,
+    });
+    const controller = new AbortController();
+    const p = t.fetchText('https://example.com/ept.json', controller.signal);
+    controller.abort();
+    const err = await p.catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(EptTimeoutError);
+    expect((err as Error).name).toBe('AbortError');
+    expect(handle.calls).toBe(1);
+  });
+
+  test('a signal already aborted before the first request throws a recognisable AbortError, not a generic error', async () => {
+    const handle = scriptedFetch([{ status: 200, body: 'never reached' }]);
+    const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
+    const controller = new AbortController();
+    controller.abort(); // user cancel BEFORE the first attempt runs
+    const err = await t
+      .fetchText('https://example.com/ept.json', controller.signal)
+      .catch((e: unknown) => e);
+    // Not the old generic Error('aborted') — a real AbortError, so isAbortError
+    // reads a pre-request cancel as a cancel rather than a transport failure.
+    expect((err as Error).name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(EptTimeoutError);
+    expect(handle.calls).toBe(0); // short-circuited before any fetch
+  });
+
+  test('a cancel that lands between retries surfaces as an AbortError, not a generic error', async () => {
+    // First attempt is a transient 503, so the transport backs off and retries.
+    const handle = scriptedFetch([{ status: 503 }, { status: 200, body: 'never reached' }]);
+    const controller = new AbortController();
+    const t = createEptTransport({
+      fetchImpl: handle.fn,
+      // The cancel arrives during the backoff sleep, before the retry's pre-check.
+      sleep: () => { controller.abort(); return Promise.resolve(); },
+    });
+    const err = await t
+      .fetchText('https://example.com/ept.json', controller.signal)
+      .catch((e: unknown) => e);
+    expect((err as Error).name).toBe('AbortError');
+    expect(err).not.toBeInstanceOf(EptTimeoutError);
+    expect(handle.calls).toBe(1); // only the first attempt ran; the retry pre-check caught the cancel
   });
 });

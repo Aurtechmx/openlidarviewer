@@ -1,0 +1,183 @@
+:root {
+  color-scheme: dark;
+  /* OpenLiDARViewer brand palette */
+  --bg: #0a0e1a;          /* Deep Navy */
+  --panel: #0f172a;       /* Midnight Blue */
+  /*
+   * v0.4.6 two-tier surfaces (design audit 1.2). A focal surface
+   * (the verdict card, the active control rail) reads RAISED — a hair
+   * lighter than --panel with a soft lift shadow; secondary stacked
+   * panels read RECESSIVE — a translucent, near-transparent fill so
+   * the eye lands on the one surface that matters. Both ride the
+   * theme rails (overridden in the Light + High-contrast blocks).
+   */
+  --panel-raised: #16203a;          /* a step up from --panel — holds the verdict + active rail */
+  --panel-recessive: rgba(15, 23, 42, 0.55); /* demoted stacked panels — hairline-led, low fill */
+  --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.55), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  --hairline-strong: rgba(140, 170, 230, 0.28); /* the raised surface earns a slightly firmer edge */
+  --hairline: rgba(140, 170, 230, 0.14);
+  --text: #eef3fb;
+  --text-dim: #9aa6bd;
+  --text-faint: #8a94ad; /* lightened from #6b768f to clear WCAG AA (≥4.5:1) on --bg */
+  --accent: #00b2ff;      /* Electric Blue */
+  --accent-soft: rgba(0, 178, 255, 0.16);
+  /* Ink colour for text/glyphs ON a solid --accent fill (primary
+   * action recipe, v0.4.6). Dark on the bright electric-blue here;
+   * the Light theme keeps it white for WCAG AA on its deeper accent. */
+  --on-accent: #0a0e1a;
+  /* Readiness rating scale — semantic, colourblind-paired with the word. */
+  --rating-excellent: #34d399;
+  --rating-strong: #6ee7b7;
+  --rating-good: #fbbf24;
+  --rating-moderate: #fb923c;
+  --rating-weak: #f87171;
+  --rating-blocked: #c084fc;  /* violet — gate blocked, distinct from the amber/red scale */
+  --cyan: #00f0ff;        /* Cyan */
+  --teal: #00d4c8;        /* Teal */
+  --ice: #c9f6ff;         /* Ice Blue */
+  --brand-gradient: linear-gradient(90deg, #00b2ff 0%, #00f0ff 52%, #00d4c8 100%);
+  --font: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /*
+   * Spacing scale — a 2px base stepping up to a 4px rhythm. Every padding,
+   * margin, and gap in the UI resolves to one of these steps so spacing is
+   * consistent across panels rather than ad-hoc per-component pixels.
+   *   --space-2xs 2   hairline gaps, icon nudges
+   *   --space-xs  4   tight inline gaps
+   *   --space-sm  6   related items inside a row
+   *   --space-md  8   default control padding / list gap
+   *   --space-lg  10  comfortable inset
+   *   --space-xl  12  group padding
+   *   --space-2xl 16  section padding / distinct groups
+   *   --space-3xl 20  panel padding
+   *   --space-4xl 24  major section separation
+   */
+  --space-2xs: 2px;
+  --space-xs: 4px;
+  --space-sm: 6px;
+  --space-md: 8px;
+  --space-lg: 10px;
+  --space-xl: 12px;
+  --space-2xl: 16px;
+  --space-3xl: 20px;
+  --space-4xl: 24px;
+
+  /*
+   * Type scale — seven steps drawn from the most common existing
+   * font-sizes so the bulk of the UI maps onto a token with no
+   * change. The body of the interface lives at --text-xs (11px),
+   * the single most-used size, with smaller meta text at 10px and
+   * progressively larger steps for headings and display numbers.
+   *   --text-2xs 10  dense meta / captions
+   *   --text-xs  11  default UI text (most common)
+   *   --text-sm  12  comfortable body / labels
+   *   --text-md  13  emphasised body
+   *   --text-lg  14  sub-headings
+   *   --text-xl  16  section headings
+   *   --text-2xl 20  panel titles
+   *   --text-3xl 28  display figures
+   */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 14px;
+  --text-xl: 16px;
+  --text-2xl: 20px;
+  --text-3xl: 28px;
+
+  /*
+   * Radius scale — four corner radii plus a pill. Drawn from the
+   * dominant existing radii (6px is by far the most common control
+   * radius) so most surfaces map with no change.
+   *   --radius-xs   4    chips / tight insets
+   *   --radius-sm   6    default control radius (most common)
+   *   --radius-md   8    cards / panels
+   *   --radius-lg  10    large panels / overlays
+   *   --radius-pill 999  fully rounded pills
+   */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /*
+   * Motion scale — three durations and the standard easing. 130ms
+   * is the dominant interaction duration ("fast"); base/slow cover
+   * the slower fades. --ease-standard mirrors the plain `ease`
+   * curve used across nearly every transition.
+   *   --dur-fast 130ms  hovers / control feedback (most common)
+   *   --dur-base 200ms  panel / opacity fades
+   *   --dur-slow 240ms  larger reveal transitions
+   */
+  --dur-fast: 130ms;
+  --dur-base: 200ms;
+  --dur-slow: 240ms;
+  --ease-standard: ease;
+
+  /*
+   * Button system primitives — shared interaction values so every button
+   * family (export, analyse, convert, url, view, class-legend, profile PDF)
+   * presses, focuses, and disables the same way. The look (size, colour,
+   * flex role) stays per-family; only these cross-cutting states are pooled.
+   *   --btn-press         uniform pointer-down "give"
+   *   --focus-ring        crisp keyboard focus outline (a11y)
+   *   --focus-ring-offset gap between control edge and ring
+   */
+  --btn-press: scale(0.97);
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
+
+  /*
+   * v0.4.6 honesty primitive (design audit 2.4). ONE caveat treatment
+   * — a left-rule + faint tint — that every honest qualification wears
+   * (Suitability caveats, `unknown`/local-frame notes, Blocked/Preview
+   * reasons, export notes). Modelled on the existing .olv-di-warning
+   * amber-left-rule. The hue keys to amber (caution) by default; a
+   * caveat can opt into the rating colour via the .is-* helpers on
+   * .olv-caveat. Tinted bg stays low-alpha so the caveat reads as a
+   * calm honest limit, never an alarm.
+   */
+  --caveat-rule: var(--rating-good);
+  --caveat-tint: color-mix(in srgb, var(--rating-good) 9%, transparent);
+
+  /*
+   * Mobile GUI refresh (v0.6.x) — hero-console material + accent, PHONE ONLY.
+   * Every token below is consumed exclusively inside `max-width: 767px` /
+   * `pointer: coarse` blocks, so desktop rendering is byte-for-byte unchanged.
+   * The reference is a dark, high-tech point-cloud console: near-black navy
+   * base, panels of dark glass edged with a low-opacity cyan hairline, one
+   * bright azure->cyan accent, and a semantic green for on/enabled status.
+   */
+  --m-accent-1: #3ba9ff;        /* azure end of the accent gradient */
+  --m-accent-2: #29d3ff;        /* cyan end — the "active" hue on phones */
+  --m-accent-grad: linear-gradient(135deg, #3ba9ff 0%, #29d3ff 100%);
+  --m-edge: rgba(41, 211, 255, 0.15);       /* low-opacity cyan panel hairline */
+  --m-edge-strong: rgba(41, 211, 255, 0.34);/* active / focused edge */
+  --m-glass: rgba(14, 20, 32, 0.86);        /* #0E1420 dark-glass panel fill */
+  --m-glass-raised: rgba(17, 24, 38, 0.92); /* #111826 focal surface fill */
+  --m-glass-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.62);
+  --m-on: #4ade80;              /* semantic on/enabled/yes green */
+
+  /*
+   * Phone bottom-chrome geometry (v0.6.x responsive pass), PHONE ONLY.
+   * The tool dock and the collapsed bottom sheet form ONE chrome zone: the
+   * dock sits flush on the sheet's head with no gap and no second border. That
+   * only holds if the dock's offset from the bottom equals the collapsed head's
+   * height EXACTLY, so the height is derived here from its parts instead of
+   * being restated as a magic number at each site. A hand-tuned literal is what
+   * produced the previous defect: the dock was parked 38 px up while the head
+   * measured 43 px, so the sheet painted over the bottom 5 px of every dock
+   * button and sliced the captions in half.
+   *   head = vertical padding + the tab strip's inset + the tab itself
+   */
+  --m-tab-h: 32px;              /* collapsed sheet tab, visual height */
+  --m-tab-hit: 40px;            /* its invisible tap area (padding-free) */
+  --m-tabs-pad: 2px;            /* tab-strip inset inside the head */
+  --m-head-pad-y: 3px;          /* head padding, collapsed */
+  --m-chrome-head-h: calc(
+    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
+  );
+}
+

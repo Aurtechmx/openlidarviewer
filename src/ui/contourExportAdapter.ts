@@ -46,8 +46,13 @@ export interface ContourExportHost {
     fmt: ContourVectorFormat,
     opts: { contourMethod?: string; deliverablePurpose?: string; permit: ContourExportPermit },
   ): Promise<void>;
-  /** Stash the granted permit for the async map-sheet dialog, then open it. */
-  openMapPdf(permit: ContourExportPermit): void;
+  /**
+   * Stash the granted permit + the live export intent for the async map-sheet
+   * dialog, then open it. The intent carries the purpose deliverable facts so the
+   * sheet documents the chosen purpose (presentation only — no gate/evidence
+   * effect).
+   */
+  openMapPdf(permit: ContourExportPermit, intent: ContourExportIntent): void;
   /**
    * Run the DEM raster package export, stamped with the evidence-gate permit the
    * adapter resolved (or null when unavailable). The DEM keeps its own internal
@@ -105,6 +110,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!demPermit.ok) {
         this._flashBlocked(srcBtn, product, demPermit.reasons);
@@ -123,6 +129,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!permit.ok) {
         this._flashBlocked(srcBtn, product, permit.reasons);
@@ -143,6 +150,7 @@ export class ContourExportAdapter {
         crsProjected: frame.crsProjected,
         analyticalGeometry: false,
         blockedReasons: frame.blockedReasons,
+        precision: frame.precision,
       });
       if (!reportPermit.ok) {
         this._flashBlocked(srcBtn, product, reportPermit.reasons);
@@ -160,6 +168,7 @@ export class ContourExportAdapter {
       crsProjected: frame.crsProjected,
       analyticalGeometry: intent.methodId === 'olv.contour.analytical',
       blockedReasons: frame.blockedReasons,
+      precision: frame.precision,
     });
     if (!permit.ok) {
       this._flashBlocked(srcBtn, product, permit.reasons);
@@ -168,7 +177,7 @@ export class ContourExportAdapter {
 
     if (product === 'pdf') {
       // The dialog is the feedback — no busy spinner; stash the permit + open it.
-      this.host.openMapPdf(permit);
+      this.host.openMapPdf(permit, intent);
       return;
     }
     // geojson | dxf | svg → the gated vector exporter, stamped self-describing.

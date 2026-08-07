@@ -96,7 +96,7 @@ RELEASE_NOTES_v0.5.*.md export-ignore
 docs-site/releases/v0.4.*.md export-ignore
 docs-site/releases/v0.5.*.md export-ignore
 # The release checklist is an internal process aid, not scholarly content.
-RELEASE_CHECKLIST.md export-ignore
+docs/project/RELEASE_CHECKLIST.md export-ignore
 
 # Internal coordinate-integrity roadmap (findings + repair order), not a
 # reviewer-facing document. Kept out of the deposit like the other plans.

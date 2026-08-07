@@ -18,6 +18,11 @@ import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions 
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
+import {
+  evaluateFullResClassExport,
+  FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
+} from '../export/fullResClassGuard';
+import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
 
@@ -74,6 +79,13 @@ export interface ExportPanelCallbacks {
   isReduced: () => boolean;
   /** Re-decode the original file at full resolution. Only call when `hasFullSource()`. */
   getFullCloud: () => Promise<PointCloud | null>;
+  /**
+   * Whether the active cloud has in-session classification edits (manual
+   * reclassify) that live only in the display-resolution buffer. Drives the
+   * full-resolution disclosure — a full-res export re-decodes the original file
+   * and drops them.
+   */
+  hasClassEdits?: () => boolean;
   /** Count of placed measurements — drives the Products lane's enablement. */
   measurementCount?: () => number;
   /** Export the placed measurements to an open format (GeoJSON / CSV). */
@@ -95,8 +107,29 @@ export interface ExportPanelCallbacks {
    * at least one annotation or measurement to carry.
    */
   kmlStatus?: () => { ready: boolean; reason: string };
+  /**
+   * Export the scanned area as a KML polygon (the bounding rectangle of the
+   * scan, reprojected to lon/lat). Carries no features, so it is available on a
+   * georeferenced scan with nothing measured yet.
+   */
+  exportScanFootprint?: () => void;
+  /**
+   * Whether the footprint export is possible right now, with a reason when not.
+   * The reason is the user-facing refusal from the CRS gate, so it explains what
+   * to fix rather than restating that the button is off.
+   */
+  scanFootprintStatus?: () => { ready: boolean; reason: string };
   /** The active clip box, if any — when enabled, the cloud export is restricted to it. */
   getActiveClip?: () => ClipBox | null;
+  /**
+   * Which scan the panel is exporting, as the shell's own active-scan id (null
+   * for a streaming scan). Read once before the export's first await and again
+   * before the bytes are written: a full-resolution re-decode takes seconds
+   * off-thread and nothing stops the user opening another scan meanwhile, which
+   * would otherwise write one scan's points under another's name and CRS. When
+   * omitted the panel cannot make that comparison and exports as before.
+   */
+  getActiveScanId?: () => string | null;
   /**
    * Whether a streaming scan is attached but has no resident points to export
    * yet. Lets the gate say "still streaming in" instead of the misleading
@@ -140,6 +173,13 @@ export class ExportPanel {
    * 'keep' and shows a one-line note instead of the three pills.
    */
   private _crsKnown = true;
+  /**
+   * Whether the Products section is expanded. Open by default: measurements and
+   * the map outlines are primary outputs of a session, and a collapsed lane made
+   * them read as an appendix to the point-cloud converter. Held on the instance
+   * so a `refresh()` re-render does not fold the section back up under the user.
+   */
+  private _productsOpen = true;
 
   constructor(callbacks: ExportPanelCallbacks) {
     this._cb = callbacks;
@@ -387,6 +427,7 @@ export class ExportPanel {
       includeClassification: this._includeClass,
       viewDecimated: this._cb.isReduced(),
       fullRes: this._fullRes,
+      hasClassEdits: this._cb.hasClassEdits?.() ?? false,
       gzip: this._gzip,
     };
     const s = buildExportSummary(input);
@@ -396,10 +437,16 @@ export class ExportPanel {
   }
 
   /**
-   * The collapsed "Products" lane — derived artifacts kept out of the primary
-   * point-cloud save flow. Today it surfaces the measurement GeoJSON/CSV export;
-   * rasters / report / session will move here as they're wired. Renders nothing
-   * when the host wires no product callbacks.
+   * The "Products" section: the artifacts derived from a scan (measurements as
+   * open vector formats, the integrity report, the map outlines) as opposed to
+   * the point-cloud file the panel's primary flow writes.
+   *
+   * It used to be a one-line text toggle over a collapsed strip of small pills,
+   * which put a session's actual deliverables below the fold and made them read
+   * like an appendix. It is now a titled section, open by default, with each
+   * product a full-width button under a group label and a line saying what the
+   * file contains or why it is unavailable. Renders nothing when the host wires
+   * no product callbacks.
    */
   private _renderProducts(): void {
     this._products.replaceChildren();
@@ -414,73 +461,128 @@ export class ExportPanel {
       count = 0;
     }
 
-    const head = el('button', {
-      className: 'olv-export-products-head',
-      type: 'button',
-      text: 'Products ▾',
+    const head = el('button', { className: 'olv-export-products-head', type: 'button' });
+    const chevron = el('span', { className: 'olv-export-products-chevron', text: '▾' });
+    head.append(el('span', { text: 'Products' }), chevron);
+    const content = el('div', { className: 'olv-export-products-body' });
+    const applyOpen = (): void => {
+      head.setAttribute('aria-expanded', this._productsOpen ? 'true' : 'false');
+      content.classList.toggle('olv-hidden', !this._productsOpen);
+      chevron.classList.toggle('is-closed', !this._productsOpen);
+    };
+    applyOpen();
+    head.addEventListener('click', () => {
+      this._productsOpen = !this._productsOpen;
+      applyOpen();
     });
-    const content = el('div', { className: 'olv-export-products-body olv-hidden' });
-    head.addEventListener('click', () => content.classList.toggle('olv-hidden'));
 
-    const row = el('div', { className: 'olv-bc-pills' });
+    const measureRow = el('div', { className: 'olv-export-product-actions' });
     ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
-      const btn = el('button', { className: 'olv-bc-pill', type: 'button', text: label }) as HTMLButtonElement;
-      btn.disabled = count === 0;
-      btn.addEventListener('click', () => this._cb.exportMeasurements?.(fmt));
-      row.append(btn);
+      measureRow.append(
+        this._productButton(label, count > 0, () => this._cb.exportMeasurements?.(fmt)),
+      );
     });
     // Tamper-evident integrity report (JSON) — the same measurements, stamped
     // with provenance + a verifiable content digest (catches accidental/casual
     // edits; not a cryptographic signature). The honest deliverable.
     if (this._cb.exportIntegrityReport) {
-      const btn = el('button', {
-        className: 'olv-bc-pill',
-        type: 'button',
-        text: 'Integrity report',
-      }) as HTMLButtonElement;
-      btn.disabled = count === 0;
+      const btn = this._productButton(
+        'Integrity report',
+        count > 0,
+        () => this._cb.exportIntegrityReport?.(),
+      );
       btn.setAttribute('data-testid', 'export-integrity-report');
-      btn.addEventListener('click', () => this._cb.exportIntegrityReport?.());
-      row.append(btn);
+      measureRow.append(btn);
     }
-
-    const hint =
-      count === 0
-        ? 'Place measurements, then export them as open vector formats.'
-        : `${count} measurement${count === 1 ? '' : 's'} ready to export.`;
     content.append(
-      this._label('Measurements'),
-      row,
-      el('span', { className: 'olv-export-fullres-hint', text: hint }),
+      this._productGroup(
+        'Measurements',
+        measureRow,
+        count === 0
+          ? 'Place measurements, then export them as open vector formats.'
+          : `${count} measurement${count === 1 ? '' : 's'} ready to export.`,
+      ),
     );
 
-    // Site KML — annotations + measurements + viewpoints for Google Earth / QGIS.
-    // Offered only when the host wires the export AND the scan is georeferenced
-    // with something to carry (the status callback owns that judgement).
+    // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
+    // Each entry is offered only when the host wires it, and each carries its
+    // own readiness because they gate on different things: the site file needs
+    // features to place, the outline needs only a known coordinate system.
+    const mapRow = el('div', { className: 'olv-export-product-actions' });
+    const mapHints: string[] = [];
     if (this._cb.exportKml) {
-      let status = { ready: false, reason: '' };
-      try {
-        status = this._cb.kmlStatus?.() ?? status;
-      } catch {
-        status = { ready: false, reason: '' };
-      }
-      const kmlRow = el('div', { className: 'olv-bc-pills' });
-      const kmlBtn = el('button', { className: 'olv-bc-pill', type: 'button', text: 'KML' }) as HTMLButtonElement;
-      kmlBtn.disabled = !status.ready;
-      kmlBtn.addEventListener('click', () => this._cb.exportKml?.());
-      kmlRow.append(kmlBtn);
-      content.append(
-        this._label('Site KML (Google Earth)'),
-        kmlRow,
-        el('span', {
-          className: 'olv-export-fullres-hint',
-          text: status.ready
-            ? 'Annotations, measurements, and views as a georeferenced .kml.'
-            : status.reason || 'Needs a georeferenced scan with a measurement or annotation.',
-        }),
+      const status = this._readStatus(this._cb.kmlStatus);
+      mapRow.append(
+        this._productButton('Site KML', status.ready, () => this._cb.exportKml?.()),
+      );
+      mapHints.push(
+        status.ready
+          ? 'Site KML: annotations, measurements, and saved views.'
+          : `Site KML: ${status.reason || 'needs a georeferenced scan with a measurement or annotation.'}`,
       );
     }
+    if (this._cb.exportScanFootprint) {
+      const status = this._readStatus(this._cb.scanFootprintStatus);
+      const btn = this._productButton(
+        'Scan area (KML polygon)',
+        status.ready,
+        () => this._cb.exportScanFootprint?.(),
+      );
+      btn.setAttribute('data-testid', 'export-scan-footprint');
+      mapRow.append(btn);
+      mapHints.push(
+        status.ready
+          ? 'Scan area: the bounding rectangle of the scan, as a lon/lat polygon.'
+          : `Scan area: ${status.reason || 'needs a scan with a known coordinate system.'}`,
+      );
+    }
+    if (mapHints.length > 0) {
+      content.append(this._productGroup('Google Earth', mapRow, mapHints.join(' ')));
+    }
     this._products.append(head, content);
+  }
+
+  /**
+   * Read a readiness callback without letting it break the render. Same reason
+   * as the measurement count above: this runs during construction, before the
+   * host's lazy viewer exists, so a dereference in the host must degrade to "not
+   * ready" rather than take down app init.
+   */
+  private _readStatus(
+    fn: (() => { ready: boolean; reason: string }) | undefined,
+  ): { ready: boolean; reason: string } {
+    try {
+      return fn?.() ?? { ready: false, reason: '' };
+    } catch {
+      return { ready: false, reason: '' };
+    }
+  }
+
+  /** One labelled product group: label, its stacked actions, one line of hint. */
+  private _productGroup(label: string, actions: HTMLElement, hint: string): HTMLElement {
+    const group = el('div', { className: 'olv-export-product-group' });
+    group.append(
+      this._label(label),
+      actions,
+      el('span', { className: 'olv-export-fullres-hint', text: hint }),
+    );
+    return group;
+  }
+
+  /**
+   * One product action. Carries the converter's pill treatment so the border,
+   * hover and type match every other button in the panel; the extra class makes
+   * it a full-width, left-aligned row so a stack of them stays scannable.
+   */
+  private _productButton(label: string, enabled: boolean, onClick: () => void): HTMLButtonElement {
+    const btn = el('button', {
+      className: 'olv-bc-pill olv-export-product-btn',
+      type: 'button',
+      text: label,
+    }) as HTMLButtonElement;
+    btn.disabled = !enabled;
+    btn.addEventListener('click', onClick);
+    return btn;
   }
 
   private _label(text: string): HTMLElement {
@@ -581,9 +683,31 @@ export class ExportPanel {
       return;
     }
 
+    const useFull = this._fullRes && this._cb.hasFullSource();
+    // Refuse — never silently discard. A full-resolution export re-decodes the
+    // original file and cannot carry in-session classification edits (they are
+    // keyed by display-point index; the re-decode has no stable mapping back).
+    // Block the write and steer the user to a lossless path instead of shipping
+    // a file that quietly drops their edits.
+    const classGate = evaluateFullResClassExport({
+      fullRes: useFull,
+      includeClassification: this._includeClass,
+      hasClassEdits: this._cb.hasClassEdits?.() ?? false,
+    });
+    if (!classGate.allowed) {
+      this._setStatus(classGate.reason ?? 'Export refused.', 'error');
+      return;
+    }
+
+    // Snapshot the export's inputs BEFORE the first await. The clip box decides
+    // which points reach the file, and the user can drag or disable it while the
+    // decode runs — reading it afterwards would filter the export by a box that
+    // was never part of the request. `scanId` is the identity re-verified below.
+    const clip = this._cb.getActiveClip?.() ?? null;
+    const scanId = this._cb.getActiveScanId?.() ?? null;
+
     this._busy = true;
     this._exportBtn.disabled = true;
-    const useFull = this._fullRes && this._cb.hasFullSource();
     this._exportBtn.textContent = useFull ? 'Re-decoding…' : 'Exporting…';
     try {
       // Full resolution re-decodes the original file; otherwise convert the
@@ -593,8 +717,27 @@ export class ExportPanel {
         this._setStatus('Could not read the source at full resolution.', 'error');
         return;
       }
-      // Respect an active clip: export only the points inside (or outside) the box.
-      const clip = this._cb.getActiveClip?.() ?? null;
+      // The decode is over — prove the export still describes what was asked for
+      // before any bytes are written. Nothing disables the scan list or the
+      // reclassify tools while a multi-second full-res decode runs off-thread, so
+      // both facts the gate above depends on can have moved underneath it. The
+      // class gate is re-taken rather than re-implemented: an edit made during the
+      // decode flips exactly the input it already reads.
+      if (!sameExportTarget(this._cb.getActiveScanId?.() ?? null, scanId)) {
+        this._setStatus(EXPORT_SCAN_CHANGED_REFUSAL, 'error');
+        return;
+      }
+      const classGateAfter = evaluateFullResClassExport({
+        fullRes: useFull,
+        includeClassification: this._includeClass,
+        hasClassEdits: this._cb.hasClassEdits?.() ?? false,
+      });
+      if (!classGateAfter.allowed) {
+        this._setStatus(FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL, 'error');
+        return;
+      }
+      // Respect an active clip: export only the points inside (or outside) the
+      // box the user had set when they pressed Export (captured above).
       const clipped = clip != null && clip.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       this._exportBtn.textContent = 'Exporting…';

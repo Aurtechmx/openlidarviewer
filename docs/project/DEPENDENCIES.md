@@ -1,7 +1,9 @@
-# Dependency audit (v0.6.3)
+# Dependency audit (v0.6.4)
 
-This is the committed dependency baseline for OpenLiDARViewer v0.6.2, recorded
-2026-07-25 (UTC) from the committed `package-lock.json`. It is a baseline, not
+This is the committed dependency baseline for OpenLiDARViewer, re-verified for
+v0.6.4 on 2026-08-05 (UTC) from the committed `package-lock.json`. The v0.6.4
+cycle added and removed no runtime or development package, so the resolved set
+below is unchanged from v0.6.3. It is a baseline, not
 the per-release record: the exact commit, toolchain, and lockfile hash for a
 published release live in the release manifest and the exact-tag evidence
 attached to that release. A committed document cannot name the commit it ships
@@ -17,15 +19,15 @@ unaffected.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.1 |
+| Release line | v0.6.4 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.1`, 59 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.4`, 59 components |
 
 The CycloneDX bill of materials for the production dependency set is in
-[sbom.json](sbom.json). Licences are credited in
+[sbom.json](../../sbom.json). Licences are credited in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Direct runtime dependencies
@@ -43,7 +45,7 @@ These ship in the deploy archive.
 | @loaders.gl/ply | ^4.4.2 | 4.4.3 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
-| proj4 | ^2.20.8 | 2.20.9 | MIT |
+| proj4 | ^2.21.0 | 2.21.0 | MIT |
 | three | ^0.184.0 | 0.184.0 | MIT |
 
 ## Direct development dependencies
@@ -114,6 +116,18 @@ through `overrides` rather than waiting on the packages that depend on them:
 The `vite` override is scoped to `vitepress` alone. The application builds on
 Vite 8.1.5 and is not affected by it. `npm run docs:build` passes on the
 overridden tree.
+
+## Stubbed to prune
+
+`texture-compressor` is replaced by a local empty stub through a
+`file:vendor-stubs/texture-compressor` override. It sits under
+`@loaders.gl/textures` on the encode path only, which shells out to `npx
+texture-compressor`. OLV decodes glTF and never encodes, so it never invokes
+that CLI, and there are zero references to it in the built `dist`. The real
+package pulls `image-size@0.7.5`, which carries CVE-2025-71329 and
+CVE-2025-71330 (HIGH, denial of service) with no fixed upstream version. The
+stub removes `image-size` and its own transitives (`argparse`, `sprintf-js`)
+from the installed tree rather than accepting an advisory with no available fix.
 
 ## Deferred upgrades
 

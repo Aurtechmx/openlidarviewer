@@ -100,7 +100,7 @@ describe('floor-plan emitted-geometry budget (dense noisy room)', () => {
   it('the decorative floor fill carries no hole subpaths and a bounded ring count', () => {
     // Pre-fix this floor traced 200+ CW hole rings (occlusion shadows).
     const holes = model.floorRings.filter((r) => ringSignedArea(r) < 0);
-    expect(holes.length).toBe(0);
+    expect(holes).toHaveLength(0);
     expect(model.floorRings.length).toBeLessThanOrEqual(24);
   });
 
@@ -173,7 +173,7 @@ describe('limitUnknownGaps', () => {
     const gaps: PlanGap[] = [];
     for (let i = 0; i < 120; i++) gaps.push(gap(0, i * 1.0, 0.3 + 0.01 * i));
     const out = limitUnknownGaps(gaps, 0.05);
-    expect(out.length).toBe(MAX_UNKNOWN_GAPS);
+    expect(out).toHaveLength(MAX_UNKNOWN_GAPS);
     // The widest survived.
     expect(out.some((g) => Math.abs(g.widthM - (0.3 + 0.01 * 119)) < 1e-9)).toBe(true);
     // The narrowest did not.
@@ -182,7 +182,7 @@ describe('limitUnknownGaps', () => {
 
   it('merges near-duplicates (same opening traced twice keeps the wider)', () => {
     const out = limitUnknownGaps([gap(0, 0, 0.8), gap(0.02, 0.02, 0.78), gap(5, 5, 0.6)], 0.05);
-    expect(out.length).toBe(2);
+    expect(out).toHaveLength(2);
     expect(out[0].widthM).toBeCloseTo(0.8, 9);
   });
 });

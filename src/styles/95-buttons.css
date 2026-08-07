@@ -1,0 +1,220 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Unified button system (export-ui polish)
+
+   A single source of truth for the cross-cutting INTERACTION states every
+   button family shares — motion, pointer-down press, keyboard focus ring, and
+   disabled treatment. Each family keeps its own size / colour / flex role in
+   its rule above; this block only pools the states so the families stay in
+   sync. Placed last so source order wins over the per-family declarations.
+
+   NOTE: the positioned dock controls (.olv-mode*, .olv-mode-reset) are
+   deliberately excluded — they own bespoke transforms (translateX/translate)
+   that a blanket scale() press would clobber.
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-export-btn,
+.olv-analyse-dl,
+.olv-analyse-run,
+.olv-bc-convert,
+.olv-bc-dlall,
+.olv-bc-row-dl,
+.olv-url-btn,
+.olv-view-save,
+.olv-view-go,
+.olv-cl-solo,
+.olv-cl-showall,
+.olv-mp-profile-pdf,
+.olv-object-run-anyway,
+.olv-reclass-auto,
+.olv-modal-btn {
+  transition: color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    box-shadow var(--dur-fast) var(--ease-standard),
+    transform var(--dur-fast) var(--ease-standard);
+}
+/* Press affordance — a small, uniform "give" on pointer-down. */
+.olv-export-btn:not(:disabled):active,
+.olv-analyse-dl:not(:disabled):active,
+.olv-analyse-run:not(:disabled):active,
+.olv-bc-convert:not(:disabled):active,
+.olv-bc-dlall:not(:disabled):active,
+.olv-bc-row-dl:not(:disabled):active,
+.olv-url-btn:not(:disabled):active,
+.olv-view-save:not(:disabled):active,
+.olv-view-go:not(:disabled):active,
+.olv-cl-solo:not(:disabled):active,
+.olv-cl-showall:not(:disabled):active,
+.olv-mp-profile-pdf:not(:disabled):active,
+.olv-object-run-anyway:not(:disabled):active,
+.olv-reclass-auto:not(:disabled):active,
+.olv-modal-btn:not(:disabled):active {
+  transform: var(--btn-press);
+}
+/* Crisp, consistent keyboard focus ring on every family (a11y). */
+.olv-export-btn:focus-visible,
+.olv-analyse-dl:focus-visible,
+.olv-analyse-run:focus-visible,
+.olv-bc-convert:focus-visible,
+.olv-bc-dlall:focus-visible,
+.olv-bc-row-dl:focus-visible,
+.olv-url-btn:focus-visible,
+.olv-view-save:focus-visible,
+.olv-view-go:focus-visible,
+.olv-cl-solo:focus-visible,
+.olv-cl-showall:focus-visible,
+.olv-mp-profile-pdf:focus-visible,
+.olv-object-run-anyway:focus-visible,
+.olv-reclass-auto:focus-visible,
+.olv-modal-btn:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+/* One unmistakable disabled treatment so a dormant action never invites a click. */
+.olv-export-btn:disabled,
+.olv-analyse-dl:disabled,
+.olv-analyse-run:disabled,
+.olv-bc-convert:disabled,
+.olv-bc-dlall:disabled,
+.olv-bc-row-dl:disabled,
+.olv-url-btn:disabled,
+.olv-view-save:disabled,
+.olv-view-go:disabled,
+.olv-cl-solo:disabled,
+.olv-cl-showall:disabled,
+.olv-mp-profile-pdf:disabled,
+.olv-object-run-anyway:disabled,
+.olv-modal-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/*
+ * v0.4.6 one-primary-action-per-state (design audit 1.4). A single
+ * primary-action recipe — solid accent fill, dark ink, weight 600 —
+ * modelled on the lasso toast's button. Exactly one element per
+ * panel/state wears the SOLID treatment so the eye knows where the
+ * journey wants it next; everything else stays a quiet ghost/outline.
+ * `.olv-primary-action` is the reusable handle; the existing
+ * importance-following primaries (Run when fresh, the DEM/Report
+ * download, Convert) are promoted onto the same solid look in place so
+ * no markup changes and every selector survives.
+ */
+.olv-primary-action,
+.olv-analyse-run:not(.is-rerun):not(:disabled),
+.olv-analyse-dl.is-primary:not(:disabled),
+.olv-object-dl.is-primary:not(:disabled),
+.olv-bc-convert:not(:disabled) {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.olv-primary-action:not(:disabled):hover,
+.olv-analyse-run:not(.is-rerun):not(:disabled):hover,
+.olv-analyse-dl.is-primary:not(:disabled):hover,
+.olv-object-dl.is-primary:not(:disabled):hover,
+.olv-bc-convert:not(:disabled):hover {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--accent) 88%, white);
+}
+
+/* Primary / CTA elevation — the few "take the data with you" actions read
+   raised so the action hierarchy is legible at a glance. Secondary buttons
+   stay quiet (border + tint only); only these lift. */
+.olv-primary-action,
+.olv-analyse-run:not(.is-rerun),
+.olv-analyse-dl.is-primary,
+.olv-object-dl.is-primary,
+.olv-bc-convert,
+.olv-modal-cta {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05) inset,
+    0 6px 16px -10px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.olv-analyse-run:not(.is-rerun):not(:disabled):hover,
+.olv-analyse-dl.is-primary:not(:disabled):hover,
+.olv-bc-convert:not(:disabled):hover,
+.olv-modal-cta:not(:disabled):hover {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.07) inset,
+    0 10px 22px -10px color-mix(in srgb, var(--accent) 75%, transparent);
+  transform: translateY(-1px);
+}
+.olv-analyse-run:not(.is-rerun):not(:disabled):active,
+.olv-analyse-dl.is-primary:not(:disabled):active,
+.olv-bc-convert:not(:disabled):active,
+.olv-modal-cta:not(:disabled):active {
+  transform: var(--btn-press);
+}
+
+/*
+ * Auto-classify (Edit classes panel) emphasis.
+ *
+ * The button carries `.olv-bc-pill` for its shape, and that base rule sits
+ * later in this file at the same specificity, so any emphasis declared next to
+ * the panel is reset back to the plain transparent pill. Users read the result
+ * as a low-emphasis control and miss the action. Declaring it here, in the
+ * block that already wins on source order, is what makes it visible.
+ *
+ * It borrows the export CTA's accent language one step down: the same
+ * `--accent` tokens, but an outline over a soft tint instead of the solid fill,
+ * so the panel keeps a single loudest action. Emphasis is carried by border
+ * weight and font weight as well as hue, and the label stays `--text` rather
+ * than `--accent`, which keeps the text contrast well clear of AA in Dark,
+ * Light and High-contrast (all three define `--accent` and `--accent-soft`).
+ */
+.olv-reclass-auto {
+  color: var(--text);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  font-weight: 600;
+}
+/* Hover needs the extra `:not(.is-disabled)` to outrank the equally late
+   `.olv-bc-pill:hover:not(.is-disabled):not(.is-active)`. */
+.olv-reclass-auto:not(:disabled):not(.is-disabled):hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-color: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .olv-export-btn,
+  .olv-analyse-dl,
+  .olv-analyse-run,
+  .olv-bc-convert,
+  .olv-bc-dlall,
+  .olv-bc-row-dl,
+  .olv-url-btn,
+  .olv-view-save,
+  .olv-view-go,
+  .olv-cl-solo,
+  .olv-cl-showall,
+  .olv-mp-profile-pdf,
+  .olv-object-run-anyway,
+  .olv-reclass-auto,
+  .olv-modal-btn {
+    transition: color var(--dur-fast) var(--ease-standard),
+      background var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard);
+  }
+  .olv-export-btn:active,
+  .olv-analyse-dl:active,
+  .olv-analyse-run:active,
+  .olv-bc-convert:active,
+  .olv-bc-dlall:active,
+  .olv-bc-row-dl:active,
+  .olv-url-btn:active,
+  .olv-view-save:active,
+  .olv-view-go:active,
+  .olv-cl-solo:active,
+  .olv-cl-showall:active,
+  .olv-mp-profile-pdf:active,
+  .olv-object-run-anyway:active,
+  .olv-reclass-auto:active,
+  .olv-modal-btn:active,
+  .olv-analyse-run:not(.is-rerun):hover,
+  .olv-analyse-dl.is-primary:hover,
+  .olv-bc-convert:hover,
+  .olv-modal-cta:hover { transform: none; }
+}
+

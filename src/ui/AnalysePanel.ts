@@ -69,7 +69,7 @@ import {
   loadContourDeliverableBuild,
 } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
-import type { SheetSize, SheetOrientation } from '../render/measure/mapSheetPdf';
+import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {
   SHEET_OPTIONS,
@@ -113,6 +113,10 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
+import {
+  sameExportTarget,
+  TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL,
+} from '../export/exportScanIdentity';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
 import { loadContourExportAdapter } from '../lazyChunks';
@@ -159,6 +163,19 @@ export interface AnalysePanelCallbacks {
   }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
+  /**
+   * The shell's active-scan id (null for a streaming scan). Stamped onto each
+   * result in {@link AnalysePanel.update} and compared again at export time.
+   *
+   * A terrain result is only cleared when the session resets, so opening a
+   * SECOND scan additively leaves the first scan's contours, DEM and report on
+   * screen while `getMapContext` / `getExportBasename` have already moved to the
+   * new scan. Exporting then writes A's geometry with B's world origin, CRS,
+   * linear unit and filename — no timing involved, it reproduces every time.
+   * With this wired the panel refuses instead. When omitted the panel cannot
+   * tell the two apart and behaves as before.
+   */
+  getActiveScanId?: () => string | null;
   /**
    * Switch the 3D viewer's colour mode to the colourblind-safe 'confidence'
    * trust overlay — the SAME per-cell confidence + strong/moderate/weak
@@ -271,10 +288,34 @@ let lastNotes: string | null = null;
  *   "1 m"          → { num: "1",  unit: "m" }
  *   "Not ready"    → { num: "Not ready", unit: "" }  (no leading digit)
  */
-function splitReadinessValue(value: string): { num: string; unit: string } {
+export function splitReadinessValue(value: string): { num: string; unit: string } {
   const m = value.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
   if (!m) return { num: value, unit: '' };
   return { num: m[1], unit: m[2].trim() };
+}
+
+/**
+ * Decide how a readiness value + detail render across the card's two text slots.
+ * The subscript slot beside the big figure is narrow, so only a short, real unit
+ * ("m", "%", "ft", "% meas.") is allowed to sit there. A long, word-y annotation
+ * such as "(vertical unit unverified)" would collapse that slot into a
+ * one-char-per-line column, so it is kept out of the subscript and folded onto
+ * the normally-wrapping detail line instead (unless the detail already carries
+ * the same caveat, to avoid stating it twice).
+ */
+export function readinessCardParts(
+  value: string,
+  detail: string,
+): { num: string; unitText: string; detailText: string } {
+  const { num, unit } = splitReadinessValue(value);
+  const compactUnit = unit.replace(/\bmeasured\b/, 'meas.');
+  const unitIsCompact = compactUnit.length <= 8 && !compactUnit.includes('(');
+  const caveat = unitIsCompact ? '' : unit;
+  return {
+    num,
+    unitText: unitIsCompact ? compactUnit : '',
+    detailText: caveat && !detail.includes(caveat) ? `${detail} · ${caveat}` : detail,
+  };
 }
 
 export class AnalysePanel {
@@ -291,6 +332,13 @@ export class AnalysePanel {
   private readonly _validationRow: HTMLElement;
   private readonly _body: HTMLElement;
   private _result: AnalyseContoursResult | null = null;
+  /**
+   * The scan `_result` was computed on, stamped when the result lands. The
+   * result outlives an additive scan open (only a session reset clears it), so
+   * this is what tells an export that the analysis on screen and the map context
+   * it would be stamped with come from two different scans.
+   */
+  private _resultScanId: string | null = null;
   /** The "Colour 3D by confidence" toggle button + its current on/off state, so
    *  its label always shows the way back to the original colour. */
   private _confidenceColorBtn?: HTMLButtonElement;
@@ -348,6 +396,14 @@ export class AnalysePanel {
    * when it is null or not granted. Cleared after each PDF export attempt.
    */
   private _contourPdfPermit: ContourExportPermit | null = null;
+  /**
+   * The active purpose's deliverable facts for the pending map-sheet PDF. Stashed
+   * at Studio 'pdf' click time (alongside the permit) and read by
+   * `_buildAndDownloadMapPdf` so the sheet documents the chosen purpose. Null for
+   * any non-Studio export path, keeping that sheet byte-identical. Cleared after
+   * each attempt.
+   */
+  private _contourPdfPurpose: MapSheetPurpose | null = null;
   /** DEM raster export — gated only on a result existing, not the contour gate. */
   private _demButton!: HTMLButtonElement;
   /**
@@ -569,6 +625,10 @@ export class AnalysePanel {
   /** Re-render from a fresh analysis result (or clear when null). */
   update(result: AnalyseContoursResult | null): void {
     this._result = result;
+    // Bind the result to the scan it was computed on. The runner only lands a
+    // result while its own dataset guard still holds, so the active id here IS
+    // the id the analysis ran against.
+    this._resultScanId = result ? this._cb.getActiveScanId?.() ?? null : null;
     // Any update supersedes a pending staleness caveat: a fresh result was
     // computed against the edited classes, and a clear removes the result
     // the caveat was about.
@@ -669,8 +729,12 @@ export class AnalysePanel {
               this._contourGeneralizeToleranceCells = generalizeToleranceCells;
             },
             exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
-            openMapPdf: (permit) => {
+            openMapPdf: (permit, intent) => {
               this._contourPdfPermit = permit;
+              // Stash the purpose deliverable facts so the async map-sheet build
+              // documents the chosen purpose (presentation only; the permit is
+              // the sole gate). Field-compatible with MapSheetPurpose.
+              this._contourPdfPurpose = intent.deliverable;
               this._studioExportBtns.get('pdf')?.click();
             },
             exportDemPackage: (stamp) => this._exportDemPackage(this._demButton, stamp),
@@ -1573,19 +1637,19 @@ export class AnalysePanel {
   private _readinessCard(ind: ReadinessIndicator): HTMLElement {
     const card = el('div', { className: `olv-analyse-ready is-${ind.rating}` });
 
+    // Right column: a big tabular figure with the unit set as a subscript,
+    // and a colour-coded rating pill (the rating word stays for colourblind
+    // safety, no longer relying on hue alone). A long, word-y unit is demoted
+    // off the narrow subscript and onto the detail line (see readinessCardParts).
+    const { num, unitText, detailText } = readinessCardParts(ind.value, ind.detail);
+
     // Left column: label over the supporting line.
     const main = el('div', { className: 'olv-analyse-ready-main' });
     main.append(
       el('div', { className: 'olv-analyse-ready-label', text: ind.label }),
-      el('div', { className: 'olv-analyse-ready-detail', text: ind.detail }),
+      el('div', { className: 'olv-analyse-ready-detail', text: detailText }),
     );
 
-    // Right column: a big tabular figure with the unit set as a subscript,
-    // and a colour-coded rating pill (the rating word stays for colourblind
-    // safety, no longer relying on hue alone).
-    const { num, unit } = splitReadinessValue(ind.value);
-    // Keep the unit compact so the figure can't crowd the supporting line.
-    const unitText = unit.replace(/\bmeasured\b/, 'meas.');
     const figure = el('div', {
       className: `olv-analyse-ready-figure${num.match(/\d/) ? '' : ' is-text'}`,
     });
@@ -1838,6 +1902,27 @@ export class AnalysePanel {
   }
 
   /**
+   * Refuse an export whose result belongs to a scan that is no longer active,
+   * and say so on the panel. Returns true when the caller must write nothing.
+   *
+   * Every terrain deliverable mixes the result (computed on one scan) with the
+   * host's live map context and basename (read from whatever is active now), so
+   * a result that outlived its scan would be published in the wrong frame under
+   * the wrong name. Refusing is deliberate over silently clearing the result:
+   * the analysis is the user's work and re-running it is their call, so the
+   * panel keeps it on screen and explains why it cannot be exported.
+   *
+   * Called at the head of every export path AND again after any regeneration
+   * await, since a scan can be opened while contours are being rebuilt.
+   */
+  private _refuseForeignScanExport(): boolean {
+    if (!this._result || !this._cb.getActiveScanId) return false;
+    if (sameExportTarget(this._resultScanId, this._cb.getActiveScanId())) return false;
+    this.setStaleNotice(TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL);
+    return true;
+  }
+
+  /**
    * Resolve the full analysis result to serialize for a contour export at the
    * panel's current shape style. Reuses the on-screen result when the style
    * already matches (no recompute); otherwise regenerates from the cached core at
@@ -1891,7 +1976,13 @@ export class AnalysePanel {
     if (!this._result || this._result.model.features.length === 0) {
       return;
     }
+    if (this._refuseForeignScanExport()) return;
+    // Both frame inputs are read HERE, before the regeneration await below: the
+    // rebuild can take seconds and the host's map context follows the ACTIVE
+    // scan, so reading it afterwards would georeference these contours with
+    // whatever scan the user opened meanwhile.
     const basename = this._cb.getExportBasename?.() ?? 'contours';
+    const mapCtx = this._cb.getMapContext?.();
     const label = btn?.textContent ?? '';
     if (btn) {
       btn.disabled = true;
@@ -1904,6 +1995,11 @@ export class AnalysePanel {
       const result = await this._resultForExport();
       const [{ serializeContours, triggerBrowserDownload }, { buildExportProvenance }] =
         await Promise.all([loadContourDownload(), loadExportProvenance()]);
+      // Re-verify after the regeneration: the captured context is the right one
+      // for `basename`/`mapCtx`, but a scan opened during the rebuild means the
+      // user is no longer looking at this analysis, and publishing it now would
+      // hand them a file for a scan they have moved on from.
+      if (this._refuseForeignScanExport()) return;
       const provenance = buildExportProvenance(result, {
         basename,
         generatedAt: new Date(),
@@ -1922,7 +2018,6 @@ export class AnalysePanel {
       // `worldOrigin` the DEM package and map sheet already use). When the host
       // can't supply one, serializeContours omits the CRS stamp rather than
       // georeferencing local coordinates.
-      const mapCtx = this._cb.getMapContext?.();
       const worldOrigin = mapCtx?.worldOrigin ?? null;
       triggerBrowserDownload(
         serializeContours(result.model, fmt, {
@@ -2021,13 +2116,16 @@ export class AnalysePanel {
   ): Promise<void> {
     const r = this._result;
     if (!r) return;
+    if (this._refuseForeignScanExport()) return;
     const label = btn.textContent ?? 'DEM (ZIP)';
     btn.disabled = true;
     btn.textContent = '…';
+    // Frame + name captured before the writer chunk loads, so the raster and its
+    // .prj / README describe the scan this result came from.
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const basename = this._cb.getExportBasename?.() ?? 'terrain';
     try {
       const { buildDemPackage } = await loadDemPackage();
-      const ctx = this._cb.getMapContext?.() ?? {};
-      const basename = this._cb.getExportBasename?.() ?? 'terrain';
       const bytes = buildDemPackage(r, {
         worldOrigin: ctx.worldOrigin ?? null,
         basename,
@@ -2071,6 +2169,12 @@ export class AnalysePanel {
     intent: ContourExportIntent,
   ): Promise<void> {
     if (!permit.ok || !this._result) return;
+    if (this._refuseForeignScanExport()) return;
+    // Captured before the regeneration + writer awaits below (which are seconds
+    // of work), so the bundle's origin, unit and filename belong to the scan the
+    // contours were computed on.
+    const ctx = this._cb.getMapContext?.() ?? {};
+    const basename = this._cb.getExportBasename?.() ?? 'contours';
     try {
       // Regenerate the bundled geometry at the SELECTED PURPOSE's style + tolerance
       // (Survey Review = exact analytical; a cartographic purpose = generalized at
@@ -2090,8 +2194,9 @@ export class AnalysePanel {
       const [{ buildContourDeliverableFromResultAsync }] = await Promise.all([
         loadContourDeliverableBuild(),
       ]);
-      const ctx = this._cb.getMapContext?.() ?? {};
-      const basename = this._cb.getExportBasename?.() ?? 'contours';
+      // Same re-verification as the vector exports: a scan opened during the
+      // rebuild means this bundle is no longer the one the user is looking at.
+      if (this._refuseForeignScanExport()) return;
       const bytes = await buildContourDeliverableFromResultAsync(result, {
         decision: permit.decision,
         basename,
@@ -2135,13 +2240,16 @@ export class AnalysePanel {
   ): Promise<void> {
     const r = this._result;
     if (!r) return;
+    if (this._refuseForeignScanExport()) return;
     const label = btn.textContent ?? 'Intelligence report (PDF)';
     btn.disabled = true;
     btn.textContent = '…';
+    // Name + frame read before the pdf-lib chunk loads, so the report's header
+    // describes the scan its verdicts were computed on.
+    const basename = this._cb.getExportBasename?.() ?? 'terrain';
+    const mapCtx = this._cb.getMapContext?.() ?? {};
     try {
       const { buildTerrainReportPdf } = await loadTerrainReportPdf();
-      const basename = this._cb.getExportBasename?.() ?? 'terrain';
-      const mapCtx = this._cb.getMapContext?.() ?? {};
       // The renderer assembles the content from the SAME result the panel shows,
       // stamping the unified provenance via these options — so the report's
       // header / footer (CRS, datum, verdicts, accuracy, date) can never drift
@@ -2187,6 +2295,10 @@ export class AnalysePanel {
     // Same hard guard as the export itself — a blocked / empty result never
     // reaches the dialog.
     if (!r || r.model.features.length === 0 || r.quality.exportReadiness === 'blocked') return;
+    // Refuse before the dialog rather than after the user fills the title block:
+    // the pre-filled fields come from the ACTIVE scan while `r` came from
+    // another, so the sheet would document a scan it does not plot.
+    if (this._refuseForeignScanExport()) return;
 
     const ctx = this._cb.getMapContext?.() ?? {};
     const basename = this._cb.getExportBasename?.() ?? 'contours';
@@ -2473,30 +2585,40 @@ export class AnalysePanel {
     // and package paths so no PDF escapes the gate).
     const permit = this._contourPdfPermit;
     this._contourPdfPermit = null;
+    // Consume the stashed purpose (Studio path only); cleared so a later non-Studio
+    // export can never inherit a stale purpose.
+    const purpose = this._contourPdfPurpose;
+    this._contourPdfPurpose = null;
     if (!permit || !permit.ok) {
       // eslint-disable-next-line no-console
       console.warn('OpenLiDARViewer: map sheet export refused — no granted evidence permit (§19).');
       return;
     }
-    const { buildMapSheetPdf } = await loadMapSheetPdf();
-    const { buildExportProvenance } = await loadExportProvenance();
+    // The dialog can sit open for minutes and its Export can regenerate the
+    // contours, so the scan is checked again here — right before the sheet is
+    // built — not only when the dialog was opened.
+    if (this._refuseForeignScanExport()) return;
     // Resolved linear unit so the sheet's scale bar + 1:N ratio honour a foot
     // CRS (the map is drawn in source units) instead of the metre default. Read
-    // the map context ONCE — it also supplies the scene up-axis the annotation
-    // markers are rotated by.
+    // the map context ONCE, before the pdf chunks load — it also supplies the
+    // scene up-axis the annotation markers are rotated by.
     const mapCtx = this._cb.getMapContext?.();
     const linearUnit = mapCtx?.linearUnit;
+    const sheetBasename = this._cb.getExportBasename?.() ?? undefined;
     // Annotation layer inputs, only gathered when the user opted in. The list is
     // read straight from the host (same order as the Annotations panel, so the
-    // marker index matches). The up-axis MUST be the gather's own — see the
-    // frame reasoning in annotationMapProjection.ts.
+    // marker index matches) — and read here, alongside the rest of the sheet's
+    // inputs, so the whole sheet comes from one instant. The up-axis MUST be the
+    // gather's own — see the frame reasoning in annotationMapProjection.ts.
     const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
+    const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const { buildExportProvenance } = await loadExportProvenance();
     // The unified provenance, derived from the SAME result the sheet plots, so
     // the title block's CRS / datum / style / accuracy / readiness / date can't
     // drift from the GeoJSON / DXF / SVG / DEM exports of this scan.
     const provenance = buildExportProvenance(result, {
-      basename: this._cb.getExportBasename?.() ?? undefined,
+      basename: sheetBasename,
       generatedAt: opts.generatedAt,
       softwareVersion: __APP_VERSION__,
       metricVersion: TERRAIN_METRIC_VERSION,
@@ -2527,6 +2649,9 @@ export class AnalysePanel {
       includeAnnotations: opts.includeAnnotations,
       annotations,
       sceneUpAxis,
+      // Purpose deliverable facts (Studio path) so the sheet renders purpose-
+      // specific content. Null on any other path ⇒ byte-identical sheet.
+      purpose,
     });
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),

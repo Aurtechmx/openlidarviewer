@@ -63,15 +63,15 @@ const SOURCE_FILES: Record<string, string> = {
   'package-lock.json': '{}',
   'sbom.json': '{}',
   'CITATION.cff': 'cff',
-  'DEPENDENCIES.md': 'deps',
-  'THIRD_PARTY_NOTICES.md': 'notices',
+  'docs/project/DEPENDENCIES.md': 'deps',
+  'docs/project/THIRD_PARTY_NOTICES.md': 'notices',
   'docs/validation/claim-register.yaml': 'claims',
   'docs/release/RELEASE_ASSETS.md': 'asset guide',
   'tests/fixtures/reference/slope/SHA256SUMS': 'sums',
-  [`RELEASE_NOTES_v${VERSION}.md`]: 'notes',
-  [`KNOWN_LIMITATIONS_v${VERSION}.md`]: 'limits',
-  [`VALIDATION_REPORT_v${VERSION}.md`]: 'validation',
-  [`REPRODUCIBILITY_v${VERSION}.md`]: 'repro',
+  [`docs/releases/RELEASE_NOTES_v${VERSION}.md`]: 'notes',
+  [`docs/releases/KNOWN_LIMITATIONS_v${VERSION}.md`]: 'limits',
+  [`docs/releases/VALIDATION_REPORT_v${VERSION}.md`]: 'validation',
+  [`docs/releases/REPRODUCIBILITY_v${VERSION}.md`]: 'repro',
 };
 
 const ALL_STAGES = [
@@ -260,10 +260,10 @@ describeZip('release:verify — provenance', () => {
 
 describeZip('release:verify — versioned evidence documents in the source zip', () => {
   for (const doc of [
-    `RELEASE_NOTES_v${VERSION}.md`,
-    `KNOWN_LIMITATIONS_v${VERSION}.md`,
-    `VALIDATION_REPORT_v${VERSION}.md`,
-    `REPRODUCIBILITY_v${VERSION}.md`,
+    `docs/releases/RELEASE_NOTES_v${VERSION}.md`,
+    `docs/releases/KNOWN_LIMITATIONS_v${VERSION}.md`,
+    `docs/releases/VALIDATION_REPORT_v${VERSION}.md`,
+    `docs/releases/REPRODUCIBILITY_v${VERSION}.md`,
   ]) {
     it(`rejects a source zip missing ${doc}`, () => {
       const files = { ...SOURCE_FILES };

@@ -44,7 +44,7 @@ describe('loadPly — tiny.ply fixture (ground truth from FIXTURES.md)', () => {
     const pc = await loadPly(loadFixture());
     expect(pc.colors).toBeInstanceOf(Uint8Array);
     // Three bytes (rgb) per point.
-    expect(pc.colors!.length).toBe(pc.pointCount * 3);
+    expect(pc.colors!).toHaveLength(pc.pointCount * 3);
   });
 
   test('name defaults sensibly and round-trips when given', async () => {
