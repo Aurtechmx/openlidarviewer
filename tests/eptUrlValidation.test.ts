@@ -84,7 +84,7 @@ describe('describeRemoteEptError — classification', () => {
     const msg = describeRemoteEptError(new Error('CORS policy blocked the request'), URL);
     expect(msg).toMatch(/CORS|Cross-Origin/i);
     expect(msg).toMatch(/cross-origin/i);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 
   test('an internal timeout gets a distinct, visible "timed out" message', () => {
@@ -96,7 +96,7 @@ describe('describeRemoteEptError — classification', () => {
     );
     expect(msg).toMatch(/timed out/i);
     expect(msg).toMatch(/try again|faster host/i);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 
   test('manifest 404 gets a precise "manifest not found" message', () => {
@@ -105,7 +105,7 @@ describe('describeRemoteEptError — classification', () => {
       URL,
     );
     expect(msg).toMatch(/manifest not found|404/i);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 
   test('manifest 5xx gets a "server-side error" message', () => {
@@ -150,7 +150,7 @@ describe('describeRemoteEptError — classification', () => {
 
   test('fallback message anchors the URL host', () => {
     const msg = describeRemoteEptError(new Error('something unexpected'), URL);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
     expect(msg).toMatch(/something unexpected/);
   });
 
@@ -160,6 +160,6 @@ describe('describeRemoteEptError — classification', () => {
       'https://user:pass@example.com/dataset/ept.json',
     );
     expect(msg).not.toMatch(/user:pass/);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 });
