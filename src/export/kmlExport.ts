@@ -330,6 +330,7 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
       '<Placemark>',
       `<name>${esc(m.name)}</name>`,
       desc,
+      POLYGON_STYLE_URL,
       '<Polygon>',
       '<outerBoundaryIs>',
       '<LinearRing>',
@@ -389,6 +390,27 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
   ].join('');
 }
 
+/**
+ * The shared style for every filled polygon this module emits — the area /
+ * volume measurement and the scan-area footprint.
+ *
+ * A `<Polygon>` with no `<PolyStyle>` is drawn with the reader's default, which
+ * in Google Earth is an opaque white fill: it hides the map under a white
+ * block and buries the outline. This declares an explicit outline with a light
+ * translucent fill, so the region reads as a highlight over the imagery.
+ *
+ * KML colour is `aabbggrr` (alpha, blue, green, red), NOT rgba. This is
+ * OpenLiDARViewer's blue #38bdf8 as a solid 2.5px outline and a ~15% fill.
+ */
+const POLYGON_STYLE_ID = 'olv-area';
+const POLYGON_STYLE = [
+  `<Style id="${POLYGON_STYLE_ID}">`,
+  '<LineStyle><color>fff8bd38</color><width>2.5</width></LineStyle>',
+  '<PolyStyle><color>26f8bd38</color><fill>1</fill><outline>1</outline></PolyStyle>',
+  '</Style>',
+].join('');
+const POLYGON_STYLE_URL = `<styleUrl>#${POLYGON_STYLE_ID}</styleUrl>`;
+
 /** Serialise the full input to a complete KML 2.2 document string. */
 export function buildKml(input: KmlExportInput): string {
   const placemarks: string[] = [];
@@ -398,6 +420,7 @@ export function buildKml(input: KmlExportInput): string {
     if (pm) placemarks.push(pm);
   }
   for (const v of input.viewpoints) placemarks.push(viewpointPlacemark(v, input));
+  const hasPolygon = placemarks.some((p) => p.includes('<Polygon>'));
 
   const crs = input.crsName ?? 'unknown CRS';
   const docDesc = description([
@@ -411,6 +434,9 @@ export function buildKml(input: KmlExportInput): string {
     '<Document>',
     '<name>OpenLiDARViewer Export</name>',
     docDesc,
+    // The shared style is only referenced by a <Polygon>; declare it only when
+    // one is present, so a points-and-lines export carries no unused style.
+    ...(hasPolygon ? [POLYGON_STYLE] : []),
     ...placemarks,
     '</Document>',
     '</kml>',
@@ -477,9 +503,11 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
     '<Document>',
     `<name>${esc(label)}</name>`,
     description(lines),
+    POLYGON_STYLE,
     '<Placemark>',
     `<name>${esc(`${label} (bounding rectangle)`)}</name>`,
     description(lines),
+    POLYGON_STYLE_URL,
     '<Polygon>',
     '<altitudeMode>clampToGround</altitudeMode>',
     '<outerBoundaryIs>',
