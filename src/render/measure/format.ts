@@ -100,7 +100,7 @@ const DISPLAY_SIG_FIGS = 5;
  * rounds to zero). Pure and deterministic; the value passed is already in the
  * unit that will be printed (centimetres, metres, km, m², …).
  */
-function displayDecimals(
+export function displayDecimals(
   displayValue: number,
   minDecimals: number,
   maxDecimals: number,

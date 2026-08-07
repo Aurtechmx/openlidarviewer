@@ -67,7 +67,7 @@ The two monoliths continue to shrink. Streaming session assembly moved behind a 
 
 ## Scientific evidence
 
-- the derived classifier is frozen against an evaluation corpus, and the ground-recall collapse is diagnosed rather than hidden;
+- the derived classifier is frozen against an evaluation corpus, and the ground-recall collapse is diagnosed and disclosed;
 - cross-implementation CRS reference fixtures (PROJ and pyproj) are on file, and a synthetic evaluation covers the building ground-support gate;
 - the non-redistributable E57 fixture is replaced with a generated synthetic one;
 - an acquired dataset's recorded hash is checkable;

@@ -956,14 +956,14 @@ describe('what the measurement report prints when the geometry is degenerate', (
       [measurement('distance', [[0, 0, 0], [3, 4, 0]])],
       'metric',
     );
-    expect(rows[0].value).toBe('5.00 m');
+    expect(rows[0].value).toBe('5.0000 m');
     // A foot-CRS scan converts exactly once at this boundary.
     const feet = buildMeasurementRows(
       [measurement('distance', [[0, 0, 0], [3, 4, 0]])],
       'metric',
       0.3048,
     );
-    expect(feet[0].value).toBe('1.52 m');
+    expect(feet[0].value).toBe('1.5240 m');
   });
 
   test('a measurement with too few vertices refuses rather than reporting a zero', () => {
@@ -1053,6 +1053,6 @@ describe('what the measurement report prints when the geometry is degenerate', (
         ],
         'metric',
       ).map((r) => r.value),
-    ).toEqual(['50.0 cm', '5.00 m', '5.00 km']);
+    ).toEqual(['50.000 cm', '5.0000 m', '5.0000 km']);
   });
 });
