@@ -3924,10 +3924,17 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-measure-panel::-webkit-scrollbar {
   width: 7px; height: 7px;
 }
+/* The outer column carries the whole stack, so its bar sits a touch wider
+   than the slim inner-panel bars while sharing their thumb colour. */
+.olv-left-panels::-webkit-scrollbar {
+  width: 11px; height: 11px;
+}
+.olv-left-panels::-webkit-scrollbar-track,
 .olv-analyse-panel::-webkit-scrollbar-track,
 .olv-streaming-panel::-webkit-scrollbar-track,
 .olv-inspector::-webkit-scrollbar-track,
 .olv-measure-panel::-webkit-scrollbar-track { background: transparent; }
+.olv-left-panels::-webkit-scrollbar-thumb,
 .olv-analyse-panel::-webkit-scrollbar-thumb,
 .olv-streaming-panel::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
@@ -3935,12 +3942,14 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: color-mix(in srgb, var(--accent) 55%, var(--hairline)); border-radius: 999px;
   border: 2px solid transparent; background-clip: padding-box;
 }
+.olv-left-panels::-webkit-scrollbar-thumb:hover,
 .olv-analyse-panel::-webkit-scrollbar-thumb:hover,
 .olv-streaming-panel::-webkit-scrollbar-thumb:hover,
 .olv-inspector::-webkit-scrollbar-thumb:hover,
 .olv-measure-panel::-webkit-scrollbar-thumb:hover {
   background: var(--accent); background-clip: padding-box;
 }
+.olv-left-panels::-webkit-scrollbar-corner,
 .olv-analyse-panel::-webkit-scrollbar-corner,
 .olv-streaming-panel::-webkit-scrollbar-corner,
 .olv-inspector::-webkit-scrollbar-corner,
