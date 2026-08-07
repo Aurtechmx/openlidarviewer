@@ -485,7 +485,7 @@ export async function handleRemoteEpt(
     // the manifest read + node streaming supersede it with staged progress.
     deps.dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     deps.dropZone.setCancelHandler(() => controller.abort());
-    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
+    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder, EptTimeoutError } = eptUrlMod;
 
     // Fetch the manifest. We use plain `fetch` rather than the HttpRangeSource:
     // ept.json is a small JSON document, not a range-served binary. It gets the
@@ -498,10 +498,25 @@ export async function handleRemoteEpt(
     const manifestTimer = setTimeout(() => manifestTimeout.abort(), MANIFEST_TIMEOUT_MS);
     const onOuterAbort = () => manifestTimeout.abort();
     controller.signal.addEventListener('abort', onOuterAbort, { once: true });
-    const manifestResponse = await fetch(url, { signal: manifestTimeout.signal }).finally(() => {
+    let manifestResponse: Response;
+    try {
+      manifestResponse = await fetch(url, { signal: manifestTimeout.signal });
+    } catch (err) {
+      // manifestTimeout is aborted by the 20 s timer OR, composed, by the outer
+      // load-cancel. Only the timer firing with no user cancel is a timeout:
+      // surface it as the typed EptTimeoutError (code 'timeout') so isAbortError
+      // does not read it as a cancel and describeRemoteEptError renders it as a
+      // timeout rather than a silent stop. A real user cancel rethrows unchanged.
+      if (isAbortError(err) && !controller.signal.aborted) {
+        throw new EptTimeoutError(
+          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${url}`,
+        );
+      }
+      throw err;
+    } finally {
       clearTimeout(manifestTimer);
       controller.signal.removeEventListener('abort', onOuterAbort);
-    });
+    }
     if (!manifestResponse.ok) {
       throw new Error(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,

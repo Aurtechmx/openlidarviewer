@@ -320,6 +320,10 @@ export const loadEpt = () =>
     // hardened remote transport (retry + per-attempt timeout +
     // typed error messages the describer already classifies).
     createEptTransport: transport.createEptTransport,
+    // The typed timeout error, so the manifest fetch in openStreaming throws the
+    // same cancel-vs-timeout convention the transport uses, without a static
+    // import that would pull the transport into the shell chunk.
+    EptTimeoutError: transport.EptTimeoutError,
     // auth-query extractor so a signed manifest URL's `?token=…` rides every
     // derived hierarchy/tile request (eptUrls is already in this chunk).
     eptUrlSearch: urls.eptUrlSearch,
