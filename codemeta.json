@@ -123,7 +123,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/obj",
       "name": "@loaders.gl/obj",
-      "version": "^4.4.2",
+      "version": "^4.4.4",
       "provider": {
         "@type": "Organization",
         "name": "npm",
