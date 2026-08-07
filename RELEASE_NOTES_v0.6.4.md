@@ -59,7 +59,8 @@ A projected coordinate system whose linear unit cannot be confirmed used to flow
 - mobile landscape layout and controls are refined, and the mobile interface matches the hero console;
 - a colour mode is recommended on scan load;
 - navigation preferences can invert orbit X and Y with presets;
-- profile-station dots couple to chart and table hover.
+- profile-station dots couple to chart and table hover;
+- the side panels are tidied: the Measurements action button fits its row, the terrain-readiness detail and fitness notes collapse behind a disclosure, the panel scrollbars read as a slim panel-toned rail, and the left column aligns with the measure toolbar instead of opening a gap above it.
 
 ## Architecture
 
