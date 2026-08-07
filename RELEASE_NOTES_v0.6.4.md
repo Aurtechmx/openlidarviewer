@@ -1,171 +1,118 @@
-# OpenLiDARViewer v0.6.4 — working draft
+# OpenLiDARViewer v0.6.4
 
-**Status: in development.** This document tracks every change on `main` since the
-`v0.6.3` release tag. The version has **not** been bumped: the formal release —
-version bump, regenerated validation/reproducibility/limitations evidence, and
-prose release notes — happens once the hardening tracked in the last section is
-complete and CI is green. This draft is the running record of what v0.6.4 is.
+v0.6.4 is a reliability and data-integrity release. It hardens how remote scans stream and how they cancel and time out, makes session and export writes snapshot-consistent, and turns a large class of "unknown coordinate unit" cases from a silent number into a refusal or a disclosed caveat. It also lifts several blocks out of the two monoliths, splits the stylesheet into ordered sections, and adds opt-in classification with export improvements. The measured figures in this document come from the release-mode gate run at the tagged commit.
 
-The prose below is a working list, not the final release copy.
+OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
----
+## Reliability and data integrity
 
-## Merged since v0.6.3
+- an EPT manifest that stalls now surfaces as a timeout the user can see, rather than a silent cancellation that leaves the load looking finished;
+- EPT and COPC share one cancel-versus-timeout-versus-transport-error convention, so a user cancel stays silent, an internal deadline reads as a timeout, and a network or HTTP fault stays a visible error on both paths;
+- opening a second remote COPC scan is transactional: the scan on screen survives until its replacement is ready;
+- streaming eviction gained hysteresis at the point budget boundary, so regions near the limit stop pulsing in and out on consecutive frames;
+- a `.olvsession` export captures one coherent snapshot of scan and viewer state before its first `await`, verifies the same scan is still active, and refuses the write rather than combine state from two scans;
+- report and map-sheet exports capture their inputs before the first `await` and re-check them before writing;
+- E57 page checksums are verified instead of discarded, so a corrupted page is caught rather than decoded;
+- session restore and the embed bridge validate untrusted input before acting on it;
+- the workflow recorder's download handler no longer races a teardown.
 
-### CRS and units — fail-closed hardening
+## Coordinate units, honest by default
 
-The largest theme: a unit-safety program that refuses to state a metric figure
-when the CRS unit is not confirmed, and routes the display tier through one
-`SpatialContext` model.
+A projected coordinate system whose linear unit cannot be confirmed used to flow into figures as if it were metres. Across the report, measurement, export and scorecard surfaces, an unconfirmed unit now fails closed: the figure is withheld or marked rather than stated wrong.
 
-- #217 fail closed on footprint area (m²) for an unknown-unit CRS
-- #218 fail closed on unknown CRS unit in streaming scan-report extents
-- #219 fail closed on unknown projected linear unit in epoch cut/fill
-- #220 disclose unverified units in the space/scan report
-- #223 fail closed on unknown projected linear unit in epoch alignment residual/shift
-- #224 fail closed on unconfirmed unit in the full-cloud grade
-- #225 disclose unverified units in the stockpile volume figures
-- #226 fail closed on unknown CRS unit in the static scan report
-- #227 fail closed on unknown CRS unit in the scan fitness scorecard
-- #229 explicit height value type; datum-honest inspector Z label
-- #232 DRY the linear-unit-known gate; fail closed on a missing CRS in epoch compare
-- #234 thread the height vertical-reference through the measure gate and scan report
-- #235 cross-implementation CRS reference fixtures (PROJ/pyproj) — P1 #9
-- #236 a single SpatialContext model, its cross-product matrix, and consumer inventory
-- #241 route the display-tier consumers through SpatialContext
-- #246 refuse a session that redefines a scan's CRS/axis/unit on restore
-- #247 replace regex WKT field extraction with an AST parser
-- #248 carry transform provenance on every reproject result
-- #250 audit frame boundaries; correct stale rebase docs; pin world-coord invariance
-- #255 refresh the coordinate-integrity roadmap status
+- footprint area, scan-report extents, epoch cut and fill, epoch alignment residual and shift, the fitness scorecard, the full-cloud grade and the stockpile volume each refuse or disclose when the unit is unknown;
+- four report and UI surfaces fail closed on an unknown CRS unit rather than assume one;
+- the linear-unit-known gate is single-sourced, and a missing CRS in epoch compare fails closed instead of reading as a known unit;
+- metric and coordinate consumers route through one spatial context, so a value derived twice is derived the same way;
+- wide-area Float32 quantization is measured, disclosed, graded and refused past the point where it would corrupt a figure, and a Float64 project frame is available as a non-mutating on-ramp;
+- every direct position read is classified by coordinate frame, counted through one shared module, and the height vertical-reference is threaded through the measure gate and the scan report;
+- a truncated COPC or EPT hierarchy is never graded as exact;
+- a session that redefines a scan's CRS, axis or unit on restore is refused;
+- reprojection results carry their transform provenance, and WKT fields are read with an AST parser rather than a regular expression.
 
-### Multi-scan project-frame mount
+## Classification
 
-- #238 activate the multi-scan project-frame mount, with browser evidence
-- #233 non-mutating on-ramp for the Float64 project frame
-- #240 route the CPU elevation filter through each cloud's own origin
-- #245 prove multi-scan acceptance: no move on sibling add/remove
-- #254 fix the inspector world coordinate for a non-anchor mounted layer
-- #210 fold layer placement into the terrain, profile, volume and lasso estimators
-- #207 per-cloud elevation filtering, stages A+B
+- a standalone Auto-classify button in the Edit-classes panel, styled as an accent action;
+- automatic classification is return-number aware, so a multi-return point reads as vegetation;
+- an opt-in low-vegetation-by-greenness mode assigns ASPRS class 3;
+- building classification is gated on firmer ground support;
+- auto-classify keeps the scan's natural colour rather than forcing the class palette;
+- full-resolution classified export is refused while unsaved class edits are present, and the drop is disclosed where it applies.
 
-> Note: this feature is being reverted to disabled in v0.6.4 pending the
-> per-layer frame fixes tracked below — see "Hardening in progress".
+## Exports
 
-### Viewer de-monolithing
+- exported KML polygons carry an explicit style, so Google Earth stops filling scan-area and annotation polygons opaque white;
+- a scan-area KML that wraps the antimeridian or is measured Y-up is refused rather than drawn wrong;
+- the map sheet includes annotations by default when the scan has them, with numbered markers and a table, and threads the Contour Studio purpose into the PDF;
+- the approximate-datum caveat is carried into the exported file, not shown only in the UI;
+- PDF accessibility metadata is present on all emitters.
 
-- #251 extract streaming session assembly behind a StreamingHost
-- #252 extract generateReportPdf + exportGeoContext to reportExport
-- #244 extract handleRemoteEpt + openStreamingCopc to openStreaming
-- #242 extract handleFile to openScan
-- #230 extract importSession to sessionIo
-- #228 extract the render-loop body to renderLoop behind a host
-- #222 extract Viewer.snapshot to render/snapshot
-- #221 extract toClassBuffer to render/class/classBuffer
-- #209 extract buildActionRegistry to app/actionDefinitions
-- #208 extract colour-legend/range reads to colorLegend
+## Viewer and platform
 
-### PDF and map sheet
+- WebGPU falls back to WebGL 2 when no adapter is present, fixing an iOS WebKit crash on scan open;
+- the contour readiness card renders its value inline rather than as a vertical column;
+- mobile landscape layout and controls are refined, and the mobile interface matches the hero console;
+- a colour mode is recommended on scan load;
+- navigation preferences can invert orbit X and Y with presets;
+- profile-station dots couple to chart and table hover.
 
-- #206 numbered annotation markers + description table on the Map Sheet PDF
-- #259 PDF accessibility metadata on the five remaining emitters
-- #264 include annotations on the map sheet by default when the scan has them
+## Architecture
 
-### Classification
+The two monoliths continue to shrink. Streaming session assembly moved behind a `StreamingHost`, and report, scan-open, streaming-open, render-loop, session-import and snapshot paths moved behind structural dependency objects. The Measurements panel mounts lazily, which returned the index chunk from 720 to 673 KiB. `style.css` is split into ordered section files under `src/styles/`, kept byte-for-byte against a golden fixture. Unwired dead code (3D-tiles decode, SSAO, photoreal, context view) is removed. Architecture documents are machine-checked against the tree, so a stale line count or claim fails the gate.
 
-- #266 emit the classifier worker chunk in the obfuscated build (fixes the
-  auto-classify page-reload: the worker was never registered in the obfuscator
-  exclude / chunk-pin lists, so its chunk 404'd and stale-chunk recovery
-  reloaded the app)
+## Scientific evidence
 
-### Security, hygiene and OSPS
+- the derived classifier is frozen against an evaluation corpus, and the ground-recall collapse is diagnosed rather than hidden;
+- cross-implementation CRS reference fixtures (PROJ and pyproj) are on file, and a synthetic evaluation covers the building ground-support gate;
+- the non-redistributable E57 fixture is replaced with a generated synthetic one;
+- an acquired dataset's recorded hash is checkable.
 
-- #253 OSPS security-policy docs; reword R&D-stage to actively maintained
-- #256 bundle-budget ceilings for the heavy capability chunks
-- #257 harden the workflowRecorder download handler against a teardown race
-- #213 signed-URL secret scan + shipped-file cleanup
-- #211 remove the test-report feature; harden dataset and privacy claims
-- #212 remove unwired dead code (3D-tiles decode, SSAO, photoreal, context view)
-- #237 correct over-claims (drop SSAO, fix 3D-Tiles wording, dataset count 14→12)
-- #185 make an acquired dataset's recorded hash checkable
-- #204 wire the Stryker Dashboard so the core mutation score gets a badge
+## Security and supply chain
 
-### Navigation, dependencies and test infrastructure
+- SonarCloud analysis is scoped to shipping code. Its real defects are fixed and integer truncation is guarded;
+- the embed bridge is hardened against untrusted input;
+- a signed-URL secret scan runs in CI. A vulnerable transitive image-size dependency is pruned behind a texture-compressor stub, and build-tooling dependencies are updated.
 
-- #205 navigation preferences: invert orbit X/Y with presets
-- #214 replace the non-redistributable bunny E57 fixture with a synthetic E57
-- #216 raise the mutation job timeout
-- #231 fix a stale battery unit-test reference
-- #239 streaming fast-navigation measurement harness (measurement-only)
-- #243 fix the flaky mapSheetPdf byte-identity test (fixed generatedAt)
-- #178 / #179 / #183 dependency bumps (download-artifact, upload-artifact, action-gh-release)
+## Known limitations
 
----
+The complete list is in `KNOWN_LIMITATIONS_v0.6.4.md`. Carried forward and unchanged by this release:
 
-## v0.6.4 hardening — status
+- in-memory LAS reconstruction is less precise than the source file at very large local extents;
+- LAS 1.2 masks classification values above 31;
+- contour geometry crossing the antimeridian is not split at ±180°;
+- opening a remote streaming source replaces the one already open;
+- multi-layer mounting remains disabled, pending per-layer frame fixes, with the flag guarded;
+- mixed-CRS layers are not automatically reprojected into a common viewer frame; supported exports can be explicitly reprojected through the converter.
 
-`[x]` merged to main · `[~]` implemented on a branch, pending merge · `[ ]` queued.
+New in this release:
 
-**Completion: ~72%.** 13 of 25 tracked items merged, 5 more in the merge cascade
-(auto-merging), 7 queued. By area: hardening and quick wins 100% (merged);
-test-feedback fixes ~100% (the cascade is landing them now); AI-discoverability
-100%; the coordinate-integrity P0, the regression tests, and the release 0%. The
-remaining ~28% is weighted toward the session frame model (the single largest
-item) and the release evidence regeneration, so effort-to-go exceeds the count.
+- the Windows and High Contrast work from v0.6.3 is still verified against a forced browser configuration, not on Windows or in a real High Contrast session;
+- queue-metered streaming commits remain implemented and tested but disabled, and carry no performance claim;
+- the ground-classification recall figure is measured against PDAL on synthetic scenes only.
 
-### Landed on main
-- [x] Classifier worker chunk emitted in the obfuscated build — fixes the
-  auto-classify page-reload (#266)
-- [x] Archive self-verification no longer requires network (#267)
-- [x] Fail closed on unknown units at four surfaces: PDF footprint, COPC
-  spacing, Dataset Intelligence volume, session-summary schema comment (#268)
-- [x] Revert `MULTI_LAYER_MOUNT_ENABLED` to `false` + release-truth mount-flag
-  guard so flag and truth docs can't disagree (#269)
-- [x] Lasso reclassify / clip placement-aware, with a direct-placement unit test
-  — P0 (#270)
-- [x] Annotation `worldPosition` populated on create; report labels the frame;
-  `layerId`/`crs` round-trip — P1 (#271)
-- [x] Streaming replacement made transactional — gate F4 (#272)
-- [x] Return-number cue: multi-return ⇒ vegetation, not building (#263)
-- [x] Quick wins: export-drops-class-edits disclosure (#258), annotation panel
-  grouping (#260), colour-mode recommendation (#261), profile-station hover (#262)
-- [x] AI-discoverability: `llms.txt` + `robots.txt` for LLM crawlers, honest
-  about the heuristic classifier and unit fail-closed behaviour (#273)
+## Compatibility
 
-### In the merge cascade, auto-merging (test-confirmed)
-- [~] Auto-classify button + loading state (#265)
-- [~] Keep the natural colour after auto-classify — don't force the class palette
-  (matches a pre-classified scan; class-hide still filters)
-- [~] Contour Studio purpose picker declutter — compact pills, descriptions on hover
-- [~] Building support-gate: a tall smooth not-green candidate needs firmer
-  ground support (0.66) to be Building; below it → Unclassified, killing
-  scan-edge false roofs
-- [~] Purpose-aware map-sheet PDF: each purpose renders a deliverable line, a
-  "This deliverable" settings box, and a validation appendix when required
+Unchanged from v0.6.3. Modern Chromium browsers use WebGPU, with WebGL 2 fallback in Firefox and Safari, and existing sessions remain compatible. A preset selected in an earlier version applies the same visual settings, and session files are unaffected.
 
-### P0 still open — the mount re-enable gate
-- [ ] Multi-layer session frame model: `projectOrigin`, per-layer
-  `{sourceOrigin, sourceToProject, fingerprint}`, `layerId` on measurements +
-  annotations, explicit frame/CRS metadata, `SESSION_VERSION` bump; fix
-  `exportGeoContext()` to return the project origin (it returns the active
-  cloud's, so work saved over a non-anchor layer reloads displaced — same defect
-  taints measurement GeoJSON/CSV export). Unreachable in production while the
-  mount is disabled; landing this is what lets the mount turn back on.
+## Verifying this release
 
-### Tests + deferred
-- [ ] Multi-layer session round-trip regression (two layers, work on the
-  non-anchor, export, reopen alone, every point returns to the same world coord)
-- [ ] Mounted-layer lasso/clip 2 km-displacement browser regression (the fix
-  shipped with a unit test; the e2e is still queued)
-- [ ] Synthetic low-support building test for the support gate
-- [ ] Hillshade / hypsometric-tint raster on the purpose PDF (currently
-  documented in the settings box, not drawn)
+```bash
+shasum -a 256 -c SHA256SUMS
+npm run release:verify -- --dir <downloaded-assets>
+gh attestation verify <archive> --repo Aurtechmx/openlidarviewer
+```
 
-### Re-enable the mount
-- [ ] After the frame model + regression tests land, flip
-  `MULTI_LAYER_MOUNT_ENABLED` back to `true` and un-skip the two-scan-mount e2e.
+The verified asset set is listed in `release-manifest-v0.6.4.json`. The two GitHub-generated Source code archives are not part of it.
 
-### Release (last)
-- [ ] Bump 0.6.3 → 0.6.4, regenerate validation / reproducibility / limitations
-  evidence, and finalize these notes — after everything above is merged and CI
-  is green.
+## Citing
+
+Citation metadata is provided in `CITATION.cff`, `.zenodo.json` and `codemeta.json`.
+
+ORCID: [0009-0007-3147-323X](https://orcid.org/0009-0007-3147-323X)
+
+- Version: 0.6.4
+- License: MIT
+
+Live demo: [lidar.aurtech.mx](https://lidar.aurtech.mx/)
+GitHub: [Aurtechmx/openlidarviewer](https://github.com/Aurtechmx/openlidarviewer)
+Full changelog: [v0.6.3...v0.6.4](https://github.com/Aurtechmx/openlidarviewer/compare/v0.6.3...v0.6.4)
