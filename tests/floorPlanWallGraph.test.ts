@@ -67,7 +67,7 @@ describe('buildWallGraph — junction topology on truth grids', () => {
     const { graph } = graphOf(toGrid(mask, 41, 31));
     expect(junctions(graph)).toBe(1);
     expect(endpoints(graph)).toBe(3);
-    expect(graph.edges.length).toBe(3);
+    expect(graph.edges).toHaveLength(3);
   });
 
   it('+: one junction, four endpoints, four edges', () => {
@@ -77,7 +77,7 @@ describe('buildWallGraph — junction topology on truth grids', () => {
     const { graph } = graphOf(toGrid(mask, 41, 41));
     expect(junctions(graph)).toBe(1);
     expect(endpoints(graph)).toBe(4);
-    expect(graph.edges.length).toBe(4);
+    expect(graph.edges).toHaveLength(4);
   });
 
   it('L: two limb-tip endpoints connected through the corner', () => {
@@ -109,8 +109,8 @@ describe('buildWallGraph — junction topology on truth grids', () => {
       for (let c = 0; c < cols; c++)
         if (Math.abs(c - 15) + Math.abs(r - 15) === 10) mask[r * cols + c] = 1;
     const { graph } = graphOf(toGrid(mask, cols, rows));
-    expect(graph.nodes.filter((n) => n.kind === 'loop').length).toBe(1);
-    expect(graph.edges.length).toBe(1);
+    expect(graph.nodes.filter((n) => n.kind === 'loop')).toHaveLength(1);
+    expect(graph.edges).toHaveLength(1);
     expect(graph.edges[0].a).toBe(graph.edges[0].b);
     // The loop path is closed: first and last points coincide (same cell).
     const p = graph.edges[0].path;
@@ -123,7 +123,7 @@ describe('buildWallGraph — per-edge measurements', () => {
     const { mask, box } = blank(40, 11);
     box(2, 4, 37, 6); // 3 thick at 0.1 m cells
     const { graph } = graphOf(toGrid(mask, 40, 11));
-    expect(graph.edges.length).toBe(1);
+    expect(graph.edges).toHaveLength(1);
     // Centre cells read chamfer 2 (0.2 m); the run ends pull the mean down a
     // touch, so gate a band around the hand value.
     expect(graph.edges[0].halfThicknessM).toBeGreaterThan(0.15);
@@ -139,7 +139,7 @@ describe('buildWallGraph — per-edge measurements', () => {
     const rawHalf = blank(cols, rows);
     rawHalf.box(2, 3, 29, 5);
     const { graph } = graphOf(grid, toGrid(rawHalf.mask, cols, rows));
-    expect(graph.edges.length).toBe(1);
+    expect(graph.edges).toHaveLength(1);
     expect(graph.edges[0].observedFrac).toBeGreaterThan(0.35);
     expect(graph.edges[0].observedFrac).toBeLessThan(0.65);
     // Fully-observed control.

@@ -69,10 +69,10 @@ describe('AnalysePanel — export area (Contour Studio architecture)', () => {
     // These moved out of the always-visible flow: the panel builds them only as
     // detached backing actions the Contour Studio workspace dispatches to, so
     // none must appear in the static panel tree.
-    expect(root.findByText('Intelligence report (PDF)').length).toBe(0);
-    expect(root.findByText('DEM (ZIP)').length).toBe(0);
-    expect(root.findByText('Export Contours').length).toBe(0);
-    expect(root.findByText('GEOJSON').length).toBe(0);
+    expect(root.findByText('Intelligence report (PDF)')).toHaveLength(0);
+    expect(root.findByText('DEM (ZIP)')).toHaveLength(0);
+    expect(root.findByText('Export Contours')).toHaveLength(0);
+    expect(root.findByText('GEOJSON')).toHaveLength(0);
   });
 
   it('leads the results with the Terrain Products surface (launcher + gated deliverable)', async () => {

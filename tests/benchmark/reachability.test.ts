@@ -92,7 +92,7 @@ describe.runIf(witnessEnabled())('negative control: an untaken path is reported 
       // Every function the claim names must be missing. One entered function
       // here would mean the witness can be satisfied without the suite.
       expect(witness.entered, `${c.id} reported entered functions from an empty window`).toEqual([]);
-      expect(witness.missing.length).toBe((c.functions ?? []).length);
+      expect(witness.missing).toHaveLength((c.functions ?? []).length);
     }
     // Reported so the control's size is visible, not just its verdict.
     expect(Object.values(report).reduce((a, b) => a + b, 0)).toBe(
@@ -114,7 +114,7 @@ describe.runIf(witnessEnabled())('negative control: an untaken path is reported 
       functions: [{ file: 'src/canonicalHash.ts', fn: 'witnessFrom' }],
     };
     expect(callsRecorded(snapshot, impostor.functions![0])).toBe(0);
-    expect(witnessFrom(impostor, snapshot).missing.length).toBe(1);
+    expect(witnessFrom(impostor, snapshot).missing).toHaveLength(1);
   });
 
   test('a function that did run in the window is reported entered', async () => {
@@ -145,7 +145,7 @@ describe('negative control: a doctored artifact is refused', () => {
       const intact = judgeArtifactClaim(c, goodResult(c));
       expect(intact.problems).toEqual([]);
       expect(intact.state).toBe('witnessed');
-      expect(intact.executed.length).toBe((c.requiredChecks ?? []).length);
+      expect(intact.executed).toHaveLength((c.requiredChecks ?? []).length);
 
       const dropped = goodResult(c);
       dropped.results = dropped.results.slice(1);

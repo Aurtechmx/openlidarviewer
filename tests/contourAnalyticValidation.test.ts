@@ -50,7 +50,7 @@ describe('analytic contour validation (§24.1)', () => {
     const CX = 20.5, CY = 20.5; // world centre
     const cone = (x: number, y: number) => Math.hypot(x - (CX - 0.5), y - (CY - 0.5));
     const set = contoursAt(grid(cone, 41, 41), { intervalM: 5, levels: [5, 10, 15] });
-    expect(set.levels.length).toBe(3);
+    expect(set.levels).toHaveLength(3);
     for (const v of vertices(set)) {
       const r = Math.hypot(v.x - CX, v.y - CY);
       // Marching-squares linear interpolation on a smooth cone keeps every

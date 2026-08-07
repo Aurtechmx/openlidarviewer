@@ -19,7 +19,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       cellSize: 1,
       referenceDensity: 1,
     });
-    expect(out.length).toBe(0);
+    expect(out).toHaveLength(0);
   });
 
   it('handles a single point gracefully (one cell, count = 1)', () => {
@@ -28,7 +28,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       cellSize: 1,
       referenceDensity: 1,
     });
-    expect(out.length).toBe(1);
+    expect(out).toHaveLength(1);
     // ratio = refDensity / cellDensity = 1 / (1 / 1) = 1 → scale = √1 = 1
     expect(out[0]).toBeCloseTo(1, 6);
   });
@@ -40,7 +40,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       referenceDensity: 0,
     });
     // ratio = 1e-9 / cellD → very small, sqrt → still small, clamps to minScale (0.5)
-    expect(out.length).toBe(2);
+    expect(out).toHaveLength(2);
     expect(Number.isFinite(out[0])).toBe(true);
     expect(Number.isFinite(out[1])).toBe(true);
     expect(out[0]).toBeGreaterThanOrEqual(0.5); // default minScale
@@ -52,7 +52,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       cellSize: 0,
       referenceDensity: 1,
     });
-    expect(out.length).toBe(2);
+    expect(out).toHaveLength(2);
     expect(Number.isFinite(out[0])).toBe(true);
     expect(Number.isFinite(out[1])).toBe(true);
   });
@@ -71,7 +71,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       cellSize: 1,
       referenceDensity: 1,
     });
-    expect(out.length).toBe(4);
+    expect(out).toHaveLength(4);
     for (const v of out) expect(v).toBeCloseTo(1, 6);
   });
 
@@ -117,7 +117,7 @@ describe('localDensitySizes — pure data formula hardening', () => {
       minScale: 0.25,
       maxScale: 4,
     });
-    expect(out.length).toBe(20);
+    expect(out).toHaveLength(20);
     for (const v of out) {
       expect(v).toBeGreaterThanOrEqual(0.25);
       expect(v).toBeLessThanOrEqual(4);
