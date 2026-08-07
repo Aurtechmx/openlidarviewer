@@ -29,7 +29,7 @@ export function quantileSorted(sorted: ArrayLike<number>, p: number): number {
   const n = sorted.length;
   if (n === 0) return Number.NaN;
   if (n === 1) return sorted[0];
-  const frac = p < 0 ? 0 : p > 1 ? 1 : p;
+  const frac = Math.min(1, Math.max(0, p));
   const rank = frac * (n - 1);
   const lo = Math.floor(rank);
   const hi = Math.ceil(rank);

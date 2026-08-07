@@ -283,9 +283,12 @@ function floorFieldForAxis(
     const b = i * 3;
     const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
-    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
-    if (v < minV) minV = v; if (v > maxV) maxV = v;
+    if (h1 < minH1) minH1 = h1;
+    if (h1 > maxH1) maxH1 = h1;
+    if (h2 < minH2) minH2 = h2;
+    if (h2 > maxH2) maxH2 = h2;
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
   }
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
@@ -351,7 +354,8 @@ function enclosureForAxis(
   for (let i = 0; i < n; i += stride) {
     const v = positions[i * 3 + vOff];
     if (!Number.isFinite(v)) continue;
-    if (v < minV) minV = v; if (v > maxV) maxV = v;
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
   }
   const exV = Math.max(0, maxV - minV);
   if (exV <= 0) return { score: 0 };
@@ -398,9 +402,12 @@ function axisMetrics(
     const b = i * 3;
     const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
-    if (h1 < minH1) minH1 = h1; if (h1 > maxH1) maxH1 = h1;
-    if (h2 < minH2) minH2 = h2; if (h2 > maxH2) maxH2 = h2;
-    if (v < minV) minV = v; if (v > maxV) maxV = v;
+    if (h1 < minH1) minH1 = h1;
+    if (h1 > maxH1) maxH1 = h1;
+    if (h2 < minH2) minH2 = h2;
+    if (h2 > maxH2) maxH2 = h2;
+    if (v < minV) minV = v;
+    if (v > maxV) maxV = v;
   }
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
@@ -466,9 +473,8 @@ export function classifyScanShape(
   const n = Math.floor(positions.length / 3);
   const gridN = Math.max(8, Math.floor(params.gridN ?? 64));
   const maxSamples = Math.max(100, Math.floor(params.maxSamples ?? 60000));
-  const classification = params.classification && params.classification.length === n
-    ? params.classification
-    : undefined;
+  const classification =
+    params.classification?.length === n ? params.classification : undefined;
 
   if (n < 8) {
     return {
@@ -580,14 +586,18 @@ export function classifyScanShape(
     // perimeter structure over a full floor) is the least certain but still
     // decisively non-terrain — it reports its own honest, lower confidence.
     const strongWalls = m.wallCoverage >= WALL_INTERIOR;
-    confidence = flatCeiling ? 0.9 : strongWalls ? 0.8 : 0.7;
-    reasons.unshift(
-      flatCeiling
-        ? `Floor + flat ceiling enclose ${Math.round(m.ceilingCoverage * 100)}% of the footprint — interior space.`
-        : strongWalls
-          ? `Floor + near-full-height walls (${Math.round(m.wallCoverage * 100)}% of cells) — interior space (ceiling partial).`
-          : `Full floor + partial perimeter walls / sparse ceiling (${Math.round(m.wallCoverage * 100)}% full-height, ${Math.round(m.ceilingCoverage * 100)}% overhead, ${Math.round(m.overhangFraction * 100)}% stacked) — open interior space (high or sparsely-scanned ceiling).`,
-    );
+    if (flatCeiling) confidence = 0.9;
+    else if (strongWalls) confidence = 0.8;
+    else confidence = 0.7;
+    let interiorReason: string;
+    if (flatCeiling) {
+      interiorReason = `Floor + flat ceiling enclose ${Math.round(m.ceilingCoverage * 100)}% of the footprint — interior space.`;
+    } else if (strongWalls) {
+      interiorReason = `Floor + near-full-height walls (${Math.round(m.wallCoverage * 100)}% of cells) — interior space (ceiling partial).`;
+    } else {
+      interiorReason = `Full floor + partial perimeter walls / sparse ceiling (${Math.round(m.wallCoverage * 100)}% full-height, ${Math.round(m.ceilingCoverage * 100)}% overhead, ${Math.round(m.overhangFraction * 100)}% stacked) — open interior space (high or sparsely-scanned ceiling).`;
+    }
+    reasons.unshift(interiorReason);
   } else {
     nonTerrain = false; spaceKind = 'terrain'; confidence = 0.85;
     reasons.unshift(`Flat, single-surface geometry along ${up} (aspect ${m.aspect.toFixed(2)}, ${Math.round(m.overhangFraction * 100)}% stacked, ${Math.round(m.wallCoverage * 100)}% full-height).`);

@@ -155,20 +155,24 @@ function pct(frac: number): number {
 
 function georefDimension(inp: FitnessInputs): FitnessDimension {
   const gs = georefStatus(inp.crsKnown, inp.datumKnown, { crsName: inp.crsName, datumName: inp.datumName });
-  const tone: FitnessTone = gs.tone === 'anchored' ? 'ready' : gs.tone === 'partial' ? 'okay' : 'review';
+  let tone: FitnessTone;
+  if (gs.tone === 'anchored') tone = 'ready';
+  else if (gs.tone === 'partial') tone = 'okay';
+  else tone = 'review';
   return { key: 'georeferencing', label: 'Location & height', tone, summary: gs.headline };
 }
 
 function coverageDimension(f: number | null): FitnessDimension {
   if (f == null) return { key: 'coverage', label: 'Coverage', tone: 'review', summary: 'Coverage unknown.' };
-  const tone: FitnessTone = f >= COVERAGE_READY ? 'ready' : f >= COVERAGE_OKAY ? 'okay' : 'review';
+  let tone: FitnessTone;
+  if (f >= COVERAGE_READY) tone = 'ready';
+  else if (f >= COVERAGE_OKAY) tone = 'okay';
+  else tone = 'review';
   const measured = pct(f);
-  const summary =
-    tone === 'ready'
-      ? `${measured}% of the surface is measured ground — well covered.`
-      : tone === 'okay'
-        ? `${measured}% measured; the rest is interpolated between gaps.`
-        : `Only ${measured}% is measured ground — ${100 - measured}% is interpolated, so the surface is mostly inferred.`;
+  let summary: string;
+  if (tone === 'ready') summary = `${measured}% of the surface is measured ground — well covered.`;
+  else if (tone === 'okay') summary = `${measured}% measured; the rest is interpolated between gaps.`;
+  else summary = `Only ${measured}% is measured ground — ${100 - measured}% is interpolated, so the surface is mostly inferred.`;
   return { key: 'coverage', label: 'Coverage', tone, summary };
 }
 
@@ -185,14 +189,15 @@ function densityDimension(d: number | null, unitKnown: boolean): FitnessDimensio
       summary: 'Coordinate units are unverified — ground density can’t be graded in pts/m² until the source CRS is confirmed.',
     };
   }
-  const tone: FitnessTone = d >= QL1_DENSITY ? 'ready' : d >= QL2_DENSITY ? 'okay' : 'review';
+  let tone: FitnessTone;
+  if (d >= QL1_DENSITY) tone = 'ready';
+  else if (d >= QL2_DENSITY) tone = 'okay';
+  else tone = 'review';
   const v = d >= 100 ? Math.round(d) : Math.round(d * 10) / 10;
-  const summary =
-    tone === 'ready'
-      ? `${v} ground pts/m² — at or above ${QL1_DENSITY} pts/m² (the 3DEP QL1 density floor).`
-      : tone === 'okay'
-        ? `${v} ground pts/m² — at or above ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`
-        : `${v} ground pts/m² — below ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
+  let summary: string;
+  if (tone === 'ready') summary = `${v} ground pts/m² — at or above ${QL1_DENSITY} pts/m² (the 3DEP QL1 density floor).`;
+  else if (tone === 'okay') summary = `${v} ground pts/m² — at or above ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
+  else summary = `${v} ground pts/m² — below ${QL2_DENSITY} pts/m² (the 3DEP QL2 density floor).`;
   return { key: 'density', label: 'Ground detail', tone, summary };
 }
 
@@ -214,14 +219,15 @@ function accuracyDimension(rmse: number | null, unit: string, unitToMetres: numb
   // Bucket on the METRIC value; the thresholds are metres. The displayed value
   // stays in the file's unit.
   const rmseM = rmse * unitToMetres;
-  const tone: FitnessTone = rmseM <= RMSE_READY ? 'ready' : rmseM <= RMSE_OKAY ? 'okay' : 'review';
+  let tone: FitnessTone;
+  if (rmseM <= RMSE_READY) tone = 'ready';
+  else if (rmseM <= RMSE_OKAY) tone = 'okay';
+  else tone = 'review';
   const v = `±${rmse.toFixed(2)} ${unit}`;
-  const summary =
-    tone === 'ready'
-      ? `${v} vertical (held-out check) — tight.`
-      : tone === 'okay'
-        ? `${v} vertical (held-out check) — moderate.`
-        : `${v} vertical (held-out check) — loose.`;
+  let summary: string;
+  if (tone === 'ready') summary = `${v} vertical (held-out check) — tight.`;
+  else if (tone === 'okay') summary = `${v} vertical (held-out check) — moderate.`;
+  else summary = `${v} vertical (held-out check) — loose.`;
   return { key: 'accuracy', label: 'Vertical accuracy', tone, summary };
 }
 
@@ -234,14 +240,15 @@ function classificationDimension(unclassified: number | null, hasGround: boolean
       summary: 'No ground classification — ground was derived, not provided.',
     };
   }
-  const tone: FitnessTone = unclassified <= UNCLASSIFIED_OKAY ? 'ready' : unclassified < 0.5 ? 'okay' : 'review';
+  let tone: FitnessTone;
+  if (unclassified <= UNCLASSIFIED_OKAY) tone = 'ready';
+  else if (unclassified < 0.5) tone = 'okay';
+  else tone = 'review';
   const u = pct(unclassified);
-  const summary =
-    tone === 'ready'
-      ? `Classified ground present; ${u}% unclassified.`
-      : tone === 'okay'
-        ? `Partly classified — ${u}% of points are unclassified.`
-        : `${u}% unclassified — classification is incomplete.`;
+  let summary: string;
+  if (tone === 'ready') summary = `Classified ground present; ${u}% unclassified.`;
+  else if (tone === 'okay') summary = `Partly classified — ${u}% of points are unclassified.`;
+  else summary = `${u}% unclassified — classification is incomplete.`;
   return { key: 'classification', label: 'Classification', tone, summary };
 }
 

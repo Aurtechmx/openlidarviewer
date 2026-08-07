@@ -53,8 +53,7 @@ export function buildDsm(points: ReadonlyArray<TerrainPoint>, params: BuildDsmPa
   const coverage = new Uint8Array(n);
   const cell = cellSizeM > 0 ? cellSizeM : 1;
 
-  for (let i = 0; i < points.length; i++) {
-    const p = points[i];
+  for (const p of points) {
     const h1 = getH1(p);
     const h2 = getH2(p);
     const v = getV(p);

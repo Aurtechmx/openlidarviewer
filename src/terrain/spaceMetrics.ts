@@ -153,8 +153,11 @@ const PARTIAL_STREAM_CAVEAT =
 const UNVERIFIED_UNIT_CAVEAT =
   'Coordinate units are unverified — dimensions, areas, volumes and densities assume metres. Confirm the source CRS before relying on the figures.';
 
-const upOffsets = (a: Axis): { v: number; h1: number; h2: number } =>
-  a === 'x' ? { v: 0, h1: 1, h2: 2 } : a === 'y' ? { v: 1, h1: 0, h2: 2 } : { v: 2, h1: 0, h2: 1 };
+const upOffsets = (a: Axis): { v: number; h1: number; h2: number } => {
+  if (a === 'x') return { v: 0, h1: 1, h2: 2 };
+  if (a === 'y') return { v: 1, h1: 0, h2: 2 };
+  return { v: 2, h1: 0, h2: 1 };
+};
 
 /** 2-D PCA on the horizontal projection → oriented footprint side lengths. */
 function orientedFootprint(h1: number[], h2: number[]): { major: number; minor: number } {
@@ -183,8 +186,10 @@ function orientedFootprint(h1: number[], h2: number[]): { major: number; minor: 
     const dx = h1[i] - cx, dy = h2[i] - cy;
     const p1 = dx * ax + dy * ay;
     const p2 = dx * bx + dy * by;
-    if (p1 < lo1) lo1 = p1; if (p1 > hi1) hi1 = p1;
-    if (p2 < lo2) lo2 = p2; if (p2 > hi2) hi2 = p2;
+    if (p1 < lo1) lo1 = p1;
+    if (p1 > hi1) hi1 = p1;
+    if (p2 < lo2) lo2 = p2;
+    if (p2 > hi2) hi2 = p2;
   }
   const r1 = Math.max(0, hi1 - lo1);
   const r2 = Math.max(0, hi2 - lo2);
@@ -223,7 +228,7 @@ function countStoreys(hist: Float64Array, binW: number, minV: number, total: num
   // Merge peaks closer than one storey, keeping the stronger.
   const merged: Array<{ level: number; count: number }> = [];
   for (const p of peaks) {
-    const last = merged[merged.length - 1];
+    const last = merged.at(-1);
     if (!last || p.level - last.level >= STOREY_SEP_M) merged.push({ ...p });
     else if (p.count > last.count) { last.level = p.level; last.count = p.count; }
   }
@@ -338,9 +343,12 @@ export function spaceMetrics(
 
   let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
   for (let i = 0; i < V.length; i++) {
-    if (H1[i] < minH1) minH1 = H1[i]; if (H1[i] > maxH1) maxH1 = H1[i];
-    if (H2[i] < minH2) minH2 = H2[i]; if (H2[i] > maxH2) maxH2 = H2[i];
-    if (V[i] < minV) minV = V[i]; if (V[i] > maxV) maxV = V[i];
+    if (H1[i] < minH1) minH1 = H1[i];
+    if (H1[i] > maxH1) maxH1 = H1[i];
+    if (H2[i] < minH2) minH2 = H2[i];
+    if (H2[i] > maxH2) maxH2 = H2[i];
+    if (V[i] < minV) minV = V[i];
+    if (V[i] > maxV) maxV = V[i];
   }
   const m = V.length;
 
@@ -390,7 +398,7 @@ export function spaceMetrics(
     if (V[i] > zMax[idx]) zMax[idx] = V[i];
   }
   let occupied = 0;
-  for (let i = 0; i < occ.length; i++) if (occ[i]) occupied++;
+  for (const o of occ) if (o) occupied++;
   const floorAreaM2 = occupied * cellArea;
   const coveragePct = (100 * occupied) / (cols * rows);
 

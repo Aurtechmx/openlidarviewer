@@ -266,8 +266,6 @@ export function summarizeChange(comparison: EpochComparison): string[] {
     `${(s.significantFraction * 100).toFixed(1)}% of comparable cells changed beyond the ` +
       `detection floor of ${comparison.levelOfDetectionM} m ` +
       `(${s.gained} gained, ${s.lost} lost, ${s.unchanged} unchanged).`,
-  );
-  lines.push(
     `Largest gain ${s.maxGainM.toFixed(2)} m, largest loss ${s.maxLossM.toFixed(2)} m; ` +
       `mean |Δ| ${s.meanAbsChangeM.toFixed(2)} m over ${s.comparable} comparable cells.`,
   );

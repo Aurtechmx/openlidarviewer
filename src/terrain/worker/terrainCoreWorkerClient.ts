@@ -130,7 +130,6 @@ export class TerrainCoreWorkerClient {
       // Strip classification from coreParams; it is carried as its own field so
       // the worker can re-attach it (avoids cloning it twice).
       const { classification: _drop, ...paramsNoClass } = coreParams;
-      void _drop;
       try {
         worker.postMessage(
           {

@@ -162,7 +162,7 @@ export function detectChange(
       const bv = b.values[y * b.width + x];
       const oi = y * W + x;
       if (!Number.isFinite(av) || !Number.isFinite(bv)) {
-        diff[oi] = NaN;
+        diff[oi] = Number.NaN;
         classes[oi] = 0;
         continue;
       }

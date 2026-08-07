@@ -71,7 +71,7 @@ export function contourStudioPrerequisitesFromResult(
   ctx: LaunchFrameContext,
 ): ContourStudioPrerequisites {
   const tally = result.cellStatusTally;
-  const total = tally.total > 0 ? tally.total : 0;
+  const total = Math.max(0, tally.total);
   // Unsupported = empty cells over the whole grid. Conservative: unknown total
   // reads as fully unsupported so a degenerate grid can't look deliverable.
   const unsupportedFraction = total > 0 ? tally.empty / total : 1;

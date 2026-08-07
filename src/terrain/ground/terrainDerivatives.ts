@@ -120,8 +120,16 @@ export function hornSlopeAspect(
   // left untouched. zScale 1 (metric, or Z already in metres) is a no-op.
   const zs = Number.isFinite(zScale) && zScale > 0 ? zScale : 1;
 
-  const clampR = (r: number): number => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
-  const clampC = (c: number): number => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
+  const clampR = (r: number): number => {
+    if (r < 0) return 0;
+    if (r >= rows) return rows - 1;
+    return r;
+  };
+  const clampC = (c: number): number => {
+    if (c < 0) return 0;
+    if (c >= cols) return cols - 1;
+    return c;
+  };
 
   /** In-grid read (indices clamped), preserving a non-finite value. */
   const raw = (r: number, c: number): number => z[clampR(r) * cols + clampC(c)];
@@ -290,7 +298,7 @@ export function countSynthesisedNeighbours(
 ): number {
   const mask = synthesisedNeighbourMask(z, cols, rows);
   let n = 0;
-  for (let i = 0; i < mask.length; i++) n += mask[i];
+  for (const m of mask) n += m;
   return n;
 }
 

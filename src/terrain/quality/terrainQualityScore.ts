@@ -60,7 +60,7 @@ const RMSE_HALF_M = 0.15;
 /** Returns-per-cell at which the density sub-score is 0.5. */
 const DENSITY_HALF_COUNT = 3;
 
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
+const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
 
 function bandFor(score: number): QualityBand {
   if (score >= 80) return 'excellent';

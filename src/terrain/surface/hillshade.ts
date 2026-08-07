@@ -133,8 +133,8 @@ export function computeMultiHillshade(
     const ss = Math.sin(slopeRad);
     let wsum = 0;
     let hsum = 0;
-    for (let k = 0; k < azRad.length; k++) {
-      const align = Math.cos(azRad[k] - asp); // -1..1
+    for (const az of azRad) {
+      const align = Math.cos(az - asp); // -1..1
       const w = 0.5 + 0.5 * Math.max(0, align); // favour the lit side
       const hs = cosZen * cs + sinZen * ss * align;
       hsum += w * Math.max(0, hs);

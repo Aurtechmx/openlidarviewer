@@ -201,7 +201,7 @@ export function icpRegister(
   }
 
   let prevRms = Infinity;
-  let rms = Infinity;
+  let rms: number;
   let iter = 0;
   let converged = false;
 

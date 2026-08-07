@@ -210,12 +210,15 @@ export interface TerrainComplexitySummary {
 
 const fmtVrm = (v: number): string => (Number.isFinite(v) ? v.toFixed(4) : '—');
 const fmtZ = (v: number): string => (Number.isFinite(v) ? v.toFixed(2) : '—');
-const fmtGroundM = (v: number | null): string =>
-  v != null && Number.isFinite(v) ? `≈${v >= 10 ? Math.round(v).toString() : v.toFixed(1)} m` : 'ground size unknown';
+const fmtGroundM = (v: number | null): string => {
+  if (v == null || !Number.isFinite(v)) return 'ground size unknown';
+  const size = v >= 10 ? Math.round(v).toString() : v.toFixed(1);
+  return `≈${size} m`;
+};
 
 /** Z-unit label from the vertical unit scale (metres / US-or-intl feet / other). */
-function zUnit(verticalUnitToMetres: number | undefined): string {
-  const v = verticalUnitToMetres ?? 1;
+function zUnit(verticalUnitToMetres = 1): string {
+  const v = verticalUnitToMetres;
   if (!Number.isFinite(v) || v <= 0 || Math.abs(v - 1) < 1e-9) return 'm';
   if (Math.abs(v - 0.3048) < 5e-4) return 'ft';
   return 'z-units';
@@ -263,8 +266,7 @@ export function summariseTerrainComplexity(
   if (tpi.classes) {
     const counts = new Uint32Array(7);
     let classified = 0;
-    for (let i = 0; i < tpi.classes.length; i++) {
-      const c = tpi.classes[i];
+    for (const c of tpi.classes) {
       if (c === 0) continue;
       counts[c]++;
       classified++;

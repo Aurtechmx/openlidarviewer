@@ -108,10 +108,15 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   // Header: [KeyDirectoryVersion=1, KeyRevision=1, MinorRevision=0, NumberOfKeys]
   const keys: number[] = [];
   // GTModelType (1024): 1=Projected, 2=Geographic, 32767=user-defined.
-  const modelType = epsg == null ? 32767 : input.isGeographic ? 2 : 1;
-  keys.push(1024, 0, 1, modelType);
-  // GTRasterType (1025): 1 = RasterPixelIsArea.
-  keys.push(1025, 0, 1, 1);
+  let modelType: number;
+  if (epsg == null) modelType = 32767;
+  else if (input.isGeographic) modelType = 2;
+  else modelType = 1;
+  keys.push(
+    1024, 0, 1, modelType,
+    // GTRasterType (1025): 1 = RasterPixelIsArea.
+    1025, 0, 1, 1,
+  );
   if (epsg != null) {
     if (input.isGeographic) keys.push(2048, 0, 1, epsg); // GeographicTypeGeoKey
     else keys.push(3072, 0, 1, epsg); // ProjectedCSTypeGeoKey

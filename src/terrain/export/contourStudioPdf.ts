@@ -53,7 +53,7 @@ function wrap(textStr: string, font: PDFFont, size: number, maxWidth: number): s
   for (const word of words) {
     const candidate = line ? `${line} ${word}` : word;
     if (fits(candidate)) { line = candidate; continue; }
-    if (line) { lines.push(line); line = ''; }
+    if (line) { lines.push(line); }
     if (fits(word)) { line = word; continue; }
     // A single word wider than the line: hard-cut it to what fits.
     let chunk = '';

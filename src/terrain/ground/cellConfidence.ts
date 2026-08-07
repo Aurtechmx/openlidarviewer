@@ -512,7 +512,7 @@ export function directionalSupport(
   if (directions === 1) return { directions: 1, oneSided: true };
   // Largest empty arc between consecutive hit directions (wrapping 360°).
   hitAngles.sort((a, b) => a - b);
-  let maxGap = 360 - hitAngles[hitAngles.length - 1] + hitAngles[0];
+  let maxGap = 360 - hitAngles.at(-1)! + hitAngles[0];
   for (let k = 1; k < hitAngles.length; k++) {
     const gap = hitAngles[k] - hitAngles[k - 1];
     if (gap > maxGap) maxGap = gap;
@@ -524,7 +524,7 @@ export function directionalSupport(
 /** Median of the positive (measured) counts; 0 when none are measured. */
 function medianMeasuredCount(counts: Uint32Array): number {
   const measured: number[] = [];
-  for (let i = 0; i < counts.length; i++) if (counts[i] > 0) measured.push(counts[i]);
+  for (const c of counts) if (c > 0) measured.push(c);
   if (measured.length === 0) return 0;
   measured.sort((a, b) => a - b);
   const mid = measured.length >> 1;

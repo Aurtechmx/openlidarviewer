@@ -97,7 +97,12 @@ export interface VrmSummary {
   readonly iqr: number;
 }
 
-const NO_SUMMARY: VrmSummary = { median: NaN, p25: NaN, p75: NaN, iqr: NaN };
+const NO_SUMMARY: VrmSummary = {
+  median: Number.NaN,
+  p25: Number.NaN,
+  p75: Number.NaN,
+  iqr: Number.NaN,
+};
 
 /**
  * Result of {@link computeVRM}. VRM is dimensionless, in [0, 1]. Carries
@@ -142,7 +147,7 @@ export function computeVRM(
 ): VrmResult {
   const warnings: string[] = [];
   const n = cols > 0 && rows > 0 ? cols * rows : 0;
-  const vrm = new Float32Array(n).fill(NaN);
+  const vrm = new Float32Array(n).fill(Number.NaN);
 
   let window = params.windowCells;
   if (!Number.isInteger(window) || window < 1 || window % 2 === 0) {
@@ -169,7 +174,7 @@ export function computeVRM(
   for (let i = 0; i < n; i++) {
     const m = slope[i];
     const a = aspect[i];
-    if ((valid != null && valid[i] === 0) || !Number.isFinite(m) || !Number.isFinite(a)) continue;
+    if (valid?.[i] === 0 || !Number.isFinite(m) || !Number.isFinite(a)) continue;
     const inv = 1 / Math.sqrt(1 + m * m); // cosθ
     const sinTheta = m * inv;
     nx[i] = sinTheta * Math.cos(a); // east
@@ -209,7 +214,7 @@ export function computeVRM(
       const resultant = Math.sqrt(sx * sx + sy * sy + sz * sz);
       // Unit vectors ⇒ R ≤ n; clamp float-error excursions to keep [0, 1].
       const v = 1 - resultant / count;
-      vrm[i] = v < 0 ? 0 : v > 1 ? 1 : v;
+      vrm[i] = Math.min(1, Math.max(0, v));
       validCellCount++;
     }
   }

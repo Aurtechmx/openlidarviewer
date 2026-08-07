@@ -220,11 +220,11 @@ export function holdoutValidateDtm(
     } catch {
       newMask = null;
     }
-    if (!newMask || newMask.length !== points.length) {
+    if (newMask?.length !== points.length) {
       warnings.push(
         'reclassifyGround returned an invalid mask; falling back to full-cloud classification',
+        FULL_CLOUD_CLASSIFICATION_WARNING,
       );
-      warnings.push(FULL_CLOUD_CLASSIFICATION_WARNING);
     } else {
       const reTrain: TerrainPoint[] = [];
       for (let i = 0; i < points.length; i++) {
@@ -239,8 +239,8 @@ export function holdoutValidateDtm(
       if (reTrain.length === 0) {
         warnings.push(
           'train-only reclassification produced no ground points; falling back to full-cloud classification',
+          FULL_CLOUD_CLASSIFICATION_WARNING,
         );
-        warnings.push(FULL_CLOUD_CLASSIFICATION_WARNING);
       } else {
         fitTrain = reTrain;
         warnings.push(
@@ -353,8 +353,16 @@ export function holdoutValidateDtm(
   // renormalised over the covered corners, so a point near a data edge
   // still predicts from the corners that exist instead of snapping to
   // one cell. This removes grid-quantisation bias from the RMSE.
-  const clampCol = (c: number) => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
-  const clampRow = (r: number) => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
+  const clampCol = (c: number): number => {
+    if (c < 0) return 0;
+    if (c >= cols) return cols - 1;
+    return c;
+  };
+  const clampRow = (r: number): number => {
+    if (r < 0) return 0;
+    if (r >= rows) return rows - 1;
+    return r;
+  };
   for (const p of test) {
     const fx = (getH1(p) - minH1) / cellSizeM - 0.5;
     const fy = (getH2(p) - minH2) / cellSizeM - 0.5;

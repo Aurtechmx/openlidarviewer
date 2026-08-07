@@ -101,8 +101,16 @@ export class DtmSurfaceModel implements SurfaceModel {
     const row0 = Math.floor(fy);
     const tx = fx - col0;
     const ty = fy - row0;
-    const clampCol = (c: number) => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
-    const clampRow = (r: number) => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
+    const clampCol = (c: number): number => {
+      if (c < 0) return 0;
+      if (c >= cols) return cols - 1;
+      return c;
+    };
+    const clampRow = (r: number): number => {
+      if (r < 0) return 0;
+      if (r >= rows) return rows - 1;
+      return r;
+    };
     const corners: ReadonlyArray<readonly [number, number, number]> = [
       [clampCol(col0), clampRow(row0), (1 - tx) * (1 - ty)],
       [clampCol(col0 + 1), clampRow(row0), tx * (1 - ty)],
