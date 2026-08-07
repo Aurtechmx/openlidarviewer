@@ -2542,7 +2542,7 @@ export class Viewer {
   clipKeptCount(id: string): { kept: number; total: number } | null {
     const entry = this._clouds.get(id);
     if (!entry) return null;
-    const total = entry.cloud.pointCount | 0;
+    const total = Math.trunc(entry.cloud.pointCount); // not `| 0`: pointCount can pass 2^31 and wrap negative (S7767)
     const placed = copyPlacedPositions(entry.cloud, 1, entry.placement);
     const kept = this._clip ? countKept(this._clip, placed) : total;
     return { kept, total };
