@@ -6,6 +6,7 @@ import {
   MAX_SESSION_BYTES,
   type SessionIoDeps,
   type SessionModule,
+  type StaticScanCloud,
 } from '../src/app/sessionIo';
 import {
   serializeSession,
@@ -227,6 +228,79 @@ describe('scanFactsFromStatic — pure cloud→fingerprint adapter', () => {
     });
     expect(facts.crs).toBeUndefined();
     expect(facts.epsg).toBeUndefined();
+  });
+
+  // Identity must be SOURCE-stable: the same file loaded at a different point
+  // budget / decode stride on another device has to fingerprint identically.
+  // `pointCount` (and the `bounds()` taken over the held sample) are the
+  // device-variant fields; `declaredPointCount` is the header's own total and
+  // survives stride / voxel downsample. These two fixtures are the SAME source
+  // file and differ ONLY in the display-sampled fields.
+  const HEADER_COUNT = 1_000_000;
+  const denseLoad: StaticScanCloud = {
+    name: 'survey.las',
+    pointCount: 500_000, // ~stride 2 under a desktop budget
+    declaredPointCount: HEADER_COUNT,
+    decodedPointCount: 500_000,
+    // more points held → the sampled AABB reaches closer to the true extremes
+    bounds: () => ({ min: [0, 0, 0], max: [99.8, 49.9, 12.4] }),
+  };
+  const sparseLoad: StaticScanCloud = {
+    name: 'survey.las',
+    pointCount: 100_000, // ~stride 10 under a mobile budget
+    declaredPointCount: HEADER_COUNT,
+    decodedPointCount: 100_000,
+    // fewer points held → the sampled extremes fall short of the true extent
+    bounds: () => ({ min: [0, 0, 0], max: [99.1, 49.4, 12.1] }),
+  };
+
+  it('fingerprints the same source identically across load stride / point budget', () => {
+    const dense = scanFactsFromStatic(denseLoad);
+    const sparse = scanFactsFromStatic(sparseLoad);
+    // Source truth from the header, not the held sample — so it does NOT move
+    // with the device budget. (Matches the streaming sibling's sourcePointCount.)
+    expect(dense.sourcePoints).toBe(HEADER_COUNT);
+    expect(sparse.sourcePoints).toBe(HEADER_COUNT);
+    expect(dense.sourcePoints).toBe(sparse.sourcePoints);
+  });
+
+  it('prefers the pre-downsample decode count when the header count is absent', () => {
+    // A format that carries no declared header total (e.g. PLY) still exposes
+    // what the decoder read before voxel downsample — better than the reduced
+    // held count. Ladder: declaredPointCount ?? decodedPointCount ?? pointCount.
+    const facts = scanFactsFromStatic({
+      name: 'mesh.ply',
+      pointCount: 40_000, // held after voxel downsample
+      decodedPointCount: 90_000, // survived the downsample
+      bounds: () => ({ min: [0, 0, 0], max: [1, 1, 1] }),
+    });
+    expect(facts.sourcePoints).toBe(90_000);
+  });
+
+  it('falls back to the held point count when no source count is known, without throwing', () => {
+    const facts = scanFactsFromStatic({
+      name: 'bare',
+      pointCount: 7,
+      bounds: () => ({ min: [0, 0, 0], max: [1, 1, 1] }),
+    });
+    expect(facts.sourcePoints).toBe(7);
+  });
+
+  it('leaves width/depth/height on the DECIMATED bounds — a documented residual', () => {
+    // A source/header extent is NOT reachable here: the LAS/LAZ header min/max
+    // are read at load but consumed for the origin and never persisted onto the
+    // cloud, and adding that plumbing across every loader is out of scope. So
+    // extents still track the display sample and legitimately differ across
+    // devices — pinned here so a future exact-match fingerprint compares extents
+    // with a tolerance (as matchSessionToScan does), never equality, while the
+    // count stays source-stable.
+    const dense = scanFactsFromStatic(denseLoad);
+    const sparse = scanFactsFromStatic(sparseLoad);
+    expect(dense.width).not.toBe(sparse.width);
+    expect(dense.depth).not.toBe(sparse.depth);
+    expect(dense.height).not.toBe(sparse.height);
+    // ...even though the count is identical for the two loads.
+    expect(dense.sourcePoints).toBe(sparse.sourcePoints);
   });
 });
 

@@ -65,6 +65,15 @@ export interface StreamingScanSource {
 export interface StaticScanCloud {
   readonly name: string;
   readonly pointCount: number;
+  /**
+   * Source-truth counts, preferred over the display-sampled `pointCount` for
+   * identity. `declaredPointCount` is the file header's own total;
+   * `decodedPointCount` is what the decoder read before any voxel downsample.
+   * Both survive stride / downsample (see PointCloud), so a fingerprint built
+   * from them does not shift with a device's point budget.
+   */
+  readonly declaredPointCount?: number;
+  readonly decodedPointCount?: number;
   bounds(): {
     readonly min: readonly [number, number, number];
     readonly max: readonly [number, number, number];
@@ -100,14 +109,36 @@ export function scanFactsFromStreaming(cloud: StreamingScanSource): ScanFacts {
 
 /**
  * Build the loaded-scan fingerprint from a static cloud. Pure counterpart to
- * {@link scanFactsFromStreaming}: extent spans from `bounds()`, point count and
- * CRS from the cloud's own header metadata.
+ * {@link scanFactsFromStreaming}: point count from the source header, CRS from
+ * the cloud's own header metadata, extent spans from `bounds()`.
+ *
+ * The point count is SOURCE truth, not the display sample. The held
+ * `pointCount` is whatever survived this device's decode stride and voxel
+ * downsample, so reading it here made a scan's identity change with the point
+ * budget — the same file fingerprinted differently on mobile vs desktop, and a
+ * valid session failed to match across devices. The streaming sibling already
+ * reads `sourcePointCount` for exactly this reason; the static analog is the
+ * header's declared total, falling to the pre-downsample decode count, then the
+ * held count (the header count on top of the `decodedPointCount ?? pointCount`
+ * ladder the Health Check uses). Both source-truth fields survive stride /
+ * downsample (see PointCloud), so the fingerprint no longer moves with the
+ * device.
+ *
+ * Extents (`width`/`depth`/`height`) are the residual: they still come from the
+ * DECIMATED `bounds()`. A source/header extent is not reachable here — the
+ * LAS/LAZ header min/max are read at load (`lasHeader.ts`) but consumed for the
+ * origin and never persisted onto the cloud or its metadata, and threading a
+ * header extent through every loader is out of scope for this change. So the
+ * spans stay decimation-sensitive (stride / voxel sampling rarely lands on the
+ * exact extremes) and an exact-match consumer must compare them with a
+ * tolerance, never equality — as {@link matchSessionToScan} already does (its
+ * 1 %/5 % extent bands). Only the count above is source-stable.
  */
 export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
   const b = cloud.bounds();
   return {
     fileName: cloud.name,
-    sourcePoints: cloud.pointCount,
+    sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
     width: b.max[0] - b.min[0],
     depth: b.max[1] - b.min[1],
     height: b.max[2] - b.min[2],
