@@ -217,3 +217,44 @@ describe('loadPcd — ASCII body scanner', () => {
     expect(pc.pointCount).toBe(2);
   });
 });
+
+describe('loadPcd — header larger than the probe still keeps f64 precision', () => {
+  test('a valid header past 4 KiB engages the f64 path (UTM easting round-trips)', async () => {
+    // Pad the header past 4096 bytes with comment lines so DATA sits well beyond
+    // the old fixed probe. A UTM easting is the tell: f32 snaps 500000.1 to a
+    // ~3 cm grid before the origin is subtracted; the f64 path keeps it.
+    const padding = Array.from(
+      { length: 200 },
+      (_, i) => `# padding comment ${i} ${'x'.repeat(24)}`,
+    ).join('\n');
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\n${padding}\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+      `COUNT 1 1 1\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n` +
+      `500000.1 4000000.1 210.25\n`;
+    // Guard: the DATA line really is past the old 4 KiB cap, or the test proves
+    // nothing.
+    expect(pcd.indexOf('DATA ascii')).toBeGreaterThan(4096);
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer as ArrayBuffer, 'big-header.pcd');
+    expect(pc.pointCount).toBe(1);
+    const worldX = pc.positions[0] + pc.origin[0];
+    // A bare f32 read lands ~6 mm away (500000.09375); the f64 path is exact.
+    expect(Math.abs(worldX - 500000.1)).toBeLessThan(1e-3);
+  });
+});
+
+describe('loadPcd — a lying ascii POINTS count degrades cleanly', () => {
+  test('an absurd declared count reads the real rows instead of throwing RangeError', async () => {
+    // POINTS lies by orders of magnitude. The old ascii path sized a
+    // Float64Array from it (maxRows * 3 overflows a typed-array length) and
+    // threw a raw RangeError from outside loadPcd's try/finally. The allocation
+    // must be bounded by the body so a lying header degrades to a correct read.
+    const pcd =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE 8 8 8\nTYPE F F F\n` +
+      `COUNT 1 1 1\nWIDTH 2000000000\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\n` +
+      `POINTS 2000000000\nDATA ascii\n1 2 3\n4 5 6\n`;
+    const pc = await loadPcd(new TextEncoder().encode(pcd).buffer as ArrayBuffer, 'liar.pcd');
+    expect(pc.pointCount).toBe(2);
+    // The two real rows decoded through the f64 path, not PCDLoader's fallback.
+    expect(pc.positions[3] - pc.positions[0]).toBeCloseTo(3, 5);
+  });
+});
