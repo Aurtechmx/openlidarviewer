@@ -59,11 +59,16 @@ const fact = (name, value) => {
 // from the tree, and the architecture map's stated current sizes must match.
 {
   const BASELINE = 'docs/validation/monolith-size-baseline.json';
-  const monoFiles = { 'src/main.ts': null, 'src/render/Viewer.ts': null, 'src/style.css': null };
+  const monoFiles = { 'src/main.ts': null, 'src/render/Viewer.ts': null };
   for (const f of Object.keys(monoFiles)) monoFiles[f] = countLines(f);
   fact('main.ts lines', monoFiles['src/main.ts']);
   fact('Viewer.ts lines', monoFiles['src/render/Viewer.ts']);
-  fact('style.css lines', monoFiles['src/style.css']);
+  // style.css was split into ordered section files under src/styles/; record
+  // the partition's combined line count in its place.
+  const styleTotal = readdirSync(resolve(ROOT, 'src/styles'))
+    .filter((f) => f.endsWith('.css'))
+    .reduce((n, f) => n + countLines(`src/styles/${f}`), 0);
+  fact('src/styles/*.css lines', styleTotal);
 
   if (existsSync(resolve(ROOT, BASELINE))) {
     const baseline = JSON.parse(read(BASELINE));

@@ -1,0 +1,200 @@
+/* ── Annotations panel ───────────────────────────────────────────────────── */
+.olv-anno-panel {
+  width: 222px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg); padding: var(--space-xl);
+}
+.olv-ap-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm); margin-bottom: var(--space-lg);
+}
+.olv-ap-title { font-size: var(--text-sm); font-weight: 500; }
+.olv-ap-sort {
+  font-size: var(--text-xs); color: var(--text-dim); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-xs);
+}
+.olv-ap-search {
+  width: 100%; box-sizing: border-box; margin-bottom: var(--space-md);
+  font-size: var(--text-xs); color: var(--text); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+}
+.olv-ap-search::placeholder { color: var(--text-faint); }
+.olv-ap-search:focus-visible { outline: none; border-color: var(--accent); }
+.olv-ap-list { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-ap-empty { font-size: var(--text-xs); color: var(--text-faint); }
+/* Annotation grouping summary — total · category breakdown · areas. */
+.olv-ap-summary {
+  font-size: var(--text-xs); color: var(--text-dim);
+  padding: var(--space-2xs) 0 var(--space-xs);
+}
+.olv-ap-row {
+  display: flex; align-items: center; gap: var(--space-sm);
+  border-radius: var(--radius-sm); padding: var(--space-xs);
+}
+.olv-ap-row-selected { background: var(--accent-soft); }
+.olv-ap-badge {
+  flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--text-2xs); font-weight: 700;
+}
+.olv-ap-badge.olv-anno-note { background: #5b9bd5; color: #06121a; }
+.olv-ap-badge.olv-anno-info { background: #22dcff; color: #06121a; }
+.olv-ap-badge.olv-anno-warning { background: var(--rating-good); color: #06121a; }
+.olv-ap-badge.olv-anno-issue { background: var(--rating-weak); color: #06121a; }
+.olv-ap-name {
+  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text);
+  font-family: var(--font); background: none; border: none; padding: var(--space-2xs) 0;
+  cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-ap-name:hover { color: var(--accent); }
+.olv-ap-link {
+  flex-shrink: 0; max-width: 70px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--text-2xs); color: var(--accent);
+  background: var(--accent-soft); border-radius: var(--radius-xs); padding: 1px var(--space-sm);
+}
+.olv-ap-time { font-size: var(--text-2xs); color: var(--text-faint); flex-shrink: 0; }
+/* Category section header for the grouped (long) annotation list. A left rule in
+   the category's colour groups the rows beneath it; the count sits at the right. */
+.olv-ap-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin: var(--space-sm) 0 var(--space-2xs);
+  padding: 0 var(--space-xs) var(--space-2xs) var(--space-sm);
+  border-bottom: 1px solid var(--border-faint, rgba(255, 255, 255, 0.08));
+  border-left: 2px solid var(--text-faint);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-ap-group:first-child { margin-top: 0; }
+.olv-ap-group-count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+.olv-ap-group.olv-anno-note { border-left-color: #5b9bd5; }
+.olv-ap-group.olv-anno-info { border-left-color: #22dcff; }
+.olv-ap-group.olv-anno-warning { border-left-color: var(--rating-good); }
+.olv-ap-group.olv-anno-issue { border-left-color: var(--rating-weak); }
+.olv-ap-edit {
+  font-size: var(--text-2xs); color: var(--text-dim); font-family: var(--font);
+  background: none; border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm); flex-shrink: 0; cursor: pointer;
+}
+.olv-ap-edit:hover { color: var(--text); border-color: var(--accent); }
+/*
+ * Delete button — same visual weight as Edit (bordered, padded chip)
+ * for Gestalt similarity within the row, but uses the rose
+ * destructive vocabulary so the action type is signalled by colour
+ * (no border-only versus border-less mismatch on adjacent peers).
+ */
+.olv-ap-del {
+  font-size: var(--text-lg); line-height: 1; color: #ffb3b3;
+  background: rgba(255, 100, 100, 0.06);
+  border: 0.5px solid rgba(255, 120, 120, 0.32);
+  border-radius: var(--radius-xs); padding: 1px var(--space-sm); flex-shrink: 0; cursor: pointer;
+}
+.olv-ap-del:hover {
+  color: #ff7a7a;
+  background: rgba(255, 100, 100, 0.12);
+  border-color: rgba(255, 120, 120, 0.7);
+}
+.olv-ap-footer {
+  margin-top: var(--space-lg); padding-top: var(--space-lg); border-top: 0.5px solid var(--hairline);
+}
+.olv-ap-action {
+  width: 100%; font-size: var(--text-xs); color: var(--text-dim); font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm); cursor: pointer;
+}
+.olv-ap-action:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-ap-action:disabled { opacity: 0.4; cursor: default; }
+.olv-ap-action-armed { color: var(--rating-weak); border-color: color-mix(in srgb, var(--rating-weak) 60%, transparent); }
+
+/* Touch sizing for the measurement controls on phones */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .olv-mkind, .olv-measure-undo, .olv-units-toggle, .olv-mp-action {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  /* Measure toolbar chain-operation pills — 44 px tap target. */
+  .olv-mp-chain-chip {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-mp-name { min-height: 40px; }
+  .olv-mp-del {
+    min-width: 44px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* The left-side panels span the width on phones rather than a narrow column.
+     v0.4.6 (design audit 1.3): cap the stack to the TOP ~52vh and let it scroll
+     INSIDE that band, so the panels never blanket the whole canvas or cover the
+     bottom dock + touch HUD. The 3D view keeps the lower half of the screen and
+     the verdict card stays reachable by scrolling the band. A true bottom-sheet
+     with a View·Analyse·Layers segmented control is the next step — see the
+     JS follow-up note below. */
+  .olv-left-panels {
+    left: calc(8px + env(safe-area-inset-left));
+    right: calc(8px + env(safe-area-inset-right));
+    max-height: 52vh;
+    overflow-y: auto;
+    /* A soft fade at the bottom edge signals "more below / canvas beyond"
+       so the band reads as a scrollable sheet, not a hard wall over the view. */
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent 100%);
+    padding-bottom: var(--space-md);
+  }
+  .olv-measure-panel, .olv-anno-panel { width: auto; }
+  /* Phones: the panel spans the row, so disable horizontal resize. */
+  .olv-measure-panel { resize: none; min-width: 0; max-width: none; }
+  /* Over the 3D canvas, the recessive translucent fill is too see-through to
+     read — restore an opaque panel fill on phones so text stays legible while
+     keeping the desktop two-tier rank. */
+  .olv-measure-panel, .olv-anno-panel, .olv-class-panel,
+  .olv-export-panel, .olv-object-panel {
+    background: var(--panel);
+  }
+
+  /* Annotation editor — 44 px touch targets for every control. */
+  .olv-anno-editor-cancel, .olv-anno-editor-save, .olv-anno-chip {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-anno-editor-title { min-height: 40px; }
+  .olv-anno-editor-camera { min-height: 36px; }
+
+  /* Annotations panel — touch-sized rows, controls and the sort select. */
+  .olv-ap-row { padding: var(--space-sm) var(--space-xs); }
+  .olv-ap-name { min-height: 40px; }
+  .olv-ap-search { min-height: 44px; }
+  .olv-ap-sort, .olv-ap-action { min-height: 44px; }
+  .olv-ap-edit {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-ap-del {
+    min-width: 44px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Batch-converter format / CRS pills — 44 px tap target. The converter
+     dialog is reachable on phones, so its choice pills need finger-sized hits. */
+  .olv-bc-pill {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+
+  /* Camera-preset chips. The NavBar HUD they live in is hidden on phones today
+     (camera is touch-driven), but size them here too so the chips are
+     finger-ready the moment that HUD is ever surfaced on touch. */
+  .olv-cam-chip {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+}
+

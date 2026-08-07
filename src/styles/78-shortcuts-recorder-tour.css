@@ -1,0 +1,384 @@
+/* ── Keyboard shortcut sheet — v0.3.9 ────────────────────────────────────── */
+.olv-shortcuts {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+  pointer-events: none;
+}
+.olv-shortcuts-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(11, 17, 33, 0.55);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+.olv-shortcuts-card {
+  position: relative;
+  width: min(560px, calc(100vw - 32px));
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  padding: var(--space-2xl);
+  background: rgba(11, 17, 33, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+}
+/* ── Workflow recorder settings popup ──────────────────────────────── */
+.olv-wfc {
+  position: fixed; inset: 0; z-index: 91;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: 12vh; pointer-events: none;
+}
+.olv-wfc-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(11, 17, 33, 0.55);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  pointer-events: auto;
+}
+.olv-wfc-card {
+  position: relative;
+  width: min(440px, calc(100vw - 32px));
+  max-height: 78vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--space-lg);
+  pointer-events: auto;
+  padding: var(--space-2xl);
+  background: rgba(11, 17, 33, 0.96);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent); border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
+  color: var(--text);
+}
+.olv-wfc-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-lg); }
+.olv-wfc-title { font-size: var(--text-md); font-weight: 600; }
+.olv-wfc-subtitle { font-size: var(--text-xs); color: var(--text-dim); margin-top: 2px; }
+.olv-wfc-close {
+  font-size: 20px; line-height: 1; color: var(--text-dim);
+  background: none; border: none; cursor: pointer; padding: 2px 6px;
+}
+.olv-wfc-close:hover { color: var(--text); }
+.olv-wfc-body { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-wfc-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+.olv-wfc-label { font-size: var(--text-sm); color: var(--text-dim); }
+.olv-wfc-seg { display: inline-flex; gap: 2px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 2px; }
+.olv-wfc-seg-btn {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: none; border-radius: 6px;
+  padding: 4px 9px; cursor: pointer; transition: color 120ms ease, background 120ms ease;
+}
+.olv-wfc-seg-btn:hover { color: var(--text); }
+.olv-wfc-seg-btn.is-active { color: var(--text); background: var(--accent-soft); }
+.olv-wfc-shortcut-wrap { display: inline-flex; gap: 6px; align-items: center; }
+.olv-wfc-shortcut {
+  font-size: var(--text-xs); color: var(--text);
+  background: rgba(255,255,255,0.06); border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 4px 10px; min-width: 78px; cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+.olv-wfc-shortcut.is-capturing { border-color: var(--accent); color: var(--accent); }
+.olv-wfc-shortcut-off { font-size: var(--text-xs); color: var(--text-dim); background: none; border: none; cursor: pointer; }
+.olv-wfc-shortcut-off:hover { color: var(--text); }
+.olv-wfc-capture { display: inline-flex; gap: var(--space-md); }
+.olv-wfc-capture-item { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; }
+.olv-wfc-check { accent-color: var(--accent); margin: 0; cursor: pointer; }
+.olv-wfc-footer { display: flex; align-items: center; justify-content: space-between; padding-top: var(--space-sm); border-top: 0.5px solid var(--hairline); }
+.olv-wfc-hint { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-wfc-reset { font-size: var(--text-xs); color: var(--text-dim); background: none; border: 0.5px solid var(--hairline); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.olv-wfc-reset:hover { color: var(--text); border-color: var(--accent); }
+
+.olv-shortcuts-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-xl);
+  margin-bottom: var(--space-lg);
+}
+.olv-shortcuts-header-titles { flex: 1 1 auto; min-width: 0; }
+.olv-shortcuts-close {
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  background: none; border: none; color: var(--text-faint);
+  font-size: var(--text-2xl); line-height: 1; cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+}
+.olv-shortcuts-close:hover {
+  color: var(--text); background: rgba(255, 255, 255, 0.07);
+}
+.olv-shortcuts-close:focus-visible {
+  outline: 1px solid var(--accent); outline-offset: 1px;
+}
+.olv-shortcuts-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+.olv-shortcuts-subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  margin-top: var(--space-2xs);
+}
+.olv-shortcuts-input {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  padding: var(--space-md) var(--space-lg);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-md);
+  box-sizing: border-box;
+}
+.olv-shortcuts-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.olv-shortcuts-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 var(--space-xs);
+}
+.olv-shortcuts-section {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: var(--space-md) var(--space-sm) var(--space-xs);
+}
+.olv-shortcuts-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  width: 100%;
+  padding: var(--space-md) var(--space-lg);
+  margin: 1px 0;
+  font-family: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard), color var(--dur-fast) var(--ease-standard);
+}
+.olv-shortcuts-row:hover {
+  background: rgba(0, 178, 255, 0.08);
+  color: var(--text);
+}
+.olv-shortcuts-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.olv-shortcuts-row-title {
+  color: var(--text);
+}
+.olv-shortcuts-row-hint {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+.olv-shortcuts-row-key {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-md);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.olv-shortcuts-row-key-empty {
+  flex: 0 0 auto;
+  width: 1px;
+}
+.olv-shortcuts-empty {
+  padding: var(--space-4xl);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+.olv-shortcuts-hint {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  padding: var(--space-md) var(--space-xs) 0;
+  border-top: 0.5px solid var(--hairline);
+  margin-top: var(--space-md);
+}
+.olv-shortcuts-hint-key {
+  font-family: var(--mono);
+  padding: 1px var(--space-sm);
+  background: rgba(255, 255, 255, 0.05);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+}
+
+/* ── Onboarding tour overlay — v0.3.9 ────────────────────────────────────── */
+.olv-tour-root {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none;
+}
+.olv-tour-backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+.olv-tour-card {
+  position: fixed;
+  width: 360px;
+  pointer-events: auto;
+  padding: var(--space-2xl) var(--space-3xl);
+  background: rgba(11, 17, 33, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 0.5px solid var(--accent);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-family: var(--sans);
+}
+.olv-tour-progress {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: var(--space-sm);
+}
+.olv-tour-title {
+  font-size: var(--text-xl);
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+}
+.olv-tour-body {
+  font-size: var(--text-md);
+  line-height: 1.45;
+  color: var(--text-dim);
+  margin-bottom: var(--space-2xl);
+}
+/* Key-term highlight in step copy (v0.4.5). <mark> defaults to the UA's
+   yellow (and, unstyled, key terms read like raw selection-blue against the
+   dark card) — restyle it into the brand vocabulary: accent-tinted pill,
+   readable accent text, rounded corners. */
+.olv-tour-mark {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 0 4px;
+  font-weight: 500;
+}
+/* Rapid Next-clicking double-click-selects card text, which looks like a
+   broken highlight; tour copy is read, not copied, so disable selection on
+   the whole card. */
+.olv-tour-card { user-select: none; -webkit-user-select: none; }
+.olv-tour-actions {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: flex-end;
+}
+.olv-tour-btn {
+  font-size: var(--text-sm);
+  padding: var(--space-sm) var(--space-2xl);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+}
+.olv-tour-btn:hover { color: var(--text); }
+.olv-tour-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.olv-tour-btn-primary {
+  color: #0a0e1a;
+  background: #00b2ff;
+  border-color: rgba(0, 178, 255, 0.85);
+  font-weight: 600;
+}
+.olv-tour-btn-primary:hover { background: #1ec0ff; color: #0a0e1a; }
+.olv-tour-skip {
+  display: block;
+  margin-top: var(--space-lg);
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.olv-tour-skip:hover { color: var(--text-dim); }
+
+.olv-mp-action:hover { color: var(--text); border-color: var(--accent); }
+.olv-mp-action-active {
+  color: var(--text);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Chain mode — appears above the measurement list when active. The
+ * chip rails read as the same level as the active-kind picker so the
+ * user maps the affordance instantly. */
+.olv-mp-chain-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0 var(--space-sm);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md);
+}
+.olv-mp-chain-label {
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-mp-chain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+}
+.olv-mp-chain-chip {
+  font-size: var(--text-xs);
+  padding: var(--space-xs) var(--space-md);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard);
+}
+.olv-mp-chain-chip:hover { color: var(--text); border-color: var(--accent); }
+.olv-mp-chain-chip-active {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.olv-mp-chain-result {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  padding: var(--space-xs) 0 0;
+}
+.olv-mp-chain-check {
+  margin-right: var(--space-xs);
+  flex: 0 0 auto;
+}
+

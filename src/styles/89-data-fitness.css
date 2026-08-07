@@ -1,0 +1,89 @@
+/* ── Data Fitness scorecard — verdict-led panel (one verdict + traffic-light
+   rows with friendly metaphor icons + shape-distinct tone glyphs). ─────────── */
+.olv-analyse-fitness { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
+.olv-fit-verdict {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--space-xs);
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+  padding: var(--space-sm) var(--space-md); border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03); border-left: 3px solid var(--hairline);
+}
+.olv-fit-verdict.is-ready { border-left-color: var(--rating-excellent); }
+.olv-fit-verdict.is-okay { border-left-color: var(--rating-good); }
+.olv-fit-verdict.is-review { border-left-color: var(--rating-weak); }
+.olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
+.olv-fit-badge {
+  flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.02em;
+  color: var(--accent); background: var(--accent-soft);
+  padding: 1px var(--space-xs); border-radius: var(--radius-sm);
+}
+.olv-fit-grid { display: flex; flex-direction: column; }
+.olv-fit-row {
+  display: grid; grid-template-columns: 18px 1fr auto; grid-template-rows: auto auto;
+  align-items: center; column-gap: var(--space-sm); row-gap: 1px;
+  padding: var(--space-xs) 0; border-top: 0.5px solid var(--hairline);
+}
+.olv-fit-ico { grid-row: 1 / 3; grid-column: 1; color: var(--text-faint); display: inline-flex; }
+.olv-fit-ico svg { width: 18px; height: 18px; display: block; }
+.olv-fit-label { grid-row: 1; grid-column: 2; font-size: var(--text-xs); font-weight: 600; color: var(--text); }
+/* Tone glyph (check / dash / triangle) — colour AND shape carry the state. */
+.olv-fit-tone { grid-row: 1; grid-column: 3; display: inline-flex; }
+.olv-fit-tone svg { width: 15px; height: 15px; display: block; }
+.olv-fit-row.is-ready .olv-fit-tone { color: var(--rating-excellent); }
+.olv-fit-row.is-okay .olv-fit-tone { color: var(--rating-good); }
+.olv-fit-row.is-review .olv-fit-tone { color: var(--rating-weak); }
+.olv-fit-sum { grid-row: 2; grid-column: 2 / 4; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.35; }
+.olv-fit-caveat {
+  font-size: var(--text-2xs); color: var(--rating-good); line-height: 1.4;
+  padding-left: var(--space-md); position: relative;
+}
+.olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
+
+/* Recommended grid / interval. */
+.olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
+.olv-analyse-reco { font-size: var(--text-xs); color: var(--text); font-family: var(--mono); }
+/* Quality gate reasons. */
+.olv-analyse-quality { display: flex; flex-direction: column; gap: var(--space-xs); margin: var(--space-xs) 0; }
+/* v0.4.6: quality-gate reason rides the shared caveat primitive (tinted
+   bg + left-rule) so a Blocked/Preview reason reads as the same honest
+   limit as every other caveat in the product. */
+.olv-analyse-reason {
+  font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--caveat-tint);
+  border-left: 2px solid var(--caveat-rule);
+  border-radius: 2px; line-height: 1.45;
+}
+/* Coverage & confidence. */
+/* Export gate note — honest limit, rides the caveat primitive (v0.4.6). */
+.olv-analyse-export-note {
+  font-size: var(--text-2xs); color: var(--text-dim); margin: var(--space-xs) 0 0; overflow-wrap: anywhere;
+  padding: var(--space-xs) var(--space-md);
+  background: var(--caveat-tint);
+  border-left: 2px solid var(--caveat-rule);
+  border-radius: 2px; line-height: 1.45;
+}
+/* DEM export honesty caveat — rides the shared caveat primitive (v0.4.6)
+   so it reads identically to every other honest limit. */
+.olv-analyse-dem-note {
+  flex-basis: 100%; font-size: var(--text-2xs); color: var(--text-dim);
+  margin: var(--space-xs) 0 0; overflow-wrap: anywhere;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--caveat-tint);
+  border-left: 2px solid var(--caveat-rule);
+  border-radius: 2px; line-height: 1.45;
+}
+.olv-analyse-dl:disabled { opacity: 0.4; cursor: default; }
+
+/* Planned — a minimal, quiet tag row of upcoming capabilities. */
+.olv-analyse-roadmap { margin-top: var(--space-xs); }
+.olv-analyse-plan { display: flex; flex-wrap: wrap; gap: var(--space-sm); margin-top: var(--space-sm); }
+.olv-analyse-plan-tag {
+  font-size: var(--text-2xs); color: var(--text-faint);
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-pill); padding: var(--space-2xs) var(--space-md);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 767px) {
+  .olv-analyse-panel { width: auto; }
+}
+

@@ -1,0 +1,141 @@
+/* ── Classification legend panel ─────────────────────────────────────────── */
+.olv-class-panel {
+  /* 248px (was 218): the class name shares the row with a wide point count and
+     the Solo button, so 218 truncated common names ("Low vegetation") to a few
+     letters. The extra width lets the names read; the full name is still on the
+     row's hover title for anything that still clips. */
+  width: 248px; box-sizing: border-box;
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+}
+.olv-cl-title { font-size: 12px; font-weight: 500; margin-bottom: 10px; }
+
+/* Manual classification-edit panel — mounts directly beneath .olv-class-panel,
+   so it borrows the same 248px dock chrome to read as a first-class sibling.
+   Controls stack in full-width rows; the primary "Reclassify (lasso)" action is
+   full width so its label can never clip in the cramped left dock. */
+.olv-reclass-panel {
+  width: 248px; box-sizing: border-box; margin-top: var(--space-md);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: 10px; padding: 12px;
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.olv-reclass-head { font-size: 12px; font-weight: 500; margin-bottom: var(--space-2xs); }
+.olv-reclass-select {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: var(--text-sm);
+  color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
+}
+.olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
+.olv-reclass-go { width: 100%; text-align: center; }
+/* Auto-classify: the panel's emphasised action. Only layout lives here. The
+   accent emphasis is declared in the unified button block at the end of this
+   file, because the button also carries `.olv-bc-pill`, whose base rule sits
+   later in the source at the same specificity and would otherwise reset the
+   fill, border and colour back to the plain pill. */
+.olv-reclass-auto {
+  width: 100%;
+  text-align: center;
+  margin-bottom: var(--space-sm);
+}
+/* In-flight derive: dim the button and spin a ring before the label. */
+.olv-reclass-auto-loading {
+  opacity: 0.72;
+  cursor: progress;
+  pointer-events: none;
+}
+.olv-reclass-auto-loading::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: olv-reclass-spin 0.7s linear infinite;
+}
+@keyframes olv-reclass-spin {
+  to { transform: rotate(360deg); }
+}
+.olv-reclass-actions { display: flex; gap: var(--space-sm); }
+.olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
+/* The "Filtered — showing N of M classes" banner — persistent while filtered. */
+.olv-cl-banner {
+  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+}
+/* Derived-classification provenance caption — a quiet amber note so the
+   heuristic classes never read as an authoritative, file-supplied set. */
+.olv-cl-derived,
+.olv-cl-streamnote {
+  font-size: 10.5px; line-height: 1.35; color: var(--warn, #b8860b);
+  background: color-mix(in srgb, var(--warn, #b8860b) 12%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--warn, #b8860b) 35%, transparent);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
+}
+.olv-cl-list { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.olv-cl-row {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  transition: opacity 130ms ease;
+}
+/* A hidden class reads dimmed so the legend always mirrors the canvas. */
+.olv-cl-row.is-hidden { opacity: 0.42; }
+.olv-cl-check { flex-shrink: 0; margin: 0; cursor: pointer; }
+.olv-cl-swatch {
+  flex-shrink: 0; width: 11px; height: 11px;
+  border-radius: 3px; border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+.olv-cl-name {
+  flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: var(--text);
+  font-family: var(--font);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* Tabular figures so counts line up column-right as they refine while streaming. */
+.olv-cl-count {
+  flex-shrink: 0; font-size: 11px; font-family: var(--mono);
+  color: var(--text-dim); text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.olv-cl-solo {
+  flex-shrink: 0; font-size: 10px; color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 5px; padding: 2px 5px;
+  transition: color 130ms ease, border-color 130ms ease;
+}
+.olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
+.olv-cl-solo:focus-visible { outline: none; border-color: var(--accent); }
+/* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
+.olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
+.olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
+.olv-cl-empty { font-size: 11.5px; color: var(--text-faint); }
+.olv-cl-footer {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 0.5px solid var(--hairline);
+}
+/* Colourblind-safe palette toggle — drops to its own full-width line under the
+ * Show-all button. A quiet checkbox row; the class swatches recolour live. */
+.olv-cl-cvd {
+  flex: 1 0 100%;
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--text-dim);
+  cursor: pointer;
+  transition: color 130ms ease;
+}
+.olv-cl-cvd:hover { color: var(--text); }
+.olv-cl-cvd-input { accent-color: var(--accent); margin: 0; cursor: pointer; }
+.olv-cl-showall {
+  flex: 1; font-size: 11px; color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: 6px; padding: 6px;
+  transition: color 130ms ease, border-color 130ms ease;
+}
+.olv-cl-showall:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-cl-showall:disabled { opacity: 0.4; cursor: default; }
+
