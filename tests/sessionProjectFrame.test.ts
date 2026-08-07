@@ -24,6 +24,7 @@ import {
   frameAnchorLayerId,
   withoutFrameLayer,
   withFrameLayerOrder,
+  MAX_FRAME_LAYERS,
 } from '../src/io/sessionFrame';
 import type { SessionLayerRecord, SessionProjectFrame } from '../src/io/sessionFrame';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
@@ -446,5 +447,25 @@ describe('sessionFrame: parse and serialize agree', () => {
       'sourceToProject',
       'upAxis',
     ]);
+  });
+});
+
+describe('validateSessionProjectFrame — layer-count ceiling (hostile input)', () => {
+  it('refuses a frame that declares more than MAX_FRAME_LAYERS layers', () => {
+    const layer = {
+      layerId: 'L',
+      sourceFingerprint: 'f',
+      sourceName: 'n',
+      sourceOrigin: [0, 0, 0],
+      sourceToProject: [0, 0, 0],
+      upAxis: 'z',
+    };
+    const frame = { projectOrigin: [0, 0, 0], layers: new Array(MAX_FRAME_LAYERS + 1).fill(layer) };
+    const reasons = validateSessionProjectFrame(frame);
+    // The count check fires up front and returns early — so the cap reason is
+    // present (the per-layer duplicate-id walk never runs).
+    expect(reasons.some((r) => r.includes('above the') && r.includes(String(MAX_FRAME_LAYERS)))).toBe(true);
+    // And the strict reader refuses it, like any other inconsistent frame.
+    expect(() => parseSessionProjectFrame(frame)).toThrow(/inconsistent/i);
   });
 });
