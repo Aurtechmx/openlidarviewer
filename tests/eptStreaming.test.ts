@@ -27,6 +27,7 @@ import {
 import { EptOctree } from '../src/render/streaming/EptOctree';
 import { EptStreamingPointCloud } from '../src/render/streaming/EptStreamingPointCloud';
 import type { EptTransport } from '../src/render/streaming/EptStreamingPointCloud';
+import { isAbortError } from '../src/app/openStreaming';
 import { parseEptMetadata } from '../src/io/ept/eptDetect';
 import type { EptMetadata, EptSchemaField } from '../src/io/ept/eptTypes';
 
@@ -267,6 +268,32 @@ test('EptOctree handles a fetcher failure without crashing — surfaces in error
   expect(octree.errors.length).toBeGreaterThan(0);
   expect(octree.errors[0]).toMatch(/network down/);
   expect(octree.isComplete).toBe(false);
+});
+
+// The mid-walk abort guard must keep a user cancel (silent) distinct from a
+// timeout (visible). It used to throw a plain Error, which the cancel classifier
+// read as neither; it now propagates the signal's own abort reason. The fetcher
+// is never reached because the guard fires on the root key before any fetch.
+
+test('EptOctree: a user cancel throws an AbortError the classifier treats as silent', async () => {
+  const meta = loadFixtureMetadata();
+  const octree = new EptOctree(meta, () => Promise.reject(new Error('fetcher must not run')));
+  const controller = new AbortController();
+  controller.abort();
+  const err = await octree.loadFullHierarchy(controller.signal).catch((e: unknown) => e);
+  expect((err as Error).name).toBe('AbortError');
+  expect(isAbortError(err)).toBe(true);
+});
+
+test('EptOctree: a timeout-reason abort stays a visible error, not a silent cancel', async () => {
+  const meta = loadFixtureMetadata();
+  const octree = new EptOctree(meta, () => Promise.reject(new Error('fetcher must not run')));
+  const controller = new AbortController();
+  const timeout = new DOMException('EPT hierarchy load timed out', 'TimeoutError');
+  controller.abort(timeout);
+  const err = await octree.loadFullHierarchy(controller.signal).catch((e: unknown) => e);
+  expect(err).toBe(timeout);
+  expect(isAbortError(err)).toBe(false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

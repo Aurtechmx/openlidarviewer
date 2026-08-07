@@ -35,6 +35,14 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
+// child_process resolves bare command names (git, tar, mkdir) through PATH, so
+// a tampered or cwd-relative PATH entry could shadow them with another binary
+// (Sonar javascript:S4036). Pin a fixed list of the standard system directories
+// those tools live in on the CI runner and on macOS. The lint stages keep the
+// inherited PATH — they run npm — and are launched through an absolute /bin/sh.
+const SAFE_PATH = '/usr/local/sbin:/usr/local/bin:/opt/homebrew/bin:/usr/sbin:/usr/bin:/sbin:/bin';
+const GIT_ENV = { ...process.env, PATH: SAFE_PATH };
+
 /**
  * Gate stages that read git history or the working copy by design, so they
  * cannot run inside an extracted archive. Each is named with its reason: an
@@ -49,7 +57,7 @@ const REPO_ONLY = new Map([
 
 /** The lint stages of `test:release:execute`, in gate order. */
 function gateLints() {
-  const pkg = JSON.parse(execSync('git show HEAD:package.json', { cwd: ROOT, encoding: 'utf8' }));
+  const pkg = JSON.parse(execSync('git show HEAD:package.json', { cwd: ROOT, encoding: 'utf8', env: GIT_ENV }));
   const chain = pkg.scripts['test:release:execute'] ?? '';
   return chain
     .split('&&')
@@ -75,6 +83,7 @@ try {
   execSync(`mkdir -p "${tree}" && git archive --format=tar HEAD | tar -x -C "${tree}"`, {
     cwd: ROOT,
     stdio: 'pipe',
+    env: GIT_ENV,
   });
 
   // The lints are plain Node ESM; a few import dev dependencies. Borrowing the
@@ -84,7 +93,7 @@ try {
     symlinkSync(mods, join(tree, 'node_modules'), 'dir');
   }
 
-  const pkg = JSON.parse(execSync('git show HEAD:package.json', { cwd: ROOT, encoding: 'utf8' }));
+  const pkg = JSON.parse(execSync('git show HEAD:package.json', { cwd: ROOT, encoding: 'utf8', env: GIT_ENV }));
 
   for (const stage of stages) {
     if (REPO_ONLY.has(stage)) continue;
@@ -94,7 +103,7 @@ try {
       continue;
     }
     try {
-      execFileSync('sh', ['-c', cmd], { cwd: tree, stdio: 'pipe', encoding: 'utf8' });
+      execFileSync('/bin/sh', ['-c', cmd], { cwd: tree, stdio: 'pipe', encoding: 'utf8' });
       passed += 1;
     } catch (err) {
       const text = `${err.stdout ?? ''}${err.stderr ?? ''}`;

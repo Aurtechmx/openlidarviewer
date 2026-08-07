@@ -4,7 +4,10 @@
  * Main-thread client for the terrain-core compute worker. Mirrors the COPC
  * decode worker client: lazily construct the `Worker`, give every request a
  * monotonic job id, settle the matching reply, drop a stale reply for an
- * already-settled job, and let an `AbortSignal` reject + abandon a request.
+ * already-settled job, and let an `AbortSignal` reject a request AND terminate
+ * the worker running it (the compute is synchronous inside one message task, so
+ * termination is the only cancellation that reaches it; the worker is lazily
+ * rebuilt on the next call).
  *
  * Serialization choice (safety first):
  *   - INPUT: the caller's working Float32Array is NEVER detached. We send a
@@ -55,7 +58,9 @@ export class TerrainCoreWorkerClient {
   /**
    * Compute a terrain core in the worker. The `positions` array is COPIED (its
    * buffer is never detached), so the caller may keep using it after the call.
-   * Rejects if the signal is (or becomes) aborted, dropping the worker's reply.
+   * Rejects if the signal is (or becomes) aborted; an abort also terminates the
+   * worker, so the abandoned compute actually stops instead of running to
+   * completion for a result nobody will read.
    *
    * Throws synchronously / rejects if the worker cannot be constructed — the
    * caller's {@link computeTerrainCoreAsync} wrapper catches this and falls back
@@ -96,8 +101,24 @@ export class TerrainCoreWorkerClient {
       if (signal) {
         pending.onAbort = (): void => {
           // Drop the job so a reply that arrives later is treated as stale.
-          if (!this._pending.delete(jobId)) return;
+          if (!this._settle(jobId)) return;
           reject(new Error('Terrain analysis aborted'));
+          // Abandoning the PROMISE is not abandoning the WORK. The worker's
+          // `onmessage` runs the whole terrain compute synchronously inside one
+          // message task, so a "cancel" message could not be read until the run
+          // it was meant to cancel had already finished — `terminate()` is the
+          // only mechanism that actually stops it. Without this an aborted
+          // analysis (the user changed the cell size, or closed the panel) kept
+          // a core pinned for the full duration of a compute whose result
+          // nobody would ever read, and the NEXT analysis queued behind it.
+          //
+          // Terminating takes the whole worker down, so any other job riding it
+          // dies too; `_terminateWorker` rejects those rather than leaving them
+          // unsettled, and their caller falls back to the main-thread compute.
+          // The worker is lazily rebuilt, so the next call gets a clean one.
+          this._terminateWorker(
+            new Error('The terrain-core worker was terminated by an aborted job.'),
+          );
         };
         signal.addEventListener('abort', pending.onAbort, { once: true });
       }
@@ -135,7 +156,19 @@ export class TerrainCoreWorkerClient {
   /** Terminate the worker and reject every in-flight job. */
   dispose(): void {
     this._disposed = true;
-    this._failAll(new Error('The terrain-core worker has been disposed.'));
+    this._terminateWorker(new Error('The terrain-core worker has been disposed.'));
+  }
+
+  /**
+   * Reject every job still in flight, terminate the live worker, and drop the
+   * reference so {@link _ensureWorker} respawns a clean one on the next call.
+   *
+   * The single "stop the machine" path, shared by `dispose` and by an abort.
+   * Rejecting BEFORE terminating matters: once the worker is gone no reply can
+   * arrive, so a job left in `_pending` would hang forever.
+   */
+  private _terminateWorker(error: Error): void {
+    this._failAll(error);
     if (this._worker) {
       this._worker.terminate();
       this._worker = null;

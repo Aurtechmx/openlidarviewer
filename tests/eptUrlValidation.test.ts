@@ -16,6 +16,7 @@ import {
   describeRemoteEptError,
   MAX_REMOTE_EPT_URL_LENGTH,
 } from '../src/io/ept/eptUrlValidation';
+import { EptTimeoutError } from '../src/io/ept/eptTransport';
 
 describe('validateRemoteEptUrl — happy path', () => {
   test('accepts a plain https URL ending in /ept.json', () => {
@@ -83,7 +84,19 @@ describe('describeRemoteEptError — classification', () => {
     const msg = describeRemoteEptError(new Error('CORS policy blocked the request'), URL);
     expect(msg).toMatch(/CORS|Cross-Origin/i);
     expect(msg).toMatch(/cross-origin/i);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
+  });
+
+  test('an internal timeout gets a distinct, visible "timed out" message', () => {
+    // An EptTimeoutError is a real failure, not a silent user cancel — it must
+    // render a visible timeout message, mirroring the COPC timeout remedy.
+    const msg = describeRemoteEptError(
+      new EptTimeoutError('EPT request timed out after 20000 ms for https://example.com/dataset/ept-hierarchy/0-0-0-0.json'),
+      URL,
+    );
+    expect(msg).toMatch(/timed out/i);
+    expect(msg).toMatch(/try again|faster host/i);
+    expect(msg).toContain('example.com');
   });
 
   test('manifest 404 gets a precise "manifest not found" message', () => {
@@ -92,7 +105,7 @@ describe('describeRemoteEptError — classification', () => {
       URL,
     );
     expect(msg).toMatch(/manifest not found|404/i);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 
   test('manifest 5xx gets a "server-side error" message', () => {
@@ -137,7 +150,7 @@ describe('describeRemoteEptError — classification', () => {
 
   test('fallback message anchors the URL host', () => {
     const msg = describeRemoteEptError(new Error('something unexpected'), URL);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
     expect(msg).toMatch(/something unexpected/);
   });
 
@@ -147,6 +160,6 @@ describe('describeRemoteEptError — classification', () => {
       'https://user:pass@example.com/dataset/ept.json',
     );
     expect(msg).not.toMatch(/user:pass/);
-    expect(msg).toMatch(/example\.com/);
+    expect(msg).toContain('example.com');
   });
 });

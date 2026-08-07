@@ -9,6 +9,8 @@ import {
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
 import type { RangeSource } from '../src/io/range/RangeSource';
+import { RangeReadError } from '../src/io/range/RangeSource';
+import { EptTimeoutError } from '../src/io/ept/eptTransport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pure decisions the extraction exposes — the only remote-open logic that
@@ -61,6 +63,26 @@ describe('isAbortError — the user-cancel classifier both remote handlers surfa
     expect(isAbortError(null)).toBe(false);
     expect(isAbortError('AbortError')).toBe(false);
     expect(isAbortError(undefined)).toBe(false);
+  });
+
+  // Regression: the three streaming outcomes must classify distinctly against the
+  // ACTUAL error types each layer throws, not just hand-built shapes.
+  it('treats the octree user-cancel throw (a DOMException AbortError) as a cancel', () => {
+    expect(isAbortError(new DOMException('Hierarchy load aborted', 'AbortError'))).toBe(true);
+  });
+
+  it('does NOT treat an internal EPT timeout (EptTimeoutError) as a cancel', () => {
+    expect(isAbortError(new EptTimeoutError('EPT request timed out after 20000 ms for https://x/ept.json'))).toBe(false);
+  });
+
+  it('does NOT treat a COPC RangeReadError timeout as a cancel, but does treat its aborted', () => {
+    expect(isAbortError(new RangeReadError('timeout', 'timed out'))).toBe(false);
+    expect(isAbortError(new RangeReadError('aborted', 'Range read aborted'))).toBe(true);
+  });
+
+  it('does NOT treat a transport / HTTP failure as a cancel', () => {
+    expect(isAbortError(new RangeReadError('transport', 'could not reach host'))).toBe(false);
+    expect(isAbortError(new Error('EPT hierarchy fetch failed (500 Err) for https://x'))).toBe(false);
   });
 });
 
