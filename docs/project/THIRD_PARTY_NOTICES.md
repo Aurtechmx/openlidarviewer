@@ -32,11 +32,11 @@ here for transparency.
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 | https://github.com/microsoft/TypeScript |
-| vite | ^8.1.5 | 8.1.5 | MIT | https://github.com/vitejs/vite |
+| vite | ^8.2.0 | 8.2.0 | MIT | https://github.com/vitejs/vite |
 | vitest | ^4.1.7 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
 | vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
-| @playwright/test | ^1.60.0 | 1.62.0 | Apache-2.0 | https://github.com/microsoft/playwright |
+| @playwright/test | ^1.62.1 | 1.62.1 | Apache-2.0 | https://github.com/microsoft/playwright |
 | @types/three | ^0.184.1 | 0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.0.1 | 7.0.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
 | @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
