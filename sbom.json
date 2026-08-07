@@ -85,7 +85,7 @@
       "version": "0.6.4",
       "bom-ref": "openlidarviewer@0.6.4",
       "author": "A. Urias",
-      "description": "Open any 3D scan \u2014 drone LiDAR, terrestrial laser scan, or phone scan \u2014 instantly and privately, in a browser tab. No install, no upload, no conversion.",
+      "description": "Open any 3D scan — drone LiDAR, terrestrial laser scan, or phone scan — instantly and privately, in a browser tab. No install, no upload, no conversion.",
       "licenses": [
         {
           "license": {
@@ -281,8 +281,8 @@
       "type": "library",
       "name": "core",
       "group": "@loaders.gl",
-      "version": "4.4.3",
-      "bom-ref": "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+      "version": "4.4.4",
+      "bom-ref": "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
       "description": "The core API for working with loaders.gl loaders and writers",
       "licenses": [
         {
@@ -292,7 +292,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40loaders.gl/core@4.4.3",
+      "purl": "pkg:npm/%40loaders.gl/core@4.4.4",
       "externalReferences": [
         {
           "url": "git+https://github.com/visgl/loaders.gl.git",
@@ -310,7 +310,7 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.4.3.tgz",
+          "url": "https://registry.npmjs.org/@loaders.gl/core/-/core-4.4.4.tgz",
           "type": "distribution",
           "hashes": [
             {
@@ -1823,7 +1823,7 @@
       "group": "@swc",
       "version": "0.5.23",
       "bom-ref": "openlidarviewer@0.6.4|@swc/helpers@0.5.23",
-      "author": "\uac15\ub3d9\uc724",
+      "author": "강동윤",
       "description": "External helpers for the swc project.",
       "licenses": [
         {
@@ -2997,7 +2997,7 @@
         "openlidarviewer@0.6.4|@fontsource-variable/inter@5.3.0",
         "openlidarviewer@0.6.4|@fontsource/jetbrains-mono@5.3.0",
         "openlidarviewer@0.6.4|@fontsource/manrope@5.3.0",
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/gltf@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/obj@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/ply@4.4.3",
@@ -3017,7 +3017,7 @@
       "ref": "openlidarviewer@0.6.4|@fontsource/manrope@5.3.0"
     },
     {
-      "ref": "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+      "ref": "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
       "dependsOn": [
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema-utils@4.4.3",
@@ -3029,7 +3029,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/gltf@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/draco@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/images@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
@@ -3041,7 +3041,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/obj@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema@4.4.3"
@@ -3050,7 +3050,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/ply@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema@4.4.3"
@@ -3093,7 +3093,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/schema-utils@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/schema@4.4.3",
         "openlidarviewer@0.6.4|@types/geojson@7946.0.16",
         "openlidarviewer@0.6.4|apache-arrow@21.1.0"
@@ -3109,7 +3109,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/worker-utils@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3"
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4"
       ]
     },
     {
@@ -3121,7 +3121,7 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/draco@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema@4.4.3",
@@ -3132,14 +3132,14 @@
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/images@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3"
       ]
     },
     {
       "ref": "openlidarviewer@0.6.4|@loaders.gl/textures@4.4.3",
       "dependsOn": [
-        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.3",
+        "openlidarviewer@0.6.4|@loaders.gl/core@4.4.4",
         "openlidarviewer@0.6.4|@loaders.gl/images@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/loader-utils@4.4.3",
         "openlidarviewer@0.6.4|@loaders.gl/schema@4.4.3",
