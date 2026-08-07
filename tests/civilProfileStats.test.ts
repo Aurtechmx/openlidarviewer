@@ -18,7 +18,7 @@ describe('computeCivilProfileStats', () => {
   it('computes length, relief, mean and max grade on a clean profile', () => {
     // 0,10,20,30 m chainage; elevations rise then fall.
     const stats = computeCivilProfileStats([s(0, 100), s(10, 102), s(20, 108), s(30, 105)]);
-    expect(stats.length).toBe(30);
+    expect(stats).toHaveLength(30);
     expect(stats.sampleCount).toBe(4);
     expect(stats.coverage).toBe(1);
     expect(stats.minElevation).toBe(100);

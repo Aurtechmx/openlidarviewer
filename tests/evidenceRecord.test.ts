@@ -250,7 +250,7 @@ describe('summariseStages', () => {
 describe('bindMutationEvidence', () => {
   it('reports absence only when the caller requires a result', () => {
     expect(bindMutationEvidence(null, RELEASE_COMMIT, { required: false }).problems).toEqual([]);
-    expect(bindMutationEvidence(null, RELEASE_COMMIT, { required: true }).problems.length).toBe(1);
+    expect(bindMutationEvidence(null, RELEASE_COMMIT, { required: true }).problems).toHaveLength(1);
   });
 
   it('does not claim coverage when the release commit is unknown', () => {

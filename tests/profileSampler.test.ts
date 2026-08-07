@@ -411,7 +411,7 @@ describe('normaliseResampleParams — the B7/B8 panel→sampler seam (hand-compu
         positions,
         samples: n,
       });
-      expect(out.length).toBe(n);
+      expect(out).toHaveLength(n);
     }
   });
 });

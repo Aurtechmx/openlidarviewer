@@ -7,6 +7,8 @@
  * output formats. Everything here is deterministic and unit-testable.
  */
 
+import type { TransformProvenance } from './transformProvenance';
+
 /** Output formats the converter can write. */
 export type ConvertFormat = 'las14' | 'las' | 'laz' | 'xyz' | 'asc';
 
@@ -93,4 +95,14 @@ export interface ConvertReport {
   readonly crsNote: string;
   /** Per-conversion log lines. */
   readonly log: ReadonlyArray<LogEntry>;
+  /**
+   * Machine-readable provenance of the coordinate transform, present only in
+   * `reproject` mode (the sole mode that runs `reprojectGlobal`) and on every
+   * reproject outcome — applied, approximate, or skipped. It carries the
+   * transform's accuracy (`accuracyMetres`), datum families, and source epoch.
+   * Previously the reproject path discarded this; keeping it lets a consumer
+   * read the transform's honest accuracy without parsing the log prose, and
+   * complements the caveat now embedded in the deliverable itself.
+   */
+  readonly provenance?: TransformProvenance | null;
 }

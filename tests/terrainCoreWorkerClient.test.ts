@@ -181,3 +181,122 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
     ),
   ]);
 }
+
+/**
+ * Aborting used to drop the pending entry and reject the promise while leaving
+ * the worker running the compute nobody would read. A cancel MESSAGE cannot fix
+ * that: the worker's `onmessage` runs the whole terrain compute synchronously
+ * inside one message task, so the cancel could not be read until the run it was
+ * meant to cancel had already finished. `terminate()` is the only cancellation
+ * that reaches it, and the lazy `_ensureWorker` is what makes it affordable.
+ */
+describe('TerrainCoreWorkerClient — abort actually stops the work', () => {
+  test('terminates the worker, and the next job respawns a fresh one', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+    const ctrl = new AbortController();
+
+    const job = client.computeCore(pos, n, PARAMS, undefined, ctrl.signal);
+    const worker = instances[0] as FakeWorker;
+    expect(worker.terminated).toBe(false);
+    expect(client.pendingCount).toBe(1);
+
+    ctrl.abort();
+    await expect(job).rejects.toThrow(/aborted/i);
+    // The defect: the promise settled but the worker kept computing.
+    expect(worker.terminated).toBe(true);
+    expect(client.pendingCount).toBe(0);
+
+    // Respawn: the terminated worker must be dropped, not reused, or the next
+    // analysis would post into a corpse and hang.
+    const sentinel = { __respawned: true } as unknown as TerrainCore;
+    const next = client.computeCore(pos, n, PARAMS, undefined);
+    expect(instances).toHaveLength(2);
+    const fresh = instances[1] as FakeWorker;
+    expect(fresh).not.toBe(worker);
+    const jobId = fresh.posted[0].jobId as number;
+    fresh.onmessage?.({ data: { jobId, ok: true, core: sentinel } } as MessageEvent);
+    await expect(next).resolves.toBe(sentinel);
+    expect(client.pendingCount).toBe(0);
+  });
+
+  test('other jobs riding the terminated worker are rejected, never left hanging', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+    const ctrl = new AbortController();
+
+    const aborted = client.computeCore(pos, n, PARAMS, undefined, ctrl.signal);
+    const bystander = client.computeCore(pos, n, PARAMS, undefined);
+    expect(client.pendingCount).toBe(2);
+
+    ctrl.abort();
+    await expect(aborted).rejects.toThrow(/aborted/i);
+    // Terminating takes the whole worker down, so the bystander can never get a
+    // reply. It must be settled here — an unsettled promise would strand the
+    // caller's `await` for the life of the page. `withTimeout` is what turns
+    // "never settles" into a failure instead of a hang.
+    await expect(withTimeout(bystander, 1000)).rejects.toThrow(/terminated/i);
+    expect(client.pendingCount).toBe(0);
+  });
+
+  test('an abort after settlement is a no-op — the worker survives it', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+    const ctrl = new AbortController();
+
+    const sentinel = { __done: true } as unknown as TerrainCore;
+    const job = client.computeCore(pos, n, PARAMS, undefined, ctrl.signal);
+    const worker = instances[0] as FakeWorker;
+    const jobId = worker.posted[0].jobId as number;
+    worker.onmessage?.({ data: { jobId, ok: true, core: sentinel } } as MessageEvent);
+    await expect(job).resolves.toBe(sentinel);
+
+    // A signal that aborts later (a component unmounting after its analysis
+    // finished) must not tear down a worker other jobs are using.
+    ctrl.abort();
+    expect(worker.terminated).toBe(false);
+    expect(instances).toHaveLength(1);
+  });
+
+  test('dispose still terminates the worker and rejects everything in flight', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+
+    const job = client.computeCore(pos, n, PARAMS, undefined);
+    const worker = instances[0] as FakeWorker;
+    client.dispose();
+    await expect(withTimeout(job, 1000)).rejects.toThrow(/disposed/i);
+    expect(worker.terminated).toBe(true);
+    expect(client.pendingCount).toBe(0);
+    // Disposed is permanent: no respawn.
+    await expect(client.computeCore(pos, n, PARAMS, undefined)).rejects.toThrow(/disposed/i);
+    expect(instances).toHaveLength(1);
+  });
+
+  test('dispose after an abort is safe (the worker is already gone)', async () => {
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new TerrainCoreWorkerClient();
+    const pos = hillScene();
+    const n = pos.length / 3;
+    const ctrl = new AbortController();
+
+    const job = client.computeCore(pos, n, PARAMS, undefined, ctrl.signal);
+    ctrl.abort();
+    await expect(job).rejects.toThrow(/aborted/i);
+    expect(() => client.dispose()).not.toThrow();
+    expect(client.pendingCount).toBe(0);
+  });
+});

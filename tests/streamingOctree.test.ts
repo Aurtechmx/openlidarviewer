@@ -70,8 +70,8 @@ test('StreamingNodeStore maintained resident/queued sets match a ground-truth wa
   const setMatchesWalk = (): void => {
     expect(new Set(store.residentNodes())).toEqual(walkResident());
     expect(new Set(store.queuedNodes())).toEqual(walkQueued());
-    expect([...store.residentNodes()].length).toBe(store.counts().resident);
-    expect([...store.queuedNodes()].length).toBe(store.queuedCount);
+    expect([...store.residentNodes()]).toHaveLength(store.counts().resident);
+    expect([...store.queuedNodes()]).toHaveLength(store.queuedCount);
   };
 
   setMatchesWalk(); // empty
@@ -90,7 +90,7 @@ test('StreamingNodeStore maintained resident/queued sets match a ground-truth wa
   setMatchesWalk();
 
   // iterate() yields every known node with zero filtering.
-  expect([...store.iterate()].length).toBe(store.size);
+  expect([...store.iterate()]).toHaveLength(store.size);
   expect(new Set(store.iterate())).toEqual(new Set(store.all()));
 });
 

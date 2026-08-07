@@ -82,7 +82,7 @@ describe('renderWorkflowCard', () => {
     const { renderWorkflowCard } = await load();
     const card = renderWorkflowCard(ITEMS) as unknown as FakeEl;
     const rows = card.findAll('olv-analyse-workflow-row');
-    expect(rows.length).toBe(ITEMS.length);
+    expect(rows).toHaveLength(ITEMS.length);
     expect(rows[0].classList.contains('is-good')).toBe(true);
     expect(rows[3].classList.contains('is-caution')).toBe(true);
     expect(rows[5].classList.contains('is-blocked')).toBe(true);
@@ -96,7 +96,7 @@ describe('renderWorkflowCard', () => {
     const { renderWorkflowCard } = await load();
     const card = renderWorkflowCard(ITEMS) as unknown as FakeEl;
     const glyphs = card.findAll('olv-analyse-workflow-glyph');
-    expect(glyphs.length).toBe(ITEMS.length);
+    expect(glyphs).toHaveLength(ITEMS.length);
     expect(glyphs[0].textContent).toBe('✓');
     expect(glyphs[3].textContent).toBe('⚠');
     expect(glyphs[5].textContent).toBe('✕');
@@ -117,9 +117,9 @@ describe('renderTerrainProducts', () => {
   it('renders real list semantics: one <ul> with one <li> per product', async () => {
     const { renderTerrainProducts } = await load();
     const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
-    expect(card.findTag('ul').length).toBe(1);
+    expect(card.findTag('ul')).toHaveLength(1);
     const items = card.findTag('li');
-    expect(items.length).toBe(PRODUCTS.length);
+    expect(items).toHaveLength(PRODUCTS.length);
     expect(items[0].classList.contains('is-ready')).toBe(true);
     expect(items[1].classList.contains('is-preview')).toBe(true);
     expect(items[2].classList.contains('is-blocked')).toBe(true);
@@ -139,10 +139,10 @@ describe('renderTerrainProducts', () => {
     const { renderTerrainProducts } = await load();
     const card = renderTerrainProducts(PRODUCTS) as unknown as FakeEl;
     // Every row has the head line (glyph + label + status word).
-    expect(card.findAll('olv-analyse-product-head').length).toBe(3);
+    expect(card.findAll('olv-analyse-product-head')).toHaveLength(3);
     // Only the non-ready rows grow the second line; the Ready row has none.
     const reasons = card.findAll('olv-analyse-product-reason');
-    expect(reasons.length).toBe(2);
+    expect(reasons).toHaveLength(2);
     const items = card.findTag('li');
     expect(items[0].find('olv-analyse-product-reason')).toBeNull();
     // The toggle is labelled "Reason" (a <summary>) for sighted users …
@@ -160,7 +160,7 @@ describe('renderTerrainProducts', () => {
     // row's reason (already shown once above) but keeps the distinct one.
     const card = renderTerrainProducts(PRODUCTS, LONG_REASON) as unknown as FakeEl;
     const reasons = card.findAll('olv-analyse-product-reason');
-    expect(reasons.length).toBe(1); // only the Map sheet's distinct reason
+    expect(reasons).toHaveLength(1); // only the Map sheet's distinct reason
     expect(reasons[0].find('olv-analyse-product-reason-text')!.textContent).toBe(
       'quality gate stopped this surface',
     );
@@ -196,12 +196,12 @@ describe('renderWhyDetails', () => {
     const node = renderWhyDetails(LIM) as unknown as FakeEl | null;
     expect(node).not.toBeNull();
     expect(node!.tagName).toBe('details');
-    expect(node!.findTag('summary').length).toBe(1);
+    expect(node!.findTag('summary')).toHaveLength(1);
     expect(node!.textContent).toContain('55% of the surface is interpolated');
     expect(node!.textContent).toContain('Provide the vertical datum');
     // Two short lists: Why (causes) and How to improve (fixes).
-    expect(node!.findAll('olv-analyse-why-cause').length).toBe(2);
-    expect(node!.findAll('olv-analyse-why-fix').length).toBe(2);
+    expect(node!.findAll('olv-analyse-why-cause')).toHaveLength(2);
+    expect(node!.findAll('olv-analyse-why-fix')).toHaveLength(2);
   });
 
   it('renders nothing when there are no causes (fully-good surface)', async () => {

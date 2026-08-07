@@ -88,7 +88,7 @@ describe('toGeoJSON', () => {
   it('produces a valid FeatureCollection with per-run properties', () => {
     const gj = toGeoJSON(m) as any;
     expect(gj.type).toBe('FeatureCollection');
-    expect(gj.features.length).toBe(2);
+    expect(gj.features).toHaveLength(2);
     expect(gj.features[0].geometry.type).toBe('LineString');
     // Elevation rides in the coordinate Z (3D position), not only the property,
     // so 3D-aware GIS/CAD don't import the contours flat at Z=0.
@@ -147,7 +147,7 @@ describe('svgContours', () => {
     );
     expect(svg).toMatch(/<svg/);
     expect(svg).toMatch(/viewBox=/);
-    expect((svg.match(/<path/g) || []).length).toBe(2);
+    expect(svg.match(/<path/g) || []).toHaveLength(2);
     expect(svg).toMatch(/stroke-dasharray/); // the dashed feature
     expect(svg).toMatch(/data-elevation="10"/);
   });
@@ -195,7 +195,7 @@ describe('svgContours', () => {
     );
     // Collect the start-Y of each contour <path> M command (skip marginalia).
     const ys = [...svg.matchAll(/<path d="M[\d.]+ ([\d.]+)/g)].map((m) => parseFloat(m[1]));
-    expect(ys.length).toBe(2);
+    expect(ys).toHaveLength(2);
     const [yAtWorld0, yAtWorld10] = ys; // features emitted in input order
     expect(yAtWorld10).toBeLessThan(yAtWorld0);
   });

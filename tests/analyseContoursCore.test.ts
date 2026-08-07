@@ -202,7 +202,7 @@ describe('computeTerrainCore + contoursFromCore (pure split)', () => {
     it('core has a usable dtm but the contour stage yields no interval', () => {
       const r = contoursFromCore(core, {});
       expect(r.intervalM).toBeNull();
-      expect(r.contours.levels.length).toBe(0);
+      expect(r.contours.levels).toHaveLength(0);
       expect(r.warnings.join(' ')).toMatch(/no reliable contour interval/i);
       // The "no interval" warning is appended AFTER the core warnings.
       expect(r.warnings.slice(0, core.coreWarnings.length)).toEqual([...core.coreWarnings]);

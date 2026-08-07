@@ -36,12 +36,12 @@ test('decodeEptLaszipTile decodes the tiny.laz fixture into a DecodedChunk', asy
   const decoded = await decodeEptLaszipTile(TINY_LAZ_BUF, [0, 0, 0]);
   // tiny.laz has 12 points (the bundled fixture's actual count).
   expect(decoded.pointCount).toBe(12);
-  expect(decoded.positions.length).toBe(12 * 3);
-  expect(decoded.intensity.length).toBe(12);
-  expect(decoded.classification.length).toBe(12);
-  expect(decoded.returnNumber.length).toBe(12);
-  expect(decoded.returnCount.length).toBe(12);
-  expect(decoded.gpsTime.length).toBe(12);
+  expect(decoded.positions).toHaveLength(12 * 3);
+  expect(decoded.intensity).toHaveLength(12);
+  expect(decoded.classification).toHaveLength(12);
+  expect(decoded.returnNumber).toHaveLength(12);
+  expect(decoded.returnCount).toHaveLength(12);
+  expect(decoded.gpsTime).toHaveLength(12);
   // tiny.laz has no RGB (PDRF without colour); the field is undefined.
   expect(decoded.rgb).toBeUndefined();
 });

@@ -18,7 +18,11 @@ import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions 
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
-import { evaluateFullResClassExport } from '../export/fullResClassGuard';
+import {
+  evaluateFullResClassExport,
+  FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL,
+} from '../export/fullResClassGuard';
+import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
 
@@ -117,6 +121,15 @@ export interface ExportPanelCallbacks {
   scanFootprintStatus?: () => { ready: boolean; reason: string };
   /** The active clip box, if any — when enabled, the cloud export is restricted to it. */
   getActiveClip?: () => ClipBox | null;
+  /**
+   * Which scan the panel is exporting, as the shell's own active-scan id (null
+   * for a streaming scan). Read once before the export's first await and again
+   * before the bytes are written: a full-resolution re-decode takes seconds
+   * off-thread and nothing stops the user opening another scan meanwhile, which
+   * would otherwise write one scan's points under another's name and CRS. When
+   * omitted the panel cannot make that comparison and exports as before.
+   */
+  getActiveScanId?: () => string | null;
   /**
    * Whether a streaming scan is attached but has no resident points to export
    * yet. Lets the gate say "still streaming in" instead of the misleading
@@ -686,6 +699,13 @@ export class ExportPanel {
       return;
     }
 
+    // Snapshot the export's inputs BEFORE the first await. The clip box decides
+    // which points reach the file, and the user can drag or disable it while the
+    // decode runs — reading it afterwards would filter the export by a box that
+    // was never part of the request. `scanId` is the identity re-verified below.
+    const clip = this._cb.getActiveClip?.() ?? null;
+    const scanId = this._cb.getActiveScanId?.() ?? null;
+
     this._busy = true;
     this._exportBtn.disabled = true;
     this._exportBtn.textContent = useFull ? 'Re-decoding…' : 'Exporting…';
@@ -697,8 +717,27 @@ export class ExportPanel {
         this._setStatus('Could not read the source at full resolution.', 'error');
         return;
       }
-      // Respect an active clip: export only the points inside (or outside) the box.
-      const clip = this._cb.getActiveClip?.() ?? null;
+      // The decode is over — prove the export still describes what was asked for
+      // before any bytes are written. Nothing disables the scan list or the
+      // reclassify tools while a multi-second full-res decode runs off-thread, so
+      // both facts the gate above depends on can have moved underneath it. The
+      // class gate is re-taken rather than re-implemented: an edit made during the
+      // decode flips exactly the input it already reads.
+      if (!sameExportTarget(this._cb.getActiveScanId?.() ?? null, scanId)) {
+        this._setStatus(EXPORT_SCAN_CHANGED_REFUSAL, 'error');
+        return;
+      }
+      const classGateAfter = evaluateFullResClassExport({
+        fullRes: useFull,
+        includeClassification: this._includeClass,
+        hasClassEdits: this._cb.hasClassEdits?.() ?? false,
+      });
+      if (!classGateAfter.allowed) {
+        this._setStatus(FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL, 'error');
+        return;
+      }
+      // Respect an active clip: export only the points inside (or outside) the
+      // box the user had set when they pressed Export (captured above).
       const clipped = clip != null && clip.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       this._exportBtn.textContent = 'Exporting…';
