@@ -1,6 +1,9 @@
 import { StreamingNodeStore } from '../src/render/streaming/StreamingNodeStore';
 import { StreamingPointCloud } from '../src/render/streaming/StreamingPointCloud';
+import { StreamingOctree } from '../src/render/streaming/StreamingOctree';
+import { CopcSource } from '../src/io/copc/CopcSource';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
+import { isAbortError } from '../src/app/openStreaming';
 import { buildSyntheticCopc } from './fixtures/copc/synthCopc';
 import type { SynthKey, SynthPage } from './fixtures/copc/synthCopc';
 import type { StreamingNodeRecord } from '../src/io/copc/copcTypes';
@@ -273,4 +276,46 @@ test('StreamingOctree: hitting the hierarchy-page ceiling loads short → NOT co
   expect(cloud.octree.fullyLoaded).toBe(true);
   expect(cloud.octree.errors.some((e) => /exceeded .* pages/.test(e))).toBe(true);
   expect(cloud.octree.isComplete).toBe(false);
+});
+
+// --- StreamingOctree cancel vs. timeout on the hierarchy walk ----------------
+//
+// The mid-walk `signal.aborted` guard must keep the three outcomes distinct: a
+// user cancel is a SILENT cancellation, a timeout stays a VISIBLE error. The
+// guard used to throw a plain `Error('Hierarchy load aborted')`, which the
+// cancel classifier read as neither — so a user cancel surfaced as an ordinary
+// load error. It now propagates the signal's own abort reason.
+
+function twoPageFixture(): ReturnType<typeof buildSyntheticCopc> {
+  return buildSyntheticCopc({
+    pages: [
+      { pageKey: [0, 0, 0, 0], nodes: [{ key: [0, 0, 0, 0], pointCount: 2000 }], childPages: [1] },
+      { pageKey: [1, 0, 0, 0], nodes: [{ key: [1, 0, 0, 0], pointCount: 800 }] },
+    ],
+  });
+}
+
+test('StreamingOctree: a user cancel throws an AbortError the classifier treats as silent', async () => {
+  const fixture = twoPageFixture();
+  const source = await CopcSource.open(new ArrayBufferRangeSource(fixture.buffer));
+  const octree = new StreamingOctree(source);
+  const controller = new AbortController();
+  controller.abort(); // the user pressed Cancel
+  const err = await octree.loadFullHierarchy(controller.signal).catch((e: unknown) => e);
+  expect((err as Error).name).toBe('AbortError');
+  expect(isAbortError(err)).toBe(true);
+});
+
+test('StreamingOctree: a timeout-reason abort stays a visible error, not a silent cancel', async () => {
+  const fixture = twoPageFixture();
+  const source = await CopcSource.open(new ArrayBufferRangeSource(fixture.buffer));
+  const octree = new StreamingOctree(source);
+  const controller = new AbortController();
+  const timeout = new DOMException('Hierarchy load timed out', 'TimeoutError');
+  controller.abort(timeout);
+  const err = await octree.loadFullHierarchy(controller.signal).catch((e: unknown) => e);
+  // The signal's own timeout reason propagates, so it is distinguishable from a
+  // cancel and the classifier refuses to swallow it.
+  expect(err).toBe(timeout);
+  expect(isAbortError(err)).toBe(false);
 });

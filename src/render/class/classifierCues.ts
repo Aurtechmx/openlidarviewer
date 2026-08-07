@@ -23,7 +23,10 @@ export interface ClassifierCueSource {
  * Returns `{}` for a bare XYZ cloud. Return number + count are included only as a
  * PAIR — the multi-return cue needs both, so one without the other is dropped.
  */
-export function classifierCues(cloud: ClassifierCueSource): DeriveClassificationOptions {
+export function classifierCues(
+  cloud: ClassifierCueSource,
+  opts?: { readonly lowVegByGreenness?: boolean },
+): DeriveClassificationOptions {
   const hasColors = !!(cloud.colors && cloud.colors.length > 0);
   const hasReturns = !!(
     cloud.returnNumber &&
@@ -36,5 +39,8 @@ export function classifierCues(cloud: ClassifierCueSource): DeriveClassification
     ...(hasReturns
       ? { returnNumber: cloud.returnNumber, returnCount: cloud.returnCount }
       : {}),
+    // A colour-only cue: pointless without RGB, so only surfaced when colours
+    // are present and the caller opted in (see DeriveClassificationOptions).
+    ...(hasColors && opts?.lowVegByGreenness ? { lowVegByGreenness: true } : {}),
   };
 }
