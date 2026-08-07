@@ -79,9 +79,11 @@ export function sampleStridedTerrain(
   // rest, which makes the order a total function of the keys alone.
   const byKey = new Map<string, KeyedTerrainStreamBuffer>();
   for (const b of streamingBuffers) if (!byKey.has(b.key)) byKey.set(b.key, b);
-  const sortedStreaming = [...byKey.values()].sort((a, b) =>
-    a.key < b.key ? -1 : a.key > b.key ? 1 : 0,
-  );
+  const sortedStreaming = [...byKey.values()].sort((a, b) => {
+    if (a.key < b.key) return -1;
+    if (a.key > b.key) return 1;
+    return 0;
+  });
   const buffers: TerrainStreamBuffer[] = [...staticBuffers, ...sortedStreaming];
 
   const stride = Math.max(1, Math.ceil(totalPoints / maxPoints));
@@ -121,13 +123,13 @@ export function sampleStridedTerrain(
     }
   }
   if (oi === 0) return null;
+  let sampledClassification: Uint8Array | undefined;
+  if (classification) {
+    sampledClassification = oi === cap ? classification : classification.subarray(0, oi);
+  }
   return {
     positions: oi * 3 === positions.length ? positions : positions.subarray(0, oi * 3),
-    classification: classification
-      ? oi === cap
-        ? classification
-        : classification.subarray(0, oi)
-      : undefined,
+    classification: sampledClassification,
     sampled: stride > 1,
   };
 }

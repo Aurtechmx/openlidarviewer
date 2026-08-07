@@ -161,7 +161,7 @@ export function evaluateRefinementReadiness(
   // Clamped for display safety only. A correct caller (counts over the wanted
   // set) cannot exceed 1; a caller that passed a global resident count can, and
   // the clamp keeps a progress bar sane without letting the excess vote below.
-  const fractionResident = raw > 1 ? 1 : raw;
+  const fractionResident = Math.min(1, raw);
   const outstanding =
     facts.inFlightCount + facts.queuedCount + facts.decodedPendingCount;
 

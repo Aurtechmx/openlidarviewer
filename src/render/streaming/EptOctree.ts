@@ -155,7 +155,7 @@ export class EptOctree implements StreamingOctreeView {
    */
   private async _walkHierarchy(fileBudget: number, signal?: AbortSignal): Promise<void> {
     if (this._fullyLoaded) return;
-    if (this._frontier === null) this._frontier = [{ d: 0, x: 0, y: 0, z: 0 }];
+    this._frontier ??= [{ d: 0, x: 0, y: 0, z: 0 }];
     const cap = Math.min(fileBudget, MAX_HIERARCHY_FILES);
     const PER_WAVE_CONCURRENCY = 8;
 

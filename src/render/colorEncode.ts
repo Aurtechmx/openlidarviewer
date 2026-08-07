@@ -46,7 +46,9 @@ export function srgbToLinearScalar(v: number): number {
  * inline copies that could drift from this seam.
  */
 export function linearToSrgbScalar(v: number): number {
-  const x = v < 0 ? 0 : v > 1 ? 1 : v;
+  let x = v;
+  if (v < 0) x = 0;
+  else if (v > 1) x = 1;
   return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
 }
 

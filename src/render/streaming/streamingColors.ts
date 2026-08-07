@@ -156,7 +156,9 @@ export function streamingNodeColors(
       applyRgbAppearance(tmp.subarray(0, len), rgbAppearance);
       const out = _rgbWorkOut;
       for (let i = 0; i < len; i++) {
-        const v = tmp[i] <= 0 ? 0 : tmp[i] >= 1 ? 1 : tmp[i];
+        let v = tmp[i];
+        if (tmp[i] <= 0) v = 0;
+        else if (tmp[i] >= 1) v = 1;
         out[i] = Math.round(v * 255);
       }
       // The InstancedBufferAttribute upload copies the bytes — the

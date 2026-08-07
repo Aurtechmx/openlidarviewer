@@ -325,8 +325,10 @@ function drawInspectorInfoCard(
   if (info.pointSourceId !== undefined) {
     rows.push(['Point source', String(info.pointSourceId)]);
   }
-  rows.push(['Layer', info.layer]);
-  rows.push(['Index', info.index.toLocaleString('en-US')]);
+  rows.push(
+    ['Layer', info.layer],
+    ['Index', info.index.toLocaleString('en-US')],
+  );
 
   // Measure layout — the card width is driven by the widest row.
   const PAD = 14;

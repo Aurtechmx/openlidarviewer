@@ -93,7 +93,7 @@ export interface ScanCapabilityInput {
   readonly hasNormals: boolean;
   readonly hasGpsTime: boolean;
   /** A resolved CRS makes the scan georeferenced; null/undefined = local frame. */
-  readonly crs?: unknown | null;
+  readonly crs?: unknown;
   readonly isMesh?: boolean;
   readonly hasTexture?: boolean;
   readonly extentMetres?: readonly [number, number, number];

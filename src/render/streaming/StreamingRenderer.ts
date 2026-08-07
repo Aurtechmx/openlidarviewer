@@ -264,7 +264,7 @@ export class StreamingRenderer {
     const existing = this._meshes.get(node.record.id);
     if (existing) {
       const fade = this._fades.get(existing.mesh);
-      if (fade && fade.direction === 'out') {
+      if (fade?.direction === 'out') {
         // The node was evicted and is mid-fade-OUT, but its chunk arrived
         // again inside the fade window — it is current once more. Bailing here
         // (the old "already resident" guard) let the fade completion later

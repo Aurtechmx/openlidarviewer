@@ -269,7 +269,7 @@ function sampleRamp(
 
   // Find the two bracketing control points.
   let lo = ramp[0];
-  let hi = ramp[ramp.length - 1];
+  let hi = ramp.at(-1)!;
 
   for (let i = 0; i < ramp.length - 1; i++) {
     if (tc >= ramp[i][0] && tc <= ramp[i + 1][0]) {
@@ -454,7 +454,7 @@ function rampScalars(
     // data" black instead of feeding NaN through the ramp maths. (±Infinity
     // still flows through and clamps to a ramp endpoint, matching what the
     // pre-refactor elevation loop did.)
-    if (v !== v) continue;
+    if (Number.isNaN(v)) continue;
     const t = range === 0 ? 0 : (v - min) / range;
     const [r, g, b] = sampleRamp(t, palette);
     out[i * 3] = r;

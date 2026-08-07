@@ -144,7 +144,7 @@ export function hillshadeShading(input: HillshadeInput): Float32Array {
     const unz = nz / len;
     // Lambert shading: max(0, dot(normal, sun)).
     const dot = unx * sx + uny * sy + unz * sz;
-    const shade = dot > 0 ? dot : 0;
+    const shade = Math.max(0, dot);
     shadingCache.set(k, shade);
     out[i] = shade;
   }

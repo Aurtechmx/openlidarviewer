@@ -204,7 +204,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
       // Static clouds first; fall back to resident streaming nodes only when
       // the static pick misses — the COPC live probe.
       info = host.probePickStatic(ndc.x, ndc.y);
-      if (info === null) info = host.probePickStreaming(ndc.x, ndc.y);
+      info ??= host.probePickStreaming(ndc.x, ndc.y);
     }
     const client = host.pointerClient();
     host.updateProbe(info, client.x, client.y);

@@ -151,11 +151,13 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
               max: range.max + cloud.sourceOrigin[upAxis],
             }
           : range;
+      let trimPercent = 0;
+      if (mode === 'elevation') trimPercent = host.heightPercentileTrim();
+      else if (mode === 'gpsTime') trimPercent = 5;
       return buildActiveColorbarSpec({
         mode,
         range: display,
-        trimPercent:
-          mode === 'elevation' ? host.heightPercentileTrim() : mode === 'gpsTime' ? 5 : 0,
+        trimPercent,
         elevationUnit: host.elevationUnitLabel(),
       });
     },

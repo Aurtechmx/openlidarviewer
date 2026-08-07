@@ -203,16 +203,12 @@ export class StreamingBenchmark {
 
   /** Mark the first rendered streaming node — once per session. */
   recordFirstPaint(): void {
-    if (this._firstPaintMs === undefined) {
-      this._firstPaintMs = this._elapsed();
-    }
+    this._firstPaintMs ??= this._elapsed();
   }
 
   /** Mark the moment the coarse view is fully resident — once per session. */
   recordCoarseStable(): void {
-    if (this._coarseStableMs === undefined) {
-      this._coarseStableMs = this._elapsed();
-    }
+    this._coarseStableMs ??= this._elapsed();
   }
 
   /**
@@ -451,12 +447,14 @@ export function formatStreamingBenchmark(result: StreamingBenchmarkResult): stri
         ` max=${a.max.toFixed(2).padStart(7)} ms`,
     );
   };
-  lines.push('streaming benchmark');
-  lines.push(`  first paint   ${ms(result.firstPaintMs)}`);
-  lines.push(`  coarse stable ${ms(result.timeToCoarseStableMs)}`);
-  lines.push(`  refined stable${ms(result.timeToRefinedStableMs)}`);
-  lines.push(`  network bytes ${mb(result.networkBytes)}`);
-  lines.push(`  decoded bytes ${mb(result.decodedBytes)}`);
+  lines.push(
+    'streaming benchmark',
+    `  first paint   ${ms(result.firstPaintMs)}`,
+    `  coarse stable ${ms(result.timeToCoarseStableMs)}`,
+    `  refined stable${ms(result.timeToRefinedStableMs)}`,
+    `  network bytes ${mb(result.networkBytes)}`,
+    `  decoded bytes ${mb(result.decodedBytes)}`,
+  );
   ag('scheduler', result.schedulerTickMs);
   ag('decode/chunk', result.decodeMsPerChunk);
   ag('frame', result.frameMs);

@@ -158,9 +158,12 @@ export function gradeSampleDensity(
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     valid++;
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
   const invalidPoints = n - valid;
   if (valid < 1 || !Number.isFinite(minX) || !Number.isFinite(maxX)) {
@@ -304,23 +307,20 @@ export function summarizeSampleGrade(grade: SampleGrade, unitConfirmed = true): 
   }
   // The tier word claims an absolute pts/m² band, so withhold it when the unit
   // is unconfirmed — the '—'/none case still reads '—'.
-  const tier = unitConfirmed
-    ? grade.bucketLabel
-    : grade.bucketBasis === 'none'
-      ? grade.bucketLabel
-      : 'units unknown';
+  let tier: string;
+  if (unitConfirmed) tier = grade.bucketLabel;
+  else if (grade.bucketBasis === 'none') tier = grade.bucketLabel;
+  else tier = 'units unknown';
   lines.push(`Density: ${tier}${densityFigure}`);
   if (grade.verticalSpanM > 0) {
     lines.push(`Vertical extent: ${grade.verticalSpanM.toFixed(1)} ${units.vertical}`);
   }
   if (grade.occupancyRatio != null) {
     const pct = Math.round(grade.occupancyRatio * 100);
-    const note =
-      grade.occupancyRatio >= 0.85
-        ? 'fills its footprint evenly'
-        : grade.occupancyRatio >= 0.5
-          ? 'partly hollow / irregular footprint'
-          : 'sparse or hollow footprint — bbox overstates coverage';
+    let note: string;
+    if (grade.occupancyRatio >= 0.85) note = 'fills its footprint evenly';
+    else if (grade.occupancyRatio >= 0.5) note = 'partly hollow / irregular footprint';
+    else note = 'sparse or hollow footprint — bbox overstates coverage';
     lines.push(`Coverage of bounding box: ${pct}% (${note})`);
   }
   if (grade.invalidPoints > 0) {

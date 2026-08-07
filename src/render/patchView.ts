@@ -83,7 +83,9 @@ const DEFAULT_SIZE = 48;
 const DEFAULT_SPLAT_RADIUS = 1.5;
 
 function clamp(v: number, lo: number, hi: number): number {
-  return v < lo ? lo : v > hi ? hi : v;
+  if (v < lo) return lo;
+  if (v > hi) return hi;
+  return v;
 }
 
 function dot(a: Vec3, b: Vec3): number {

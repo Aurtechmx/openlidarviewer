@@ -72,7 +72,8 @@ export function clipMaskArray(clip: ClipBox, positions: Float32Array): Uint8Arra
       x >= min[0] && x <= max[0] &&
       y >= min[1] && y <= max[1] &&
       z >= min[2] && z <= max[2];
-    mask[i] = (keepInside ? inside : !inside) ? 1 : 0;
+    const keep = keepInside ? inside : !inside;
+    mask[i] = keep ? 1 : 0;
   }
   return mask;
 }
@@ -86,11 +87,20 @@ export function countKept(clip: ClipBox, positions: Float32Array): number {
   let kept = 0;
   for (let i = 0; i < n; i++) {
     const x = positions[i * 3];
-    if (x < min[0] || x > max[0]) { if (!keepInside) kept++; continue; }
+    if (x < min[0] || x > max[0]) {
+      if (!keepInside) kept++;
+      continue;
+    }
     const y = positions[i * 3 + 1];
-    if (y < min[1] || y > max[1]) { if (!keepInside) kept++; continue; }
+    if (y < min[1] || y > max[1]) {
+      if (!keepInside) kept++;
+      continue;
+    }
     const z = positions[i * 3 + 2];
-    if (z < min[2] || z > max[2]) { if (!keepInside) kept++; continue; }
+    if (z < min[2] || z > max[2]) {
+      if (!keepInside) kept++;
+      continue;
+    }
     if (keepInside) kept++;
   }
   return kept;

@@ -222,7 +222,7 @@ export function listPresets(): readonly InspectionPreset[] {
 }
 
 /** Look up a preset by id. Returns the default when the id is unknown. */
-export function getPreset(id: PresetId | string): InspectionPreset {
+export function getPreset(id: string): InspectionPreset {
   const known = (PRESETS as Record<string, InspectionPreset>)[id];
   return known ?? PRESETS[DEFAULT_PRESET_ID];
 }
