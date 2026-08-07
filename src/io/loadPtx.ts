@@ -116,6 +116,12 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   // `null` until the first point decides whether the file carries colour.
   let hasColor: boolean | null = null;
   let scannerOrigin: [number, number, number] | undefined;
+  // Per-block load warnings. A dropped registration or a grid that ran out of
+  // lines leaves only finite, plausible coordinates behind, so the sanitiser —
+  // which reports non-finite points — never sees them. They are surfaced here
+  // instead, on the same load-warning channel the Scan Report already reads.
+  const blockWarnings: string[] = [];
+  let blockIndex = 0;
 
   let i = 0;
   while (i < lines.length) {
@@ -130,6 +136,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       break; // not a valid block header — stop, keeping the blocks already read
     }
     if (i + HEADER_LINES > lines.length) break; // truncated header
+    blockIndex++;
 
     // The 4×4 transform sits in header lines 7–10 (after the two count lines
     // and four pose lines). PTX stores it row-major with translation in row 4.
@@ -139,7 +146,25 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       parseRow4(lines.at(i + 8)),
       parseRow4(lines.at(i + 9)),
     ];
-    const m = matrixIsFinite(parsed) ? parsed : IDENTITY;
+    // A finite matrix is used as read — including a legitimate identity, which
+    // is exactly how a single-scan PTX registers, and is not an error. A
+    // NON-finite matrix is different: a row failed to parse (parseRow4 seeds
+    // NaN for a missing or non-numeric token), so the file's registration is
+    // corrupt. Substituting identity keeps the loader alive, but silently:
+    // that block's points would render in raw scanner-local coordinates —
+    // finite, plausible, and overlapping the world-registered blocks with no
+    // other trace. So the substitution is announced, naming the block, and only
+    // for the corrupt case — never for a matrix that legitimately IS identity.
+    const registrationValid = matrixIsFinite(parsed);
+    const m = registrationValid ? parsed : IDENTITY;
+    if (!registrationValid) {
+      blockWarnings.push(
+        `Block ${blockIndex}: its 4×4 registration transform could not be parsed ` +
+          `(a row held a non-numeric or missing entry), so the identity transform ` +
+          `was substituted — that block is placed in raw scanner-local coordinates ` +
+          `and may not register with the rest of the cloud.`,
+      );
+    }
     if (!scannerOrigin) {
       // The transform's 4th row is the scanner's registered world position.
       scannerOrigin = [m[3][0], m[3][1], m[3][2]];
@@ -147,7 +172,8 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     i += HEADER_LINES;
 
     const total = cols * rows;
-    for (let p = 0; p < total && i < lines.length; p++, i++) {
+    let p = 0;
+    for (; p < total && i < lines.length; p++, i++) {
       const tok = tokenize(lines.at(i));
       if (tok.length < 4) continue; // malformed point line — skip it
       const lx = Number(tok[0]);
@@ -173,6 +199,18 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       if (hasColor) {
         rgb.push(Number(tok[4]) || 0, Number(tok[5]) || 0, Number(tok[6]) || 0);
       }
+    }
+    // Each iteration consumes exactly one input line per grid cell — empty
+    // 0 0 0 non-returns and short lines are skipped but still advance `p` — so
+    // a complete block always reaches `total`. Ending short means the only
+    // other way out: the file ran out of lines mid-block (the `i < lines.length`
+    // guard failed), i.e. the scan is truncated and what was read is a fragment.
+    if (p < total) {
+      blockWarnings.push(
+        `Block ${blockIndex}: the file ended after ${p} of ${total} declared ` +
+          `grid cells (${cols}×${rows}) — the block is truncated, so only part ` +
+          `of the scan was read.`,
+      );
     }
   }
 
@@ -215,7 +253,10 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   xs.length = 0; ys.length = 0; zs.length = 0;
   intensityVals.length = 0; rgb.length = 0;
 
-  const metadata: CloudMetadata | undefined = scannerOrigin ? { scannerOrigin } : undefined;
+  let metadata: CloudMetadata | undefined = scannerOrigin ? { scannerOrigin } : undefined;
+  // Fold in any per-block registration / truncation warnings first, then let
+  // the sanitiser append its own below — all on the one load-warning channel.
+  for (const w of blockWarnings) metadata = withLoadWarning(metadata, w);
 
   // The point reader already refuses a non-numeric x/y/z, but the registration
   // transform is applied after that check, so this is where a world coordinate

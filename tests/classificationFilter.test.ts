@@ -26,7 +26,7 @@ describe('excludeNonGroundClasses', () => {
   it('keeps everything when classification is absent or misaligned', () => {
     const pts = [p(0, 1), p(1, 2)];
     expect(excludeNonGroundClasses(pts, null).excludedCount).toBe(0);
-    expect(excludeNonGroundClasses(pts, [5]).points.length).toBe(2); // wrong length → keep all
+    expect(excludeNonGroundClasses(pts, [5]).points).toHaveLength(2); // wrong length → keep all
     expect(excludeNonGroundClasses(pts, [5, 6], []).excludedCount).toBe(0); // empty exclude set
   });
 
@@ -39,7 +39,7 @@ describe('excludeNonGroundClasses', () => {
   it('does not mutate the input array', () => {
     const pts = [p(0, 1), p(1, 1)];
     excludeNonGroundClasses(pts, [5, 2]);
-    expect(pts.length).toBe(2);
+    expect(pts).toHaveLength(2);
   });
 
   it('default class set is vegetation + building + noise', () => {

@@ -67,10 +67,10 @@ test('the generated hierarchy parses cleanly and the data-node count matches', (
   );
   // Every generated node lands in exactly one of nodes / emptyKeys (the
   // synthetic builder emits a single-page hierarchy, so childPages is 0).
-  expect(page.childPages.length).toBe(0);
-  expect(page.errors.length).toBe(0);
+  expect(page.childPages).toHaveLength(0);
+  expect(page.errors).toHaveLength(0);
   expect(page.nodes.length + page.emptyKeys.length).toBe(r.nodeCount);
-  expect(page.nodes.length).toBe(r.dataNodeCount);
+  expect(page.nodes).toHaveLength(r.dataNodeCount);
 });
 
 test('STRESS_TIERS lists 1 M / 10 M / 100 M / 250 M / 500 M', () => {

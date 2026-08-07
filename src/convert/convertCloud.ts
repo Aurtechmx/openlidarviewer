@@ -19,6 +19,7 @@ import { writeLas, writeLas14 } from './writeLas';
 import { spatialContextFrom } from '../geo/SpatialContext';
 import { writeXyz, writeAsc } from './writeAscii';
 import { reprojectGlobal } from './reproject';
+import type { TransformProvenance } from './transformProvenance';
 import { isGeographicEpsg, epsgLabel, epsgToProj4 } from './epsg';
 import {
   CONVERT_FORMATS,
@@ -111,6 +112,14 @@ export function convertCloud(
   // Output-CRS-dependent stamps below (the metre GeoKey) key off this, not off
   // the requested mode — a skipped reproject leaves the file in its SOURCE CRS.
   let reprojectApplied = false;
+  // The APPROXIMATE-datum caveat to EMBED in the deliverable (LAS VLR / ASCII
+  // header comment), not just the UI report. Non-null only when a transform
+  // that DID move coordinates crossed a grid-less/identity datum leg — so the
+  // exact-transform path leaves it null and the output stays byte-clean.
+  let datumNote: string | null = null;
+  // Machine-readable provenance of the transform, threaded into the report so
+  // the reproject path stops discarding it (present on every reproject outcome).
+  let transformProvenance: TransformProvenance | null = null;
 
   if (mode === 'keep') {
     crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS (local coordinates)';
@@ -143,6 +152,9 @@ export function convertCloud(
     // reprojected coordinates.
     const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs: cloud.metadata?.crs ?? null });
     g = r.points;
+    // Provenance is present on every reproject outcome (applied / approximate /
+    // skipped) — keep it for the report instead of discarding it.
+    transformProvenance = r.provenance;
     if (r.transformed && r.datumCaveat == null) {
       reprojectApplied = true;
       outEpsg = opts.targetEpsg;
@@ -157,6 +169,11 @@ export function convertCloud(
       outEpsg = opts.targetEpsg;
       crsNote = `${r.note} — APPROXIMATE datum shift`;
       log.push({ level: 'warn', message: `${r.note}, but ${r.datumCaveat}.` });
+      // Carry that same caveat INTO the file. The UI report is not the
+      // deliverable; a downstream reader only has the bytes, so the
+      // approximation must be recorded there too (LAS Text Area Description
+      // VLR, ASCII `# datum-transform:` header). Coordinates are untouched.
+      datumNote = `APPROXIMATE — ${r.datumCaveat}`;
     } else {
       // Could not resolve a transform — keep source CRS, warn loudly.
       outEpsg = sourceEpsg;
@@ -234,6 +251,7 @@ export function convertCloud(
         verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
         wkt,
+        description: datumNote,
       });
     } else {
       // LAS 1.2 stores the classification in 5 bits — count what the mask
@@ -259,20 +277,29 @@ export function convertCloud(
         linearUnitCode,
         verticalEpsg: srcCtx.verticalEpsg ?? null,
         verticalUnitCode,
+        description: datumNote,
       });
     }
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo })
-        : writeXyz(g, opts.asciiPrecision ?? 3, geo);
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo, datumNote })
+        : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote);
     bytes = new TextEncoder().encode(text);
   }
 
   log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });
   return {
     file: { filename, mime: MIME[opts.format], bytes },
-    report: { source: cloud.name, ok: true, pointCount: g.count, crsNote, log },
+    report: {
+      source: cloud.name,
+      ok: true,
+      pointCount: g.count,
+      crsNote,
+      log,
+      // Only reproject mode produces provenance; keep/assign omit the field.
+      ...(transformProvenance ? { provenance: transformProvenance } : {}),
+    },
   };
   }
 }

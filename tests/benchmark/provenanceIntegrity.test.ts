@@ -329,7 +329,7 @@ describe('completeness — what the artifact declares on its own', () => {
         bytes.byteOffset + 58,
         32,
       );
-      expect(field.length).toBe(32);
+      expect(field).toHaveLength(32);
       expect(lasGeneratingSoftware().length).toBeLessThanOrEqual(32);
       for (const part of lasGeneratingSoftware().split(' ').slice(1)) {
         expect([BUILD_IDENTITY.version, BUILD_IDENTITY.commit, `${BUILD_IDENTITY.commit}+dirty`])

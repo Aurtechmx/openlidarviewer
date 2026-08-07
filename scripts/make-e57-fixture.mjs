@@ -21,7 +21,8 @@
  * decode target. Re-run with `node scripts/make-e57-fixture.mjs` to regenerate.
  *
  * PHYSICAL vs LOGICAL. An E57 file is a sequence of 1024-byte pages; the last 4
- * bytes of every page are a CRC-32C checksum over that page's first 1020 bytes.
+ * bytes of every page are a big-endian CRC-32C checksum over that page's first
+ * 1020 bytes.
  * "Logical" space is the file with those checksums removed (what the reader's
  * `depage` produces). We build the logical bytes first, record logical offsets,
  * convert them to the physical offsets the header/section fields store, then
@@ -44,8 +45,16 @@ function logicalToPhysical(logical) {
 
 /**
  * CRC-32C (Castagnoli, polynomial 0x1EDC6F41, reflected). The E57 page checksum.
- * The reader does not verify it, but a well-formed file carries the real value.
- * Table-driven, reflected form (LSB-first), stored little-endian per page.
+ * Table-driven, reflected form (LSB-first), stored BIG-ENDIAN per page.
+ *
+ * The byte order matters and used to be wrong here: this generator wrote the
+ * checksum little-endian, which no real E57 does. It went unnoticed because
+ * the reader stripped page checksums without verifying them, so the fixture
+ * decoded fine while being a file libE57 would have rejected. The order was
+ * settled against `tests/pumpARowColumnIndexNoInvalidPoints.e57`, a genuine
+ * libE57-written file, whose 2536 pages all match big-endian and none match
+ * little-endian. `src/io/e57/depage.ts` now verifies every page, so a fixture
+ * with the wrong byte order would fail the suite outright.
  */
 const CRC32C_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -234,7 +243,7 @@ function build() {
     const dst = physical.subarray(p * PAGE_SIZE, p * PAGE_SIZE + PAGE_SIZE);
     dst.set(src, 0); // trailing payload bytes of the last page stay zero
     const crc = crc32c(dst.subarray(0, PAGE_PAYLOAD));
-    new DataView(dst.buffer, dst.byteOffset + PAGE_PAYLOAD, 4).setUint32(0, crc, true);
+    new DataView(dst.buffer, dst.byteOffset + PAGE_PAYLOAD, 4).setUint32(0, crc, false);
   }
   return physical;
 }

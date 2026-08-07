@@ -18,33 +18,36 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
   median: [number, number, number];
   mad: [number, number, number];
 } {
-  const axes: [Float64Array, Float64Array, Float64Array] = [
-    new Float64Array(pointCount),
-    new Float64Array(pointCount),
-    new Float64Array(pointCount),
-  ];
-
-  for (let i = 0; i < pointCount; i++) {
-    axes[0][i] = positions[i * 3];
-    axes[1][i] = positions[i * 3 + 1];
-    axes[2][i] = positions[i * 3 + 2];
-  }
+  // ONE scratch buffer for all three axes, reused twice per axis. The earlier
+  // shape allocated nine Float64Arrays of N (three axis copies, a `.slice()` per
+  // axis, an `absDevs` per axis) where two passes over one buffer suffice — on a
+  // multi-million-point cloud that is hundreds of megabytes of garbage for a
+  // number that is thrown away after the row is rendered.
+  //
+  // The in-place reuse is sound because a median does not care about order: the
+  // absolute deviations are the same MULTISET whether they are derived from the
+  // axis values in file order or from the already-sorted copy, so folding
+  // `|v - median|` over the sorted buffer and re-sorting yields the identical
+  // MAD. NaNs ride along unchanged — `TypedArray.sort` parks them at the end
+  // both times, exactly as the two-array version did.
+  const scratch = new Float64Array(pointCount);
 
   const median: [number, number, number] = [0, 0, 0];
   const mad: [number, number, number] = [0, 0, 0];
 
   for (let axis = 0; axis < 3; axis++) {
-    const sorted = axes[axis].slice().sort();
-    const med = medianSorted(sorted);
+    for (let i = 0; i < pointCount; i++) {
+      scratch[i] = positions[i * 3 + axis];
+    }
+    scratch.sort();
+    const med = medianSorted(scratch);
     median[axis] = med;
 
-    // Compute absolute deviations and their median
-    const absDevs = new Float64Array(pointCount);
     for (let i = 0; i < pointCount; i++) {
-      absDevs[i] = Math.abs(axes[axis][i] - med);
+      scratch[i] = Math.abs(scratch[i] - med);
     }
-    absDevs.sort();
-    mad[axis] = medianSorted(absDevs);
+    scratch.sort();
+    mad[axis] = medianSorted(scratch);
   }
 
   return { median, mad };
@@ -160,22 +163,110 @@ function checkDeclaredVsDecoded(cloud: PointCloud): AnalysisRow {
   };
 }
 
+/**
+ * Scratch used to read a coordinate's IEEE-754 bit pattern. Module-level so the
+ * duplicate scan allocates nothing per point.
+ */
+const _bitsScratch = new Float64Array(1);
+const _bitsWords = new Uint32Array(_bitsScratch.buffer);
+
+/** Vacant marker for the duplicate table; point indices are always ≥ 0. */
+const EMPTY_SLOT = -1;
+
+/**
+ * The equality the duplicate scan counts by, and the ONLY definition the hash
+ * is allowed to disagree with by being coarser, never finer.
+ *
+ * This is SameValueZero, which is exactly what the previous `"x,y,z"` string
+ * key meant: `String(NaN)` is `"NaN"` for every payload, so all NaNs collided;
+ * `String(-0)` is `"0"`, so -0 and +0 collided; and every other double has a
+ * distinct shortest round-tripping representation, so no two unequal values
+ * ever produced the same text. Keeping that definition here is what makes the
+ * typed-array rewrite a drop-in — the reported count is unchanged, not merely
+ * close.
+ */
+function sameValueZero(a: number, b: number): boolean {
+  return a === b || (a !== a && b !== b);
+}
+
+/**
+ * Fold one coordinate into a running 32-bit hash by its bit pattern.
+ *
+ * Two normalisations keep the hash consistent with {@link sameValueZero}: -0 is
+ * folded as +0 and every NaN payload is folded as one constant. Without them
+ * two coordinates the confirm step calls equal could land in different buckets
+ * and a real duplicate would be missed.
+ */
+function foldCoord(hash: number, v: number): number {
+  let lo: number;
+  let hi: number;
+  if (v !== v) {
+    // One bucket for every NaN, whatever its payload. Reading a NaN out of a
+    // Float32Array yields the canonical quiet NaN on the engines we ship to, so
+    // no test can currently distinguish this branch from falling through to the
+    // bit read — it is here because the language does NOT guarantee that (a
+    // conforming implementation may surface any NaN bit pattern), and a payload
+    // that reached the hash unfolded would put two points the confirm step
+    // calls equal in different buckets and UNDER-count duplicates.
+    lo = 0x7ff80000;
+    hi = 0;
+  } else {
+    _bitsScratch[0] = v === 0 ? 0 : v; // -0 → +0
+    lo = _bitsWords[0];
+    hi = _bitsWords[1];
+  }
+  let h = Math.imul(hash ^ lo, 0x9e3779b1);
+  h = Math.imul(h ^ hi, 0x85ebca6b);
+  return h ^ (h >>> 15);
+}
+
 function checkDuplicatePoints(cloud: PointCloud): AnalysisRow {
   const n = cloud.pointCount;
   if (n === 0) {
     return { label: 'Duplicate Points', value: 'N/A (empty cloud)', status: 'info' };
   }
 
-  // Build a set of "x,y,z" strings to find duplicates
+  // An open-addressed index table, NOT a `Set` of `"x,y,z"` strings.
+  //
+  // The string form allocated one JS string plus one Set entry per UNIQUE
+  // point, which at the desktop point budget was the largest allocation in this
+  // module by a wide margin — several hundred megabytes of short-lived strings
+  // for a single integer — and on a mobile budget it was a plausible way to run
+  // the tab out of memory. This table is one Int32Array of point indices sized
+  // to the next power of two at or above 2n, so the load factor stays at or
+  // below 0.5 and linear probing terminates quickly.
+  //
+  // The count stays EXACT. The hash only chooses a bucket; a collision is
+  // resolved by comparing the actual three coordinates of the stored point
+  // (`sameValueZero` per axis), so two distinct points that happen to hash
+  // alike probe past each other instead of being miscounted as a duplicate.
   const pos = sourcePositions(cloud);
-  const seen = new Set<string>();
+  let capacity = 1;
+  while (capacity < n * 2) capacity *= 2;
+  const mask = capacity - 1;
+  const slots = new Int32Array(capacity).fill(EMPTY_SLOT);
+
   let duplicateCount = 0;
   for (let i = 0; i < n; i++) {
-    const key = `${pos[i * 3]},${pos[i * 3 + 1]},${pos[i * 3 + 2]}`;
-    if (seen.has(key)) {
-      duplicateCount++;
-    } else {
-      seen.add(key);
+    const x = pos[i * 3];
+    const y = pos[i * 3 + 1];
+    const z = pos[i * 3 + 2];
+    let bucket = foldCoord(foldCoord(foldCoord(0, x), y), z) & mask;
+    for (;;) {
+      const stored = slots[bucket];
+      if (stored === EMPTY_SLOT) {
+        slots[bucket] = i;
+        break;
+      }
+      if (
+        sameValueZero(pos[stored * 3], x) &&
+        sameValueZero(pos[stored * 3 + 1], y) &&
+        sameValueZero(pos[stored * 3 + 2], z)
+      ) {
+        duplicateCount++;
+        break;
+      }
+      bucket = (bucket + 1) & mask;
     }
   }
 
@@ -237,9 +328,9 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
  * Per-cloud result memo. Every check reads only the cloud's IMMUTABLE fields
  * (positions, point counts) — no scope, no classification — so the result is a
  * pure function of the cloud and is identical on every re-run. The two heavy
- * checks (the median/MAD sort + the duplicate-scan's N-string Set) re-ran on
- * every Inspector refresh — a class toggle, a tab switch — stalling the main
- * thread on a multi-million-point scan. Keyed by the cloud via a WeakMap so the
+ * checks (the median/MAD sort + the duplicate-scan table) re-ran on every
+ * Inspector refresh — a class toggle, a tab switch — stalling the main thread
+ * on a multi-million-point scan. Keyed by the cloud via a WeakMap so the
  * entry is collected with the cloud; nothing to invalidate because nothing the
  * checks read can change without a new cloud.
  */

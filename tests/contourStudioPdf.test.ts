@@ -53,7 +53,7 @@ describe('buildContourStudioPdf (multipage Contour Studio PDF emitter)', () => {
     expect(bytes.byteLength).toBeGreaterThan(500);
 
     // One PDF page per model page/section (base model = 4 pages).
-    expect(model.pages.length).toBe(4);
+    expect(model.pages).toHaveLength(4);
     const loaded = await PDFDocument.load(bytes);
     expect(loaded.getPageCount()).toBe(model.pages.length);
   });
@@ -70,7 +70,7 @@ describe('buildContourStudioPdf (multipage Contour Studio PDF emitter)', () => {
       standardsTraceability: true,
     });
     expect(model.watermark).toBe('EXPLORATORY');
-    expect(model.pages.length).toBe(5);
+    expect(model.pages).toHaveLength(5);
 
     const bytes = await buildContourStudioPdf(model);
     expect(bytes[0]).toBe(PDF_MAGIC[0]);

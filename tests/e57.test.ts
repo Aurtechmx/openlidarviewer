@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseE57Header } from '../src/io/e57/header';
 import { depage, physicalToLogical } from '../src/io/e57/depage';
+import { crc32c } from '../src/io/e57/crc32c';
 import { parseXml, child } from '../src/io/e57/xml';
 import { parseE57 } from '../src/io/e57/parseE57';
 
@@ -55,11 +56,27 @@ describe('parseE57Header', () => {
 });
 
 describe('depage', () => {
-  it('strips page checksums into a contiguous logical buffer', () => {
-    // Two 8-byte pages; the last 4 bytes of each are checksum filler.
-    const paged = new Uint8Array([0, 1, 2, 3, 99, 99, 99, 99, 4, 5, 6, 7, 88, 88, 88, 88]);
+  it('verifies and strips page checksums into a contiguous logical buffer', () => {
+    // Two 8-byte pages; the last 4 bytes of each are that page's big-endian
+    // CRC-32C over its first 4 bytes. This case used to carry filler bytes
+    // (99s and 88s) in the checksum slots, which pinned the strip-only
+    // contract: the reader never looked at them. It looks now, so the fixture
+    // has to be a genuinely well-formed one. Corruption cases live in
+    // tests/e57PageChecksums.test.ts.
+    const paged = new Uint8Array(16);
+    paged.set([0, 1, 2, 3], 0);
+    paged.set([4, 5, 6, 7], 8);
+    const view = new DataView(paged.buffer);
+    view.setUint32(4, crc32c(paged, 0, 4), false);
+    view.setUint32(12, crc32c(paged, 8, 12), false);
+
     const { logical } = depage(paged.buffer, 8);
     expect([...logical.subarray(0, 8)]).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('refuses the same pages when the checksums are filler', () => {
+    const filler = new Uint8Array([0, 1, 2, 3, 99, 99, 99, 99, 4, 5, 6, 7, 88, 88, 88, 88]);
+    expect(() => depage(filler.buffer, 8)).toThrow(/page 0 of 2/);
   });
 
   it('maps physical offsets to logical offsets', () => {

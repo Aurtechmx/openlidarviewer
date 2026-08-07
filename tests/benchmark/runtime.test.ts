@@ -148,7 +148,7 @@ describe('the environment capture', () => {
       'releaseVersion',
     ];
     for (const key of declared) expect(env[key], key).toBeDefined();
-    expect(fields.length).toBe(declared.length);
+    expect(fields).toHaveLength(declared.length);
   });
 
   test('says whether the working tree matched the commit it reports', () => {

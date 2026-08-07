@@ -23,7 +23,7 @@ describe('stationsAlongLine — chainage placement', () => {
       b: [100, 0, 110],
       intervalM: 25,
     });
-    expect(stations.length).toBe(5);
+    expect(stations).toHaveLength(5);
     expect(stations.map((s) => s.chainage)).toEqual([0, 25, 50, 75, 100]);
     // Last station carries the endpoint flag; others don't.
     expect(stations[stations.length - 1].isEndpoint).toBe(true);
@@ -123,7 +123,7 @@ describe('slopeGradesPerSegment — per-segment math', () => {
     // 100 m run, 5 m rise → 5 %.
     const sts = stations([0, 100], [0, 5]);
     const grades = slopeGradesPerSegment({ stations: sts });
-    expect(grades.length).toBe(1);
+    expect(grades).toHaveLength(1);
     expect(grades[0].run).toBe(100);
     expect(grades[0].rise).toBe(5);
     expect(grades[0].gradePercent).toBeCloseTo(5, 9);
@@ -141,7 +141,7 @@ describe('slopeGradesPerSegment — per-segment math', () => {
   it('produces one grade per segment between adjacent stations', () => {
     const sts = stations([0, 50, 100], [0, 3, 8]);
     const grades = slopeGradesPerSegment({ stations: sts });
-    expect(grades.length).toBe(2);
+    expect(grades).toHaveLength(2);
     expect(grades[0].gradePercent).toBeCloseTo(6, 9); // 3 / 50
     expect(grades[1].gradePercent).toBeCloseTo(10, 9); // 5 / 50
   });

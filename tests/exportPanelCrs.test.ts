@@ -107,7 +107,7 @@ describe('ExportPanel — CRS step auto-collapse', () => {
     expect(isHidden(note)).toBe(true);
     // The three CRS mode pills are present + their container visible.
     const keep = root.findOwnText('Keep');
-    expect(keep.length).toBe(1);
+    expect(keep).toHaveLength(1);
     expect(isHidden(keep[0])).toBe(false);
   });
 
@@ -128,7 +128,7 @@ describe('ExportPanel — CRS step auto-collapse', () => {
     // but their row carries display:none).
     const pillRows = root.findByClass('olv-bc-pills');
     // [0] = format row (visible), [1] = CRS row (hidden when collapsed).
-    expect(pillRows.length).toBe(2);
+    expect(pillRows).toHaveLength(2);
     expect(isHidden(pillRows[1])).toBe(true);
   });
 

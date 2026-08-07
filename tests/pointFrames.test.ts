@@ -74,7 +74,7 @@ describe('pointFrames accessors are free', () => {
   it('does not let a caller observe a different length or content', () => {
     const c = cloud();
     const p = sourcePositions(c);
-    expect(p.length).toBe(15);
+    expect(p).toHaveLength(15);
     expect([...p]).toEqual([...c.positions]);
   });
 
@@ -102,7 +102,7 @@ describe('copyPlacedPositions matches the buffer-level primitive exactly', () =>
       const viaCloud = copyPlacedPositions(c, stride, tf);
       const viaBuffer = stridePlacedPositions(c.positions, stride, tf);
       expect([...viaCloud]).toEqual([...viaBuffer]);
-      expect(viaCloud.length).toBe(viaBuffer.length);
+      expect(viaCloud).toHaveLength(viaBuffer.length);
     });
   }
 
@@ -156,7 +156,7 @@ describe('converted call sites are unchanged', () => {
       undefined,
       2,
     );
-    expect(viaAccessor.length).toBe(c.pointCount * 3);
+    expect(viaAccessor).toHaveLength(c.pointCount * 3);
     expect([...viaAccessor]).toEqual([...viaRawBuffer]);
   });
 });

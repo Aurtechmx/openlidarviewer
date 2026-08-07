@@ -75,7 +75,7 @@ describe('worker registry single source', () => {
   it('derives an exclude pattern for every client and async bridge', () => {
     const expected = workerExcludeModules().map((m) => m.split('/').pop());
     const patterns = workerExcludePatterns();
-    expect(patterns.length).toBe(expected.length);
+    expect(patterns).toHaveLength(expected.length);
     for (const base of expected) {
       const hit = patterns.some((re) => re.test(`src/x/${base}`));
       expect(hit, `no exclude pattern matches ${base}`).toBe(true);

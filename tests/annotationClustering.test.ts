@@ -69,7 +69,7 @@ describe('clusterAnnotations', () => {
   it('guards a non-positive cell size without throwing', () => {
     const out = clusterAnnotations([a('note', 0, 0), a('note', 1000, 1000)], 0);
     // With the min cell, the two distant points are separate clusters.
-    expect(out.length).toBe(2);
+    expect(out).toHaveLength(2);
   });
 });
 
