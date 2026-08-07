@@ -1,10 +1,19 @@
 /**
  * tests/copcWorkerClient.test.ts
  *
- * Protocol tests for the COPC decode worker CLIENT. Unlike the EPT client this
- * one constructs its `Worker` directly, so the real `Worker` global is stubbed
- * with a fake that records posts and lets the test drive `onmessage`/`onerror`.
- * The worker body (laz-perf + WASM) is browser-bound and covered elsewhere.
+ * Protocol tests for the COPC decode worker CLIENT — the single-worker contract:
+ * one decode in, one reply out, and every way that can go wrong. The real
+ * `Worker` global is stubbed with a fake that records posts and lets the test
+ * drive `onmessage`/`onerror`. The worker body (laz-perf + WASM) is
+ * browser-bound and covered elsewhere.
+ *
+ * Every client here pins `poolSize: 1`. Two reasons: these cases are about the
+ * protocol, not the pool (dispatch, queueing and failure isolation across
+ * several workers live in `decodeWorkerPool.test.ts`), and the default size
+ * comes from the host's core count — leaving it unpinned would make the
+ * assertions below depend on the machine running them. A one-worker pool is
+ * also the exact shape the `?decodePool=off` fallback produces, so this file
+ * doubles as the regression test for that path.
  */
 
 import { describe, test, expect, afterEach, vi } from 'vitest';
@@ -40,7 +49,7 @@ let instances: FakeWorker[] = [];
 function mkClient(): { client: CopcWorkerClient; worker: FakeWorker } {
   instances = [];
   vi.stubGlobal('Worker', FakeWorker);
-  const client = new CopcWorkerClient();
+  const client = new CopcWorkerClient({ poolSize: 1 });
   return { client, worker: instances[0] };
 }
 
@@ -48,6 +57,26 @@ const META = {} as ChunkDecodeMetadata;
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('CopcWorkerClient — the shipping default', () => {
+  test('with no options and no flags, exactly ONE worker is built', () => {
+    // Pooling is opt-in. A default client must be the pre-pool client: one
+    // worker, and a second decode QUEUED rather than sent to a second worker.
+    // If this ever reports more than one worker, pooled decoding has been
+    // enabled by default without the browser measurement that gates it.
+    instances = [];
+    vi.stubGlobal('Worker', FakeWorker);
+    const client = new CopcWorkerClient();
+    void client.decode(new ArrayBuffer(8), META).catch(() => undefined);
+    void client.decode(new ArrayBuffer(8), META).catch(() => undefined);
+    void client.decode(new ArrayBuffer(8), META).catch(() => undefined);
+    expect(instances).toHaveLength(1);
+    expect(instances[0].posted).toHaveLength(1);
+    expect(client.poolStats().size).toBe(1);
+    expect(client.poolStats().queued).toBe(2);
+    client.dispose();
+  });
 });
 
 describe('CopcWorkerClient protocol', () => {

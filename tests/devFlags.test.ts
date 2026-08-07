@@ -29,6 +29,8 @@ describe('parseDevFlags — defaults', () => {
       uploadQueue: true,
       angularPrediction: true,
       streamingCommitMode: 'immediate',
+      decodePool: false,
+      decodeWorkers: null,
     });
   });
 
@@ -77,7 +79,36 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       uploadQueue: false,
       angularPrediction: false,
       streamingCommitMode: 'immediate',
+      decodePool: false,
+      decodeWorkers: null,
     });
+  });
+
+  it('?decodePool=on opts into pooled decoding; every other input leaves it off', () => {
+    expect(parseDevFlags('?decodePool=on').decodePool).toBe(true);
+    expect(parseDevFlags('?decodePool=ON').decodePool).toBe(true);
+    expect(parseDevFlags('?decodePool=1').decodePool).toBe(true);
+    expect(parseDevFlags('?decodePool=true').decodePool).toBe(true);
+    // This flag runs the opposite way to the rest: absence, garbage, an empty
+    // value and an explicit `off` all keep the SHIPPING default, which is the
+    // historical single-worker path. No malformed URL can turn pooling on.
+    expect(parseDevFlags('').decodePool).toBe(false);
+    expect(parseDevFlags('?decodePool').decodePool).toBe(false);
+    expect(parseDevFlags('?decodePool=').decodePool).toBe(false);
+    expect(parseDevFlags('?decodePool=off').decodePool).toBe(false);
+    expect(parseDevFlags('?decodePool=banana').decodePool).toBe(false);
+  });
+
+  it('?decodeWorkers=N pins 1-4; anything else defers to the device policy', () => {
+    for (const n of [1, 2, 3, 4]) {
+      expect(parseDevFlags(`?decodeWorkers=${n}`).decodeWorkers).toBe(n);
+    }
+    // Out of range, fractional, negative, garbage and absence all read as null,
+    // so a mistyped flag falls back to the policy rather than to an extreme.
+    for (const bad of ['0', '5', '64', '-1', '2.5', 'banana', '', ' ']) {
+      expect(parseDevFlags(`?decodeWorkers=${bad}`).decodeWorkers).toBeNull();
+    }
+    expect(parseDevFlags('').decodeWorkers).toBeNull();
   });
 
   it('?streamingCommitMode=metered opts into the metered path; default is immediate', () => {

@@ -100,6 +100,14 @@ export interface SessionFrameInput {
 
 const AXES: readonly FrameUpAxis[] = ['x', 'y', 'z'];
 
+/**
+ * Cap on the number of layer records a project frame may declare. One record per
+ * loaded layer, so a real project has a handful; 10k is far beyond any genuine
+ * frame while bounding how much a hostile file can make the validator allocate
+ * and walk. Over-cap is refused, like any other self-inconsistent frame.
+ */
+export const MAX_FRAME_LAYERS = 10_000;
+
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
@@ -133,7 +141,12 @@ export function validateSessionProjectFrame(frame: unknown): string[] {
     reasons.push('the frame declares no layers');
     return reasons;
   }
-
+  // Refuse an unbounded layer count up front, before the per-layer walk below —
+  // a hostile frame can't make the validator chew through millions of records.
+  if (layers.length > MAX_FRAME_LAYERS) {
+    reasons.push(`the frame declares ${layers.length} layers, above the ${MAX_FRAME_LAYERS} cap`);
+    return reasons;
+  }
   const seen = new Set<string>();
   layers.forEach((entry, i) => {
     const where = `layer ${i + 1}`;
