@@ -27,6 +27,7 @@
 
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
+import { readTextAtMost } from '../io/range/boundedRead';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 
@@ -460,6 +461,10 @@ export async function handleRemoteEpt(
   // classifier when the module loaded, and a plain classifier when the
   // chunk fetch itself was the failure.
   let eptUrlMod: Awaited<ReturnType<OpenStreamingDeps['loadEpt']>> | null = null;
+  // Also hoisted for the catch: the conditional teardown below has to ask
+  // whether a streaming scene survived, and it can only ask a Viewer that
+  // actually loaded.
+  let viewer: Viewer | null = null;
   try {
     // URL validation is pure — run it before awaiting the lazy Viewer so a
     // malformed URL always surfaces an error toast, even if the Viewer chunk
@@ -473,7 +478,7 @@ export async function handleRemoteEpt(
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await deps.viewerReady;
-    const viewer = deps.getViewer();
+    viewer = deps.getViewer();
     // Blue blinking "Opening …" first, consistent with the COPC + device paths;
     // the manifest read + node streaming supersede it with staged progress.
     deps.dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
@@ -487,20 +492,62 @@ export async function handleRemoteEpt(
     // the timeout is composed with the outer load-cancel signal. Single attempt
     // (no retry) — a failed manifest surfaces an error and the user re-opens.
     const MANIFEST_TIMEOUT_MS = 20_000;
-    const manifestTimeout = new AbortController();
-    const manifestTimer = setTimeout(() => manifestTimeout.abort(), MANIFEST_TIMEOUT_MS);
-    const onOuterAbort = () => manifestTimeout.abort();
+    // Two controllers, not one. `manifestDeadline` fires only when the clock
+    // runs out; `manifestAbort` is what the request actually rides on and
+    // fires for either cause. Collapsing them means a stalled host and a user
+    // pressing Cancel arrive as the same event, and the read then reports the
+    // server's failure as something the user chose — silently, since a cancel
+    // shows no error.
+    const manifestDeadline = new AbortController();
+    const manifestAbort = new AbortController();
+    const manifestTimer = setTimeout(() => manifestDeadline.abort(), MANIFEST_TIMEOUT_MS);
+    manifestDeadline.signal.addEventListener('abort', () => manifestAbort.abort(), {
+      once: true,
+    });
+    const onOuterAbort = () => manifestAbort.abort();
     controller.signal.addEventListener('abort', onOuterAbort, { once: true });
-    const manifestResponse = await fetch(url, { signal: manifestTimeout.signal }).finally(() => {
+    // Bounded read. `ept.json` is a small JSON document — version, span,
+    // schema, bounds, and at most a WKT string — so 4 MiB is already orders of
+    // magnitude of headroom over the largest real manifest (a verbose compound
+    // CRS WKT runs a few kilobytes). Reading it with `.text()` meant an
+    // endless body from a hostile or misconfigured host was materialised in
+    // full before anyone looked at it; this stops at the ceiling and cancels.
+    const MAX_MANIFEST_BYTES = 4 * 1024 * 1024;
+    let manifestText: string;
+    // The timer and the cancel listener are torn down only AFTER the body is
+    // read. Clearing them when `fetch` resolved — which is when the headers
+    // arrive, not the body — left a stalled manifest with no deadline and no
+    // route for Cancel, so this `await` never settled. That matters more here
+    // than anywhere else: we are inside the `loading = true` window, and the
+    // `finally` that calls `setLoading(false)` is downstream of this line. A
+    // hung read therefore wedged the flag on, and every later open answered
+    // "Already loading — cancel the current load first" until a page reload.
+    try {
+      // `redirect: 'follow'` stated rather than defaulted — see the note in
+      // `HttpRangeSource` and the residual in `docs/threat-model.md`.
+      const manifestResponse = await fetch(url, {
+        signal: manifestAbort.signal,
+        redirect: 'follow',
+      });
+      if (!manifestResponse.ok) {
+        throw new Error(
+          `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
+        );
+      }
+      manifestText = await readTextAtMost(
+        manifestResponse,
+        MAX_MANIFEST_BYTES,
+        'EPT manifest',
+        {
+          signal: manifestAbort.signal,
+          timeoutSignal: manifestDeadline.signal,
+          idleTimeoutMs: MANIFEST_TIMEOUT_MS,
+        },
+      );
+    } finally {
       clearTimeout(manifestTimer);
       controller.signal.removeEventListener('abort', onOuterAbort);
-    });
-    if (!manifestResponse.ok) {
-      throw new Error(
-        `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
-      );
     }
-    const manifestText = await manifestResponse.text();
     const detection = parseEptMetadata(manifestText);
     if (!detection.isEpt) {
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
@@ -558,9 +605,17 @@ export async function handleRemoteEpt(
     );
     // A streaming scan is exclusive — replace any prior streaming/static scene
     // at the last moment, after the EPT source opened and the decoder is ready,
-    // so a failed or cancelled step above left the current scene intact.
+    // so a failed or cancelled step above leaves the current scene intact.
+    //
+    // The teardown of a PRIOR STREAMING scan is deliberately not done here.
+    // `attachStreamingCloud` builds the replacement session first and detaches
+    // the old one only once that succeeded (Viewer.ts), which makes the swap
+    // transactional; calling `closeStreaming()` first — as this path used to —
+    // defeated exactly that design and left the user staring at an empty scene
+    // whenever the attach threw. The COPC path never did this, which is why
+    // only EPT had the bug. Static layers still clear here: nothing yields
+    // between the abort check and the attach, so they cannot outlive a failure.
     if (controller.signal.aborted) throw new LoadCancelledError();
-    if (viewer.hasStreamingCloud) deps.closeStreaming();
     deps.clearOpenStaticLayers();
     await viewer.attachStreamingCloud(
       cloud,
@@ -660,7 +715,13 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(
         eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
       );
-      deps.closeStreaming();
+      // Transactional, matching the COPC path: a failed open left the prior
+      // scene untouched, so keep it — only tidy the streaming chrome when no
+      // streaming scene remains. Closing unconditionally here threw away a
+      // perfectly good scan because a DIFFERENT one failed to open.
+      // A null viewer means the failure landed before the Viewer chunk even
+      // resolved, so there is no streaming scene to preserve — tidy as before.
+      if (!viewer || !viewer.hasStreamingCloud) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();

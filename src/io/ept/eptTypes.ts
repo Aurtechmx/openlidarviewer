@@ -129,19 +129,56 @@ export interface EptKey {
  */
 export type EptHierarchyMap = Readonly<Record<string, number>>;
 
+/**
+ * Hard cap on EPT key depth. EPT keys are 32-bit signed; `x >> 1` parent-key
+ * arithmetic wraps into negative space once `x` reaches 2^31. The cap is set
+ * well below the wrap edge — practical Entwine output rarely exceeds depth
+ * ~20, so this limit only kicks in for pathological or malicious manifests.
+ *
+ * Lives here, in the pure type module, rather than in the octree that
+ * enforces it at ingest: the parser needs the same number to reject an
+ * out-of-range key at parse time, and two constants that must agree is one
+ * constant with an extra way to drift.
+ */
+export const MAX_EPT_DEPTH = 24;
+
 /** Format the EPT address string a hierarchy uses. */
 export function eptKeyToString(k: EptKey): string {
   return `${k.d}-${k.x}-${k.y}-${k.z}`;
 }
 
-/** Parse an `"D-X-Y-Z"` hierarchy address back to a typed key. */
+/**
+ * Parse a `"D-X-Y-Z"` hierarchy address back to a typed key, or `null` when
+ * the address cannot name a real node.
+ *
+ * The shape check alone is not enough. An octree node at depth `d` has
+ * exactly `2^d` cells along each axis, so `x`, `y`, `z` must all be below
+ * `2^d` — `5-9999-0-0` is structurally impossible, yet the old digits-only
+ * regex accepted it, and everything downstream then treated it as real:
+ * `_boundsForKey` fabricated bounds far outside the dataset cube (the cube
+ * side is divided by `2^d` and multiplied by `x`, so an out-of-range `x`
+ * projects the node into empty space), the store accepted it, and the
+ * scheduler queued a tile fetch for it. Depth is capped at
+ * {@link MAX_EPT_DEPTH} for the same reason the octree caps it, and every
+ * component must be a safe integer so a 30-digit address can't arrive as a
+ * float that silently loses its low bits.
+ */
 export function eptStringToKey(s: string): EptKey | null {
   const m = /^(\d+)-(\d+)-(\d+)-(\d+)$/.exec(s);
   if (!m) return null;
-  return {
-    d: Number(m[1]),
-    x: Number(m[2]),
-    y: Number(m[3]),
-    z: Number(m[4]),
-  };
+  const d = Number(m[1]);
+  const x = Number(m[2]);
+  const y = Number(m[3]);
+  const z = Number(m[4]);
+  if (!Number.isSafeInteger(d) || !Number.isSafeInteger(x) ||
+      !Number.isSafeInteger(y) || !Number.isSafeInteger(z)) {
+    return null;
+  }
+  // Negatives can't reach here — the `\d+` groups admit no sign — so
+  // nonnegativity is established by the shape check above.
+  if (d > MAX_EPT_DEPTH) return null;
+  // `2^d` is exact for every d ≤ 24, so this comparison needs no epsilon.
+  const cellsPerAxis = Math.pow(2, d);
+  if (x >= cellsPerAxis || y >= cellsPerAxis || z >= cellsPerAxis) return null;
+  return { d, x, y, z };
 }

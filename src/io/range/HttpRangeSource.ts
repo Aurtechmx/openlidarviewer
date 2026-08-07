@@ -17,12 +17,41 @@
  * deterministic tests — pass a fake `fetchImpl`, `now`, and `random` and
  * exercise the retry / timeout / mismatch paths exactly.
  *
+ * IDENTITY PINNING. A COPC load is dozens of range reads spread over
+ * seconds or minutes against an object the server may replace at any moment.
+ * Nothing tied one read to the next: `probe()` learned a size, `readRange()`
+ * checked only that the first and last byte numbers came back as asked, and
+ * the `Content-Range` TOTAL was discarded by a non-capturing group. A file
+ * swapped mid-load therefore mixed two versions of the object into one point
+ * cloud, and a same-size re-upload — a re-run of the same processing job, the
+ * common case — decoded cleanly and produced WRONG COORDINATES WITH NO ERROR.
+ * `docs/threat-model.md` ranks that first precisely because a wrong number is
+ * silent where a crash is not. So: pin the object's validators at probe time,
+ * send `If-Match` on every subsequent range read where the server gave us a
+ * strong ETag, and re-check the validators and the total on every response.
+ * A mismatch is `resource-changed` — a distinct code that deliberately does
+ * not retry, because retrying fetches bytes from the new object to sit beside
+ * the bytes we already hold from the old one.
+ *
+ * BOUNDED READS. Every body is read through
+ * {@link readExactlyBounded}, which stops at the requested length instead of
+ * materialising whatever the server chose to send and checking afterwards.
+ *
+ * DEADLINES THAT OUTLIVE THE HEADERS. The per-attempt timer used to be cleared
+ * — and the composed abort listener torn down — the instant `fetch` resolved,
+ * which is when the HEADERS arrive, not the body. After that moment a server
+ * could stall the body forever with no deadline running and no way for the
+ * user's Cancel to reach the stream. `_fetchWithRetryAndTimeout` therefore
+ * hands back a {@link TimedResponse} whose timer and listeners stay armed, and
+ * the caller `release()`s only once the body has been consumed.
+ *
  * Pure of three.js; uses `fetch`, which is available on both the main thread
  * and in workers.
  */
 
 import type { RangeSource, RangeSourceKind } from './RangeSource';
 import { RangeReadError, clampRange, sanitizeUrlForDisplay } from './RangeSource';
+import { readAtMostBounded, readExactlyBounded } from './boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -32,6 +61,42 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_BASE_MS = 250;
 /** HTTP statuses we DO retry on (transient transport faults). */
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+/**
+ * `412 Precondition Failed` is the server's answer to our `If-Match`: the
+ * object no longer has the ETag we pinned. It is not in
+ * {@link RETRYABLE_STATUSES} and must never be added to it — a retry would
+ * just fetch the NEW object's bytes to mix with the old object's bytes we
+ * already decoded, which is the exact failure the precondition exists to
+ * prevent.
+ */
+const PRECONDITION_FAILED = 412;
+
+/**
+ * A response whose request deadline is still running.
+ *
+ * The whole point is `release`. Everything a `fetch` promise settling tells you
+ * is that the response HEADERS arrived; the body is still in flight, still on
+ * the same connection, and still needs both a deadline and a route for the
+ * user's cancel. Holding the timer and the composed signal until the caller
+ * says it is done reading is what makes a stalled body terminate.
+ */
+interface TimedResponse {
+  readonly response: Response;
+  /**
+   * The signal the request was issued with — caller cancel composed with the
+   * per-attempt deadline. Pass it to the body reader so an abort errors the
+   * stream instead of leaving a read pending forever.
+   */
+  readonly signal: AbortSignal | undefined;
+  /**
+   * The deadline half of {@link signal}, so the body reader can tell an
+   * expired deadline (a stalled server — an error) from the user's Cancel (not
+   * an error). Both reach it as the same composed abort otherwise.
+   */
+  readonly timeoutSignal: AbortSignal;
+  /** Drop the timer and the listeners. Call once the body is consumed. */
+  readonly release: () => void;
+}
 
 /** Tunables for {@link HttpRangeSource}. Defaulted, injected for unit tests. */
 export interface HttpRangeSourceOptions {
@@ -62,6 +127,25 @@ export class HttpRangeSource implements RangeSource {
   private readonly _random: () => number;
   private readonly _sleep: (ms: number) => Promise<void>;
   private _size: number | undefined;
+  /** The `ETag` pinned at probe time, verbatim (quotes and any `W/` included). */
+  private _etag: string | null = null;
+  /**
+   * Whether {@link _etag} is a STRONG validator. `If-Match` is defined to use
+   * strong comparison, so a weak `W/"…"` tag must not be sent as a
+   * precondition — it would be rejected or, worse, silently mis-evaluated. A
+   * weak tag is still worth keeping: we compare it against what comes back.
+   */
+  private _etagIsStrong = false;
+  /** The `Last-Modified` pinned at probe time — the weaker fallback validator. */
+  private _lastModified: string | null = null;
+  /**
+   * Whether to send `If-Match` on range reads. Starts on and downgrades at
+   * most once; see {@link _readRangeResponse} for why a working dataset must
+   * be able to fall back.
+   */
+  private _useConditionalRead = true;
+  /** True once a conditional read has actually reached a response. */
+  private _conditionalReadProven = false;
 
   constructor(url: string, options: HttpRangeSourceOptions = {}) {
     this._url = url;
@@ -97,10 +181,13 @@ export class HttpRangeSource implements RangeSource {
    */
   async probe(signal?: AbortSignal): Promise<number> {
     try {
-      const head = await this._fetchWithRetryAndTimeout(
+      const headAttempt = await this._fetchWithRetryAndTimeout(
         { method: 'HEAD' },
         signal,
       );
+      // A HEAD has no body to read, so the deadline has nothing left to cover.
+      headAttempt.release();
+      const head = headAttempt.response;
       if (!head.ok) {
         // A 4xx HEAD often means the CDN refuses HEADs but happily serves
         // GETs — try the bytes=0-0 fallback before giving up.
@@ -112,6 +199,10 @@ export class HttpRangeSource implements RangeSource {
           `Server returned ${head.status} for ${sanitizeUrlForDisplay(this._url)}`,
         );
       }
+      // Pin the object's identity from the first successful response. Every
+      // later read is checked against this; see the IDENTITY PINNING note at
+      // the top of the file.
+      this._pinIdentity(head);
       const acceptRanges = head.headers.get('accept-ranges');
       if (acceptRanges === 'none') {
         // Server explicitly declares it doesn't support ranges.
@@ -179,10 +270,33 @@ export class HttpRangeSource implements RangeSource {
     if (clamped === 0) return new ArrayBuffer(0);
 
     const end = offset + clamped - 1;
-    const response = await this._fetchWithRetryAndTimeout(
-      { headers: { Range: `bytes=${offset}-${end}` } },
-      signal,
-    );
+    const attempt = await this._readRangeResponse(offset, end, signal);
+    try {
+      return await this._consumeRangeResponse(attempt, offset, end);
+    } finally {
+      // The deadline stays armed until the body is fully read — releasing at
+      // the headers is what let a stalled body hang with no clock running.
+      attempt.release();
+    }
+  }
+
+  /** Validate a range response and read its body under the attempt's deadline. */
+  private async _consumeRangeResponse(
+    attempt: TimedResponse,
+    offset: number,
+    end: number,
+  ): Promise<ArrayBuffer> {
+    const response = attempt.response;
+    // The server evaluated our `If-Match` and says the object is no longer
+    // the one we pinned. Distinct from every transport code on purpose: the
+    // read cannot be retried into correctness, because the bytes already
+    // decoded belong to a version that no longer exists.
+    if (response.status === PRECONDITION_FAILED) {
+      throw new RangeReadError(
+        'resource-changed',
+        'The file on the server changed while it was loading. Reload to read the current version.',
+      );
+    }
     // 206 Partial Content is the expected success. A 200 means the server
     // ignored the Range header and is sending the whole file — that defeats
     // streaming, so it is treated as range-unsupported rather than accepted.
@@ -208,23 +322,135 @@ export class HttpRangeSource implements RangeSource {
     // returning the wrong bytes.
     const contentRange = response.headers.get('content-range');
     const expected = end - offset + 1;
-    if (contentRange === null) {
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== expected) {
+    if (contentRange !== null) {
+      const parsed = parseContentRange(contentRange);
+      if (parsed === null || parsed.first !== offset || parsed.last !== end) {
         throw new RangeReadError(
           'content-mismatch',
-          `Server returned a 206 without Content-Range and a body length ${body.byteLength} that didn't match the requested ${expected} bytes.`,
+          `Server returned a 206 with mismatched Content-Range "${contentRange}" for ${offset}-${end}.`,
         );
       }
-      return body;
+      // The TOTAL was previously thrown away by a non-capturing group, which
+      // is what let a re-uploaded object of a different size go unnoticed. It
+      // is the one identity signal every compliant range server sends, with
+      // no CORS `ExposeHeader` beyond the Content-Range we already read.
+      this._assertSameObject(response, parsed.total);
+    } else {
+      this._assertSameObject(response, null);
     }
-    if (!isContentRangeMatch(contentRange, offset, end)) {
-      throw new RangeReadError(
-        'content-mismatch',
-        `Server returned a 206 with mismatched Content-Range "${contentRange}" for ${offset}-${end}.`,
+    // Bounded body read for every path: the length is fixed by the request,
+    // so anything longer is refused mid-stream rather than allocated first —
+    // and, with the attempt's signal, anything SLOWER than the idle budget is
+    // refused too rather than waited on forever.
+    return readExactlyBounded(response, expected, {
+      signal: attempt.signal,
+      timeoutSignal: attempt.timeoutSignal,
+      idleTimeoutMs: this._requestTimeoutMs,
+    });
+  }
+
+  /**
+   * Issue the range request, sending `If-Match` when we hold a strong ETag.
+   *
+   * The fallback exists because `If-Match` is not a CORS-safelisted request
+   * header. A bucket whose CORS policy lists `Range` explicitly rather than
+   * `*` in `AllowedHeaders` will fail the preflight for a request that adds
+   * `If-Match`, and the browser reports that as an opaque `fetch` rejection —
+   * indistinguishable from a network drop. Refusing to load such a dataset
+   * would trade a rare correctness hazard for a common, total outage on hosts
+   * that work today. So the FIRST conditional read that dies at the transport
+   * layer downgrades this source to unconditional reads, once, and every
+   * response is still checked against the pinned validators and total. We lose
+   * the server-side precondition on those hosts and keep the client-side
+   * detection, which is the honest trade.
+   */
+  private async _readRangeResponse(
+    offset: number,
+    end: number,
+    signal?: AbortSignal,
+  ): Promise<TimedResponse> {
+    const conditional =
+      this._useConditionalRead && this._etag !== null && this._etagIsStrong;
+    const headers: Record<string, string> = { Range: `bytes=${offset}-${end}` };
+    if (conditional) headers['If-Match'] = this._etag as string;
+    try {
+      const attempt = await this._fetchWithRetryAndTimeout({ headers }, signal);
+      if (conditional) this._conditionalReadProven = true;
+      return attempt;
+    } catch (err) {
+      const preflightSuspect =
+        conditional &&
+        !this._conditionalReadProven &&
+        err instanceof RangeReadError &&
+        err.code === 'transport';
+      if (!preflightSuspect) throw err;
+      this._useConditionalRead = false;
+      return this._fetchWithRetryAndTimeout(
+        { headers: { Range: `bytes=${offset}-${end}` } },
+        signal,
       );
     }
-    return response.arrayBuffer();
+  }
+
+  /**
+   * Record the object's validators from the first response that carries them.
+   * Later responses are checked against these, never allowed to overwrite them
+   * — a pin that follows the server around isn't a pin.
+   */
+  private _pinIdentity(response: Response): void {
+    if (this._etag === null) {
+      const etag = response.headers.get('etag');
+      if (etag !== null && etag.trim() !== '') {
+        this._etag = etag.trim();
+        this._etagIsStrong = !/^W\//i.test(this._etag);
+      }
+    }
+    if (this._lastModified === null) {
+      const lastModified = response.headers.get('last-modified');
+      if (lastModified !== null && lastModified.trim() !== '') {
+        this._lastModified = lastModified.trim();
+      }
+    }
+  }
+
+  /**
+   * Fail the read if this response describes a different object than the one
+   * pinned at probe time.
+   *
+   * Each check is skipped when either side is absent, which is the graceful
+   * degradation the CORS-restricted hosts need: a bucket that exposes no
+   * `ETag`, no `Last-Modified`, and no `Content-Range` gets exactly the
+   * behaviour it had before, no worse. A host that exposes any one of them
+   * gets that one enforced. Absence is never treated as agreement.
+   */
+  private _assertSameObject(response: Response, total: number | null = null): void {
+    const etag = response.headers.get('etag');
+    if (this._etag !== null && etag !== null && etag.trim() !== this._etag) {
+      throw new RangeReadError(
+        'resource-changed',
+        'The file on the server changed while it was loading (its ETag no longer matches). ' +
+          'Reload to read the current version.',
+      );
+    }
+    const lastModified = response.headers.get('last-modified');
+    if (
+      this._lastModified !== null &&
+      lastModified !== null &&
+      lastModified.trim() !== this._lastModified
+    ) {
+      throw new RangeReadError(
+        'resource-changed',
+        'The file on the server changed while it was loading (its Last-Modified date moved). ' +
+          'Reload to read the current version.',
+      );
+    }
+    if (total !== null && this._size !== undefined && total !== this._size) {
+      throw new RangeReadError(
+        'resource-changed',
+        `The file on the server changed while it was loading — it is now ${total} bytes, ` +
+          `not the ${this._size} it reported when the load started. Reload to read the current version.`,
+      );
+    }
   }
 
   /**
@@ -240,10 +466,25 @@ export class HttpRangeSource implements RangeSource {
     signal?: AbortSignal,
     sizeHint?: number,
   ): Promise<number> {
-    const response = await this._fetchWithRetryAndTimeout(
+    const attempt = await this._fetchWithRetryAndTimeout(
       { headers: { Range: 'bytes=0-0' } },
       signal,
     );
+    try {
+      return await this._probeFromRangedResponse(attempt, sizeHint);
+    } finally {
+      // Released only after the drain below has finished with the body, so a
+      // probe whose one byte never arrives still hits the deadline.
+      attempt.release();
+    }
+  }
+
+  /** The body of {@link _probeViaRangedGet}, under the attempt's deadline. */
+  private async _probeFromRangedResponse(
+    attempt: TimedResponse,
+    sizeHint?: number,
+  ): Promise<number> {
+    const response = attempt.response;
     if (response.status === 200) {
       throw new RangeReadError(
         'range-unsupported',
@@ -256,10 +497,26 @@ export class HttpRangeSource implements RangeSource {
         `Probe returned an unexpected status ${response.status}`,
       );
     }
-    // Drain the one-byte body so the connection can be reused. Skipping
-    // this can leave the response in a half-read state on some runtimes.
-    void response.arrayBuffer().catch(() => undefined);
-    const total = parseContentRangeTotal(response.headers.get('content-range'));
+    // A HEAD may have run first; if so this response must describe the same
+    // object, or the object changed between two probe requests seconds apart
+    // and nothing downstream can be trusted. Otherwise this becomes the pin.
+    this._assertSameObject(response);
+    this._pinIdentity(response);
+    // Drain the one-byte body so the connection can be reused — skipping it
+    // can leave the response half-read on some runtimes — but drain it
+    // BOUNDED. This line used to be `void response.arrayBuffer().catch(…)`: an
+    // unbounded body read into a discarded promise, during the probe, before
+    // anything at all was known about the object. One byte is the entire legal
+    // answer to `bytes=0-0`; anything past it gets cancelled rather than
+    // buffered. A server that can't produce even that is not a probe failure —
+    // the 206 status already proved range support — so the drain's own outcome
+    // stays advisory.
+    await readAtMostBounded(response, 1, 'range probe', {
+      signal: attempt.signal,
+      timeoutSignal: attempt.timeoutSignal,
+      idleTimeoutMs: this._requestTimeoutMs,
+    }).catch(() => undefined);
+    const total = parseContentRange(response.headers.get('content-range'))?.total ?? null;
     if (total !== null && total > 0) {
       this._size = total;
       return total;
@@ -284,11 +541,16 @@ export class HttpRangeSource implements RangeSource {
    * exponential-backoff retries on transient transport failures (retry-with-backoff),
    * and proper signal composition so the caller's cancel still wins. Every
    * non-retryable response is returned unchanged for the caller to inspect.
+   *
+   * Returns a {@link TimedResponse}, not a bare `Response`: the timer and the
+   * composed signal survive past the headers so the caller can read the body
+   * under the same deadline and the same cancellation. Every caller MUST
+   * `release()` on every exit path.
    */
   private async _fetchWithRetryAndTimeout(
     init: RequestInit,
     callerSignal?: AbortSignal,
-  ): Promise<Response> {
+  ): Promise<TimedResponse> {
     let lastError: unknown;
     for (let attempt = 0; attempt <= this._maxRetries; attempt++) {
       if (callerSignal?.aborted) {
@@ -303,12 +565,26 @@ export class HttpRangeSource implements RangeSource {
         callerSignal,
         timeoutController.signal,
       );
-      let response: Response;
-      try {
-        response = await this._fetch(this._url, { ...init, signal });
-      } catch (err) {
+      // Idempotent: the retry paths below release before looping, and the
+      // caller releases after reading the body.
+      let released = false;
+      const release = (): void => {
+        if (released) return;
+        released = true;
         clearTimeout(timer);
         cleanup();
+      };
+      let response: Response;
+      try {
+        // `redirect: 'follow'` is the platform default, stated here so it reads
+        // as a decision rather than an oversight. `'error'` would refuse the
+        // signed-URL and CDN chains public LiDAR hosting is built on (S3 to
+        // CloudFront, GCS signed redirects, DOI resolvers). The residual —
+        // a validated public host redirecting somewhere private — is bounded
+        // by the CSP and by CORS, and is written up in `docs/threat-model.md`.
+        response = await this._fetch(this._url, { ...init, signal, redirect: 'follow' });
+      } catch (err) {
+        release();
         if (callerSignal?.aborted) {
           throw new RangeReadError('aborted', 'Range read aborted');
         }
@@ -332,12 +608,13 @@ export class HttpRangeSource implements RangeSource {
           `Could not reach ${sanitizeUrlForDisplay(this._url)} — check the URL and that the server allows cross-origin requests.`,
         );
       }
-      clearTimeout(timer);
-      cleanup();
       if (!RETRYABLE_STATUSES.has(response.status)) {
-        return response;
+        // NOT released here — the body still has to be read, and it needs the
+        // deadline and the caller's cancel to stay wired while it is.
+        return { response, signal, timeoutSignal: timeoutController.signal, release };
       }
       // Retryable HTTP status — discard the body, back off, try again.
+      release();
       lastError = new RangeReadError(
         response.status >= 500 ? 'server-error' : 'transport',
         `Server returned ${response.status} for ${sanitizeUrlForDisplay(this._url)}`,
@@ -361,26 +638,46 @@ export class HttpRangeSource implements RangeSource {
   }
 }
 
-/** Parse the total size out of `bytes 0-0/12345`. Returns `null` on failure. */
-function parseContentRangeTotal(header: string | null): number | null {
-  if (!header) return null;
-  // `bytes <start>-<end>/<total>` or `bytes */<total>` (unsatisfied range).
-  const match = /^bytes\s+(?:\*|\d+-\d+)\/(\d+)$/i.exec(header.trim());
-  if (!match) return null;
-  const total = Number(match[1]);
-  return Number.isFinite(total) ? total : null;
+/** A parsed `Content-Range:` header. A `null` field means the server sent `*`. */
+interface ParsedContentRange {
+  /** First byte of the served span. */
+  readonly first: number | null;
+  /** Last byte of the served span, inclusive. */
+  readonly last: number | null;
+  /** Total size of the whole representation. */
+  readonly total: number | null;
 }
 
-/** Check a 206 `Content-Range` against the requested first / last byte. */
-function isContentRangeMatch(
-  header: string | null,
-  offset: number,
-  end: number,
-): boolean {
-  if (!header) return false;
-  const match = /^bytes\s+(\d+)-(\d+)\/(?:\d+|\*)$/i.exec(header.trim());
-  if (!match) return false;
-  return Number(match[1]) === offset && Number(match[2]) === end;
+/**
+ * Parse `bytes <first>-<last>/<total>`, either half of which may be `*`.
+ *
+ * This replaces two narrower helpers that each threw away what the other
+ * needed: the span matcher discarded the total through a non-capturing group,
+ * and the total parser was only ever called from the probe. The total is the
+ * cheapest identity signal a range server gives us, so it has to survive
+ * parsing at both call sites.
+ */
+function parseContentRange(header: string | null): ParsedContentRange | null {
+  if (!header) return null;
+  const match = /^bytes\s+(?:(\d+)-(\d+)|\*)\/(?:(\d+)|\*)$/i.exec(header.trim());
+  if (!match) return null;
+  const num = (raw: string | undefined): number | null => {
+    if (raw === undefined) return null;
+    const n = Number(raw);
+    return Number.isSafeInteger(n) ? n : null;
+  };
+  const first = num(match[1]);
+  const last = num(match[2]);
+  const total = num(match[3]);
+  // A digit group that overflows the safe-integer range parses to `null`
+  // here, which would read as "the server sent `*`" — a lie by omission. Any
+  // digits present must have produced a number.
+  if ((match[1] !== undefined && first === null) ||
+      (match[2] !== undefined && last === null) ||
+      (match[3] !== undefined && total === null)) {
+    return null;
+  }
+  return { first, last, total };
 }
 
 /**

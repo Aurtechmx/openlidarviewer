@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   isEptUrl,
   isAbortError,
@@ -404,6 +404,344 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     // the prior streaming cloud) — the "after the candidate opened" ordering.
     expect(calls.openSpy).toHaveBeenCalledTimes(1);
     expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// handleRemoteEpt — transactional replacement, the EPT mirror of gate F4.
+//
+// `attachStreamingCloud` builds the replacement session before detaching the
+// old one, which makes a streaming swap transactional. The EPT path defeated
+// that by calling `closeStreaming()` itself, one line before the attach: if
+// the attach then threw, the user lost the scene they were watching to a scan
+// that never arrived. The COPC path never did this — and had a test saying so,
+// which is why only EPT regressed. This is that test, for EPT.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A structurally-complete EPT manifest, enough for the whole open to run. */
+const EPT_MANIFEST = JSON.stringify({
+  version: '1.0.0',
+  dataType: 'binary',
+  hierarchyType: 'json',
+  points: 1000,
+  span: 128,
+  schema: [{ name: 'X', size: 8, type: 'signed' }],
+  bounds: [0, 0, 0, 10, 10, 5],
+  boundsConforming: [0, 0, 0, 10, 10, 5],
+});
+
+/**
+ * Deps that drive `handleRemoteEpt` all the way to the attach.
+ *
+ * `openRejects` makes `EptStreamingPointCloud.open` reject (a dataset that
+ * validated but whose hierarchy is broken); `attachRejects` makes the attach
+ * itself reject (the replacement session fails to build). Either way the prior
+ * streaming scene must survive.
+ */
+function makeEptPipelineDeps(
+  over: {
+    openRejects?: boolean;
+    attachRejects?: boolean;
+    priorStreamingCloud?: boolean;
+    manifestBody?: () => BodyInit | null;
+  } = {},
+) {
+  const cloud = {
+    kind: 'ept' as const,
+    dataType: 'binary' as const,
+    name: 'dataset',
+    sourcePointCount: 1000,
+    availableColorModes: () => ['rgb'],
+    defaultColorMode: () => 'rgb',
+    maxDepth: () => 4,
+    octree: { nodes: () => [] as unknown[] },
+    crs: () => null,
+  };
+  const openSpy = vi.fn(async () => {
+    if (over.openRejects) throw new Error('EPT hierarchy fetch failed (500)');
+    return cloud;
+  });
+  const attachStreamingCloud = vi.fn(async () => {
+    if (over.attachRejects) throw new Error('could not build the streaming session');
+  });
+  const viewer = {
+    ready: Promise.resolve(),
+    hasStreamingCloud: over.priorStreamingCloud ?? true,
+    attachStreamingCloud,
+    setMode: vi.fn(),
+    frameAll: vi.fn(),
+    availableImageExportModes: () => [],
+  } as unknown as Viewer;
+
+  const validateRemoteEptUrl = vi.fn(() => ({ ok: true as const, url: 'u' }));
+  const describeRemoteEptError = vi.fn(() => 'classified EPT error');
+  let loading = false;
+  const calls = {
+    openSpy,
+    attachStreamingCloud,
+    closeStreaming: vi.fn(),
+    clearOpenStaticLayers: vi.fn(),
+    setError: vi.fn(),
+    setProgress: vi.fn(),
+    setLoading: vi.fn((v: boolean) => { loading = v; }),
+    isLoading: vi.fn(() => loading),
+    describeRemoteEptError,
+  };
+
+  const eptModule = {
+    validateRemoteEptUrl,
+    describeRemoteEptError,
+    parseEptMetadata: (text: string) => {
+      const raw = JSON.parse(text) as Record<string, unknown>;
+      return {
+        isEpt: true as const,
+        metadata: {
+          version: raw.version,
+          dataType: raw.dataType,
+          hierarchyType: raw.hierarchyType,
+          points: raw.points,
+          span: raw.span,
+          schema: raw.schema,
+          bounds: { conforming: raw.boundsConforming, cubic: raw.bounds },
+        },
+      };
+    },
+    EptStreamingPointCloud: { open: openSpy },
+    EptChunkDecoder: class {},
+    eptUrlSearch: () => '',
+    createEptTransport: () => ({ fetchText: vi.fn(), fetchBytes: vi.fn() }),
+  };
+
+  const stub = <K extends keyof OpenStreamingDeps>(): OpenStreamingDeps[K] =>
+    vi.fn() as unknown as OpenStreamingDeps[K];
+
+  const deps: OpenStreamingDeps = {
+    loadStreamingPointCloud: stub<'loadStreamingPointCloud'>(),
+    loadCopcWorkerClient: stub<'loadCopcWorkerClient'>(),
+    loadStreamingColors: stub<'loadStreamingColors'>(),
+    loadEptLaszipWorkerClient: stub<'loadEptLaszipWorkerClient'>(),
+    loadEpt: (async () => eptModule) as unknown as OpenStreamingDeps['loadEpt'],
+    loadDiagnostics: stub<'loadDiagnostics'>(),
+    viewerReady: Promise.resolve(),
+    getViewer: () => viewer,
+    isLoading: calls.isLoading,
+    setLoading: calls.setLoading,
+    getStreamingBenchmark: () => null,
+    setStreamingBenchmark: vi.fn(),
+    setCoarseStableFired: vi.fn(),
+    getCopcDecoder: () => null,
+    setCopcDecoder: vi.fn(),
+    getEptLaszipDecoder: () => null,
+    setEptLaszipDecoder: vi.fn(),
+    getStreamingQuality: () => 'balanced',
+    setLastStreamingReportCloud: vi.fn(),
+    debug: false,
+    benchmark: false,
+    showToast: vi.fn(),
+    dropZone: {
+      setError: calls.setError,
+      setOpening: vi.fn(),
+      setCancelHandler: vi.fn(),
+      setProgress: calls.setProgress,
+    },
+    stage: { hideEmptyState: vi.fn() },
+    inspector: {
+      element: { classList: { remove: vi.fn() } },
+      setImageExportEnabled: vi.fn(),
+      setImageExportAvailability: vi.fn(),
+      setStreamingMode: vi.fn(),
+      setDetail: vi.fn(),
+      setReport: vi.fn(),
+    } as unknown as OpenStreamingDeps['inspector'],
+    streamingPanel: {
+      setPhase: vi.fn(),
+      show: vi.fn(),
+      setColorModes: vi.fn(),
+      setQuality: vi.fn(),
+      setSummary: vi.fn(),
+    } as unknown as OpenStreamingDeps['streamingPanel'],
+    classLegendPanel: {
+      setClasses: vi.fn(),
+      hide: vi.fn(),
+      getVisibility: () => ({ isFiltered: () => false }),
+    } as unknown as OpenStreamingDeps['classLegendPanel'],
+    inspectorCards: {
+      refreshProvenanceFromStreaming: vi.fn(),
+      refreshDatasetIntelligenceFromStreamingCloud: vi.fn(),
+    } as unknown as OpenStreamingDeps['inspectorCards'],
+    crsCoordinator: {
+      refreshCrsForStreamingCloud: vi.fn(),
+    } as unknown as OpenStreamingDeps['crsCoordinator'],
+    bookmarks: { clear: vi.fn() },
+    isPhone: () => false,
+    closeStreaming: calls.closeStreaming,
+    clearOpenStaticLayers: calls.clearOpenStaticLayers,
+    startStreamingStatusPolling: vi.fn(),
+    revealStreamingChrome: vi.fn(),
+    revealAnalysePanel: vi.fn(),
+    prewarmExportStudio: vi.fn(),
+    prewarmForUrl: vi.fn(),
+    refreshViewsUI: vi.fn(),
+    hideReclassifyUi: vi.fn(),
+    syncInspectClassScope: vi.fn(),
+    runStreamingModules: vi.fn(() => []),
+  };
+
+  const body = over.manifestBody ?? (() => EPT_MANIFEST);
+  const fetchStub = (async () =>
+    new Response(body(), { status: 200, statusText: 'OK' })) as typeof fetch;
+
+  return { deps, calls, fetchStub, viewer };
+}
+
+describe('handleRemoteEpt — transactional replacement (the EPT mirror of gate F4)', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('leaves the prior streaming scene intact when the candidate fails to open', async () => {
+    const { deps, calls, fetchStub } = makeEptPipelineDeps({
+      openRejects: true,
+      priorStreamingCloud: true,
+    });
+    globalThis.fetch = fetchStub;
+    await handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+
+    expect(calls.openSpy).toHaveBeenCalledTimes(1);
+    // The open REJECTED, so nothing downstream ran and nothing was torn down.
+    expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+    // And the catch left the surviving scan alone — this is the line that used
+    // to close it unconditionally.
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the prior streaming scene intact when the ATTACH itself fails', async () => {
+    // The sharpest case: everything opened, the decoder is ready, and building
+    // the replacement session throws. `attachStreamingCloud` detaches only
+    // after a successful build, so the old scan is still live — unless we tore
+    // it down ourselves first, which is exactly what this path used to do.
+    const { deps, calls, fetchStub } = makeEptPipelineDeps({
+      attachRejects: true,
+      priorStreamingCloud: true,
+    });
+    globalThis.fetch = fetchStub;
+    await handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('still tidies up when the failure leaves no streaming scene at all', async () => {
+    // The conditional cuts both ways: with nothing left on screen, the
+    // streaming chrome must still be cleared.
+    const { deps, calls, fetchStub } = makeEptPipelineDeps({
+      openRejects: true,
+      priorStreamingCloud: false,
+    });
+    globalThis.fetch = fetchStub;
+    await handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+    expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears static layers and attaches once the candidate opens', async () => {
+    const { deps, calls, fetchStub } = makeEptPipelineDeps({ priorStreamingCloud: true });
+    globalThis.fetch = fetchStub;
+    await handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+
+    expect(calls.openSpy).toHaveBeenCalledTimes(1);
+    expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // The prior streaming cloud is retired by attachStreamingCloud's own
+    // build-then-detach, never by a call from here.
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.setError).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// handleRemoteEpt — a stalled manifest body must not wedge the load flag.
+//
+// `loading` is claimed synchronously at the top and released in the `finally`.
+// The manifest read sits between the two, and its deadline used to be cleared
+// the instant `fetch` resolved — which is when the HEADERS arrive. A server
+// that then stalled the body left that `await` unsettled forever: the flag
+// stayed on, every later open answered "Already loading", and Cancel could not
+// help because its listener had been removed with the timer.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('handleRemoteEpt — a stalled manifest releases the load flag', () => {
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    vi.useRealTimers();
+  });
+
+  it('times out a manifest body that never yields, and does not wedge `loading`', async () => {
+    vi.useFakeTimers();
+    let cancelled = false;
+    const { deps, calls } = makeEptPipelineDeps({
+      manifestBody: () =>
+        new ReadableStream<Uint8Array>({
+          pull() {
+            return new Promise<void>(() => {});
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+    });
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull() {
+            return new Promise<void>(() => {});
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        { status: 200, statusText: 'OK' },
+      )) as typeof fetch;
+
+    const open = handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+    // The 20 s manifest deadline is the only thing that can end this read.
+    await vi.advanceTimersByTimeAsync(20_001);
+    await open;
+
+    expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
+    // The whole point: the flag comes back off, so the next open is allowed.
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+    expect(deps.isLoading()).toBe(false);
+    expect(cancelled).toBe(true);
+    // A stalled server is an error the user should see, not a silent cancel.
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+  });
+
+  it('a second open succeeds after a stalled one, rather than being refused', async () => {
+    vi.useFakeTimers();
+    const { deps, calls } = makeEptPipelineDeps({});
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          pull() {
+            return new Promise<void>(() => {});
+          },
+        }),
+        { status: 200, statusText: 'OK' },
+      )) as typeof fetch;
+    const first = handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
+    await vi.advanceTimersByTimeAsync(20_001);
+    await first;
+
+    // Now a healthy manifest — this used to hit "Already loading…" forever.
+    globalThis.fetch = (async () =>
+      new Response(EPT_MANIFEST, { status: 200, statusText: 'OK' })) as typeof fetch;
+    await handleRemoteEpt('https://example.com/dataset/ept.json', undefined, deps);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
   });
 });

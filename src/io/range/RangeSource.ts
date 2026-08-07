@@ -49,7 +49,15 @@ export type RangeReadErrorCode =
   | 'range-unsupported'
   | 'timeout'
   | 'content-mismatch'
-  | 'server-error';
+  | 'server-error'
+  // The remote object was replaced while we were reading it — a different
+  // ETag / Last-Modified / total size than the one pinned at probe time.
+  // Deliberately NOT a transport fault: retrying cannot help, because the
+  // bytes we already hold belong to a version that no longer exists. Mixing
+  // them with the new object's bytes is how a load produces wrong
+  // coordinates without producing an error, which `docs/threat-model.md`
+  // ranks as the highest-value failure in the project.
+  | 'resource-changed';
 
 /** A typed range-read failure. */
 export class RangeReadError extends Error {
@@ -225,4 +233,28 @@ export function sanitizeUrlForDisplay(raw: string): string {
     const noUserInfo = raw.replace(/^([a-zA-Z][a-zA-Z0-9+.\-]*:\/\/)[^/@]*@/, '$1');
     return noUserInfo.replace(/\?.*$/, '?…');
   }
+}
+
+/**
+ * Run {@link sanitizeUrlForDisplay} over every http(s) URL embedded in a block
+ * of free text.
+ *
+ * Message formatters compose a scrubbed host with a `detail` string lifted
+ * from some other error, and that detail is where a raw signed URL gets back
+ * in — the formatter sanitises what it knows about and re-appends what it
+ * doesn't. This closes that seam: whatever the detail came from, any URL
+ * inside it loses its userinfo and its query before display.
+ *
+ * The throw sites are still the primary fix. This is the backstop for errors
+ * we don't own — a runtime's own `fetch` rejection text, a third-party
+ * decoder — where there is no throw site to correct.
+ */
+export function scrubUrlsForDisplay(text: string): string {
+  // Stop at whitespace and at the punctuation that conventionally ends a URL
+  // in prose (quotes, brackets, a trailing comma). A trailing `.` is
+  // ambiguous — it is legal in a URL and also ends the sentence — so it is
+  // excluded from the match and left in the surrounding text.
+  return text.replace(/https?:\/\/[^\s"'<>()[\]]+[^\s"'<>()[\].,;]/gi, (m) =>
+    sanitizeUrlForDisplay(m),
+  );
 }
