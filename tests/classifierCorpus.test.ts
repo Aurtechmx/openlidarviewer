@@ -64,7 +64,7 @@ describe('corpus immutability', () => {
   it('regenerates byte for byte on a second build', () => {
     const a = buildCorpus();
     const b = buildCorpus();
-    expect(a.length).toBe(b.length);
+    expect(a).toHaveLength(b.length);
     for (let i = 0; i < a.length; i++) {
       expect(sceneDigest(a[i])).toBe(sceneDigest(b[i]));
       expect(Array.from(a[i].xyz)).toEqual(Array.from(b[i].xyz));
@@ -129,11 +129,11 @@ describe('corpus coverage', () => {
   it('every scene carries labelled points and a positive cell size', () => {
     for (const scene of buildCorpus()) {
       expect(scene.count).toBeGreaterThan(1000);
-      expect(scene.truth.length).toBe(scene.count);
-      expect(scene.xyz.length).toBe(scene.count * 3);
+      expect(scene.truth).toHaveLength(scene.count);
+      expect(scene.xyz).toHaveLength(scene.count * 3);
       expect(scene.cellSize).toBeGreaterThan(0);
-      if (scene.colors) expect(scene.colors.length).toBe(scene.count * 3);
-      if (scene.returnCount) expect(scene.returnCount.length).toBe(scene.count);
+      if (scene.colors) expect(scene.colors).toHaveLength(scene.count * 3);
+      if (scene.returnCount) expect(scene.returnCount).toHaveLength(scene.count);
     }
   });
 

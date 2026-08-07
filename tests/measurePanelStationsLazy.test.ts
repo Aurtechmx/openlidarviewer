@@ -210,7 +210,7 @@ function setOpen(details: FakeEl, open: boolean): void {
 describe('MeasurePanel — station table rows build lazily on first open', () => {
   it('renders NO station rows until the <details> is opened', () => {
     const { tbody } = mountProfilePanel();
-    expect(tbody.querySelectorAll('tr').length).toBe(0);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(0);
   });
 
   it('shows the correct row count in the summary while the body is still unbuilt', () => {
@@ -218,24 +218,24 @@ describe('MeasurePanel — station table rows build lazily on first open', () =>
     // The count comes from the eagerly-computed row MODEL, not from the DOM…
     expect(summary.textContent).toContain(`Station table (${SAMPLE_COUNT})`);
     // …while the DOM body is still empty.
-    expect(tbody.querySelectorAll('tr').length).toBe(0);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(0);
   });
 
   it('builds one row per sample when the <details> is opened', () => {
     const { details, tbody } = mountProfilePanel();
     setOpen(details, true);
-    expect(tbody.querySelectorAll('tr').length).toBe(SAMPLE_COUNT);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
     // Each built row carries the five station columns.
-    expect(tbody.querySelector('tr')!.querySelectorAll('td').length).toBe(5);
+    expect(tbody.querySelector('tr')!.querySelectorAll('td')).toHaveLength(5);
   });
 
   it('builds the rows exactly once — closing then reopening does not duplicate them', () => {
     const { details, tbody } = mountProfilePanel();
     setOpen(details, true);
-    expect(tbody.querySelectorAll('tr').length).toBe(SAMPLE_COUNT);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
     setOpen(details, false); // close — cached body stays
-    expect(tbody.querySelectorAll('tr').length).toBe(SAMPLE_COUNT);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
     setOpen(details, true); // reopen — no rebuild, no duplication
-    expect(tbody.querySelectorAll('tr').length).toBe(SAMPLE_COUNT);
+    expect(tbody.querySelectorAll('tr')).toHaveLength(SAMPLE_COUNT);
   });
 });

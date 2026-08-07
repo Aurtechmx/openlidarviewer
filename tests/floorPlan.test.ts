@@ -100,7 +100,7 @@ describe('wallSlice', () => {
 
   it('exposes per-band-point z parallel to xs/ys', () => {
     const slice = wallSlice(room(), { upAxis: 'z' });
-    expect(slice.zs.length).toBe(slice.count);
+    expect(slice.zs).toHaveLength(slice.count);
     // Every kept z lies inside the band actually used [anchor+low, anchor+high].
     for (let i = 0; i < slice.count; i++) {
       expect(slice.zs[i]).toBeGreaterThanOrEqual(slice.bandLowUsedM - 1e-6);
@@ -308,7 +308,7 @@ describe('vectorize', () => {
 
   it('traces a single cell as its CCW unit square', () => {
     const rings = traceMaskBoundaries(unitGrid([1], 1, 1));
-    expect(rings.length).toBe(1);
+    expect(rings).toHaveLength(1);
     expect(rings[0]).toEqual([[0, 0], [1, 0], [1, 1], [0, 1]]);
     expect(ringSignedArea(rings[0])).toBeCloseTo(1, 10);
   });
@@ -316,7 +316,7 @@ describe('vectorize', () => {
   it('traces a hole as a separate CW ring (nonzero winding renders it open)', () => {
     // 3×3 block with the centre empty: outer ring area +9, hole ring area −1.
     const rings = traceMaskBoundaries(unitGrid([1, 1, 1, 1, 0, 1, 1, 1, 1], 3, 3));
-    expect(rings.length).toBe(2);
+    expect(rings).toHaveLength(2);
     const areas = rings.map(ringSignedArea).sort((a, b) => a - b);
     expect(areas[0]).toBeCloseTo(-1, 10);
     expect(areas[1]).toBeCloseTo(9, 10);
@@ -325,7 +325,7 @@ describe('vectorize', () => {
   it('traces disjoint regions as separate rings', () => {
     // Two cells separated by an empty column.
     const rings = traceMaskBoundaries(unitGrid([1, 0, 1], 3, 1));
-    expect(rings.length).toBe(2);
+    expect(rings).toHaveLength(2);
     expect(rings.map(ringSignedArea).every((a) => Math.abs(a - 1) < 1e-9)).toBe(true);
   });
 
@@ -333,10 +333,10 @@ describe('vectorize', () => {
     // A 2×2 block traces with edge midpoints (8 points); ε = 0.1 removes the
     // collinear midpoints and keeps the 4 corners — area is preserved.
     const rings = traceMaskBoundaries(unitGrid([1, 1, 1, 1], 2, 2));
-    expect(rings.length).toBe(1);
-    expect(rings[0].length).toBe(8);
+    expect(rings).toHaveLength(1);
+    expect(rings[0]).toHaveLength(8);
     const simple = simplifyRing(rings[0], 0.1);
-    expect(simple.length).toBe(4);
+    expect(simple).toHaveLength(4);
     expect(Math.abs(ringSignedArea(simple))).toBeCloseTo(4, 10);
   });
 
@@ -378,7 +378,7 @@ describe('vectorize', () => {
     const snapped = snapRingToAxes(ring, 0);
     // Segment targets: south y = 0 (mean of ±0.05), east x = 10.025,
     // north y = 8.01, west x = 0.
-    expect(snapped.length).toBe(4);
+    expect(snapped).toHaveLength(4);
     expect(snapped[0][0]).toBeCloseTo(0, 9);
     expect(snapped[0][1]).toBeCloseTo(0, 9);
     expect(snapped[1][0]).toBeCloseTo(10.025, 9);

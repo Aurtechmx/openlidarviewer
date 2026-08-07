@@ -66,7 +66,7 @@ describe('makeTrainOnlyReclassifier — train-only ground classification', () =>
     const got = seen as unknown as ReadonlyArray<TerrainPoint>;
     // Exactly the training points, in source order — no held-out point leaks in.
     const expectedTrain = pts.filter((_, i) => heldOut[i] !== 1);
-    expect(got.length).toBe(expectedTrain.length);
+    expect(got).toHaveLength(expectedTrain.length);
     for (let j = 0; j < got.length; j++) expect(got[j]).toBe(expectedTrain[j]);
   });
 
@@ -78,7 +78,7 @@ describe('makeTrainOnlyReclassifier — train-only ground classification', () =>
       isGround: Uint8Array.from(trainPts.map((_, j) => (j % 2) as 0 | 1)),
     });
     const mask = makeTrainOnlyReclassifier(SMRF_PARAMS, spy)(pts, heldOut);
-    expect(mask.length).toBe(pts.length);
+    expect(mask).toHaveLength(pts.length);
     let j = 0;
     for (let i = 0; i < pts.length; i++) {
       if (heldOut[i] === 1) {

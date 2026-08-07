@@ -200,7 +200,7 @@ describe('contour correctness — analytic agreement', () => {
     const dtm = coneGrid(41, 41, cx, cy);
     const levels = [5, 10, 15];
     const set = contoursAt(dtm, { intervalM: 5, levels });
-    expect(set.levels.length).toBe(3);
+    expect(set.levels).toHaveLength(3);
     for (const level of set.levels) {
       expect(level.segments.length).toBeGreaterThan(0);
       const tol = radialTolerance(CELL, level.value);
@@ -471,8 +471,8 @@ describe('contour correctness — topological invariants', () => {
     };
     const below = ringsAt(4.0);
     const above = ringsAt(6.0);
-    expect(below.length).toBe(1);
-    expect(above.length).toBe(2);
+    expect(below).toHaveLength(1);
+    expect(above).toHaveLength(2);
     // The two upper rings are disjoint: neither contains a vertex of the other.
     const [a, b] = above.map((p) => p.vertices.map((v) => [v.x, v.y] as [number, number]));
     expect(a.some(([x, y]) => pointInRing({ x, y }, b))).toBe(false);
@@ -548,7 +548,7 @@ describe('contour correctness — topological invariants', () => {
     const model = modelFor(dtm, set);
     const ringFor = (value: number) => {
       const f = model.features.filter((x) => x.value === value);
-      expect(f.length).toBe(1);
+      expect(f).toHaveLength(1);
       return f[0].coordinates;
     };
     const values = [2, 4, 6, 8];
@@ -634,10 +634,10 @@ describe('contour correctness — declared properties match the geometry', () =>
     const dtm = coneGrid(41, 41, 20.5, 20.5);
     const set = contoursAt(dtm, { intervalM: 1 });
     const stitched = stitchContourSet(set, dtm.cellSizeM);
-    expect(stitched.length).toBe(set.levels.length);
+    expect(stitched).toHaveLength(set.levels.length);
     const model = modelFor(dtm, set);
     const geo = toGeoJSON(model);
-    expect((geo.features as unknown[]).length).toBe(model.features.length);
+    expect(geo.features as unknown[]).toHaveLength(model.features.length);
     const declaredValues = new Set(set.levels.map((l) => l.value));
     for (const f of model.features) expect(declaredValues.has(f.value)).toBe(true);
   });
@@ -695,7 +695,7 @@ describe('contour correctness — declared properties match the geometry', () =>
       const props = f.properties as Record<string, unknown>;
       const geom = f.geometry as { coordinates: number[][] };
       for (const c of geom.coordinates) {
-        expect(c.length).toBe(3);
+        expect(c).toHaveLength(3);
         expect(c[2]).toBe(props.elevation);
       }
     }
@@ -730,7 +730,7 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
     expect(metadata.elevationIn3d).toBe(false);
     for (const f of geo.features as Array<Record<string, unknown>>) {
       const geom = f.geometry as { coordinates: number[][] };
-      for (const c of geom.coordinates) expect(c.length).toBe(2);
+      for (const c of geom.coordinates) expect(c).toHaveLength(2);
       expect((f.properties as Record<string, unknown>).elevationUnit).toBe('foot');
     }
   });
@@ -751,7 +751,7 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
       expect(props.elevationUnit).toBe('foot');
       const geom = f.geometry as { coordinates: number[][] };
       for (const c of geom.coordinates) {
-        expect(c.length).toBe(3);
+        expect(c).toHaveLength(3);
         expect(c[2]).toBeCloseTo((props.elevation as number) * 0.3048, 9);
       }
     }
@@ -767,7 +767,7 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
     expect(metadata.elevationNote).toMatch(/vertical unit/i);
     for (const f of geo.features as Array<Record<string, unknown>>) {
       const geom = f.geometry as { coordinates: number[][] };
-      for (const c of geom.coordinates) expect(c.length).toBe(2);
+      for (const c of geom.coordinates) expect(c).toHaveLength(2);
     }
   });
 
@@ -794,7 +794,7 @@ describe('contour correctness — the documented third-ordinate unit gap', () =>
     const features = geo.features as Array<Record<string, unknown>>;
     for (const f of features) {
       const geom = f.geometry as { coordinates: number[][] };
-      for (const c of geom.coordinates) expect(c.length).toBe(3);
+      for (const c of geom.coordinates) expect(c).toHaveLength(3);
     }
     // And with no provenance argument the file carries no unit token at all:
     // `intervalM` names metres while the value is 2 feet, and neither the
@@ -865,7 +865,7 @@ describe('contour correctness — degenerate inputs', () => {
     const model = modelFor(dtm, set);
     expect(model.features).toEqual([]);
     expect(model.bbox).toBeNull();
-    expect(set.levels.length).toBe(1);
+    expect(set.levels).toHaveLength(1);
     expect(set.levels[0].value).toBe(10);
     // The set says WHY it is empty, in the same shape the all-gap path uses,
     // so a consumer never has to count segments to learn the surface is flat.
@@ -980,7 +980,7 @@ describe('contour correctness — generalization stays within its tolerance', ()
       toleranceSource: tol,
       horizontalUnit: knownUnit(1),
     });
-    expect(product.features.length).toBe(analytical.features.length);
+    expect(product.features).toHaveLength(analytical.features.length);
     // Recomputed independently of the record the generalizer wrote.
     let worst = 0;
     for (let i = 0; i < analytical.features.length; i++) {
@@ -1004,7 +1004,7 @@ describe('contour correctness — generalization stays within its tolerance', ()
         toleranceSource: tol,
         horizontalUnit: knownUnit(1),
       });
-      expect(product.features.length).toBe(analytical.features.length);
+      expect(product.features).toHaveLength(analytical.features.length);
       for (let i = 0; i < product.features.length; i++) {
         expect(product.features[i].value).toBe(analytical.features[i].value);
         expect(product.features[i].closed).toBe(analytical.features[i].closed);
@@ -1112,7 +1112,7 @@ describe('contour correctness — negative controls', () => {
     const closedLoop = [seg(0, 0, 1, 0), seg(1, 0, 1, 1), seg(1, 1, 0, 0)];
     expect(oddDegreeNodes(closedLoop, q)).toEqual([]);
     const withSpur = [...closedLoop, seg(1, 1, 2, 2)];
-    expect(oddDegreeNodes(withSpur, q).length).toBe(2);
+    expect(oddDegreeNodes(withSpur, q)).toHaveLength(2);
   });
 
   it('the crossing check flags two segments that genuinely cross', () => {

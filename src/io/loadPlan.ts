@@ -67,8 +67,10 @@ export interface LoadPlan {
    * ceiling. The guard shrinks the budget toward `MIN_BUDGET_FLOOR`,
    * but when the FIXED cost (file bytes + LAZ scratch + WASM heap)
    * alone exceeds the ceiling, no point budget reshape can bring
-   * the estimate down. In that case the loader should warn the
-   * user (or refuse the open) rather than imply the file fits.
+   * the estimate down. The loader warns rather than implying the
+   * file fits: `buildSourceMetadata` in `src/io/loadFile.ts` reads
+   * this first and, when set, replaces the ordinary "large file"
+   * size note with a stronger "the open may fail" caution.
    *
    * Optional for backward-compat with sites that synthesise a
    * `LoadPlan` in tests; `planLoad` always populates it. Read sites

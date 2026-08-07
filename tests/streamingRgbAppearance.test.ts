@@ -136,6 +136,6 @@ describe('streamingNodeColors — RGB appearance pass-through', () => {
   it('returns reusable buffer subarray of correct length', () => {
     const decoded = makeDecoded([10, 20, 30, 40, 50, 60]);
     const out = streamingNodeColors('rgb', decoded, RANGES, IDENTITY_RGB_APPEARANCE);
-    expect(out.length).toBe(6);
+    expect(out).toHaveLength(6);
   });
 });

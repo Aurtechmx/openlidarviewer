@@ -40,7 +40,7 @@ describe('buildZip', () => {
   it('handles an empty archive', () => {
     const zip = buildZip([]);
     expect(u32(zip, 0)).toBe(0x06054b50); // EOCD only
-    expect(zip.length).toBe(22);
+    expect(zip).toHaveLength(22);
   });
 });
 

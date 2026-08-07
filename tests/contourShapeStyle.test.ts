@@ -59,7 +59,7 @@ describe('applyContourShapeStyle', () => {
   it('crisp is identity — no vertex moved, same count', () => {
     const poly = line([v(0, 0), v(1, 1), v(2, 0), v(3, 2)]);
     const [out] = applyContourShapeStyle([poly], 'crisp');
-    expect(out.vertices.length).toBe(poly.vertices.length);
+    expect(out.vertices).toHaveLength(poly.vertices.length);
     out.vertices.forEach((p, i) => {
       expect(p.x).toBe(poly.vertices[i].x);
       expect(p.y).toBe(poly.vertices[i].y);
@@ -72,7 +72,7 @@ describe('applyContourShapeStyle', () => {
     const expected = chaikinSmooth(poly, { iterations: 2 });
     // Also identical to the historical bare call (no params) — the live default.
     const legacy = chaikinSmooth(poly);
-    expect(styled.vertices.length).toBe(expected.vertices.length);
+    expect(styled.vertices).toHaveLength(expected.vertices.length);
     styled.vertices.forEach((p, i) => {
       expect(p.x).toBe(expected.vertices[i].x);
       expect(p.y).toBe(expected.vertices[i].y);
@@ -120,7 +120,7 @@ describe('applyContourShapeStyle', () => {
       cellSizeM: 1,
       generalizeToleranceCells: 0.5,
     });
-    expect(explicit.vertices.length).toBe(byDefault.vertices.length);
+    expect(explicit.vertices).toHaveLength(byDefault.vertices.length);
     explicit.vertices.forEach((p, i) => {
       expect(p.x).toBe(byDefault.vertices[i].x);
       expect(p.y).toBe(byDefault.vertices[i].y);
@@ -149,7 +149,7 @@ describe('applyContourShapeStyle', () => {
       cellSizeM: 1,
       generalizeToleranceCells: 0,
     });
-    expect(genZero.vertices.length).toBe(smooth.vertices.length);
+    expect(genZero.vertices).toHaveLength(smooth.vertices.length);
   });
 
   it('honesty — a low-confidence/gap vertex keeps its EXACT coordinates under EVERY style', () => {
@@ -192,7 +192,7 @@ describe('simplifyPolyline', () => {
   it('removes collinear interior points but keeps endpoints', () => {
     const poly = line([v(0, 0), v(1, 0), v(2, 0), v(3, 0), v(4, 0)]);
     const out = simplifyPolyline(poly, 0.01);
-    expect(out.vertices.length).toBe(2);
+    expect(out.vertices).toHaveLength(2);
     expect([out.vertices[0].x, out.vertices[1].x]).toEqual([0, 4]);
   });
 
@@ -231,8 +231,8 @@ describe('simplifyPolyline', () => {
 
   it('returns short polylines and non-positive epsilon unchanged', () => {
     const two = line([v(0, 0), v(1, 1)]);
-    expect(simplifyPolyline(two, 1).vertices.length).toBe(2);
+    expect(simplifyPolyline(two, 1).vertices).toHaveLength(2);
     const poly = line([v(0, 0), v(1, 0), v(2, 0)]);
-    expect(simplifyPolyline(poly, 0).vertices.length).toBe(3);
+    expect(simplifyPolyline(poly, 0).vertices).toHaveLength(3);
   });
 });

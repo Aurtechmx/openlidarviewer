@@ -83,7 +83,7 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
 
     // 2 valid points, not 2 + 4 phantom records.
     expect(cloud.pointCount).toBe(2);
-    expect(cloud.positions.length).toBe(6);
+    expect(cloud.positions).toHaveLength(6);
     expect(cloud.origin).toEqual([10, 20, 5]);
     expect([...cloud.positions]).toEqual([0.5, 0.5, 0.5, 2.5, 2.5, 2.5]);
     // No point sits at the local origin (the phantom signature).

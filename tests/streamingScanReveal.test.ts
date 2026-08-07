@@ -80,10 +80,10 @@ describe('streaming scan reveal', () => {
     const reveals = src.match(/revealStreamingChrome\(/g) ?? [];
 
     expect(attaches.length).toBeGreaterThanOrEqual(2);
-    expect(reveals.length).toBe(attaches.length);
+    expect(reveals).toHaveLength(attaches.length);
 
     // The reveal helper itself is wired exactly once — the shell's deps binding.
-    expect((main.match(/revealStreamingScanChrome\(/g) ?? []).length).toBe(1);
+    expect(main.match(/revealStreamingScanChrome\(/g) ?? []).toHaveLength(1);
 
     // And nothing re-inlines the block. Two hand-written `setCloseEnabled`
     // calls are correct and expected: the static-load path enables it, and
@@ -95,7 +95,7 @@ describe('streaming scan reveal', () => {
     const openScanSrc = readFileSync(resolve(ROOT, 'src/app/openScan.ts'), 'utf8');
     const enables = (main + openScanSrc).match(/dock\.setCloseEnabled\(true\)/g) ?? [];
     const disables = (main + openScanSrc).match(/dock\.setCloseEnabled\(false\)/g) ?? [];
-    expect(enables.length).toBe(1);
-    expect(disables.length).toBe(1);
+    expect(enables).toHaveLength(1);
+    expect(disables).toHaveLength(1);
   });
 });

@@ -197,7 +197,7 @@ describe('scheduleReplay — timer disposal', () => {
 describe('WorkflowSession — event accumulation', () => {
   it('a fresh session reports zero events', () => {
     const session = new WorkflowSession(() => 0);
-    expect(session.events().length).toBe(0);
+    expect(session.events()).toHaveLength(0);
     expect(session.hasContent).toBe(false);
   });
 
@@ -217,7 +217,7 @@ describe('WorkflowSession — event accumulation', () => {
     session.push({ type: 'camera-preset', name: 'top' });
     const snap = session.events();
     snap.length = 0;
-    expect(session.events().length).toBe(1);
+    expect(session.events()).toHaveLength(1);
   });
 });
 
@@ -256,7 +256,7 @@ describe('parseWorkflow — malformed input safety', () => {
     const r = parseWorkflow(json);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      expect(r.workflow.events.length).toBe(2);
+      expect(r.workflow.events).toHaveLength(2);
     }
   });
 });

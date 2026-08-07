@@ -91,7 +91,7 @@ describe('rankActions — sorts + filters action lists', () => {
 
   it('returns every action when the query is empty', () => {
     const ranked = rankActions('', ACTIONS);
-    expect(ranked.length).toBe(ACTIONS.length);
+    expect(ranked).toHaveLength(ACTIONS.length);
   });
 
   it('preserves the input order on an empty query (stable sort)', () => {
@@ -107,7 +107,7 @@ describe('rankActions — sorts + filters action lists', () => {
 
   it('drops actions that do not match at all', () => {
     const ranked = rankActions('snake oil', ACTIONS);
-    expect(ranked.length).toBe(0);
+    expect(ranked).toHaveLength(0);
   });
 
   it('finds an action by its section name', () => {
