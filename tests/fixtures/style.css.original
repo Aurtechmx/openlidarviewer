@@ -3901,6 +3901,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-bc-dialog,
   .olv-wfc-card,
   .olv-left-panels,
+  .olv-analyse-panel,
   .olv-inspector,
   .olv-streaming-panel,
   .olv-catalog-results,
@@ -3910,6 +3911,39 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
     scrollbar-color: var(--hairline-strong) transparent;
   }
 }
+
+/* Always-on thin themed scrollbar (not gated on classic mode) for the tall
+   panels, so a macOS "always show scrollbars" setting — or any non-overlay
+   platform — reads a slim accent bar rather than the chunky OS default. The
+   thumb mirrors the classic-mode style: hairline fill, inset with a transparent
+   border, accent on hover. Chromium/WebKit only; Firefox uses the block above. */
+.olv-analyse-panel::-webkit-scrollbar,
+.olv-streaming-panel::-webkit-scrollbar,
+.olv-inspector::-webkit-scrollbar,
+.olv-measure-panel::-webkit-scrollbar {
+  width: 7px; height: 7px;
+}
+.olv-analyse-panel::-webkit-scrollbar-track,
+.olv-streaming-panel::-webkit-scrollbar-track,
+.olv-inspector::-webkit-scrollbar-track,
+.olv-measure-panel::-webkit-scrollbar-track { background: transparent; }
+.olv-analyse-panel::-webkit-scrollbar-thumb,
+.olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-inspector::-webkit-scrollbar-thumb,
+.olv-measure-panel::-webkit-scrollbar-thumb {
+  background: var(--hairline-strong); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.olv-analyse-panel::-webkit-scrollbar-thumb:hover,
+.olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-inspector::-webkit-scrollbar-thumb:hover,
+.olv-measure-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--accent); background-clip: padding-box;
+}
+.olv-analyse-panel::-webkit-scrollbar-corner,
+.olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-inspector::-webkit-scrollbar-corner,
+.olv-measure-panel::-webkit-scrollbar-corner { background: transparent; }
 .olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-help-body::-webkit-scrollbar,
@@ -4577,6 +4611,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-confidence {
   font-size: var(--text-xs); color: var(--text-faint);
   text-align: right; line-height: 1.35; cursor: help;
+  /* Wrap to a second line instead of clipping at the panel edge when the label
+     ("Viewer measurement · datum resolved") is wider than a narrow panel. */
+  white-space: normal; overflow-wrap: anywhere;
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }

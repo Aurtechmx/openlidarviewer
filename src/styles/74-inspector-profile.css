@@ -544,6 +544,9 @@
 .olv-mp-confidence {
   font-size: var(--text-xs); color: var(--text-faint);
   text-align: right; line-height: 1.35; cursor: help;
+  /* Wrap to a second line instead of clipping at the panel edge when the label
+     ("Viewer measurement · datum resolved") is wider than a narrow panel. */
+  white-space: normal; overflow-wrap: anywhere;
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
