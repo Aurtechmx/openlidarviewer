@@ -84,7 +84,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
    * signal. Returns the Response; throws on transport / timeout / abort.
    */
   async function fetchOnce(url: string, outer?: AbortSignal): Promise<Response> {
-    if (outer?.aborted) throw new Error('aborted');
+    if (outer?.aborted) throw outer.reason ?? new DOMException('EPT fetch aborted before request', 'AbortError');
     const timeoutController = new AbortController();
     const timer = setTimeout(() => timeoutController.abort(), requestTimeoutMs);
     // Compose: abort when either the outer signal or our timeout fires.
@@ -139,7 +139,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
   ): Promise<Response> {
     let lastError: unknown = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      if (outer?.aborted) throw new Error('aborted');
+      if (outer?.aborted) throw outer.reason ?? new DOMException('EPT fetch aborted between retries', 'AbortError');
       let response: Response | null = null;
       // Only the transport / timeout call is inside the try; the status
       // classification below is intentionally outside so a permanent-error
