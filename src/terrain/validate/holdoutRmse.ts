@@ -60,6 +60,13 @@ export interface HoldoutParams {
   readonly cellSizeM: number;
   /** Per-cell aggregation for the DTM. Default `mean`. */
   readonly aggregation?: DtmAggregation;
+  /**
+   * Run the blunder-only despike when rebuilding the train surface. Default
+   * `true`. Set `false` to match a delivered surface built from a trusted
+   * ground classification (despike disabled), so the validated surface is the
+   * one the user receives rather than a despiked variant.
+   */
+  readonly despike?: boolean;
   /** Vertical axis of the source frame. Default `'z'`. */
   readonly verticalAxis?: VerticalAxis;
   /** Density (returns/cell) earning full confidence; default = scene median. */
@@ -283,6 +290,7 @@ export function holdoutValidateDtm(
   });
   const { dtm } = buildSurfaceFromRaster(raster, {
     targetCount: params.targetCount,
+    despike: params.despike,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
