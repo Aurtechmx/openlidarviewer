@@ -2542,7 +2542,9 @@ export class Viewer {
   clipKeptCount(id: string): { kept: number; total: number } | null {
     const entry = this._clouds.get(id);
     if (!entry) return null;
-    const total = entry.cloud.pointCount | 0;
+    // Math.trunc, not `| 0`: pointCount can exceed 2^31 for a large cloud, and a
+    // bitwise wrap would report a negative total (Sonar typescript:S7767).
+    const total = Math.trunc(entry.cloud.pointCount);
     const placed = copyPlacedPositions(entry.cloud, 1, entry.placement);
     const kept = this._clip ? countKept(this._clip, placed) : total;
     return { kept, total };
