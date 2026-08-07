@@ -154,14 +154,14 @@ function describeCoverage(mode: string): { value: string; rating: SupportingMetr
 }
 
 /** Band a metric where a HIGHER value is better into good/fair/poor. NaN → 'poor'. */
-function bandHigh(v: number, goodMin: number, fairMin: number): SupportingMetric['rating'] {
+export function bandHigh(v: number, goodMin: number, fairMin: number): SupportingMetric['rating'] {
   if (v >= goodMin) return 'good';
   if (v >= fairMin) return 'fair';
   return 'poor';
 }
 
 /** Band a metric where a LOWER value is better into good/fair/poor. NaN → 'poor'. */
-function bandLow(v: number, goodMax: number, fairMax: number): SupportingMetric['rating'] {
+export function bandLow(v: number, goodMax: number, fairMax: number): SupportingMetric['rating'] {
   if (v <= goodMax) return 'good';
   if (v <= fairMax) return 'fair';
   return 'poor';
