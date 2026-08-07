@@ -260,15 +260,16 @@
   .olv-mp-stations-wrap,
   .olv-shortcuts-list {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in srgb, var(--hairline) 50%, var(--panel)) transparent;
+    scrollbar-color: color-mix(in srgb, var(--accent) 55%, var(--hairline)) transparent;
   }
 }
 
 /* Always-on thin themed scrollbar (not gated on classic mode) for the tall
    panels, so a macOS "always show scrollbars" setting — or any non-overlay
    platform — reads a slim accent bar rather than the chunky OS default. The
-   thumb mirrors the classic-mode style: hairline fill, inset with a transparent
-   border, accent on hover. Chromium/WebKit only; Firefox uses the block above. */
+   thumb mirrors the classic-mode style: accent-tinted fill, inset with a
+   transparent border, full accent on hover. Chromium/WebKit only; Firefox
+   uses the block above. */
 .olv-analyse-panel::-webkit-scrollbar,
 .olv-streaming-panel::-webkit-scrollbar,
 .olv-inspector::-webkit-scrollbar,
@@ -283,7 +284,7 @@
 .olv-streaming-panel::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
 .olv-measure-panel::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--hairline) 50%, var(--panel)); border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 55%, var(--hairline)); border-radius: 999px;
   border: 2px solid transparent; background-clip: padding-box;
 }
 .olv-analyse-panel::-webkit-scrollbar-thumb:hover,
