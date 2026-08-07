@@ -53,6 +53,24 @@ export const FULL_RES_CLASS_EDITS_REFUSAL =
   'export them at display resolution, or untick "Include classification" to ' +
   'export the full scan without them.';
 
+/**
+ * The same refusal, for the case where the edits arrive DURING the export.
+ *
+ * The gate above is evaluated when the user presses Export, but a full-res
+ * export then spends seconds re-decoding the source off-thread with the
+ * reclassify tools still live. An edit made in that window passes the gate and
+ * is absent from the file, which is the exact outcome this module exists to
+ * refuse — so the decision is re-taken after the decode and, when it flips, the
+ * user is told why nothing was written rather than being handed a lossy file
+ * with a success message.
+ */
+export const FULL_RES_CLASS_EDITS_MID_EXPORT_REFUSAL =
+  'Points were reclassified while the full-resolution re-decode was running, so '
+  + 'nothing was written — the file would have carried the re-decoded classes and '
+  + 'silently dropped those edits. Untick "convert at full resolution" to export '
+  + 'them at display resolution, or untick "Include classification" to export the '
+  + 'full scan without them.';
+
 /** A full-res export decision: allowed, or refused with a reason. */
 export interface FullResClassExportDecision {
   readonly allowed: boolean;

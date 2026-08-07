@@ -90,7 +90,7 @@ describe('sanitizeAndRecenter — attribute lockstep', () => {
     });
 
     expect(result.excludedCount).toBe(1);
-    expect(result.positions.length).toBe(9);
+    expect(result.positions).toHaveLength(9);
     // Origin is the floored min of the SURVIVORS.
     expect(result.origin).toEqual([10, 10, 10]);
     expect(Array.from(result.positions)).toEqual([0, 0, 0, 2, 2, 2, 3, 3, 3]);
@@ -143,7 +143,7 @@ describe('sanitizeAndRecenter — which coordinates are excluded', () => {
       coords[3 + axis] = bad;
       const result = sanitizeAndRecenter(coords, {});
       expect(result.excludedCount).toBe(1);
-      expect(result.positions.length).toBe(3);
+      expect(result.positions).toHaveLength(3);
       expect(Array.from(result.positions)).toEqual([0, 0, 0]);
     }
   });
@@ -207,7 +207,7 @@ describe('sanitizeAndRecenter — reporting and refusal', () => {
     // Nothing was excluded, so there is nothing to warn about; `parseBuffer`
     // already refuses a zero-point cloud with its own message.
     const result = sanitizeAndRecenter(new Float64Array(0), {});
-    expect(result.positions.length).toBe(0);
+    expect(result.positions).toHaveLength(0);
     expect(result.warning).toBeUndefined();
   });
 });

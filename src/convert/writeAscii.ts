@@ -29,9 +29,34 @@ function horizontalPrecision(precision: number, geographic?: boolean): number {
   return geographic === true ? Math.max(precision, 7) : precision;
 }
 
-/** Write space-delimited `x y z` (+ `r g b` when the cloud has colour). */
-export function writeXyz(g: GlobalPoints, precision = 3, geographic?: boolean): string {
+/**
+ * The `# datum-transform:` header comment an APPROXIMATE reproject stamps into
+ * an ASCII file, or null when there is nothing to disclose. Mirrors the LAS
+ * Text Area Description VLR: a degenerate/identity datum leg is proj4's honest
+ * best-effort, but the metres-to-tens-of-metres approximation must ride WITH
+ * the coordinates, not stay in the UI report. The caller supplies the full
+ * note (e.g. `APPROXIMATE — …`); ASCII text is UTF-8, so its glyphs are kept
+ * verbatim (unlike the 7-bit LAS VLR).
+ */
+function datumTransformComment(note: string | null | undefined): string | null {
+  const t = note?.trim();
+  return t ? `# datum-transform: ${t}` : null;
+}
+
+/**
+ * Write space-delimited `x y z` (+ `r g b` when the cloud has colour). A
+ * non-empty `datumNote` prepends a `# datum-transform:` comment; `loadXyz`
+ * skips `#` lines, so the note never corrupts the point list.
+ */
+export function writeXyz(
+  g: GlobalPoints,
+  precision = 3,
+  geographic?: boolean,
+  datumNote?: string | null,
+): string {
   const lines: string[] = [];
+  const note = datumTransformComment(datumNote);
+  if (note) lines.push(note);
   const c = g.colors;
   const h = horizontalPrecision(precision, geographic);
   for (let i = 0; i < g.count; i++) {
@@ -42,7 +67,9 @@ export function writeXyz(g: GlobalPoints, precision = 3, geographic?: boolean): 
       lines.push(base);
     }
   }
-  return lines.join('\n') + (g.count > 0 ? '\n' : '');
+  // Trailing newline whenever anything was written (a header-only file still
+  // ends in a newline). With no note this is exactly `g.count > 0` as before.
+  return lines.join('\n') + (lines.length > 0 ? '\n' : '');
 }
 
 /**
@@ -58,6 +85,13 @@ export function writeAsc(
     epsg?: number | null;
     /** True when the output frame is geographic (lon/lat degrees). */
     geographic?: boolean;
+    /**
+     * Full APPROXIMATE-datum note (e.g. `APPROXIMATE — …`) for a reproject whose
+     * datum leg is only best-effort. Emitted as a `# datum-transform:` comment
+     * beside the `# crs:` line; absent/empty ⇒ no line (the exact path stays
+     * byte-clean).
+     */
+    datumNote?: string | null;
   } = {},
 ): string {
   const precision = opts.precision ?? 3;
@@ -67,6 +101,8 @@ export function writeAsc(
   if (opts.epsg != null) header.push(`# crs: EPSG:${opts.epsg}`);
   else if (opts.crsName) header.push(`# crs: ${opts.crsName}`);
   else header.push('# crs: unknown (local coordinates)');
+  const datumComment = datumTransformComment(opts.datumNote);
+  if (datumComment) header.push(datumComment);
   header.push(`# columns: x y z${hasI ? ' intensity' : ''}`);
 
   const lines: string[] = [header.join('\n')];

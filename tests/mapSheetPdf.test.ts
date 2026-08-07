@@ -373,7 +373,7 @@ describe('buildMapSheetPdf — purpose deliverable content', () => {
     expect(withApx.length).toBeGreaterThan(noApx.length);
     // And both differ from the no-purpose sheet.
     const plain = await buildMapSheetPdf({ model, labels: [], provenance: PROV });
-    expect(noApx.length).not.toBe(plain.length);
+    expect(noApx).not.toHaveLength(plain.length);
   });
 
   it('produces different bytes for two different purposes (purposes are real)', async () => {

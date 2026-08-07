@@ -263,7 +263,7 @@ test('shrinking the budget evicts the surplus resident nodes', async () => {
   scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
   await drain(scheduler);
 
-  expect(evicted.length).toBe(4);
+  expect(evicted).toHaveLength(4);
   expect(cloud.counts().resident).toBe(1);
   expect(cloud.residentPointCount).toBe(1000); // the depth-0 root node
 });
@@ -387,7 +387,7 @@ test('memory pressure evicts deferred nodes immediately, bypassing hysteresis', 
   scheduler.setBudgets({ pointBudget: 1_000, maxConcurrentDecodes: 4 });
   scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
   await drain(scheduler);
-  expect(evicted.length).toBe(4);
+  expect(evicted).toHaveLength(4);
   expect(cloud.counts().resident).toBe(1);
 });
 

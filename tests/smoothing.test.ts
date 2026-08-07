@@ -24,7 +24,7 @@ const line = (vertices: ContourVertex[], closed = false): ContourPolyline => ({
 describe('chaikinSmooth', () => {
   it('rounds a corner on an all-confident open line', () => {
     const out = chaikinSmooth(line([v(0, 0), v(1, 1), v(2, 0)]), { iterations: 1 });
-    expect(out.vertices.length).toBe(4); // corner replaced by two cut points
+    expect(out.vertices).toHaveLength(4); // corner replaced by two cut points
     // The original corner vertex must no longer be present exactly.
     expect(out.vertices.some((p) => p.x === 1 && p.y === 1)).toBe(false);
     // Endpoints are pinned.
@@ -54,11 +54,11 @@ describe('chaikinSmooth', () => {
       { iterations: 1 },
     );
     expect(out.closed).toBe(true);
-    expect(out.vertices.length).toBe(8); // 4 corners → 2 points each
+    expect(out.vertices).toHaveLength(8); // 4 corners → 2 points each
   });
 
   it('returns short polylines unchanged', () => {
     const out = chaikinSmooth(line([v(0, 0), v(1, 1)]), { iterations: 3 });
-    expect(out.vertices.length).toBe(2);
+    expect(out.vertices).toHaveLength(2);
   });
 });

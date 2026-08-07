@@ -77,7 +77,7 @@ describe('formatVerticalAccuracy', () => {
 
   it('returns a single honest line when there is no measurement', () => {
     const lines = formatVerticalAccuracy(report(Number.NaN, Number.NaN, 0));
-    expect(lines.length).toBe(1);
+    expect(lines).toHaveLength(1);
     expect(lines[0]).toMatch(/not enough ground points/i);
   });
 });

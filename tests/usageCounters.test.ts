@@ -58,7 +58,7 @@ describe('usageCounters — basic increment + snapshot', () => {
   it('records a new counter on first increment', () => {
     increment('scan-open', 'laz');
     const rows = snapshot();
-    expect(rows.length).toBe(1);
+    expect(rows).toHaveLength(1);
     expect(rows[0].key).toBe('scan-open:laz');
     expect(rows[0].count).toBe(1);
     expect(rows[0].category).toBe('scan-open');
@@ -70,7 +70,7 @@ describe('usageCounters — basic increment + snapshot', () => {
     increment('measurement', 'distance');
     increment('measurement', 'distance');
     const rows = snapshot();
-    expect(rows.length).toBe(1);
+    expect(rows).toHaveLength(1);
     expect(rows[0].count).toBe(3);
   });
 
@@ -79,7 +79,7 @@ describe('usageCounters — basic increment + snapshot', () => {
     increment('scan-open', 'copc');
     increment('scan-open', 'ply');
     const rows = snapshot();
-    expect(rows.length).toBe(3);
+    expect(rows).toHaveLength(3);
     expect(rows.map((r) => r.subcategory).sort()).toEqual(['copc', 'laz', 'ply']);
   });
 
@@ -123,7 +123,7 @@ describe('usageCounters — privacy contract', () => {
     // rather than a filesystem leak.
     increment('scan-open', 'My-Survey-File.LAS');
     const rows = snapshot();
-    expect(rows.length).toBe(1);
+    expect(rows).toHaveLength(1);
     // 'my-survey-file.las' — lowercased, hyphens + dots kept, no path
     // separator possible because '/' is stripped.
     expect(rows[0].subcategory).toBe('my-survey-file.las');
@@ -132,15 +132,15 @@ describe('usageCounters — privacy contract', () => {
   it('caps subcategory length at 32 characters', () => {
     increment('scan-open', 'a'.repeat(64));
     const rows = snapshot();
-    expect(rows.length).toBe(1);
-    expect(rows[0].subcategory.length).toBe(32);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].subcategory).toHaveLength(32);
   });
 
   it('drops an empty subcategory rather than recording a blank row', () => {
     increment('scan-open', '');
     increment('scan-open', '!!!@@@###'); // sanitises to ''
     const rows = snapshot();
-    expect(rows.length).toBe(0);
+    expect(rows).toHaveLength(0);
   });
 
   it('never writes anything outside the olv.usage.v1 storage key', () => {
@@ -171,7 +171,7 @@ describe('usageCounters — LRU cap', () => {
     vi.useRealTimers();
 
     const rows = snapshot();
-    expect(rows.length).toBe(200);
+    expect(rows).toHaveLength(200);
     // The oldest entries are dropped; key-0 is gone, key-249 is in.
     const subs = rows.map((r) => r.subcategory);
     expect(subs).toContain('key-249');
@@ -183,9 +183,9 @@ describe('usageCounters — reset', () => {
   it('reset() wipes every row', () => {
     increment('scan-open', 'laz');
     increment('measurement', 'distance');
-    expect(snapshot().length).toBe(2);
+    expect(snapshot()).toHaveLength(2);
     reset();
-    expect(snapshot().length).toBe(0);
+    expect(snapshot()).toHaveLength(0);
   });
 
   it('reset() removes the storage key entirely', () => {
@@ -236,7 +236,7 @@ describe('usageCounters — defensive loading', () => {
       ]),
     );
     const rows = snapshot();
-    expect(rows.length).toBe(1);
+    expect(rows).toHaveLength(1);
     expect(rows[0].count).toBe(5);
   });
 });

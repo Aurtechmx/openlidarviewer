@@ -1261,7 +1261,7 @@ describe('session resource ceilings (hostile / corrupt input)', () => {
       `"measurements":[{"kind":"distance","points":${pointsJson}}]}`;
     const session = parseSession(doc);
     expect(session.measurements).toHaveLength(1);
-    expect(session.measurements[0].points.length).toBe(MAX_MEASUREMENT_POINTS);
+    expect(session.measurements[0].points).toHaveLength(MAX_MEASUREMENT_POINTS);
   });
 
   it('caps an annotation title and note length', () => {
@@ -1274,7 +1274,7 @@ describe('session resource ceilings (hostile / corrupt input)', () => {
     ];
     const session = parseSession(JSON.stringify(baseDoc({ annotations })));
     expect(session.annotations).toHaveLength(1);
-    expect(session.annotations[0].title.length).toBe(MAX_ANNOTATION_TITLE);
+    expect(session.annotations[0].title).toHaveLength(MAX_ANNOTATION_TITLE);
     expect(session.annotations[0].note?.length).toBe(MAX_ANNOTATION_NOTE);
   });
 
