@@ -55,7 +55,7 @@ export function formatInfo(format: SourceFormat): FormatInfo {
 
 /** Whether a string names a registered, decodable format. */
 export function isRegisteredFormat(format: string): format is SourceFormat {
-  return Object.prototype.hasOwnProperty.call(FORMAT_INFO, format);
+  return Object.hasOwn(FORMAT_INFO, format);
 }
 
 /** Every registered format, for tests and diagnostics. */

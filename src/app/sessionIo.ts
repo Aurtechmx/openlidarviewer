@@ -168,8 +168,14 @@ export function declaredSpatialFromStreaming(cloud: StreamingScanSource): Declar
  */
 export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpatialFacts {
   const crs = cloud.metadata?.crs;
+  let upAxis: 'y' | 'z' | undefined;
+  if (cloud.sourceFormat) {
+    upAxis = isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';
+  } else {
+    upAxis = undefined;
+  }
   return {
-    upAxis: cloud.sourceFormat ? (isZUpFormat(cloud.sourceFormat) ? 'z' : 'y') : undefined,
+    upAxis,
     epsg: crs?.epsg,
     linearUnit: crs?.linearUnit,
   };
@@ -330,8 +336,9 @@ export async function importSession(
           // scene until the user opts in. "Apply anyway" re-imports with the
           // check skipped, so the same restore proceeds on their confirmation.
           const why = match.reasons[0] ?? '';
+          const whyDetail = why ? ` (${why})` : '';
           deps.showToast(
-            `This session's scan couldn't be fully verified${why ? ` (${why})` : ''}. ` +
+            `This session's scan couldn't be fully verified${whyDetail}. ` +
               'Applying it may place its measurements on the wrong scan.',
             { label: 'Apply anyway', onClick: () => void importSession(file, { skipScanConfirm: true }, deps) },
           );
@@ -425,8 +432,7 @@ export async function importSession(
     // author's CRS override so an Evidence Capsule round-trips without
     // re-prompting; a session that declared no usable CRS leaves the file's own.
     if (
-      session.crs &&
-      session.crs.epsg != null &&
+      session.crs?.epsg != null &&
       (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
     ) {
       deps.setCrsOverride({

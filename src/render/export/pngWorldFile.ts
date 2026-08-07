@@ -64,7 +64,7 @@ export function buildWorldFileText(params: WorldFileParams): string | null {
   }
   const vals = [extent.minX, extent.minY, extent.maxX, extent.maxY];
   if (vals.some((v) => !Number.isFinite(v))) return null;
-  if (!(extent.maxX > extent.minX) || !(extent.maxY > extent.minY)) return null;
+  if (extent.maxX <= extent.minX || extent.maxY <= extent.minY) return null;
 
   const ox = params.worldOrigin?.x ?? 0;
   const oy = params.worldOrigin?.y ?? 0;
@@ -74,7 +74,7 @@ export function buildWorldFileText(params: WorldFileParams): string | null {
   const cx = ox + extent.minX + pixelW / 2;
   const cy = oy + extent.maxY - pixelH / 2;
   // One value per line, trailing newline — the format GDAL/QGIS write & read.
-  return [pixelW, 0, 0, -pixelH, cx, cy].map((v) => String(v)).join('\n') + '\n';
+  return [pixelW, 0, 0, -pixelH, cx, cy].map(String).join('\n') + '\n';
 }
 
 export interface StudioPngPackageParams extends WorldFileParams {

@@ -86,7 +86,15 @@ export function buildSamplingPlan(
   const eligible = nodes
     .filter((n) => n.depth <= maxDepth)
     .slice()
-    .sort((a, b) => a.depth - b.depth || b.pointCount - a.pointCount || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    .sort((a, b) => {
+      const byDepth = a.depth - b.depth;
+      if (byDepth !== 0) return byDepth;
+      const byCount = b.pointCount - a.pointCount;
+      if (byCount !== 0) return byCount;
+      if (a.id < b.id) return -1;
+      if (a.id > b.id) return 1;
+      return 0;
+    });
 
   const nodeIds: string[] = [];
   let sampledPoints = 0;

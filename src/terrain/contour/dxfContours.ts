@@ -108,8 +108,7 @@ export function dxfContours(
 
   const out: string[] = [];
   const pair = (code: number, value: string | number) => {
-    out.push(String(code));
-    out.push(String(value));
+    out.push(String(code), String(value));
   };
 
   // Provenance comments (group code 999 — ignored by CAD readers) so the file is

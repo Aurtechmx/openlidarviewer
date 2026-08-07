@@ -170,7 +170,7 @@ export function rasterizeDtm(
 
   const { originH1, originH2, cols, rows, cellSizeM } = grid;
   const nCells = cols * rows;
-  const z = new Float32Array(nCells).fill(NaN);
+  const z = new Float32Array(nCells).fill(Number.NaN);
   const counts = new Uint32Array(nCells);
   const accum = new Float64Array(nCells); // sum for mean
   // Per-cell value lists, only allocated for list-needing modes. Sparse: a cell

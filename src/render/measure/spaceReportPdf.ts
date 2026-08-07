@@ -22,10 +22,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
-import {
-  buildSpaceReportContent,
-  type SpaceReportContent,
-} from '../../terrain/space/spaceReportLayout';
+import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 
@@ -130,7 +127,6 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
       y = drawWrapped(page, font, `- ${c}`, M, y, PW - 2 * M, 8.5, DIM);
       y -= 3;
     }
-    y -= 8;
   }
 
   // ── Provenance footer ──
@@ -351,4 +347,4 @@ function drawFloorPlan(
   });
 }
 
-export type { SpaceReportContent };
+export type { SpaceReportContent } from '../../terrain/space/spaceReportLayout';

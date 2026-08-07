@@ -159,11 +159,11 @@ export function kmlAltitudeMode(
 /** Escape text for XML content / attribute values (& < > " '). */
 function esc(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
+    .replaceAll(/&/g, '&amp;')
+    .replaceAll(/</g, '&lt;')
+    .replaceAll(/>/g, '&gt;')
+    .replaceAll(/"/g, '&quot;')
+    .replaceAll(/'/g, '&apos;');
 }
 
 /**
@@ -243,10 +243,14 @@ function sourceElevationLine(input: KmlExportInput, sourceZ: number): string {
   // geometry that had correctly refused to carry an altitude at all. The
   // reader takes the number and its unit together, so an honest ordinate and
   // a guessed unit is not half right.
-  const unit =
-    f === undefined ? 'source vertical units (scale unknown)'
-    : Math.abs(f - 1) < 1e-9 ? 'metres'
-    : `source vertical units (1 unit = ${fmt(f)} m)`;
+  let unit: string;
+  if (f === undefined) {
+    unit = 'source vertical units (scale unknown)';
+  } else if (Math.abs(f - 1) < 1e-9) {
+    unit = 'metres';
+  } else {
+    unit = `source vertical units (1 unit = ${fmt(f)} m)`;
+  }
   const datum = input.verticalDatum?.trim() || 'undeclared';
   return `Source elevation: ${fmt(sourceZ)} ${unit}, vertical datum: ${datum}.`;
 }
@@ -482,7 +486,7 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
     );
   }
   const first = ring[0];
-  const last = ring[ring.length - 1];
+  const last = ring.at(-1)!;
   if (first[0] !== last[0] || first[1] !== last[1]) {
     throw new ScanFootprintError(
       'The scan outline does not close: its last corner must repeat its first.',
@@ -491,6 +495,7 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
   const crs = input.crsName ?? 'unknown CRS';
   const coords = ring.map(([lon, lat]) => coord([lon, lat, 0], false)).join(' ');
   const label = `${input.name} scan area`;
+  const rectLabel = `${label} (bounding rectangle)`;
   const lines = [
     'Bounding rectangle of the scanned area, reprojected to WGS84 longitude/latitude.',
     `Source CRS: ${crs}. Extent read from ${input.extentBasis}.`,
@@ -505,7 +510,7 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
     description(lines),
     POLYGON_STYLE,
     '<Placemark>',
-    `<name>${esc(`${label} (bounding rectangle)`)}</name>`,
+    `<name>${esc(rectLabel)}</name>`,
     description(lines),
     POLYGON_STYLE_URL,
     '<Polygon>',

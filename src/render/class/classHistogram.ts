@@ -24,8 +24,8 @@ export function countClasses(
   buf: Uint8Array | Uint16Array | Float32Array,
 ): Map<number, number> {
   const counts = new Map<number, number>();
-  for (let i = 0; i < buf.length; i++) {
-    const code = Math.floor(buf[i]) & 0xff;
+  for (const value of buf) {
+    const code = Math.floor(value) & 0xff;
     counts.set(code, (counts.get(code) ?? 0) + 1);
   }
   return counts;

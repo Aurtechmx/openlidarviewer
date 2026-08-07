@@ -153,7 +153,7 @@ export interface EvictionPlanInput {
 export function resolveEvictionHysteresis(
   overrides: Partial<EvictionHysteresis> | undefined,
 ): EvictionHysteresis {
-  const merged = { ...DEFAULT_EVICTION_HYSTERESIS, ...(overrides ?? {}) };
+  const merged = { ...DEFAULT_EVICTION_HYSTERESIS, ...overrides };
   const triggerRatio = Math.max(1, finiteOr(merged.triggerRatio, DEFAULT_EVICTION_HYSTERESIS.triggerRatio));
   const requested = Math.max(0, finiteOr(merged.releaseRatio, DEFAULT_EVICTION_HYSTERESIS.releaseRatio));
   // Keep a real band between the two edges — 5 % of the trigger, or the whole
@@ -242,12 +242,15 @@ function byEvictionPriority(
 ): number {
   const ap = isDwellProtected(a, nowMs, minVisibleDwellMs) ? 1 : 0;
   const bp = isDwellProtected(b, nowMs, minVisibleDwellMs) ? 1 : 0;
+  let idOrder = 0;
+  if (a.id < b.id) idOrder = -1;
+  else if (a.id > b.id) idOrder = 1;
   return (
     evictionRank(b) - evictionRank(a) ||
     ap - bp ||
     b.depth - a.depth ||
     b.distance - a.distance ||
-    (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+    idOrder
   );
 }
 

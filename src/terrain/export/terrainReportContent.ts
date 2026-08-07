@@ -152,7 +152,9 @@ function fmtGenerated(iso: string): string {
 
 /** Map a workflow grade to its glyph mark. */
 function markFor(status: WorkflowItem['status']): TerrainReportWorkflow['mark'] {
-  return status === 'good' ? '✓' : status === 'caution' ? '⚠' : '✕';
+  if (status === 'good') return '✓';
+  if (status === 'caution') return '⚠';
+  return '✕';
 }
 
 /**
@@ -321,12 +323,11 @@ export function buildTerrainReportContent(
   // ── Quality Metrics ─────────────────────────────────────────────────────
   // ASPRS / USGS 3DEP vocabulary, honestly null-able: when the run measured no
   // RMSEz the whole block reads em-dash / unknown rather than a fabricated zero.
+  const qlFallback = acc && acc.qualityLevel !== 'unknown' ? acc.qualityLevel : DASH;
   const qlValue =
     hasAcc && provenance.accuracy && provenance.accuracy.usgsQualityLevel !== 'unknown'
       ? provenance.accuracy.usgsQualityLevel
-      : acc && acc.qualityLevel !== 'unknown'
-        ? acc.qualityLevel
-        : DASH;
+      : qlFallback;
   // Phase 4 honesty figures, single-sourced from the same result the panel
   // shows. ASCII only (the PDF renderer strips non-Latin1), so "<=" not "≤".
   const pctOf = (x: number): string => `${Math.round(x * 100)}%`;

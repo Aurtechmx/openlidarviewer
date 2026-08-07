@@ -210,21 +210,24 @@ export function buildInspectionSummary(
   const findings: ReportFinding[] = [];
 
   // 1. Coverage / scale.
-  findings.push({
-    label: 'Coverage',
-    value: formatArea(area),
-    detail: `${formatCount(metadata.sourcePointCount)} captured.`,
-    tier: 'info',
-  });
-
-  // 2. Point density — the one genuinely quantitative finding.
-  findings.push(densityFinding(metadata, qlApplies));
+  findings.push(
+    {
+      label: 'Coverage',
+      value: formatArea(area),
+      detail: `${formatCount(metadata.sourcePointCount)} captured.`,
+      tier: 'info',
+    },
+    // 2. Point density — the one genuinely quantitative finding.
+    densityFinding(metadata, qlApplies),
+  );
 
   // 3. Attribute channels.
   const channels: string[] = [];
-  channels.push(metadata.hasClassification ? 'classification' : 'no classification');
-  channels.push(metadata.hasIntensity ? 'intensity' : 'no intensity');
-  channels.push(metadata.hasRgb ? 'RGB' : 'no RGB');
+  channels.push(
+    metadata.hasClassification ? 'classification' : 'no classification',
+    metadata.hasIntensity ? 'intensity' : 'no intensity',
+    metadata.hasRgb ? 'RGB' : 'no RGB',
+  );
   findings.push({
     label: 'Attributes',
     value: channels.join(', '),

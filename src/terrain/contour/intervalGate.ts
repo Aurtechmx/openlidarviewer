@@ -140,7 +140,7 @@ export function gateIntervals(params: IntervalGateParams): IntervalGateResult {
     }
   }
   if (recommendedM == null && supported.length > 0) {
-    recommendedM = supported[supported.length - 1];
+    recommendedM = supported.at(-1)!;
   }
 
   return { options, recommendedM, warnings };

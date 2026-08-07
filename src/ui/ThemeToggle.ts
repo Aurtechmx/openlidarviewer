@@ -138,6 +138,6 @@ export class ThemeToggle {
 function nextTheme(current: ThemeName): ThemeName {
   const i = THEME_ORDER.indexOf(current);
   // Unknown value (shouldn't happen) falls back to the start of the cycle.
-  const at = i < 0 ? 0 : i;
+  const at = Math.max(0, i);
   return THEME_ORDER[(at + 1) % THEME_ORDER.length];
 }

@@ -103,7 +103,7 @@ export function verticalAxisHintForSources(
 function readAscii(buffer: ArrayBuffer, count: number): string {
   const view = new Uint8Array(buffer, 0, Math.min(count, buffer.byteLength));
   let out = '';
-  for (let i = 0; i < view.length; i++) out += String.fromCharCode(view[i]);
+  for (const b of view) out += String.fromCharCode(b);
   return out;
 }
 

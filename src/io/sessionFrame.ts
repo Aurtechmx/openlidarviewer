@@ -98,7 +98,7 @@ export interface SessionFrameInput {
   readonly layers: readonly SessionFrameLayerInput[];
 }
 
-const AXES: readonly FrameUpAxis[] = ['x', 'y', 'z'];
+const AXES: ReadonlySet<FrameUpAxis> = new Set(['x', 'y', 'z']);
 
 /**
  * Cap on the number of layer records a project frame may declare. One record per
@@ -170,7 +170,7 @@ export function validateSessionProjectFrame(frame: unknown): string[] {
     if (typeof l.sourceName !== 'string') {
       reasons.push(`${named} has no source name`);
     }
-    if (typeof l.upAxis !== 'string' || !AXES.includes(l.upAxis as FrameUpAxis)) {
+    if (typeof l.upAxis !== 'string' || !AXES.has(l.upAxis as FrameUpAxis)) {
       reasons.push(`${named} declares up axis ${JSON.stringify(l.upAxis)}; expected "x", "y" or "z"`);
     }
     const sourceOrigin = l.sourceOrigin;

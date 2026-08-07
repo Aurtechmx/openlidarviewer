@@ -59,11 +59,14 @@ export function georefStatus(
   // A horizontally-georeferenced scan usually carries ABSOLUTE Z (e.g. 65–85 m),
   // so "relative" is wrong there — the datum is simply not declared. Reserve
   // "Relative heights" for the truly floating case (no horizontal reference).
-  const heightLabel = datumKnown
-    ? 'Real-world elevation'
-    : crsKnown
-      ? 'Datum not declared'
-      : 'Relative heights';
+  let heightLabel: string;
+  if (datumKnown) {
+    heightLabel = 'Real-world elevation';
+  } else if (crsKnown) {
+    heightLabel = 'Datum not declared';
+  } else {
+    heightLabel = 'Relative heights';
+  }
 
   let tone: GeorefTone;
   let headline: string;
@@ -85,14 +88,16 @@ export function georefStatus(
   // technical fact; a plain consequence sentence follows for everyone else.
   const crsPart = crsKnown ? `Position: ${names.crsName?.trim() || 'defined'}` : 'Position: none (no CRS)';
   const datumPart = datumKnown ? `Height: ${names.datumName?.trim() || 'defined'}` : 'Height: none (no vertical datum)';
-  const consequence =
-    crsKnown && datumKnown
-      ? 'Coordinates and heights are real-world values.'
-      : !crsKnown && !datumKnown
-        ? 'The scan can’t be placed on a map and its heights are relative only.'
-        : crsKnown
-          ? 'The scan is georeferenced horizontally, but its vertical datum isn’t declared — heights aren’t tied to a known reference.'
-          : 'Heights are referenced, but the scan can’t be placed on a map (no CRS).';
+  let consequence: string;
+  if (crsKnown && datumKnown) {
+    consequence = 'Coordinates and heights are real-world values.';
+  } else if (!crsKnown && !datumKnown) {
+    consequence = 'The scan can’t be placed on a map and its heights are relative only.';
+  } else if (crsKnown) {
+    consequence = 'The scan is georeferenced horizontally, but its vertical datum isn’t declared — heights aren’t tied to a known reference.';
+  } else {
+    consequence = 'Heights are referenced, but the scan can’t be placed on a map (no CRS).';
+  }
   const tooltip = `${crsPart} · ${datumPart}. ${consequence}`;
 
   return { tone, headline, positionKnown: crsKnown, heightKnown: datumKnown, positionLabel, heightLabel, tooltip };

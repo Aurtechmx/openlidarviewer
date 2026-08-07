@@ -46,9 +46,9 @@ export function formatShortcutKeys(keys: string | undefined): string {
       .replace(/\bCmd\b/g, '⌘')
       .replace(/\bShift\b/g, '⇧')
       .replace(/\bAlt\b/g, '⌥')
-      .replace(/-/g, ' ');
+      .replaceAll('-', ' ');
   }
-  return keys.replace(/\bCmd\b/g, 'Ctrl').replace(/-/g, '+');
+  return keys.replace(/\bCmd\b/g, 'Ctrl').replaceAll('-', '+');
 }
 
 /**

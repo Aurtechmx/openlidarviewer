@@ -155,12 +155,22 @@ export function snapChainToAxes(
       // End segments next to a FIXED anchor take that vertex's coordinate as
       // their line (the anchor cannot move); free ends and interior segments
       // settle on the segment mean.
-      target[i] =
-        i === 0 && fixStart ? y1 : i === nSeg - 1 && fixEnd ? y2 : (y1 + y2) / 2;
+      if (i === 0 && fixStart) {
+        target[i] = y1;
+      } else if (i === nSeg - 1 && fixEnd) {
+        target[i] = y2;
+      } else {
+        target[i] = (y1 + y2) / 2;
+      }
     } else if (dV <= tol) {
       cls[i] = 'v';
-      target[i] =
-        i === 0 && fixStart ? x1 : i === nSeg - 1 && fixEnd ? x2 : (x1 + x2) / 2;
+      if (i === 0 && fixStart) {
+        target[i] = x1;
+      } else if (i === nSeg - 1 && fixEnd) {
+        target[i] = x2;
+      } else {
+        target[i] = (x1 + x2) / 2;
+      }
     } else {
       cls[i] = 'o';
       target[i] = 0;
@@ -191,7 +201,7 @@ export function snapChainToAxes(
   // Drop interior vertices the snap made (near-)duplicate.
   const dedup: Array<readonly [number, number]> = [out[0]];
   for (let i = 1; i < out.length; i++) {
-    const last = dedup[dedup.length - 1];
+    const last = dedup.at(-1)!;
     const isLast = i === out.length - 1;
     if (isLast || Math.hypot(out[i][0] - last[0], out[i][1] - last[1]) > 1e-9) dedup.push(out[i]);
   }
@@ -322,9 +332,9 @@ export function buildWallGraph(
     for (let steps = 0; steps < n && cur !== undefined && cur !== start; steps++) {
       visited[cur] = 1;
       cells.push(cur);
-      const nb = skelNeighbours(skeleton, cols, rows, cur).filter((k) => k !== prev && !visited[k]);
+      const nb = skelNeighbours(skeleton, cols, rows, cur).find((k) => k !== prev && !visited[k]);
       prev = cur;
-      cur = nb[0] ?? skelNeighbours(skeleton, cols, rows, prev).find((k) => k === start) ?? -1;
+      cur = nb ?? skelNeighbours(skeleton, cols, rows, prev).find((k) => k === start) ?? -1;
       if (cur === -1) break;
     }
     cells.push(start); // close the loop on its anchor
@@ -332,7 +342,7 @@ export function buildWallGraph(
   }
 
   // ── Per-edge attributes + straightening ──
-  const raw = opts.raw && opts.raw.cols === cols && opts.raw.rows === rows ? opts.raw : null;
+  const raw = opts.raw?.cols === cols && opts.raw?.rows === rows ? opts.raw : null;
   const observedAt = (i: number): boolean => {
     if (!raw) return true;
     const r = (i / cols) | 0;

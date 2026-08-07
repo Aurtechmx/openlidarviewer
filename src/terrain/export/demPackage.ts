@@ -222,9 +222,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
 
   const cov = (() => {
     let measured = 0; let interp = 0; const total = dtm.coverage.length;
-    for (let i = 0; i < dtm.coverage.length; i++) {
-      if (dtm.coverage[i] === 2) measured++;
-      else if (dtm.coverage[i] === 1) interp++;
+    for (const c of dtm.coverage) {
+      if (c === 2) measured++;
+      else if (c === 1) interp++;
     }
     return { measured, interp, total };
   })();
@@ -283,12 +283,12 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     ``,
+    `Quality gate`,
   );
 
   // Quality gate — the unified verdicts come from the provenance block below;
   // here we surface the gate's own per-axis REASON lists (surface + export
   // georeferencing) so a preview / blocked export explains itself in full.
-  lines.push(`Quality gate`);
   if (reasons.length) {
     lines.push(`  Surface reasons`);
     for (const r of reasons) lines.push(`    - ${r}`);
@@ -300,9 +300,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   if (!reasons.length && !exportReasons.length) {
     lines.push(`  (no gate reasons — see Export readiness in Provenance below)`);
   }
-  lines.push(``);
-
-  lines.push(`Warnings`);
+  lines.push(``, `Warnings`);
   if (warnings.length) {
     for (const w of warnings) lines.push(`  - ${w}`);
   } else {
@@ -317,9 +315,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
   // it can't drift from what the other exports stamp.)
   const gp = result.generationParams;
   const interpStr = gp ? `${gp.interpolation} void fill` : 'unknown';
-  const despikeStr = gp
-    ? (gp.despike ? 'on (blunder-only outlier removal)' : 'off')
-    : 'unknown';
+  let despikeStr: string;
+  if (gp) despikeStr = gp.despike ? 'on (blunder-only outlier removal)' : 'off';
+  else despikeStr = 'unknown';
   const aggStr = gp ? gp.aggregation : 'unknown';
   lines.push(
     `Generation parameters`,
@@ -408,14 +406,16 @@ export function buildDemPackage(
       values: g.values, coverage: g.coverage,
       cols: dtm.cols, rows: dtm.rows, cellSize, xllCorner: xll, yllCorner: yll, noData: NO_DATA,
     };
-    entries.push({
-      name: `${basename}-${g.key}.asc`,
-      bytes: new TextEncoder().encode(writeAsciiGrid(common)),
-    });
-    entries.push({
-      name: `${basename}-${g.key}.tif`,
-      bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.verticalEpsg != null ? verticalUnitCode : null }),
-    });
+    entries.push(
+      {
+        name: `${basename}-${g.key}.asc`,
+        bytes: new TextEncoder().encode(writeAsciiGrid(common)),
+      },
+      {
+        name: `${basename}-${g.key}.tif`,
+        bytes: writeGeoTiff({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.verticalEpsg != null ? verticalUnitCode : null }),
+      },
+    );
   }
 
   if (options.wkt) {

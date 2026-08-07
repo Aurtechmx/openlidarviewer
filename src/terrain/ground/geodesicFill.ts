@@ -151,7 +151,7 @@ export function geodesicFill(
     for (let scol = 0; scol < cols; scol++) {
       const src = srow * cols + scol;
       if (hadData[src] === 1) continue; // measured — keep verbatim
-      if (!Number.isFinite(surface[src])) { out[src] = NaN; continue; } // unreachable gap
+      if (!Number.isFinite(surface[src])) { out[src] = Number.NaN; continue; } // unreachable gap
 
       const iter = src; // unique per void; stamps scratch arrays
       heapLen = 0;
@@ -186,8 +186,10 @@ export function geodesicFill(
           if (Math.abs(nr - srow) > maxRadius || Math.abs(nc - scol) > maxRadius) continue;
           const nb = nr * cols + nc;
           if (!Number.isFinite(surface[nb])) continue; // can't walk over unknown ground
-          const stepXY =
-            DR[k] !== 0 && DC[k] !== 0 ? cellDiag : DC[k] !== 0 ? cellX : cellY;
+          let stepXY: number;
+          if (DR[k] !== 0 && DC[k] !== 0) stepXY = cellDiag;
+          else if (DC[k] !== 0) stepXY = cellX;
+          else stepXY = cellY;
           const dz = (surface[nb] - surface[c]) * zScale;
           const nd = cost + Math.sqrt(stepXY * stepXY + dz * dz);
           if (seen[nb] !== iter || nd < dist[nb]) {

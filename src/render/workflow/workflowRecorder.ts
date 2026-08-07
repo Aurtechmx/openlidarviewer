@@ -299,7 +299,10 @@ export function scheduleReplay(
   // delay to 0 (instant replay).
   const speed = deps.speed;
   const instant = speed !== undefined && (!Number.isFinite(speed) || speed <= 0);
-  const scale = instant ? 0 : speed !== undefined && speed > 0 ? 1 / speed : 1;
+  let scale: number;
+  if (instant) scale = 0;
+  else if (speed !== undefined && speed > 0) scale = 1 / speed;
+  else scale = 1;
   for (const event of workflow.events) {
     const h = deps.setTimeout(() => {
       if (cancelled) return;

@@ -61,7 +61,7 @@ export function ensurePdfExtension(name: string): string {
  * field is never blank.
  */
 export function defaultMapTitle(p: { title?: string | null; basename: string }): string {
-  if (p.title && p.title.trim()) return p.title.trim();
+  if (p.title?.trim()) return p.title.trim();
   const base = (p.basename ?? '').trim();
   return base ? `${base} — Contours` : 'Contours';
 }
@@ -86,7 +86,7 @@ export function defaultMapNotes(p: {
     p.intervalM != null && Number.isFinite(p.intervalM)
       ? `${p.intervalM}${verticalUnitSuffix(p.verticalUnitToMetres)}`
       : 'auto';
-  const crs = p.crs && p.crs.trim() ? p.crs.trim() : 'no CRS';
+  const crs = p.crs?.trim() ? p.crs.trim() : 'no CRS';
   return `Contours from ${base} · interval ${interval} · ${crs}`;
 }
 

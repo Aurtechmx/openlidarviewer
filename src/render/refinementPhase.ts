@@ -138,5 +138,7 @@ export function centerWeight(
   const dy = projY / wy;
   const d = Math.sqrt(dx * dx + dy * dy);
   const w = 1 - d;
-  return w < 0 ? 0 : w > 1 ? 1 : w;
+  if (w < 0) return 0;
+  if (w > 1) return 1;
+  return w;
 }

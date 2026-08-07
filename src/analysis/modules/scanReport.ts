@@ -26,7 +26,7 @@ function rowWarn(label: string, value: string): AnalysisRow {
  * byte-identical to the legacy result.
  */
 function withScope(row: AnalysisRow, scope: ClassScope | undefined): AnalysisRow {
-  if (scope && scope.kind === 'subset') row.scope = scope;
+  if (scope?.kind === 'subset') row.scope = scope;
   return row;
 }
 
@@ -102,7 +102,7 @@ export const scanReport: AnalysisModule = {
     // density, coverage) to the visible classes. The set is masked to a byte
     // to match how classification is stored and counted elsewhere.
     const subset =
-      scope && scope.kind === 'subset' && cloud.classification !== undefined
+      scope?.kind === 'subset' && cloud.classification !== undefined
         ? new Set(scope.codes.map((c) => c & 0xff))
         : null;
     const cls = cloud.classification;
@@ -128,9 +128,12 @@ export const scanReport: AnalysisModule = {
         if (!isVisible(i)) continue;
         n++;
         const x = pos[i * 3], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
-        if (x < minX) minX = x; if (x > maxX) maxX = x;
-        if (y < minY) minY = y; if (y > maxY) maxY = y;
-        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
       }
       if (n === 0) {
         // No visible points — every extent collapses to zero so the degenerate
@@ -184,9 +187,11 @@ export const scanReport: AnalysisModule = {
     const width = spanX * mpu;
     const depth = (zUp ? spanY : spanZ) * mpu;
     const height = (zUp ? spanZ : spanY) * vmpu;
-    rows.push(withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope));
-    rows.push(withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope));
-    rows.push(withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}`), scope));
+    rows.push(
+      withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
+      withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
+      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.lengthUnit}`), scope),
+    );
 
     const footprintArea = width * depth;
 
@@ -258,20 +263,19 @@ export const scanReport: AnalysisModule = {
             `${precision.worstCaseSpacing.toPrecision(3)} (source units) worst case — `
               + 'no linear unit declared, not graded',
           ),
+      {
+        label: 'Quantization basis',
+        value:
+          `Float32 positions, ${precision.governingAxis} axis, `
+          + `${precision.reach.toFixed(0)} source units from the local origin `
+          + `(${precision.localOrigin.map((n) => n.toFixed(0)).join(', ')})`,
+        status: 'info',
+        advanced: true,
+      },
+      // Attribute coverage.
+      rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'),
+      rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'),
     );
-    rows.push({
-      label: 'Quantization basis',
-      value:
-        `Float32 positions, ${precision.governingAxis} axis, `
-        + `${precision.reach.toFixed(0)} source units from the local origin `
-        + `(${precision.localOrigin.map((n) => n.toFixed(0)).join(', ')})`,
-      status: 'info',
-      advanced: true,
-    });
-
-    // Attribute coverage.
-    rows.push(rowInfo('RGB', cloud.colors !== undefined ? 'Yes' : 'No'));
-    rows.push(rowInfo('Intensity', cloud.intensity !== undefined ? 'Yes' : 'No'));
     // A cloud can carry the classification dimension while every point is still
     // unassigned (ASPRS 0 = never classified, 1 = unclassified). A bare "Yes"
     // there implies a classified cloud that isn't — so report the honest state.
@@ -348,8 +352,10 @@ export const scanReport: AnalysisModule = {
     const corner = (c: [number, number, number]): string =>
       `${(c[0] + origin[0]).toFixed(3)}, ${(c[1] + origin[1]).toFixed(3)}, ` +
       `${(c[2] + origin[2]).toFixed(3)}`;
-    rows.push({ label: 'Min corner', value: corner(bounds.min), status: 'info', advanced: true });
-    rows.push({ label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true });
+    rows.push(
+      { label: 'Min corner', value: corner(bounds.min), status: 'info', advanced: true },
+      { label: 'Max corner', value: corner(bounds.max), status: 'info', advanced: true },
+    );
 
     // The absolute corners carry an absolute Z, which asserts a vertical
     // reference the reader cannot recover from the number alone. State it,
@@ -374,6 +380,6 @@ export const scanReport: AnalysisModule = {
     // (v0.5.5 P12 — the separate "Classification Coverage" diagnostic row
     // merged into the main Classification row above.)
 
-    return scope && scope.kind === 'subset' ? { rows, scope } : { rows };
+    return scope?.kind === 'subset' ? { rows, scope } : { rows };
   },
 };

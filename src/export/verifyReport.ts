@@ -91,12 +91,16 @@ export function verifyReportFile(jsonText: string): VerifyReportResult {
   // Only SHA-256 is cryptographic. An FNV-1a digest is a forgeable checksum, so
   // a match is NOT proof of tamper-evidence — never report it as "intact".
   const cryptographic = algorithm === 'SHA-256';
+  let reason: string;
+  if (!valid) {
+    reason = 'Report has been modified, or the digest does not match its contents.';
+  } else if (cryptographic) {
+    reason = 'Report is intact — the SHA-256 digest matches its contents.';
+  } else {
+    reason = `The ${algorithm} checksum matches, but it is a fast non-cryptographic checksum an editor can forge — this does NOT prove the report was not altered. Treat it as unverified for tamper-evidence.`;
+  }
   return {
     recognised: true, valid, cryptographic, algorithm, software, classificationEpoch, findingsCount,
-    reason: !valid
-      ? 'Report has been modified, or the digest does not match its contents.'
-      : cryptographic
-        ? 'Report is intact — the SHA-256 digest matches its contents.'
-        : `The ${algorithm} checksum matches, but it is a fast non-cryptographic checksum an editor can forge — this does NOT prove the report was not altered. Treat it as unverified for tamper-evidence.`,
+    reason,
   };
 }

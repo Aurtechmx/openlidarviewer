@@ -73,7 +73,7 @@ export function parseEptMetadata(text: string): EptDetection {
   if (typeof version !== 'string') {
     return { isEpt: false, reason: 'EPT manifest is missing a "version" string.' };
   }
-  if (!/^1\./.test(version)) {
+  if (!version.startsWith('1.')) {
     return {
       isEpt: false,
       reason: `Unsupported EPT version ${version} — only EPT 1.x is supported.`,

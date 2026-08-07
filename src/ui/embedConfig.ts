@@ -55,7 +55,7 @@ export function parseEmbedConfig(search: string): EmbedConfig {
   // `?autoload=sample:<id>` — only built-in samples are accepted.
   const autoload = params.get('autoload');
   const autoloadSample =
-    autoload && autoload.startsWith('sample:') ? autoload.slice('sample:'.length) : null;
+    autoload?.startsWith('sample:') ? autoload.slice('sample:'.length) : null;
 
   return {
     embed: flag(params, 'embed'),

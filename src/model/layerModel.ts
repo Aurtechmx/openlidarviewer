@@ -147,9 +147,10 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
 
   if (known.length < 2) {
     // Nothing to compare against — surface only an "unknown CRS" note if any.
+    const plural = unknown.length === 1 ? '' : 's';
     return empty(
       unknown.length > 0 && layers.length > 1
-        ? `${unknown.length} layer${unknown.length === 1 ? '' : 's'} without a declared CRS — can't check alignment.`
+        ? `${unknown.length} layer${plural} without a declared CRS — can't check alignment.`
         : '',
     );
   }

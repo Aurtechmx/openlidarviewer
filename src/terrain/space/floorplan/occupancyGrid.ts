@@ -124,8 +124,8 @@ export function buildOccupancyMask(
       counts[r * cols + c]++;
     }
     let occupied = 0, total = 0;
-    for (let i = 0; i < counts.length; i++) {
-      if (counts[i] > 0) { occupied++; total += counts[i]; }
+    for (const cnt of counts) {
+      if (cnt > 0) { occupied++; total += cnt; }
     }
     if (occupied === 0) return null;
     return { counts, cols, rows, cellX, cellY, occupied, total };
@@ -183,8 +183,8 @@ export function buildCellHeightProfile(
 ): { zMin: Float32Array; zMax: Float32Array } {
   const { cols, rows, cellX, cellY, originX, originY } = grid;
   const n = cols * rows;
-  const zMin = new Float32Array(n).fill(NaN);
-  const zMax = new Float32Array(n).fill(NaN);
+  const zMin = new Float32Array(n).fill(Number.NaN);
+  const zMax = new Float32Array(n).fill(Number.NaN);
   for (let i = 0; i < count; i++) {
     let c = Math.floor((xs[i] - originX) / cellX);
     if (c < 0) c = 0; else if (c >= cols) c = cols - 1;
@@ -194,8 +194,13 @@ export function buildCellHeightProfile(
     const z = zs[i];
     // NaN-initialised cells: first hit seeds both bounds (NaN comparisons are
     // false, so an explicit empty test is needed).
-    if (Number.isNaN(zMin[k])) { zMin[k] = z; zMax[k] = z; }
-    else { if (z < zMin[k]) zMin[k] = z; if (z > zMax[k]) zMax[k] = z; }
+    if (Number.isNaN(zMin[k])) {
+      zMin[k] = z;
+      zMax[k] = z;
+    } else {
+      if (z < zMin[k]) zMin[k] = z;
+      if (z > zMax[k]) zMax[k] = z;
+    }
   }
   return { zMin, zMax };
 }
@@ -203,7 +208,7 @@ export function buildCellHeightProfile(
 /** Occupied area of the mask in m² (cells × exact cell area). */
 export function maskAreaM2(grid: OccupancyGrid): number {
   let occ = 0;
-  for (let i = 0; i < grid.mask.length; i++) if (grid.mask[i]) occ++;
+  for (const cell of grid.mask) if (cell) occ++;
   return occ * grid.cellX * grid.cellY;
 }
 

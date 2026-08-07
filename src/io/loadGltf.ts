@@ -37,7 +37,7 @@ interface GltfPrimitive {
 /** Build the local transform of a node from either `matrix` or its TRS parts. */
 function localMatrix(node: GltfNode): Matrix4 {
   const m = new Matrix4();
-  if (node.matrix && node.matrix.length === 16) {
+  if (node.matrix?.length === 16) {
     // glTF matrices are column-major; three's `fromArray` reads column-major.
     m.fromArray(node.matrix);
     return m;
@@ -104,13 +104,15 @@ function collectNode(
       // vertex push accordingly. Without this scale, a float-typed
       // value of 0.5 becomes 0 when packed into `new Uint8Array(...)`
       // and most coloured mobile scans render near-black.
-      const colScale = colAttr
-        ? colAttr.value instanceof Float32Array || colAttr.value instanceof Float64Array
-          ? 255
-          : colAttr.value instanceof Uint16Array
-            ? 255 / 65535
-            : 1
-        : 1;
+      let colScale = 1;
+      if (colAttr) {
+        const cv = colAttr.value;
+        if (cv instanceof Float32Array || cv instanceof Float64Array) {
+          colScale = 255;
+        } else if (cv instanceof Uint16Array) {
+          colScale = 255 / 65535;
+        }
+      }
 
       for (let i = 0; i < vertexCount; i++) {
         // Apply the node's world transform so multi-node scans line up.

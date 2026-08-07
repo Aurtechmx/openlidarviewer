@@ -416,11 +416,13 @@ export class InspectTool {
     // doubled values into the geographic projection below.
     const split = splitPointCoords(info, this._coordContext.origin);
     const worldLabels = worldCoordLabels(this._coordContext.crs);
-    rows.push(coordGroupHeader(worldLabels.heading));
     // Geographic eastings/northings are degrees, not metres — use the
     // CRS-aware unit suffix so a lon/lat scan never reads "-122.4 m".
-    rows.push(infoRow(worldLabels.x, `${split.world.x}${worldLabels.xUnit}`));
-    rows.push(infoRow(worldLabels.y, `${split.world.y}${worldLabels.yUnit}`));
+    rows.push(
+      coordGroupHeader(worldLabels.heading),
+      infoRow(worldLabels.x, `${split.world.x}${worldLabels.xUnit}`),
+      infoRow(worldLabels.y, `${split.world.y}${worldLabels.yUnit}`),
+    );
     // Z / height row. The label is datum-aware via an explicit HeightValue: a
     // projected or geographic scan with no declared vertical datum reads
     // "Height (datum unknown)" instead of "Elevation" (which would assert a
@@ -441,10 +443,12 @@ export class InspectTool {
       // Local is the render-recentred point in the SAME source units as the
       // World group — so it must carry the same CRS-aware unit suffix, not a
       // hardcoded "m" that reads "152.400 m" beside World's "500.00 ft".
-      rows.push(coordGroupHeader('Local'));
-      rows.push(infoRow('X', `${split.local.x.toFixed(3)}${worldLabels.xUnit}`));
-      rows.push(infoRow('Y', `${split.local.y.toFixed(3)}${worldLabels.yUnit}`));
-      rows.push(infoRow('Z', `${split.local.z.toFixed(3)}${worldLabels.zUnit}`));
+      rows.push(
+        coordGroupHeader('Local'),
+        infoRow('X', `${split.local.x.toFixed(3)}${worldLabels.xUnit}`),
+        infoRow('Y', `${split.local.y.toFixed(3)}${worldLabels.yUnit}`),
+        infoRow('Z', `${split.local.z.toFixed(3)}${worldLabels.zUnit}`),
+      );
     }
 
     // ── Geographic coordinates — when CRS supports projection to WGS84 ────
@@ -469,7 +473,7 @@ export class InspectTool {
         lon = geo.value.lon;
         elev = geo.value.elevation;
       }
-    } else if (crs && crs.kind === 'geographic') {
+    } else if (crs?.kind === 'geographic') {
       // Source is already geographic — World row carried lon/lat
       // directly; reuse them for the UTM derivation.
       lat = split.world.y;
@@ -481,10 +485,12 @@ export class InspectTool {
       // Geographic group — render unless the World group already
       // carried it (i.e. the source CRS is geographic, in which case
       // the World row IS the lat/lon and we skip the redundancy).
-      if (!(crs && crs.kind === 'geographic')) {
-        rows.push(coordGroupHeader('Geographic (WGS 84)'));
-        rows.push(infoRow('Latitude', `${lat.toFixed(7)}°`));
-        rows.push(infoRow('Longitude', `${lon.toFixed(7)}°`));
+      if (!(crs?.kind === 'geographic')) {
+        rows.push(
+          coordGroupHeader('Geographic (WGS 84)'),
+          infoRow('Latitude', `${lat.toFixed(7)}°`),
+          infoRow('Longitude', `${lon.toFixed(7)}°`),
+        );
         if (typeof elev === 'number') {
           rows.push(infoRow('Elevation', `${elev.toFixed(3)} m`));
         }
@@ -498,16 +504,18 @@ export class InspectTool {
       // here instead of printing a coordinate from outside the system.
       const outsideUtm = utmLatitudeFailure(lat);
       if (outsideUtm) {
-        rows.push(coordGroupHeader('UTM'));
-        rows.push(infoRow('Grid', 'not defined at this latitude'));
-        rows.push(infoRow('Reason', outsideUtm));
+        rows.push(
+          coordGroupHeader('UTM'),
+          infoRow('Grid', 'not defined at this latitude'),
+          infoRow('Reason', outsideUtm),
+        );
       } else {
         const utm = latLonToUtm(lat, lon, elev);
         rows.push(
           coordGroupHeader(`UTM (zone ${utm.zone}${utm.hemisphere})`),
+          infoRow('Easting', `${utm.easting.toFixed(3)} m`),
+          infoRow('Northing', `${utm.northing.toFixed(3)} m`),
         );
-        rows.push(infoRow('Easting', `${utm.easting.toFixed(3)} m`));
-        rows.push(infoRow('Northing', `${utm.northing.toFixed(3)} m`));
         if (typeof utm.elevation === 'number') {
           rows.push(infoRow('Elevation', `${utm.elevation.toFixed(3)} m`));
         }
@@ -515,11 +523,13 @@ export class InspectTool {
     }
 
     // ── Existing attribute rows ────────────────────────────────────────────
-    rows.push(coordGroupHeader('Attributes'));
-    rows.push(infoRow('Distance', `${info.distance} m`));
-    rows.push(infoRow('Intensity', intensityText(info)));
-    rows.push(infoRow('Classification', classificationText(info)));
-    rows.push(infoRow('RGB', rgbText(info)));
+    rows.push(
+      coordGroupHeader('Attributes'),
+      infoRow('Distance', `${info.distance} m`),
+      infoRow('Intensity', intensityText(info)),
+      infoRow('Classification', classificationText(info)),
+      infoRow('RGB', rgbText(info)),
+    );
     // The LAS inspection extras get a row only when the cloud carries them —
     // a non-LAS scan shows no empty "Not available" clutter.
     const ret = returnText(info);
@@ -530,8 +540,10 @@ export class InspectTool {
     if (gps) rows.push(infoRow('GPS time', gps, gps));
     const normal = normalText(info);
     if (normal) rows.push(infoRow('Normal', normal, normal));
-    rows.push(infoRow('Layer', info.layer, info.layer));
-    rows.push(infoRow('Index', info.index.toLocaleString('en-US')));
+    rows.push(
+      infoRow('Layer', info.layer, info.layer),
+      infoRow('Index', info.index.toLocaleString('en-US')),
+    );
     // Refining-hint — "still refining" hint. Only present on streaming picks that
     // landed on a node coarser than the deepest currently-resident one.
     if (info.streamingRefining) {

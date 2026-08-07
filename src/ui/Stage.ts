@@ -469,11 +469,12 @@ export class Stage {
       className: 'olv-empty-formats-summary',
       text: `Compatible data — ${SOURCE_FORMATS.length} file formats · COPC & EPT streaming`,
     });
+    const xyzAliases = XYZ_ALIAS_EXTENSIONS.map((e) => `.${e}`).join('/');
     const formatsFull = el('p', {
       className: 'olv-empty-formats-full',
       text:
         SOURCE_FORMATS.map((f) => `.${f}`).join(' · ') +
-        ` · ${XYZ_ALIAS_EXTENSIONS.map((e) => `.${e}`).join('/')} (read as .xyz)` +
+        ` · ${xyzAliases} (read as .xyz)` +
         ' · .copc.laz (streamed) · EPT via ept.json (streamed)',
     });
     formats.append(formatsSummary, formatsFull);
@@ -1029,11 +1030,9 @@ export class Stage {
             'streaming will resume when you reconnect.',
         }),
       );
-    } else {
+    } else if (this._statusBanner.classList.contains('olv-empty-status-offline')) {
       // Only auto-dismiss if the offline banner is the one currently shown.
-      if (this._statusBanner.classList.contains('olv-empty-status-offline')) {
-        this._hideStatusBanner();
-      }
+      this._hideStatusBanner();
     }
   }
 }

@@ -44,9 +44,9 @@ function hexToRgb(hex: string): ParsedColor | null {
   }
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
   return {
-    r: parseInt(h.slice(0, 2), 16) / 255,
-    g: parseInt(h.slice(2, 4), 16) / 255,
-    b: parseInt(h.slice(4, 6), 16) / 255,
+    r: Number.parseInt(h.slice(0, 2), 16) / 255,
+    g: Number.parseInt(h.slice(2, 4), 16) / 255,
+    b: Number.parseInt(h.slice(4, 6), 16) / 255,
   };
 }
 
@@ -57,7 +57,7 @@ function hexToRgb(hex: string): ParsedColor | null {
 export function effectiveBranding(b?: ReportBranding): Required<Pick<ReportBranding, 'accentColor'>> & ReportBranding {
   return {
     accentColor: b?.accentColor ?? DEFAULT_ACCENT,
-    ...(b ?? {}),
+    ...b,
   };
 }
 

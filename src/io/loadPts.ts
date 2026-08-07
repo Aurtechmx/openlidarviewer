@@ -63,7 +63,7 @@ export async function loadPts(
     buffer,
     (raw) => {
       const line = raw.trim();
-      if (line === '' || line[0] === '#') return;
+      if (line === '' || line.startsWith('#')) return;
 
       const tok = tokenize(line);
       // The optional first line is a lone non-negative integer — the point
@@ -145,7 +145,7 @@ export async function loadPts(
     intensity = new Uint16Array(count);
     for (let p = 0; p < count; p++) {
       const v = Math.round((intensityVals[p] + offset) * scale);
-      intensity[p] = v < 0 ? 0 : v > 65535 ? 65535 : v;
+      intensity[p] = Math.max(0, Math.min(65535, v));
     }
   }
 
@@ -156,7 +156,7 @@ export async function loadPts(
     colors = new Uint8Array(count * 3);
     for (let k = 0; k < count * 3; k++) {
       const v = Math.round(normalized ? rgb[k] * 255 : rgb[k]);
-      colors[k] = v < 0 ? 0 : v > 255 ? 255 : v;
+      colors[k] = Math.max(0, Math.min(255, v));
     }
   }
 

@@ -248,16 +248,20 @@ export function classifyDensity(
   input: Pick<DatasetIntelligenceInput, 'pointCount' | 'bboxVolume' | 'residentDensity'>,
 ): DensityBucket {
   // Prefer the engine-measured value when present.
-  const candidate =
-    input.residentDensity !== undefined && Number.isFinite(input.residentDensity)
-      ? input.residentDensity
-      : input.pointCount !== undefined &&
-          input.bboxVolume !== undefined &&
-          Number.isFinite(input.pointCount) &&
-          Number.isFinite(input.bboxVolume) &&
-          input.bboxVolume > 0
-        ? input.pointCount / input.bboxVolume
-        : NaN;
+  let candidate: number;
+  if (input.residentDensity !== undefined && Number.isFinite(input.residentDensity)) {
+    candidate = input.residentDensity;
+  } else if (
+    input.pointCount !== undefined &&
+    input.bboxVolume !== undefined &&
+    Number.isFinite(input.pointCount) &&
+    Number.isFinite(input.bboxVolume) &&
+    input.bboxVolume > 0
+  ) {
+    candidate = input.pointCount / input.bboxVolume;
+  } else {
+    candidate = Number.NaN;
+  }
   if (!Number.isFinite(candidate) || candidate <= 0) return 'unknown';
   // Thresholds in points per cubic metre. The bands are deliberately
   // wide so a typical drone scan reads as Dense, a typical airborne
@@ -525,13 +529,13 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
 /** Clamp into [0, 1]. */
 function clamp01(x: number): number {
   if (!Number.isFinite(x)) return 0;
-  return x < 0 ? 0 : x > 1 ? 1 : x;
+  return Math.min(1, Math.max(0, x));
 }
 
 /** Clamp into [lo, hi]. */
 function clamp(x: number, lo: number, hi: number): number {
   if (!Number.isFinite(x)) return lo;
-  return x < lo ? lo : x > hi ? hi : x;
+  return Math.min(hi, Math.max(lo, x));
 }
 
 /** Normalise a value to [0, 1] across [lo, hi]; 0 when missing. */

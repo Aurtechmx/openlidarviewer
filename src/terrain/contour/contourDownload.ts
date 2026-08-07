@@ -122,8 +122,16 @@ export function serializeContours(
   // Unit stamp for the human-facing formats. 'metre' is the standing default;
   // the abbreviation feeds the SVG's visible scale note.
   const linearUnit = opts.linearUnit ?? 'metre';
-  const unitLabel =
-    linearUnit === 'foot' ? 'ft' : linearUnit === 'us-survey-foot' ? 'ftUS' : linearUnit === 'unknown' ? 'unit' : 'm';
+  let unitLabel: string;
+  if (linearUnit === 'foot') {
+    unitLabel = 'ft';
+  } else if (linearUnit === 'us-survey-foot') {
+    unitLabel = 'ftUS';
+  } else if (linearUnit === 'unknown') {
+    unitLabel = 'unit';
+  } else {
+    unitLabel = 'm';
+  }
 
   let content: string;
   switch (format) {
@@ -160,7 +168,11 @@ export function serializeContours(
   // two files with the same extension in one folder is how the wrong frame
   // gets loaded.
   const code = format === 'geojson-native' ? epsgFromCrsLabel(exportModel.crs ?? '') : null;
-  const stem = format === 'geojson-native' ? `${basename}-native${code ? `-EPSG${code}` : ''}` : basename;
+  let stem = basename;
+  if (format === 'geojson-native') {
+    const epsgSuffix = code ? `-EPSG${code}` : '';
+    stem = `${basename}-native${epsgSuffix}`;
+  }
   return { filename: `${stem}.${EXT[format]}`, mime: MIME[format], content };
 }
 

@@ -73,7 +73,7 @@ function ms(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
-const orNull = <T>(v: T | undefined): T | null => (v === undefined ? null : v);
+const orNull = <T>(v: T | undefined): T | null => v ?? null;
 
 /**
  * Build the metrics document as a plain object (exported for tests) —

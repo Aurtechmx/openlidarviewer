@@ -47,8 +47,7 @@
  * point is dropped without an in-file note.
  */
 
-import type { PointCloud } from '../model/PointCloud';
-import type { SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
+import type { PointCloud, SourceMetadata, DeclaredMetadataField } from '../model/PointCloud';
 
 /** The export formats this module produces. */
 export type ExportFormat = 'xyz' | 'csv' | 'ply' | 'obj';
@@ -113,7 +112,14 @@ function subsetLine(cloud: PointCloud): string | null {
   const pct = (held / declared) * 100;
   // Two significant-ish digits: "12.3 %" for a typical cap, "0.4 %" for a
   // heavy stride, never "0.0 %" for something that did write points.
-  const share = pct >= 10 ? pct.toFixed(0) : pct >= 1 ? pct.toFixed(1) : pct.toFixed(2);
+  let share: string;
+  if (pct >= 10) {
+    share = pct.toFixed(0);
+  } else if (pct >= 1) {
+    share = pct.toFixed(1);
+  } else {
+    share = pct.toFixed(2);
+  }
   const stride = cloud.loadStride;
   const cause =
     stride !== undefined && stride > 1
@@ -243,9 +249,9 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   // Length guards: a malformed cloud with a misaligned channel drops the
   // column rather than writing values from the wrong points.
   const intensity =
-    cloud.intensity && cloud.intensity.length === n ? cloud.intensity : undefined;
+    cloud.intensity?.length === n ? cloud.intensity : undefined;
   const classification =
-    cloud.classification && cloud.classification.length === n
+    cloud.classification?.length === n
       ? cloud.classification
       : undefined;
   const columns = [

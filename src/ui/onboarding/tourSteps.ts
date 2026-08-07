@@ -136,6 +136,9 @@ export function splitEmphasis(body: string): BodySegment[] {
 /** Outcome of the user's interaction with the tour. */
 export type TourOutcome = 'completed' | 'skipped' | 'dismissed';
 
+/** Tour lifecycle: not yet started, running, or a terminal outcome. */
+export type TourState = 'pending' | 'running' | TourOutcome;
+
 /**
  * The persistence port. Default implementation uses `localStorage`;
  * tests inject a Map-backed fake.
@@ -184,7 +187,7 @@ export class TourSession {
   private readonly _steps: readonly TourStep[];
   private readonly _storage: TourStoragePort;
   private _index = 0;
-  private _state: 'pending' | 'running' | TourOutcome = 'pending';
+  private _state: TourState = 'pending';
   private readonly _listeners = new Set<(snap: TourSnapshot) => void>();
 
   constructor(
@@ -201,7 +204,7 @@ export class TourSession {
   }
 
   /** Current state — 'pending' before `start`, 'running' during, then the outcome. */
-  get state(): 'pending' | 'running' | TourOutcome {
+  get state(): TourState {
     return this._state;
   }
 
@@ -342,5 +345,5 @@ export interface TourSnapshot {
   readonly step: TourStep | null;
   readonly index: number;
   readonly total: number;
-  readonly state: 'pending' | 'running' | TourOutcome;
+  readonly state: TourState;
 }

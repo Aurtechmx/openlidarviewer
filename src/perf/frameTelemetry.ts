@@ -209,13 +209,14 @@ export class FrameTelemetry {
     this._requestFrame =
       options.requestFrame ?? ((cb) => requestAnimationFrame(() => cb()));
     this._cancelFrame = options.cancelFrame ?? ((h) => cancelAnimationFrame(h));
-    this._observerCtor =
-      options.performanceObserver !== undefined
-        ? options.performanceObserver
-        : longTaskSupported()
-          ? ((globalThis as { PerformanceObserver?: LongTaskObserverCtor })
-              .PerformanceObserver ?? null)
-          : null;
+    if (options.performanceObserver !== undefined) {
+      this._observerCtor = options.performanceObserver;
+    } else if (longTaskSupported()) {
+      this._observerCtor =
+        (globalThis as { PerformanceObserver?: LongTaskObserverCtor }).PerformanceObserver ?? null;
+    } else {
+      this._observerCtor = null;
+    }
     this._dpr = options.devicePixelRatio ?? (() =>
       typeof devicePixelRatio === 'number' ? devicePixelRatio : 1);
     this._ringCapacity = options.ringCapacity ?? 240;

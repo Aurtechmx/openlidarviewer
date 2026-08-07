@@ -168,9 +168,9 @@ export class NavBar {
   private readonly _speed: HTMLElement;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
-  private _panBtn!: HTMLButtonElement;
+  private readonly _panBtn!: HTMLButtonElement;
   /** Legend chips that only make sense while the hand tool exists. */
-  private _panLegendItems: HTMLElement[] = [];
+  private readonly _panLegendItems: HTMLElement[] = [];
 
   private _mode: NavMode = 'orbit';
   private _locked = false;

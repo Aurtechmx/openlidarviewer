@@ -104,11 +104,11 @@ export function regionAreaReconcileScale(
 /** XML-escape a string for safe insertion into SVG text / attributes. */
 export function escapeXml(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replaceAll(/&/g, '&amp;')
+    .replaceAll(/</g, '&lt;')
+    .replaceAll(/>/g, '&gt;')
+    .replaceAll(/"/g, '&quot;')
+    .replaceAll(/'/g, '&#39;');
 }
 
 /** Greedy word-wrap (the footer has no DOM to measure text with). */
@@ -356,15 +356,15 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" font-family="Helvetica, Arial, sans-serif">`,
+    `<rect x="0" y="0" width="${W}" height="${totalH}" fill="#ffffff"/>`,
   );
-  parts.push(`<rect x="0" y="0" width="${W}" height="${totalH}" fill="#ffffff"/>`);
 
   // ── Title ──
   const title = escapeXml((opts.title ?? 'Floor plan preview').trim() || 'Floor plan preview');
-  parts.push(`<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="${INK}">${title}</text>`);
   // Claim-accurate subtitle: "wall-graph reconstruction" only when the walls
   // really were re-extruded from the centerline graph; still a preview.
   parts.push(
+    `<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="${INK}">${title}</text>`,
     `<text x="${pad}" y="46" font-size="11" fill="${DIM}">Floor Plan Preview — ${
       model.fromWallGraph ? 'wall-graph reconstruction' : 'approximate wall-trace sketch'
     } (top-down)</text>`,
@@ -478,11 +478,9 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
     const dimLabelY = (dimY - 4).toFixed(1);
     const depthLabelX = (dimX - 4).toFixed(1);
     const depthLabelY = ((yT + yB) / 2).toFixed(1);
-    parts.push(`<g class="plan-dims"><path d="${dd.trim()}" fill="none" stroke="${INK}" stroke-width="0.55"/>`);
     parts.push(
+      `<g class="plan-dims"><path d="${dd.trim()}" fill="none" stroke="${INK}" stroke-width="0.55"/>`,
       `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${dimLabelY}" font-size="10" text-anchor="middle" fill="${INK}">${escapeXml(lengthLabel(model.widthM, unitSystem))}</text>`,
-    );
-    parts.push(
       `<text x="${depthLabelX}" y="${depthLabelY}" font-size="10" text-anchor="middle" fill="${INK}" transform="rotate(-90 ${depthLabelX} ${depthLabelY})">${escapeXml(lengthLabel(model.depthM, unitSystem))}</text></g>`,
     );
     // ── Room labels: "Room N · 12.3 m²" at each segmented room's pole of
@@ -608,8 +606,8 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
         const barPx = barM * scale;
         const bx = W - pad - barPx;
         const by = drawTop + drawH + 18;
-        parts.push(`<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barPx.toFixed(1)}" height="6" fill="${INK}"/>`);
         parts.push(
+          `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${barPx.toFixed(1)}" height="6" fill="${INK}"/>`,
           `<text x="${(bx + barPx).toFixed(1)}" y="${(by - 4).toFixed(1)}" font-size="10" text-anchor="end" fill="${INK}">${escapeXml(barText)}</text>`,
         );
       }
@@ -653,15 +651,17 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
       model.floorAreaM2 != null
         ? `Floor area ${areaLabel(model.floorAreaM2, unitSystem)} (approx.)`
         : 'Floor area: not measured';
+    const overallTxt = `Overall ${lengthLabel(model.widthM, unitSystem)} x ${lengthLabel(model.depthM, unitSystem)}`;
+    const previewNote = `${dateTxt} · Floor plan preview — not for construction`;
     parts.push(
       `<g class="title-block">` +
         `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#ffffff" stroke="${INK}" stroke-width="1"/>` +
         `<line x1="${tbX}" y1="${tbY + 21}" x2="${tbX + tbW}" y2="${tbY + 21}" stroke="${INK}" stroke-width="0.55"/>` +
         `<text x="${tbX + 8}" y="${tbY + 15}" font-size="11" font-weight="bold" fill="${INK}">${escapeXml(tbTitle)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}">${escapeXml(`Overall ${lengthLabel(model.widthM, unitSystem)} x ${lengthLabel(model.depthM, unitSystem)}`)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}">${escapeXml(overallTxt)}</text>` +
         `<text x="${tbX + 8}" y="${tbY + 46}" font-size="8.5" fill="${INK}">${escapeXml(areaTxt)}</text>` +
         `<text x="${tbX + 8}" y="${tbY + 58}" font-size="8.5" fill="${INK}">${escapeXml(scaleTxt)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 70}" font-size="8.5" fill="${DIM}">${escapeXml(`${dateTxt} · Floor plan preview — not for construction`)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 70}" font-size="8.5" fill="${DIM}">${escapeXml(previewNote)}</text>` +
         `</g>`,
     );
   }

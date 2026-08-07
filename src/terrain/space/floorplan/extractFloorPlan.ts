@@ -680,27 +680,32 @@ export function extractFloorPlan(
   // wall-evidence peak (vs the standard 0.7–1.8 m band) — an honest note that
   // the slice height was chosen from the data, not assumed.
   const bandAdapted = slice.bandBasis === 'adaptive';
-  reasons.push(
-    slice.usedWallBand
-      ? slice.floorBasis === 'histogram'
-        ? `Walls traced from the point slice ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m above the detected floor${bandAdapted ? ' (band re-centred on the densest wall-return height)' : ''}.`
-        : `No dominant floor plane — floor level estimated from the lowest dense returns; walls traced from the ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m slice above it${bandAdapted ? ' (band re-centred on the densest wall-return height)' : ''}.`
-      : 'No floor-anchored wall band could be cut — walls traced from the full-height point density instead.',
-  );
+  const adaptedNote = bandAdapted ? ' (band re-centred on the densest wall-return height)' : '';
+  let wallBandReason: string;
+  if (!slice.usedWallBand) {
+    wallBandReason = 'No floor-anchored wall band could be cut — walls traced from the full-height point density instead.';
+  } else if (slice.floorBasis === 'histogram') {
+    wallBandReason = `Walls traced from the point slice ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m above the detected floor${adaptedNote}.`;
+  } else {
+    wallBandReason = `No dominant floor plane — floor level estimated from the lowest dense returns; walls traced from the ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m slice above it${adaptedNote}.`;
+  }
+  reasons.push(wallBandReason);
   if (slice.clippedCount > 0) {
     reasons.push(
       `${slice.clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded as outliers.`,
     );
   }
-  reasons.push(
-    snap.mode === 'off'
-      ? 'Axis snapping disabled (SNAP_MODE off) — wall directions left exactly as traced.'
-      : snap.forced && axes
-        ? 'Wall directions FORCED onto the strongest axis pair (SNAP_MODE strong) — the auto bimodal gates did not pass, so right angles may be assumed where the scan shows none.'
-        : axes
-          ? 'Wall directions snapped to the two dominant perpendicular axes (within ±7°).'
-          : 'Wall directions left as traced — no two dominant perpendicular directions found, so no right angles were assumed.',
-  );
+  let snapReason: string;
+  if (snap.mode === 'off') {
+    snapReason = 'Axis snapping disabled (SNAP_MODE off) — wall directions left exactly as traced.';
+  } else if (snap.forced && axes) {
+    snapReason = 'Wall directions FORCED onto the strongest axis pair (SNAP_MODE strong) — the auto bimodal gates did not pass, so right angles may be assumed where the scan shows none.';
+  } else if (axes) {
+    snapReason = 'Wall directions snapped to the two dominant perpendicular axes (within ±7°).';
+  } else {
+    snapReason = 'Wall directions left as traced — no two dominant perpendicular directions found, so no right angles were assumed.';
+  }
+  reasons.push(snapReason);
   if (thicknessNormalized) {
     reasons.push(
       `Echo-fattened wall mass (a wall scanned from both sides reads double) was collapsed onto its centerline at the measured ~${norm.medianThicknessM.toFixed(2)} m wall thickness (${removedM2.toFixed(1)} m² removed).`,
@@ -727,8 +732,10 @@ export function extractFloorPlan(
     );
   }
   if (rooms.length > 0) {
+    const doorwayNote =
+      roomsDet.closedDoorways > 0 ? ` and ${roomsDet.closedDoorways} closed doorway span(s)` : '';
     reasons.push(
-      `${rooms.length} room(s) segmented by flood fill bounded by the walls${roomsDet.closedDoorways > 0 ? ` and ${roomsDet.closedDoorways} closed doorway span(s)` : ''}; unknown gaps are never closed, so an unscanned divider merges its regions instead of fabricating a wall. Room areas are measured on the region mask.`,
+      `${rooms.length} room(s) segmented by flood fill bounded by the walls${doorwayNote}; unknown gaps are never closed, so an unscanned divider merges its regions instead of fabricating a wall. Room areas are measured on the region mask.`,
     );
   } else if (roomsDet.segmentation === 'open-space') {
     // HONESTY: one connected interior region dominates the floor — present it

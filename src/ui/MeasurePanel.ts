@@ -18,7 +18,7 @@ import { storageGet, storageSet } from './safeStorage';
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
 import { loadProfilePdf } from '../lazyChunks';
-import type { MeasurementSummary } from '../render/measure/MeasureController';
+import type { MeasurementSummary, ProfileResampleParams } from '../render/measure/MeasureController';
 import {
   DIMENSION_LABEL,
   OPERATION_LABEL,
@@ -63,7 +63,6 @@ import {
   MIN_CORRIDOR_HALF_WIDTH_M,
   PROFILE_SAMPLE_COUNT_OPTIONS,
 } from '../render/measure/profileSampler';
-import type { ProfileResampleParams } from '../render/measure/MeasureController';
 
 /** Metres → feet — the same factor the chart's imperial labels use. */
 const FT_PER_M = 3.28084;
@@ -167,7 +166,16 @@ export function niceElevationTicks(min: number, max: number, target = 4): number
   const rawStep = span / Math.max(1, target);
   const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
   const norm = rawStep / mag;
-  const niceUnit = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  let niceUnit: number;
+  if (norm <= 1) {
+    niceUnit = 1;
+  } else if (norm <= 2) {
+    niceUnit = 2;
+  } else if (norm <= 5) {
+    niceUnit = 5;
+  } else {
+    niceUnit = 10;
+  }
   const step = niceUnit * mag;
   // Crash guard (v0.4.5): a denormal-tiny span underflows `mag` to 0, which
   // makes `step` 0 — and a `v += 0` loop pushes ticks forever until the tab
@@ -966,12 +974,18 @@ export class MeasurePanel {
 
     const apply = (): void => {
       const rawCorr = corrInput.value.trim();
-      const corrVal = rawCorr === '' ? NaN : Number(rawCorr);
+      const corrVal = rawCorr === '' ? Number.NaN : Number(rawCorr);
       const cnt = Number(cntSelect.value);
       const pctVal = Number(pctInput.value);
+      // Empty input = keep auto; the controller clamps out-of-range values.
+      let corridorWidthM: number | null;
+      if (Number.isFinite(corrVal)) {
+        corridorWidthM = imperial ? corrVal / FT_PER_M : corrVal;
+      } else {
+        corridorWidthM = null;
+      }
       resample(s.id, {
-        // Empty input = keep auto; the controller clamps out-of-range values.
-        corridorWidthM: Number.isFinite(corrVal) ? (imperial ? corrVal / FT_PER_M : corrVal) : null,
+        corridorWidthM,
         groundPercentile: Number.isFinite(pctVal) ? pctVal : null,
         sampleCount: Number.isFinite(cnt) ? cnt : null,
       });
@@ -1146,7 +1160,14 @@ export class MeasurePanel {
     // value the data can't support.
     if (s.trust) {
       const t = s.trust;
-      const colour = t.grade === 'green' ? '#38b058' : t.grade === 'yellow' ? '#e8c440' : '#d64c40';
+      let colour: string;
+      if (t.grade === 'green') {
+        colour = '#38b058';
+      } else if (t.grade === 'yellow') {
+        colour = '#e8c440';
+      } else {
+        colour = '#d64c40';
+      }
       const badge = el('span', {
         className: `olv-mp-trust olv-mp-trust-${t.grade}`,
         text: '●',
@@ -1771,7 +1792,9 @@ function renderProfileChart(
   const elevDecimals = (() => {
     if (yTicks.length >= 2) {
       const st = Math.abs(yTicks[1] - yTicks[0]);
-      return st >= 1 ? 0 : st >= 0.1 ? 1 : 2;
+      if (st >= 1) return 0;
+      if (st >= 0.1) return 1;
+      return 2;
     }
     return 1;
   })();
@@ -1790,7 +1813,9 @@ function renderProfileChart(
   const elevDecimalsFt = (() => {
     if (yTicks.length >= 2) {
       const stepFt = Math.abs(yTicks[1] - yTicks[0]) * 3.28084;
-      return stepFt >= 1 ? 0 : stepFt >= 0.1 ? 1 : 2;
+      if (stepFt >= 1) return 0;
+      if (stepFt >= 0.1) return 1;
+      return 2;
     }
     return 1;
   })();
@@ -1901,7 +1926,14 @@ function renderProfileChart(
       const isLast = i === lastIdx;
       if (!isLast && i % labelStride !== 0) return '';
       if (!isLast && lastIdx - i < labelStride / 2) return '';
-      const tx = i === 0 ? '0' : isLast ? '-100%' : '-50%';
+      let tx: string;
+      if (i === 0) {
+        tx = '0';
+      } else if (isLast) {
+        tx = '-100%';
+      } else {
+        tx = '-50%';
+      }
       return `<span class="olv-mp-axis olv-mp-axis-x" style="left:${xPct(c).toFixed(2)}%;top:${xLabelTop}%;transform:translateX(${tx})">${formatChainage(c)}</span>`;
     })
     .join('');

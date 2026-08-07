@@ -71,7 +71,7 @@ export interface ContourPermitContext {
    */
   readonly precision: PrecisionPermit | null;
   /** Injectable evidence lookup (defaults to the claim registry) — for tests. */
-  readonly evidenceStatusOf?: ExportDecisionContext['evidenceStatusOf'];
+  readonly evidenceStatusOf?: NonNullable<ExportDecisionContext['evidenceStatusOf']>;
 }
 
 /**

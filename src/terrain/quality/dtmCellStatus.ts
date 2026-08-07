@@ -107,8 +107,8 @@ export function tallyCellStatus(statuses: Uint8Array): CellStatusTally {
   let empty = 0;
   let lowConfidence = 0;
   let edgeRisk = 0;
-  for (let i = 0; i < statuses.length; i++) {
-    switch (statuses[i]) {
+  for (const status of statuses) {
+    switch (status) {
       case CELL_STATUS_CODE.measured:
         measured++;
         break;

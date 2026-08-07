@@ -133,9 +133,12 @@ export function objectMetrics(
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     sx.push(x); sy.push(y); sz.push(z);
     cx += x; cy += y; cz += z;
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
   const m = sx.length;
   if (m < 4) return empty;
@@ -215,7 +218,7 @@ export function objectMetrics(
     bins[la2 * LON + lo2] = 1;
   }
   let hit = 0;
-  for (let i = 0; i < bins.length; i++) if (bins[i]) hit++;
+  for (const bin of bins) if (bin) hit++;
   const completenessPct = (100 * hit) / (LON * LAT);
 
   const { lengthM: L, widthM: W, heightM: H } = obb;

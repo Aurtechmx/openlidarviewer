@@ -93,7 +93,7 @@ export function chordFromEvent(e: ChordEventLike): string | null {
 export function matchesShortcut(e: ChordEventLike, chord: string): boolean {
   if (chord === '') return false;
   const tokens = chord.split('+');
-  const key = tokens[tokens.length - 1];
+  const key = tokens.at(-1)!;
   const wantMod = tokens.includes('mod');
   const wantAlt = tokens.includes('alt');
   const wantShift = tokens.includes('shift');
@@ -109,7 +109,7 @@ export function matchesShortcut(e: ChordEventLike, chord: string): boolean {
 export function formatShortcutLabel(chord: string, isMac: boolean): string {
   if (chord === '') return 'Off';
   const tokens = chord.split('+');
-  const key = tokens[tokens.length - 1];
+  const key = tokens.at(-1)!;
   const keyLabel = key.length === 1 ? key.toUpperCase() : key;
   if (isMac) {
     let s = '';

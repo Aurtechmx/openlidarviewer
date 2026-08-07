@@ -86,7 +86,7 @@ export function shouldExportGeoreferencedOrtho(
   if (!adapter.localBoundsAabb()) return false;
   if ((classScopeStamp ?? '').trim().length > 0) return false;
   const geo = adapter.georefContext?.() ?? null;
-  if (!geo || geo.worldOrigin == null) return false;
+  if (geo?.worldOrigin == null) return false;
   return geo.wkt != null && geo.wkt.trim().length > 0;
 }
 

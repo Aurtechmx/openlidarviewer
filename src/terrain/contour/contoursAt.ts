@@ -328,7 +328,7 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     const zb = zc[bIdx];
     const denom = zb - za;
     const t = Math.abs(denom) < 1e-12 ? 0.5 : (v - za) / denom;
-    const tc = t < 0 ? 0 : t > 1 ? 1 : t;
+    const tc = Math.max(0, Math.min(1, t));
     return [p[aIdx][0] + tc * (p[bIdx][0] - p[aIdx][0]), p[aIdx][1] + tc * (p[bIdx][1] - p[aIdx][1])];
   };
 

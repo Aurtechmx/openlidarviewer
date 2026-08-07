@@ -332,8 +332,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
       }
     } else {
       // No UNIT clause is rare on a projected CRS — default to metres.
+      // linearUnitToMetres stays at its initial 1 (metre) on this path.
       linearUnit = 'metre';
-      linearUnitToMetres = 1;
     }
   }
 
@@ -679,10 +679,14 @@ export function crsFromGeoTiff(
   // to use its geographic citation, because there it does describe the CRS.
   const ownCitation = isGeographic ? citation : projectedCitation;
   const baseName = ownCitation ?? wellKnownCrsName(epsg) ?? (epsg ? `EPSG:${epsg}` : 'Unknown CRS');
-  const name =
-    epsg && !ownCitation && !wellKnownCrsName(epsg) ? `EPSG:${epsg}`
-    : epsg ? `${baseName} (EPSG:${epsg})`
-    : baseName;
+  let name: string;
+  if (epsg && !ownCitation && !wellKnownCrsName(epsg)) {
+    name = `EPSG:${epsg}`;
+  } else if (epsg) {
+    name = `${baseName} (EPSG:${epsg})`;
+  } else {
+    name = baseName;
+  }
 
   // Vertical datum: a real EPSG (verticalDatumLabel rejects the 0 / 32767
   // placeholders), else fall back to the citation text when present.

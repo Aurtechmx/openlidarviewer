@@ -42,7 +42,7 @@ export function histogramBins(values: ArrayLike<number>, binCount: number): Hist
   const counts = new Array<number>(bins).fill(0);
 
   // Empty, or a degenerate single-value spread: everything in bin 0, width 0.
-  if (total === 0 || !(max > min)) {
+  if (total === 0 || max <= min) {
     if (total > 0) counts[0] = total;
     return {
       counts,

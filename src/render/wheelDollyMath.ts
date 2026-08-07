@@ -61,7 +61,7 @@ export function normalizeWheelDeltaPx(
  */
 export function clampDollyVelocity(velocity: number, maxVelocity = Number.POSITIVE_INFINITY): number {
   if (!Number.isFinite(velocity)) return 0;
-  if (!(maxVelocity > 0) || !Number.isFinite(maxVelocity)) return velocity;
+  if (maxVelocity <= 0 || !Number.isFinite(maxVelocity)) return velocity;
   if (velocity > maxVelocity) return maxVelocity;
   if (velocity < -maxVelocity) return -maxVelocity;
   return velocity;

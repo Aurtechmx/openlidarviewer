@@ -292,7 +292,7 @@ function statsOf(
     nmad,
     p90AbsResidual: quantileSorted(abs, 0.9),
     p95AbsResidual: quantileSorted(abs, 0.95),
-    maxAbsResidual: abs[abs.length - 1],
+    maxAbsResidual: abs.at(-1)!,
     biasCiLower: standardError === null ? null : bias - ciZ * standardError,
     biasCiUpper: standardError === null ? null : bias + ciZ * standardError,
     standardError,
@@ -434,7 +434,11 @@ export function checkpointAccuracy(
   // is what a deterministic record needs. Same rule as the benchmark artifact
   // ordering.
   const strata: StratumAccuracy[] = [...byStratum.keys()]
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .sort((a, b) => {
+      if (a < b) return -1;
+      if (a > b) return 1;
+      return 0;
+    })
     .map((key) => {
       const bucket = byStratum.get(key)!;
       // A stratum below the floor is REPORTED as insufficient rather than

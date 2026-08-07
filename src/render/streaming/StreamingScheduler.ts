@@ -403,7 +403,7 @@ export class StreamingScheduler {
   private _pointBudget: number;
   private readonly _uploadQueue: GpuUploadQueue | undefined;
   private readonly _datasetId: string;
-  private _generationId = 0;
+  private readonly _generationId = 0;
   private _maxConcurrent: number;
   /**
    * Reused per-tick to avoid the spread-clone of `view.cameraPosition`
@@ -516,7 +516,7 @@ export class StreamingScheduler {
     this._memoryPressureRatio =
       options.memoryPressureRatio ?? DEFAULT_MEMORY_PRESSURE_RATIO;
     this._evictionHysteresis = resolveEvictionHysteresis({
-      ...(options.evictionHysteresis ?? {}),
+      ...options.evictionHysteresis,
       triggerRatio: this._memoryPressureRatio,
     });
     this._now = options.now ?? nowMs;
@@ -683,7 +683,7 @@ export class StreamingScheduler {
     // Hysteresis on the "stable" transition — we only resume full-detail
     // refinement after staying below the threshold for the settle window.
     if (this._velocitySmoothed <= VELOCITY_FAST_THRESHOLD) {
-      if (this._stableSinceTs === null) this._stableSinceTs = wallNow;
+      this._stableSinceTs ??= wallNow;
     } else {
       this._stableSinceTs = null;
     }
@@ -702,7 +702,7 @@ export class StreamingScheduler {
         ? this._cloud.octree.store.residentPointCount / this._pointBudget
         : 0;
     if (ratio > PRESSURE_HIGH_RATIO) {
-      if (this._pressureHighSinceTs === null) this._pressureHighSinceTs = wallNow;
+      this._pressureHighSinceTs ??= wallNow;
       this._pressureLowSinceTs = null;
       if (
         this._pressureDepthReduction === 0 &&
@@ -711,7 +711,7 @@ export class StreamingScheduler {
         this._pressureDepthReduction = PRESSURE_DEPTH_REDUCTION;
       }
     } else if (ratio < PRESSURE_LOW_RATIO) {
-      if (this._pressureLowSinceTs === null) this._pressureLowSinceTs = wallNow;
+      this._pressureLowSinceTs ??= wallNow;
       this._pressureHighSinceTs = null;
       if (
         this._pressureDepthReduction > 0 &&
@@ -746,7 +746,7 @@ export class StreamingScheduler {
     if (typeof frameMs === 'number' && frameMs > 0) {
       if (frameMs > FPS_PRESSURE_HIGH_MS) {
         // Sustained slow — start the low-fps timer.
-        if (this._fpsLowSinceTs === null) this._fpsLowSinceTs = wallNow;
+        this._fpsLowSinceTs ??= wallNow;
         this._fpsHighSinceTs = null;
         if (
           wallNow - this._fpsLowSinceTs >= FPS_PRESSURE_HIGH_HOLD_MS &&
@@ -761,7 +761,7 @@ export class StreamingScheduler {
         }
       } else if (frameMs < FPS_PRESSURE_LOW_MS) {
         // Sustained smooth — start the high-fps recovery timer.
-        if (this._fpsHighSinceTs === null) this._fpsHighSinceTs = wallNow;
+        this._fpsHighSinceTs ??= wallNow;
         this._fpsLowSinceTs = null;
         if (
           wallNow - this._fpsHighSinceTs >= FPS_PRESSURE_LOW_HOLD_MS &&
@@ -887,7 +887,7 @@ export class StreamingScheduler {
       wanted = freshWanted;
 
       // Cache the inputs and outputs for the next tick's fast-path check.
-      if (this._lastVP === null) this._lastVP = new Float64Array(16);
+      this._lastVP ??= new Float64Array(16);
       copyVp(view.viewProjection, this._lastVP);
       // Reuse the cached tuple instead of allocating a fresh one each rescore.
       if (this._lastSigCameraPos === null) {
@@ -958,7 +958,7 @@ export class StreamingScheduler {
     for (const [id, deadline] of this._deferredEvictAt) {
       if (nowTs < deadline) continue;
       const node = store.get(id);
-      if (!node || node.state !== 'resident') {
+      if (node?.state !== 'resident') {
         this._deferredEvictAt.delete(id);
         continue;
       }
@@ -1004,7 +1004,7 @@ export class StreamingScheduler {
       this._pointBudget,
     )) {
       const node = store.get(id);
-      if (!node || node.state !== 'resident') continue;
+      if (node?.state !== 'resident') continue;
       // Cache hysteresis (hysteresis): bump the compressed chunk so a quick
       // camera return finds it warm.
       this._cache.touch(id);
@@ -1063,7 +1063,7 @@ export class StreamingScheduler {
       });
       for (const id of plan.evict) {
         const node = store.get(id);
-        if (!node || node.state !== 'resident') {
+        if (node?.state !== 'resident') {
           this._deferredEvictAt.delete(id);
           continue;
         }
@@ -1146,7 +1146,7 @@ export class StreamingScheduler {
     const store = this._cloud.octree.store;
     for (const id of this._inFlight.keys()) {
       const node = store.get(id);
-      if (node && node.state === 'loading') store.setState(node, 'unloaded');
+      if (node?.state === 'loading') store.setState(node, 'unloaded');
     }
     for (const controller of this._inFlight.values()) controller.abort();
     this._inFlight.clear();
@@ -1273,7 +1273,7 @@ export class StreamingScheduler {
       this._queue.length > 0
     ) {
       const node = this._queue.shift();
-      if (!node || node.state !== 'queued') continue;
+      if (node?.state !== 'queued') continue;
       // Pressure gate — if accepting this decode would push the projected
       // resident count past the hysteresis cap, defer it. The next scheduler
       // `update()` tick (after eviction has had a chance to run) will

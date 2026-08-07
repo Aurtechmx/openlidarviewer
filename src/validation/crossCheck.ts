@@ -154,14 +154,19 @@ export function crossCheck(
   else if (withinTolFraction >= threshold) verdict = 'agree';
   else verdict = 'disagree';
 
-  const summary =
-    lengthMismatch && !allowPartial
-      ? `Grid length mismatch (${ours.length} vs ${reference.length}); not aligned — resample onto a common grid before comparing.`
-      : verdict === 'insufficient'
-      ? `Insufficient overlap: ${count} comparable cells (< ${minCells}).`
-      : `${verdict === 'agree' ? 'Agrees' : 'Disagrees'} with reference over ${count} cells: ` +
-        `max |Δ| ${maxAbsDiff.toPrecision(3)}, RMSE ${rmse.toPrecision(3)}, ` +
-        `${(withinTolFraction * 100).toFixed(1)}% within ±${tol} (bias ${meanDiff >= 0 ? '+' : ''}${meanDiff.toPrecision(3)}).`;
+  const agreeWord = verdict === 'agree' ? 'Agrees' : 'Disagrees';
+  const biasSign = meanDiff >= 0 ? '+' : '';
+  let summary: string;
+  if (lengthMismatch && !allowPartial) {
+    summary = `Grid length mismatch (${ours.length} vs ${reference.length}); not aligned — resample onto a common grid before comparing.`;
+  } else if (verdict === 'insufficient') {
+    summary = `Insufficient overlap: ${count} comparable cells (< ${minCells}).`;
+  } else {
+    summary =
+      `${agreeWord} with reference over ${count} cells: ` +
+      `max |Δ| ${maxAbsDiff.toPrecision(3)}, RMSE ${rmse.toPrecision(3)}, ` +
+      `${(withinTolFraction * 100).toFixed(1)}% within ±${tol} (bias ${biasSign}${meanDiff.toPrecision(3)}).`;
+  }
 
   return {
     verdict, count, skipped, maxAbsDiff, rmse, meanDiff,

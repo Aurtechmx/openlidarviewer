@@ -182,10 +182,8 @@ export function classificationAgreement(
     if (t === 'ground') {
       if (p === 'ground') tp++;
       else fn++;
-    } else {
-      if (p === 'ground') fp++;
-      else tn++;
-    }
+    } else if (p === 'ground') fp++;
+    else tn++;
   }
 
   const evaluated = tp + fp + fn + tn;

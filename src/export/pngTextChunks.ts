@@ -53,8 +53,8 @@ const CRC_TABLE = (() => {
 
 function crc32(bytes: Uint8Array): number {
   let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) {
-    c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  for (const b of bytes) {
+    c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
   }
   return (c ^ 0xffffffff) >>> 0;
 }
@@ -77,7 +77,7 @@ function latin1Bytes(s: string): Uint8Array {
 /** Decode Latin-1 bytes back to a string (exact inverse of latin1Bytes). */
 function latin1String(bytes: Uint8Array): string {
   let out = '';
-  for (let i = 0; i < bytes.length; i++) out += String.fromCharCode(bytes[i]);
+  for (const b of bytes) out += String.fromCharCode(b);
   return out;
 }
 

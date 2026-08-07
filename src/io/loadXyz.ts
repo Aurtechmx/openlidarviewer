@@ -48,7 +48,7 @@ export async function loadXyz(
     buffer,
     (raw) => {
       const line = raw.trim();
-      if (line === '' || line[0] === '#') return;
+      if (line === '' || line.startsWith('#')) return;
 
       const tok = tokenize(line);
       const x = Number(tok[0]);
@@ -57,13 +57,11 @@ export async function loadXyz(
       // A non-numeric line (e.g. a "x,y,z" header) is silently skipped.
       if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
 
-      if (hasColor === null) {
-        hasColor =
-          tok.length >= 6 &&
-          Number.isFinite(Number(tok[3])) &&
-          Number.isFinite(Number(tok[4])) &&
-          Number.isFinite(Number(tok[5]));
-      }
+      hasColor ??=
+        tok.length >= 6 &&
+        Number.isFinite(Number(tok[3])) &&
+        Number.isFinite(Number(tok[4])) &&
+        Number.isFinite(Number(tok[5]));
 
       xs.push(x);
       ys.push(y);

@@ -29,6 +29,8 @@ import {
   type NavigationPreset,
 } from '../render/navPrefs';
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
+import type { EdlPresetId } from '../render/edlPresets';
+import type { SplatMode } from '../render/splatShader';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import {
@@ -59,6 +61,9 @@ import {
   type TerrainWorkflowPresetId,
 } from '../render/terrainWorkflowPresets';
 
+/** An EDL preset id, or `null` for "off". */
+type EdlPresetSelection = EdlPresetId | null;
+
 /** The render-quality state the Inspector's Rendering controls reflect. */
 export interface RenderingState {
   pointSize: number;
@@ -79,7 +84,7 @@ export interface RenderingState {
    * Rendering section. The viewer keeps the source of truth; the
    * Inspector mirrors it via `syncRendering`.
    */
-  splatMode: 'classic' | 'soft' | 'inspection' | 'gaussian';
+  splatMode: SplatMode;
 }
 
 export interface InspectorCallbacks {
@@ -164,14 +169,14 @@ export interface InspectorCallbacks {
    * preset change (session restore, public API call) reflects in the UI.
    */
   onRgbAppearancePreset: (id: string) => void;
-  onEdlPreset: (id: 'subtle' | 'balanced' | 'inspection' | null) => void;
+  onEdlPreset: (id: EdlPresetSelection) => void;
   onSkyPreset: (id: string) => void;
   /** Advanced (streaming COPC only) — white-balance sliders. */
   onWhiteBalance: (temperature: number, tint: number) => void;
   /** Advanced (streaming COPC only) — auto-balance button. */
   onAutoBalance: () => void;
   /** Rendering > Splat mode chip rail. */
-  onSplatMode: (id: 'classic' | 'soft' | 'inspection' | 'gaussian') => void;
+  onSplatMode: (id: SplatMode) => void;
   /**
    * Visuals Studio > Workflow chip rail (v0.4.5) — apply a terrain workflow
    * preset (Terrain / Construction / Mining / Forestry / Hydrology /
@@ -289,7 +294,7 @@ const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
  */
 export interface VisualsStudioState {
   readonly rgbAppearancePresetId: string | null;
-  readonly edlPresetId: 'subtle' | 'balanced' | 'inspection' | null;
+  readonly edlPresetId: EdlPresetSelection;
   readonly skyPresetId: string;
   /** Current white-balance temperature; only meaningful for streaming COPC. */
   readonly temperature: number;
@@ -315,7 +320,7 @@ const VISUALS_RGB_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
 
 /** The four EDL chips (Off + three named presets). */
 const VISUALS_EDL_CHIPS: ReadonlyArray<{
-  id: 'subtle' | 'balanced' | 'inspection' | null;
+  id: EdlPresetSelection;
   label: string;
 }> = [
   { id: null, label: 'Off' },
@@ -343,7 +348,7 @@ const VISUALS_SKY_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
  *     sprite falloff, NOT a trained 3D Gaussian Splat scene.
  */
 const VISUALS_SPLAT_CHIPS: ReadonlyArray<{
-  id: 'classic' | 'soft' | 'inspection' | 'gaussian';
+  id: SplatMode;
   label: string;
   /** Optional custom tooltip; falls back to a generated one when absent. */
   title?: string;
@@ -581,7 +586,7 @@ export class Inspector {
    * the listener is harmless — the sheet-open class is a no-op when the
    * panel isn't styled as a sheet.
    */
-  private _sheetHead!: HTMLElement;
+  private readonly _sheetHead!: HTMLElement;
   private readonly _cb: InspectorCallbacks;
   private readonly _layers = el('div', { className: 'olv-layers' });
   private readonly _chips = el('div', { className: 'olv-chips' });
@@ -608,7 +613,7 @@ export class Inspector {
    * so this details element is hidden via `_advancedVisible` until a
    * streaming cloud attaches. Stored so the host can flip visibility.
    */
-  private _wbAdvancedDetails: HTMLDetailsElement | null = null;
+  private readonly _wbAdvancedDetails: HTMLDetailsElement | null = null;
   private readonly _wbTemperatureSlider = (() => {
     const s = el('input', { type: 'range', className: 'olv-wb-slider' }) as HTMLInputElement;
     s.min = '-100';
@@ -651,17 +656,17 @@ export class Inspector {
   // Range filters (v0.5.6) — an elevation (world-unit height) filter and an
   // intensity (raw-unit) filter, both built from the shared `buildRangeFilter`
   // so the DOM, the active-state cue, and the seed/reset logic live once.
-  private _elevFilter!: RangeFilter;
-  private _intenFilter!: RangeFilter;
+  private readonly _elevFilter!: RangeFilter;
+  private readonly _intenFilter!: RangeFilter;
   private readonly _detail = el('div', { className: 'olv-detail' });
   private readonly _report = el('div', { className: 'olv-report' });
   // Captured section refs — `setStreamingMode` toggles their visibility so
   // the static-cloud-only sections drop out when a streaming COPC / EPT is
   // active and their streaming-equivalents in StreamingPanel take over.
-  private _layersSection!: HTMLElement;
-  private _colorBySection!: HTMLElement;
-  private _renderingSection!: HTMLElement;
-  private _exportSection!: HTMLElement;
+  private readonly _layersSection!: HTMLElement;
+  private readonly _colorBySection!: HTMLElement;
+  private readonly _renderingSection!: HTMLElement;
+  private readonly _exportSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
   /** Session-stats body — rebuilt lazily when the details section opens. */
   private readonly _sessionStatsBody: HTMLElement;
@@ -687,7 +692,7 @@ export class Inspector {
   /** CRS section body — populated by setCrs(). */
   private readonly _crsBody: HTMLElement;
   /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
-  private _crsSection: HTMLElement | null = null;
+  private readonly _crsSection: HTMLElement | null = null;
   /** Caller registers this to react to user CRS overrides. */
   private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
@@ -707,8 +712,8 @@ export class Inspector {
   /** The original tooltip for each image-export button — restored on enable. */
   private readonly _imageExportTitles = new Map<ExportMode, string>();
   /** the Report PDF button, gated like the image-export ones. */
-  private _reportButton: HTMLButtonElement | null = null;
-  private _reportSelect: HTMLSelectElement | null = null;
+  private readonly _reportButton: HTMLButtonElement | null = null;
+  private readonly _reportSelect: HTMLSelectElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _pointSizeValue: HTMLElement;
@@ -1325,6 +1330,7 @@ export class Inspector {
     // paint — it simply is not there yet).
     this._layerHealthSlot = el('div');
 
+    this._crsSection = collapsibleSection('Coordinate system', this._crsBody);
     this.element = el('aside', { className: 'olv-inspector' }, [
       head,
       this._datasetIntelligence.element,
@@ -1347,7 +1353,7 @@ export class Inspector {
           this._provenanceBody,
         ]),
       ),
-      (this._crsSection = collapsibleSection('Coordinate system', this._crsBody)),
+      this._crsSection,
       collapsibleSection('Scan report', this._report),
       collapsibleSection('Saved views', views),
       this._exportSection,
@@ -1795,7 +1801,7 @@ export class Inspector {
     }
     for (const chip of this._visualsEdlRail.children) {
       const id = (chip as HTMLElement).dataset?.presetId;
-      const wanted = state.edlPresetId === null ? 'off' : state.edlPresetId;
+      const wanted = state.edlPresetId ?? 'off';
       chip.classList.toggle('olv-chip-active', id === wanted);
     }
     for (const chip of this._visualsSkyRail.children) {

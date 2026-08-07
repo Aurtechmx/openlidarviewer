@@ -466,8 +466,16 @@ export function hornDerivativesF32Reference(
   // Per-axis denominators, mirroring the kernel's cellX / cellY uniforms.
   const denomX = fr(8 * fr(cellSizeM));
   const denomY = fr(8 * fr(cellSizeYM));
-  const clampR = (r: number): number => (r < 0 ? 0 : r >= rows ? rows - 1 : r);
-  const clampC = (c: number): number => (c < 0 ? 0 : c >= cols ? cols - 1 : c);
+  const clampR = (r: number): number => {
+    if (r < 0) return 0;
+    if (r >= rows) return rows - 1;
+    return r;
+  };
+  const clampC = (c: number): number => {
+    if (c < 0) return 0;
+    if (c >= cols) return cols - 1;
+    return c;
+  };
   const sample = (r: number, c: number, fallback: number): number => {
     const i = clampR(r) * cols + clampC(c);
     return valid[i] === 1 ? zClean[i] : fallback;

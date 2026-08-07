@@ -52,15 +52,21 @@ export interface ExportCloudSummary {
 function cloudToSummary(cloud: PointCloud | null): ExportCloudSummary | null {
   if (!cloud) return null;
   const crs = cloud.metadata?.crs ?? null;
+  let classProvenance: ExportCloudSummary['classProvenance'];
+  if (cloud.classificationIsDerived) {
+    classProvenance = 'derived';
+  } else if (cloud.classification != null) {
+    classProvenance = 'source';
+  } else {
+    classProvenance = 'none';
+  }
   return {
     pointCount: cloud.pointCount,
     hasRgb: cloud.colors != null,
     hasGpsTime: cloud.gpsTime != null,
     crsName: crs?.name ?? null,
     hasWkt: crs?.wkt != null,
-    classProvenance: cloud.classificationIsDerived
-      ? 'derived'
-      : cloud.classification != null ? 'source' : 'none',
+    classProvenance,
   };
 }
 
@@ -433,7 +439,8 @@ export class ExportPanel {
     const s = buildExportSummary(input);
     const warn = s.warnings.find((w) => w.level === 'error') ?? s.warnings.find((w) => w.level === 'warn');
     this._summary.textContent = warn ? `${s.line} — ${warn.message}` : s.line;
-    this._summary.className = `olv-export-summary${warn ? ` is-${warn.level}` : ''}`;
+    const summaryModifier = warn ? ` is-${warn.level}` : '';
+    this._summary.className = `olv-export-summary${summaryModifier}`;
   }
 
   /**
@@ -494,13 +501,14 @@ export class ExportPanel {
       btn.setAttribute('data-testid', 'export-integrity-report');
       measureRow.append(btn);
     }
+    const measurePlural = count === 1 ? '' : 's';
     content.append(
       this._productGroup(
         'Measurements',
         measureRow,
         count === 0
           ? 'Place measurements, then export them as open vector formats.'
-          : `${count} measurement${count === 1 ? '' : 's'} ready to export.`,
+          : `${count} measurement${measurePlural} ready to export.`,
       ),
     );
 
@@ -738,7 +746,7 @@ export class ExportPanel {
       }
       // Respect an active clip: export only the points inside (or outside) the
       // box the user had set when they pressed Export (captured above).
-      const clipped = clip != null && clip.enabled;
+      const clipped = clip?.enabled;
       const cloud = clipped ? clipCloud(sourceCloud, clip) : sourceCloud;
       this._exportBtn.textContent = 'Exporting…';
       const { convertCloud } = await loadConvertEngine();
@@ -782,7 +790,7 @@ export class ExportPanel {
 }
 
 function parseEpsg(v: string): number | null {
-  const n = parseInt(v, 10);
+  const n = Number.parseInt(v, 10);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 

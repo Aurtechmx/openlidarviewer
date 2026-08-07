@@ -53,7 +53,7 @@ export const DEFAULT_CANOPY_PALETTE: ReadonlyArray<ColorStop> = [
 
 function clamp01(t: number): number {
   if (!Number.isFinite(t)) return 0;
-  return t < 0 ? 0 : t > 1 ? 1 : t;
+  return Math.max(0, Math.min(1, t));
 }
 
 function lerpChannel(a: number, b: number, t: number): number {
@@ -77,7 +77,7 @@ export function hypsometricColor(
 
   const t = clamp01((value - minZ) / (maxZ - minZ));
   if (t <= palette[0].t) return palette[0].color;
-  const last = palette[palette.length - 1];
+  const last = palette.at(-1)!;
   if (t >= last.t) return last.color;
 
   for (let i = 1; i < palette.length; i++) {

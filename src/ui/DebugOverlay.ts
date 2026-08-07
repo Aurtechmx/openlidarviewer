@@ -223,8 +223,8 @@ export class DebugOverlay {
     this.element = el('div', { className: 'olv-debug' }, [title, this._body]);
   }
 
-  private _title!: HTMLButtonElement;
-  private _body!: HTMLElement;
+  private readonly _title!: HTMLButtonElement;
+  private readonly _body!: HTMLElement;
   private _collapsed = false;
 
   /** Collapse to just the title bar, or expand back. */
@@ -317,8 +317,14 @@ export class DebugOverlay {
     } else {
       this._perf.textContent = '(collecting…)';
     }
-    const backendLabel =
-      backend === 'webgpu' ? 'WebGPU' : backend === 'webgl2' ? 'WebGL 2' : '—';
+    let backendLabel: string;
+    if (backend === 'webgpu') {
+      backendLabel = 'WebGPU';
+    } else if (backend === 'webgl2') {
+      backendLabel = 'WebGL 2';
+    } else {
+      backendLabel = '—';
+    }
 
     if (stats) {
       this._live.textContent = [

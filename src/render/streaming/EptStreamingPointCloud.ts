@@ -41,6 +41,7 @@ import type {
 } from '../../io/copc/copcChunkDecode';
 import type { NodeCounts } from './StreamingNodeStore';
 import type {
+  StreamingColorMode,
   StreamingSource,
   StreamingSourceKind,
 } from './StreamingSource';
@@ -181,7 +182,7 @@ export class EptStreamingPointCloud implements StreamingSource {
    * Red / Green / Blue attributes; elevation otherwise. Mirrors the
    * COPC implementation's contract.
    */
-  defaultColorMode(): 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal' {
+  defaultColorMode(): StreamingColorMode {
     return this._hasRgb() ? 'rgb' : 'elevation';
   }
 
@@ -190,8 +191,8 @@ export class EptStreamingPointCloud implements StreamingSource {
    * RGB requires Red/Green/Blue, Intensity needs Intensity, Classification
    * needs Classification. Elevation is always available (always have X/Y/Z).
    */
-  availableColorModes(): readonly ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[] {
-    const out: ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[] = [];
+  availableColorModes(): readonly StreamingColorMode[] {
+    const out: StreamingColorMode[] = [];
     if (this._hasRgb()) out.push('rgb');
     if (this._schemaHas('Intensity')) out.push('intensity');
     out.push('elevation');

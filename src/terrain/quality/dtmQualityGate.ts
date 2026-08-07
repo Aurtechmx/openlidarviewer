@@ -236,5 +236,5 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
 function joinReasons(parts: string[]): string {
   if (parts.length === 1) return parts[0];
   if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
-  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+  return `${parts.slice(0, -1).join(', ')}, and ${parts.at(-1)}`;
 }

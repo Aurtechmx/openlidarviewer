@@ -28,7 +28,7 @@ function readVertexRecords(text: string): Float64Array {
   const out: number[] = [];
   for (const raw of text.split('\n')) {
     const line = raw.trimStart();
-    if (line.length < 2 || line[0] !== 'v') continue;
+    if (line.length < 2 || !line.startsWith('v')) continue;
     const after = line[1];
     if (after !== ' ' && after !== '\t') continue; // vn / vt / vp records
     const tok = line.split(/\s+/);

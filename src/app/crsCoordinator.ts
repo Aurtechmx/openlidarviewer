@@ -164,9 +164,22 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     const vw = getViewer();
     const act = getActiveId();
     const sc = vw.streamingCloud;
-    const detected =
-      (sc ? sc.crs() : act ? vw.getCloud(act)?.metadata?.crs : undefined) ?? undefined;
-    const source: CrsSource = sc ? (sc.kind === 'ept' ? 'ept-srs' : 'copc-meta') : 'las-vlr';
+    let detected: CrsInfo | undefined;
+    if (sc) {
+      detected = sc.crs() ?? undefined;
+    } else if (act) {
+      detected = vw.getCloud(act)?.metadata?.crs ?? undefined;
+    } else {
+      detected = undefined;
+    }
+    let source: CrsSource;
+    if (!sc) {
+      source = 'las-vlr';
+    } else if (sc.kind === 'ept') {
+      source = 'ept-srs';
+    } else {
+      source = 'copc-meta';
+    }
     crsService.setOverride({ override, detected, source });
     if (!(override.epsg === null && override.kind === 'local')) {
       recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);

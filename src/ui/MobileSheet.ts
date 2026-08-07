@@ -233,9 +233,9 @@ export class MobileSheet {
     this._syncDetent();
   }
 
-  private _handle!: HTMLButtonElement;
-  private _head!: HTMLElement;
-  private _body!: HTMLElement;
+  private readonly _handle!: HTMLButtonElement;
+  private readonly _head!: HTMLElement;
+  private readonly _body!: HTMLElement;
 
   /** The tabpanel container the host re-parents this tab's panels into. */
   slot(tab: MobileTab): HTMLElement {

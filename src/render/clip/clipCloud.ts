@@ -27,7 +27,7 @@ function filterChannel<T extends TypedArray>(
   if (!arr || pointCount <= 0) return undefined;
   const stride = (arr.length / pointCount) | 0;
   if (stride < 1) return undefined;
-  const Ctor = arr.constructor as { new (length: number): T };
+  const Ctor = arr.constructor as new (length: number) => T;
   const out = new Ctor(keep.length * stride);
   for (let j = 0; j < keep.length; j++) {
     const src = keep[j] * stride;

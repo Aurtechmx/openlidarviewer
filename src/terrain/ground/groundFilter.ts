@@ -275,7 +275,7 @@ export function classifyGroundSmrf(
   };
 
   // ── 2. minimum-elevation grid (optionally despiked) ───────────────
-  const minGrid = new Float32Array(nCells).fill(NaN);
+  const minGrid = new Float32Array(nCells).fill(Number.NaN);
   const hadData = new Uint8Array(nCells);
   if (floorPercentile <= 0) {
     // Fast path: strict per-cell minimum.
@@ -452,7 +452,7 @@ function windowExtreme(
   for (let row = 0; row < rows; row++) {
     const base = row * cols;
     for (let col = 0; col < cols; col++) {
-      let acc = NaN;
+      let acc = Number.NaN;
       const lo = Math.max(0, col - b);
       const hi = Math.min(cols - 1, col + b);
       for (let c = lo; c <= hi; c++) {
@@ -467,7 +467,7 @@ function windowExtreme(
   const out = new Float32Array(grid.length);
   for (let col = 0; col < cols; col++) {
     for (let row = 0; row < rows; row++) {
-      let acc = NaN;
+      let acc = Number.NaN;
       const lo = Math.max(0, row - b);
       const hi = Math.min(rows - 1, row + b);
       for (let r = lo; r <= hi; r++) {

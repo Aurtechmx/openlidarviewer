@@ -180,7 +180,7 @@ export class AnnotationOverlay {
   private _createMarker(a: Annotation): Marker {
     const group = svgEl('g');
     group.setAttribute('class', `olv-anno-marker ${typeClass(a.type)}`);
-    group.setAttribute('data-aid', a.id);
+    group.dataset.aid = a.id;
 
     // Dark halo for readability over a dense, bright cloud, then the type disc.
     const halo = svgEl('circle');

@@ -304,44 +304,42 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   // v0.5.2 — verify a handed-over integrity report. Opens a file picker, reads
   // the JSON, recomputes its digest (the algorithm is self-described in the
   // file), and shows intact / modified. Ungated; the verifier loads on demand.
-  actions.push({
-    id: 'report.verify',
-    title: 'Verify integrity report…',
-    section: 'Export',
-    hint: 'Check a report JSON — confirm its digest still matches its contents.',
-    keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
-    run: () => {
-      const input = el('input', { className: 'olv-hidden' });
-      input.type = 'file';
-      input.accept = '.json,application/json';
-      input.addEventListener('change', () => {
-        const file = input.files?.[0];
-        input.remove();
-        if (!file) return;
-        void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
-      });
-      document.body.append(input);
-      input.click();
-    },
-  });
-
-  // v0.5.3 — toggle the on-canvas compass (promoted to a default control). The
-  // choice persists; the widget loads lazily the first time it is shown.
-  actions.push({
-    id: 'view.compass',
-    title: 'Toggle compass',
-    section: 'View',
-    hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
-    keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
-    run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
-  });
-
-  // v7 sessions — named view states from the palette. Both handlers already
-  // live in this shell (the same saveCurrentView/applyView the panels call),
-  // so these entries add only sub-KB registry rows — no new code is dragged
-  // into the eager bundle. `keys: 'V'` advertises the binding that
-  // ui/shortcuts.ts actually fires; the registry `keys` field is display-only.
   actions.push(
+    {
+      id: 'report.verify',
+      title: 'Verify integrity report…',
+      section: 'Export',
+      hint: 'Check a report JSON — confirm its digest still matches its contents.',
+      keywords: ['integrity', 'digest', 'tamper', 'check', 'sha', 'validate', 'verify'],
+      run: () => {
+        const input = el('input', { className: 'olv-hidden' });
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.addEventListener('change', () => {
+          const file = input.files?.[0];
+          input.remove();
+          if (!file) return;
+          void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
+        });
+        document.body.append(input);
+        input.click();
+      },
+    },
+    // v0.5.3 — toggle the on-canvas compass (promoted to a default control). The
+    // choice persists; the widget loads lazily the first time it is shown.
+    {
+      id: 'view.compass',
+      title: 'Toggle compass',
+      section: 'View',
+      hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
+      keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
+      run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
+    },
+    // v7 sessions — named view states from the palette. Both handlers already
+    // live in this shell (the same saveCurrentView/applyView the panels call),
+    // so these entries add only sub-KB registry rows — no new code is dragged
+    // into the eager bundle. `keys: 'V'` advertises the binding that
+    // ui/shortcuts.ts actually fires; the registry `keys` field is display-only.
     {
       id: 'view.save-state',
       title: 'Save view state',
@@ -373,32 +371,30 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
         deps.applyView(deps.bookmarks.count() - 1);
       },
     },
+    // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
+    // command palette so users who skipped or dismissed can re-trigger
+    // it from one keystroke (Cmd-K → "tour").
+    {
+      id: 'tour.replay',
+      title: 'Replay onboarding tour',
+      section: 'Help',
+      hint: 'Walks through the main tools — about 30 seconds.',
+      keywords: ['onboarding', 'tour', 'help', 'tutorial', 'guide', 'walkthrough'],
+      run: () => deps.getTour()?.replay(),
+    },
+    // v0.3.9 — Keyboard shortcut sheet. Surfaces the sheet from the
+    // palette and lists its own binding (`?`) so users who discovered
+    // the palette via Cmd-K can find the sheet from the same surface.
+    {
+      id: 'help.shortcuts',
+      title: 'Show keyboard shortcuts',
+      section: 'Help',
+      keys: '?',
+      hint: 'Every action and key, grouped by section.',
+      keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
+      run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()),
+    },
   );
-
-  // v0.3.9 — Onboarding tour replay. Surfaces the tour from the
-  // command palette so users who skipped or dismissed can re-trigger
-  // it from one keystroke (Cmd-K → "tour").
-  actions.push({
-    id: 'tour.replay',
-    title: 'Replay onboarding tour',
-    section: 'Help',
-    hint: 'Walks through the main tools — about 30 seconds.',
-    keywords: ['onboarding', 'tour', 'help', 'tutorial', 'guide', 'walkthrough'],
-    run: () => deps.getTour()?.replay(),
-  });
-
-  // v0.3.9 — Keyboard shortcut sheet. Surfaces the sheet from the
-  // palette and lists its own binding (`?`) so users who discovered
-  // the palette via Cmd-K can find the sheet from the same surface.
-  actions.push({
-    id: 'help.shortcuts',
-    title: 'Show keyboard shortcuts',
-    section: 'Help',
-    keys: '?',
-    hint: 'Every action and key, grouped by section.',
-    keywords: ['shortcuts', 'keys', 'bindings', 'help', 'cheat', 'sheet'],
-    run: () => void deps.ensureShortcutSheet().then((sheet) => sheet.open()),
-  });
 
   return actions;
 }

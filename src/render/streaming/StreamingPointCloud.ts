@@ -20,6 +20,7 @@ import type {
 import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
 import type { NodeCounts } from './StreamingNodeStore';
 import type {
+  StreamingColorMode,
   StreamingSource,
   StreamingSourceKind,
 } from './StreamingSource';
@@ -113,7 +114,7 @@ export class StreamingPointCloud implements StreamingSource {
    * format-agnostic default colour mode. COPC clouds use RGB when
    * the point format carries it (PDRF 7 / 8), elevation otherwise.
    */
-  defaultColorMode(): 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal' {
+  defaultColorMode(): StreamingColorMode {
     return this.metadata.header.hasRgb ? 'rgb' : 'elevation';
   }
 
@@ -122,8 +123,8 @@ export class StreamingPointCloud implements StreamingSource {
    * present; intensity / elevation / classification are always available
    * on COPC PDRF 6/7/8.
    */
-  availableColorModes(): readonly ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[] {
-    const out: ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[] = [];
+  availableColorModes(): readonly StreamingColorMode[] {
+    const out: StreamingColorMode[] = [];
     if (this.metadata.header.hasRgb) out.push('rgb');
     out.push('intensity', 'elevation', 'classification');
     return out;

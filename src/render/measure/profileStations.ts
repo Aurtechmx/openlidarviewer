@@ -260,10 +260,11 @@ function elevationAtChainage(
   samples: ReadonlyArray<ProfileChartSample>,
   chainage: number,
 ): number {
-  if (samples.length === 0) return Number.NaN;
+  const last = samples.at(-1);
+  if (last === undefined) return Number.NaN;
   if (chainage <= samples[0].distance) return samples[0].height;
-  if (chainage >= samples[samples.length - 1].distance) {
-    return samples[samples.length - 1].height;
+  if (chainage >= last.distance) {
+    return last.height;
   }
   // Linear search — samples are typically 32..256 long; binary
   // search would shave µs but adds branch complexity not worth it
@@ -286,5 +287,5 @@ function elevationAtChainage(
       return lo.height + t * (hi.height - lo.height);
     }
   }
-  return samples[samples.length - 1].height;
+  return last.height;
 }

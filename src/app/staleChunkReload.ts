@@ -166,18 +166,22 @@ export function installStaleChunkRecovery(
       // lands back exactly where they were.
       if (typeof location !== 'undefined') location.reload();
     });
-  const storage =
-    opts.storage !== undefined
-      ? opts.storage
-      : typeof sessionStorage !== 'undefined'
-        ? sessionStorage
-        : null;
-  const eventTarget =
-    opts.eventTarget !== undefined
-      ? opts.eventTarget
-      : typeof window !== 'undefined'
-        ? (window as unknown as EventTargetLike)
-        : null;
+  let storage: StorageLike | null;
+  if (opts.storage !== undefined) {
+    storage = opts.storage;
+  } else if (typeof sessionStorage !== 'undefined') {
+    storage = sessionStorage;
+  } else {
+    storage = null;
+  }
+  let eventTarget: EventTargetLike | null;
+  if (opts.eventTarget !== undefined) {
+    eventTarget = opts.eventTarget;
+  } else if (typeof window !== 'undefined') {
+    eventTarget = window as unknown as EventTargetLike;
+  } else {
+    eventTarget = null;
+  }
   const onUnrecoverable = opts.onUnrecoverable;
   const log = opts.log ?? ((reason: string) => console.warn('[staleChunkReload]', reason));
 

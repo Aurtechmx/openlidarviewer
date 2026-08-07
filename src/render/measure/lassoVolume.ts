@@ -119,8 +119,9 @@ export function filterSelectionToVisible(
   const { keepPoint, acceptIndex } = filters;
   if (!keepPoint && !acceptIndex) return indices;
   let w = 0;
-  for (let r = 0; r < indices.length; r++) {
-    const i = indices[r];
+  // Compaction in place: writes always land at index w <= the current read
+  // position, so the for-of never observes an overwritten element.
+  for (const i of indices) {
     if (
       keepPoint &&
       !keepPoint(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2])
@@ -154,7 +155,7 @@ export function convexHull2D(points: ReadonlyArray<Vec2>): Vec2[] {
   // Lower hull.
   const lower: Vec2[] = [];
   for (const p of sorted) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, p) <= 0) {
       lower.pop();
     }
     lower.push(p);
@@ -163,7 +164,7 @@ export function convexHull2D(points: ReadonlyArray<Vec2>): Vec2[] {
   const upper: Vec2[] = [];
   for (let i = sorted.length - 1; i >= 0; i--) {
     const p = sorted[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, p) <= 0) {
       upper.pop();
     }
     upper.push(p);
