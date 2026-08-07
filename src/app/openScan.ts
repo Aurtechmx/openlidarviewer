@@ -19,6 +19,7 @@
  */
 
 import { isSessionFile } from '../io/sessionFile';
+import { scanFactsFromStatic } from './sessionIo';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress } from '../io/loadProgress';
 import { describeLoadError } from '../io/loadErrors';
@@ -44,6 +45,7 @@ import type { DropZone } from '../ui/DropZone';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
+import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
@@ -122,6 +124,13 @@ export interface OpenScanDeps {
   closeStreaming: () => void;
   /** Active-scan selection + lookup. */
   scans: Pick<ScanService, 'setActive' | 'activeId'>;
+  /**
+   * The session's layer-identity owner. On load, the freshly attached cloud is
+   * bound to a stable, name-independent id from its SOURCE facts; the work
+   * stores are wired so new measurements/annotations record which layer they
+   * belong to once more than one is open.
+   */
+  layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired'>;
   /** The Inspector panel. */
   inspector: Inspector;
   /** Provenance / dataset-intelligence card refreshers. */
@@ -273,6 +282,18 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     const id = viewer.addCloud(result.cloud);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     deps.scans.setActive(id);
+    // Bind this cloud to a stable, name-independent identity from its SOURCE
+    // facts (declared count + tolerant extents + CRS), so ownership survives a
+    // rename, a duplicate filename, and a reopen at a different stride; then wire
+    // the work stores — once — so new measurements/annotations record their
+    // owning layer as soon as a second layer joins. Additive: a single-layer
+    // scene keeps its exact byte shape, because the provider returns no owner.
+    deps.layerIdentity.bindOnLoad(id, scanFactsFromStatic(result.cloud), result.cloud.name);
+    deps.layerIdentity.ensureStoresWired(
+      [viewer.measure, viewer.annotate],
+      () => deps.scans.activeId,
+      () => viewer.clouds().length,
+    );
     // A freshly opened scan has no terrain analysis yet — drop any prior grid so
     // the Coverage colour chip starts disabled until this scan is analysed.
     viewer.setCoverageGrid(null);
