@@ -120,6 +120,7 @@ import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
 import type { MeasurementExportContext } from './export/measurementExport';
 import { makeLocalToLonLat } from './export/lonLatMapper';
+import { writeScanScopedExport, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -4887,124 +4888,123 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * Export the inspection session — measurements, annotations and saved views —
  * as JSON. The whole inspection state round-trips, so a review can be closed
  * and reopened without loss.
+ *
+ * The writer loads lazily and the session reads mutable scan/viewer state, so
+ * writeScanScopedExport loads first, snapshots once with no await, and writes
+ * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<void> {
-  const { serializeSession } = await loadSession();
-  const cloud = scans.activeCloud() ?? undefined;
-  // A streaming-only session has no static cloud. Its frame still exists — the
-  // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
-  // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
-  // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
-  // and mis-oriented.
-  const upAxis: 'y' | 'z' = cloud
-    ? isZUpFormat(cloud.sourceFormat) ? 'z' : 'y'
-    : viewer.streamingCloud ? 'z' : 'y';
+  let stem = 'openlidarviewer';
+  await writeScanScopedExport({
+    requestedScanId: scans.activeId,
+    activeScanId: () => scans.activeId,
+    refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
+    // Both lazy imports resolve before any state is read; their exports spread into one deps object.
+    load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()) }),
+    write: (json) => downloadText(`${stem}.olvsession`, json),
+    serialize: ({ serializeSession, buildExportProvenance, processingManifestFromProvenance }) => {
+      const cloud = scans.activeCloud() ?? undefined;
+      // A streaming-only session has no static cloud. Its frame still exists — the
+      // streaming source's renderOrigin — and streaming COPC/EPT are LAS-derived,
+      // hence Z-up. Deriving origin/upAxis from the (absent) static cloud wrote
+      // [0,0,0] + Y-up, so the session reopened displaced by the whole render origin
+      // and mis-oriented.
+      const upAxis: 'y' | 'z' = cloud ? (isZUpFormat(cloud.sourceFormat) ? 'z' : 'y') : viewer.streamingCloud ? 'z' : 'y';
 
-  // populate the v3 fields so the .olvsession captures
-  // the full working state, not just the inspection annotations. The
-  // optional fields are only emitted when there's something meaningful
-  // to write — a session exported with no scan loaded won't pollute
-  // the file with bogus render defaults.
-  const streamingCloud = viewer.streamingCloud;
-  const exportFileName = streamingCloud?.name
-    ?? (cloud ? cloud.name : null);
+      // populate the v3 fields so the .olvsession captures
+      // the full working state, not just the inspection annotations. The
+      // optional fields are only emitted when there's something meaningful
+      // to write — a session exported with no scan loaded won't pollute
+      // the file with bogus render defaults.
+      const streamingCloud = viewer.streamingCloud;
+      const exportFileName = streamingCloud?.name ?? (cloud ? cloud.name : null);
 
-  let scanSummary: import('./io/session').SessionScanSummary | undefined;
-  if (streamingCloud) {
-    // Tight data AABB, not the octree cube — see the dataBounds() note above.
-    const b = streamingCloud.dataBounds();
-    const crs = streamingCloud.crs();
-    scanSummary = {
-      fileName: streamingCloud.name,
-      sourcePoints: streamingCloud.sourcePointCount,
-      width: b[3] - b[0],
-      depth: b[4] - b[1],
-      height: b[5] - b[2],
-      ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
-    };
-  } else if (cloud) {
-    const b = cloud.bounds();
-    scanSummary = {
-      fileName: cloud.name,
-      sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
-      width: b.max[0] - b.min[0],
-      depth: b.max[1] - b.min[1],
-      height: b.max[2] - b.min[2],
-      ...(cloud.metadata?.crs
-        ? {
-            crs: cloud.metadata.crs.name,
-            crsUnit: cloud.metadata.crs.linearUnit,
-            ...(cloud.metadata.crs.epsg != null ? { epsg: cloud.metadata.crs.epsg } : {}),
-          }
-        : {}),
-    };
-  }
+      let scanSummary: import('./io/session').SessionScanSummary | undefined;
+      if (streamingCloud) {
+        // Tight data AABB, not the octree cube — see the dataBounds() note above.
+        const b = streamingCloud.dataBounds();
+        const crs = streamingCloud.crs();
+        scanSummary = {
+          fileName: streamingCloud.name,
+          sourcePoints: streamingCloud.sourcePointCount,
+          width: b[3] - b[0],
+          depth: b[4] - b[1],
+          height: b[5] - b[2],
+          ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
+        };
+      } else if (cloud) {
+        const b = cloud.bounds();
+        const crs = cloud.metadata?.crs;
+        scanSummary = {
+          fileName: cloud.name,
+          sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
+          width: b.max[0] - b.min[0],
+          depth: b.max[1] - b.min[1],
+          height: b.max[2] - b.min[2],
+          ...(crs ? { crs: crs.name, crsUnit: crs.linearUnit, ...(crs.epsg != null ? { epsg: crs.epsg } : {}) } : {}),
+        };
+      }
 
-  // v7 — the verify-only processing manifest, filled into the slot the schema
-  // reserved. Derived from the CURRENT analysis result's provenance (the same
-  // derivation every terrain export stamps), so a session saved after an
-  // analysis carries the ordered, hash-chained record of the methods + final
-  // parameters behind the on-screen numbers. No analysis → the slot stays
-  // absent (serializeSession omits it), never an empty placeholder. The
-  // provenance/manifest modules ride the lazy terrain-export chunk — loaded
-  // here on demand via lazyChunks so the eager shell stays manifest-free.
-  let processingManifest: unknown;
-  // Null-safe: saving a session before any scan (or before the panel's chunk
-  // resolves) simply carries no analysis manifest.
-  const analysed = analysePanel?.currentResult() ?? null;
-  if (analysed) {
-    const { buildExportProvenance, processingManifestFromProvenance } =
-      await loadExportProvenance();
-    processingManifest = processingManifestFromProvenance(
-      buildExportProvenance(analysed, {
-        basename: exportFileName ? baseName(exportFileName) : null,
-        generatedAt: new Date(),
-        softwareVersion: __APP_VERSION__,
-        metricVersion: TERRAIN_METRIC_VERSION,
-      }),
-    );
-  }
+      // v7 — the verify-only processing manifest, filled into the slot the schema
+      // reserved. Derived from the CURRENT analysis result's provenance (the same
+      // derivation every terrain export stamps), so a session saved after an
+      // analysis carries the ordered, hash-chained record of the methods + final
+      // parameters behind the on-screen numbers. No analysis → the slot stays
+      // absent (serializeSession omits it), never an empty placeholder. The
+      // provenance/manifest builders ride the lazy terrain-export chunk, loaded with the writer above.
+      let processingManifest: unknown;
+      // Null-safe: saving a session before any scan (or before the panel's chunk
+      // resolves) simply carries no analysis manifest.
+      const analysed = analysePanel?.currentResult() ?? null;
+      if (analysed) {
+        processingManifest = processingManifestFromProvenance(
+          buildExportProvenance(analysed, {
+            basename: exportFileName ? baseName(exportFileName) : null,
+            generatedAt: new Date(),
+            softwareVersion: __APP_VERSION__,
+            metricVersion: TERRAIN_METRIC_VERSION,
+          }),
+        );
+      }
 
-  // The GLOBAL live state and every saved view's bundle come from the same
-  // capture path (captureViewState) — the extraction that replaced the old
-  // inline field-by-field block here, so the export and the named views can
-  // never record different notions of "the current state". Field-level
-  // rationale (the v5 clip write-side fix, the hidden-codes contract, the
-  // emit-only-when-set discipline) lives on captureViewState itself.
-  const viewState = captureViewState();
-  const json = serializeSession({
-    upAxis,
-    // The scene's real frame, static OR streaming — exportGeoContext resolves the
-    // static cloud's origin, else the streaming renderOrigin, else zero.
-    origin: [...exportGeoContext().origin],
-    unitSystem: viewer.measure.unitSystem,
-    // v7 — a view with a captured bundle serialises it per-view; a camera-only
-    // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
-    // v6 byte-shape.
-    views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
-    measurements: viewer.measure.getMeasurements(),
-    annotations: viewer.annotate.getAnnotations(),
-    camera: viewState.camera,
-    render: viewState.render,
-    colorMode: viewState.colorMode,
-    scanSummary,
-    classFilter: viewState.classFilter,
-    ...(viewState.pointFilters ? { pointFilters: viewState.pointFilters } : {}),
-    clip: viewState.clip,
-    // v6 — stamp the producing app version so a later re-open can tell whether a
-    // newer build would read the scan differently (see exportStaleness).
-    software: __APP_VERSION__,
-    // v7 — the reserved slot, filled above when an analysis exists; the
-    // serializer omits it when undefined so no-analysis sessions keep their
-    // byte-shape.
-    processingManifest,
+      // The GLOBAL live state and every saved view's bundle come from the same
+      // capture path (captureViewState) — the extraction that replaced the old
+      // inline field-by-field block here, so the export and the named views can
+      // never record different notions of "the current state". Field-level
+      // rationale (the v5 clip write-side fix, the hidden-codes contract, the
+      // emit-only-when-set discipline) lives on captureViewState itself.
+      const viewState = captureViewState();
+      // `.olvsession` filename derives from the active scan name so exports don't collide; JSON internally.
+      stem = exportFileName ? baseName(exportFileName) : 'openlidarviewer';
+      return serializeSession({
+        upAxis,
+        // The scene's real frame, static OR streaming — exportGeoContext resolves the
+        // static cloud's origin, else the streaming renderOrigin, else zero.
+        origin: [...exportGeoContext().origin],
+        unitSystem: viewer.measure.unitSystem,
+        // v7 — a view with a captured bundle serialises it per-view; a camera-only
+        // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
+        // v6 byte-shape.
+        views: viewBookmarks.savedViews.map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
+        measurements: viewer.measure.getMeasurements(),
+        annotations: viewer.annotate.getAnnotations(),
+        camera: viewState.camera,
+        render: viewState.render,
+        colorMode: viewState.colorMode,
+        scanSummary,
+        classFilter: viewState.classFilter,
+        ...(viewState.pointFilters ? { pointFilters: viewState.pointFilters } : {}),
+        clip: viewState.clip,
+        // v6 — stamp the producing app version so a later re-open can tell whether a
+        // newer build would read the scan differently (see exportStaleness).
+        software: __APP_VERSION__,
+        // v7 — the reserved slot, filled above when an analysis exists; the
+        // serializer omits it when undefined so no-analysis sessions keep their
+        // byte-shape.
+        processingManifest,
+      });
+    },
   });
-  // `.olvsession` is the new canonical extension; the file is
-  // still JSON internally (Mac/Linux's Open With dialog associates the
-  // double-click flow). Filename derived from the active scan name when
-  // possible so a folder of exports doesn't collide.
-  const stem = exportFileName ? baseName(exportFileName) : 'openlidarviewer';
-  downloadText(`${stem}.olvsession`, json);
 }
 
 /**
