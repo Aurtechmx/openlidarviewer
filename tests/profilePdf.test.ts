@@ -103,7 +103,7 @@ describe('provenance metadata (v0.4.5, B4)', () => {
     const text = drawnPdfText(bytes);
     expect(text).toContain('EPSG:2225'); // header line + summary row
     expect(text).toContain('NAVD88');
-    expect(text).toContain('12.50 m'); // the real corridor, not "auto"
+    expect(text).toContain('12.500 m'); // the real corridor, not "auto" (5 sig figs)
     expect(text).toContain('ground p25'); // header provenance line
     expect(text).not.toContain('auto (5% of length)');
     expect(text).not.toContain('not georeferenced');
@@ -132,10 +132,10 @@ describe('unit system (v0.4.5, B9) — the sheet honours the active toggle end-t
     // Chainage gridline labels use US 100-ft stationing: the ramp spans
     // 30 m = 98.43 ft → nice interval 10 ft → second gridline at "0+10.00".
     expect(text).toContain('0+10.00');
-    // Summary: length 30 m = 98.4252 ft → "98.43 ft" via formatLength; the
-    // corridor 12.5 m = 41.0105 ft → "41.01 ft".
-    expect(text).toContain('98.43 ft');
-    expect(text).toContain('41.01 ft');
+    // Summary: length 30 m = 98.4252 ft → "98.425 ft" via formatLength (5 sig
+    // figs); the corridor 12.5 m = 41.0105 ft → "41.010 ft".
+    expect(text).toContain('98.425 ft');
+    expect(text).toContain('41.010 ft');
     // Station table: header names the unit; elevations convert per station
     // (station 0 sits at exactly 100 m = 328.0840 ft → "328.08").
     expect(text).toContain('elevation (ft)');
