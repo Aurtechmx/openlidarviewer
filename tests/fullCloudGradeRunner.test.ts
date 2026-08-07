@@ -160,4 +160,31 @@ describe('runFullCloudGrade — orchestration', () => {
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(decode).not.toHaveBeenCalled();
   });
+
+  it('forwards octree completeness: an incomplete hierarchy is never labelled exact', async () => {
+    // Budget covers all 300 points → plan.exhaustive is true → the old path said
+    // "exact". A false `completeness` (a truncated hierarchy) must override that.
+    const out = await runFullCloudGrade({
+      nodes: nodes(),
+      decodeNode: markerDecode({ '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 }),
+      grade: (_pos, scale) => scale,
+      options: { maxPoints: 10_000 },
+      completeness: { complete: false, errorCount: 1 },
+    });
+    expect(out.coverage.scope).toBe('sampled');
+    expect(out.coverage.label).not.toMatch(/exact/);
+    expect(out.coverage.note).toMatch(/did not fully load/i);
+  });
+
+  it('a complete hierarchy within budget keeps the exact label (no false downgrade)', async () => {
+    const out = await runFullCloudGrade({
+      nodes: nodes(),
+      decodeNode: markerDecode({ '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 }),
+      grade: (_pos, scale) => scale,
+      options: { maxPoints: 10_000 },
+      completeness: { complete: true, errorCount: 0 },
+    });
+    expect(out.coverage.scope).toBe('exhaustive');
+    expect(out.coverage.label).toMatch(/exact/);
+  });
 });

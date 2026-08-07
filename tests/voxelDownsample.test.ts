@@ -171,7 +171,7 @@ test('LAS inspection extras are carried through, keeping the first member', () =
   expect(out.pointCount).toBe(2);
   // Each output array exists and matches the reduced point count.
   expect(out.returnNumber).toBeInstanceOf(Uint8Array);
-  expect(out.returnNumber!.length).toBe(2);
+  expect(out.returnNumber!).toHaveLength(2);
   expect(out.gpsTime).toBeInstanceOf(Float64Array);
   // The first member's discrete metadata is kept (the contract classification uses).
   expect(Array.from(out.returnNumber!)).toEqual([1, 3]);

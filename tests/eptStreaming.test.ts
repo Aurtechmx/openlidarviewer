@@ -91,9 +91,9 @@ test('decodeEptBinaryTile decodes the synthetic fixture cleanly', () => {
   const decoded = decodeEptBinaryTile(buffer, 100, meta.schema, renderOrigin);
 
   expect(decoded.pointCount).toBe(100);
-  expect(decoded.positions.length).toBe(300);
-  expect(decoded.intensity.length).toBe(100);
-  expect(decoded.classification.length).toBe(100);
+  expect(decoded.positions).toHaveLength(300);
+  expect(decoded.intensity).toHaveLength(100);
+  expect(decoded.classification).toHaveLength(100);
 
   // Every position is in render-origin-subtracted local space — the
   // fixture's cube is 100 m × 100 m × 50 m, so EVERY local x/y is within
@@ -132,9 +132,11 @@ test('EptOctree loads the synthetic fixture and registers one root node', async 
   );
   await octree.loadFullHierarchy();
   expect(octree.fullyLoaded).toBe(true);
-  expect(octree.errors.length).toBe(0);
+  expect(octree.errors).toHaveLength(0);
+  // A whole hierarchy with no dropped file → complete, gradeable "exact".
+  expect(octree.isComplete).toBe(true);
   const nodes = octree.nodes();
-  expect(nodes.length).toBe(1);
+  expect(nodes).toHaveLength(1);
   expect(nodes[0].record.id).toBe('0-0-0-0');
   expect(nodes[0].record.pointCount).toBe(100);
 });
@@ -184,6 +186,9 @@ test('progressive hierarchy: an initial paint attaches before the full index loa
   // Budget of one file: the root only.
   await octree.loadInitialHierarchy(1);
   expect(octree.fullyLoaded).toBe(false); // more to fetch in the background
+  // Mid-deepening the index is not whole yet, so a grade taken now must not
+  // claim exact — even though no error has occurred.
+  expect(octree.isComplete).toBe(false);
   const idsAfterInitial = octree.nodes().map((n) => n.record.id).sort();
   expect(idsAfterInitial).toEqual(['0-0-0-0', '1-0-0-0']);
   // The nodes that DID land already carry correct child links.
@@ -192,13 +197,15 @@ test('progressive hierarchy: an initial paint attaches before the full index loa
   // Continue to completion — nodes arrive and refine.
   await octree.continueHierarchy();
   expect(octree.fullyLoaded).toBe(true);
+  // Deepened to completion with no dropped file → now complete.
+  expect(octree.isComplete).toBe(true);
   expect(octree.nodes().map((n) => n.record.id).sort()).toEqual([
     '0-0-0-0', '1-0-0-0', '1-1-0-0', '2-2-0-0',
   ]);
   // Child links are complete AND never duplicated across the two passes —
   // the root gained 1-1-0-0 without re-adding 1-0-0-0.
   expect(new Set(octree.store.get('0-0-0-0')!.childIds)).toEqual(new Set(['1-0-0-0', '1-1-0-0']));
-  expect(octree.store.get('0-0-0-0')!.childIds.length).toBe(2);
+  expect(octree.store.get('0-0-0-0')!.childIds).toHaveLength(2);
   expect(octree.store.get('1-1-0-0')!.childIds).toEqual(['2-2-0-0']);
 });
 
@@ -234,18 +241,21 @@ test('the walk terminates when sub-file fetches fail — no retry loop', async (
   expect(octree.fullyLoaded).toBe(true);
   expect(octree.nodes().map((n) => n.record.id).sort()).toEqual(['0-0-0-0', '1-0-0-0']);
   expect(octree.errors.some((e) => /network down/.test(e))).toBe(true);
+  // EPT mirror of the COPC swallowed-fetch case: the walk finished but a sub-file
+  // was dropped, so the octree is NOT complete and a grade must not claim exact.
+  expect(octree.isComplete).toBe(false);
 });
 
 test('a small hierarchy that fits the first-paint budget loads fully in one call', async () => {
   const octree = multiFileOctree();
   await octree.loadInitialHierarchy(64); // budget exceeds the 3 files
   expect(octree.fullyLoaded).toBe(true);
-  expect(octree.nodes().length).toBe(4);
+  expect(octree.nodes()).toHaveLength(4);
 });
 
 test('EptOctree.childKeysOf returns the 8 standard octree children', () => {
   const children = EptOctree.childKeysOf({ d: 0, x: 0, y: 0, z: 0 });
-  expect(children.length).toBe(8);
+  expect(children).toHaveLength(8);
 });
 
 test('EptOctree handles a fetcher failure without crashing — surfaces in errors', async () => {
@@ -256,6 +266,7 @@ test('EptOctree handles a fetcher failure without crashing — surfaces in error
   expect(octree.fullyLoaded).toBe(true);
   expect(octree.errors.length).toBeGreaterThan(0);
   expect(octree.errors[0]).toMatch(/network down/);
+  expect(octree.isComplete).toBe(false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,7 +287,7 @@ test('EptStreamingPointCloud.open round-trips the fixture into a streaming sourc
   expect(cloud.sourcePointCount).toBe(100);
   expect(cloud.dataType).toBe('binary');
   expect(cloud.maxDepth()).toBe(0);
-  expect(cloud.octree.nodes().length).toBe(1);
+  expect(cloud.octree.nodes()).toHaveLength(1);
 });
 
 test('EptStreamingPointCloud.readNodeChunk fetches the tile bytes', async () => {
@@ -307,7 +318,7 @@ test('EptStreamingPointCloud.decodeBinary recovers points within the cube', asyn
   const bytes = await cloud.readNodeChunk(root.record);
   const decoded = cloud.decodeBinary(bytes, root.record.pointCount);
   expect(decoded.pointCount).toBe(100);
-  expect(decoded.positions.length).toBe(300);
+  expect(decoded.positions).toHaveLength(300);
 });
 
 test('EptStreamingPointCloud pins the RGB bit-depth from the first decoded tile', async () => {

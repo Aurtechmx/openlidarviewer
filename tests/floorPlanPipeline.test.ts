@@ -239,7 +239,7 @@ describe('extractFloorPlan — robustness and fallbacks', () => {
     expect(model.usedWallBand).toBe(true);
     expect(model.floorBasis).toBe('percentile');
     expect(model.floorAreaM2).toBeNull();
-    expect(model.floorRings.length).toBe(0);
+    expect(model.floorRings).toHaveLength(0);
     expect(model.wallRings.length).toBeGreaterThanOrEqual(1);
     expect(Math.abs(model.widthM - 10)).toBeLessThan(0.2);
     expect(Math.abs(model.depthM - 8)).toBeLessThan(0.2);
@@ -282,8 +282,8 @@ describe('extractFloorPlan — robustness and fallbacks', () => {
     const t: number[] = [];
     for (let i = 0; i < 150; i++) t.push(rnd() * 10, rnd() * 8, rnd() * 2.5);
     const model = extractFloorPlan(Float32Array.from(t), { upAxis: 'z' });
-    expect(model.wallRings.length).toBe(0);
-    expect(model.floorRings.length).toBe(0);
+    expect(model.wallRings).toHaveLength(0);
+    expect(model.floorRings).toHaveLength(0);
     expect(model.floorAreaM2).toBeNull();
     expect(model.widthM).toBe(0);
     expect(model.reasons[0]).toMatch(/Too few points/);
@@ -365,7 +365,7 @@ describe('extractFloorPlan — multi-room interior', () => {
       }
       return a < 0;
     });
-    expect(holes.length).toBe(2);
+    expect(holes).toHaveLength(2);
   });
 
   it('traces the shared wall and both far walls', () => {

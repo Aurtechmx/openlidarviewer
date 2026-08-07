@@ -41,7 +41,7 @@ describe('deriveClassificationAsync', () => {
     };
     const res = await deriveClassificationAsync(positions, n, { cellSizeM: 1 }, undefined, client);
     expect(res.derived).toBe(true);
-    expect(res.codes.length).toBe(n);
+    expect(res.codes).toHaveLength(n);
     expect(getLastClassifyComputePath()).toBe('worker');
   });
 
@@ -65,7 +65,7 @@ describe('deriveClassificationAsync', () => {
       classify: () => Promise.reject(new Error('worker construction failed')),
     };
     const res = await deriveClassificationAsync(positions, n, { cellSizeM: 1 }, undefined, failing);
-    expect(res.codes.length).toBe(n);
+    expect(res.codes).toHaveLength(n);
     expect(getLastClassifyComputePath()).toBe('fallback');
   });
 

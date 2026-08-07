@@ -52,6 +52,10 @@ function fakeSource(
   nodes: StreamingNode[],
   markers: Record<string, number>,
   hooks: { onRead?: (id: string, signal?: AbortSignal) => void } = {},
+  // Completeness of the source octree. Defaults to a WHOLE hierarchy so the
+  // existing exhaustive/sampled tests are unaffected; the truncation test sets
+  // it false to prove the grade never claims exact over a short hierarchy.
+  completeness: { isComplete?: boolean; errors?: readonly string[] } = {},
 ): GradeNodeSource {
   const byId = new Map(nodes.map((n) => [n.record.id, n]));
   // Reverse-lookup a record's id from the marker we'll stash, so readNodeChunk
@@ -60,6 +64,8 @@ function fakeSource(
     octree: {
       nodes: () => nodes,
       store: { get: (id: string) => byId.get(id) },
+      isComplete: completeness.isComplete ?? true,
+      errors: completeness.errors ?? [],
     },
     readNodeChunk: async (rec: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer> => {
       hooks.onRead?.(rec.id, signal);
@@ -120,7 +126,7 @@ describe('makeDecodeNode — id → decoded positions', () => {
     const src = fakeSource(nodeList(), {});
     const decode = makeDecodeNode(src, fakeDecoder());
     const pos = await decode('9-9-9-9');
-    expect(pos.length).toBe(0);
+    expect(pos).toHaveLength(0);
   });
 
   it('throws if a decoder returns a non-triple-length positions array', async () => {
@@ -227,5 +233,29 @@ describe('gradeFullCloud — one-call composition + progress', () => {
         signal: controller.signal,
       }),
     ).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('never labels an INCOMPLETE octree exact — even when every LOADED node fits the budget', async () => {
+    // The defect end-to-end: a hierarchy that dropped a subtree (a swallowed
+    // page-fetch failure here) still returns its loaded nodes, so the sampling
+    // plan is exhaustive OVER THOSE and the old path printed "all N points
+    // (exact)". `octree.nodes()` — not `fullyLoaded` — is what the grade reads,
+    // so completeness must ride in separately and downgrade the claim.
+    const src = fakeSource(nodeList(), { '0-0-0-0': 1, '1-0-0-0': 2, '1-1-0-0': 3 }, {}, {
+      isComplete: false,
+      errors: ['failed to load hierarchy page at 4096: network down'],
+    });
+    const run = await gradeFullCloud({
+      source: src,
+      decoder: fakeDecoder(),
+      grade: (pos) => pos.length / 3,
+      options: { maxPoints: 10_000 }, // budget covers every loaded node
+    });
+    expect(run.coverage.scope).toBe('sampled');
+    expect(run.coverage.label).not.toMatch(/exact/);
+    expect(run.coverage.label).toMatch(/partial/i);
+    // The reason and the (previously write-only) error count reach the user.
+    expect(run.coverage.note).toMatch(/did not fully load/i);
+    expect(run.coverage.note).toMatch(/1 load error/);
   });
 });

@@ -42,7 +42,7 @@ describe('alignEpochClouds', () => {
     expect(alignment.rmsResidualM).toBeLessThan(1e-3);
     expect(Math.abs(alignment.yawDeg)).toBeLessThan(0.1);
     expect(Math.hypot(alignment.translation[0], alignment.translation[1])).toBeLessThan(1e-2);
-    expect(after.positions.length).toBe(b.positions.length);
+    expect(after.positions).toHaveLength(b.positions.length);
   });
 
   test('recovers a horizontal translation and preserves the vertical change', () => {

@@ -64,7 +64,7 @@ describe('buildDsm — top surface (max return per cell)', () => {
 
   it('emptySurfaceGrid is all-NaN with zero coverage', () => {
     const g = emptySurfaceGrid({ originH1: 0, originH2: 0, cols: 2, rows: 2, cellSizeM: 1 });
-    expect(g.z.length).toBe(4);
+    expect(g.z).toHaveLength(4);
     expect(Array.from(g.coverage)).toEqual([0, 0, 0, 0]);
     expect(g.z.every((v) => Number.isNaN(v))).toBe(true);
     expect(surfaceStats(g).coveredCells).toBe(0);

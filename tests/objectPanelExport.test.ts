@@ -81,8 +81,8 @@ describe('ObjectPanel — export row gating', () => {
     });
     panel.showSpace(space, shape);
     const root = panel.element as unknown as FakeEl;
-    expect(root.findByText('Report PDF').length).toBe(1);
-    expect(root.findByText('Floor plan preview').length).toBe(1);
+    expect(root.findByText('Report PDF')).toHaveLength(1);
+    expect(root.findByText('Floor plan preview')).toHaveLength(1);
   });
 
   it('object scan: Report PDF present, Floor plan preview absent', async () => {
@@ -95,7 +95,7 @@ describe('ObjectPanel — export row gating', () => {
     });
     panel.showObject(objectMetrics(cubeShell()), null, null);
     const root = panel.element as unknown as FakeEl;
-    expect(root.findByText('Report PDF').length).toBe(1);
-    expect(root.findByText('Floor plan preview').length).toBe(0);
+    expect(root.findByText('Report PDF')).toHaveLength(1);
+    expect(root.findByText('Floor plan preview')).toHaveLength(0);
   });
 });

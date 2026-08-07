@@ -33,7 +33,7 @@ describe('WorkflowSession — live capture', () => {
     const s = new WorkflowSession(() => t);
     s.push({ type: 'frame-all' });
     const events = s.events();
-    expect(events.length).toBe(1);
+    expect(events).toHaveLength(1);
     expect(events[0].tMs).toBe(0);
     expect(s.hasContent).toBe(true);
   });
@@ -58,7 +58,7 @@ describe('WorkflowSession — live capture', () => {
     s.push({ type: 'frame-all' });
     const a = s.events();
     a.push({ type: 'frame-all', tMs: 999 });
-    expect(s.events().length).toBe(1); // mutation didn't leak back
+    expect(s.events()).toHaveLength(1); // mutation didn't leak back
   });
 });
 
@@ -83,7 +83,7 @@ describe('buildWorkflow — Workflow construction', () => {
     expect(Object.isFrozen(w.events)).toBe(true);
     // Mutating the input array does not leak into the workflow.
     events.push({ type: 'frame-all', tMs: 100 });
-    expect(w.events.length).toBe(1);
+    expect(w.events).toHaveLength(1);
   });
 
   it('omits title when not provided', () => {
@@ -142,7 +142,7 @@ describe('parseWorkflow — file shape validation', () => {
     const result = parseWorkflow(json);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.workflow.events.length).toBe(4);
+      expect(result.workflow.events).toHaveLength(4);
       expect(result.workflow.events[0]).toEqual({
         type: 'camera-preset',
         name: 'top',
@@ -262,7 +262,7 @@ describe('scheduleReplay — fake-clock scheduler', () => {
   it('schedules one timer per event at the declared offset', () => {
     const { deps, timers } = makeFakeDeps();
     scheduleReplay(exampleWorkflow(), () => void 0, deps);
-    expect(timers.length).toBe(3);
+    expect(timers).toHaveLength(3);
     expect(timers.map((t) => t.ms)).toEqual([0, 1500, 3000]);
   });
 
@@ -274,7 +274,7 @@ describe('scheduleReplay — fake-clock scheduler', () => {
     for (const t of timers) {
       if (!t.cancelled) t.fn();
     }
-    expect(dispatched.length).toBe(3);
+    expect(dispatched).toHaveLength(3);
     expect(dispatched[0].type).toBe('camera-preset');
     expect(dispatched[1].type).toBe('theme');
     expect(dispatched[2].type).toBe('frame-all');
@@ -306,7 +306,7 @@ describe('scheduleReplay — fake-clock scheduler', () => {
     handle.cancel();
     // A delayed call (e.g. fake timer flushed after cancel) is a no-op.
     for (const t of timers) t.fn();
-    expect(dispatched.length).toBe(0);
+    expect(dispatched).toHaveLength(0);
   });
 
   it('an empty workflow fires onComplete immediately', () => {

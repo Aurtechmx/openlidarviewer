@@ -268,7 +268,7 @@ describe('FullscreenToggle refusal status', () => {
     press(toggle);
     await Promise.resolve();
     await Promise.resolve();
-    expect(announced.length).toBe(1);
+    expect(announced).toHaveLength(1);
     expect(announced[0]).toBe((toggle.status as unknown as NodeStub).textContent);
   });
 

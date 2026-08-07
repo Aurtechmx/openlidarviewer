@@ -156,7 +156,7 @@ describe('computeTerrainCoreAsync — fallback', () => {
       throwingClient,
     );
     // The fallback reads pos synchronously; if it had been detached this throws.
-    expect(pos.length).toBe(before);
+    expect(pos).toHaveLength(before);
     expect(pos[0]).toBe(0); // first x of the grid, untouched
   });
 
