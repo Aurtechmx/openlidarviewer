@@ -243,7 +243,7 @@ describe('LayerService — refreshCrsFlags', () => {
     const two = setup(twoClouds);
     two.service.refreshCrsFlags();
     expect(two.compareCalls.at(-1)).toBe(true);
-    expect(two.crsFlagCalls.length).toBe(1);
+    expect(two.crsFlagCalls).toHaveLength(1);
     expect(two.compassRefreshes()).toBe(1);
 
     const one = setup({ a: twoClouds.a });

@@ -20,7 +20,7 @@ describe('toClassBuffer', () => {
   it('empty input yields an empty buffer', () => {
     const out = toClassBuffer([]);
     expect(out).toBeInstanceOf(Uint8Array);
-    expect(out.length).toBe(0);
+    expect(out).toHaveLength(0);
   });
 
   it('copies a number[] into a fresh Uint8Array with identical values', () => {

@@ -126,7 +126,7 @@ describe('makeDecodeNode — id → decoded positions', () => {
     const src = fakeSource(nodeList(), {});
     const decode = makeDecodeNode(src, fakeDecoder());
     const pos = await decode('9-9-9-9');
-    expect(pos.length).toBe(0);
+    expect(pos).toHaveLength(0);
   });
 
   it('throws if a decoder returns a non-triple-length positions array', async () => {

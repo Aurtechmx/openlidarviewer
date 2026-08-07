@@ -329,7 +329,7 @@ describe('the OLV pipeline driver', () => {
     expect(actual.validation.rmse).toBe(expected.validation.rmse);
     expect(actual.intervalM).toBe(expected.intervalM);
     expect(actual.tally).toEqual(expected.tally);
-    expect(actual.model.features.length).toBe(expected.model.features.length);
+    expect(actual.model.features).toHaveLength(expected.model.features.length);
     // And the descriptor stage re-runs the app's own complexity summary over
     // the core's cached Horn grids, so it must agree with the core's own.
     expect(run.artifacts.descriptors).toEqual(toHashable(expected.complexity));

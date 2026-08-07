@@ -336,8 +336,8 @@ describe('buildTerrainReportContent — Good + Ready scan', () => {
 
   it('omits the How-to-improve section and emits no warnings', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
-    expect(c.howToImprove.length).toBe(0);
-    expect(c.warnings.length).toBe(0);
+    expect(c.howToImprove).toHaveLength(0);
+    expect(c.warnings).toHaveLength(0);
   });
 
   it('every recommended workflow is graded good (✓)', () => {
@@ -359,7 +359,7 @@ describe('buildTerrainReportContent — Preview + datum-unknown scan', () => {
     // verdict reason, byte-identical.
     const result = previewResult();
     const c = buildTerrainReportContent(result, OPTS);
-    expect(c.products.length).toBe(6);
+    expect(c.products).toHaveLength(6);
     const a = terrainAssessment(result);
     for (const p of c.products) {
       expect(p.availability).toBe('Preview');
