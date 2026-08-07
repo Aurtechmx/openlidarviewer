@@ -48,6 +48,14 @@ export interface GradeNodeSource {
     nodes(): StreamingNode[];
     /** Lookup a runtime node by its deterministic id. */
     readonly store: { get(id: string): StreamingNode | undefined };
+    /**
+     * Whether the hierarchy loaded whole. Gates the grade's "exact" claim:
+     * `nodes()` returns only the LOADED nodes, so a grade that sampled every one
+     * of them is still not exhaustive over the file when this is false.
+     */
+    readonly isComplete: boolean;
+    /** Hierarchy load errors — read so the dropped-region count reaches the grade note. */
+    readonly errors: readonly string[];
   };
   readNodeChunk(record: StreamingNodeRecord, signal?: AbortSignal): Promise<ArrayBuffer>;
   decodeMeta(record: StreamingNodeRecord): ChunkDecodeMetadata;
@@ -140,5 +148,14 @@ export function gradeFullCloud<G>(args: {
     options,
     signal,
     onProgress,
+    // The whole point of grading the FULL cloud is the completeness claim, so
+    // carry the octree's own truth: `nodes()` above is only what loaded, and a
+    // sample of it is "exact" over the file solely when the hierarchy is whole.
+    // `errors.length` rides along so a partial grade can name how many regions
+    // were dropped instead of leaving that count write-only.
+    completeness: {
+      complete: source.octree.isComplete,
+      errorCount: source.octree.errors.length,
+    },
   });
 }
