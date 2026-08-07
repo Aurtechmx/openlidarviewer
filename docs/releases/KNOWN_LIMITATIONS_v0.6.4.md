@@ -4,7 +4,7 @@ This release sharpens classification, hardens the report and export surfaces aga
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 5,876 lines and `src/render/Viewer.ts` is 6,376, against stated targets of 2,500 and 2,000. This cycle lifted more blocks out of `Viewer.ts` (the streaming session assembly moved behind a `StreamingHost`, and report and scan-open paths moved behind structural dependency objects), and the composition root stays free of module-level mutable application state. That is continued decomposition, not its completion. The remaining blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
+`src/main.ts` is 5,874 lines and `src/render/Viewer.ts` is 6,369, against stated targets of 2,500 and 2,000. This cycle lifted more blocks out of `Viewer.ts` (the streaming session assembly moved behind a `StreamingHost`, and report and scan-open paths moved behind structural dependency objects), and the composition root stays free of module-level mutable application state. That is continued decomposition, not its completion. The remaining blocks to lift, and the measured dependency surface of the first one, are in `docs/architecture/architecture-map.md`.
 
 ## Building classification: the ground-support gate is evaluated on synthetic scenes only
 
