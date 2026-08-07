@@ -37,7 +37,7 @@ describe('FLAI Open LiDAR Data catalog entries', () => {
     // authoritative AHN source. If a future change adds or removes an
     // entry without updating the expected count, this assertion fails
     // loudly.
-    expect(flaiEntries.length).toBe(2);
+    expect(flaiEntries).toHaveLength(2);
   });
 
   it.each(flaiEntries)('$id streams from the documented S3 bucket', (loc) => {

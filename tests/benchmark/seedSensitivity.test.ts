@@ -243,7 +243,7 @@ describe('quantities that must not depend on the draw', () => {
 describe('quantities that legitimately follow the draw', () => {
   test('each carries a full spread and no verdict', () => {
     const variable = evaluation.quantities.filter((q) => q.group === 'variable');
-    expect(variable.length).toBe(PIPELINE_QUANTITIES.filter((q) => q.group === 'variable').length);
+    expect(variable).toHaveLength(PIPELINE_QUANTITIES.filter((q) => q.group === 'variable').length);
     for (const q of variable) {
       expect(q.summary.count, q.name).toBe(SWEEP_SEED_COUNT);
       expect(q.summary.stdDev, q.name).not.toBeNull();

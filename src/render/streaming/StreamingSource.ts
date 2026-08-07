@@ -38,13 +38,29 @@ import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
  * nominal typing).
  *
  * Both `StreamingOctree` (COPC) and `EptOctree` (EPT) implement this surface.
- * New streaming formats only need to expose these two members.
+ * New streaming formats expose these members.
  */
 export interface StreamingOctreeView {
   /** The shared node store — generic across formats. */
   readonly store: StreamingNodeStore;
   /** Every known node in the octree. */
   nodes(): StreamingNode[];
+  /**
+   * Whether the whole hierarchy index loaded with nothing dropped — no page/
+   * file ceiling hit, no swallowed fetch failure, no skipped malformed entry.
+   * false when any node is missing from the store, so a completeness-sensitive
+   * consumer can refuse to overclaim (the full-cloud grade's "exact" label).
+   * Distinct from a "walk finished" flag: a walk can finish having dropped
+   * subtrees, which is exactly the silent under-report the grade must not make.
+   */
+  readonly isComplete: boolean;
+  /**
+   * Hierarchy errors recorded while loading the index (a ceiling hit, a fetch
+   * failure, or a malformed entry). On the shared contract so a consumer can
+   * report HOW MANY regions were dropped instead of leaving the count
+   * write-only.
+   */
+  readonly errors: readonly string[];
 }
 
 /** The on-disk format a streaming source is backed by. */

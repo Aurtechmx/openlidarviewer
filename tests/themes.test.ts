@@ -117,7 +117,7 @@ describe('applyTheme — body-class swap', () => {
     const matches = Array.from(body.classes).filter(
       (c) => c === 'olv-theme-light',
     );
-    expect(matches.length).toBe(1);
+    expect(matches).toHaveLength(1);
   });
 
   it('preserves unrelated body classes the host has set', () => {

@@ -94,7 +94,7 @@ describe('colorForMode — intensity', () => {
     const cloud = makeFullCloud();
     const result = colorForMode('intensity', cloud);
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(cloud.pointCount * 3);
+    expect(result).toHaveLength(cloud.pointCount * 3);
   });
 
   test('maps min intensity to 0 and max to 255 (greyscale)', () => {
@@ -150,7 +150,7 @@ describe('colorForMode — elevation', () => {
     const cloud = makeFullCloud();
     const result = colorForMode('elevation', cloud);
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(cloud.pointCount * 3);
+    expect(result).toHaveLength(cloud.pointCount * 3);
   });
 
   test('higher Z points map to a higher position on the colour ramp', () => {
@@ -197,7 +197,7 @@ describe('colorForMode — elevation', () => {
     const cloud = makePositionsOnlyCloud(); // Z: 10, 20, 30
     expect(() => colorForMode('elevation', cloud)).not.toThrow();
     const result = colorForMode('elevation', cloud);
-    expect(result.length).toBe(3 * 3);
+    expect(result).toHaveLength(3 * 3);
   });
 
   test('single-point cloud does not throw', () => {
@@ -245,7 +245,7 @@ describe('colorByScalar', () => {
   test('returns a Uint8Array with 3 bytes per point', () => {
     const out = colorByScalar([0, 1, 2], 3, 0, 2);
     expect(out).toBeInstanceOf(Uint8Array);
-    expect(out.length).toBe(9);
+    expect(out).toHaveLength(9);
   });
 
   test('defaults to the CVD-safe Cividis ramp — min hits the bottom stop, max the top', () => {
@@ -364,7 +364,7 @@ describe('colorForMode — gpsTime', () => {
 
   test('ramps early → late acquisition time on Cividis (min bottom, max top)', () => {
     const out = colorForMode('gpsTime', makeGpsTimeCloud());
-    expect(out.length).toBe(4 * 3);
+    expect(out).toHaveLength(4 * 3);
     expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
     expect([out[9], out[10], out[11]]).toEqual([253, 231, 37]);
   });
@@ -422,7 +422,7 @@ describe('colorForMode — returnNumber', () => {
 
   test('ramps first → last return on Cividis (min bottom, max top)', () => {
     const out = colorForMode('returnNumber', makeReturnCloud());
-    expect(out.length).toBe(3 * 3);
+    expect(out).toHaveLength(3 * 3);
     expect([out[0], out[1], out[2]]).toEqual([0, 32, 76]);
     expect([out[6], out[7], out[8]]).toEqual([253, 231, 37]);
   });
@@ -441,7 +441,7 @@ describe('colorForMode — classification', () => {
     const cloud = makeFullCloud();
     const result = colorForMode('classification', cloud);
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(cloud.pointCount * 3);
+    expect(result).toHaveLength(cloud.pointCount * 3);
   });
 
   test('two points with the same class code get the same colour', () => {
@@ -481,7 +481,7 @@ describe('colorForMode — normal', () => {
     const cloud = makeNormalsCloud();
     const result = colorForMode('normal', cloud);
     expect(result).toBeInstanceOf(Uint8Array);
-    expect(result.length).toBe(cloud.pointCount * 3);
+    expect(result).toHaveLength(cloud.pointCount * 3);
   });
 
   test('encodes a unit normal direction as RGB (component −1…+1 → 0…255)', () => {
@@ -551,7 +551,7 @@ describe('colorForMode — coverage', () => {
       name: 'cov.las',
     });
     const out = colorForMode('coverage', cloud, { coverageGrid });
-    expect(out.length).toBe(4 * 3);
+    expect(out).toHaveLength(4 * 3);
     expect([out[0], out[1], out[2]]).toEqual([
       COVERAGE_STRONG.r, COVERAGE_STRONG.g, COVERAGE_STRONG.b,
     ]);

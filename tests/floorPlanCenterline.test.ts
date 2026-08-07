@@ -251,7 +251,7 @@ describe('classifyWallGaps', () => {
 
   it('square jambs across a door-width gap classify as a door', () => {
     const gaps = gapsOf(gapGrid(18)); // 0.9 m at 0.05 m cells
-    expect(gaps.length).toBe(1);
+    expect(gaps).toHaveLength(1);
     expect(gaps[0].kind).toBe('door');
     expect(gaps[0].widthM).toBeGreaterThanOrEqual(DOOR_MIN_M);
     expect(gaps[0].widthM).toBeLessThanOrEqual(DOOR_MAX_M);
@@ -264,20 +264,20 @@ describe('classifyWallGaps', () => {
   it('skewed (ragged) facing ends classify as an unknown gap, not a door', () => {
     // Same door-width gap, right run shifted 12 cells: cos ≈ 0.6 — ragged.
     const gaps = gapsOf(gapGrid(14, 12));
-    expect(gaps.length).toBe(1);
+    expect(gaps).toHaveLength(1);
     expect(gaps[0].kind).toBe('unknown');
   });
 
   it('a wider-than-door gap with square ends is unknown (not claimed as a door)', () => {
     const gaps = gapsOf(gapGrid(36)); // 1.8 m: square but not door width
-    expect(gaps.length).toBe(1);
+    expect(gaps).toHaveLength(1);
     expect(gaps[0].kind).toBe('unknown');
     expect(gaps[0].widthM).toBeGreaterThan(DOOR_MAX_M);
   });
 
   it('holes wider than GAP_MAX_M are no gap at all (honest missing data)', () => {
     const gaps = gapsOf(gapGrid(Math.ceil(GAP_MAX_M / 0.05) + 14));
-    expect(gaps.length).toBe(0);
+    expect(gaps).toHaveLength(0);
   });
 
   it('an L-corner is not a gap (the runs do not face each other)', () => {
@@ -302,7 +302,7 @@ describe('convexHullRing', () => {
       expect(cross).toBeGreaterThanOrEqual(0);
     }
     // The hull is the 4-corner bounding rectangle here.
-    expect(hull.length).toBe(4);
+    expect(hull).toHaveLength(4);
     expect(Math.abs(ringSignedArea(hull))).toBeCloseTo(12, 5);
     expect(Math.abs(ringSignedArea(hull))).toBeGreaterThan(Math.abs(ringSignedArea(ring)));
   });
@@ -369,7 +369,7 @@ describe('extractFloorPlan — centerline pass end-to-end', () => {
     );
     expect(clean.thicknessNormalized).toBe(false);
     expect(clean.reasons.some((r) => /collapsed onto its centerline/i.test(r))).toBe(false);
-    expect(clean.unknownGaps.length).toBe(0);
+    expect(clean.unknownGaps).toHaveLength(0);
   });
 });
 

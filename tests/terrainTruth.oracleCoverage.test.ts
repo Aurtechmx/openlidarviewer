@@ -593,7 +593,7 @@ describe('No-data boundary on a tilted plane — ground labels and the slope art
       scalingFactorM: 0,
     };
     const res = classifyGroundSmrf(clipped, PARAMS);
-    expect(res.isGround.length).toBe(clipped.length);
+    expect(res.isGround).toHaveLength(clipped.length);
     expect(Array.from(res.isGround).every((v) => v === 1)).toBe(true);
   });
 

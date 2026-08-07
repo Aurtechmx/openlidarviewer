@@ -45,7 +45,7 @@ describe('decodeField — integer / scaledInteger truncation', () => {
       { name: 't', type: 'integer', bitWidth: 8, minimum: 0 },
       4,
     );
-    expect(out.length).toBe(4);
+    expect(out).toHaveLength(4);
     expect(out[0]).toBe(1);
     expect(out[1]).toBe(2);
     expect(out[2]).toBe(3);

@@ -230,7 +230,7 @@ test('HttpRangeSource.readRange accepts a 206 and rejects a 200 full-file respon
           headers: { 'content-range': 'bytes 0-2/100' },
         })) as typeof fetch;
   const ok = new HttpRangeSource('https://example.com/a.copc.laz', testOpts);
-  expect(new Uint8Array(await ok.readRange(0, 3)).length).toBe(3);
+  expect(new Uint8Array(await ok.readRange(0, 3))).toHaveLength(3);
 
   globalThis.fetch = (async (_url: string, init?: RequestInit) =>
     init?.method === 'HEAD'

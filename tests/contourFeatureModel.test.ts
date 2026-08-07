@@ -35,7 +35,7 @@ describe('buildFeatureModel', () => {
       crs: 'EPSG:32610',
       intervalM: 1,
     });
-    expect(model.features.length).toBe(3);
+    expect(model.features).toHaveLength(3);
     expect(model.features.map((f) => f.grade)).toEqual(['solid', 'gap', 'solid']);
     expect(model.features.every((f) => f.isIndex)).toBe(true);
   });
@@ -74,7 +74,7 @@ describe('buildFeatureModel', () => {
       crs: 'EPSG:32610',
       intervalM: 1,
     });
-    expect(model.features.length).toBe(1);
+    expect(model.features).toHaveLength(1);
     expect(model.features[0].closed).toBe(true);
   });
 

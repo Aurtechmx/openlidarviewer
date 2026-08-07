@@ -92,6 +92,6 @@ describe('coverageHeatmapImage — rasterises confidences to coloured pixels', (
     const img = coverageHeatmapImage({ confidence: [], coverage: [], cols: 0, rows: 0 });
     expect(img.width).toBe(0);
     expect(img.height).toBe(0);
-    expect(img.data.length).toBe(0);
+    expect(img.data).toHaveLength(0);
   });
 });
