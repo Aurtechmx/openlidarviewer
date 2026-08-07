@@ -24,7 +24,7 @@ describe('lint-unsafe-html scanSource', () => {
   });
 
   it('flags an annotation string reaching the sink', () => {
-    expect(scanSource(`el('p', { unsafeHtml: annotationText });`).length).toBe(1);
+    expect(scanSource(`el('p', { unsafeHtml: annotationText });`)).toHaveLength(1);
   });
 
   it('does NOT flag static icon constants (the real usages)', () => {

@@ -236,10 +236,26 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
   } else if (headerPointCount !== undefined) {
     meta.estimatedPointCount = headerPointCount;
   }
-  // Surface the pre-decode RAM caution. LAS/LAZ carries it on the plan; non-LAS
-  // formats carry it on `preflight.largeNonLasFormat` (set above). Either way
-  // the user sees it before the expensive parse, not after a silent OOM.
-  if (preflight.largeNonLasFormat || plan?.largeNonLasFormat) {
+  // Surface the pre-decode RAM caution, strongest signal first.
+  //
+  // `mayExceedCeiling` outranks the size cautions below it because it is a
+  // different claim. Those say "this is big, expect a spike" — the open is
+  // still expected to succeed. This one says the budget guard already shrank
+  // the plan as far as it can and the estimate is STILL over the device's
+  // memory ceiling, because the fixed costs (file bytes + LAZ scratch + WASM
+  // heap) exceed it on their own. No reshape of the point budget can fix that,
+  // so the honest line is that the open may fail, not that it may be slow.
+  // Reporting only the ordinary size note here implied the file fits.
+  if (plan?.mayExceedCeiling) {
+    meta.warning =
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — the estimated ` +
+      `memory needed is above what this device can be expected to give the tab, even at ` +
+      `the smallest load setting. The open may fail. Convert to COPC/EPT (PDAL or ` +
+      `untwine) to stream it instead.`;
+  } else if (preflight.largeNonLasFormat || plan?.largeNonLasFormat) {
+    // LAS/LAZ carries this one on the plan; non-LAS formats carry it on
+    // `preflight.largeNonLasFormat` (set above). Either way the user sees it
+    // before the expensive parse, not after a silent OOM.
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — decodes fully in ` +
       `memory, so loading may spike RAM.`;

@@ -92,14 +92,14 @@ test('streamingNodeColors returns the decoded RGB directly in rgb mode', () => {
 test('streamingNodeColors falls back to elevation when RGB is absent', () => {
   const c = chunk(2, false);
   const out = streamingNodeColors('rgb', c, ranges({ maxZ: 10 }));
-  expect(out.length).toBe(6); // 3 bytes per point — the elevation fallback
+  expect(out).toHaveLength(6); // 3 bytes per point — the elevation fallback
 });
 
 test('streamingNodeColors produces 3 bytes per point for every mode', () => {
   const c = chunk(4, true);
   const r = ranges({ maxIntensity: 255 });
   for (const mode of ['intensity', 'elevation', 'classification', 'gpsTime', 'returnNumber'] as const) {
-    expect(streamingNodeColors(mode, c, r).length).toBe(12);
+    expect(streamingNodeColors(mode, c, r)).toHaveLength(12);
   }
 });
 

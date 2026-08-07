@@ -70,7 +70,7 @@ describe('yUpToCanonicalZUp', () => {
   });
 
   it('handles an empty buffer', () => {
-    expect(yUpToCanonicalZUp(new Float32Array(0)).length).toBe(0);
+    expect(yUpToCanonicalZUp(new Float32Array(0))).toHaveLength(0);
   });
 
   it('ignores a trailing partial triple rather than reading past the end', () => {

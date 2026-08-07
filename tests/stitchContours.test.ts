@@ -20,7 +20,7 @@ const seg = (x1: number, y1: number, x2: number, y2: number, c = 90): ContourSeg
 describe('stitchLevel', () => {
   it('joins two adjacent segments into one 3-vertex polyline', () => {
     const polys = stitchLevel(5, [seg(0, 0, 1, 0), seg(1, 0, 2, 0)]);
-    expect(polys.length).toBe(1);
+    expect(polys).toHaveLength(1);
     expect(polys[0].vertices.map((v) => [v.x, v.y])).toEqual([
       [0, 0],
       [1, 0],
@@ -36,9 +36,9 @@ describe('stitchLevel', () => {
       seg(1, 1, 0, 1),
       seg(0, 1, 0, 0),
     ]);
-    expect(polys.length).toBe(1);
+    expect(polys).toHaveLength(1);
     expect(polys[0].closed).toBe(true);
-    expect(polys[0].vertices.length).toBe(4);
+    expect(polys[0].vertices).toHaveLength(4);
   });
 
   it('takes the minimum confidence at a junction', () => {
@@ -58,7 +58,7 @@ describe('stitchLevel', () => {
       seg(1, 0, 2, 0),
       seg(10, 10, 11, 10),
     ]);
-    expect(polys.length).toBe(2);
+    expect(polys).toHaveLength(2);
   });
 });
 
@@ -77,14 +77,14 @@ describe('unit-aware endpoint quantum (geographic-degree grids)', () => {
     // grid's quantum (1e-7) keeps them apart: two polylines.
     const chains = [seg(0, 0, 1e-4, 0), seg(0, 4e-4, 1e-4, 4e-4)];
     const legacy = stitchLevel(5, chains); // fixed 1e-3 quantum
-    expect(legacy.length).toBe(1); // documents the audited failure mode
+    expect(legacy).toHaveLength(1); // documents the audited failure mode
     const scaled = stitchLevel(5, chains, quantumForCellSize(1e-4));
-    expect(scaled.length).toBe(2);
+    expect(scaled).toHaveLength(2);
   });
 
   it('still joins genuinely shared endpoints under a tiny quantum', () => {
     const polys = stitchLevel(5, [seg(0, 0, 1e-4, 0), seg(1e-4, 0, 2e-4, 0)], quantumForCellSize(1e-4));
-    expect(polys.length).toBe(1);
-    expect(polys[0].vertices.length).toBe(3);
+    expect(polys).toHaveLength(1);
+    expect(polys[0].vertices).toHaveLength(3);
   });
 });

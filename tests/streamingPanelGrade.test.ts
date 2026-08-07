@@ -84,8 +84,8 @@ describe('StreamingPanel — full-cloud grade surface', () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
     const panel = new StreamingPanel(noopCallbacks());
     const root = panel.element as unknown as FakeEl;
-    expect(root.findByText('Grade full cloud').length).toBe(1);
-    expect(root.findByText('Full-cloud grade').length).toBe(1);
+    expect(root.findByText('Grade full cloud')).toHaveLength(1);
+    expect(root.findByText('Full-cloud grade')).toHaveLength(1);
   });
 
   it('setGradeBusy turns the button into an enabled Cancel control and shows progress', async () => {
