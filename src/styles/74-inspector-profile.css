@@ -19,6 +19,9 @@
   position: relative;
   min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
+  /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
+     doesn't eat into the content width and clip the right edge of a reading. */
+  scrollbar-gutter: stable;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }

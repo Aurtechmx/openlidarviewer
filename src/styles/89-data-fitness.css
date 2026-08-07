@@ -37,6 +37,20 @@
   padding-left: var(--space-md); position: relative;
 }
 .olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
+/* Caveats collapsed behind a "Notes" disclosure — they restate the checklist in
+   longer form, so they stay one tap away instead of stacking under it. */
+.olv-fit-caveats { margin-top: var(--space-2xs); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-fit-caveats-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+}
+.olv-fit-caveats-summary::-webkit-details-marker { display: none; }
+.olv-fit-caveats-summary::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }

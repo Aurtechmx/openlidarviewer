@@ -3908,7 +3908,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-mp-stations-wrap,
   .olv-shortcuts-list {
     scrollbar-width: thin;
-    scrollbar-color: var(--hairline-strong) transparent;
+    scrollbar-color: var(--hairline) transparent;
   }
 }
 
@@ -3931,7 +3931,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-streaming-panel::-webkit-scrollbar-thumb,
 .olv-inspector::-webkit-scrollbar-thumb,
 .olv-measure-panel::-webkit-scrollbar-thumb {
-  background: var(--hairline-strong); border-radius: 999px;
+  background: var(--hairline); border-radius: 999px;
   border: 2px solid transparent; background-clip: padding-box;
 }
 .olv-analyse-panel::-webkit-scrollbar-thumb:hover,
@@ -4086,6 +4086,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   position: relative;
   min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
+  /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
+     doesn't eat into the content width and clip the right edge of a reading. */
+  scrollbar-gutter: stable;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
@@ -6650,6 +6653,20 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   padding-left: var(--space-md); position: relative;
 }
 .olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
+/* Caveats collapsed behind a "Notes" disclosure — they restate the checklist in
+   longer form, so they stay one tap away instead of stacking under it. */
+.olv-fit-caveats { margin-top: var(--space-2xs); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-fit-caveats-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+}
+.olv-fit-caveats-summary::-webkit-details-marker { display: none; }
+.olv-fit-caveats-summary::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
