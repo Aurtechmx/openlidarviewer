@@ -125,7 +125,10 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     if (tier === 'void') worst = 'void';
   }
 
-  let grade: TrustGrade = worst === 'strong' ? 'green' : worst === 'weak' ? 'yellow' : 'red';
+  let grade: TrustGrade;
+  if (worst === 'strong') grade = 'green';
+  else if (worst === 'weak') grade = 'yellow';
+  else grade = 'red';
 
   // Endpoint reasoning.
   if (anyVoid) {
@@ -170,15 +173,12 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   }
 
   const presentable = !anyVoid && !geographicRefusal && !verticalMismatchRefusal;
-  const caption = geographicRefusal
-    ? 'Unverified — degrees are not distances (geographic CRS)'
-    : verticalMismatchRefusal
-    ? 'Unverified — height unit differs from horizontal (compound CRS)'
-    : grade === 'green'
-      ? 'Verified — well supported by measured points'
-      : grade === 'yellow'
-        ? 'Caution — loosely supported or unverified scale'
-        : 'Unverified — an endpoint has no points to measure';
+  let caption: string;
+  if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
+  else if (verticalMismatchRefusal) caption = 'Unverified — height unit differs from horizontal (compound CRS)';
+  else if (grade === 'green') caption = 'Verified — well supported by measured points';
+  else if (grade === 'yellow') caption = 'Caution — loosely supported or unverified scale';
+  else caption = 'Unverified — an endpoint has no points to measure';
 
   return { grade, caption, reasons, presentable };
 }
@@ -216,9 +216,12 @@ export function summarizeMeasurementTrust(
   if (green) parts.push(`${green} verified`);
   if (yellow) parts.push(`${yellow} caution`);
   if (red) parts.push(`${red} unverified`);
-  const line =
-    total === 0
-      ? 'No graded measurements'
-      : `${total} measurement${total === 1 ? '' : 's'} — ${parts.join(', ')}`;
+  let line: string;
+  if (total === 0) {
+    line = 'No graded measurements';
+  } else {
+    const plural = total === 1 ? '' : 's';
+    line = `${total} measurement${plural} — ${parts.join(', ')}`;
+  }
   return { total, green, yellow, red, line };
 }

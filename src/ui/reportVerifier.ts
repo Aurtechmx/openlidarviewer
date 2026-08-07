@@ -45,18 +45,34 @@ export function showReportVerification(result: VerifyReportResult): void {
   const ok = result.valid;
   const weak = ok && result.cryptographic === false;
   const status = document.createElement('div');
-  status.setAttribute(
-    'data-testid',
-    !ok ? 'report-verify-invalid' : weak ? 'report-verify-weak' : 'report-verify-valid',
-  );
-  status.textContent = !result.recognised
-    ? 'Not a report'
-    : !ok
-      ? 'Report has been modified'
-      : weak
-        ? 'Checksum matches — not tamper-proof'
-        : 'Report is intact';
-  const statusColor = !ok ? 'var(--rating-weak)' : weak ? 'var(--rating-good)' : 'var(--rating-excellent)';
+  let statusTestid: string;
+  if (!ok) {
+    statusTestid = 'report-verify-invalid';
+  } else if (weak) {
+    statusTestid = 'report-verify-weak';
+  } else {
+    statusTestid = 'report-verify-valid';
+  }
+  status.setAttribute('data-testid', statusTestid);
+  let statusText: string;
+  if (!result.recognised) {
+    statusText = 'Not a report';
+  } else if (!ok) {
+    statusText = 'Report has been modified';
+  } else if (weak) {
+    statusText = 'Checksum matches — not tamper-proof';
+  } else {
+    statusText = 'Report is intact';
+  }
+  status.textContent = statusText;
+  let statusColor: string;
+  if (!ok) {
+    statusColor = 'var(--rating-weak)';
+  } else if (weak) {
+    statusColor = 'var(--rating-good)';
+  } else {
+    statusColor = 'var(--rating-excellent)';
+  }
   status.style.cssText = `font:600 16px system-ui,sans-serif;color:${statusColor};`;
   card.append(status);
 

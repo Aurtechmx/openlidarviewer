@@ -302,7 +302,7 @@ const defaultParseWorkerFactory: ParseWorkerFactory = () =>
 let parseWorkerFactory: ParseWorkerFactory = defaultParseWorkerFactory;
 
 function parseWorkerInstance(): Worker {
-  if (!sharedWorker) sharedWorker = parseWorkerFactory();
+  sharedWorker ??= parseWorkerFactory();
   return sharedWorker;
 }
 
@@ -413,7 +413,7 @@ export async function loadFile(
       const msg = event.data as WorkerReply;
       if (msg.type === 'progress') {
         // The first reply marks the buffer transfer + worker spin-up cost.
-        if (transferMs === undefined) transferMs = performance.now() - postedAt;
+        transferMs ??= performance.now() - postedAt;
         onProgress?.({ stage: msg.stage, detail: msg.detail, fraction: msg.fraction });
         return;
       }

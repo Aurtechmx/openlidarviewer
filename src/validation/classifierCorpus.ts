@@ -295,7 +295,8 @@ function buildScene(spec: SceneSpec): CorpusScene {
       const h = spec.vegMinH + rnd() * (spec.vegMaxH - spec.vegMinH);
       // Truth follows the SAME height bands the classifier uses, so a band
       // disagreement is a real disagreement and not a definition mismatch.
-      const truth = h < 2 ? TRUTH_LOW_VEG : h < 5 ? TRUTH_MED_VEG : TRUTH_HIGH_VEG;
+      const truthVeg = h < 5 ? TRUTH_MED_VEG : TRUTH_HIGH_VEG;
+      const truth = h < 2 ? TRUTH_LOW_VEG : truthVeg;
       // A canopy return is one of several from a pulse that kept going; a roof
       // return is not. Second return of two, so the cue reads `returnCount > 1`.
       add(a, x, y, surface(x, y) + h, GREEN, 2, 2, truth);
@@ -605,12 +606,14 @@ export function scoreScene(
     }
     const precision = tp + fp > 0 ? tp / (tp + fp) : null;
     const recall = tp + fn > 0 ? tp / (tp + fn) : null;
-    const f1 =
-      precision !== null && recall !== null && precision + recall > 0
-        ? (2 * precision * recall) / (precision + recall)
-        : precision !== null && recall !== null
-          ? 0
-          : null;
+    let f1: number | null;
+    if (precision !== null && recall !== null && precision + recall > 0) {
+      f1 = (2 * precision * recall) / (precision + recall);
+    } else if (precision !== null && recall !== null) {
+      f1 = 0;
+    } else {
+      f1 = null;
+    }
     byClass.push({
       code,
       support,
@@ -701,12 +704,14 @@ export function poolScores(scores: readonly SceneScore[]): SceneScore {
     const acc = byCode.get(code)!;
     const precision = acc.tp + acc.fp > 0 ? acc.tp / (acc.tp + acc.fp) : null;
     const recall = acc.tp + acc.fn > 0 ? acc.tp / (acc.tp + acc.fn) : null;
-    const f1 =
-      precision !== null && recall !== null && precision + recall > 0
-        ? (2 * precision * recall) / (precision + recall)
-        : precision !== null && recall !== null
-          ? 0
-          : null;
+    let f1: number | null;
+    if (precision !== null && recall !== null && precision + recall > 0) {
+      f1 = (2 * precision * recall) / (precision + recall);
+    } else if (precision !== null && recall !== null) {
+      f1 = 0;
+    } else {
+      f1 = null;
+    }
     return {
       code,
       support: acc.support,

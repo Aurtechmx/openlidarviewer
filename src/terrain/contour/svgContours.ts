@@ -57,7 +57,7 @@ const MAP_TARGET_PX = 880;
 
 /** Escape the three XML-significant characters for safe text / `<metadata>`. */
 function xmlEscape(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replaceAll(/&/g, '&amp;').replaceAll(/</g, '&lt;').replaceAll(/>/g, '&gt;');
 }
 
 function strokeStyle(f: ContourFeature, stroke: string, indexW: number, baseW: number): string {
@@ -77,7 +77,14 @@ function niceRound(v: number): number {
   if (!(v > 0)) return 1;
   const pow = Math.pow(10, Math.floor(Math.log10(v)));
   const f = v / pow;
-  const n = f >= 5 ? 5 : f >= 2 ? 2 : 1;
+  let n: number;
+  if (f >= 5) {
+    n = 5;
+  } else if (f >= 2) {
+    n = 2;
+  } else {
+    n = 1;
+  }
   return n * pow;
 }
 
@@ -99,9 +106,11 @@ function scaleBar(x: number, y: number, scale: number, worldW: number, unit: str
   const tick = (px: number, label: string): string =>
     `<text x="${px.toFixed(2)}" y="${(y - 3).toFixed(2)}" font-size="9" text-anchor="middle" ` +
     `fill="${stroke}" font-family="sans-serif">${label}</text>`;
-  parts.push(tick(x, '0'));
-  parts.push(tick(x + (D * scale) / 2, (D / 2).toFixed(dec)));
-  parts.push(tick(x + D * scale, `${D.toFixed(dec)} ${unit}`));
+  parts.push(
+    tick(x, '0'),
+    tick(x + (D * scale) / 2, (D / 2).toFixed(dec)),
+    tick(x + D * scale, `${D.toFixed(dec)} ${unit}`),
+  );
   return parts.join('');
 }
 
@@ -144,9 +153,11 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
     lines.push(`Contour interval ${model.intervalM.toFixed(intervalDec)} ${unit}`);
   }
   if (prov) {
-    lines.push(`Vertical datum: ${prov.datumKnown ? prov.verticalDatum : 'unknown'}`);
-    lines.push(`Horizontal CRS: ${prov.crsKnown ? prov.horizontalCrs : 'not georeferenced'}`);
-    if (prov.accuracy && prov.accuracy.rmseZM != null) {
+    lines.push(
+      `Vertical datum: ${prov.datumKnown ? prov.verticalDatum : 'unknown'}`,
+      `Horizontal CRS: ${prov.crsKnown ? prov.horizontalCrs : 'not georeferenced'}`,
+    );
+    if (prov.accuracy?.rmseZM != null) {
       // rmseZM is metre-denominated (the *M contract) whatever the sheet's
       // linear unit, and the provenance carries no unit factor to convert it
       // with — so stamp it 'm', matching the <metadata> block. Labelling a
@@ -154,8 +165,7 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
       // deliverable's accuracy 3.28×.
       lines.push(`Vertical RMSEz: ${prov.accuracy.rmseZM.toFixed(2)} m`);
     }
-    lines.push(`Surface quality: ${prov.surfaceQuality}`);
-    lines.push(prov.notSurveyGrade);
+    lines.push(`Surface quality: ${prov.surfaceQuality}`, prov.notSurveyGrade);
     if (prov.generated) lines.push(`Generated: ${prov.generated.slice(0, 10)}`);
   } else {
     lines.push(NOT_SURVEY_GRADE_NOTE);

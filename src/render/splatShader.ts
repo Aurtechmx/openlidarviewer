@@ -156,7 +156,9 @@ export function gaussianSplatAlpha(
   const edge = Math.exp(-k); // raw(1), in (0, 1)
   const raw = Math.exp(-k * d * d); // raw(d)
   const a = (raw - edge) / (1 - edge);
-  return a <= 0 ? 0 : a >= 1 ? 1 : a;
+  if (a <= 0) return 0;
+  if (a >= 1) return 1;
+  return a;
 }
 
 /**

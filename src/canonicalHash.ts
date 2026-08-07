@@ -28,7 +28,9 @@
  * This comparator is for strings. Numeric arrays need `(a, b) => a - b`.
  */
 export function compareCodeUnits(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }
 
 /** Deterministic JSON with sorted object keys, so a fingerprint is stable. */
@@ -37,7 +39,8 @@ export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj).sort(compareCodeUnits);
-  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
+  const entries = keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`);
+  return `{${entries.join(',')}}`;
 }
 
 /** FNV-1a 32-bit over a UTF-16 code-unit stream, as an 8-hex-digit string. */

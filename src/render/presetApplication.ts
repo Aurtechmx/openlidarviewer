@@ -76,7 +76,7 @@ export interface PresetApplication {
  */
 export function applyInspectionPreset(
   host: PresetApplyHost,
-  id: PresetId | string,
+  id: string,
 ): PresetApplication {
   const preset = getPreset(id);
   host.setEdlEnabled(preset.edlEnabled);

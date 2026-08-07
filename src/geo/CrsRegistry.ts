@@ -307,7 +307,7 @@ export function resolveHorizontalDatum(
   epsg: number | undefined,
 ): string | undefined {
   const wkt = wktDatum?.trim();
-  return wkt ? wkt : registryDatumFor(epsg);
+  return wkt || registryDatumFor(epsg);
 }
 
 /**

@@ -24,10 +24,10 @@ import { exportDecision, type ExportDecision } from './evidenceLevel';
 // The registry is GENERATED from docs/validation/claim-register.yaml by
 // scripts/generate-claim-registry.mjs (`npm run gen:claim-registry`), so it can
 // never be hand-mirrored out of sync. lint:claim-register fails on any drift.
-import { EVIDENCE_REGISTRY, type RegistryEntry } from './claimRegistry.generated';
+import { EVIDENCE_REGISTRY } from './claimRegistry.generated';
 
 export { EVIDENCE_REGISTRY };
-export type { RegistryEntry };
+export type { RegistryEntry } from './claimRegistry.generated';
 
 /**
  * Resolve the export decision for a product by its claim id. An unknown id is

@@ -197,7 +197,7 @@ function coerce(p: Partial<ContourStudioState>): ContourStudioState {
     appearance: { ...base.appearance, ...p.appearance },
     validation: { ...base.validation, ...p.validation },
     deliverable: { ...base.deliverable, ...p.deliverable },
-    overrides: { ...(p.overrides ?? {}) },
+    overrides: { ...p.overrides },
   };
 }
 

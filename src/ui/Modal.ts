@@ -122,7 +122,7 @@ export function openModal(opts: ModalOptions): ModalHandle {
       return;
     }
     const first = items[0];
-    const last = items[items.length - 1];
+    const last = items.at(-1)!;
     const active = document.activeElement;
     if (e.shiftKey && (active === first || !dialog.contains(active))) {
       e.preventDefault();

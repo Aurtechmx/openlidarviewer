@@ -82,7 +82,7 @@ export function targetPixelRatio(input: DprInput): number {
 export function quantizeDpr(dpr: number, step: number = DPR_QUANT_STEP): number {
   const s = step > 0 && Number.isFinite(step) ? step : DPR_QUANT_STEP;
   const q = Math.round(dpr / s) * s;
-  return q < s ? s : q;
+  return Math.max(q, s);
 }
 
 /**

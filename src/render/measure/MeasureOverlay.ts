@@ -198,34 +198,24 @@ export class MeasureOverlay {
           }),
         );
       }
-      kids.push(
-        svg('circle', {
-          cx: p.x,
-          cy: p.y,
-          r:
-            vx.role === 'pending'
-              ? 5
-              : vx.role === 'snap-target'
-                ? 5.5
-                : vx.role === 'station'
-                  ? 2.6
-                  : 4.2,
-          class:
-            vx.role === 'pending'
-              ? 'olv-measure-dot olv-measure-dot-pending'
-              : vx.role === 'snap-target'
-                ? 'olv-measure-dot olv-measure-dot-snap'
-                : vx.role === 'station'
-                  ? vx.active
-                    ? 'olv-measure-dot olv-measure-dot-station is-active'
-                    : 'olv-measure-dot olv-measure-dot-station'
-                  : 'olv-measure-dot',
-        }),
-      );
+      let dotRadius: number;
+      if (vx.role === 'pending') dotRadius = 5;
+      else if (vx.role === 'snap-target') dotRadius = 5.5;
+      else if (vx.role === 'station') dotRadius = 2.6;
+      else dotRadius = 4.2;
+      let dotClass: string;
+      if (vx.role === 'pending') dotClass = 'olv-measure-dot olv-measure-dot-pending';
+      else if (vx.role === 'snap-target') dotClass = 'olv-measure-dot olv-measure-dot-snap';
+      else if (vx.role === 'station') {
+        dotClass = vx.active
+          ? 'olv-measure-dot olv-measure-dot-station is-active'
+          : 'olv-measure-dot olv-measure-dot-station';
+      } else dotClass = 'olv-measure-dot';
+      kids.push(svg('circle', { cx: p.x, cy: p.y, r: dotRadius, class: dotClass }));
       if (vx.handle) {
         const hit = svg('circle', { cx: p.x, cy: p.y, r: 12, class: 'olv-m-handle' });
-        hit.setAttribute('data-mid', vx.handle.mid);
-        hit.setAttribute('data-vi', String(vx.handle.vi));
+        hit.dataset.mid = vx.handle.mid;
+        hit.dataset.vi = String(vx.handle.vi);
         kids.push(hit);
       }
     }

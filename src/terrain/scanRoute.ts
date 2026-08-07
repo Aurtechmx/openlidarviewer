@@ -144,12 +144,10 @@ export function planScanRoute(input: ScanRouteInput): ScanRoutePlan {
   // nothing to say, a NON-AUTO override still routes by itself (the user's
   // explicit choice must never strand them on a torn-down panel just because
   // the gather failed at click time).
-  const effective: SpaceKind | null =
-    detected !== null
-      ? resolveScanRoute(detected, override)
-      : override !== 'auto'
-        ? override
-        : null;
+  let effective: SpaceKind | null;
+  if (detected !== null) effective = resolveScanRoute(detected, override);
+  else if (override !== 'auto') effective = override;
+  else effective = null;
   if (!initial) {
     // Re-route only when the effective route genuinely changes — never thrash.
     if (effective === null || effective === lastVerdict) {

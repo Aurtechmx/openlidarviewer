@@ -212,9 +212,8 @@ import {
 } from './measure/classificationEditor';
 import { ClassEditHistory, recordEdit } from './measure/classEditHistory';
 import { ClassificationEpochs } from './measure/classificationEpoch';
-import type { PresetId, SkyPreset } from './inspectionPresets';
+import type { PresetId, SkyPreset, SkyPreset as SkyPresetId } from './inspectionPresets';
 import { applySkyPreset } from './skyPresetApply';
-import type { SkyPreset as SkyPresetId } from './inspectionPresets';
 import {
   applyRgbAppearance,
   IDENTITY_RGB_APPEARANCE,
@@ -1094,22 +1093,22 @@ export class Viewer {
   //    on the canvas / window; `dispose()` removes them. Storing the
   //    bound closures here (rather than the methods themselves) preserves
   //    the canvas reference each listener captures.
-  private _onCanvasDblClick!: (e: MouseEvent) => void;
-  private _onCanvasClick!: (e: MouseEvent) => void;
-  private _onCanvasPointerMove!: (e: PointerEvent) => void;
-  private _onCanvasPointerLeave!: () => void;
-  private _onWindowKeyDown!: (e: KeyboardEvent) => void;
+  private readonly _onCanvasDblClick!: (e: MouseEvent) => void;
+  private readonly _onCanvasClick!: (e: MouseEvent) => void;
+  private readonly _onCanvasPointerMove!: (e: PointerEvent) => void;
+  private readonly _onCanvasPointerLeave!: () => void;
+  private readonly _onWindowKeyDown!: (e: KeyboardEvent) => void;
   /**
    * Pauses the render loop while the tab is hidden; resumes when
    * the user comes back. Registered on `document.visibilitychange`.
    * Stored as a bound field so the symmetric `removeEventListener`
    * in `dispose()` actually matches.
    */
-  private _onVisibilityChange!: () => void;
+  private readonly _onVisibilityChange!: () => void;
   /** Touch-gesture pointer trackers. See `_initTouchGesture`. */
-  private _onCanvasPointerDown!: (e: PointerEvent) => void;
-  private _onCanvasPointerUp!: (e: PointerEvent) => void;
-  private _onCanvasPointerCancel!: (e: PointerEvent) => void;
+  private readonly _onCanvasPointerDown!: (e: PointerEvent) => void;
+  private readonly _onCanvasPointerUp!: (e: PointerEvent) => void;
+  private readonly _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
   private readonly _touchTracker = new TouchTracker();
   /**
@@ -1342,7 +1341,7 @@ export class Viewer {
         const aligned = (
           c: ArrayLike<number> | null | undefined,
           pos: Float32Array,
-        ): ArrayLike<number> | undefined => (c && c.length === pos.length / 3 ? c : undefined);
+        ): ArrayLike<number> | undefined => (c?.length === pos.length / 3 ? c : undefined);
         // Only clouds the picker would place profile vertices on — visible and
         // unlocked — feed the sample, so a hidden or locked layer can't skew it.
         for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
@@ -1453,12 +1452,10 @@ export class Viewer {
           up,
           positions,
         });
-        const confidence: 'high' | 'medium' | 'low' =
-          result.pointsInPolygon >= 1000
-            ? 'high'
-            : result.pointsInPolygon >= 100
-              ? 'medium'
-              : 'low';
+        let confidence: 'high' | 'medium' | 'low';
+        if (result.pointsInPolygon >= 1000) confidence = 'high';
+        else if (result.pointsInPolygon >= 100) confidence = 'medium';
+        else confidence = 'low';
         // Volume readout is "resident-only" whenever any streaming bytes
         // were in the walk and no fully-loaded static cloud sat beside
         // them — same rationale as the profile sampler.
@@ -2385,7 +2382,7 @@ export class Viewer {
       cls: ArrayLike<number> | null | undefined,
       pos: Float32Array,
     ): ArrayLike<number> | undefined =>
-      cls && cls.length === pos.length / 3 ? cls : undefined;
+      cls?.length === pos.length / 3 ? cls : undefined;
     // Match the picker: only visible, unlocked clouds contribute to the surface.
     for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
       if (cloud.positions && cloud.positions.length > 0) {
@@ -3056,7 +3053,7 @@ export class Viewer {
    */
   swapClassification(id: string, fromClass: number, toClass: number): ClassEditResult {
     const entry = this._clouds.get(id);
-    if (!entry || !entry.cloud.classification) {
+    if (!entry?.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
     const buf = entry.cloud.classification;
@@ -3099,7 +3096,7 @@ export class Viewer {
     up?: Vec3,
   ): ClassEditResult {
     const entry = this._clouds.get(id);
-    if (!entry || !entry.cloud.classification) {
+    if (!entry?.cloud.classification) {
       return { changedCount: 0, pointCount: 0 };
     }
     const buf = entry.cloud.classification;
@@ -3134,7 +3131,7 @@ export class Viewer {
     newClass: number,
   ): ClassEditResult {
     const entry = this._clouds.get(id);
-    if (!entry || !entry.cloud.classification || lasso.length < 3) {
+    if (!entry?.cloud.classification || lasso.length < 3) {
       return { changedCount: 0, pointCount: 0 };
     }
     const canvas = this._canvas;
@@ -3193,7 +3190,7 @@ export class Viewer {
   undoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
     const h = this._classHistory.get(id);
-    if (!entry || !entry.cloud.classification || !h || !h.canUndo) return false;
+    if (!entry?.cloud.classification || !h?.canUndo) return false;
     h.undo(entry.cloud.classification);
     this._refreshClassificationColours(id);
     this._markClassificationEdited(id);
@@ -3208,7 +3205,7 @@ export class Viewer {
   redoClassification(id: string): boolean {
     const entry = this._clouds.get(id);
     const h = this._classHistory.get(id);
-    if (!entry || !entry.cloud.classification || !h || !h.canRedo) return false;
+    if (!entry?.cloud.classification || !h?.canRedo) return false;
     h.redo(entry.cloud.classification);
     this._refreshClassificationColours(id);
     this._markClassificationEdited(id);
@@ -3273,7 +3270,7 @@ export class Viewer {
     const existing = entry.mesh.geometry.getAttribute('aClass') as
       | THREE.InstancedBufferAttribute
       | undefined;
-    if (existing && existing.array.length === instanceCount) {
+    if (existing?.array.length === instanceCount) {
       const arr = existing.array as Float32Array;
       for (let i = 0; i < n; i++) arr[i] = codes[i];
       existing.needsUpdate = true;
@@ -3641,7 +3638,7 @@ export class Viewer {
    * report says whether the colour mode reached every layer: read `partial`
    * before telling the user the preset is active.
    */
-  applyPreset(id: PresetId | string): PresetApplication {
+  applyPreset(id: string): PresetApplication {
     const applied = applyInspectionPreset(this._presetApplyHost(), id);
     this._presetId = applied.presetId;
     return applied;
@@ -4209,11 +4206,9 @@ export class Viewer {
     this._toolPaused = paused;
     this._nav.setInputEnabled(paused);
     // Inspect owns its own cursor; measure / annotate use the crosshair.
-    this._canvas.style.cursor = paused
-      ? 'grab'
-      : this._toolMode === 'inspect'
-        ? ''
-        : 'crosshair';
+    if (paused) this._canvas.style.cursor = 'grab';
+    else if (this._toolMode === 'inspect') this._canvas.style.cursor = '';
+    else this._canvas.style.cursor = 'crosshair';
   }
 
   private _setToolMode(mode: ToolMode): void {
@@ -5783,7 +5778,6 @@ export class Viewer {
     // Resident-only pick invariant — pick from resident meshes only. Prune any orphan
     // sighting so the bug can't compound (and surface it in dev). The
     // resident, visible nodes are then handed to the pure selector below.
-    const eligibleMeshes: THREE.Mesh[] = [];
     const eligibleEntries: StreamingPickEntry[] = [];
     for (const [mesh, entry] of this._streamingPickData) {
       if (!this._streamingMeshes.has(mesh) || mesh.parent === null) {
@@ -5792,7 +5786,6 @@ export class Viewer {
         continue;
       }
       if (!mesh.visible) continue;
-      eligibleMeshes.push(mesh);
       eligibleEntries.push(entry);
     }
     if (eligibleEntries.length === 0) return null;

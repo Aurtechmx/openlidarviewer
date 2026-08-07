@@ -54,7 +54,7 @@ const LOW_GROUND_RATIO = 0.1;
 
 const pct = (frac: number): string => `${Math.round(frac * 100)}%`;
 const finite = (n: number | null | undefined): number =>
-  n != null && Number.isFinite(n) ? n : NaN;
+  n != null && Number.isFinite(n) ? n : Number.NaN;
 
 /**
  * Explain why an analysed surface sits short of fully-good, and how to improve

@@ -21,7 +21,6 @@
  */
 
 import { EVIDENCE_THRESHOLDS, type EvidenceGrade } from '../ground/cellConfidence';
-import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
 import type { IntervalOption, IntervalGateResult } from './intervalGate';
 
 /** Plain-language names for the Analyse features. */
@@ -98,7 +97,7 @@ export const GRADE_MEANING: Record<EvidenceGrade, string> = {
  * {@link NOT_SURVEY_GRADE_NOTE} so the panel footer and the export writers
  * state the limitation in exactly one wording.
  */
-export const NOT_SURVEY_GRADE = NOT_SURVEY_GRADE_NOTE;
+export { NOT_SURVEY_GRADE_NOTE as NOT_SURVEY_GRADE } from '../export/exportNotes';
 
 /** A plain confidence word for a 0..100 number, aligned to the grade thresholds. */
 export function confidenceWord(confidence: number): 'high' | 'moderate' | 'low' {

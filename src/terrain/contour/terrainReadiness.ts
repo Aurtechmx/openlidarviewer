@@ -69,9 +69,9 @@ function tallyCoverage(coverage: Uint8Array): CoverageTally {
   let measured = 0;
   let interpolated = 0;
   let gap = 0;
-  for (let i = 0; i < coverage.length; i++) {
-    if (coverage[i] === 2) measured++;
-    else if (coverage[i] === 1) interpolated++;
+  for (const cell of coverage) {
+    if (cell === 2) measured++;
+    else if (cell === 1) interpolated++;
     else gap++;
   }
   return {
@@ -130,15 +130,19 @@ export function computeTerrainReadiness(
   if (groundRating !== 'unavailable' && measuredFrac < 0.5) {
     groundRating = demote(groundRating);
   }
+  let confidenceDetail: string;
+  if (!Number.isFinite(meanConf)) {
+    confidenceDetail = 'No ground surface could be built for this scan.';
+  } else if (calibrated && tol != null) {
+    confidenceDetail = `Calibrated to held-out error · ±${tol.toFixed(2)} m`;
+  } else {
+    confidenceDetail = 'Heuristic estimate — not enough held-out points to calibrate.';
+  }
   const groundConfidence: ReadinessIndicator = {
     label: 'Ground confidence',
     rating: groundRating,
     value: Number.isFinite(meanConf) ? pct(meanConf / 100) : '—',
-    detail: !Number.isFinite(meanConf)
-      ? 'No ground surface could be built for this scan.'
-      : calibrated && tol != null
-        ? `Calibrated to held-out error · ±${tol.toFixed(2)} m`
-        : 'Heuristic estimate — not enough held-out points to calibrate.',
+    detail: confidenceDetail,
   };
 
   // ── DTM quality ──────────────────────────────────────────────────────

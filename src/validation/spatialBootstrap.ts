@@ -154,7 +154,7 @@ function refuse(
 
 function mean(values: readonly number[]): number {
   let sum = 0;
-  for (let i = 0; i < values.length; i++) sum += values[i];
+  for (const v of values) sum += v;
   return sum / values.length;
 }
 
@@ -184,8 +184,8 @@ function quantileSorted(sorted: readonly number[], p: number): number {
 function standardDeviation(values: readonly number[]): number {
   const m = mean(values);
   let ss = 0;
-  for (let i = 0; i < values.length; i++) {
-    const d = values[i] - m;
+  for (const v of values) {
+    const d = v - m;
     ss += d * d;
   }
   return Math.sqrt(ss / (values.length - 1));
@@ -361,7 +361,7 @@ export function blockBootstrap(
     const pool: number[] = [];
     for (let d = 0; d < k; d++) {
       const block = groups[Math.floor(rng() * k)];
-      for (let i = 0; i < block.length; i++) pool.push(block[i]);
+      for (const v of block) pool.push(v);
     }
     const s = statistic(pool);
     if (!Number.isFinite(s)) {
@@ -508,7 +508,11 @@ export function leaveOneSiteOut(
   // reproducible. Comparing by code unit is fixed by the language spec, which
   // is what a deterministic record needs. Same rule as the benchmark artifact
   // ordering.
-  const siteIds = [...groups.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const siteIds = [...groups.keys()].sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
   const perSite: SiteOmission[] = [];
   for (const siteId of siteIds) {
     const kept: number[] = [];

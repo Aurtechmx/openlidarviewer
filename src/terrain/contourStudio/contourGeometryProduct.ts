@@ -131,7 +131,7 @@ export function cartographicProduct(
   // and the gaps between them are never merged.
 
   displacements.sort((a, b) => a - b);
-  const max = displacements.length ? displacements[displacements.length - 1] : 0;
+  const max = displacements.at(-1) ?? 0;
   const p95 = percentile(displacements, 0.95);
   const mean = displacements.length
     ? displacements.reduce((s, d) => s + d, 0) / displacements.length
@@ -171,7 +171,7 @@ function douglasPeucker(points: ReadonlyArray<Pt>, tol: number): Pt[] {
   let maxDist = -1;
   let idx = -1;
   const first = points[0];
-  const last = points[points.length - 1];
+  const last = points.at(-1)!;
   for (let i = 1; i < points.length - 1; i++) {
     const d = perpendicularDistance(points[i], first, last);
     if (d > maxDist) {

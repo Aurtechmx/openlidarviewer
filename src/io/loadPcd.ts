@@ -23,12 +23,16 @@ import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
 
 /** Round and clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
-  return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+  if (v < 0) return 0;
+  if (v > 255) return 255;
+  return Math.round(v);
 }
 
 /** Round and clamp a value into the 0–65535 Uint16 range. */
 function clampU16(v: number): number {
-  return v < 0 ? 0 : v > 65535 ? 65535 : Math.round(v);
+  if (v < 0) return 0;
+  if (v > 65535) return 65535;
+  return Math.round(v);
 }
 
 /** The subset of PCD header facts the f64 position path needs. */
@@ -114,7 +118,7 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
   let height = 0;
   for (const raw of probe.slice(0, m.index).split(/\r?\n/)) {
     const line = raw.trim();
-    if (line === '' || line[0] === '#') continue;
+    if (line === '' || line.startsWith('#')) continue;
     const tok = line.split(/\s+/);
     const key = tok[0].toUpperCase();
     if (key === 'FIELDS') facts.fields = tok.slice(1).map((f) => f.toLowerCase());
@@ -295,7 +299,7 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
   // with what PCDLoader decoded, PCDLoader's rows win.
   const reread = extractPcdPositionsF64(buffer);
   let global: Float64Array;
-  if (reread && reread.length === count * 3) {
+  if (reread?.length === count * 3) {
     global = reread;
   } else {
     global = new Float64Array(count * 3);

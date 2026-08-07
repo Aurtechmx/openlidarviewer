@@ -103,7 +103,7 @@ export class TierAdaptation {
   recordFps(fps: number): DeviceTier {
     const now = this._now();
     if (fps < STEP_DOWN_FPS) {
-      if (this._belowSinceTs === null) this._belowSinceTs = now;
+      this._belowSinceTs ??= now;
       this._aboveSinceTs = null;
       if (now - this._belowSinceTs >= STEP_DOWN_HOLD_MS) {
         const next = tierStepDown(this._tier);
@@ -113,7 +113,7 @@ export class TierAdaptation {
         }
       }
     } else if (fps > STEP_UP_FPS) {
-      if (this._aboveSinceTs === null) this._aboveSinceTs = now;
+      this._aboveSinceTs ??= now;
       this._belowSinceTs = null;
       if (now - this._aboveSinceTs >= STEP_UP_HOLD_MS) {
         const next = tierStepUp(this._tier);

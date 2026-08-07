@@ -214,14 +214,16 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   const rows: ExportHealthRow[] = [];
 
   // Scope — what slice of the cloud the figures describe.
-  const scope =
-    i.coverageMode === 'full'
-      ? { value: 'Full cloud', tier: 'good' as HealthTier }
-      : i.coverageMode === 'resident-only'
-        ? { value: 'Resident preview', tier: 'caution' as HealthTier }
-        : i.coverageMode === 'sampled'
-          ? { value: 'Sampled', tier: 'caution' as HealthTier }
-          : { value: 'Unknown', tier: 'info' as HealthTier };
+  let scope: { value: string; tier: HealthTier };
+  if (i.coverageMode === 'full') {
+    scope = { value: 'Full cloud', tier: 'good' };
+  } else if (i.coverageMode === 'resident-only') {
+    scope = { value: 'Resident preview', tier: 'caution' };
+  } else if (i.coverageMode === 'sampled') {
+    scope = { value: 'Sampled', tier: 'caution' };
+  } else {
+    scope = { value: 'Unknown', tier: 'info' };
+  }
   rows.push({ label: 'Scan scope', value: scope.value, tier: scope.tier });
 
   // Classification — source vs derived is the trust line the reviewer cares about.
@@ -238,20 +240,23 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   }
 
   // Georeferencing.
-  rows.push(
-    i.crsKnown === false
-      ? { label: 'Coordinate system', value: 'Unknown', tier: 'caution' }
-      : i.crsKnown === true
-        ? { label: 'Coordinate system', value: 'Known', tier: 'good' }
-        : { label: 'Coordinate system', value: '—', tier: 'info' },
-  );
-  rows.push(
-    i.datumKnown === false
-      ? { label: 'Vertical datum', value: 'Unknown', tier: 'caution' }
-      : i.datumKnown === true
-        ? { label: 'Vertical datum', value: 'Known', tier: 'good' }
-        : { label: 'Vertical datum', value: '—', tier: 'info' },
-  );
+  let crsRow: ExportHealthRow;
+  if (i.crsKnown === false) {
+    crsRow = { label: 'Coordinate system', value: 'Unknown', tier: 'caution' };
+  } else if (i.crsKnown === true) {
+    crsRow = { label: 'Coordinate system', value: 'Known', tier: 'good' };
+  } else {
+    crsRow = { label: 'Coordinate system', value: '—', tier: 'info' };
+  }
+  let datumRow: ExportHealthRow;
+  if (i.datumKnown === false) {
+    datumRow = { label: 'Vertical datum', value: 'Unknown', tier: 'caution' };
+  } else if (i.datumKnown === true) {
+    datumRow = { label: 'Vertical datum', value: 'Known', tier: 'good' };
+  } else {
+    datumRow = { label: 'Vertical datum', value: '—', tier: 'info' };
+  }
+  rows.push(crsRow, datumRow);
 
   // Density.
   if (i.density && i.density !== 'unknown') {
@@ -264,22 +269,26 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   }
 
   // Terrain-product readiness — the surface verdict in export terms.
-  const tprTier: HealthTier =
-    i.surfaceTier === 'Good'
-      ? 'good'
-      : i.surfaceTier === 'Blocked'
-        ? 'blocked'
-        : i.surfaceTier === undefined || i.surfaceTier === 'Unknown'
-          ? 'info'
-          : 'caution';
-  const tprValue =
-    i.surfaceTier === 'Good'
-      ? 'Export-ready'
-      : i.surfaceTier === 'Blocked'
-        ? 'Blocked'
-        : i.surfaceTier === undefined || i.surfaceTier === 'Unknown'
-          ? 'Not analysed'
-          : 'Preview only';
+  let tprTier: HealthTier;
+  if (i.surfaceTier === 'Good') {
+    tprTier = 'good';
+  } else if (i.surfaceTier === 'Blocked') {
+    tprTier = 'blocked';
+  } else if (i.surfaceTier === undefined || i.surfaceTier === 'Unknown') {
+    tprTier = 'info';
+  } else {
+    tprTier = 'caution';
+  }
+  let tprValue: string;
+  if (i.surfaceTier === 'Good') {
+    tprValue = 'Export-ready';
+  } else if (i.surfaceTier === 'Blocked') {
+    tprValue = 'Blocked';
+  } else if (i.surfaceTier === undefined || i.surfaceTier === 'Unknown') {
+    tprValue = 'Not analysed';
+  } else {
+    tprValue = 'Preview only';
+  }
   rows.push({ label: 'Terrain products', value: tprValue, tier: tprTier });
 
   // Actionable blockers — the caution/blocked rows phrased as a checklist.

@@ -21,14 +21,21 @@
  * Pure — no DOM, no three.js — entirely a type/contract module.
  */
 
-import type { Box6 } from '../../io/copc/copcTypes';
-import type {
-  ChunkDecodeMetadata,
-  DecodedChunk,
-} from '../../io/copc/copcChunkDecode';
-import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
+import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
+import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
 import type { StreamingNode } from './StreamingNode';
 import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
+
+/**
+ * The colour modes a streaming cloud can drive — shared by the source
+ * contract and its COPC / EPT implementations.
+ */
+export type StreamingColorMode =
+  | 'rgb'
+  | 'intensity'
+  | 'elevation'
+  | 'classification'
+  | 'normal';
 
 /**
  * The minimal public surface the scheduler / renderer / picking path read off
@@ -122,14 +129,14 @@ export interface StreamingSource {
    * Returned values match the runtime's `ColorMode` enum: 'rgb' when the
    * format carries colour, else 'elevation'.
    */
-  defaultColorMode(): 'rgb' | 'intensity' | 'elevation' | 'classification' | 'normal';
+  defaultColorMode(): StreamingColorMode;
   /**
    * The colour modes the cloud can actually drive. The Viewer surfaces
    * these to the Inspector's "Color by" chip row so a cloud that lacks
    * (say) classification doesn't show a Class chip that produces a blank
    * recolour.
    */
-  availableColorModes(): readonly ('rgb' | 'intensity' | 'elevation' | 'classification' | 'normal')[];
+  availableColorModes(): readonly StreamingColorMode[];
   /**
    * the source CRS, when the cloud carries projection metadata.
    * COPC clouds get this from the LAS VLRs the public-header parser walks
@@ -174,4 +181,4 @@ export interface StreamingSource {
 
 // Re-export `DecodedChunk` so consumers that import `StreamingSource` need
 // only one import for the decode-side type vocabulary.
-export type { DecodedChunk };
+export type { DecodedChunk } from '../../io/copc/copcChunkDecode';

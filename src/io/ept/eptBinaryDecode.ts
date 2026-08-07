@@ -91,9 +91,11 @@ function readAttr(view: DataView, off: number, attr: AttrLayout): number {
   switch (attr.size) {
     case 1: return attr.type === 'signed'   ? view.getInt8(off)              : view.getUint8(off);
     case 2: return attr.type === 'signed'   ? view.getInt16(off,  true)      : view.getUint16(off,  true);
-    case 4: return attr.type === 'float'    ? view.getFloat32(off, true)
-          : attr.type === 'signed'         ? view.getInt32(off,   true)
-                                            : view.getUint32(off,  true);
+    case 4: {
+      if (attr.type === 'float') return view.getFloat32(off, true);
+      if (attr.type === 'signed') return view.getInt32(off, true);
+      return view.getUint32(off, true);
+    }
     case 8: {
       // Size 8 must branch on the declared type. The earlier code read every
       // 8-byte attribute as Float64, which reinterprets an int64/uint64's

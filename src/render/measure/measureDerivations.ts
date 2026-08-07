@@ -24,10 +24,10 @@ const MEDIUM_CONFIDENCE_POINTS = 100;
  */
 export function deriveVolumeRecord(result: VolumeResult, referenceZ: number): VolumeRecord {
   const inPoly = result.pointsInPolygon;
-  const confidence: 'high' | 'medium' | 'low' =
-    inPoly >= HIGH_CONFIDENCE_POINTS ? 'high'
-    : inPoly >= MEDIUM_CONFIDENCE_POINTS ? 'medium'
-    : 'low';
+  let confidence: 'high' | 'medium' | 'low';
+  if (inPoly >= HIGH_CONFIDENCE_POINTS) confidence = 'high';
+  else if (inPoly >= MEDIUM_CONFIDENCE_POINTS) confidence = 'medium';
+  else confidence = 'low';
   const record: VolumeRecord = {
     fill: result.fill,
     cut: result.cut,

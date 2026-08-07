@@ -111,12 +111,14 @@ export function decodeWorkerPoolSize(input: DecodePoolSizeInput): number {
   }
 
   const cores = usableCores(input.hardwareConcurrency);
-  let workers =
-    cores === undefined
-      ? input.isMobile
-        ? UNKNOWN_CORES_MOBILE
-        : UNKNOWN_CORES_DESKTOP
-      : bandForCores(cores);
+  let workers: number;
+  if (cores !== undefined) {
+    workers = bandForCores(cores);
+  } else if (input.isMobile) {
+    workers = UNKNOWN_CORES_MOBILE;
+  } else {
+    workers = UNKNOWN_CORES_DESKTOP;
+  }
 
   if (input.isMobile) workers = Math.min(workers, DECODE_POOL_MOBILE_CAP);
 

@@ -25,7 +25,6 @@
  */
 
 import {
-  EVIDENCE_THRESHOLDS,
   gradeForConfidence,
   type EvidenceGrade,
 } from '../ground/cellConfidence';
@@ -166,4 +165,4 @@ export function coverageHeatmapImage(
 
 // Re-export the threshold object so a consumer can read the cutoffs without
 // reaching past the rasteriser into the confidence leaf.
-export { EVIDENCE_THRESHOLDS };
+export { EVIDENCE_THRESHOLDS } from '../ground/cellConfidence';

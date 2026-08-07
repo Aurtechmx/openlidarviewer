@@ -232,15 +232,23 @@ export class ObjectPanel {
     // —" caveat wins outright (the figures are provisional on a partial load);
     // else the certified-survey honesty line (present for interiors); else the
     // first reason as a fallback.
-    const partialIdx = reasons.findIndex((r) => /^Preliminary —/.test(r));
+    const partialIdx = reasons.findIndex((r) => r.startsWith('Preliminary —'));
     // An unverified-unit caveat is a whole-basis honesty flag (every metre figure
     // is an assumption), so it must be VISIBLE, not folded into the disclosure.
     // It outranks the standing "not a certified survey" line but yields to a
     // genuine partial-stream lead (provisional data trumps unit provenance).
-    const unitIdx = reasons.findIndex((r) => /^Coordinate units are unverified/.test(r));
+    const unitIdx = reasons.findIndex((r) => r.startsWith('Coordinate units are unverified'));
     const certIdx = reasons.findIndex((r) => /not a certified survey/i.test(r));
-    const leadIdx =
-      partialIdx >= 0 ? partialIdx : unitIdx >= 0 ? unitIdx : certIdx >= 0 ? certIdx : 0;
+    let leadIdx: number;
+    if (partialIdx >= 0) {
+      leadIdx = partialIdx;
+    } else if (unitIdx >= 0) {
+      leadIdx = unitIdx;
+    } else if (certIdx >= 0) {
+      leadIdx = certIdx;
+    } else {
+      leadIdx = 0;
+    }
     const lead = reasons[leadIdx];
     const rest = reasons.filter((_, i) => i !== leadIdx);
     const isPreliminary = leadIdx === partialIdx && partialIdx >= 0;
@@ -498,8 +506,8 @@ export class ObjectPanel {
     this._body.append(el('div', { className: 'olv-object-subhead', text: 'Planes' }));
     const p = space.planes;
     this._body.append(
-      this._row('Floor', p.floorPresent ? `Yes · ${areaMft(p.floorAreaM2 ?? NaN)}` : 'Not detected'),
-      this._row('Ceiling', p.ceilingPresent ? `Yes · ${areaMft(p.ceilingAreaM2 ?? NaN)}` : 'Not detected'),
+      this._row('Floor', p.floorPresent ? `Yes · ${areaMft(p.floorAreaM2 ?? Number.NaN)}` : 'Not detected'),
+      this._row('Ceiling', p.ceilingPresent ? `Yes · ${areaMft(p.ceilingAreaM2 ?? Number.NaN)}` : 'Not detected'),
       this._row('Walls', `${Math.round(p.wallCoveragePct)}% coverage · ~${p.dominantWallDirections} direction(s)`,
         'Share of perimeter spanning most of the height; approximate dominant-wall count.'),
     );
@@ -507,7 +515,7 @@ export class ObjectPanel {
     this._caveats(space.reasons);
     // Interior export row: Report PDF + the interior-only Floor plan preview.
     this._exportRow(true);
-    const why = shape && shape.reasons.length ? shape.reasons[0].replace(/\.$/, '') : 'interior space';
+    const why = shape?.reasons.length ? shape.reasons[0].replace(/\.$/, '') : 'interior space';
     this._body.append(el('div', {
       className: 'olv-object-note',
       text: `This looks like a ${why}. Terrain analysis — contours, slope, DTM — is for ground scans and would be misleading here.`,
@@ -555,7 +563,7 @@ export class ObjectPanel {
     }
     // Object export row: Report PDF only (no floor plan for objects).
     this._exportRow(false);
-    const why = shape && shape.reasons.length ? ` (${shape.reasons[0].replace(/\.$/, '')})` : '';
+    const why = shape?.reasons.length ? ` (${shape.reasons[0].replace(/\.$/, '')})` : '';
     this._body.append(el('div', {
       className: 'olv-object-note',
       text: `This looks like an object${why}. Terrain analysis — contours, slope, DTM — is for ground scans and would be misleading here.`,

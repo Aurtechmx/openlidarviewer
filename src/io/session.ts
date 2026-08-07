@@ -80,7 +80,7 @@ import type { WorkOwnership } from '../model/workOwnership';
 export const SESSION_VERSION = 8;
 
 /** Schema versions `parseSession` can read. */
-const SUPPORTED_VERSIONS: readonly number[] = [1, 2, 3, 4, 5, 6, 7, 8];
+const SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
 
 /** the render-style snapshot the v3 schema captures. */
 export interface SessionRenderSettings {
@@ -286,7 +286,7 @@ export interface InspectionSession {
   projectFrame?: SessionProjectFrame;
 }
 
-const KINDS: readonly MeasurementKind[] = [
+const KINDS: ReadonlySet<MeasurementKind> = new Set([
   'distance',
   'polyline',
   'area',
@@ -299,7 +299,7 @@ const KINDS: readonly MeasurementKind[] = [
   'profile',
   'box',
   'volume',
-];
+]);
 
 /**
  * Serialise a session to a pretty-printed JSON string (always the current
@@ -492,7 +492,7 @@ export function parseSession(text: string): InspectionSession {
   if (raw.app !== 'OpenLiDARViewer' || raw.kind !== 'measurement-session') {
     throw new Error('This file is not an OpenLiDARViewer session.');
   }
-  if (typeof raw.version !== 'number' || !SUPPORTED_VERSIONS.includes(raw.version)) {
+  if (typeof raw.version !== 'number' || !SUPPORTED_VERSIONS.has(raw.version)) {
     throw new Error(`Unsupported session version: ${String(raw.version)}.`);
   }
   const out: InspectionSession = {
@@ -982,7 +982,7 @@ export function detectSessionSpatialConflict(
 
 // --- validation helpers ----------------------------------------------------
 
-const CLIP_MODES: readonly ClipMode[] = ['keep-inside', 'keep-outside'];
+const CLIP_MODES: ReadonlySet<ClipMode> = new Set(['keep-inside', 'keep-outside']);
 
 /**
  * Parse a persisted clipping box, or `null` when malformed. Requires two finite
@@ -998,7 +998,7 @@ function parseClipBox(v: unknown): ClipBox | null {
     min: [b.min[0], b.min[1], b.min[2]],
     max: [b.max[0], b.max[1], b.max[2]],
   };
-  const mode: ClipMode = CLIP_MODES.includes(v.mode as ClipMode)
+  const mode: ClipMode = CLIP_MODES.has(v.mode as ClipMode)
     ? (v.mode as ClipMode)
     : 'keep-inside';
   return { box, mode, enabled: v.enabled === true };
@@ -1104,7 +1104,7 @@ function parseMeasurements(v: unknown): Measurement[] {
   for (const item of v.slice(0, MAX_SESSION_ITEMS)) {
     if (!isRecord(item)) continue;
     const kind = item.kind;
-    if (typeof kind !== 'string' || !KINDS.includes(kind as MeasurementKind)) continue;
+    if (typeof kind !== 'string' || !KINDS.has(kind as MeasurementKind)) continue;
     const k = kind as MeasurementKind;
     // Slice BEFORE filter/map so the cap bounds the WORK, not just the output —
     // a single measurement carrying tens of millions of points can't OOM the tab.
@@ -1173,7 +1173,7 @@ function parseProfileChart(v: unknown): ProfileChartSample[] | undefined {
     if (!isRecord(s)) continue;
     if (!isFiniteNum(s.distance)) continue;
     // JSON has no NaN literal — a gap serialises as null; restore it to NaN.
-    const height = isFiniteNum(s.height) ? s.height : NaN;
+    const height = isFiniteNum(s.height) ? s.height : Number.NaN;
     const sample: ProfileChartSample = { distance: s.distance, height };
     if (isFiniteNum(s.count)) sample.count = s.count;
     out.push(sample);
@@ -1181,7 +1181,7 @@ function parseProfileChart(v: unknown): ProfileChartSample[] | undefined {
   return out.length > 0 ? out : undefined;
 }
 
-const VOLUME_CONFIDENCE: readonly VolumeRecord['confidence'][] = ['high', 'medium', 'low'];
+const VOLUME_CONFIDENCE: ReadonlySet<VolumeRecord['confidence']> = new Set(['high', 'medium', 'low']);
 
 /**
  * Parse a persisted volume cut/fill record, or `undefined` when malformed. All
@@ -1196,14 +1196,17 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   // The field was renamed `density` → `densityNative` to stop calling a native
   // horizontal-unit² figure "points/m²". Older files carry `density`, which held
   // exactly the same native value, so migrating it across is lossless.
-  const densityNative = isFiniteNum(v.densityNative)
-    ? v.densityNative
-    : isFiniteNum(v.density)
-      ? v.density
-      : undefined;
+  let densityNative: number | undefined;
+  if (isFiniteNum(v.densityNative)) {
+    densityNative = v.densityNative;
+  } else if (isFiniteNum(v.density)) {
+    densityNative = v.density;
+  } else {
+    densityNative = undefined;
+  }
   if (densityNative === undefined) return undefined;
   if (typeof v.confidence !== 'string'
-    || !VOLUME_CONFIDENCE.includes(v.confidence as VolumeRecord['confidence'])) {
+    || !VOLUME_CONFIDENCE.has(v.confidence as VolumeRecord['confidence'])) {
     return undefined;
   }
   const record: VolumeRecord = {
@@ -1224,12 +1227,12 @@ function parseVolumeRecord(v: unknown): VolumeRecord | undefined {
   return record;
 }
 
-const TRUST_GRADES: readonly TrustGrade[] = ['green', 'yellow', 'red'];
+const TRUST_GRADES: ReadonlySet<TrustGrade> = new Set(['green', 'yellow', 'red']);
 
 /** Defensively parse a persisted measurement trust grade; null if malformed. */
 function parseMeasurementTrust(v: unknown): MeasurementTrust | undefined {
   if (!isRecord(v)) return undefined;
-  if (typeof v.grade !== 'string' || !TRUST_GRADES.includes(v.grade as TrustGrade)) return undefined;
+  if (typeof v.grade !== 'string' || !TRUST_GRADES.has(v.grade as TrustGrade)) return undefined;
   if (typeof v.caption !== 'string') return undefined;
   if (typeof v.presentable !== 'boolean') return undefined;
   const reasons = Array.isArray(v.reasons)

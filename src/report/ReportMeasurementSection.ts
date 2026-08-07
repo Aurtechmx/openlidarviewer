@@ -94,7 +94,10 @@ function polyAreaHorizontal(points: readonly Vec3[]): number {
 function slopePercent(a: Vec3, b: Vec3): number {
   const dz = b[2] - a[2];
   const dxy = Math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2);
-  if (dxy === 0) return dz === 0 ? 0 : dz > 0 ? Infinity : -Infinity;
+  if (dxy === 0) {
+    if (dz === 0) return 0;
+    return dz > 0 ? Infinity : -Infinity;
+  }
   return (dz / dxy) * 100;
 }
 
@@ -284,15 +287,19 @@ function buildProfileExtras(
     .map((s) => formatLinear(s.chainage * f, system))
     .join(' · ');
 
-  const slopeLine = Number.isFinite(summary.maxGradePercent)
-    ? `Max ${summary.maxGradePercent >= 0 ? '+' : ''}${summary.maxGradePercent.toFixed(2)}%, ` +
-      `Min ${summary.minGradePercent >= 0 ? '+' : ''}${summary.minGradePercent.toFixed(2)}%, ` +
-      `Avg ${summary.avgGradePercent >= 0 ? '+' : ''}${summary.avgGradePercent.toFixed(2)}%`
-    : `Slope summary unavailable — ${
-        samples
-          ? 'no finite samples along the section.'
-          : 'no point-cloud samples attached to this profile.'
-      }`;
+  const signPrefix = (v: number): string => (v >= 0 ? '+' : '');
+  let slopeLine: string;
+  if (Number.isFinite(summary.maxGradePercent)) {
+    slopeLine =
+      `Max ${signPrefix(summary.maxGradePercent)}${summary.maxGradePercent.toFixed(2)}%, ` +
+      `Min ${signPrefix(summary.minGradePercent)}${summary.minGradePercent.toFixed(2)}%, ` +
+      `Avg ${signPrefix(summary.avgGradePercent)}${summary.avgGradePercent.toFixed(2)}%`;
+  } else {
+    const reason = samples
+      ? 'no finite samples along the section.'
+      : 'no point-cloud samples attached to this profile.';
+    slopeLine = `Slope summary unavailable — ${reason}`;
+  }
 
   // The renderer self-normalises, so pass the finite samples straight through
   // (their absolute units are immaterial to the drawn shape).

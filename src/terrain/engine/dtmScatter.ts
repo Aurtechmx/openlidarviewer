@@ -160,7 +160,7 @@ export function scatterMinCountReference(
   grid: ScatterGrid,
 ): ScatterMinCount {
   const nCells = grid.cols * grid.rows;
-  const z = new Float32Array(nCells).fill(NaN);
+  const z = new Float32Array(nCells).fill(Number.NaN);
   const counts = new Uint32Array(nCells);
   const f32 = new Float32Array(1);
   const { h1, h2, v, count } = points;

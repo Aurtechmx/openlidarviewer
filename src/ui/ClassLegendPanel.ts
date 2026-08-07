@@ -68,7 +68,7 @@ export class ClassLegendPanel {
   private _onPaletteChange: ClassPaletteChange | null = null;
 
   /** The colourblind-safe palette checkbox. */
-  private _cvToggle!: HTMLInputElement;
+  private readonly _cvToggle!: HTMLInputElement;
 
   /** The scrolling list of class rows. */
   private readonly _list: HTMLElement;

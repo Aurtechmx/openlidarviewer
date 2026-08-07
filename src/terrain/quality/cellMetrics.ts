@@ -188,11 +188,10 @@ export function computeCellMetrics(
   // True median: for an even count, average the two central values rather than
   // taking the lower-middle element (which biases the reported density low).
   const dn = densities.length;
-  const median = dn === 0
-    ? 0
-    : dn % 2 === 1
-      ? densities[(dn - 1) >> 1]
-      : (densities[dn / 2 - 1] + densities[dn / 2]) / 2;
+  let median: number;
+  if (dn === 0) median = 0;
+  else if (dn % 2 === 1) median = densities[(dn - 1) >> 1];
+  else median = (densities[dn / 2 - 1] + densities[dn / 2]) / 2;
 
   return {
     metrics: { pointDensity, localCompleteness, edgeDistanceCells },

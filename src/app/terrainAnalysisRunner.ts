@@ -105,11 +105,14 @@ export function deriveCoreParams(
   // has to keep the raster self-consistent with the coordinates it is built
   // over. The metric claims downstream (densities, areas, volumes) are the ones
   // that gate on the context's `metricClaimsPermitted`.
-  const metresPerUnit = isGeographic
-    ? METRES_PER_DEGREE
-    : ctx.linearUnitToMetres > 0
-      ? ctx.linearUnitToMetres
-      : 1;
+  let metresPerUnit: number;
+  if (isGeographic) {
+    metresPerUnit = METRES_PER_DEGREE;
+  } else if (ctx.linearUnitToMetres > 0) {
+    metresPerUnit = ctx.linearUnitToMetres;
+  } else {
+    metresPerUnit = 1;
+  }
   const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
   const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
   // Grid-centre latitude for the pipeline's cos φ east–west corrections.

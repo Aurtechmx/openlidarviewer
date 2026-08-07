@@ -225,10 +225,14 @@ export function convertCloud(
     // source unit exactly like keep mode (stamping 9001 on a skipped reproject
     // mislabelled foot data as metres — v0.4.4 defect). Assigned tags leave the
     // unit implied by the EPSG. Vertical datum is preserved (no mode moves Z).
-    const linearUnitCode =
-      mode === 'reproject' && reprojectApplied ? 9001
-      : (mode === 'keep' || mode === 'reproject') && srcCrs ? unitToGeoTiff(srcCtx.linearUnit)
-      : null;
+    let linearUnitCode: number | null;
+    if (mode === 'reproject' && reprojectApplied) {
+      linearUnitCode = 9001;
+    } else if ((mode === 'keep' || mode === 'reproject') && srcCrs) {
+      linearUnitCode = unitToGeoTiff(srcCtx.linearUnit);
+    } else {
+      linearUnitCode = null;
+    }
     // Vertical unit: Z is untouched by every mode, so its unit is the SOURCE's
     // declared vertical unit — falling back to the source's horizontal family
     // (the GeoTIFF convention that vertical tracks the model's units), never

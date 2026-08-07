@@ -88,7 +88,11 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
   const rawStep = span / Math.max(1, target);
   const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
   const norm = rawStep / mag;
-  const niceNorm = norm < 1.5 ? 1 : norm < 3 ? 2 : norm < 7 ? 5 : 10;
+  let niceNorm: number;
+  if (norm < 1.5) niceNorm = 1;
+  else if (norm < 3) niceNorm = 2;
+  else if (norm < 7) niceNorm = 5;
+  else niceNorm = 10;
   const step = niceNorm * mag;
   const first = Math.ceil(lo / step) * step;
   const ticks: number[] = [];
@@ -102,10 +106,10 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
 /** XML-escape a text value for safe inclusion in the SVG. */
 function esc(s: string): string {
   return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }
 
 /**

@@ -43,7 +43,7 @@ const DENSITY_RAMP: ReadonlyArray<readonly [number, number, number, number]> = [
 /** Sample the density ramp at `t` in [0, 1]. */
 function sampleRamp(t: number): [number, number, number] {
   if (t <= 0) return [DENSITY_RAMP[0][1], DENSITY_RAMP[0][2], DENSITY_RAMP[0][3]];
-  const last = DENSITY_RAMP[DENSITY_RAMP.length - 1];
+  const last = DENSITY_RAMP.at(-1)!;
   if (t >= 1) return [last[1], last[2], last[3]];
   for (let i = 1; i < DENSITY_RAMP.length; i++) {
     const upper = DENSITY_RAMP[i];

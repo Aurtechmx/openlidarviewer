@@ -216,7 +216,7 @@ export function placeContourLabels(
   features: readonly ContourFeature[],
   params: LabelEngineParams,
 ): { labels: PlacedLabel[]; audit: ContourLabelAudit } {
-  const fmt = params.formatValue ?? ((v: number) => String(v));
+  const fmt = params.formatValue ?? String;
   const placed: PlacedLabel[] = [];
   const placedBoxes: Box[] = [];
   let candidates = 0, suppressedByCollision = 0, suppressedByCurvature = 0;
@@ -226,9 +226,10 @@ export function placeContourLabels(
   const ordered = features
     .map((f, i) => ({ f, i, len: polylineLength(f.coordinates) }))
     .filter(({ f }) => !(params.indexOnly && !f.isIndex))
-    .sort((a, b) =>
-      a.f.isIndex !== b.f.isIndex ? (a.f.isIndex ? -1 : 1) : b.len - a.len || a.i - b.i,
-    );
+    .sort((a, b) => {
+      if (a.f.isIndex !== b.f.isIndex) return a.f.isIndex ? -1 : 1;
+      return b.len - a.len || a.i - b.i;
+    });
 
   for (const { f, len } of ordered) {
     if (params.maxLabels != null && placed.length >= params.maxLabels) break;

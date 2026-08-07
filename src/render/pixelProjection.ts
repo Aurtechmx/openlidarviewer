@@ -32,7 +32,7 @@ export function projectedPixels(
   if (!(worldSize > 0) || !(viewportHeightCss > 0) || !(verticalFovRadians > 0)) return 0;
   const d = distance > 1e-6 ? distance : 1e-6;
   const denom = 2 * d * Math.tan(verticalFovRadians / 2);
-  if (!(denom > 0) || !Number.isFinite(denom)) return 0;
+  if (denom <= 0 || !Number.isFinite(denom)) return 0;
   return (worldSize * viewportHeightCss) / denom;
 }
 

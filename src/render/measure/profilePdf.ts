@@ -154,7 +154,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // title rather than the raw filename; setLanguage tags the document language.
   // (A full tagged-structure tree is out of reach with this PDF library; these
   // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
-  const pdfTitle = input.name && input.name.trim()
+  const pdfTitle = input.name?.trim()
     ? `Terrain Profile - ${input.name.trim()}`
     : 'Terrain Profile';
   doc.setTitle(pdfTitle, { showInWindowTitleBar: true });

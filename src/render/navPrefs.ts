@@ -48,7 +48,7 @@ export const DEFAULT_NAVIGATION_PREFERENCES: NavigationPreferences = {
 };
 
 /** The presets the panel offers (kept in sync with {@link NavigationPreset}). */
-const NAV_PRESETS: readonly NavigationPreset[] = ['default', 'recap', 'nira'];
+const NAV_PRESETS: ReadonlySet<NavigationPreset> = new Set(['default', 'recap', 'nira']);
 
 /**
  * The invert signs each preset selects. These sign combos are the ADJUSTABLE
@@ -83,7 +83,7 @@ export function parseNavigationPreferences(raw: unknown): NavigationPreferences 
   return {
     invertOrbitX: typeof o.invertOrbitX === 'boolean' ? o.invertOrbitX : d.invertOrbitX,
     invertOrbitY: typeof o.invertOrbitY === 'boolean' ? o.invertOrbitY : d.invertOrbitY,
-    preset: NAV_PRESETS.includes(o.preset as NavigationPreset)
+    preset: NAV_PRESETS.has(o.preset as NavigationPreset)
       ? (o.preset as NavigationPreset)
       : d.preset,
   };

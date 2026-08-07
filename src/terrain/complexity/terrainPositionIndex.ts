@@ -149,7 +149,12 @@ export interface TpiSummary {
   readonly iqr: number;
 }
 
-const NO_SUMMARY: TpiSummary = { median: NaN, p25: NaN, p75: NaN, iqr: NaN };
+const NO_SUMMARY: TpiSummary = {
+  median: Number.NaN,
+  p25: Number.NaN,
+  p75: Number.NaN,
+  iqr: Number.NaN,
+};
 
 /**
  * Compute TPI, standardised TPI, and (when slope is supplied) the Weiss
@@ -163,8 +168,8 @@ export function computeTPI(
 ): TpiResult {
   const warnings: string[] = [];
   const n = cols > 0 && rows > 0 ? cols * rows : 0;
-  const tpi = new Float32Array(n).fill(NaN);
-  const stdTpi = new Float32Array(n).fill(NaN);
+  const tpi = new Float32Array(n).fill(Number.NaN);
+  const stdTpi = new Float32Array(n).fill(Number.NaN);
 
   let radius = params.radiusCells;
   if (!Number.isFinite(radius) || radius < 1) {
@@ -180,7 +185,7 @@ export function computeTPI(
 
   const valid = params.valid;
   const isValid = (i: number): boolean =>
-    (valid == null || valid[i] !== 0) && Number.isFinite(z[i]);
+    valid?.[i] !== 0 && Number.isFinite(z[i]);
 
   // Precompute the window offsets for the discrete circle (centre excluded).
   const rCeil = Math.ceil(radius);
@@ -302,8 +307,8 @@ function classify(stdTpi: number, slopeTan: number): number {
 function summarise(values: Float32Array, validCount: number): TpiSummary {
   if (validCount === 0) return NO_SUMMARY;
   const finite: number[] = [];
-  for (let i = 0; i < values.length; i++) {
-    if (Number.isFinite(values[i])) finite.push(values[i]);
+  for (const v of values) {
+    if (Number.isFinite(v)) finite.push(v);
   }
   finite.sort((a, b) => a - b);
   const p25 = quantileSorted(finite, 0.25);
@@ -329,8 +334,8 @@ function emptyResult(
     tpi,
     stdTpi,
     classes: slopeSupplied ? new Uint8Array(cellCount) : null,
-    mean: NaN,
-    stdev: NaN,
+    mean: Number.NaN,
+    stdev: Number.NaN,
     summary: NO_SUMMARY,
     validCellCount: 0,
     cellCount,

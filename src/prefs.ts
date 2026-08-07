@@ -74,7 +74,7 @@ const STORAGE_KEY = 'openlidarviewer.prefs.v1';
 
 /** Valid point-appearance modes (kept in sync with `SplatMode`). Inlined so the
  *  shell doesn't take a runtime dependency on the render layer. */
-const SPLAT_MODES: readonly SplatMode[] = ['classic', 'soft', 'inspection', 'gaussian'];
+const SPLAT_MODES: ReadonlySet<SplatMode> = new Set<SplatMode>(['classic', 'soft', 'inspection', 'gaussian']);
 
 /** Clamp a number into `[min, max]`. */
 function clamp(v: number, min: number, max: number): number {
@@ -111,7 +111,7 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   // P13 — validate against the known modes inline (kept type-only on splatShader
   // so prefs never pulls the render layer into the shell chunk). Unknown values
   // are dropped, like every other malformed key here.
-  if (SPLAT_MODES.includes(o.splatMode as SplatMode)) out.splatMode = o.splatMode as SplatMode;
+  if (SPLAT_MODES.has(o.splatMode as SplatMode)) out.splatMode = o.splatMode as SplatMode;
   if (typeof o.antialiasing === 'boolean') out.antialiasing = o.antialiasing;
   if (o.unitSystem === 'metric' || o.unitSystem === 'imperial') {
     out.unitSystem = o.unitSystem;

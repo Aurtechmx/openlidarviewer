@@ -58,7 +58,7 @@ export interface GridRecommendation {
 /** Snap a raw value up to the smallest ladder member ≥ it (clamped to the ends). */
 function snapUp(raw: number, ladder: ReadonlyArray<number>): number {
   for (const v of ladder) if (raw <= v) return v;
-  return ladder[ladder.length - 1];
+  return ladder.at(-1)!;
 }
 
 /** Recommend a DTM grid cell size and contour interval. Deterministic. */
@@ -83,7 +83,7 @@ export function recommendGrid(input: GridRecommendationInput): GridRecommendatio
   const cellOptionsM = GRID_LADDER_M.filter(cellFits);
   let cellSizeM = densityCell;
   if (!cellFits(cellSizeM)) {
-    cellSizeM = cellOptionsM.length > 0 ? cellOptionsM[0] : GRID_LADDER_M[GRID_LADDER_M.length - 1];
+    cellSizeM = cellOptionsM.length > 0 ? cellOptionsM[0] : GRID_LADDER_M.at(-1)!;
     reasons.push(`Grid coarsened to ${cellSizeM} m so the ${Math.round(area)} m² extent fits in memory.`);
   } else if (Number.isFinite(spacing)) {
     reasons.push(

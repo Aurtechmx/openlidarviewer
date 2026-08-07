@@ -127,11 +127,14 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
   // the same unit-aware rule as the analysis runner's deriveCoreParams. The
   // BEFORE epoch's units are the reference, matching compareDtms (an
   // inter-epoch unit mismatch is flagged by the comparison itself).
-  const metresPerUnit = before.isGeographic
-    ? METRES_PER_DEGREE
-    : before.linearUnitToMetres && before.linearUnitToMetres > 0
-      ? before.linearUnitToMetres
-      : 1;
+  let metresPerUnit: number;
+  if (before.isGeographic) {
+    metresPerUnit = METRES_PER_DEGREE;
+  } else if (before.linearUnitToMetres && before.linearUnitToMetres > 0) {
+    metresPerUnit = before.linearUnitToMetres;
+  } else {
+    metresPerUnit = 1;
+  }
   const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
   const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
   return {

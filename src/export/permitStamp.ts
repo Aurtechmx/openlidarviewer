@@ -21,7 +21,7 @@ import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
  * has no runtime dependencies and never pulls the resolver into the eager bundle.
  */
 export function permitStamp(permit: ContourExportPermit | null): ExportPermitStamp | null {
-  if (!permit || !permit.ok) return null;
+  if (!permit?.ok) return null;
   const d = permit.decision;
   return {
     status: d.status,

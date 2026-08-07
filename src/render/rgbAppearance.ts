@@ -184,7 +184,9 @@ function luminance(r: number, g: number, b: number): number {
 }
 
 function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v;
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return v;
 }
 
 /**

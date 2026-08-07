@@ -70,7 +70,7 @@ export function idwFill(
     }
   }
   if (!anyData) {
-    out.fill(NaN);
+    out.fill(Number.NaN);
     return out;
   }
 
@@ -118,7 +118,7 @@ export function idwFill(
         radius++;
       }
 
-      out[i] = wSum > 0 ? vSum / wSum : NaN;
+      out[i] = wSum > 0 ? vSum / wSum : Number.NaN;
     }
   }
   return out;

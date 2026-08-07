@@ -30,7 +30,7 @@ export function keyId(key: VoxelKey): string {
 export function keyFromId(id: string): VoxelKey | null {
   const parts = id.split('-');
   if (parts.length !== 4) return null;
-  const [depth, x, y, z] = parts.map((p) => Number(p));
+  const [depth, x, y, z] = parts.map(Number);
   const key = { depth, x, y, z };
   return isValidKey(key) ? key : null;
 }

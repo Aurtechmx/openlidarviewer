@@ -18,14 +18,13 @@
  */
 
 import type { ContourStudioController } from '../terrain/contourStudio/contourStudioController';
-import type { ContourStudioState } from '../terrain/contourStudio/contourStudioState';
+import type { ContourStudioState, ContourStudioPurpose } from '../terrain/contourStudio/contourStudioState';
 import type { ContourStudioLaunchState } from '../terrain/contourStudio/contourStudioLaunchState';
 import type { ContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import {
   PURPOSE_META,
   type PurposeMeta,
 } from '../terrain/contourStudio/contourStudioPurpose';
-import type { ContourStudioPurpose } from '../terrain/contourStudio/contourStudioState';
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -98,7 +97,14 @@ const LADDER_GLYPH: Record<LadderState, string> = { met: '✓', warn: '!', block
 function ladderRows(launch: ContourStudioLaunchState): ReadonlyArray<{ label: string; state: LadderState }> {
   const status = launch.status;
   const base: LadderState = status === 'unavailable' ? 'blocked' : 'met';
-  const support: LadderState = status === 'available' ? 'met' : status === 'exploratory' ? 'warn' : 'blocked';
+  let support: LadderState;
+  if (status === 'available') {
+    support = 'met';
+  } else if (status === 'exploratory') {
+    support = 'warn';
+  } else {
+    support = 'blocked';
+  }
   const validation: LadderState = status === 'unavailable' ? 'blocked' : 'warn';
   return [
     { label: 'Source', state: base },
@@ -152,10 +158,16 @@ function renderPurposeCards(
 function renderSettingsSummary(state: ContourStudioState): HTMLElement {
   const wrap = el('div', { className: 'olv-cs-summary' });
   wrap.append(el('div', { className: 'olv-cs-section-head', text: 'This deliverable' }));
+  let labelsValue: string;
+  if (state.labels.enabled) {
+    labelsValue = state.labels.indexOnly ? 'index only' : 'on';
+  } else {
+    labelsValue = 'off';
+  }
   const rows: Array<[string, string]> = [
     ['Geometry', [state.contour.analytical ? 'analytical' : null, state.contour.cartographic ? 'cartographic' : null].filter(Boolean).join(' + ') || 'none'],
     ['Cartographic smoothing', state.surface.cartographicSmoothing ? 'on' : 'off'],
-    ['Labels', state.labels.enabled ? (state.labels.indexOnly ? 'index only' : 'on') : 'off'],
+    ['Labels', labelsValue],
     ['Validation appendix', state.validation.appendixRequired ? 'required' : 'optional'],
     ['Exploratory output', state.deliverable.allowExploratory ? 'allowed' : 'not for this purpose'],
   ];

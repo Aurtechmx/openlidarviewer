@@ -201,8 +201,10 @@ export function buildContourPackageManifest(input: PackageInput): ContourPackage
     }
   }
   // README + checksums always present.
-  entries.push({ role: 'readme', filename: `${stem}_README.txt`, status: 'included' });
-  entries.push({ role: 'checksums', filename: 'SHA256SUMS', status: 'included' });
+  entries.push(
+    { role: 'readme', filename: `${stem}_README.txt`, status: 'included' },
+    { role: 'checksums', filename: 'SHA256SUMS', status: 'included' },
+  );
 
   const readme = buildReadme(stem, entries, input, exploratory);
   return { projectName: input.projectName, zipName: `${stem}_Contour_Deliverable.zip`, entries, readme, exploratory };

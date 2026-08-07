@@ -121,9 +121,9 @@ export class NavController {
   // ── Look orientation (walk / fly) ──────────────────────────────────────
   private _yaw = 0;
   private _pitch = 0;
-  private _worldUp = new THREE.Vector3(0, 1, 0);
-  private _refForward = new THREE.Vector3(0, 0, -1);
-  private _refRight = new THREE.Vector3(1, 0, 0);
+  private readonly _worldUp = new THREE.Vector3(0, 1, 0);
+  private readonly _refForward = new THREE.Vector3(0, 0, -1);
+  private readonly _refRight = new THREE.Vector3(1, 0, 0);
 
   // ── Movement state ─────────────────────────────────────────────────────
   private readonly _keys = {

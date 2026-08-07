@@ -63,7 +63,16 @@ export function niceStep(span: number, target: number): number {
   const raw = span / Math.max(1, target);
   const mag = 10 ** Math.floor(Math.log10(raw));
   const norm = raw / mag;
-  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10;
+  let step: number;
+  if (norm <= 1) {
+    step = 1;
+  } else if (norm <= 2) {
+    step = 2;
+  } else if (norm <= 5) {
+    step = 5;
+  } else {
+    step = 10;
+  }
   return step * mag;
 }
 
@@ -72,7 +81,14 @@ export function niceRoundDown(x: number): number {
   if (!Number.isFinite(x) || x <= 0) return 0;
   const mag = 10 ** Math.floor(Math.log10(x));
   const norm = x / mag;
-  const v = norm >= 5 ? 5 : norm >= 2 ? 2 : 1;
+  let v: number;
+  if (norm >= 5) {
+    v = 5;
+  } else if (norm >= 2) {
+    v = 2;
+  } else {
+    v = 1;
+  }
   return v * mag;
 }
 

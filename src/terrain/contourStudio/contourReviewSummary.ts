@@ -97,13 +97,19 @@ export function buildContourReviewSummary(
   // estimate as a producer's survey classification. Unknown counts as derived:
   // silence must not be upgraded into a claim.
   const groundDerived = input.groundIsDerived !== false;
+  let sourceValue: string;
+  if (tally.measured === 0) sourceValue = 'No ground source';
+  else if (groundDerived) sourceValue = 'Derived ground (not from the source file)';
+  else sourceValue = 'Classified ground';
+  let sourceConfidence: ReviewRow['confidence'];
+  if (tally.measured === 0) sourceConfidence = 'low';
+  else if (groundDerived) sourceConfidence = 'medium';
+  else if (measuredFrac >= 0.5) sourceConfidence = 'high';
+  else sourceConfidence = 'medium';
   rows.push({
     key: 'source',
     label: 'Source',
-    value:
-      tally.measured === 0 ? 'No ground source'
-      : groundDerived ? 'Derived ground (not from the source file)'
-      : 'Classified ground',
+    value: sourceValue,
     rationale: [
       `${tally.measured.toLocaleString()} measured ground cells`,
       `${pct(covered / total)} of the grid is covered`,
@@ -113,11 +119,7 @@ export function buildContourReviewSummary(
     ],
     // Derived ground caps at medium however dense it is: density is not
     // provenance, and a confident-looking wrong surface is the failure mode.
-    confidence:
-      tally.measured === 0 ? 'low'
-      : groundDerived ? 'medium'
-      : measuredFrac >= 0.5 ? 'high'
-      : 'medium',
+    confidence: sourceConfidence,
   });
 
   // ── Grid ────────────────────────────────────────────────────────────────
@@ -187,6 +189,10 @@ export function buildContourReviewSummary(
     total,
   );
   const weakFrac = (tally.lowConfidence + tally.edgeRisk + tally.empty) / total;
+  let supportConfidence: ReviewRow['confidence'];
+  if (weakFrac < 0.1) supportConfidence = 'high';
+  else if (weakFrac < 0.3) supportConfidence = 'medium';
+  else supportConfidence = 'low';
   rows.push({
     key: 'support',
     label: 'Support',
@@ -200,7 +206,7 @@ export function buildContourReviewSummary(
     // Keyed off everything that is not strong. Keying it off `empty` alone
     // rated a mostly-low-confidence surface 'high' simply because no cell was
     // strictly void.
-    confidence: weakFrac < 0.1 ? 'high' : weakFrac < 0.3 ? 'medium' : 'low',
+    confidence: supportConfidence,
   });
 
   // ── Validation ────────────────────────────────────────────────────────────
@@ -226,12 +232,10 @@ export function buildContourReviewSummary(
   });
 
   // ── Evidence (from the launch state — the real claim) ─────────────────────
-  const evidenceValue =
-    input.launch.status === 'available'
-      ? 'Supported (internal validation only)'
-      : input.launch.status === 'exploratory'
-        ? 'Exploratory'
-        : 'Blocked';
+  let evidenceValue: string;
+  if (input.launch.status === 'available') evidenceValue = 'Supported (internal validation only)';
+  else if (input.launch.status === 'exploratory') evidenceValue = 'Exploratory';
+  else evidenceValue = 'Blocked';
   rows.push({
     key: 'evidence',
     label: 'Evidence',

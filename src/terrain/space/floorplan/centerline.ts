@@ -133,9 +133,7 @@ export function skeletonize(mask: Uint8Array, cols: number, rows: number): Uint8
           if (a !== 1) continue;
           if (step === 0) {
             if (p2 * p4 * p6 !== 0 || p4 * p6 * p8 !== 0) continue;
-          } else {
-            if (p2 * p4 * p8 !== 0 || p2 * p6 * p8 !== 0) continue;
-          }
+          } else if (p2 * p4 * p8 !== 0 || p2 * p6 * p8 !== 0) continue;
           toClear.push(r * cols + c);
         }
       }
@@ -330,7 +328,7 @@ export function normalizeWallThickness(grid: OccupancyGrid): ThicknessNormalizat
   for (let i = 0; i < n; i++) {
     if (!mask[i]) continue;
     if (demotedComp[label[i]]) {
-      if (demotedMask === null) demotedMask = new Uint8Array(n);
+      demotedMask ??= new Uint8Array(n);
       demotedMask[i] = 1;
     } else if (!out[i]) {
       removedCells++;
@@ -506,9 +504,10 @@ export function classifyWallGaps(
       });
     }
   }
-  cands.sort((p, q) =>
-    p.kind !== q.kind ? (p.kind === 'door' ? -1 : 1) : p.widthM - q.widthM,
-  );
+  cands.sort((p, q) => {
+    if (p.kind !== q.kind) return p.kind === 'door' ? -1 : 1;
+    return p.widthM - q.widthM;
+  });
   const used = new Uint8Array(ends.length);
   const gaps: PlanGap[] = [];
   for (const cand of cands) {

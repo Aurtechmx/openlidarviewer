@@ -458,7 +458,11 @@ export function classifierProcessingOp(result: DeriveClassificationResult): Proc
 }
 
 /** Clamp to [0, 1]. */
-const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
+const clamp01 = (v: number): number => {
+  if (v < 0) return 0;
+  if (v > 1) return 1;
+  return Number.isFinite(v) ? v : 0;
+};
 
 /** A finite-only min/max scan over the XY footprint and Z. */
 interface Bounds {
@@ -473,9 +477,12 @@ function computeBounds(positions: Float32Array, count: number): Bounds {
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
     finite++;
-    if (x < minX) minX = x; if (x > maxX) maxX = x;
-    if (y < minY) minY = y; if (y > maxY) maxY = y;
-    if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
   }
   return { minX, minY, maxX, maxY, minZ, maxZ, finite };
 }
@@ -516,7 +523,7 @@ function lineExtreme(
 ): void {
   let head = 0, tail = 0, next = 0;
   for (let i = 0; i < len; i++) {
-    const hi = i + r < len - 1 ? i + r : len - 1;
+    const hi = Math.min(i + r, len - 1);
     while (next <= hi) {
       const v = src[base + next * stride];
       while (tail > head) {
@@ -559,8 +566,8 @@ function morphOpen(src: Float32Array, W: number, H: number, r: number): Float32A
  */
 function fillHoles(grid: Float32Array, W: number, H: number): void {
   let holes = 0, sum = 0, finite = 0;
-  for (let i = 0; i < grid.length; i++) {
-    if (Number.isFinite(grid[i])) { sum += grid[i]; finite++; }
+  for (const value of grid) {
+    if (Number.isFinite(value)) { sum += value; finite++; }
     else holes++;
   }
   if (holes === 0) return;
@@ -624,7 +631,7 @@ export function rejectLowOutliers(
   H: number,
   gap: number,
 ): number {
-  if (!(gap > 0) || !Number.isFinite(gap)) return 0;
+  if (gap <= 0 || !Number.isFinite(gap)) return 0;
   // Snapshot so the pass is order-independent: a cell already rejected must not
   // change the median its neighbour is judged against.
   const snap = gridMin.slice();
@@ -685,12 +692,12 @@ export function deriveClassification(
   const emptyResult = (reason: string): DeriveClassificationResult => ({
     codes: new Uint8Array(count).fill(DERIVED_UNCLASSIFIED),
     counts: { [DERIVED_UNCLASSIFIED]: count },
-    cellSizeM: NaN,
+    cellSizeM: Number.NaN,
     gridWidth: 0,
     gridHeight: 0,
     derived: true,
     provenance: `Derived classification not computed (${reason}).`,
-    confidence: NaN,
+    confidence: Number.NaN,
     classConfidence: {},
     warnings: [`Classification not computed (${reason}).`],
     // The run produced nothing, but WHICH classifier declined still belongs in
@@ -706,7 +713,7 @@ export function deriveClassification(
     },
   });
 
-  if (count <= 0 || b.finite < 3 || !(b.maxX > b.minX) || !(b.maxY > b.minY)) {
+  if (count <= 0 || b.finite < 3 || b.maxX <= b.minX || b.maxY <= b.minY) {
     return emptyResult('insufficient or degenerate geometry');
   }
 
@@ -726,8 +733,8 @@ export function deriveClassification(
   //    alongside it, so the low-outlier rejection below has something real to
   //    fall back to rather than an interpolated guess.
   phase('Building ground surface');
-  const gridMin = new Float32Array(W * H).fill(NaN);
-  const gridMin2 = new Float32Array(W * H).fill(NaN);
+  const gridMin = new Float32Array(W * H).fill(Number.NaN);
+  const gridMin2 = new Float32Array(W * H).fill(Number.NaN);
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
@@ -787,8 +794,10 @@ export function deriveClassification(
     const gx = (x - b.minX) / cell;
     const gy = (y - b.minY) / cell;
     let x0 = Math.floor(gx), y0 = Math.floor(gy);
-    if (x0 < 0) x0 = 0; if (x0 > W - 2) x0 = Math.max(0, W - 2);
-    if (y0 < 0) y0 = 0; if (y0 > H - 2) y0 = Math.max(0, H - 2);
+    if (x0 < 0) x0 = 0;
+    if (x0 > W - 2) x0 = Math.max(0, W - 2);
+    if (y0 < 0) y0 = 0;
+    if (y0 > H - 2) y0 = Math.max(0, H - 2);
     const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
     const fx = Math.min(1, Math.max(0, gx - x0));
     const fy = Math.min(1, Math.max(0, gy - y0));
@@ -808,8 +817,10 @@ export function deriveClassification(
     const gx = (x - b.minX) / cell;
     const gy = (y - b.minY) / cell;
     let x0 = Math.floor(gx), y0 = Math.floor(gy);
-    if (x0 < 0) x0 = 0; if (x0 > W - 2) x0 = Math.max(0, W - 2);
-    if (y0 < 0) y0 = 0; if (y0 > H - 2) y0 = Math.max(0, H - 2);
+    if (x0 < 0) x0 = 0;
+    if (x0 > W - 2) x0 = Math.max(0, W - 2);
+    if (y0 < 0) y0 = 0;
+    if (y0 > H - 2) y0 = Math.max(0, H - 2);
     const x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1);
     return (
       measured[y0 * W + x0] + measured[y0 * W + x1] +
@@ -821,10 +832,10 @@ export function deriveClassification(
   for (let i = 0; i < count; i++) {
     const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) {
-      hag[i] = NaN; continue;
+      hag[i] = Number.NaN; continue;
     }
     const h = z - dtmAt(x, y);
-    hag[i] = Number.isFinite(h) ? Math.max(0, h) : NaN;
+    hag[i] = Number.isFinite(h) ? Math.max(0, h) : Number.NaN;
   }
 
   // 5. Per-cell roughness of ABOVE-GROUND HAG (Welford mean/variance) — the
@@ -878,14 +889,11 @@ export function deriveClassification(
   // (3 = RGB, 4 = RGBA) is inferred from the buffer length; an unusable buffer
   // disables the cue rather than throwing.
   const colors = options.colors;
-  const colorStride =
-    colors && count > 0 && colors.length >= count * 3
-      ? colors.length % count === 0 && colors.length / count === 4
-        ? 4
-        : colors.length / count >= 3
-          ? 3
-          : 0
-      : 0;
+  let colorStride = 0;
+  if (colors && count > 0 && colors.length >= count * 3) {
+    if (colors.length % count === 0 && colors.length / count === 4) colorStride = 4;
+    else if (colors.length / count >= 3) colorStride = 3;
+  }
   const greenAt = (i: number): number => {
     const j = i * colorStride;
     const r = colors![j], g = colors![j + 1], bl = colors![j + 2];
@@ -983,7 +991,7 @@ export function deriveClassification(
   // fills only the unclassified holes — a scan that arrived with Ground keeps
   // it and gains vegetation / building around it.
   const existing = options.existingClassification;
-  const preserved = !!(existing && existing.length === count);
+  const preserved = !!(existing?.length === count);
   if (preserved) {
     for (let i = 0; i < count; i++) {
       const ex = existing![i];

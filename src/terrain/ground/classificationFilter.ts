@@ -42,7 +42,7 @@ export function excludeNonGroundClasses(
   classification: ReadonlyArray<number> | Uint8Array | null | undefined,
   excluded: ReadonlyArray<number> = NON_GROUND_CLASSES,
 ): ClassificationFilterResult {
-  if (!classification || classification.length !== points.length || excluded.length === 0) {
+  if (classification?.length !== points.length || excluded.length === 0) {
     return { points: points.slice(), excludedCount: 0, byClass: {} };
   }
   const drop = new Set(excluded);

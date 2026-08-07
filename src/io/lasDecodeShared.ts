@@ -36,7 +36,7 @@ const RECORD_GPS_TIME_EXT = 22;
 /** First point format index that uses the extended record layout. */
 export const FIRST_EXTENDED_FORMAT = 6;
 /** Legacy point formats (0-5) that carry a GPS-time field. */
-const LEGACY_GPS_FORMATS: readonly number[] = [1, 3, 4, 5];
+const LEGACY_GPS_FORMATS: ReadonlySet<number> = new Set([1, 3, 4, 5]);
 
 /**
  * Mask isolating the classification value within the LAS classification byte.
@@ -54,7 +54,7 @@ function classificationOffsetFor(pointFormat: number): number {
 
 function gpsTimeOffsetFor(header: LasHeader): number | null {
   const extended = header.pointFormat >= FIRST_EXTENDED_FORMAT;
-  if (!extended && !LEGACY_GPS_FORMATS.includes(header.pointFormat)) return null;
+  if (!extended && !LEGACY_GPS_FORMATS.has(header.pointFormat)) return null;
   const offset = extended ? RECORD_GPS_TIME_EXT : RECORD_GPS_TIME_LEGACY;
   return header.pointDataRecordLength >= offset + 8 ? offset : null;
 }
@@ -211,8 +211,8 @@ export function finalizeRawColors(raw: RawPoints): void {
   const src = raw.colors16;
   if (!src) return;
   let maxRgb = 0;
-  for (let i = 0; i < src.length; i++) {
-    if (src[i] > maxRgb) maxRgb = src[i];
+  for (const v of src) {
+    if (v > maxRgb) maxRgb = v;
   }
   const eightBit = maxRgb <= 255;
   const out = new Uint8Array(src.length);

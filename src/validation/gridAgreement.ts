@@ -281,7 +281,7 @@ function statsOf(signed: readonly number[], tolerance: number): ErrorStats {
     abs.push(a);
   }
   const sortedSigned = [...signed].sort((x, y) => x - y);
-  const sortedAbs = abs.sort((x, y) => x - y);
+  const sortedAbs = abs.toSorted((x, y) => x - y);
   const median = quantileSorted(sortedSigned, 0.5);
   // NMAD = 1.4826 × median(|x − median(x)|). The constant makes it a consistent
   // estimator of the standard deviation under normality while staying resistant
@@ -298,7 +298,7 @@ function statsOf(signed: readonly number[], tolerance: number): ErrorStats {
     p90AbsError: quantileSorted(sortedAbs, 0.9),
     p95AbsError: quantileSorted(sortedAbs, 0.95),
     p99AbsError: quantileSorted(sortedAbs, 0.99),
-    maxAbsError: sortedAbs[sortedAbs.length - 1],
+    maxAbsError: sortedAbs.at(-1)!,
     withinToleranceFraction: within / n,
   };
 }

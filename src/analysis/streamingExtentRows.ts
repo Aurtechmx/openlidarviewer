@@ -75,8 +75,10 @@ export function streamingExtentRows(
     const spacing = Math.sqrt(footprintArea / sourcePointCount);
     const densityUnit = unitConfirmed ? ' pts/m²' : ' pts/unit²';
     const spacingUnit = unitConfirmed ? ' m' : ' (source units)';
-    rows.push({ label: 'Density', value: `${density.toFixed(1)}${densityUnit}`, scoped: true });
-    rows.push({ label: 'Spacing', value: `${spacing.toFixed(2)}${spacingUnit}`, scoped: true });
+    rows.push(
+      { label: 'Density', value: `${density.toFixed(1)}${densityUnit}`, scoped: true },
+      { label: 'Spacing', value: `${spacing.toFixed(2)}${spacingUnit}`, scoped: true },
+    );
   }
 
   return { unitConfirmed, rows };

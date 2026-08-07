@@ -83,10 +83,16 @@ export function buildContourPdfModel(input: ContourPdfInput): ContourPdfModel {
   ];
 
   // ── Page 1 — Contour map ────────────────────────────────────────────────
-  const geometryNote = input.geometry.cartographic
-    ? 'Cartographic (generalized) contours are shown for legibility.' +
-      (input.geometry.analyticalAvailable ? ' Exact analytical geometry is available in the GIS export.' : '')
-    : 'Analytical (exact) contours are shown.';
+  let geometryNote: string;
+  if (input.geometry.cartographic) {
+    const analyticalNote = input.geometry.analyticalAvailable
+      ? ' Exact analytical geometry is available in the GIS export.'
+      : '';
+    geometryNote =
+      'Cartographic (generalized) contours are shown for legibility.' + analyticalNote;
+  } else {
+    geometryNote = 'Analytical (exact) contours are shown.';
+  }
   const mapPage: ContourPdfPage = {
     title: 'Contour summary',
     lines: [
@@ -108,11 +114,12 @@ export function buildContourPdfModel(input: ContourPdfInput): ContourPdfModel {
   };
 
   // ── Page 3 — Validation ─────────────────────────────────────────────────
+  const rmseLine = input.validation.rmseM == null ? '—' : `${num(input.validation.rmseM)} m`;
   const validationPage: ContourPdfPage = {
     title: 'Validation',
     lines: [
       `Mode: ${input.validation.mode}`,
-      `RMSE: ${input.validation.rmseM == null ? '—' : `${num(input.validation.rmseM)} m`}`,
+      `RMSE: ${rmseLine}`,
       `Sample size: ${input.validation.sampleSize}`,
       `Independent checkpoints: ${input.validation.independentCheckpoints ? 'yes' : 'none provided'}`,
     ],

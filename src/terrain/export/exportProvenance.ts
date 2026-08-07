@@ -343,7 +343,7 @@ export function buildExportProvenance(
   // otherwise the whole block is null (never a fabricated zero).
   const acc = result.accuracyStandards ?? null;
   const accuracy: ExportProvenanceAccuracy | null =
-    acc && acc.rmseZM != null && Number.isFinite(acc.rmseZM)
+    acc?.rmseZM != null && Number.isFinite(acc.rmseZM)
       ? {
           rmseZM: acc.rmseZM,
           nvaM: acc.nvaM ?? null,
@@ -363,7 +363,7 @@ export function buildExportProvenance(
   // fields are a straight projection of the summary the core computed.
   const cx = result.complexity ?? null;
   const complexity: ExportProvenanceComplexity | null =
-    cx && cx.band != null
+    cx?.band != null
       ? {
           vrmMedian: cx.vrmMedian,
           vrmIqr: cx.vrmIqr,
@@ -609,6 +609,14 @@ function kv(key: string, value: string): string {
  * structured {@link provenanceJson} so every format agrees verbatim.
  */
 export function provenanceLines(p: ExportProvenance): string[] {
+  let contourIntervalValue: string;
+  if (p.contourIntervalM == null) {
+    contourIntervalValue = 'none';
+  } else if (p.contourIntervalUnit && p.contourIntervalUnit !== 'unknown') {
+    contourIntervalValue = `${p.contourIntervalM} ${p.contourIntervalUnit}`;
+  } else {
+    contourIntervalValue = `${p.contourIntervalM} (vertical unit unverified)`;
+  }
   const lines: string[] = [
     kv('Software', `${p.software} ${p.softwareVersion}`),
     kv('Build', p.build),
@@ -618,14 +626,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Horizontal CRS', p.horizontalCrs),
     kv('Vertical datum', p.verticalDatum),
     kv('Coverage', p.coverageMode),
-    kv(
-      'Contour interval',
-      p.contourIntervalM != null
-        ? p.contourIntervalUnit && p.contourIntervalUnit !== 'unknown'
-          ? `${p.contourIntervalM} ${p.contourIntervalUnit}`
-          : `${p.contourIntervalM} (vertical unit unverified)`
-        : 'none',
-    ),
+    kv('Contour interval', contourIntervalValue),
     kv('Contour style', p.contourStyleLabel),
     kv('Surface quality', p.surfaceQuality),
     // The "Tier — reason" formatting is the readiness engine's, so this stamp
@@ -688,8 +689,10 @@ export function provenanceLines(p: ExportProvenance): string[] {
   // The registered methods (id@version) that produced these figures, so a reader
   // can trace each number to the algorithm and revision behind it.
   const record = analysisRecordFromProvenance(p);
-  lines.push(kv('Methods', record.methods.map(methodTag).join(', ')));
-  lines.push(kv('Record', `schema ${record.schemaVersion} · ${record.contentHash}`));
+  lines.push(
+    kv('Methods', record.methods.map(methodTag).join(', ')),
+    kv('Record', `schema ${record.schemaVersion} · ${record.contentHash}`),
+  );
   // The verify-only processing manifest: op count + shortened chain head so a
   // reader can match this stamp against the full manifest in the JSON
   // metadata (or a session file) and confirm the record is intact. Twelve hex
@@ -701,9 +704,9 @@ export function provenanceLines(p: ExportProvenance): string[] {
       'Manifest',
       `schema ${manifest.schemaVersion} · ${manifest.head.slice(0, 12)} · ${manifest.ops.length} ops · verifiable`,
     ),
+    kv('Note', p.notSurveyGrade),
+    kv('Evidence', EVIDENCE_GATE_NOTE),
   );
-  lines.push(kv('Note', p.notSurveyGrade));
-  lines.push(kv('Evidence', EVIDENCE_GATE_NOTE));
   // The evidence-gate permit that authorised this file (§19). Absent only for a
   // non-gated path; a gated contour export always carries its decision here.
   if (p.exportPermit) {

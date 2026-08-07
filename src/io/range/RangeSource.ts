@@ -174,8 +174,8 @@ export function isBlockedHost(hostname: string): boolean {
     const tail = mapped[1];
     const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(tail);
     if (hex) {
-      const hi = parseInt(hex[1], 16);
-      const lo = parseInt(hex[2], 16);
+      const hi = Number.parseInt(hex[1], 16);
+      const lo = Number.parseInt(hex[2], 16);
       return isBlockedHost(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
     }
     return isBlockedHost(tail); // already-dotted mapped form
@@ -222,7 +222,7 @@ export function sanitizeUrlForDisplay(raw: string): string {
   } catch {
     // Best-effort textual scrub for inputs that won't parse — strip
     // the first `userinfo@` segment AND any query string.
-    const noUserInfo = raw.replace(/^([a-zA-Z][a-zA-Z0-9+.\-]*:\/\/)[^/@]*@/, '$1');
+    const noUserInfo = raw.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/@]*@/, '$1');
     return noUserInfo.replace(/\?.*$/, '?…');
   }
 }

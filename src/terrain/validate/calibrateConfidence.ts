@@ -190,7 +190,7 @@ function buildCurve(
   const remap = (rawConfidence: number): number => {
     const c = clamp(rawConfidence, 0, 100);
     if (c <= curve[0].rawConfidence) return curve[0].calibrated;
-    const last = curve[curve.length - 1];
+    const last = curve.at(-1)!;
     if (c >= last.rawConfidence) return last.calibrated;
     for (let i = 1; i < curve.length; i++) {
       const a = curve[i - 1];
@@ -334,7 +334,7 @@ export function applyConfidenceCalibration(
   // facts in the warning when the evaluation is available.
   const ev = calibration.evaluation;
   const evNote =
-    ev && ev.crossValidated
+    ev?.crossValidated
       ? `; quality assessed out-of-fold (${ev.folds}-fold cross-fit, ${ev.sampleSize} samples: reliability ${(ev.reliability * 100).toFixed(0)}%, Brier ${ev.brier.toFixed(3)})`
       : '';
   return {
@@ -363,7 +363,7 @@ function poolAdjacentViolators(
   const blocks: Array<{ x: number; y: number; w: number }> = [];
   for (const p of pts) {
     let cur = { x: p.x, y: p.y, w: p.w };
-    while (blocks.length > 0 && blocks[blocks.length - 1].y > cur.y) {
+    while (blocks.length > 0 && blocks.at(-1)!.y > cur.y) {
       const prev = blocks.pop() as { x: number; y: number; w: number };
       const w = prev.w + cur.w;
       cur = { x: cur.x, y: (prev.y * prev.w + cur.y * cur.w) / w, w };
@@ -375,5 +375,5 @@ function poolAdjacentViolators(
 
 function clamp(v: number, lo: number, hi: number): number {
   if (!Number.isFinite(v)) return lo;
-  return v < lo ? lo : v > hi ? hi : v;
+  return Math.min(hi, Math.max(lo, v));
 }

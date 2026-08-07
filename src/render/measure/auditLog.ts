@@ -156,7 +156,8 @@ export class AuditLog {
 
   /** The current chain head hash (or the genesis sentinel when empty). */
   get head(): string {
-    return this._entries.length === 0 ? GENESIS : this._entries[this._entries.length - 1].hash;
+    const last = this._entries.at(-1);
+    return last === undefined ? GENESIS : last.hash;
   }
 
   /** Deterministic, canonical serialization of the whole log for export. */

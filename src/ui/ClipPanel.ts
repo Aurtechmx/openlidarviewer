@@ -172,7 +172,7 @@ export class ClipPanel {
     const input = el('input', { className: 'olv-bc-input olv-clip-num', type: 'number' }) as HTMLInputElement;
     input.step = 'any';
     input.addEventListener('input', () => {
-      const v = parseFloat(input.value);
+      const v = Number.parseFloat(input.value);
       if (Number.isFinite(v)) onChange(v);
     });
     return input;

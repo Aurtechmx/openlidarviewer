@@ -99,7 +99,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
   // A poisoned (non-finite) or flat window cannot be labelled: a one-colour
   // bar says nothing, and NaN endpoints would render as garbage ticks.
   if (!Number.isFinite(range.min) || !Number.isFinite(range.max)) return null;
-  if (!(range.max > range.min)) return null;
+  if (range.max <= range.min) return null;
 
   const trim = source.trimPercent ?? 0;
   const windowNote = trim > 0 ? `p${trim}–p${100 - trim} window` : null;

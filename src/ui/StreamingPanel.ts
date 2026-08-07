@@ -11,8 +11,7 @@
  */
 
 import { clamp01 } from '../numeric';
-import { el } from './dom';
-import { formatCount } from './dom';
+import { el, formatCount } from './dom';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
@@ -468,9 +467,12 @@ export class StreamingPanel {
     const file = this._statRow('File', this._value(summary.fileName, summary.fileName));
     // format-aware Format row. COPC shows the LAS PDRF; EPT shows
     // the schema summary (when supplied) or just "EPT".
-    const formatText = summary.format === 'ept'
-      ? (summary.schemaSummary ? `EPT · ${summary.schemaSummary}` : 'EPT')
-      : `COPC LAZ · PDRF ${summary.pointFormat}`;
+    let formatText: string;
+    if (summary.format === 'ept') {
+      formatText = summary.schemaSummary ? `EPT · ${summary.schemaSummary}` : 'EPT';
+    } else {
+      formatText = `COPC LAZ · PDRF ${summary.pointFormat}`;
+    }
     this._summary.replaceChildren(
       file,
       this._statRow('Format', this._value(formatText)),

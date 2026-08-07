@@ -77,13 +77,12 @@ function smoothOpen(
     const next = verts[i + 1];
     if (smoothable(prev) && smoothable(cur) && smoothable(next)) {
       // Cut the corner at `cur`: a point 1/4 toward prev and 1/4 toward next.
-      out.push(lerpVertex(cur, prev, 0.25));
-      out.push(lerpVertex(cur, next, 0.25));
+      out.push(lerpVertex(cur, prev, 0.25), lerpVertex(cur, next, 0.25));
     } else {
       out.push(cur); // preserve exactly — no fabrication near uncertainty
     }
   }
-  out.push(verts[verts.length - 1]);
+  out.push(verts.at(-1)!);
   return out;
 }
 
@@ -99,8 +98,7 @@ function smoothClosed(
     const cur = verts[i];
     const next = verts[(i + 1) % n];
     if (smoothable(prev) && smoothable(cur) && smoothable(next)) {
-      out.push(lerpVertex(cur, prev, 0.25));
-      out.push(lerpVertex(cur, next, 0.25));
+      out.push(lerpVertex(cur, prev, 0.25), lerpVertex(cur, next, 0.25));
     } else {
       out.push(cur);
     }

@@ -342,7 +342,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
           return null; // conflicting frames — honestly not georeferenceable
         }
-        if (wkt == null) wkt = cloud.metadata?.crs?.wkt ?? null;
+        wkt ??= cloud.metadata?.crs?.wkt ?? null;
       }
       return any ? { worldOrigin, wkt } : null;
     },

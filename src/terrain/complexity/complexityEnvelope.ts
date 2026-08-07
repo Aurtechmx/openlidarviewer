@@ -89,7 +89,7 @@ export function deriveComplexityConfidence(support: ComplexitySupport): number {
       ? Math.min(1, meanWindowSupport)
       : 0;
   const c = Math.round(100 * validFraction * windowSupport);
-  return c < 0 ? 0 : c > 100 ? 100 : c;
+  return Math.min(100, Math.max(0, c));
 }
 
 /**

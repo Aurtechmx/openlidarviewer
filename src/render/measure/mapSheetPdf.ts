@@ -64,15 +64,14 @@ export function mapSheetEvidenceNote(claimId: string = MAP_SHEET_CLAIM): string 
  */
 export function mapSheetEvidenceLine(claimId: string = MAP_SHEET_CLAIM): string {
   const status = evidenceStatus(claimId);
-  return status === 'validated'
-    ? 'Evidence: validated export (meets required evidence level).'
-    : status === 'refused'
-      ? 'Evidence: export not permitted at current evidence level.'
-      : 'Evidence: exploratory export - below required evidence level.';
+  if (status === 'validated') return 'Evidence: validated export (meets required evidence level).';
+  if (status === 'refused') return 'Evidence: export not permitted at current evidence level.';
+  return 'Evidence: exploratory export - below required evidence level.';
 }
 
 export type SheetSize = 'letter' | 'a4' | 'a3';
 export type SheetOrientation = 'portrait' | 'landscape';
+export type SheetReadiness = 'ready' | 'previewOnly' | 'blocked';
 
 /**
  * Purpose-driven product facts a map sheet DOCUMENTS (v0.5.9 §6.2). When present
@@ -128,7 +127,7 @@ export interface MapSheetInput {
    */
   readonly linearUnit?: 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
   readonly accuracy?: DemAccuracyStandards | null;
-  readonly readiness?: 'ready' | 'previewOnly' | 'blocked';
+  readonly readiness?: SheetReadiness;
   readonly title?: string;
   readonly preparedBy?: string;
   /** Free-text "Project / Notes" block printed under the identity column. */
@@ -241,7 +240,7 @@ export function contourDrawStyle(isIndex: boolean, grade: ContourFeature['grade'
  * without calling it survey-grade or a certification, and the preview state is
  * already negated.
  */
-export function readinessNote(readiness: 'ready' | 'previewOnly' | 'blocked'): string {
+export function readinessNote(readiness: SheetReadiness): string {
   return readiness === 'ready'
     ? 'Validated against held-out ground - not a survey certification.'
     : 'PREVIEW - not survey-grade until validated against control.';
@@ -267,8 +266,7 @@ export function wrapTextToWidth(
   const lines: string[] = [];
   let line = '';
   let truncated = false;
-  for (let w = 0; w < words.length; w++) {
-    const word = words[w];
+  for (const word of words) {
     const candidate = line ? `${line} ${word}` : word;
     if (fits(candidate)) {
       line = candidate;
@@ -473,14 +471,11 @@ function drawPurposeAppendix(
   // ── "This deliverable" settings box ────────────────────────────────────────
   const onOff = (b: boolean): string => (b ? 'on' : 'off');
   const yesNo = (b: boolean): string => (b ? 'yes' : 'no');
-  const geometry =
-    purpose.analytical && purpose.cartographic
-      ? 'analytical + cartographic'
-      : purpose.analytical
-        ? 'analytical (exact)'
-        : purpose.cartographic
-          ? 'cartographic'
-          : 'none';
+  let geometry: string;
+  if (purpose.analytical && purpose.cartographic) geometry = 'analytical + cartographic';
+  else if (purpose.analytical) geometry = 'analytical (exact)';
+  else if (purpose.cartographic) geometry = 'cartographic';
+  else geometry = 'none';
   const generalization =
     purpose.generalizeToleranceCells > 0
       ? `e = ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker tolerance)`
@@ -837,10 +832,13 @@ function drawAnnotationTable(
   const headerBaseline = boxTop - 12;
   // Available vertical run from the header down to a margin above the scale bar.
   const avail = headerBaseline - (frame.y + 28);
-  const footNote =
-    offMapCount > 0
-      ? `${offMapCount} annotation${offMapCount === 1 ? '' : 's'} outside the map extent - listed, not plotted.`
-      : '';
+  let footNote: string;
+  if (offMapCount > 0) {
+    const plural = offMapCount === 1 ? '' : 's';
+    footNote = `${offMapCount} annotation${plural} outside the map extent - listed, not plotted.`;
+  } else {
+    footNote = '';
+  }
   const footLines = footNote ? 1 : 0;
   const noteRun = rowSz + 4;
   // Fit the row pitch: start roomy, shrink toward a floor so more rows fit before
@@ -986,12 +984,10 @@ function drawTitleBlock(
   const interval = prov?.contourIntervalM ?? input.model.intervalM;
   // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
   // on a foot CRS (the map is drawn in source units). 1 for metric / unknown.
-  const worldUnitToMetres =
-    input.linearUnit === 'foot'
-      ? 0.3048
-      : input.linearUnit === 'us-survey-foot'
-        ? 1200 / 3937
-        : 1;
+  let worldUnitToMetres: number;
+  if (input.linearUnit === 'foot') worldUnitToMetres = 0.3048;
+  else if (input.linearUnit === 'us-survey-foot') worldUnitToMetres = 1200 / 3937;
+  else worldUnitToMetres = 1;
   const scaleN =
     bbox && frame.w > 0
       ? Math.round(
@@ -1098,13 +1094,14 @@ function drawTitleBlock(
   // Export-readiness verdict — single-sourced from the unified provenance so the
   // sheet's readiness note can't disagree with the other exports. Maps the
   // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
-  const readiness: 'ready' | 'previewOnly' | 'blocked' = prov
-    ? prov.exportReadiness === 'Ready'
-      ? 'ready'
-      : prov.exportReadiness === 'Blocked'
-        ? 'blocked'
-        : 'previewOnly'
-    : input.readiness ?? 'previewOnly';
+  let readiness: SheetReadiness;
+  if (prov) {
+    if (prov.exportReadiness === 'Ready') readiness = 'ready';
+    else if (prov.exportReadiness === 'Blocked') readiness = 'blocked';
+    else readiness = 'previewOnly';
+  } else {
+    readiness = input.readiness ?? 'previewOnly';
+  }
   // Export-readiness + evidence verdict, wrapped WITHIN the accuracy column
   // (rcx..rxr) so the honest PREVIEW / exploratory banner can never bleed into
   // the legend column. Both stay the SAME central-gate strings every other
