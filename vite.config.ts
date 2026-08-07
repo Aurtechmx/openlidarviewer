@@ -332,6 +332,15 @@ function chunkEmissionGuard() {
     'src/report/ReportMeasurementSection.ts',
     'src/report/ReportAnnotationSection.ts',
     'src/report/ReportBranding.ts',
+    // Measurements panel + its profile-as-deliverable chain (sampler + summary)
+    // are lazy-mounted on first scan load via `loadMeasurePanel()` /
+    // `ensureMeasurePanel()`. No measurement can exist in the empty-state boot,
+    // so the panel and its profile modules must arrive through that seam, never a
+    // static import from main.ts. profileSampler is otherwise reached only from
+    // the (already lazy) Viewer chunk, so it must not sit in the eager shell.
+    'src/ui/MeasurePanel.ts',
+    'src/render/measure/profileSummary.ts',
+    'src/render/measure/profileSampler.ts',
   ];
 
   return {

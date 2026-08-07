@@ -93,7 +93,16 @@ export class StreamingOctree {
     while (frontier.length > 0) {
       const next: typeof frontier = [];
       for (const ref of frontier) {
-        if (signal?.aborted) throw new Error('Hierarchy load aborted');
+        // Propagate the signal's own abort reason so the outcome stays
+        // classifiable: a user cancel (`controller.abort()`) carries a
+        // DOMException named `AbortError`, which `isAbortError` treats as a
+        // silent cancellation; a signal aborted with a timeout reason carries a
+        // distinct error that stays a visible failure. A plain `Error` here was
+        // neither — it read as an ordinary load error, so a user cancel
+        // surfaced as one. The fallback covers a signal aborted without a reason.
+        if (signal?.aborted) {
+          throw signal.reason ?? new DOMException('Hierarchy load aborted', 'AbortError');
+        }
         if (this._loadedPageOffsets.has(ref.pageOffset)) continue;
         if (pagesLoaded >= MAX_HIERARCHY_PAGES) {
           this._errors.push(`hierarchy exceeded ${MAX_HIERARCHY_PAGES} pages — stopped`);
