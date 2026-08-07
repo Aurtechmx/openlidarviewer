@@ -40,7 +40,7 @@ describe('shadeFromSlopeAspect', () => {
       azimuthDeg: 315,
       altitudeDeg: 45,
     });
-    expect(direct.shade.length).toBe(N);
+    expect(direct.shade).toHaveLength(N);
     // Interior cells should carry a finite, in-range shade.
     expect(direct.shade[5]).toBeGreaterThanOrEqual(0);
     expect(direct.shade[5]).toBeLessThanOrEqual(255);

@@ -267,7 +267,7 @@ describe('mergeAxisJogs', () => {
       [0, 0], [10, 0], [10, 1.05], [6, 1.05], [6, 1], [0, 1],
     ];
     const out = mergeAxisJogs(ring, 0, 0.06);
-    expect(out.length).toBe(4);
+    expect(out).toHaveLength(4);
     const ys = out.map((p) => p[1]).sort((a, b) => a - b);
     // Weighted mean of 4 m at 1.05 and 6 m at 1.00 = 1.02.
     expect(ys[2]).toBeCloseTo(1.02, 6);
@@ -280,7 +280,7 @@ describe('mergeAxisJogs', () => {
       [0, 0], [10, 0], [10, 1.4], [6, 1.4], [6, 1], [0, 1],
     ];
     const out = mergeAxisJogs(ring, 0, 0.06);
-    expect(out.length).toBe(6);
+    expect(out).toHaveLength(6);
   });
 
   it('works in a rotated dominant-axis frame', () => {
@@ -292,7 +292,7 @@ describe('mergeAxisJogs', () => {
       [0, 0], [10, 0], [10, 1.05], [6, 1.05], [6, 1], [0, 1],
     ] as const).map(rot);
     const out = mergeAxisJogs(ring, theta, 0.06);
-    expect(out.length).toBe(4);
+    expect(out).toHaveLength(4);
   });
 });
 

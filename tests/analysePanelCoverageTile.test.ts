@@ -101,21 +101,21 @@ describe('AnalysePanel — coverage tile', () => {
     const root = panel.element as unknown as FakeEl;
 
     // The tile heading.
-    expect(root.findByText('Coverage (trust)').length).toBe(1);
+    expect(root.findByText('Coverage (trust)')).toHaveLength(1);
 
     // The honesty caption — green/yellow/red = measured/interpolated/unreliable.
     expect(root.findContaining(COVERAGE_CAPTION).length).toBeGreaterThan(0);
 
     // The 3-stop legend words.
-    expect(root.findContaining('strong — measured').length).toBe(1);
-    expect(root.findContaining('moderate — interpolated').length).toBe(1);
-    expect(root.findContaining('weak — extrapolated / gap').length).toBe(1);
+    expect(root.findContaining('strong — measured')).toHaveLength(1);
+    expect(root.findContaining('moderate — interpolated')).toHaveLength(1);
+    expect(root.findContaining('weak — extrapolated / gap')).toHaveLength(1);
 
     // Coverage tile gets its own Export PNG button (one of several PNG buttons
     // in the surface row — assert at least the coverage one exists).
     expect(root.findByText('Export PNG').length).toBeGreaterThanOrEqual(1);
 
     // Honesty: nothing in the rendered tree claims survey-grade for coverage.
-    expect(root.findContaining('survey-grade coverage').length).toBe(0);
+    expect(root.findContaining('survey-grade coverage')).toHaveLength(0);
   });
 });

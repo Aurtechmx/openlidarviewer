@@ -180,8 +180,8 @@ describe('DSM / CHM truth — building + canopy on a ground plane', () => {
     const canopy = 5 * 5;
     expect(classFilter.excludedCount).toBe(building + canopy);
     // Excluded returns are class 5 and 6 only.
-    expect(scene.classification.filter((c) => c === ASPRS.BUILDING).length).toBe(building);
-    expect(scene.classification.filter((c) => c === ASPRS.HIGH_VEGETATION).length).toBe(canopy);
+    expect(scene.classification.filter((c) => c === ASPRS.BUILDING)).toHaveLength(building);
+    expect(scene.classification.filter((c) => c === ASPRS.HIGH_VEGETATION)).toHaveLength(canopy);
   });
 
   it('nodata is preserved where the DSM grid has no points (none here: full coverage)', () => {

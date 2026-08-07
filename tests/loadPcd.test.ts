@@ -48,7 +48,7 @@ describe('loadPcd — ASCII', () => {
   test('a 0–1 intensity field is rescaled to the full Uint16 range', async () => {
     const pc = await loadPcd(loadFixture('tiny.pcd'));
     expect(pc.intensity).toBeInstanceOf(Uint16Array);
-    expect(pc.intensity!.length).toBe(4);
+    expect(pc.intensity!).toHaveLength(4);
     expect(pc.intensity![0]).toBe(Math.round(0.25 * 65535));
     expect(pc.intensity![3]).toBe(65535);
     // The fixture carries no rgb or normals.
@@ -169,7 +169,7 @@ describe('loadPcd — malformed input', () => {
       console.error = origError;
     }
     // The unplaceable point is excluded; the two finite points survive, all finite.
-    expect(pc.positions.length).toBe(6);
+    expect(pc.positions).toHaveLength(6);
     for (const v of pc.positions) expect(Number.isFinite(v)).toBe(true);
     // The redundant three bounding-sphere NaN message reached neither console channel.
     expect(logged.some((m) => m.includes('computeBoundingSphere') && m.includes('NaN'))).toBe(false);

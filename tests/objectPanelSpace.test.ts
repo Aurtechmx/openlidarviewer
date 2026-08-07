@@ -202,7 +202,7 @@ describe('ObjectPanel — space / object routing', () => {
 
     // Exactly ONE collapsible caveat disclosure, with a "details"/"summary".
     const details = all.filter((e) => e.tagName === 'details' && e.className.includes('olv-object-caveats'));
-    expect(details.length).toBe(1);
+    expect(details).toHaveLength(1);
     const summary = all.find((e) => e.className.includes('olv-object-caveats-summary'));
     expect(summary).toBeDefined();
     expect(summary!.textContent).toMatch(/About these figures/);
@@ -255,7 +255,7 @@ describe('ObjectPanel — space / object routing', () => {
     const root = panel.element as unknown as FakeEl;
     const all = flatten(root);
     expect(root.textContent).toContain('No space measurements available');
-    expect(all.filter((e) => e.className.includes('olv-scan-type-opt')).length).toBe(4);
+    expect(all.filter((e) => e.className.includes('olv-scan-type-opt'))).toHaveLength(4);
     expect(all.some((e) => e.className.includes('olv-object-run-anyway'))).toBe(true);
   });
 });

@@ -140,10 +140,10 @@ describe('door-leaf arcs — one swing symbol per classified doorway', () => {
 
   it('renders exactly one door-arc path per classified doorway', () => {
     const arcs = svg.match(/class="door-arc"/g) ?? [];
-    expect(arcs.length).toBe(model.doorways.length);
+    expect(arcs).toHaveLength(model.doorways.length);
     // Each symbol is leaf line + quarter arc: M …  L … A r r 0 0 s …
     const ds = [...svg.matchAll(/class="door-arc" d="M[^"]*L[^"]*A([\d.]+) ([\d.]+) 0 0 [01][^"]*"/g)];
-    expect(ds.length).toBe(model.doorways.length);
+    expect(ds).toHaveLength(model.doorways.length);
   });
 
   it('the arc radius equals the doorway clear width at sheet scale', () => {
@@ -159,14 +159,14 @@ describe('door-leaf arcs — one swing symbol per classified doorway', () => {
 
   it('draws two arcs for two doors', () => {
     const two = extractFloorPlan(rectRoom([[2.0, 3.0], [6.5, 7.5]]), { upAxis: 'z' });
-    expect(two.doorways.length).toBe(2);
+    expect(two.doorways).toHaveLength(2);
     const svg2 = floorPlanSvg(two, { unitSystem: 'metric' });
-    expect((svg2.match(/class="door-arc"/g) ?? []).length).toBe(2);
+    expect(svg2.match(/class="door-arc"/g) ?? []).toHaveLength(2);
   });
 
   it('no door symbols without classified doorways', () => {
     const plain = extractFloorPlan(rectRoom(), { upAxis: 'z' });
-    expect(plain.doorways.length).toBe(0);
+    expect(plain.doorways).toHaveLength(0);
     expect(floorPlanSvg(plain, {})).not.toContain('door-arc');
   });
 
@@ -232,7 +232,7 @@ describe('region area labels — floor-fill polygon areas, honestly approximate'
     // supersede the approximate region labels exactly as before.
     const twoRoom = extractFloorPlan(twoRoomCloud([3.5, 4.4]), { upAxis: 'z' });
     expect(twoRoom.roomSegmentation).toBe('rooms');
-    expect(twoRoom.rooms.length).toBe(2); // the engine partitioned the space
+    expect(twoRoom.rooms).toHaveLength(2); // the engine partitioned the space
     const withRooms = floorPlanSvg(twoRoom, { unitSystem: 'metric' });
     expect(withRooms).toContain('class="room-labels"');
     expect(withRooms).toMatch(/Room 1 · [\d.]+ m²/);
@@ -284,7 +284,7 @@ describe('region area labels — floor-fill polygon areas, honestly approximate'
     // rounding tolerance), not the un-reconciled 120 m².
     expect(sum).toBeLessThanOrEqual(floor + 0.2);
     // The reconcile is proportional (not a clamp-to-zero): both regions survive.
-    expect([...footer.matchAll(/m²/g)].length).toBe(2);
+    expect([...footer.matchAll(/m²/g)]).toHaveLength(2);
 
     // Pure helper contract: scale ≤ 1, makes the sum equal the floor area, and
     // never scales UP when the raw sum already fits.
@@ -336,7 +336,7 @@ describe('ringObservedFraction — outline support in the pre-close mask', () =>
 
   it('the real pipeline threads per-ring fractions aligned with wallRings', () => {
     const model = extractFloorPlan(rectRoom(), { upAxis: 'z' });
-    expect(model.wallRingObservedFrac.length).toBe(model.wallRings.length);
+    expect(model.wallRingObservedFrac).toHaveLength(model.wallRings.length);
     // A cleanly sampled synthetic room is solidly observed.
     expect(Math.max(...model.wallRingObservedFrac)).toBeGreaterThan(OBSERVED_FRAC_MIN);
     for (const f of model.wallRingObservedFrac) {
@@ -393,7 +393,7 @@ describe('wall confidence styling — tinted poché under the threshold', () => 
     const weak = svg.match(/class="wall-weak" d="([^"]+)"/);
     expect(weak).not.toBeNull();
     // Both subpaths (outer + hole) live in the weak path: 2 closed loops.
-    expect((weak![1].match(/Z/g) ?? []).length).toBe(2);
+    expect(weak![1].match(/Z/g) ?? []).toHaveLength(2);
     expect(svg).not.toContain('class="wall-poche"');
   });
 });

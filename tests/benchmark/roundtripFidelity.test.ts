@@ -513,7 +513,7 @@ describe('version coverage — LAS 1.2 and 1.4 header contracts', () => {
     // The VALUE carries build identity and changes between branches; the
     // structure is what a reader depends on.
     const raw = readLasBySpec(writeLas(attributeCloud(), {})).generatingSoftwareRaw;
-    expect(raw.length).toBe(32);
+    expect(raw).toHaveLength(32);
     let sawNul = false;
     for (const b of raw) {
       if (b === 0) sawNul = true;
@@ -615,7 +615,7 @@ describe('CRS survival — what is written reads back as the same CRS', () => {
     const wkt = 'PROJCS["x",UNIT["metre",1],AUTHORITY["EPSG","32611"]]';
     const spec = readLasBySpec(writeLas14(g, { epsg: 32611, wkt }));
     const vlr = spec.vlrs.find((v) => v.recordId === 2112)!;
-    expect(vlr.bytes.length).toBe(wkt.length + 1);
+    expect(vlr.bytes).toHaveLength(wkt.length + 1);
     expect(vlr.bytes[vlr.bytes.length - 1]).toBe(0);
     expect(String.fromCharCode(...vlr.bytes.subarray(0, wkt.length))).toBe(wkt);
   });
@@ -689,7 +689,7 @@ describe('header self-consistency', () => {
   it('the point data offset lands exactly where the records begin', () => {
     for (const bytes of [writeLas(attributeCloud(), { epsg: 32611 }), writeLas14(attributeCloud(), { epsg: 32611 })]) {
       const spec = readLasBySpec(bytes);
-      expect(bytes.length).toBe(spec.offsetToPointData + spec.pointCount * spec.recordLength);
+      expect(bytes).toHaveLength(spec.offsetToPointData + spec.pointCount * spec.recordLength);
       expect(spec.offsetToPointData).toBeGreaterThanOrEqual(spec.headerSize);
     }
   });

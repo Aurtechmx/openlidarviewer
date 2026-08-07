@@ -387,7 +387,7 @@ test('orthographic-rgb render: a null framed render falls back to the view captu
   await orthographicRgbExporter.render(stubContext(adapter), {}).catch(() => {
     /* Node has no Image/canvas for the report-card composition — fine. */
   });
-  expect(adapter.framedCalls.length).toBe(1);
+  expect(adapter.framedCalls).toHaveLength(1);
   expect(snapshotCalled).toBe(true);
   warnSpy.mockRestore();
 });

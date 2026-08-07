@@ -51,7 +51,7 @@ describe('subset disclosure in text exports', () => {
     expect(subset).toContain('250');
     expect(subset).toContain('1,000');
     // The rows written must match the held count, not the declared one.
-    expect(text.split('\n').filter((l) => l && !l.startsWith('#')).length).toBe(250);
+    expect(text.split('\n').filter((l) => l && !l.startsWith('#'))).toHaveLength(250);
   });
 
   it('names the load stride when one caused the subset', () => {
