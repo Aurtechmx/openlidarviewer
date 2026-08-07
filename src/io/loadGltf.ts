@@ -57,6 +57,18 @@ function localMatrix(node: GltfNode): Matrix4 {
 }
 
 /**
+ * Depth cap for the node walk. The glTF spec requires the node hierarchy to be
+ * a tree ("nodes must not form loops"), so no conforming asset comes near this
+ * — a 64-deep rig is already extraordinary. The cap exists only so a malformed
+ * or hostile file fails with a sentence that names the problem instead of a
+ * bare `RangeError: Maximum call stack size exceeded` from a cyclic `children`
+ * graph, which reads as a viewer crash rather than a bad asset. Deliberately
+ * not a full graph validation: the failure mode we owe the user a name for is
+ * the runaway recursion, not an inventory of which nodes formed the cycle.
+ */
+const MAX_NODE_DEPTH = 256;
+
+/**
  * Recursively collect transformed vertex positions and (optional) colours from
  * a node and its descendants.
  */
@@ -66,7 +78,14 @@ function collectNode(
   positions: number[],
   colors: number[],
   colorSeen: { any: boolean },
+  depth = 0,
 ): void {
+  if (depth > MAX_NODE_DEPTH) {
+    throw new Error(
+      `glTF node hierarchy is deeper than ${MAX_NODE_DEPTH} levels — the asset's ` +
+        `node graph is cyclic or malformed (the glTF spec requires a tree).`,
+    );
+  }
   const world = new Matrix4().multiplyMatrices(parentWorld, localMatrix(node));
 
   if (node.mesh) {
@@ -128,7 +147,7 @@ function collectNode(
 
   if (node.children) {
     for (const child of node.children) {
-      collectNode(child, world, positions, colors, colorSeen);
+      collectNode(child, world, positions, colors, colorSeen, depth + 1);
     }
   }
 }
@@ -159,6 +178,13 @@ export async function loadGltf(
     throw err;
   });
   const gltf = postProcessGLTF(raw) as unknown as {
+    /**
+     * The DEFAULT scene, already dereferenced. glTF's top-level `scene` is an
+     * index into `scenes`; loaders.gl resolves it to the scene object when the
+     * source JSON carries one (`post-process-gltf.js`), so this is an object
+     * here, not a number.
+     */
+    scene?: { nodes?: GltfNode[] };
     scenes?: { nodes?: GltfNode[] }[];
     nodes?: GltfNode[];
     asset?: { generator?: string };
@@ -194,8 +220,22 @@ export async function loadGltf(
   const colorSeen = { any: false };
   const identity = new Matrix4();
 
-  // Prefer walking the scene roots; fall back to every node if there are none.
-  const roots = gltf.scenes?.flatMap((scene) => scene.nodes ?? []) ?? [];
+  // Walk ONE scene — the default one.
+  //
+  // Merging the roots of every scene (the previous shape) treated a multi-scene
+  // asset as if all its scenes were meant to be seen at once. They are not: the
+  // top-level `scene` property names the one to display, and the others are
+  // alternates — an LOD variant, a rejected pose, a packaging scene. Merging
+  // them silently double-counted the geometry and, when the alternates sit at
+  // different transforms, scattered copies of the model through the cloud with
+  // nothing in the UI to say why. Exporters that write a single scene (the
+  // common case) are unaffected either way.
+  //
+  // `scenes[0]` is the fallback for an asset with scenes but no `scene`, which
+  // the spec permits and leaves to the viewer. The flat `nodes` walk below
+  // remains the last resort, for an asset with no usable scene roots at all.
+  const defaultScene = gltf.scene ?? gltf.scenes?.[0];
+  const roots = defaultScene ? (defaultScene.nodes ?? []) : [];
   if (roots.length > 0) {
     for (const root of roots) {
       collectNode(root, identity, positions, colors, colorSeen);
