@@ -306,6 +306,9 @@ export interface MeasurementSummary {
   volumeResidentOnly?: boolean;
 }
 
+/** Snap targeting mode: off, to real returns only, or to measurement geometry. */
+export type SnapMode = 'off' | 'point' | 'geometry';
+
 export class MeasureController {
   /** The SVG overlay element — append to the stage overlay. */
   readonly overlay: SVGSVGElement;
@@ -318,7 +321,7 @@ export class MeasureController {
   private readonly _clearBtn: HTMLButtonElement;
   private readonly _unitsBtn: HTMLButtonElement;
   /** Finish-polygon button — shown only while a polygon draft is open. */
-  private _finishBtn: HTMLButtonElement | null = null;
+  private readonly _finishBtn: HTMLButtonElement | null = null;
   private readonly _kindButtons = new Map<MeasurementKind, HTMLButtonElement>();
   /**
    * The kind picker row container — exposed so the host can inject
@@ -326,7 +329,7 @@ export class MeasureController {
    * built-in measurement kinds without forking the controller.
    * Populated in the constructor.
    */
-  private _kindRow: HTMLElement | null = null;
+  private readonly _kindRow: HTMLElement | null = null;
   private _onChange: (() => void) | null = null;
   /** Called when the unit system changes — used to persist the preference. */
   private _onUnitChange: (() => void) | null = null;
@@ -445,7 +448,7 @@ export class MeasureController {
   // cloud on load; `_lastSnap` drives the disclosure in the hint. The camera +
   // canvas are cached each frame so the place handler can size the snap radius.
   private static readonly SNAP_RADIUS_PX = 14;
-  private _snapMode: 'off' | 'point' | 'geometry' = 'off';
+  private _snapMode: SnapMode = 'off';
   private _snapIndex: PointSnapIndex | null = null;
   private _lastSnap: SnapResult | null = null;
   // Whether the active scan has a known CRS with real-world units. Separate from
@@ -463,7 +466,7 @@ export class MeasureController {
   private _geographicCrs = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
   private _lastCanvas: HTMLCanvasElement | null = null;
-  private _snapBtn: HTMLButtonElement | null = null;
+  private readonly _snapBtn: HTMLButtonElement | null = null;
   private readonly _counters: Record<MeasurementKind, number> = {
     distance: 0,
     polyline: 0,
@@ -970,8 +973,8 @@ export class MeasureController {
       const anchorBtn = anchorKind
         ? this._kindButtons.get(anchorKind) ?? null
         : null;
-      if (anchorBtn && anchorBtn.parentElement === this._kindRow) {
-        anchorBtn.insertAdjacentElement('afterend', btn);
+      if (anchorBtn?.parentElement === this._kindRow) {
+        anchorBtn.after(btn);
       } else {
         this._kindRow.append(btn);
       }
@@ -1018,7 +1021,7 @@ export class MeasureController {
   resampleProfile(id: string, params: ProfileResampleParams): boolean {
     if (!this._profileSampler) return false;
     const m = this._measurements.find((x) => x.id === id);
-    if (!m || m.kind !== 'profile' || m.points.length < 2) return false;
+    if (m?.kind !== 'profile' || m.points.length < 2) return false;
     // Clamp in METRES (the user's input space), then convert to render units
     // through the same B2 factor the summary boundary applies forward — the
     // exact inverse, so what the user typed is what the sampler walks. The
@@ -1200,7 +1203,7 @@ export class MeasureController {
       this._setHintText(`No point there — ${VERB_LOWER} directly on the scan`);
       return;
     }
-    if (!this._draft) this._draft = this._newDraft();
+    this._draft ??= this._newDraft();
     // Snap the placed vertex to a real return or to existing measurement
     // geometry before committing it. `_lastSnap` records what it landed on so
     // the hint can disclose it (a snap never implies a return that isn't one).
@@ -1223,12 +1226,12 @@ export class MeasureController {
   }
 
   /** The active snap mode. */
-  get snapMode(): 'off' | 'point' | 'geometry' {
+  get snapMode(): SnapMode {
     return this._snapMode;
   }
 
   /** Set the snap mode and re-label the toggle. */
-  setSnapMode(mode: 'off' | 'point' | 'geometry'): void {
+  setSnapMode(mode: SnapMode): void {
     this._snapMode = mode;
     if (mode === 'off') this._lastSnap = null;
     this._syncSnapBtn();
@@ -1236,15 +1239,19 @@ export class MeasureController {
   }
 
   private _cycleSnapMode(): void {
-    const next: 'off' | 'point' | 'geometry' =
-      this._snapMode === 'off' ? 'point' : this._snapMode === 'point' ? 'geometry' : 'off';
+    let next: SnapMode;
+    if (this._snapMode === 'off') next = 'point';
+    else if (this._snapMode === 'point') next = 'geometry';
+    else next = 'off';
     this.setSnapMode(next);
   }
 
   private _syncSnapBtn(): void {
     if (!this._snapBtn) return;
-    const label =
-      this._snapMode === 'off' ? 'Snap: Off' : this._snapMode === 'point' ? 'Snap: Point' : 'Snap: Geom';
+    let label: string;
+    if (this._snapMode === 'off') label = 'Snap: Off';
+    else if (this._snapMode === 'point') label = 'Snap: Point';
+    else label = 'Snap: Geom';
     const span = this._snapBtn.querySelector('.olv-mlabel');
     if (span) span.textContent = label;
     else this._snapBtn.textContent = label;
@@ -1303,14 +1310,11 @@ export class MeasureController {
   private _snapHintPrefix(): string {
     if (this._snapMode === 'off' || !this._lastSnap) return '';
     const k = this._lastSnap.kind;
-    const where =
-      k === 'point'
-        ? 'nearest point (measured return)'
-        : k === 'endpoint'
-          ? 'measurement vertex'
-          : k === 'midpoint'
-            ? 'segment midpoint'
-            : 'segment intersection';
+    let where: string;
+    if (k === 'point') where = 'nearest point (measured return)';
+    else if (k === 'endpoint') where = 'measurement vertex';
+    else if (k === 'midpoint') where = 'segment midpoint';
+    else where = 'segment intersection';
     return `Snapped to ${where} · `;
   }
 
@@ -1559,9 +1563,9 @@ export class MeasureController {
   /** A pointerdown on a vertex handle begins an edit drag. */
   private _handlePointerDown(e: PointerEvent): void {
     if (!this._active) return;
-    const target = e.target as Element | null;
-    const mid = target?.getAttribute('data-mid') ?? null;
-    const viAttr = target?.getAttribute('data-vi') ?? null;
+    const target = e.target as SVGElement | null;
+    const mid = target?.dataset.mid ?? null;
+    const viAttr = target?.dataset.vi ?? null;
     if (mid === null || viAttr === null) return;
     e.preventDefault();
     this._drag = { id: mid, vi: Number(viAttr) };
@@ -1853,7 +1857,7 @@ export class MeasureController {
         });
       }
       L.push({
-        anchor: pts[pts.length - 1],
+        anchor: pts.at(-1)!,
         text: this._fmtLen(r.total),
         primary: true,
       });
@@ -1873,48 +1877,58 @@ export class MeasureController {
       const [a, b] = pts;
       const elbow = elbowPoint(a, b, this._worldUp);
       const d = verticalDelta(a, b, this._worldUp);
-      E.push({ a, b: elbow, style: 'solid' });
-      E.push({ a: elbow, b, style: 'solid' });
-      L.push({
-        anchor: midpoint(elbow, b),
-        text: this._fmtVertical(Math.abs(d.vertical)),
-        primary: true,
-      });
-      L.push({
-        anchor: midpoint(a, elbow),
-        text: this._fmtLen(d.horizontal),
-        primary: false,
-      });
+      E.push(
+        { a, b: elbow, style: 'solid' },
+        { a: elbow, b, style: 'solid' },
+      );
+      L.push(
+        {
+          anchor: midpoint(elbow, b),
+          text: this._fmtVertical(Math.abs(d.vertical)),
+          primary: true,
+        },
+        {
+          anchor: midpoint(a, elbow),
+          text: this._fmtLen(d.horizontal),
+          primary: false,
+        },
+      );
       return;
     }
     if (m.kind === 'slope' && pts.length >= 2) {
       const [a, b] = pts;
       const elbow = elbowPoint(a, b, this._worldUp);
       const s = slopeBetween(a, b, this._worldUp);
-      E.push({ a, b, style: 'solid' });
-      E.push({ a, b: elbow, style: 'preview' });
-      E.push({ a: elbow, b, style: 'preview' });
-      L.push({
-        anchor: midpoint(a, b),
-        text: `${formatGrade(s.gradePercent)} · ${formatAngle(s.angleDeg)}`,
-        primary: true,
-      });
-      L.push({
-        anchor: midpoint(elbow, b),
-        text: this._fmtVertical(Math.abs(s.rise)),
-        primary: false,
-      });
-      L.push({
-        anchor: midpoint(a, elbow),
-        text: this._fmtLen(s.run),
-        primary: false,
-      });
+      E.push(
+        { a, b, style: 'solid' },
+        { a, b: elbow, style: 'preview' },
+        { a: elbow, b, style: 'preview' },
+      );
+      L.push(
+        {
+          anchor: midpoint(a, b),
+          text: `${formatGrade(s.gradePercent)} · ${formatAngle(s.angleDeg)}`,
+          primary: true,
+        },
+        {
+          anchor: midpoint(elbow, b),
+          text: this._fmtVertical(Math.abs(s.rise)),
+          primary: false,
+        },
+        {
+          anchor: midpoint(a, elbow),
+          text: this._fmtLen(s.run),
+          primary: false,
+        },
+      );
       return;
     }
     if (m.kind === 'angle' && pts.length >= 3) {
       const [a, vertex, c] = pts;
-      E.push({ a, b: vertex, style: 'solid' });
-      E.push({ a: vertex, b: c, style: 'solid' });
+      E.push(
+        { a, b: vertex, style: 'solid' },
+        { a: vertex, b: c, style: 'solid' },
+      );
       L.push({
         anchor: vertex,
         text: formatAngle(angleAtVertex(a, vertex, c)),
@@ -1930,30 +1944,34 @@ export class MeasureController {
       const [a, b] = pts;
       const elbow = elbowPoint(a, b, this._worldUp);
       const pm = profileMetrics(a, b, this._worldUp);
-      E.push({ a, b, style: 'solid' });
-      E.push({ a, b: elbow, style: 'preview' });
-      E.push({ a: elbow, b, style: 'preview' });
-      L.push({
-        anchor: midpoint(a, b),
-        text: formatProfileHeadline(
-          // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
-          pm.length3d * this._unitToMetres,
-          pm.verticalDrop * this._effVertical(),
-          pm.gradePercent,
-          this._units,
-        ),
-        primary: true,
-      });
-      L.push({
-        anchor: midpoint(elbow, b),
-        text: this._fmtVertical(Math.abs(pm.verticalDrop)),
-        primary: false,
-      });
-      L.push({
-        anchor: midpoint(a, elbow),
-        text: this._fmtLen(pm.lengthHorizontal),
-        primary: false,
-      });
+      E.push(
+        { a, b, style: 'solid' },
+        { a, b: elbow, style: 'preview' },
+        { a: elbow, b, style: 'preview' },
+      );
+      L.push(
+        {
+          anchor: midpoint(a, b),
+          text: formatProfileHeadline(
+            // Length ×horizontal factor; drop ×up-axis factor (compound CRS).
+            pm.length3d * this._unitToMetres,
+            pm.verticalDrop * this._effVertical(),
+            pm.gradePercent,
+            this._units,
+          ),
+          primary: true,
+        },
+        {
+          anchor: midpoint(elbow, b),
+          text: this._fmtVertical(Math.abs(pm.verticalDrop)),
+          primary: false,
+        },
+        {
+          anchor: midpoint(a, elbow),
+          text: this._fmtLen(pm.lengthHorizontal),
+          primary: false,
+        },
+      );
       // Station markers on the cloud — small dim dots at evenly-spaced
       // chainages along the section line, so the profile's stations are visible
       // in 3D, not just on the chart. The endpoints already carry their own
@@ -2042,7 +2060,7 @@ export class MeasureController {
 
     const cur = this._cursor;
     if (!cur || pts.length === 0) return;
-    const last = pts[pts.length - 1];
+    const last = pts.at(-1)!;
 
     if (d.kind === 'distance') {
       E.push({ a: last, b: cur, style: 'preview' });
@@ -2097,8 +2115,10 @@ export class MeasureController {
     }
     if (d.kind === 'height') {
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
-      E.push({ a: pts[0], b: elbow, style: 'preview' });
-      E.push({ a: elbow, b: cur, style: 'preview' });
+      E.push(
+        { a: pts[0], b: elbow, style: 'preview' },
+        { a: elbow, b: cur, style: 'preview' },
+      );
       L.push({
         anchor: midpoint(elbow, cur),
         text: this._fmtVertical(Math.abs(verticalDelta(pts[0], cur, this._worldUp).vertical)),
@@ -2109,9 +2129,11 @@ export class MeasureController {
     if (d.kind === 'slope') {
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
       const s = slopeBetween(pts[0], cur, this._worldUp);
-      E.push({ a: pts[0], b: cur, style: 'preview' });
-      E.push({ a: pts[0], b: elbow, style: 'preview' });
-      E.push({ a: elbow, b: cur, style: 'preview' });
+      E.push(
+        { a: pts[0], b: cur, style: 'preview' },
+        { a: pts[0], b: elbow, style: 'preview' },
+        { a: elbow, b: cur, style: 'preview' },
+      );
       L.push({
         anchor: midpoint(pts[0], cur),
         text: `${formatGrade(s.gradePercent)} · ${formatAngle(s.angleDeg)}`,
@@ -2135,9 +2157,11 @@ export class MeasureController {
       // readout (length · Δh · grade).
       const elbow = elbowPoint(pts[0], cur, this._worldUp);
       const pm = profileMetrics(pts[0], cur, this._worldUp);
-      E.push({ a: pts[0], b: cur, style: 'preview' });
-      E.push({ a: pts[0], b: elbow, style: 'preview' });
-      E.push({ a: elbow, b: cur, style: 'preview' });
+      E.push(
+        { a: pts[0], b: cur, style: 'preview' },
+        { a: pts[0], b: elbow, style: 'preview' },
+        { a: elbow, b: cur, style: 'preview' },
+      );
       L.push({
         anchor: midpoint(pts[0], cur),
         text: formatProfileHeadline(

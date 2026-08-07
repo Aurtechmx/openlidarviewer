@@ -153,7 +153,10 @@ export function formatProfileHeadline(
   const len = formatLength(length3d, system);
   const drop = formatLength(Math.abs(verticalDrop), system);
   const grade = formatGrade(gradePercent);
-  const sign = verticalDrop < 0 ? '−' : verticalDrop > 0 ? '+' : '';
+  let sign: string;
+  if (verticalDrop < 0) sign = '−';
+  else if (verticalDrop > 0) sign = '+';
+  else sign = '';
   return `${len}  · Δh ${sign}${drop}  · ${grade}`;
 }
 

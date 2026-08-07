@@ -200,7 +200,7 @@ export function snapToNearestPoint(
   };
 
   // If cellSize is non-finite (<=1 point, no extent) just scan linearly.
-  if (!isFinite(cellSize)) {
+  if (!Number.isFinite(cellSize)) {
     for (let i = 0; i < index.count; i++) consider(i);
     return bestIndex < 0
       ? null
@@ -286,7 +286,7 @@ export function countPointsWithinRadius(
     if (dist2(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2], query) <= r2) count++;
   };
 
-  if (!isFinite(cellSize)) {
+  if (!Number.isFinite(cellSize)) {
     for (let i = 0; i < index.count; i++) consider(i);
     return count;
   }
@@ -468,13 +468,14 @@ export function snapBest(
       best = c;
       continue;
     }
-    // Prefer a real point on a near-tie; otherwise strictly closer wins.
-    if (c.distance < best.distance - POINT_PREFERENCE_MARGIN) {
-      best = c;
-    } else if (
-      c.kind === 'point' &&
-      best.kind !== 'point' &&
-      c.distance <= best.distance + POINT_PREFERENCE_MARGIN
+    // Prefer a real point on a near-tie; otherwise strictly closer wins. Both
+    // conditions land on the same assignment: a strictly-closer candidate, or a
+    // real measured point that ties a constructed feature within the margin.
+    if (
+      c.distance < best.distance - POINT_PREFERENCE_MARGIN ||
+      (c.kind === 'point' &&
+        best.kind !== 'point' &&
+        c.distance <= best.distance + POINT_PREFERENCE_MARGIN)
     ) {
       best = c;
     }

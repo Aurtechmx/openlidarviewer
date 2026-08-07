@@ -17,8 +17,12 @@ const EPSILON = 1e-9;
 
 // ── small vector helpers ────────────────────────────────────────────────────
 
-function sub(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+function sub(minuend: Vec3, subtrahend: Vec3): Vec3 {
+  return [
+    minuend[0] - subtrahend[0],
+    minuend[1] - subtrahend[1],
+    minuend[2] - subtrahend[2],
+  ];
 }
 
 function dot(a: Vec3, b: Vec3): number {
@@ -367,6 +371,9 @@ export function boxFromCorners(a: Vec3, b: Vec3): BoxBounds {
  */
 const AXIS_EPS = 1e-6;
 
+/** The index of a coordinate axis: 0 = X, 1 = Y, 2 = Z. */
+export type AxisIndex = 0 | 1 | 2;
+
 /**
  * The index of the axis an up vector names — 0 = X, 1 = Y, 2 = Z.
  *
@@ -385,16 +392,22 @@ const AXIS_EPS = 1e-6;
  * it today: every write to the viewer's world-up is exactly (0, ±1, 0) or
  * (0, 0, ±1), chosen by source format.
  */
-export function upAxisIndex(up: Vec3): 0 | 1 | 2 {
+export function upAxisIndex(up: Vec3): AxisIndex {
   const ax = Math.abs(up[0]);
   const ay = Math.abs(up[1]);
   const az = Math.abs(up[2]);
   const len = Math.hypot(ax, ay, az);
-  const axis: 0 | 1 | 2 = ay > ax && ay >= az ? 1 : ax > ay && ax >= az ? 0 : 2;
+  let axis: AxisIndex;
+  if (ay > ax && ay >= az) axis = 1;
+  else if (ax > ay && ax >= az) axis = 0;
+  else axis = 2;
   // A zero or non-finite vector names no axis, and normalising it would divide
   // by zero — refuse before the ratio test rather than propagate a NaN.
   if (Number.isFinite(len) && len > 0) {
-    const dominant = axis === 0 ? ax : axis === 1 ? ay : az;
+    let dominant: number;
+    if (axis === 0) dominant = ax;
+    else if (axis === 1) dominant = ay;
+    else dominant = az;
     if (dominant / len >= 1 - AXIS_EPS) return axis;
   }
   throw new Error(
@@ -405,7 +418,7 @@ export function upAxisIndex(up: Vec3): 0 | 1 | 2 {
 }
 
 /** The two non-vertical axes, ascending, for a given up-axis. */
-function horizontalAxes(upAxis: 0 | 1 | 2): [0 | 1 | 2, 0 | 1 | 2] {
+function horizontalAxes(upAxis: AxisIndex): [AxisIndex, AxisIndex] {
   if (upAxis === 0) return [1, 2];
   if (upAxis === 1) return [0, 2];
   return [0, 1];

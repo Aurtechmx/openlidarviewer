@@ -105,8 +105,12 @@ export function assembleProfileBuffers(
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
-function sub(a: Vec3, b: Vec3): Vec3 {
-  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+function sub(minuend: Vec3, subtrahend: Vec3): Vec3 {
+  return [
+    minuend[0] - subtrahend[0],
+    minuend[1] - subtrahend[1],
+    minuend[2] - subtrahend[2],
+  ];
 }
 function length(v: Vec3): number {
   return Math.hypot(v[0], v[1], v[2]);
@@ -394,8 +398,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
       ? horizontalLen * AUTO_CORRIDOR_FRACTION
       : Math.max(0, input.bandWidth);
   const bandSq = band * band;
-  const percentile =
-    input.groundPercentile == null ? DEFAULT_GROUND_PERCENTILE : input.groundPercentile;
+  const percentile = input.groundPercentile ?? DEFAULT_GROUND_PERCENTILE;
 
   const binStep = horizontalLen / (samples - 1);
 
@@ -411,10 +414,10 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   // Classification gate — drop vegetation / building / noise so they never
   // enter a corridor's elevation statistics. Only active when an aligned
   // classification channel was supplied.
-  const cls = input.classification && input.classification.length === n ? input.classification : null;
+  const cls = input.classification?.length === n ? input.classification : null;
   const drop = cls ? new Set(input.excludeClasses ?? NON_GROUND_CLASSES) : null;
   for (let i = 0; i < n; i++) {
-    if (drop && drop.has(cls![i])) continue;
+    if (drop?.has(cls![i])) continue;
     const px = positions[i * 3];
     const py = positions[i * 3 + 1];
     const pz = positions[i * 3 + 2];
@@ -492,7 +495,7 @@ export function summariseProfile(samples: readonly ProfileSample[]): ProfileSumm
     if (s.height > max) max = s.height;
   }
   if (hits === 0) {
-    return { minHeight: NaN, maxHeight: NaN, heightSpan: NaN, coverage: 0 };
+    return { minHeight: Number.NaN, maxHeight: Number.NaN, heightSpan: Number.NaN, coverage: 0 };
   }
   return {
     minHeight: min,

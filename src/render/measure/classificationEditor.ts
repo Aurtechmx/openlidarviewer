@@ -86,8 +86,7 @@ export function applyIndexReclassify(
 ): ClassEditResult {
   const n = classification.length;
   let changed = 0;
-  for (let k = 0; k < indices.length; k++) {
-    const i = indices[k];
+  for (const i of indices) {
     if (i < 0 || i >= n) continue;
     if (classification[i] !== newClass) {
       classification[i] = newClass;

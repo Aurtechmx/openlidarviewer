@@ -250,40 +250,38 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   if (baseMode === 'explicit') {
     baseZ = input.base?.z ?? 0;
     baseUncertainty = 0;
+  } else if (insideHeights.length === 0) {
+    baseZ = 0;
+    baseUncertainty = 0;
   } else {
-    if (insideHeights.length === 0) {
-      baseZ = 0;
-      baseUncertainty = 0;
-    } else {
-      const sorted = Float64Array.from(insideHeights).sort();
-      baseZ = percentileSorted(sorted, basePct);
-      // Base-plane uncertainty has TWO parts, and the band is only honest if it
-      // carries both:
-      //
-      //   1. Random scatter — the std of the "ground band" (lowest 25% of inside
-      //      heights, the points sitting on the surrounding ground). How noisy
-      //      the apron is.
-      //   2. Systematic mis-fit — a single HORIZONTAL base under sloped or
-      //      uneven ground biases EVERY thickness the same direction, so it
-      //      cannot be averaged away by more points (a Type-B systematic term in
-      //      GUM language). Point scatter alone misses it. We bound it by how far
-      //      the representative ground level — the ground band's MEAN — sits
-      //      above the chosen low-percentile base: the amount the flat base is
-      //      systematically too low across the footprint. Flat ground ⇒ this gap
-      //      ≈ 0 and scatter governs; a sloped apron ⇒ it dominates, widening the
-      //      band honestly instead of reporting a confidently-narrow number.
-      //
-      // Take the larger of the two so the systematic term sets a floor the
-      // random term can never shrink below.
-      const groundCount = Math.max(1, Math.floor(sorted.length * 0.25));
-      const groundBand = sorted.subarray(0, groundCount);
-      const groundScatter = stdDev(groundBand);
-      let groundSum = 0;
-      for (let i = 0; i < groundBand.length; i++) groundSum += groundBand[i];
-      const groundMean = groundSum / groundBand.length;
-      const baseBias = Math.max(0, groundMean - baseZ);
-      baseUncertainty = Math.max(groundScatter, baseBias);
-    }
+    const sorted = Float64Array.from(insideHeights).sort();
+    baseZ = percentileSorted(sorted, basePct);
+    // Base-plane uncertainty has TWO parts, and the band is only honest if it
+    // carries both:
+    //
+    //   1. Random scatter — the std of the "ground band" (lowest 25% of inside
+    //      heights, the points sitting on the surrounding ground). How noisy
+    //      the apron is.
+    //   2. Systematic mis-fit — a single HORIZONTAL base under sloped or
+    //      uneven ground biases EVERY thickness the same direction, so it
+    //      cannot be averaged away by more points (a Type-B systematic term in
+    //      GUM language). Point scatter alone misses it. We bound it by how far
+    //      the representative ground level — the ground band's MEAN — sits
+    //      above the chosen low-percentile base: the amount the flat base is
+    //      systematically too low across the footprint. Flat ground ⇒ this gap
+    //      ≈ 0 and scatter governs; a sloped apron ⇒ it dominates, widening the
+    //      band honestly instead of reporting a confidently-narrow number.
+    //
+    // Take the larger of the two so the systematic term sets a floor the
+    // random term can never shrink below.
+    const groundCount = Math.max(1, Math.floor(sorted.length * 0.25));
+    const groundBand = sorted.subarray(0, groundCount);
+    const groundScatter = stdDev(groundBand);
+    let groundSum = 0;
+    for (const g of groundBand) groundSum += g;
+    const groundMean = groundSum / groundBand.length;
+    const baseBias = Math.max(0, groundMean - baseZ);
+    baseUncertainty = Math.max(groundScatter, baseBias);
   }
 
   // Reuse the existing estimator for fill/cut/area/density/validity.
@@ -425,11 +423,11 @@ function buildCaveats(
       `Base plane was inferred from the lowest ground points inside the footprint (±${baseUncertainty.toFixed(2)} m); set an explicit base if you have a surveyed datum.`,
     );
   }
-  out.push('Point-sample estimate over a horizontal base plane; not a triangulated surface-to-surface volume.');
   // Mirrors changeUncertainty's spatial-correlation caveat: the √N in the
   // sampling-error term assumes independent residuals, which scan noise
   // (scan lines, registration drift) routinely violates.
   out.push(
+    'Point-sample estimate over a horizontal base plane; not a triangulated surface-to-surface volume.',
     'Point-sampling noise is assumed spatially independent; the true error is larger if it is correlated.',
   );
   if (confidence === 'high') {
