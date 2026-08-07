@@ -210,6 +210,48 @@ describe('deriveClassification — RGB greenness fusion', () => {
     expect(frac(scene.groundIdx, res.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
   });
 
+  it('opt-in lowVegByGreenness promotes a GREEN ground return to Low vegetation (ASPRS 3)', () => {
+    // Same all-green paint, but the caller opts to honour greenness in the
+    // ground band: Excess-Green is well above the threshold, so those returns
+    // are live foliage (cover crop), not bare earth. Default stays Ground.
+    const allGreen = new Uint8Array(scene.count * 3);
+    for (let i = 0; i < scene.count; i++) {
+      allGreen[i * 3] = 50;
+      allGreen[i * 3 + 1] = 200;
+      allGreen[i * 3 + 2] = 50;
+    }
+    const off = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: allGreen });
+    const on = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      colors: allGreen,
+      lowVegByGreenness: true,
+    });
+    expect(frac(scene.groundIdx, off.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+    expect(frac(scene.groundIdx, on.codes, DERIVED_LOW_VEG)).toBeGreaterThan(0.9);
+    expect(frac(scene.groundIdx, on.codes, DERIVED_GROUND)).toBeLessThan(0.1);
+  });
+
+  it('opt-in lowVegByGreenness leaves BARE (non-green) ground as Ground', () => {
+    // Neutral grey ground: Excess-Green ≈ 0, below the threshold. The toggle
+    // promotes live foliage only — it must never turn bare earth into vegetation.
+    const grey = new Uint8Array(scene.count * 3).fill(128);
+    const on = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      colors: grey,
+      lowVegByGreenness: true,
+    });
+    expect(frac(scene.groundIdx, on.codes, DERIVED_GROUND)).toBeGreaterThan(0.9);
+  });
+
+  it('lowVegByGreenness is a no-op without colours (geometry-only byte-identical)', () => {
+    const base = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
+    const flagged = deriveClassification(scene.positions, scene.count, {
+      cellSizeM: 1,
+      lowVegByGreenness: true,
+    });
+    expect(Array.from(flagged.codes)).toEqual(Array.from(base.codes));
+  });
+
   it('colours absent ⇒ byte-identical to geometry-only', () => {
     const a = deriveClassification(scene.positions, scene.count, { cellSizeM: 1 });
     const b = deriveClassification(scene.positions, scene.count, { cellSizeM: 1, colors: undefined });

@@ -289,6 +289,11 @@ describe('CRS reference fixtures (PROJ / pyproj)', () => {
     // A leg with a null deviation means the converter declined the point. That
     // must fail loudly: a silently-skipped leg would let the suite pass having
     // measured nothing, which is the exact failure P1 #9 exists to prevent.
+    //
+    // The loop below is the same vacuous success one level up: an empty fixture
+    // set would let this pass having checked nothing, so assert there is work
+    // before checking each leg.
+    expect(LEGS.length).toBeGreaterThan(0);
     for (const leg of LEGS) {
       if (leg.deviationM === null) {
         throw new Error(

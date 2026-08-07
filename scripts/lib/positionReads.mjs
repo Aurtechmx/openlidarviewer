@@ -123,7 +123,15 @@ export function walkPositionSources(srcDir, scope) {
     }
   };
   walk(srcDir);
-  return out.sort();
+  // An explicit comparator, not the default: Array#sort with no argument
+  // coerces elements to strings and orders by UTF-16 code unit. These are
+  // already strings, so the explicit form states that code-unit order is
+  // intended rather than accidental (Sonar javascript:S2871).
+  return out.sort((a, b) => {
+    if (a < b) return -1;
+    if (a > b) return 1;
+    return 0;
+  });
 }
 
 /**
