@@ -27,7 +27,9 @@
  * closing it means giving streaming scans a stable id in the shell, which is a
  * change to the shell rather than to this rule.
  *
- * Pure data — the comparison plus the refusal wording. No DOM, no I/O.
+ * Effect-free: the comparison, the refusal wording, and the shared
+ * load-snapshot-verify-write flow every scan-scoped export follows. Every side
+ * effect is injected by the caller, so this module itself does no DOM, no I/O.
  */
 
 /**
@@ -64,3 +66,55 @@ export const TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL =
   + 'active, so nothing was written — the contours, rasters and report would have '
   + 'been stamped with the active scan\'s origin, coordinate system and name. '
   + 'Re-run the analysis on this scan to export it.';
+
+/**
+ * Refusal for a `.olvsession` export whose active scan was swapped while the
+ * session writer was loading. A session file embeds the scan's summary, origin,
+ * CRS and unit alongside the measurements, annotations and saved views, so a
+ * mid-load swap would pair one scan's coordinate frame with another scan's
+ * contents. Non-alarming: nothing is lost, the user re-exports on the scan they
+ * meant. Kept free of an em dash so it reads plainly at any width.
+ */
+export const SESSION_EXPORT_SCAN_CHANGED_REFUSAL =
+  'The active scan changed while the session was being prepared, so it was not '
+  + 'saved. The file would have paired one scan\'s coordinate frame with another '
+  + 'scan\'s measurements and views. Select the scan you want and export the '
+  + 'session again.';
+
+/**
+ * The moving parts of a scan-scoped export, injected so the load-then-snapshot
+ * ordering and the identity backstop can be exercised in a Node test without the
+ * shell. `D` is whatever {@link ScanScopedExportIo.load} resolves to (a bundle
+ * of lazily imported writers), handed straight to {@link ScanScopedExportIo.serialize}.
+ */
+export interface ScanScopedExportIo<D> {
+  /** The active scan id sampled when the export was requested (null = streaming). */
+  readonly requestedScanId: string | null;
+  /** Load the lazy writer(s). Runs to completion BEFORE the snapshot is taken. */
+  load(): Promise<D>;
+  /** Read ONE coherent snapshot of scan/viewer state and serialise it. No await inside. */
+  serialize(deps: D): string;
+  /** The active scan id now, re-read after serialising and before the write. */
+  activeScanId(): string | null;
+  /** Commit the serialised text (e.g. trigger the download). */
+  write(text: string): void;
+  /** Tell the user the export was refused. Called instead of {@link write} on a swap. */
+  refuse(): void;
+}
+
+/**
+ * Load the lazy dependencies first, let the caller take one coherent snapshot and
+ * serialise it with no await in between, then write only when the scan the export
+ * was requested for is still active. A scan opened while the writer loaded is
+ * refused rather than written, so the file can never splice two scans. Returns
+ * after the write OR the refusal, never both.
+ */
+export async function writeScanScopedExport<D>(io: ScanScopedExportIo<D>): Promise<void> {
+  const deps = await io.load();
+  const text = io.serialize(deps);
+  if (!sameExportTarget(io.activeScanId(), io.requestedScanId)) {
+    io.refuse();
+    return;
+  }
+  io.write(text);
+}
