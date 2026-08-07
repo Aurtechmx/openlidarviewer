@@ -62,6 +62,16 @@ export interface SurfaceFromRasterParams {
   readonly verticalUnitToMetres?: number;
   /** Density (returns/cell) earning full confidence; default = scene median. */
   readonly targetCount?: number;
+  /**
+   * Run the blunder-only despike pass before building the surface. Default
+   * `true` (the historical behaviour). Set `false` when the ground returns are
+   * an AUTHORITATIVE classification the caller trusts (see
+   * `analyseContours` `trustGroundClassification`): the despike's 6σ-MAD test
+   * misreads legitimately-steep survey ground — escarpment and ridge nodes —
+   * as spikes and void-fills them, so trusting the classification means keeping
+   * every measured ground cell exactly as delivered.
+   */
+  readonly despike?: boolean;
 }
 
 export interface SurfaceFromRasterResult {
@@ -93,34 +103,38 @@ export function buildSurfaceFromRaster(
   // neighbours) so they don't warp the surface; the builder re-fills them by
   // interpolation. Real outliers only — smooth terrain loses nothing.
   let workingRaster = raster;
-  const hadData0 = new Uint8Array(raster.counts.length);
-  let measuredCellCount = 0;
-  for (let i = 0; i < hadData0.length; i++) {
-    if (raster.counts[i] > 0) { hadData0[i] = 1; measuredCellCount++; }
-  }
-  // `raster.z` is in native source vertical units and LIVE_DESPIKE's floor is
-  // metres, so the factor has to travel with it — otherwise 30 cm reads as
-  // 30 source units and a foot-vertical scan loses real sub-30 cm features.
-  const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
-    ...LIVE_DESPIKE,
-    verticalUnitToMetres: params.verticalUnitToMetres,
-  });
-  // Safety cap: if "outliers" exceed 2% of measured cells the data is noisy,
-  // not spiky — removing that much would distort the surface, so leave it.
-  const removalCap = Math.max(4, Math.ceil(measuredCellCount * 0.02));
   let despikedCellCount = 0;
   let cappedOutlierCount = 0;
-  if (despiked.removed > 0 && despiked.removed <= removalCap) {
-    const counts2 = raster.counts.slice();
-    let filled = 0;
-    for (let i = 0; i < counts2.length; i++) {
-      if (despiked.hadData[i] === 0) counts2[i] = 0;
-      if (counts2[i] > 0) filled++;
+  // Skip the despike entirely when the caller trusts an authoritative ground
+  // classification — steep survey ground must not be void-filled as a "spike".
+  if (params.despike !== false) {
+    const hadData0 = new Uint8Array(raster.counts.length);
+    let measuredCellCount = 0;
+    for (let i = 0; i < hadData0.length; i++) {
+      if (raster.counts[i] > 0) { hadData0[i] = 1; measuredCellCount++; }
     }
-    workingRaster = { ...raster, z: despiked.z, counts: counts2, filledCellCount: filled };
-    despikedCellCount = despiked.removed;
-  } else if (despiked.removed > removalCap) {
-    cappedOutlierCount = despiked.removed;
+    // `raster.z` is in native source vertical units and LIVE_DESPIKE's floor is
+    // metres, so the factor has to travel with it — otherwise 30 cm reads as
+    // 30 source units and a foot-vertical scan loses real sub-30 cm features.
+    const despiked = removeSpikes(raster.z, hadData0, raster.cols, raster.rows, {
+      ...LIVE_DESPIKE,
+      verticalUnitToMetres: params.verticalUnitToMetres,
+    });
+    // Safety cap: if "outliers" exceed 2% of measured cells the data is noisy,
+    // not spiky — removing that much would distort the surface, so leave it.
+    const removalCap = Math.max(4, Math.ceil(measuredCellCount * 0.02));
+    if (despiked.removed > 0 && despiked.removed <= removalCap) {
+      const counts2 = raster.counts.slice();
+      let filled = 0;
+      for (let i = 0; i < counts2.length; i++) {
+        if (despiked.hadData[i] === 0) counts2[i] = 0;
+        if (counts2[i] > 0) filled++;
+      }
+      workingRaster = { ...raster, z: despiked.z, counts: counts2, filledCellCount: filled };
+      despikedCellCount = despiked.removed;
+    } else if (despiked.removed > removalCap) {
+      cappedOutlierCount = despiked.removed;
+    }
   }
 
   const dtm = buildDtmGrid(workingRaster, {

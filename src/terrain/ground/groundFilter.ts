@@ -372,6 +372,111 @@ export function classifyGroundSmrf(
   };
 }
 
+/**
+ * Build a {@link GroundFilterResult} that TRUSTS an authoritative ground
+ * classification instead of re-deriving one with SMRF. Every finite point in
+ * `points` is treated as ground (the caller has already selected the ASPRS
+ * class-2 subset), so `isGround` is all-ones over the finite returns and the
+ * DTM rasterised from it is a measured cell wherever a ground return exists —
+ * SMRF's progressive opening can no longer discard steep-slope ground it
+ * mistook for structure.
+ *
+ * The grid geometry (origin / cols / rows) and the provisional `groundSurface`
+ * (min-elevation grid + nearest-finite inpaint) are computed EXACTLY as
+ * {@link classifyGroundSmrf} would, so this result is a drop-in substitute for
+ * the SMRF one; only the classification decision differs. The morphological
+ * opening and slope-scaled point test are skipped — that is the whole point.
+ *
+ * Deterministic. Degenerate inputs (empty / all non-finite) return the same
+ * honest empty result the SMRF path does.
+ */
+export function groundFromTrustedClassification(
+  points: ReadonlyArray<TerrainPoint>,
+  params: { readonly cellSizeM: number; readonly verticalAxis?: VerticalAxis },
+): GroundFilterResult {
+  const warnings: string[] = [];
+  const vertical: VerticalAxis = params.verticalAxis ?? 'z';
+  const cellSizeM = finitePositive(params.cellSizeM, 1, 'cellSizeM', warnings);
+
+  const sourcePointCount = points.length;
+  if (sourcePointCount === 0) {
+    warnings.push('no points — nothing to classify');
+    return emptyResult(cellSizeM, warnings);
+  }
+
+  // Bounds over the finite returns (identical rule to classifyGroundSmrf).
+  let minH1 = Infinity;
+  let minH2 = Infinity;
+  let maxH1 = -Infinity;
+  let maxH2 = -Infinity;
+  let analyzed = 0;
+  for (const p of points) {
+    const [h1, h2, v] = axes(p, vertical);
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    analyzed++;
+    if (h1 < minH1) minH1 = h1;
+    if (h2 < minH2) minH2 = h2;
+    if (h1 > maxH1) maxH1 = h1;
+    if (h2 > maxH2) maxH2 = h2;
+  }
+  if (analyzed === 0) {
+    warnings.push('all points non-finite — nothing to classify');
+    return emptyResult(cellSizeM, warnings);
+  }
+  if (analyzed < sourcePointCount) {
+    warnings.push(`${sourcePointCount - analyzed} non-finite points skipped`);
+  }
+
+  const cols = Math.max(1, Math.floor((maxH1 - minH1) / cellSizeM) + 1);
+  const rows = Math.max(1, Math.floor((maxH2 - minH2) / cellSizeM) + 1);
+  const nCells = cols * rows;
+
+  const cellOf = (h1: number, h2: number): number => {
+    let col = Math.floor((h1 - minH1) / cellSizeM);
+    let row = Math.floor((h2 - minH2) / cellSizeM);
+    if (col < 0) col = 0;
+    else if (col >= cols) col = cols - 1;
+    if (row < 0) row = 0;
+    else if (row >= rows) row = rows - 1;
+    return row * cols + col;
+  };
+
+  // Minimum-elevation grid + provisional surface, so the returned result
+  // carries a valid bare-earth surface like the SMRF path (used for provenance,
+  // never for the delivered DTM, which rasterizeDtm builds from the points).
+  const minGrid = new Float32Array(nCells).fill(Number.NaN);
+  const hadData = new Uint8Array(nCells);
+  const isGround = new Uint8Array(sourcePointCount);
+  let groundPointCount = 0;
+  for (let pi = 0; pi < sourcePointCount; pi++) {
+    const [h1, h2, v] = axes(points[pi], vertical);
+    if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    // Every finite classified-ground return is ground — no morphological test.
+    isGround[pi] = 1;
+    groundPointCount++;
+    const c = cellOf(h1, h2);
+    if (hadData[c] === 0 || v < minGrid[c]) minGrid[c] = v;
+    hadData[c] = 1;
+  }
+  const groundSurface = inpaintNearest(minGrid, hadData, cols, rows);
+
+  return {
+    isGround,
+    groundSurface,
+    hadData,
+    cols,
+    rows,
+    cellSizeM,
+    originH1: minH1,
+    originH2: minH2,
+    coverage: 'full' as TerrainCoverageMode,
+    sourcePointCount,
+    analyzedPointCount: analyzed,
+    groundPointCount,
+    warnings,
+  };
+}
+
 // ── morphology helpers (exported for unit testing) ──────────────────
 
 /**

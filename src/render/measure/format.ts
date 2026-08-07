@@ -4,13 +4,14 @@
  * Unit-aware formatting of measurement values for on-screen labels and the
  * Measurements panel. Pure — unit-tested in Node.
  *
- * The metric length format delegates to `navMath.formatDistance`, so the
- * distance tool's labels stay byte-identical to the original implementation
- * (no regression). The imperial branch and the area / angle / grade
- * formatters live here.
+ * Length and area readouts carry ADAPTIVE precision (see {@link displayDecimals}):
+ * the decimal count follows the value's magnitude so a sub-centimetre baseline
+ * keeps real digits (0.0020 m → "0.2000 cm", not "0.00 m") while a large span
+ * stays uncluttered (500.00 m, not 500.0000). The panel, the CSV and the PDF
+ * all read the same helpers here, so the precision policy cannot fork across
+ * surfaces. The imperial branch and the angle / grade formatters live here too.
  */
 
-import { formatDistance } from '../navMath';
 import type { UnitSystem } from './types';
 
 /**
@@ -75,16 +76,68 @@ function grouped(value: number, decimals: number): string {
   });
 }
 
+/**
+ * How many significant figures a length / area readout aims to show.
+ *
+ * The datasets now span sub-millimetre baselines (a 2 mm span) to kilometre
+ * corridors, and a fixed 2-decimal (centimetre) readout collapses the small
+ * end — 0.0020 m printed "0.00 m", a 50.009999 m GCP baseline printed "50.01 m"
+ * with the millimetre rounded away. Displaying a fixed number of SIGNIFICANT
+ * figures instead makes the decimal count follow the magnitude: small values
+ * gain decimals, large values shed them, so both ends read honestly.
+ */
+const DISPLAY_SIG_FIGS = 5;
+
+/**
+ * Decimal count for a display-unit value under the {@link DISPLAY_SIG_FIGS}
+ * policy, clamped to `[minDecimals, maxDecimals]`.
+ *
+ * `minDecimals` keeps a clean value looking familiar within its band (metres
+ * never drop below "0.00 m"); `maxDecimals` bounds the tail so a tiny value
+ * cannot demand an unreadable run of digits. Trailing zeros are KEPT — they
+ * are the visible signal that the reading carries that many significant
+ * figures (50.009999 m → "50.010 m", the millimetre place shown even though it
+ * rounds to zero). Pure and deterministic; the value passed is already in the
+ * unit that will be printed (centimetres, metres, km, m², …).
+ */
+function displayDecimals(
+  displayValue: number,
+  minDecimals: number,
+  maxDecimals: number,
+): number {
+  const abs = Math.abs(displayValue);
+  if (!(abs > 0) || !Number.isFinite(abs)) return minDecimals;
+  // leadingPlace: 0 for 1–9.99, 1 for 10–99.99, −1 for 0.1–0.99, …
+  const leadingPlace = Math.floor(Math.log10(abs));
+  const forSigFigs = DISPLAY_SIG_FIGS - 1 - leadingPlace;
+  return Math.min(maxDecimals, Math.max(minDecimals, forSigFigs));
+}
+
 /** Format a length given in metres for the active unit system. */
 export function formatLength(metres: number, system: UnitSystem): string {
   if (!Number.isFinite(metres)) return '—';
-  if (system === 'metric') return formatDistance(metres);
+  if (system === 'metric') {
+    const abs = Math.abs(metres);
+    // Band by magnitude (not sign): a signed reading — a downward delta, an
+    // elevation below the render origin — stays in the unit its size warrants.
+    if (abs < 1) {
+      const cm = metres * 100;
+      return `${cm.toFixed(displayDecimals(cm, 1, 4))} cm`;
+    }
+    if (abs < 1000) return `${metres.toFixed(displayDecimals(metres, 2, 4))} m`;
+    const km = metres / 1000;
+    return `${km.toFixed(displayDecimals(km, 3, 4))} km`;
+  }
 
   const feet = metres * FEET_PER_METRE;
   const abs = Math.abs(feet);
-  if (abs < 1) return `${(feet * 12).toFixed(1)} in`;
-  if (abs < FEET_PER_MILE) return `${feet.toFixed(2)} ft`;
-  return `${(feet / FEET_PER_MILE).toFixed(3)} mi`;
+  if (abs < 1) {
+    const inches = feet * 12;
+    return `${inches.toFixed(displayDecimals(inches, 1, 4))} in`;
+  }
+  if (abs < FEET_PER_MILE) return `${feet.toFixed(displayDecimals(feet, 2, 4))} ft`;
+  const miles = feet / FEET_PER_MILE;
+  return `${miles.toFixed(displayDecimals(miles, 3, 4))} mi`;
 }
 
 /**
@@ -107,13 +160,22 @@ export function formatElevation(metres: number, system: UnitSystem): string {
 /** Format an area given in square metres for the active unit system. */
 export function formatArea(squareMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(squareMetres) || squareMetres < 0) return '—';
+  // A wider decimal ceiling than lengths: a small feature's area is the square
+  // of a small length, so a 5 mm baseline encloses ~2.5e-5 m² and needs the
+  // room to read as non-zero rather than collapsing to "0.00 m²".
   if (system === 'metric') {
-    if (squareMetres < 1e6) return `${grouped(squareMetres, 2)} m²`;
-    return `${grouped(squareMetres / 1e6, 3)} km²`;
+    if (squareMetres < 1e6) {
+      return `${grouped(squareMetres, displayDecimals(squareMetres, 2, 6))} m²`;
+    }
+    const sqKm = squareMetres / 1e6;
+    return `${grouped(sqKm, displayDecimals(sqKm, 3, 6))} km²`;
   }
   const squareFeet = squareMetres * SQFT_PER_SQM;
-  if (squareFeet < SQFT_PER_ACRE) return `${grouped(squareFeet, 1)} ft²`;
-  return `${grouped(squareFeet / SQFT_PER_ACRE, 3)} acre`;
+  if (squareFeet < SQFT_PER_ACRE) {
+    return `${grouped(squareFeet, displayDecimals(squareFeet, 1, 6))} ft²`;
+  }
+  const acres = squareFeet / SQFT_PER_ACRE;
+  return `${grouped(acres, displayDecimals(acres, 3, 6))} acre`;
 }
 
 /** Format an angle in degrees. Unit-system independent. */

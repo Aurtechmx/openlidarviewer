@@ -39,7 +39,9 @@
 import type { TerrainPoint } from '../TerrainContracts';
 import {
   classifyGroundSmrf,
+  groundFromTrustedClassification,
   type GroundFilterParams,
+  type GroundFilterResult,
   type VerticalAxis,
 } from '../ground/groundFilter';
 import { rasterizeDtm, type DtmAggregation } from '../ground/rasterizeDtm';
@@ -168,6 +170,27 @@ export interface TerrainCoreParams {
    * The DSM (top surface, for above-ground height) still uses the full cloud.
    */
   readonly classification?: ReadonlyArray<number> | Uint8Array;
+  /**
+   * Trust an authoritative ground classification instead of re-deriving one
+   * with SMRF. When the caller already carries a usable ASPRS class-2 (ground)
+   * set — a survey-delivered bare-earth cloud, or the lasso editor's ground
+   * assignment — the DTM should be rasterised straight from those points, so
+   * every ground node is a MEASURED cell and steep-slope ground SMRF's
+   * progressive opening would drop stays exact. Interpreted as:
+   *   - `true`  — force trust: use the class-2 points as the ground set and
+   *               skip SMRF (falls back to SMRF with a warning if no class-2
+   *               points are present).
+   *   - `false` — never trust: always run SMRF (the historical behaviour).
+   *   - omitted — AUTO: trust only when a class-2 set of sufficient size is
+   *               present AND every ground candidate (after dropping
+   *               vegetation/building/noise) is class-2, i.e. the cloud is
+   *               fully ground-classified. This keeps mixed clouds (some
+   *               unclassified ground) on the SMRF path, so unclassified
+   *               ground is never silently dropped.
+   * The RAW-cloud path (no `classification`) is byte-unchanged: with no
+   * classification there is no class-2 set, so auto never engages.
+   */
+  readonly trustGroundClassification?: boolean;
   /** ASPRS classes to exclude before ground filtering. Default veg/building/noise. */
   readonly excludeClasses?: ReadonlyArray<number>;
   /** Hold-out PRNG seed for reproducible validation. Default 1. */
@@ -506,6 +529,70 @@ function normalisePoints(input: TerrainPointInput): ReadonlyArray<TerrainPoint> 
   return input instanceof Float32Array ? positionsToPoints(input) : input;
 }
 
+/** ASPRS classification code for bare-earth ground returns. */
+const ASPRS_GROUND_CLASS = 2;
+
+/**
+ * Minimum class-2 points for AUTO trust to engage — enough to hold-out
+ * cross-validate (which needs ≥ 4 ground returns to split). Below this the
+ * classification is too sparse to be the authoritative surface, so the SMRF
+ * path runs. `trustGroundClassification: true` bypasses this floor.
+ */
+const AUTO_TRUST_MIN_GROUND_POINTS = 4;
+
+/** Resolved trust decision + the class-2 ground point set it will use. */
+interface GroundTrustDecision {
+  /** True when the DTM should be built from the class-2 set, skipping SMRF. */
+  readonly trust: boolean;
+  /** The ASPRS class-2 (ground) points, index-selected from the input. */
+  readonly groundPoints: TerrainPoint[];
+  /** True when trust was explicitly requested but no class-2 points exist. */
+  readonly requestedButUnavailable: boolean;
+}
+
+/**
+ * Decide whether to trust an existing ground classification (see
+ * {@link TerrainCoreParams.trustGroundClassification}) and, when so, select the
+ * class-2 point set to rasterise the DTM from.
+ *
+ * `keptCandidateCount` is the number of points that survive
+ * {@link excludeNonGroundClasses} (the 0/1/2/9 ground candidates). AUTO trust
+ * requires EVERY candidate to be class-2, so a cloud with unclassified ground
+ * stays on the SMRF path and nothing is silently dropped.
+ */
+function resolveGroundTrust(
+  points: ReadonlyArray<TerrainPoint>,
+  classification: ReadonlyArray<number> | Uint8Array | undefined,
+  keptCandidateCount: number,
+  explicit: boolean | undefined,
+): GroundTrustDecision {
+  const aligned = classification != null && classification.length === points.length;
+  const groundPoints: TerrainPoint[] = [];
+  if (aligned) {
+    for (let i = 0; i < points.length; i++) {
+      if (classification![i] === ASPRS_GROUND_CLASS) groundPoints.push(points[i]);
+    }
+  }
+  const class2Count = groundPoints.length;
+
+  if (explicit === false) {
+    return { trust: false, groundPoints: [], requestedButUnavailable: false };
+  }
+  if (explicit === true) {
+    if (class2Count >= 1) return { trust: true, groundPoints, requestedButUnavailable: false };
+    return { trust: false, groundPoints: [], requestedButUnavailable: true };
+  }
+  // AUTO: a class-2 set of sufficient size, and the classification is
+  // authoritative (every ground candidate is class-2).
+  const auto =
+    class2Count >= AUTO_TRUST_MIN_GROUND_POINTS && class2Count === keptCandidateCount;
+  return {
+    trust: auto,
+    groundPoints: auto ? groundPoints : [],
+    requestedButUnavailable: false,
+  };
+}
+
 /**
  * Resolve the ground-filter parameters the core actually runs with (caller
  * overrides + pipeline defaults). Exported as the SINGLE source of truth for
@@ -591,7 +678,7 @@ export function computeTerrainCore(
   // or rooftops. The full cloud is still used for the DSM further down, so
   // above-ground height keeps measuring those very returns.
   const classFilter = excludeNonGroundClasses(points, params.classification, params.excludeClasses);
-  const groundPts = classFilter.points;
+  let groundPts: ReadonlyArray<TerrainPoint> = classFilter.points;
   if (classFilter.excludedCount > 0) {
     warnings.push(
       `Excluded ${classFilter.excludedCount} classified vegetation/building/noise return(s) before ground filtering.`,
@@ -602,9 +689,56 @@ export function computeTerrainCore(
   // resolveGroundFilterParams) and shared with the hold-out validation's
   // train-only reclassifier below, so the per-split classification can never
   // drift from the pass that produced the delivered surface.
+  //
+  // When a usable ground classification is present (auto) — or the caller
+  // forces it — TRUST the ASPRS class-2 set as the surface and skip the SMRF
+  // re-derivation: the DTM is then rasterised straight from measured ground
+  // returns, so steep-slope ground SMRF's progressive opening would discard
+  // stays exact. `reclassifyForHoldout` follows the same decision so the
+  // hold-out validates the surface the user actually receives.
   const groundParams = resolveGroundFilterParams(params, verticalAxis);
-  const gf = classifyGroundSmrf(groundPts, groundParams);
-  warnings.push(...gf.warnings);
+  const trust = resolveGroundTrust(
+    points,
+    params.classification,
+    groundPts.length,
+    params.trustGroundClassification,
+  );
+  if (trust.requestedButUnavailable) {
+    warnings.push(
+      'trustGroundClassification was requested but no ASPRS class 2 (ground) ' +
+        'points are present; falling back to the SMRF ground filter.',
+    );
+  }
+  let groundPtsForSurface: ReadonlyArray<TerrainPoint>;
+  let gf: GroundFilterResult;
+  let reclassifyForHoldout:
+    | ((points: ReadonlyArray<TerrainPoint>, isHeldOut: Uint8Array) => Uint8Array | ReadonlyArray<number>)
+    | undefined;
+  if (trust.trust) {
+    groundPtsForSurface = trust.groundPoints;
+    gf = groundFromTrustedClassification(groundPtsForSurface, {
+      cellSizeM: params.cellSizeM,
+      verticalAxis,
+    });
+    warnings.push(...gf.warnings);
+    warnings.push(
+      `Trusted ${gf.groundPointCount} ASPRS class 2 (ground) point(s) as the DTM ` +
+        'surface; SMRF ground re-derivation skipped (every ground node is a measured cell).',
+    );
+    // The class-2 set is authoritative and independent of the hold-out split,
+    // so a withheld point never helped decide its own ground membership — the
+    // classification leak the SMRF path removes with a re-run simply does not
+    // exist here. Feed the validator an all-ground mask (it excludes held-out
+    // points from the fit itself), so it validates the delivered surface.
+    reclassifyForHoldout = (pts) => new Uint8Array(pts.length).fill(1);
+  } else {
+    groundPtsForSurface = groundPts;
+    gf = classifyGroundSmrf(groundPtsForSurface, groundParams);
+    warnings.push(...gf.warnings);
+    reclassifyForHoldout = makeTrainOnlyReclassifier(groundParams);
+  }
+  // Every stage below that consumed `groundPts` reads the resolved surface set.
+  groundPts = groundPtsForSurface;
 
   // 2) DTM raster aligned to the filter grid + 3) per-cell confidence.
   // The live surface aggregates each cell by MEDIAN (the robustness upgrade over
@@ -627,14 +761,17 @@ export function computeTerrainCore(
   // geodesic void fill + extrapolation-guarded confidence — all through the
   // ONE shared raster→grid constructor, so the hold-out validation below
   // provably builds the SAME kind of surface (it calls the same function).
-  // The despike pass is part of every generation run; the README derives its
-  // provenance from this fact, not a mirrored constant.
-  const despikeApplied = true;
+  // The despike pass is part of every generation run EXCEPT the trusted-
+  // classification path: there the ground returns are authoritative, so a
+  // steep survey node must not be void-filled as a spike. The README derives
+  // its provenance from this fact, not a mirrored constant.
+  const despikeApplied = !trust.trust;
   const built = buildSurfaceFromRaster(raster, {
     crs,
     horizontalEpsg: params.horizontalEpsg,
     verticalDatum,
     verticalEpsg: params.verticalEpsg,
+    despike: despikeApplied,
     isGeographic: params.isGeographic,
     // WORLD grid-centre latitude for the confidence roughness slope's cos φ
     // E–W correction (the grid's own originH2 is render-recentred, ≈ 0).
@@ -671,8 +808,10 @@ export function computeTerrainCore(
     seed: params.holdoutSeed ?? 1,
     verticalAxis,
     // Validate the SAME surface the user gets: same per-cell aggregation as the
-    // live DTM above (median), so the RMSE isn't measuring a different surface.
+    // live DTM above (median) AND the same despike decision (off when trusting
+    // the classification), so the RMSE isn't measuring a different surface.
     aggregation,
+    despike: despikeApplied,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     verticalUnitToMetres: params.verticalUnitToMetres,
@@ -685,8 +824,10 @@ export function computeTerrainCore(
     // Cost: the hold-out is a single deterministic split, so this is exactly
     // ONE extra SMRF pass over the training share of the analysed cloud
     // (already capped by the gather stride) — ground-filter cost ≤ 2× per
-    // run, never K passes.
-    reclassifyGround: makeTrainOnlyReclassifier(groundParams),
+    // run, never K passes. On the trusted-classification path this is instead
+    // an all-ground mask (no SMRF), so the hold-out validates the exact class-2
+    // surface the user receives.
+    reclassifyGround: reclassifyForHoldout,
   });
   const confidenceOrdering = checkConfidenceOrdering(validation);
   const accuracy = computeVerticalAccuracy(validation);
