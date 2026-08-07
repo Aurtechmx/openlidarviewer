@@ -49,8 +49,16 @@ const DOMAIN_32BIT = new Set([
 ]);
 
 /** A quantity that can pass 2^31 in this application, so a wrap would be wrong. */
-const MAGNITUDE =
-  /\b(count|counts|length|len|offset|offsets|byte|bytes|byteLength|size|sizes|index|idx|indices|point|points|pointCount|numPoints|nPoints|total|totals|position|positions|addr|address|stride|capacity|bufferLength)\b/i;
+const MAGNITUDE_WORDS = [
+  'count', 'counts', 'length', 'len', 'offset', 'offsets', 'byte', 'bytes',
+  'byteLength', 'size', 'sizes', 'index', 'idx', 'indices', 'point', 'points',
+  'pointCount', 'numPoints', 'nPoints', 'total', 'totals', 'position',
+  'positions', 'addr', 'address', 'stride', 'capacity', 'bufferLength',
+];
+// Built from the word list rather than one long literal alternation: the list
+// is the readable form, and the constructed regex carries no branch-count
+// complexity for a reader (or a linter) to wade through.
+const MAGNITUDE = new RegExp(`\\b(?:${MAGNITUDE_WORDS.join('|')})\\b`, 'i');
 
 /** A length divided down — result ≤ the array length that bounds it, under 2^31. */
 const LENGTH_DERIVED = /(?:\.length|\blen\b)\s*\/\s*[\w.]+/;
@@ -67,7 +75,10 @@ const IDIOMS = [
 
 /** Strip a `// …` line comment and any `/* … *\/` spans, so matches are code. */
 function codeOnly(line) {
-  return line.replace(/\/\*.*?\*\//g, '').replace(/\/\/.*$/, '');
+  // The block-comment matcher is unrolled (`[^*]*` and `\*(?!\/)` consume
+  // disjoint characters) so it runs in linear time. The lazy `.*?` form it
+  // replaced backtracks super-linearly on a line with many `/*` and no closer.
+  return line.replace(/\/\*[^*]*(?:\*(?!\/)[^*]*)*\*\//g, '').replace(/\/\/.*$/, '');
 }
 
 /** Every non-test, non-declaration `.ts` under src/, relative to the root. */
