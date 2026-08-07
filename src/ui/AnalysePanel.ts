@@ -67,6 +67,8 @@ import {
   loadContourDownload,
   loadExportProvenance,
   loadContourDeliverableBuild,
+  loadContourStudioMount,
+  loadContourExportAdapter,
 } from '../lazyChunks';
 import { openModal, type ModalHandle } from './Modal';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
@@ -102,7 +104,6 @@ import {
   renderWorkflowCard,
   renderWhyDetails,
 } from './workflowCardRender';
-import { loadContourStudioMount } from '../lazyChunks';
 import type {
   LaunchFrameContext,
   ContourStudioExportProduct,
@@ -119,7 +120,6 @@ import {
 } from '../export/exportScanIdentity';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import type { ContourExportAdapter, ContourExportHost } from './contourExportAdapter';
-import { loadContourExportAdapter } from '../lazyChunks';
 import type { SpaceKind } from '../terrain/scanShape';
 import type { ScanTypeOverride } from '../terrain/scanRoute';
 import type { DatasetIntelligence } from '../terrain/datasetIntelligence';
@@ -289,7 +289,7 @@ let lastNotes: string | null = null;
  *   "Not ready"    → { num: "Not ready", unit: "" }  (no leading digit)
  */
 export function splitReadinessValue(value: string): { num: string; unit: string } {
-  const m = value.match(/^(\d+(?:\.\d+)?)\s*(.*)$/);
+  const m = /^(\d+(?:\.\d+)?)\s*(.*)$/.exec(value);
   if (!m) return { num: value, unit: '' };
   return { num: m[1], unit: m[2].trim() };
 }
@@ -784,8 +784,14 @@ export class AnalysePanel {
     // a datum-less but clean scan reads "Surface quality: Good · Export
     // readiness: Preview — vertical datum unknown". Colour reuses the rating
     // tokens (good / moderate / blocked), never a new hardcoded colour.
-    const exportTier =
-      a.exportReadiness === 'Ready' ? 'good' : a.exportReadiness === 'Blocked' ? 'blocked' : 'preview';
+    let exportTier: 'good' | 'blocked' | 'preview';
+    if (a.exportReadiness === 'Ready') {
+      exportTier = 'good';
+    } else if (a.exportReadiness === 'Blocked') {
+      exportTier = 'blocked';
+    } else {
+      exportTier = 'preview';
+    }
     const exportLine = el('div', { className: `olv-analyse-assess-export is-${exportTier}` });
     exportLine.append(
       el('span', { className: 'olv-analyse-assess-export-label', text: 'Export readiness' }),
@@ -856,7 +862,7 @@ export class AnalysePanel {
     // `.olv-caveat` honesty treatment; nothing renders when the run
     // measured nothing (no fabricated band).
     const cx = this._result.complexity;
-    if (cx && cx.band) {
+    if (cx?.band) {
       const line = el('div', { className: 'olv-analyse-derived' });
       line.append(
         el('span', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
@@ -1201,7 +1207,14 @@ export class AnalysePanel {
       } else {
         const conf = r.dtm.confidence[i];
         const grade = gradeForConfidence(conf);
-        const support = grade === 'solid' ? 'strong' : grade === 'dashed' ? 'moderate' : 'weak';
+        let support: 'strong' | 'moderate' | 'weak';
+        if (grade === 'solid') {
+          support = 'strong';
+        } else if (grade === 'dashed') {
+          support = 'moderate';
+        } else {
+          support = 'weak';
+        }
         const c = Number.isFinite(conf) ? Math.round(conf) : 0;
         readout.textContent = `Sample · ${support} support · confidence ${c}% (${confidenceWord(conf)})`;
         readout.classList.remove('is-empty');
@@ -1511,7 +1524,7 @@ export class AnalysePanel {
       const row = rows - 1 - displayRow; // undo the north-up flip
       const sample = sampleTerrain(r, col, row);
       readout.textContent = this._sampleReadoutText(sample);
-      readout.classList.toggle('is-empty', !sample || !sample.covered);
+      readout.classList.toggle('is-empty', !sample?.covered);
       // Drop the crosshair at the click point — percentages survive resize.
       crosshair.style.left = `${(fx * 100).toFixed(2)}%`;
       crosshair.style.top = `${(fy * 100).toFixed(2)}%`;
@@ -1651,7 +1664,7 @@ export class AnalysePanel {
     );
 
     const figure = el('div', {
-      className: `olv-analyse-ready-figure${num.match(/\d/) ? '' : ' is-text'}`,
+      className: `olv-analyse-ready-figure${/\d/.exec(num) ? '' : ' is-text'}`,
     });
     figure.append(el('span', { className: 'olv-analyse-ready-value', text: num }));
     if (unitText) figure.append(el('span', { className: 'olv-analyse-ready-unit', text: unitText }));
@@ -1715,10 +1728,17 @@ export class AnalysePanel {
     if (!this._result) return null;
     const a = terrainAssessment(this._result);
     const workflows = recommendedWorkflows(a, this._result.quality);
-    const products: StoryProduct[] = terrainProducts(a, workflows).map((p) => ({
-      label: p.label,
-      status: p.status === 'ready' ? 'Ready' : p.status === 'preview' ? 'Preview' : 'Blocked',
-    }));
+    const products: StoryProduct[] = terrainProducts(a, workflows).map((p) => {
+      let status: StoryProduct['status'];
+      if (p.status === 'ready') {
+        status = 'Ready';
+      } else if (p.status === 'preview') {
+        status = 'Preview';
+      } else {
+        status = 'Blocked';
+      }
+      return { label: p.label, status };
+    });
     const tier: FitnessTier =
       a.status === 'Good' || a.status === 'Preview' || a.status === 'Limited' || a.status === 'Blocked'
         ? a.status
@@ -1766,11 +1786,14 @@ export class AnalysePanel {
       reasonWhenAbsent: 'Not enough ground points to cross-validate.',
     });
     const cal = this._result?.confidenceOrdering;
-    const calText = cal?.assessable
-      ? cal.orderingConsistent
+    let calText: string;
+    if (cal?.assessable) {
+      calText = cal.orderingConsistent
         ? 'Confidence ordering is consistent with held-out error.'
-        : 'Warning: confidence does not track error here.'
-      : 'Confidence ordering not assessable on this scan.';
+        : 'Warning: confidence does not track error here.';
+    } else {
+      calText = 'Confidence ordering not assessable on this scan.';
+    }
     this._validationRow.append(
       this._hint(
         el('div', { className: 'olv-analyse-rmse', text: `Vertical RMSE: ${rmse.text}` }),
@@ -1966,7 +1989,7 @@ export class AnalysePanel {
     // This replaces the old ad-hoc `exportReadiness === 'blocked'` check with the
     // single authoritative gate, so no serialize path can bypass the registry.
     const permit = provenanceExtra?.permit ?? null;
-    if (!permit || !permit.ok) {
+    if (!permit?.ok) {
       // eslint-disable-next-line no-console
       console.warn(
         'OpenLiDARViewer: contour export refused — no granted evidence permit (§19).',
@@ -2191,9 +2214,7 @@ export class AnalysePanel {
             generalizeToleranceCells: intent.generalizeToleranceCells,
           })
         : this._result;
-      const [{ buildContourDeliverableFromResultAsync }] = await Promise.all([
-        loadContourDeliverableBuild(),
-      ]);
+      const { buildContourDeliverableFromResultAsync } = await loadContourDeliverableBuild();
       // Same re-verification as the vector exports: a scan opened during the
       // rebuild means this bundle is no longer the one the user is looking at.
       if (this._refuseForeignScanExport()) return;
@@ -2589,7 +2610,7 @@ export class AnalysePanel {
     // export can never inherit a stale purpose.
     const purpose = this._contourPdfPurpose;
     this._contourPdfPurpose = null;
-    if (!permit || !permit.ok) {
+    if (!permit?.ok) {
       // eslint-disable-next-line no-console
       console.warn('OpenLiDARViewer: map sheet export refused — no granted evidence permit (§19).');
       return;
@@ -2830,7 +2851,14 @@ export class AnalysePanel {
     const previewNoteApplies = e === 'previewOnly' && hasFeatures;
     const merged = demNoteApplies && previewNoteApplies;
     if (demNoteApplies) {
-      const verdict = exp === 'blocked' ? 'blocked' : exp === 'previewOnly' ? 'preview' : 'ready';
+      let verdict: 'blocked' | 'preview' | 'ready';
+      if (exp === 'blocked') {
+        verdict = 'blocked';
+      } else if (exp === 'previewOnly') {
+        verdict = 'preview';
+      } else {
+        verdict = 'ready';
+      }
       const georef = r.quality.exportReasons.length > 0 ? ` (${r.quality.exportReasons.join(', ')})` : '';
       this._demNote.textContent = merged
         ? `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +

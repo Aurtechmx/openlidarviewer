@@ -218,51 +218,45 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
     rows.push({ label: 'Coordinate system', value: `${input.crsName}${source}`, status: 'ok' });
   }
 
+  // One layer has nothing to combine WITH, so "eligible for combined
+  // results" overstates — the compatibility report says the same in its
+  // "cross-layer comparison does not apply" line. Keep the two agreeing.
+  let projectFrameRow: LayerHealthRow;
+  if (input.soleLayer ?? false) {
+    projectFrameRow = {
+      label: 'Project frame',
+      value: 'single layer — analysed on its own frame, nothing to combine',
+      status: 'info',
+    };
+  } else if (input.mounted) {
+    projectFrameRow = {
+      label: 'Project frame',
+      value: 'mounted — eligible for combined results',
+      status: 'ok',
+    };
+  } else {
+    projectFrameRow = {
+      label: 'Project frame',
+      value: 'not mounted — kept in its own frame, excluded from combined results',
+      status: 'info',
+    };
+  }
+
   rows.push(
     input.horizontalUnit === null
       ? { label: 'Horizontal unit', value: 'unknown', status: 'warn' }
       : { label: 'Horizontal unit', value: input.horizontalUnit, status: 'ok' },
-  );
-  // The vertical unit is its own declaration. Borrowing the horizontal one
-  // here would repeat, in words, the unit bug the precision gate exists to
-  // refuse in numbers.
-  rows.push(
+    // The vertical unit is its own declaration. Borrowing the horizontal one
+    // here would repeat, in words, the unit bug the precision gate exists to
+    // refuse in numbers.
     input.verticalUnit === null
       ? { label: 'Vertical unit', value: 'unknown', status: 'warn' }
       : { label: 'Vertical unit', value: input.verticalUnit, status: 'ok' },
-  );
-  rows.push(
     input.verticalDatum === null
       ? { label: 'Vertical datum', value: 'not established', status: 'warn' }
       : { label: 'Vertical datum', value: input.verticalDatum, status: 'ok' },
-  );
-
-  rows.push(compatibilityRow(input.compatibility, input.soleLayer ?? false));
-
-  rows.push(
-    (input.soleLayer ?? false)
-      // One layer has nothing to combine WITH, so "eligible for combined
-      // results" overstates — the compatibility report says the same in its
-      // "cross-layer comparison does not apply" line. Keep the two agreeing.
-      ? {
-          label: 'Project frame',
-          value: 'single layer — analysed on its own frame, nothing to combine',
-          status: 'info',
-        }
-      : input.mounted
-        ? {
-            label: 'Project frame',
-            value: 'mounted — eligible for combined results',
-            status: 'ok',
-          }
-        : {
-            label: 'Project frame',
-            value: 'not mounted — kept in its own frame, excluded from combined results',
-            status: 'info',
-          },
-  );
-
-  rows.push(
+    compatibilityRow(input.compatibility, input.soleLayer ?? false),
+    projectFrameRow,
     input.sourceOrigin === null
       ? { label: 'Source origin', value: 'not declared', status: 'info' }
       : {
@@ -271,9 +265,6 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
           status: 'ok',
           mono: true,
         },
-  );
-
-  rows.push(
     input.frameOffset === null
       ? { label: 'Offset to project', value: 'none — not in a shared frame', status: 'info' }
       : {
@@ -287,9 +278,8 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
   const identityPlacement =
     input.frameOffset === null ||
     (input.frameOffset[0] === 0 && input.frameOffset[1] === 0 && input.frameOffset[2] === 0);
-  rows.push(precisionRow(input.precisionMm, input.precisionBasis, identityPlacement));
-
   rows.push(
+    precisionRow(input.precisionMm, input.precisionBasis, identityPlacement),
     input.streaming
       ? {
           label: 'Loading',
@@ -357,12 +347,14 @@ export function buildCompatibilityReport(
     });
   }
 
-  const verdict =
-    allVerified && allDatumsKnown
-      ? 'These layers share one established reference, so plan and height results can be combined.'
-      : allHorizontal
-        ? 'These layers overlay in plan only; each keeps its own heights until a shared vertical reference is established.'
-        : 'Not every layer has an established frame, so combined results exclude the unproven ones.';
+  let verdict: string;
+  if (allVerified && allDatumsKnown) {
+    verdict = 'These layers share one established reference, so plan and height results can be combined.';
+  } else if (allHorizontal) {
+    verdict = 'These layers overlay in plan only; each keeps its own heights until a shared vertical reference is established.';
+  } else {
+    verdict = 'Not every layer has an established frame, so combined results exclude the unproven ones.';
+  }
 
   return { lines, verdict };
 }

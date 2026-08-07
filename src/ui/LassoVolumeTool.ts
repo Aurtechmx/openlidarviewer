@@ -153,7 +153,7 @@ export class LassoVolumeTool {
     // Skip duplicate / near-duplicate samples — saves ~30% of the
     // path-d string growth on a slow drag and avoids the
     // `pointInPolygon2D` test repeating an identical vertex.
-    const last = this._points[this._points.length - 1];
+    const last = this._points.at(-1);
     if (last && Math.hypot(p.x - last.x, p.y - last.y) < 2) return;
     this._points.push(p);
     this._renderPath();

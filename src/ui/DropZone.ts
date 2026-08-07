@@ -160,8 +160,7 @@ export class DropZone {
       this.setProgress(null);
       return;
     }
-    this.toast.classList.remove('olv-toast-error');
-    this.toast.classList.remove('is-opening');
+    this.toast.classList.remove('olv-toast-error', 'is-opening');
     const text = lines.join('\n');
     this._text.textContent = text;
     this._srStatus.textContent = text;

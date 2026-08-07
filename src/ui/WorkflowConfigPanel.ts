@@ -45,7 +45,7 @@ export class WorkflowConfigPanel {
   private _capturingShortcut = false;
   private _shortcutBtn!: HTMLButtonElement;
   /** Re-render hooks keyed by control, run when the config changes externally. */
-  private _syncers: Array<() => void> = [];
+  private readonly _syncers: Array<() => void> = [];
 
   constructor() {
     const dismiss = el('button', {

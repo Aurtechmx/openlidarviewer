@@ -142,7 +142,14 @@ export function createScanTypeControl(opts: ScanTypeControlOptions): ScanTypeCon
     // "(manual)" note), with Auto one click away to re-run detection.
     const detectedKind: SpaceKind | null = !manual ? effective : null;
     const committed = detectionCommitted === true && detectedKind !== null;
-    const selected: ScanTypeOverride = manual ? override : committed ? detectedKind! : 'auto';
+    let selected: ScanTypeOverride;
+    if (manual) {
+      selected = override;
+    } else if (committed) {
+      selected = detectedKind!;
+    } else {
+      selected = 'auto';
+    }
     let reasonText: string | null = null;
     for (const [value, btn] of buttons) {
       const active = value === selected;
@@ -181,17 +188,25 @@ export function createScanTypeControl(opts: ScanTypeControlOptions): ScanTypeCon
       // manual override (the override pill is the active one then).
       autoBtn.textContent =
         detectedKind !== null && !committed ? `Auto (${EFFECTIVE_LABEL[detectedKind]})` : 'Auto';
-      autoBtn.title = manual
-        ? `Auto-detection is overridden. Click to return to automatic (${eff}).`
-        : committed
-          ? `Detection settled on ${eff}. Click to re-run auto-detection.`
-          : `Auto-detected as ${eff}.`;
+      let autoTitle: string;
+      if (manual) {
+        autoTitle = `Auto-detection is overridden. Click to return to automatic (${eff}).`;
+      } else if (committed) {
+        autoTitle = `Detection settled on ${eff}. Click to re-run auto-detection.`;
+      } else {
+        autoTitle = `Auto-detected as ${eff}.`;
+      }
+      autoBtn.title = autoTitle;
     }
-    group.title = manual
-      ? `Treated as ${eff} — manual override of auto-detection.`
-      : committed
-        ? `Auto-detected as ${eff} — the detected type is selected. Pick a different type if it's wrong.`
-        : `Auto-detected as ${eff}. Pick a type here if it's wrong.`;
+    let groupTitle: string;
+    if (manual) {
+      groupTitle = `Treated as ${eff} — manual override of auto-detection.`;
+    } else if (committed) {
+      groupTitle = `Auto-detected as ${eff} — the detected type is selected. Pick a different type if it's wrong.`;
+    } else {
+      groupTitle = `Auto-detected as ${eff}. Pick a type here if it's wrong.`;
+    }
+    group.title = groupTitle;
   }
 
   set('auto', null);

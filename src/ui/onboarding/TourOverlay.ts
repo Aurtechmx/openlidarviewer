@@ -137,7 +137,7 @@ export class TourOverlay {
       );
       if (items.length === 0) return;
       const first = items[0];
-      const last = items[items.length - 1];
+      const last = items.at(-1)!;
       const active = document.activeElement;
       if (e.shiftKey && (active === first || !this._card.contains(active))) {
         e.preventDefault();

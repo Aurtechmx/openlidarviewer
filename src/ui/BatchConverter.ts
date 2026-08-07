@@ -41,7 +41,7 @@ export class BatchConverter {
   private readonly _formatNote: HTMLElement;
   private readonly _crsRow: HTMLElement;
 
-  private _files: BatchInput[] = [];
+  private readonly _files: BatchInput[] = [];
   // LAS 1.4 is the default: modern consumers all read it, and its extended
   // point formats keep the full 8-bit classification (1.2 clamps to 5 bits).
   // LAS 1.2 stays selectable for legacy-tool compatibility.
@@ -370,10 +370,11 @@ export class BatchConverter {
 
     const sum = summariseBatch(results);
     const header = el('div', { className: 'olv-bc-results-head' });
+    const failedNote = sum.failed ? `, ${sum.failed} failed` : '';
     header.append(
       el('span', {
         className: 'olv-bc-results-summary',
-        text: `${sum.ok} converted${sum.failed ? `, ${sum.failed} failed` : ''} · ${sum.points.toLocaleString()} points`,
+        text: `${sum.ok} converted${failedNote} · ${sum.points.toLocaleString()} points`,
       }),
     );
     if (this._produced.length > 1) {
@@ -432,7 +433,7 @@ export class BatchConverter {
 
 // ── small local helpers ─────────────────────────────────────────────────────
 function parseEpsg(v: string): number | null {
-  const n = parseInt(v, 10);
+  const n = Number.parseInt(v, 10);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
