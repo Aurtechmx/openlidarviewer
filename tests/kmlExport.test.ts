@@ -156,6 +156,26 @@ describe('buildKml — coordinates', () => {
   });
 });
 
+describe('buildKml — polygon styling', () => {
+  // A <Polygon> with no <PolyStyle> is drawn with the reader's default, which in
+  // Google Earth is an opaque white fill that hides the map. The export declares
+  // its own outline plus a translucent fill instead.
+  it('an area polygon references a declared, non-opaque style', () => {
+    const kml = buildKml(input({ annotations: [], viewpoints: [], measurements: [area], verticalDatum: 'EPSG:5703', verticalUnitToMetres: 1 }));
+    expect(count(kml, '<Style id="olv-area">')).toBe(1);
+    expect(kml).toContain('<styleUrl>#olv-area</styleUrl>');
+    // aabbggrr: the fill's alpha byte is 0x26, not the 0xff of an opaque fill.
+    expect(kml).toContain('<PolyStyle><color>26f8bd38</color>');
+    expect(kml).not.toContain('ffffffff');
+  });
+
+  it('a points-and-lines export declares no unused polygon style', () => {
+    const kml = buildKml(input({ annotations: [annotation()], viewpoints: [], measurements: [polyline] }));
+    expect(kml).not.toContain('<Style id="olv-area">');
+    expect(kml).not.toContain('<styleUrl>');
+  });
+});
+
 describe('buildKml — measured values', () => {
   it('reports metres, scaling render units by unitToMetres (foot scan)', () => {
     // polyline render-unit length = 10 + 10 = 20; at 0.3048 m/unit → 6.096 m.
