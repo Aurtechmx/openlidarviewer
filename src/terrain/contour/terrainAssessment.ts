@@ -153,6 +153,20 @@ function describeCoverage(mode: string): { value: string; rating: SupportingMetr
   return { value: 'unknown', rating: 'unknown' };
 }
 
+/** Band a metric where a HIGHER value is better into good/fair/poor. NaN → 'poor'. */
+function bandHigh(v: number, goodMin: number, fairMin: number): SupportingMetric['rating'] {
+  if (v >= goodMin) return 'good';
+  if (v >= fairMin) return 'fair';
+  return 'poor';
+}
+
+/** Band a metric where a LOWER value is better into good/fair/poor. NaN → 'poor'. */
+function bandLow(v: number, goodMax: number, fairMax: number): SupportingMetric['rating'] {
+  if (v <= goodMax) return 'good';
+  if (v <= fairMax) return 'fair';
+  return 'poor';
+}
+
 /**
  * Collapse an analysis result into a single top-level assessment with TWO axes.
  *
@@ -194,7 +208,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   const emptyFrac = tally.empty / gridTotal;
   const edgeFrac = Number.isFinite(cm?.edgeRiskRatio) ? cm.edgeRiskRatio : 0;
   const density = Number.isFinite(cm?.meanDensity) ? cm.meanDensity : 0;
-  const groundRatio = Number.isFinite(q.groundPointRatio) ? q.groundPointRatio : NaN;
+  const groundRatio = Number.isFinite(q.groundPointRatio) ? q.groundPointRatio : Number.NaN;
   const crsKnown = crs != null;
   const datumKnown = datum != null;
   const rmse = acc?.rmseZM;
@@ -231,36 +245,22 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     {
       label: 'Ground density',
       value: density > 0 ? `${density.toFixed(1)} pts/m²` : 'unknown',
-      rating:
-        density <= 0
-          ? 'unknown'
-          : density >= 2
-            ? 'good'
-            : density >= LOW_DENSITY_PER_M2
-              ? 'fair'
-              : 'poor',
+      rating: density <= 0 ? 'unknown' : bandHigh(density, 2, LOW_DENSITY_PER_M2),
     },
     {
       label: 'DTM quality',
       value: scoreKnown ? `${score}/100` : 'unknown',
-      rating: !scoreKnown ? 'unknown' : score >= 70 ? 'good' : score >= 45 ? 'fair' : 'poor',
+      rating: !scoreKnown ? 'unknown' : bandHigh(score, 70, 45),
     },
     {
       label: 'Interpolation',
       value: coveredCells > 0 ? pctStr(interpFrac) : 'unknown',
-      rating:
-        coveredCells === 0
-          ? 'unknown'
-          : interpFrac <= 0.2
-            ? 'good'
-            : interpFrac <= HIGH_INTERP_FRACTION
-              ? 'fair'
-              : 'poor',
+      rating: coveredCells === 0 ? 'unknown' : bandLow(interpFrac, 0.2, HIGH_INTERP_FRACTION),
     },
     {
       label: 'Empty cells',
       value: pctStr(emptyFrac),
-      rating: emptyFrac <= 0.2 ? 'good' : emptyFrac <= HIGH_EMPTY_FRACTION ? 'fair' : 'poor',
+      rating: bandLow(emptyFrac, 0.2, HIGH_EMPTY_FRACTION),
     },
     {
       // cellMetrics.edgeRiskRatio — measured cells near the data boundary
@@ -269,18 +269,12 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
       // sentence below words each truthfully.
       label: 'Edge risk',
       value: pctStr(edgeFrac),
-      rating: edgeFrac <= 0.05 ? 'good' : edgeFrac <= HIGH_EDGE_FRACTION ? 'fair' : 'poor',
+      rating: bandLow(edgeFrac, 0.05, HIGH_EDGE_FRACTION),
     },
     {
       label: 'Vertical RMSE',
       value: rmseKnown ? `${(rmse as number).toFixed(2)} m` : 'unknown',
-      rating: !rmseKnown
-        ? 'unknown'
-        : (rmse as number) <= 0.1
-          ? 'good'
-          : (rmse as number) <= 0.25
-            ? 'fair'
-            : 'poor',
+      rating: !rmseKnown ? 'unknown' : bandLow(rmse as number, 0.1, 0.25),
     },
     {
       label: 'CRS',
@@ -386,32 +380,39 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
   // advertise georeferenced DEM export when export readiness actually allows it
   // (known CRS + datum); otherwise we point at measurement/inspection and the
   // export recommendation is carried separately by exportReason.
-  const bestFor =
-    status === 'Good'
-      ? exportReadiness === 'Ready'
+  let bestFor: string;
+  if (status === 'Good') {
+    bestFor =
+      exportReadiness === 'Ready'
         ? 'terrain products, DEM export, measurement and inspection'
-        : 'measurement, inspection and terrain analysis'
-      : status === 'Preview'
-        ? 'profile review, measurement and terrain inspection'
-        : status === 'Limited'
-          ? 'visual inspection only'
-          : 'reviewing the point cloud; this scan has no usable terrain surface';
+        : 'measurement, inspection and terrain analysis';
+  } else if (status === 'Preview') {
+    bestFor = 'profile review, measurement and terrain inspection';
+  } else if (status === 'Limited') {
+    bestFor = 'visual inspection only';
+  } else {
+    bestFor = 'reviewing the point cloud; this scan has no usable terrain surface';
+  }
 
-  const useCaution =
-    status === 'Good'
-      ? ''
-      : status === 'Preview'
-        ? 'terrain products are preliminary — validate independently before relying on them'
-        : status === 'Limited'
-          ? 'the surface is too incomplete for reliable terrain products'
-          : 'do not build terrain products from this scan';
+  let useCaution: string;
+  if (status === 'Good') {
+    useCaution = '';
+  } else if (status === 'Preview') {
+    useCaution = 'terrain products are preliminary — validate independently before relying on them';
+  } else if (status === 'Limited') {
+    useCaution = 'the surface is too incomplete for reliable terrain products';
+  } else {
+    useCaution = 'do not build terrain products from this scan';
+  }
 
-  const notRecommendedFor =
-    status === 'Good'
-      ? 'uses that legally require certified survey data'
-      : status === 'Preview'
-        ? 'outputs requiring independent validation'
-        : 'terrain products, DEM export, contour generation';
+  let notRecommendedFor: string;
+  if (status === 'Good') {
+    notRecommendedFor = 'uses that legally require certified survey data';
+  } else if (status === 'Preview') {
+    notRecommendedFor = 'outputs requiring independent validation';
+  } else {
+    notRecommendedFor = 'terrain products, DEM export, contour generation';
+  }
 
   return {
     status,

@@ -527,11 +527,14 @@ export function resolveGroundFilterParams(
   // plain cell size; a geographic frame's degree-valued cell would otherwise
   // starve the growth term by ~1/111,320, pinning the threshold at its base
   // and rejecting legitimate slope ground.
-  const horizToMetres = params.isGeographic
-    ? METRES_PER_DEGREE
-    : params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0
-      ? params.horizontalUnitToMetres
-      : 1;
+  let horizToMetres: number;
+  if (params.isGeographic) {
+    horizToMetres = METRES_PER_DEGREE;
+  } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
+    horizToMetres = params.horizontalUnitToMetres;
+  } else {
+    horizToMetres = 1;
+  }
   const vertToMetres =
     params.verticalUnitToMetres && params.verticalUnitToMetres > 0
       ? params.verticalUnitToMetres
@@ -829,11 +832,14 @@ export function computeTerrainCore(
   // anisotropy in as √(cos φ): area = (cell·M·cos φ)·(cell·M) = (cell·M·√cos φ)²
   // exactly. Without it a 60°-latitude scan reports ~half the true pts/m² and
   // an unfairly failing USGS QL. cos φ = 1 (no-op) when latitude is unknown.
-  const horizUnitToMetres = params.isGeographic
-    ? METRES_PER_DEGREE * Math.sqrt(cosLatitude(params.latitudeDeg))
-    : params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0
-      ? params.horizontalUnitToMetres
-      : 1;
+  let horizUnitToMetres: number;
+  if (params.isGeographic) {
+    horizUnitToMetres = METRES_PER_DEGREE * Math.sqrt(cosLatitude(params.latitudeDeg));
+  } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
+    horizUnitToMetres = params.horizontalUnitToMetres;
+  } else {
+    horizUnitToMetres = 1;
+  }
   const cellMetrics = computeCellMetrics(dtm, {
     horizontalUnitToMetres: horizUnitToMetres,
     // Stride honesty: scale per-cell counts back to the SCAN so the density —
@@ -932,7 +938,7 @@ export function computeTerrainCore(
   // non-finite neighbour was replaced by the centre.
   const synthesised = synthesisedNeighbourMask(dtm.z, dtm.cols, dtm.rows);
   let synthesisedCount = 0;
-  for (let i = 0; i < synthesised.length; i++) synthesisedCount += synthesised[i];
+  for (const flag of synthesised) synthesisedCount += flag;
   // Reported only when it is a material share of the grid — see
   // SYNTHESISED_WARN_FRACTION for why the threshold is not zero.
   if (synthesised.length > 0 && synthesisedCount / synthesised.length >= SYNTHESISED_WARN_FRACTION) {

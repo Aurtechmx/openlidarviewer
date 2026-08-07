@@ -258,14 +258,14 @@ export function convexHullRing(ring: Ring): Ring {
   ): number => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
   const lower: Array<readonly [number, number]> = [];
   for (const p of pts) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0)
+    while (lower.length >= 2 && cross(lower.at(-2)!, lower.at(-1)!, p) <= 0)
       lower.pop();
     lower.push(p);
   }
   const upper: Array<readonly [number, number]> = [];
   for (let i = pts.length - 1; i >= 0; i--) {
     const p = pts[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0)
+    while (upper.length >= 2 && cross(upper.at(-2)!, upper.at(-1)!, p) <= 0)
       upper.pop();
     upper.push(p);
   }
@@ -425,8 +425,14 @@ export function removeSpikes(ring: Ring, minLenM: number): Ring {
           const i1 = (i + 1) % n, i2 = (i + 2) % n;
           const next: Array<readonly [number, number]> = [];
           for (let k = 0; k < n; k++) {
-            if (k === i1) { if (nb) next.push(nb); continue; }
-            if (k === i2) { if (nc) next.push(nc); continue; }
+            if (k === i1) {
+              if (nb) next.push(nb);
+              continue;
+            }
+            if (k === i2) {
+              if (nc) next.push(nc);
+              continue;
+            }
             next.push(pts[k]);
           }
           pts = next;

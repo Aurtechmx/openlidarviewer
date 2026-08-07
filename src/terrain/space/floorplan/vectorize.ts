@@ -435,12 +435,12 @@ export function snapRingToAxes(ring: Ring, thetaRad: number, tolDeg = SNAP_TOL_D
 export function dedupeRing(ring: Ring, epsilon = 1e-9): Ring {
   const out: Array<readonly [number, number]> = [];
   for (const p of ring) {
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (!last || Math.hypot(p[0] - last[0], p[1] - last[1]) > epsilon) out.push(p);
   }
   while (
     out.length > 1 &&
-    Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]) <= epsilon
+    Math.hypot(out[0][0] - out.at(-1)![0], out[0][1] - out.at(-1)![1]) <= epsilon
   ) {
     out.pop();
   }

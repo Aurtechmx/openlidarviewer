@@ -47,7 +47,9 @@ export interface FloorPlanConfidence {
 }
 
 function bandLabel(b: FloorPlanConfidenceBand): string {
-  return b === 'good' ? 'Good' : b === 'moderate' ? 'Moderate' : 'Low';
+  if (b === 'good') return 'Good';
+  if (b === 'moderate') return 'Moderate';
+  return 'Low';
 }
 
 /** Derive the presentation summary from a built floor-plan model. */
@@ -57,8 +59,16 @@ export function floorPlanConfidence(model: FloorPlanModel): FloorPlanConfidence 
   const weakWallPct = walls > 0 ? Math.round((100 * weakCount) / walls) : 100;
 
   // Trust band from the weak-wall share; no walls at all ⇒ low.
-  const band: FloorPlanConfidenceBand =
-    walls === 0 ? 'low' : weakWallPct <= 20 ? 'good' : weakWallPct <= 50 ? 'moderate' : 'low';
+  let band: FloorPlanConfidenceBand;
+  if (walls === 0) {
+    band = 'low';
+  } else if (weakWallPct <= 20) {
+    band = 'good';
+  } else if (weakWallPct <= 50) {
+    band = 'moderate';
+  } else {
+    band = 'low';
+  }
 
   let roomsLabel: string;
   let roomCount: number | null;

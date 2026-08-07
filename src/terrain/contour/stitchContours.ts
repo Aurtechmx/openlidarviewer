@@ -134,7 +134,7 @@ export function stitchLevel(
         ny = sj.y1;
         tailKey = ka;
       }
-      mergeShared(vertices[vertices.length - 1], sj.confidence);
+      mergeShared(vertices.at(-1)!, sj.confidence);
       vertices.push({ x: nx, y: ny, confidence: sj.confidence, grade: sj.grade });
     }
 
@@ -164,7 +164,7 @@ export function stitchLevel(
     const closed =
       vertices.length > 3 &&
       keyOf(vertices[0].x, vertices[0].y) ===
-        keyOf(vertices[vertices.length - 1].x, vertices[vertices.length - 1].y);
+        keyOf(vertices.at(-1)!.x, vertices.at(-1)!.y);
     if (closed) vertices.pop(); // drop duplicate closing vertex
     polylines.push({ value, vertices, closed });
   }

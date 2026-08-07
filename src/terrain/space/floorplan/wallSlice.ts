@@ -124,8 +124,11 @@ export interface WallSlice {
 }
 
 /** Same up-frame offset convention as spaceMetrics (vertical, horizontal1/2). */
-const upOffsets = (a: Axis): { v: number; h1: number; h2: number } =>
-  a === 'x' ? { v: 0, h1: 1, h2: 2 } : a === 'y' ? { v: 1, h1: 0, h2: 2 } : { v: 2, h1: 0, h2: 1 };
+const upOffsets = (a: Axis): { v: number; h1: number; h2: number } => {
+  if (a === 'x') return { v: 0, h1: 1, h2: 2 };
+  if (a === 'y') return { v: 1, h1: 0, h2: 2 };
+  return { v: 2, h1: 0, h2: 1 };
+};
 
 /** Histogram bins — matches spaceMetrics so both agree on the floor peak. */
 const HIST_BINS = 64;
@@ -384,7 +387,7 @@ export function denseFootprintBbox(
       if (r > kMaxR) kMaxR = r;
     }
   }
-  if (!(kMaxC >= kMinC) || !(kMaxR >= kMinR)) return null;
+  if (kMaxC < kMinC || kMaxR < kMinR) return null;
   // One-cell margin so border points straddling a kept cell's edge survive.
   return [
     minX + (kMinC - 1) * cellX,
@@ -521,8 +524,10 @@ export function wallSlice(
       const adapt = detectWallBand(V, anchor, bandHigh - bandLow, defaultCentreM);
       if (adapt) candidates.push({ bl: adapt.lowM, bh: adapt.highM, basis: 'adaptive' });
     }
-    candidates.push({ bl: bandLow, bh: bandHigh, basis: 'fixed' });
-    candidates.push({ bl: WIDE_BAND_LOW_M, bh: WIDE_BAND_HIGH_M, basis: 'fixed' });
+    candidates.push(
+      { bl: bandLow, bh: bandHigh, basis: 'fixed' },
+      { bl: WIDE_BAND_LOW_M, bh: WIDE_BAND_HIGH_M, basis: 'fixed' },
+    );
     for (const { bl, bh, basis } of candidates) {
       if (countInBand(anchor + bl, anchor + bh) >= MIN_BAND_POINTS) {
         lo = anchor + bl;
