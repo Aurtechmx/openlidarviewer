@@ -186,26 +186,36 @@ export interface OpenScanDeps {
 /** Load a dropped or sampled File: parse, render, and populate the Inspector. */
 export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   // SINGLE ROUTER for every file that enters the app (drop zone, Open picker,
-  // Measurements Import). An `.olvsession` is a saved analysis, not a scan, so
-  // it goes to the one session loader — never the cloud worker — and every
-  // entry point therefore opens sessions the same way. A session restore is
-  // cheap (read + apply state) and safe to run even mid-load, so it routes
-  // ahead of the cloud-loading guard.
-  if (isSessionFile(file.name)) {
-    await deps.importSession(file);
-    return;
-  }
-  // One load at a time. The shared parse worker decodes a single file; a
-  // second load started mid-flight would hijack the first one's worker. The
-  // in-progress load carries a Cancel control if the user wants to switch.
+  // Measurements Import). It splits three ways: an `.olvsession` is a saved
+  // analysis (→ the one session loader), a COPC file streams, everything else
+  // takes the static loader. The one-load-at-a-time guard below now covers ALL
+  // three — including the session reroute, which used to run AHEAD of it.
+  //
+  // One load at a time. The shared parse worker decodes a single file; a second
+  // load started mid-flight would hijack the first one's worker. The session
+  // reroute sits under this guard too: an embed `load-file` is wrapped as a File
+  // whose NAME the host controls (main.ts), so a `x.olvsession` name could
+  // otherwise reach the session loader unthrottled and stack repeated restores.
   if (deps.isLoading()) {
     deps.showToast('Already loading — cancel the current load first.');
     return;
   }
-  // Claim the flag SYNCHRONOUSLY — the `await viewerReady` below yields to
-  // the event loop, and a second drop in that window used to pass the
-  // `loading` guard too (TOCTOU). The `finally` below is the only reset.
+  // Claim the flag SYNCHRONOUSLY — the `await`s below yield to the event loop,
+  // and a second drop in that window used to pass the `loading` guard too
+  // (TOCTOU). Every return path from here on releases it.
   deps.setLoading(true);
+  // An `.olvsession` is a saved analysis, not a scan: route it to the one
+  // session loader (never the cloud worker) and release the flag in its own
+  // finally — the session path has no cancel / progress affordance, so it does
+  // not share the cloud path's dropzone setup below.
+  if (isSessionFile(file.name)) {
+    try {
+      await deps.importSession(file);
+    } finally {
+      deps.setLoading(false);
+    }
+    return;
+  }
   const controller = new AbortController();
   // Blue blinking "Opening …" — the prominent first feedback, matching the
   // catalog status vocabulary so device and public-dataset loads read the same.
