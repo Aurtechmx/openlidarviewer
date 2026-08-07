@@ -1,0 +1,332 @@
+/* Export buttons (Inspector)
+ *
+ * Two layouts share the same `.olv-export-btn` styling:
+ *   - `.olv-export`      — flex row, used for the 4 file-format buttons
+ *                          (PLY / OBJ / XYZ / CSV) and the single Report PDF
+ *                          button. Each button stretches to fill its share
+ *                          of the row.
+ *   - `.olv-export-grid` — 2-column grid, used for the 7 image-export
+ *                          buttons (Ortho RGB / Height Map / Intensity /
+ *                          Class Map / Depth Map / Normal Map / Contour
+ *                          Map). Seven buttons in a single flex row would
+ *                          shrink below their label width and overflow the
+ *                          232 px Inspector panel; the grid wraps them into
+ *                          4 rows of 2 (last row holds the seventh).
+ */
+.olv-export { display: flex; gap: var(--space-sm); }
+.olv-export-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+.olv-export-btn {
+  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
+  /* Centre the label even when the button is wider than its text — the
+   * 2-column grid gives each image-export button ~100 px, well over the
+   * label width. `text-align: center` keeps the visual rhythm.
+   */
+  text-align: center;
+  /* Defensive overflow handling: if a custom theme or zoomed font ever
+   * pushes a label past its cell, ellipsise rather than overflow.
+   */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-export-btn:hover { color: var(--text); border-color: var(--accent); }
+.olv-export-btn:active { transform: scale(0.95); }
+.olv-export-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The disabled state needs to look unmistakably inactive so a user doesn't
+ * try to click an export that can't run yet. */
+.olv-export-btn[disabled] {
+  opacity: 0.42;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Report PDF row — template picker + generate button, mirrored on the
+ * existing `.olv-export` flex idiom. Picker takes the elastic share so
+ * a long template label doesn't push the button off the row. */
+.olv-report-row { display: flex; gap: var(--space-sm); align-items: stretch; }
+.olv-report-row .olv-export-btn { flex: 0 0 auto; }
+.olv-report-select {
+  flex: 1; min-width: 0;
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
+  transition: border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
+.olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-report-select:disabled { opacity: 0.42; cursor: not-allowed; }
+
+/* Saved views (Inspector) */
+.olv-view-save {
+  width: 100%; font-size: var(--text-xs); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-sm); padding: var(--space-sm);
+  transition: background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-view-save:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-view-save:active { transform: scale(0.98); }
+/* Provenance — capture-type fingerprint surfaced near the dataset metadata. */
+/* Coordinate reference system (CRS) section in the Inspector. The
+ * picker uses the same restrained styling as the Report PDF picker
+ * so two `<select>`s in the panel don't visually compete. Safety
+ * warnings get a coloured left rail so they read as advice, not as
+ * decoration. */
+.olv-crs { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-summary { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
+.olv-crs-epsg {
+  font-size: var(--text-xs); color: var(--text-faint);
+  font-family: var(--mono);
+}
+.olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: var(--space-2xs); }
+.olv-crs-meta-row { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-crs-warning {
+  font-size: var(--text-xs); color: var(--text-dim);
+  border-left: 2px solid var(--rating-weak);
+  padding: var(--space-sm) var(--space-md);
+  background: color-mix(in srgb, var(--rating-weak) 6%, transparent);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  line-height: 1.45;
+}
+.olv-crs-warning-soft {
+  font-size: var(--text-xs); color: var(--text-dim);
+  border-left: 2px solid var(--accent);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--accent-soft);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  line-height: 1.45;
+}
+.olv-crs-picker-label {
+  font-size: var(--text-xs); color: var(--text-faint);
+  letter-spacing: 0.04em; text-transform: uppercase;
+  margin-top: var(--space-xs);
+}
+.olv-crs-select {
+  width: 100%;
+  font-size: var(--text-xs); color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+}
+.olv-crs-select:hover { border-color: var(--accent); }
+.olv-crs-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.olv-provenance { display: flex; flex-direction: column; gap: var(--space-md); }
+
+/* v0.5.7 declared-by-the-file profile / provenance card, above the fingerprint. */
+.olv-provenance-wrap { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-declared-prov {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding-bottom: var(--space-md);
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-declared-prov-headline { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
+.olv-declared-prov-qualifier {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.olv-declared-prov-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-size: var(--text-xs);
+}
+.olv-declared-prov-key { color: var(--text-dim); }
+.olv-declared-prov-val { color: var(--text); text-align: right; }
+.olv-declared-prov-note { font-size: var(--text-xs); color: var(--accent); margin-top: var(--space-2xs); }
+.olv-declared-prov-limits { font-size: var(--text-2xs); color: var(--text-dim); line-height: 1.4; }
+
+.olv-prov-headline { display: flex; justify-content: space-between; align-items: center; }
+.olv-prov-label { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
+.olv-prov-confidence {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.olv-prov-confidence-high   { color: var(--accent); border: 0.5px solid var(--accent); }
+.olv-prov-confidence-medium { color: var(--text-dim); border: 0.5px solid var(--hairline); }
+.olv-prov-confidence-low    { color: var(--text-faint); border: 0.5px solid var(--hairline); }
+.olv-prov-signals { display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-prov-signal { font-size: var(--text-xs); color: var(--text-dim); }
+/*
+ * Provenance sub-regions get 12 px top margins so each (confidence,
+ * signals, ribbon, override) reads as its own concern instead of one
+ * blurry list (Gestalt common region — proximity carries grouping in
+ * a 5-region card where hairlines would be overkill).
+ */
+.olv-prov-ribbon { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-xl); }
+.olv-prov-ribbon-title {
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.olv-prov-bound { display: flex; flex-direction: column; gap: 1px; }
+.olv-prov-bound-label  { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-prov-bound-value  { font-size: var(--text-xs);   color: var(--text); }
+.olv-prov-bound-source { font-size: var(--text-2xs);   color: var(--text-faint); font-style: italic; }
+.olv-prov-disclaimer {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: 1.45;
+  border-top: 0.5px solid var(--hairline);
+  padding-top: var(--space-md);
+}
+.olv-prov-override-row {
+  display: flex; align-items: center; gap: var(--space-md); margin-top: var(--space-xl);
+}
+.olv-prov-override-label { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-prov-override-select {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-sm);
+  flex: 1;
+}
+
+/* Session stats — collapsible details/summary section. The native disclosure
+ * triangle is hidden in favour of a uniform label that matches the other
+ * section headers in the Inspector. */
+.olv-stats-section {
+  cursor: default;
+}
+.olv-stats-section > summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  user-select: none;
+  padding: 0;
+  margin-bottom: var(--space-md);
+}
+.olv-stats-section > summary::-webkit-details-marker { display: none; }
+.olv-stats-section > summary::before {
+  content: '▸';
+  display: inline-block;
+  width: 12px;
+  font-size: var(--text-2xs);
+  color: var(--text-faint);
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.olv-stats-section[open] > summary::before { transform: rotate(90deg); }
+.olv-session-stats { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-xs);
+  padding: var(--space-xs) 0;
+}
+.olv-stats-label { color: var(--text-dim); }
+.olv-stats-count { color: var(--text); font-variant-numeric: tabular-nums; }
+.olv-stats-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-stats-note { font-size: var(--text-xs); color: var(--text-faint); }
+.olv-stats-reset {
+  font-size: var(--text-xs);
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  cursor: pointer;
+}
+.olv-stats-reset:hover { color: var(--text); border-color: var(--accent); }
+
+.olv-views { display: flex; flex-direction: column; gap: var(--space-sm); margin-top: var(--space-md); }
+.olv-view-row { display: flex; align-items: center; gap: var(--space-sm); }
+.olv-view-name {
+  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text-dim);
+  font-family: var(--font);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-view-name:hover { border-color: rgba(0, 178, 255, 0.4); }
+.olv-view-name:focus-visible { outline: none; border-color: var(--accent); }
+.olv-view-go {
+  flex-shrink: 0; font-size: var(--text-xs); color: var(--accent);
+  background: var(--accent-soft);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-lg);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.olv-view-go:hover { background: rgba(0, 178, 255, 0.24); }
+.olv-view-go:active { transform: scale(0.98); }
+
+/* "Project ready" summary card */
+.olv-project-card {
+  position: absolute; top: 56px; left: 50%;
+  transform: translateX(-50%) translateY(-6px);
+  width: 290px;
+  background: rgba(11, 17, 33,0.9);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border: 0.5px solid rgba(0, 178, 255, 0.28);
+  border-radius: 12px; padding: var(--space-xl) var(--space-2xl);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease-standard), transform var(--dur-slow) var(--ease-standard);
+}
+.olv-project-card.olv-visible {
+  opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto;
+}
+.olv-pc-head { display: flex; align-items: center; justify-content: space-between; }
+.olv-pc-title {
+  font-size: var(--text-xs); color: var(--accent);
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.olv-pc-dismiss {
+  background: none; border: none; color: var(--text-faint);
+  font-size: var(--text-xl); line-height: 1; padding: 0 var(--space-2xs);
+  transition: color var(--dur-fast) var(--ease-standard);
+}
+.olv-pc-dismiss:hover { color: var(--text); }
+.olv-pc-name {
+  font-size: var(--text-sm); font-family: var(--mono); color: var(--text-dim);
+  margin: var(--space-md) 0 var(--space-lg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.olv-pc-grid { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xl); }
+.olv-pc-label { font-size: var(--text-xs); color: var(--text-faint); flex-shrink: 0; }
+.olv-pc-value {
+  font-size: var(--text-xs); color: var(--text); font-family: var(--mono);
+  text-align: right;
+}
+.olv-pc-countdown {
+  height: 2px; background: var(--brand-gradient); border-radius: 1px;
+  margin-top: var(--space-xl); width: 100%;
+  animation: olv-pc-deplete 7s linear forwards;
+}
+@keyframes olv-pc-deplete { from { width: 100%; } to { width: 0%; } }
+
