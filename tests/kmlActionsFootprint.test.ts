@@ -91,6 +91,12 @@ describe('scan-area export — a Z-up georeferenced scan still exports', () => {
     expect(r.files).toHaveLength(1);
     expect(r.files[0].name).toBe('quarry-north-scan-area.kml');
     expect(r.files[0].text).toContain('<Polygon>');
+    // The outline carries an explicit style, so Google Earth does not draw the
+    // footprint as an opaque white block over the imagery.
+    expect(r.files[0].text).toContain('<Style id="olv-area">');
+    expect(r.files[0].text).toContain('<styleUrl>#olv-area</styleUrl>');
+    expect(r.files[0].text).toContain('<PolyStyle>');
+    expect(r.files[0].text).not.toContain('ffffffff');
   });
 });
 

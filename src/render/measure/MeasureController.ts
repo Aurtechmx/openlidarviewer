@@ -31,6 +31,7 @@ import type {
   VolumeRecord,
 } from './types';
 import { MIN_POINTS, isFull } from './types';
+import type { WorkOwnership } from '../../model/workOwnership';
 import {
   distance,
   bearingDegrees,
@@ -381,6 +382,15 @@ export class MeasureController {
         referenceZ: number,
       ) => VolumeRecord | { record: VolumeRecord; residentOnly: boolean } | null)
     | null = null;
+  /**
+   * Owner provider — injected by the app once identity is wired. Consulted when
+   * a measurement is created, so the record names which layer it belongs to (by
+   * stable id, in that layer's source-local frame). Returns undefined for a
+   * single-layer scene, where the session's one origin already anchors the work
+   * and stamping an owner would break the byte-identical round trip; null until
+   * set, so a controller with no app wiring behaves exactly as before.
+   */
+  private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
   private _drag: { id: string; vi: number } | null = null;
   private _dragNdcX = 0;
@@ -1066,6 +1076,19 @@ export class MeasureController {
     this._volumeSampler = sampler;
   }
 
+  /**
+   * Inject the owner provider consulted when a measurement is created. The app
+   * sets it once identity is wired; passing `null` restores the unowned default.
+   */
+  setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
+    this._ownerProvider = provider;
+  }
+
+  /** The owner to stamp on a freshly created measurement, when one is provided. */
+  private _newOwner(): WorkOwnership | undefined {
+    return this._ownerProvider ? this._ownerProvider() : undefined;
+  }
+
   /** Whether a vertex handle is currently being dragged. */
   get dragging(): boolean {
     return this._drag !== null;
@@ -1115,6 +1138,9 @@ export class MeasureController {
       volume: input.volume,
     };
     if (input.residentOnly) m.volumeResidentOnly = true;
+    // Same source-local ownership a hand-drawn volume gets (see `_commitDraft`).
+    const owner = this._newOwner();
+    if (owner) m.owner = owner;
     this._measurements.push(m);
     this._updateHint();
     this._emitChange();
@@ -1500,6 +1526,11 @@ export class MeasureController {
       }
     }
     m.trust = this._gradeMeasurement(m);
+    // Record which layer this measurement belongs to, by stable id, in that
+    // layer's source-local frame. Undefined for a single-layer scene, so the
+    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
+    const owner = this._newOwner();
+    if (owner) m.owner = owner;
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();

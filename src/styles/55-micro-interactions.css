@@ -1,0 +1,55 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Micro-interactions — tactile feedback, eased states, entrance motion
+   ─────────────────────────────────────────────────────────────────────────── */
+.olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x {
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-tool:active:not(:disabled),
+.olv-chip:active,
+.olv-sample:active,
+.olv-layer-x:active { transform: scale(0.95); }
+.olv-chip-active { transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
+
+/* Keyboard focus — visible, on-brand, never on mouse click */
+.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-mode:focus-visible,
+.olv-sample:focus-visible, .olv-github:focus-visible, .olv-layer-x:focus-visible,
+.olv-slider:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* Panels glide in rather than snapping */
+.olv-inspector, .olv-navbar, .olv-dock, .olv-backend, .olv-version {
+  animation: olv-rise-in 260ms ease both;
+}
+@keyframes olv-rise-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+/* The nav bar keeps its horizontal centring while rising */
+.olv-navbar { animation-name: olv-rise-in-centred; }
+@keyframes olv-rise-in-centred {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* A health issue gently pulses so the eye is drawn to it */
+.olv-status-warn, .olv-status-fail { animation: olv-dot-pulse 2.4s ease-in-out infinite; }
+@keyframes olv-dot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 159, 39, 0); }
+  50% { box-shadow: 0 0 0 3px rgba(239, 159, 39, 0.18); }
+}
+.olv-status-fail { animation-name: olv-dot-pulse-fail; }
+@keyframes olv-dot-pulse-fail {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--rating-weak) 22%, transparent); }
+}
+
+/* Version mark — bottom-right corner, revealed once a scan loads */
+.olv-version {
+  position: absolute; bottom: 13px; right: 14px;
+  font-size: var(--text-2xs); line-height: 1; font-family: var(--mono);
+  letter-spacing: 0.03em; color: var(--text-faint);
+  pointer-events: auto; user-select: none;
+}
+

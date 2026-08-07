@@ -76,6 +76,14 @@ export function describeRemoteEptError(err: unknown, url: string): string {
   const detail = err instanceof Error ? err.message : String(err);
 
   // Pattern-match common failure shapes for clearer messaging.
+  // An internal request deadline elapsed. Distinct from a user cancel (which is
+  // silent) and from a transport error — mirror the COPC timeout remedy.
+  if ((err as { code?: unknown })?.code === 'timeout' || /\btimed out\b/i.test(detail)) {
+    return (
+      `${shortHost} did not respond in time — the EPT request timed out. ` +
+      `Try again in a moment, or pick a faster host.`
+    );
+  }
   if (/CORS|Cross-Origin|Access-Control/i.test(detail)) {
     return (
       `${shortHost} blocked the EPT request (CORS). ` +

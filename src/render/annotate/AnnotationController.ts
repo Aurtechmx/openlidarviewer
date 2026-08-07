@@ -19,6 +19,7 @@ import type {
   Vec3Object,
 } from './types';
 import { createAnnotation, editAnnotation } from './types';
+import type { WorkOwnership } from '../../model/workOwnership';
 import type { AnnotationGeoref } from './pickGeoref';
 import { AnnotationOverlay } from './AnnotationOverlay';
 import { AnnotationEditor } from '../../ui/AnnotationEditor';
@@ -68,6 +69,14 @@ export class AnnotationController {
   private _onSelect: ((id: string | null) => void) | null = null;
   /** Supplies the measurements an annotation may link to; empty by default. */
   private _measurements: () => MeasurementRef[] = () => [];
+  /**
+   * Owner provider — injected by the app once identity is wired. Consulted when
+   * an annotation is created, so it names which layer it belongs to (by stable
+   * id, in that layer's source-local frame). Returns undefined for a
+   * single-layer scene (preserving the byte-identical round trip); null until
+   * set, so a controller with no app wiring behaves exactly as before.
+   */
+  private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** Past annotation-list snapshots (most recent last) — drives undo. */
   private _undoStack: Annotation[][] = [];
   /** Snapshots undone but available to redo — cleared by any fresh edit. */
@@ -177,6 +186,14 @@ export class AnnotationController {
   /** Register the source of measurements the editor offers as link targets. */
   setMeasurementSource(source: () => MeasurementRef[]): void {
     this._measurements = source;
+  }
+
+  /**
+   * Inject the owner provider consulted when an annotation is created. The app
+   * sets it once identity is wired; passing `null` restores the unowned default.
+   */
+  setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
+    this._ownerProvider = provider;
   }
 
   /** Report a click that missed the cloud — no annotation is created. */
@@ -294,6 +311,11 @@ export class AnnotationController {
   add(input: NewAnnotation): Annotation {
     this._snapshot();
     const a = createAnnotation(input);
+    // Record which layer this annotation belongs to, by stable id, in that
+    // layer's source-local frame. Undefined for a single-layer scene, so the
+    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
+    const owner = this._ownerProvider ? this._ownerProvider() : undefined;
+    if (owner) a.owner = owner;
     this._annotations.push(a);
     this._selectedId = a.id;
     this._sync();

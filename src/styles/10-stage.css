@@ -1,0 +1,47 @@
+/* Stage */
+/* Stage container — base radial gradient gives a subtle "lit centre"
+ * cinematic feel before WebGPU paints, and also shows in any sliver
+ * around the canvas during resize. Vignette overlay applied via a
+ * non-interactive pseudo-element. */
+.olv-stage {
+  position: relative; height: 100%; width: 100%;
+  background:
+    radial-gradient(ellipse at 50% 45%, #0c1224 0%, #070a14 70%, #050810 100%);
+}
+.olv-stage::after {
+  /* Cinematic vignette — darkens the corners ~22%, fades to neutral by
+   * 60% of the radius. pointer-events:none so clicks pass through to
+   * the canvas; z-index just under the overlay so panels still sit on
+   * top. The vignette also helps the bright cyan EDL highlights pop
+   * because the eye reads more contrast against a darker frame. */
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 50%,
+      rgba(0, 0, 0, 0) 0%,
+      rgba(0, 0, 0, 0) 55%,
+      rgba(0, 0, 0, 0.28) 100%);
+  z-index: 1;
+}
+.olv-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  z-index: 0;
+  /* The viewer owns every touch on the canvas — 1-finger orbit, 2-finger
+     twist / pinch / pan. Without this the browser claims those gestures for
+     page pinch-zoom and scrolling, so the model wouldn't respond on phones. */
+  touch-action: none;
+}
+/* Overlay sits above the vignette so panels read crisp against the
+ * darkened corners — the vignette is decorative scene framing, not a
+ * dimming layer for the UI. */
+.olv-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.olv-overlay > * { pointer-events: auto; }
+.olv-dragging::after {
+  content: "";
+  position: absolute; inset: 10px;
+  border: 2px dashed var(--accent);
+  border-radius: 14px;
+  pointer-events: none;
+}
+

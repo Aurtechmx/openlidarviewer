@@ -1,0 +1,74 @@
+/* Top bar */
+.olv-topbar {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--space-2xl) var(--space-3xl);
+  /* The empty-state backdrop (.olv-empty) is a full-viewport, pointer-
+     capturing layer that appears later in the DOM, so without an explicit
+     stack it sits ABOVE this header and swallows clicks to the theme toggle
+     and links before a scan loads. Lift the header above that backdrop, but
+     keep it below the functional panels (z 10+). The bar itself is made
+     click-through so its empty middle never steals clicks from centred
+     empty-state content beneath it; only its real controls capture input. */
+  z-index: 4;
+  pointer-events: none;
+}
+.olv-topbar > * { pointer-events: auto; }
+.olv-wordmark { display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-lg); font-weight: 500; }
+/* The official brand mark (public/brand-mark.svg, via <img>) beside the
+ * top-bar text wordmark. */
+.olv-wordmark-mark { display: block; width: 28px; height: 28px; flex: none; }
+.olv-topbar-right { display: flex; align-items: center; gap: var(--space-lg); }
+/*
+ * v0.4.6 trust signal (design audit 2.4). "Private · on your device"
+ * is the brand's whole pitch, so it's elevated from a quiet pill to a
+ * confident one: a lock glyph (drawn in CSS, no markup change), a
+ * pill radius, and a slightly firmer accent edge so it reads as the
+ * one always-on colored element in the header — a deliberate trust
+ * mark, not fine print. Colour holds WCAG AA in all three themes
+ * (--accent on a low-alpha tint of itself).
+ */
+.olv-badge {
+  position: relative;
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  font-size: var(--text-xs); font-weight: 500; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 0.5px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  border-radius: var(--radius-pill); padding: var(--space-sm) var(--space-lg);
+  white-space: nowrap;
+}
+/* Lock glyph — a body (::before, in flow) with a shackle arc (::after,
+   absolutely anchored over it). Drawn with borders so it inherits
+   currentColor and needs no icon font or SVG asset. */
+.olv-badge::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 9px; height: 7px;
+  border: 1.2px solid currentColor;
+  border-radius: 1.5px;
+  margin-top: 4px; /* leave room for the shackle above the body */
+}
+.olv-badge::after {
+  content: "";
+  position: absolute;
+  /* sit centred over the body glyph: left padding + half the 9px body */
+  left: calc(var(--space-lg) + 1px);
+  top: 50%;
+  margin-top: -5px;
+  width: 5px; height: 4px;
+  border: 1.2px solid currentColor;
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+}
+/* v0.3.6 design audit (item 9): demoted from a pill to a ghost link so the
+ * "Private · on your device" trust-signal pill stays the dominant element
+ * in the header. Padding kept so the tap target meets 44 pt on mobile via
+ * the touch-target media query. */
+.olv-github {
+  font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
+}
+.olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+

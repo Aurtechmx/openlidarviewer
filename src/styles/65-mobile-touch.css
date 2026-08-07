@@ -1,0 +1,549 @@
+/* ───────────────────────────────────────────────────────────────────────────
+   Mobile & touch — safe-area insets, the file-picker button, responsive
+   layout, the Scan Info bottom sheet, and 44 px touch targets.
+
+   Desktop is unaffected: env() insets resolve to 0 with no display cut-out,
+   and every layout change lives behind a max-width media query.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* The hidden <input type=file> behind the "Open scan from device" button. */
+.olv-file-input { display: none; }
+
+/* "Open scan from device" — the primary file-picker action on the empty
+   state. Visible everywhere; it is the touch-friendly path on phones. */
+/* The single primary action on the page. It earns its weight from a resting
+ * lift the other surfaces don't have — the empty state offers three ways in
+ * (device, public dataset, URL) and only this one should read as the answer. */
+.olv-open-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: var(--text-md); font-weight: 600; color: #04121f;
+  background: var(--brand-gradient);
+  /* 12px, not the 8px control radius: at this padding the default radius
+   * reads sharp beside the pill ghost button directly beneath. The stack
+   * lives in a variable because the idle-pulse keyframes must repeat it —
+   * their `both` fill applies the from-frame through the 4 s delay, so a
+   * keyframe carrying a different base shadow would override this one. */
+  --olv-cta-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 4px 12px rgba(0, 178, 255, 0.22),
+    0 12px 32px rgba(0, 178, 255, 0.12);
+  border: none; border-radius: 12px; padding: var(--space-xl) var(--space-3xl);
+  box-shadow: var(--olv-cta-shadow);
+  transition: box-shadow var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
+}
+.olv-open-btn:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 8px 30px rgba(0, 178, 255, 0.38);
+}
+.olv-open-btn:active { transform: scale(0.96); }
+.olv-open-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The Scan Info launcher and the sheet's close control are phone-only —
+   hidden until the phone media query (and a loaded scan) reveal them. */
+.olv-scaninfo-btn { display: none; }
+.olv-sheet-close { display: none; }
+
+/* The touch-gesture hint replaces the keyboard HUD on phones. */
+.olv-touch-hint { display: none; }
+
+/* Honour display cut-outs (notch / home indicator) under viewport-fit=cover.
+   env() is 0 on displays without insets, so desktop layout is unchanged. */
+.olv-topbar {
+  padding-top: calc(14px + env(safe-area-inset-top));
+  padding-left: calc(18px + env(safe-area-inset-left));
+  padding-right: calc(18px + env(safe-area-inset-right));
+}
+.olv-dock {
+  bottom: calc(14px + env(safe-area-inset-bottom));
+  left: calc(16px + env(safe-area-inset-left));
+}
+.olv-backend {
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  right: calc(18px + env(safe-area-inset-right));
+}
+.olv-navbar { bottom: calc(72px + env(safe-area-inset-bottom)); }
+.olv-version {
+  bottom: calc(13px + env(safe-area-inset-bottom));
+  right: calc(14px + env(safe-area-inset-right));
+}
+
+/* ── Phone layout ─────────────────────────────────────────────────────────
+   CANONICAL MOBILE-LAYOUT CONDITION (mirrors MOBILE_LAYOUT_QUERY in
+   src/ui/isMobileDevice.ts). Every LAYOUT-structural phone block below repeats
+   it verbatim so a phone stays in the mobile layout in BOTH orientations:
+     (max-width: 767px)                              portrait phone / narrow window
+     (max-height: 500px) and (pointer: coarse)       landscape phone (wide but short + touch)
+   The second arm needs a coarse pointer so a short desktop window (fine pointer)
+   is never captured; a real desktop is tall and fine-pointer, so it never
+   matches either arm. Purely cosmetic max-width:767px blocks (dialogs, splash)
+   are left alone since they are harmless in landscape. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  /* Topbar: tighter padding so the wordmark, badge and link share one row. */
+  .olv-topbar {
+    padding-left: calc(var(--space-xl) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-xl) + env(safe-area-inset-right));
+    gap: var(--space-md);
+  }
+
+  /* Empty state can scroll if a short landscape viewport runs out of room. */
+  .olv-empty { overflow-y: auto; }
+
+  /* The keyboard HUD and pointer-lock prompt are meaningless without a
+     keyboard — hide them; the touch hint stands in. The mode switcher
+     itself (.olv-navbar — Orbit / Fly / Zoom + the speed slider) is
+     also keyboard-only behaviour, so hide the whole bar on phones.
+     Touch users drive the camera via the existing 1-finger orbit, 2-
+     finger twist / pinch / pan recogniser. */
+  .olv-nav-hud { display: none !important; }
+  .olv-nav-prompt { display: none !important; }
+  .olv-navbar { display: none !important; }
+
+  /* The backend pill is desk-side detail; drop it to declutter the phone. */
+  .olv-backend { display: none; }
+
+  /* Show the "More" disclosure on phones (hidden on desktop). It un-hides the
+     secondary tools when tapped (see the .olv-dock-more-open rules below). The
+     button itself is part of the primary row. */
+  .olv-tool-more { display: inline-flex; }
+
+  /* ── Tool dock: the top half of the single bottom chrome zone ───────────
+     PRIORITY+, NOT A SCROLLER. The dock used to be a sideways-scrolling strip
+     with a fade at its right edge. A scroller always cuts whichever button
+     straddles its edge, which is what rendered "Copy view link" as "Cop…" on a
+     real phone. A half-drawn word reads as a broken layout, not as an
+     affordance. So the row now carries only the tools a phone user reaches for
+     (Frame, Measure, Inspect, Annotate, Close) plus the "More" disclosure, and
+     it WRAPS instead of scrolling: every button is drawn whole or moved to the
+     next line, never sliced. Snapshot, Analyse, Copy view link and Help live
+     behind "More"; Probe stays out (it is a hover affordance).
+
+     Full-bleed, and offset from the bottom by EXACTLY the collapsed sheet
+     head's height, so the dock lands flush on the sheet with no gap, no second
+     hairline and no second shadow: one surface, read as one zone. */
+  .olv-dock {
+    left: 0;
+    right: 0;
+    width: auto; max-width: none;
+    margin: 0;
+    overflow: visible;
+    bottom: calc(var(--m-chrome-head-h) + env(safe-area-inset-bottom));
+    flex-wrap: wrap;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--space-2xs);
+    padding-top: var(--space-2xs);
+    padding-bottom: var(--space-2xs);
+    padding-left: calc(var(--space-xs) + env(safe-area-inset-left));
+    padding-right: calc(var(--space-xs) + env(safe-area-inset-right));
+  }
+  /* Share the row evenly. `min-width` holds the 44 pt tap target and keeps the
+     widest caption ("Annotate", ~38 px at this size) inside its button at 320 px;
+     `flex-grow` spreads the slack so the strip reads as an even control bar
+     rather than a left-packed queue. */
+  .olv-dock .olv-tool { flex: 1 1 auto; min-width: 48px; max-width: 104px; }
+  /* Close keeps its own group, a hair apart from the work tools. */
+  .olv-dock > .olv-dock-gap { margin-left: var(--space-sm); }
+  /* Canvas-first tools: a small icon over a tiny label (the hero left-rail
+     look), compact and low-contrast so the cloud dominates. Ghost by default
+     (transparent fill, no resting border); the single cyan accent lands only on
+     the active tool in the aesthetic block below.
+
+     INTRINSIC HEIGHT. `min-height` sets the 44 pt floor, nothing sets a
+     maximum, and the dock's own height is `auto`, so the button always grows
+     to fit its glyph plus its caption and a caption can never be sliced. */
+  .olv-dock .olv-tool {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 9px;
+    letter-spacing: 0.02em;
+    padding: var(--space-2xs) var(--space-xs);
+    border-radius: var(--radius-sm);
+    min-width: 40px;
+    min-height: 44px;
+    height: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Icon-over-label: stack the glyph above the tiny caption. */
+  .olv-dock .olv-tool-ico { flex-direction: column; gap: 2px; }
+  .olv-dock .olv-tool-ico svg { width: 18px; height: 18px; }
+  .olv-dock .olv-tool-label {
+    font-size: 9px;
+    line-height: 1;
+    font-weight: 500;
+  }
+  /* THE PRIORITY SPLIT. The primary row is Frame, Measure, Inspect, Annotate,
+     "More" and Close; Snapshot, Analyse, Copy view link and Help sit behind the
+     disclosure, and Probe stays out entirely (it is a hover affordance and a
+     touch screen has no hover). Tapping "More" flips a class on the dock that
+     un-hides the rest, and the row wraps to a second line to take them, which
+     is why the dock's height is never fixed.
+
+     These selectors are `.olv-dock .olv-tool-*`, not the bare class, and they
+     sit AFTER the `.olv-dock .olv-tool` block on purpose. The bare form
+     (`.olv-tool-snapshot`) scores one class against that rule's two and lost
+     every cascade, so the disclosure had no effect and all nine tools rendered
+     on every phone. That is what overflowed the row and left "Copy view link"
+     rendering as "Cop…" at the screen edge. */
+  .olv-dock .olv-tool-snapshot,
+  .olv-dock .olv-tool-analyse,
+  .olv-dock .olv-tool-share,
+  .olv-dock .olv-tool-help,
+  .olv-dock .olv-tool-probe {
+    display: none;
+  }
+  .olv-dock.olv-dock-more-open .olv-tool-snapshot,
+  .olv-dock.olv-dock-more-open .olv-tool-analyse,
+  .olv-dock.olv-dock-more-open .olv-tool-share,
+  .olv-dock.olv-dock-more-open .olv-tool-help {
+    display: inline-flex;
+  }
+  /* Subtle accent on the More button so it reads as a disclosure, and a
+     pressed look when expanded. */
+  .olv-dock .olv-tool-more {
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    padding: var(--space-sm) var(--space-md);
+  }
+  .olv-dock.olv-dock-more-open .olv-tool-more {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* Streaming / Scan info card: a slim dark-glass card docked to the top-right
+     corner, never a half-screen panel over the cloud. Narrow width + a modest
+     max-height keep the point cloud visible behind it.
+
+     CONTAINED, NOT CUT. The card carries far more than a phone can show at
+     once (scan stats, streaming stats, colour and quality chips, the grade
+     action, saved views), so it is capped and scrolls INSIDE itself. A plain
+     cap left the last visible row bisected by the card's edge, which is what
+     sliced "Extent 1000 x 1000 x 322" in half on a real device. Two additions
+     fix the read: a bottom fade that says "there is more below" instead of
+     "this is broken", and a bottom pad taller than the fade so the final row
+     is fully opaque once the user has scrolled to the end. */
+  .olv-streaming-panel {
+    top: calc(52px + env(safe-area-inset-top));
+    right: calc(var(--space-md) + env(safe-area-inset-right));
+    left: auto;
+    width: min(212px, calc(100vw - 2 * var(--space-md)));
+    max-height: 38dvh;
+    padding: var(--space-md);
+    padding-bottom: var(--space-3xl);
+    font-size: var(--text-xs);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent 100%);
+  }
+
+  /* The mode switcher lets its speed slider wrap onto a second line. */
+  .olv-nav-row { flex-wrap: wrap; justify-content: center; }
+
+  /* Version mark moves to the free bottom-left corner. */
+  .olv-version {
+    left: calc(12px + env(safe-area-inset-left));
+    right: auto;
+  }
+
+  /* ── Centred transient cards were capped at HALF the screen ──────────────
+     Every hint, toast and bar below is centred with `left: 50%` plus a
+     `translateX(-50%)` and has no width of its own. For an out-of-flow box that
+     leaves only the space from the centre line to the right edge available, so
+     each of them shrink-to-fits inside 50 vw and no `max-width` can widen it:
+     195 px on a 390 px phone, whatever the rule says. Desktop never showed it
+     because half of 1280 is still roomy. The lasso toast showed it worst: its
+     message column collapsed to about one word per line and the "Save to
+     session" button sat on top of the text.
+
+     Pin BOTH edges and drop the translate. The box then measures against the
+     real gutter-to-gutter width and centres its own content. */
+  .olv-toast,
+  .olv-measure-hint,
+  .olv-measure-bar,
+  .olv-anno-hint,
+  .olv-lasso-toast,
+  .olv-touch-hint {
+    left: calc(var(--space-2xl) + env(safe-area-inset-left));
+    right: calc(var(--space-2xl) + env(safe-area-inset-right));
+    transform: none;
+    width: auto;
+    /* Auto side margins keep the box centred when a max-width below leaves it
+       narrower than the gutters allow; without them an over-constrained
+       absolute box snaps to its left edge. */
+    margin-left: auto;
+    margin-right: auto;
+    justify-content: center;
+    /* A cap so the same rule does not stretch a one-line hint from edge to edge
+       on the 844 px-wide landscape phone. Below the cap the gutters decide. */
+    max-width: 560px;
+  }
+
+  /* Transient top-centre cards clear the notch and never exceed the screen. */
+  .olv-project-card {
+    top: calc(58px + env(safe-area-inset-top));
+    width: min(290px, calc(100vw - 28px));
+  }
+  .olv-toast, .olv-measure-hint { top: calc(58px + env(safe-area-inset-top)); }
+  /* Keep the progress toast clear of a landscape side-notch — cap its width to
+     the inset-free area. Centred, so this only ever shrinks, never shifts. */
+  .olv-toast { max-width: min(360px, calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right))); }
+
+  /* Touch-gesture hint: floats above the dock, fades out on its own. Its
+     horizontal placement comes from the centred-card rule above. */
+  .olv-touch-hint {
+    position: absolute;
+    bottom: calc(148px + env(safe-area-inset-bottom));
+    display: flex; align-items: center; gap: var(--space-md);
+    max-width: min(420px, calc(100vw - 24px));
+    background: rgba(11, 17, 33, 0.92);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 0.5px solid rgba(0, 178, 255, 0.34);
+    border-radius: var(--radius-lg); padding: var(--space-lg) var(--space-lg) var(--space-lg) var(--space-2xl);
+    font-size: var(--text-sm); color: var(--text); text-align: left;
+    opacity: 0; pointer-events: none;
+    transition: opacity var(--dur-slow) var(--ease-standard);
+  }
+  .olv-touch-hint.olv-visible { opacity: 1; pointer-events: auto; }
+  .olv-touch-hint-x {
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text-faint);
+    font-size: 17px; line-height: 1;
+    min-width: 44px; min-height: 44px;
+  }
+  .olv-touch-hint-x:hover { color: var(--text); }
+
+  /* Scan Info launcher — kept hidden on phones now that the bottom
+     sheet peeks. The peeked head bar IS the launcher (tap it to expand),
+     so a second floating button right next to it was duplicate UI. The
+     button still exists in the DOM as a programmatic fallback. */
+  body.olv-has-scan .olv-scaninfo-btn {
+    display: none;
+    align-items: center; justify-content: center;
+    position: fixed;
+    right: calc(12px + env(safe-area-inset-right));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 40;
+    font-size: var(--text-sm); font-weight: 500; color: var(--accent);
+    background: rgba(11, 17, 33, 0.92);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border: 0.5px solid rgba(0, 178, 255, 0.42);
+    border-radius: var(--radius-lg); padding: 0 var(--space-2xl);
+    min-height: 44px;
+    transition: transform 90ms var(--ease-standard);
+  }
+  body.olv-has-scan .olv-scaninfo-btn:active { transform: scale(0.97); }
+
+  /* Inspector becomes a peek-and-expand bottom sheet on phones.
+   *
+   * v0.3.9 mobile UX fix: previously the sheet was fully hidden
+   * (transform: translateY(110%)) and only a floating "Scan Info"
+   * launcher button could open it. That left users staring at a
+   * canvas with no obvious entry into the dataset card. The fix:
+   * peek the head bar at the bottom of the viewport so the title
+   * ("Scan Intelligence") + chevron read as a tappable handle,
+   * and wire a tap-toggle in Inspector.ts. The user can now expand
+   * the panel by tapping anywhere on the bar — the chevron flips,
+   * the sheet glides up. Tapping × or the bar again collapses.
+   *
+   * SHEET_HEAD_PEEK is the visible head height once the sheet is
+   * fully translated down. Adjust here if the head row gains a
+   * second line. */
+  .olv-inspector {
+    position: fixed;
+    --olv-sheet-head-peek: 64px;
+    top: auto; left: 0; right: 0; bottom: 0;
+    width: auto; max-height: 64vh;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    padding: 14px var(--space-2xl) calc(var(--space-2xl) + env(safe-area-inset-bottom));
+    z-index: 60;
+    animation: none;
+    /* Peek: leave the head visible above the safe-area. The translate
+       maths shifts the panel down by its own height minus the peek and
+       the safe-area inset. */
+    transform: translateY(calc(100% - var(--olv-sheet-head-peek) - env(safe-area-inset-bottom)));
+    transition: transform 280ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    box-shadow: 0 -14px 38px rgba(0, 0, 0, 0.55);
+    overflow: hidden;
+  }
+  .olv-inspector.olv-sheet-open {
+    transform: translateY(0);
+    overflow-y: auto;
+  }
+  /* A grip handle so the sheet reads as bottom-sheet furniture. */
+  .olv-inspector::before {
+    content: "";
+    position: absolute; top: 6px; left: 50%;
+    transform: translateX(-50%);
+    width: 38px; height: 4px; border-radius: 2px;
+    background: rgba(140, 170, 230, 0.42);
+  }
+
+  /* Sheet header doubles as a tap-to-toggle handle. It sits at the very
+     top of the panel — the grip line floats above it — and the whole row
+     responds to tap. The chevron rotates when the sheet expands. */
+  .olv-panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: var(--space-sm) 0 var(--space-md);
+    min-height: 44px;
+    cursor: pointer;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .olv-panel-head:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-md);
+  }
+  .olv-panel-head .olv-panel-title {
+    margin-bottom: 0;
+    flex: 1 1 auto;
+    font-weight: 600;
+  }
+  .olv-sheet-chevron {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px;
+    color: var(--text-dim);
+    font-size: var(--text-lg); line-height: 1;
+    transition: transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    margin-right: var(--space-xs);
+  }
+  .olv-inspector.olv-sheet-open .olv-sheet-chevron {
+    transform: rotate(180deg);
+  }
+  .olv-sheet-close {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; color: var(--text-dim);
+    font-size: 22px; line-height: 1;
+    min-width: 44px; min-height: 44px;
+    margin: -8px -10px -8px 0;
+  }
+  .olv-sheet-close:hover { color: var(--text); }
+  /* When peeked, hide the close button — there's nothing to close yet.
+     It reappears once the sheet is open so the user has a familiar
+     dismiss target. */
+  .olv-inspector:not(.olv-sheet-open) .olv-sheet-close { display: none; }
+
+  /* 44 px touch targets for every interactive control. */
+  .olv-tool, .olv-mode {
+    min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-export-btn, .olv-chip, .olv-view-name, .olv-view-save, .olv-view-go,
+  .olv-measure-clear, .olv-measure-done, .olv-inspect-copy {
+    min-height: 44px;
+  }
+  .olv-open-btn { min-height: 48px; }
+  .olv-sample { min-height: 52px; }
+  .olv-url-input, .olv-url-btn { min-height: 44px; }
+  .olv-layer-x, .olv-pc-dismiss {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px;
+  }
+
+  /* ── Visuals Studio + Inspector sections — phone tuning ─────────────
+     The chip rails, white-balance sliders and section summaries inherit
+     desktop defaults sized for a hover-and-click cursor. Touch needs
+     bigger type, more padding and chunkier thumbs so a thumb hits the
+     right control on the first try. */
+
+  /* Section summaries: each Inspector section becomes a 44 pt row so
+     the chevron + label form a comfortable tap target. */
+  .olv-section-summary {
+    min-height: 44px;
+    padding: var(--space-xs) 0;
+    font-size: var(--text-sm);
+  }
+
+  /* Visuals Studio group labels (RGB / Depth (EDL) / Background) bump
+     from 10 px → 11 px and gain extra top spacing so the rails read as
+     distinct groups during a thumb scroll. */
+  .olv-visuals-group-label {
+    font-size: var(--text-xs);
+    margin-top: var(--space-md);
+    margin-bottom: var(--space-xs);
+  }
+
+  /* Chip rails inside Visuals Studio get a touch-friendly chip size.
+     The general .olv-chip mobile rule already enforces 44 px height;
+     we add padding + font-size so the chip reads as a labelled control
+     rather than a tiny pill stretched vertically. */
+  .olv-visuals-body .olv-chip {
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-xl);
+  }
+  /* Tighter inter-chip gap so the 6-chip RGB rail wraps onto two
+     compact rows on a 320 pt viewport instead of three uneven ones. */
+  .olv-visuals-body .olv-chips { gap: var(--space-sm); }
+
+  /* Advanced disclosure summary becomes a 44 pt row so opening WB
+     sliders is a single tap. */
+  .olv-visuals-advanced-summary {
+    min-height: 44px;
+    padding: var(--space-md) 0;
+    font-size: var(--text-sm);
+    display: flex;
+    align-items: center;
+  }
+
+  /* White-balance row: the slider name + value get more room so they
+     don't compete with the slider thumb. */
+  .olv-visuals-row { font-size: var(--text-sm); gap: var(--space-md); padding: var(--space-xs) 0; }
+  .olv-visuals-row-name { width: 88px; }
+  .olv-wb-label { width: 36px; }
+
+  /* Chunky touch thumbs on the WB + height-trim sliders. Native sliders
+     default to ~14 px thumbs; touch needs ~26 px so the user can grab
+     them without aiming. accent-color tints the track; the vendor
+     pseudo-elements style the thumb itself. */
+  .olv-wb-slider,
+  .olv-height-trim-slider {
+    height: 28px;
+  }
+  .olv-wb-slider::-webkit-slider-thumb,
+  .olv-height-trim-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #0b1121;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+  .olv-wb-slider::-moz-range-thumb,
+  .olv-height-trim-slider::-moz-range-thumb {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #0b1121;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+  }
+
+  /* Auto-balance chip lifts so the thumb-tap doesn't fall on the row
+     above; the .olv-chip mobile min-height already gives it a 44 pt
+     target. */
+  .olv-wb-auto { margin-top: var(--space-sm); }
+
+  /* Sub-group labels inside the merged Rendering section ("Point size",
+     "Eye Dome Lighting") get the same readable bump as the Visuals
+     group labels so the two sections feel consistent. */
+  .olv-render-sublabel {
+    font-size: var(--text-xs);
+    margin-top: var(--space-lg);
+  }
+}
+
+/* Reduced motion: the bottom sheet and touch hint appear without sliding.
+   Placed last so it overrides the transitions set in the phone block. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-inspector { transition: none; }
+  .olv-touch-hint { transition: none; }
+}
+

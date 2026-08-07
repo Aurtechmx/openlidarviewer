@@ -9,6 +9,8 @@ import {
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
 import type { RangeSource } from '../src/io/range/RangeSource';
+import { RangeReadError } from '../src/io/range/RangeSource';
+import { EptTimeoutError } from '../src/io/ept/eptTransport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // The pure decisions the extraction exposes — the only remote-open logic that
@@ -62,6 +64,26 @@ describe('isAbortError — the user-cancel classifier both remote handlers surfa
     expect(isAbortError('AbortError')).toBe(false);
     expect(isAbortError(undefined)).toBe(false);
   });
+
+  // Regression: the three streaming outcomes must classify distinctly against the
+  // ACTUAL error types each layer throws, not just hand-built shapes.
+  it('treats the octree user-cancel throw (a DOMException AbortError) as a cancel', () => {
+    expect(isAbortError(new DOMException('Hierarchy load aborted', 'AbortError'))).toBe(true);
+  });
+
+  it('does NOT treat an internal EPT timeout (EptTimeoutError) as a cancel', () => {
+    expect(isAbortError(new EptTimeoutError('EPT request timed out after 20000 ms for https://x/ept.json'))).toBe(false);
+  });
+
+  it('does NOT treat a COPC RangeReadError timeout as a cancel, but does treat its aborted', () => {
+    expect(isAbortError(new RangeReadError('timeout', 'timed out'))).toBe(false);
+    expect(isAbortError(new RangeReadError('aborted', 'Range read aborted'))).toBe(true);
+  });
+
+  it('does NOT treat a transport / HTTP failure as a cancel', () => {
+    expect(isAbortError(new RangeReadError('transport', 'could not reach host'))).toBe(false);
+    expect(isAbortError(new Error('EPT hierarchy fetch failed (500 Err) for https://x'))).toBe(false);
+  });
 });
 
 describe('linkAbortSignals — composing an outer Cancel with a load controller', () => {
@@ -114,7 +136,7 @@ function makeDeps(
   over: { loading?: boolean; validate?: { ok: boolean; reason?: string }; loadEptRejects?: boolean } = {},
 ) {
   let loading = over.loading ?? false;
-  const validateRemoteEptUrl = vi.fn((_url: string) => over.validate ?? { ok: true });
+  const validateRemoteEptUrl = vi.fn((url: string) => over.validate ?? { ok: true, url });
   const describeRemoteEptError = vi.fn((_err: unknown, _url: string) => 'classified EPT error');
   const calls = {
     isLoading: vi.fn(() => loading),
@@ -238,6 +260,53 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
     expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
     // And the one-load flag is always released.
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('a manifest that stalls past the internal timeout surfaces as a timeout, not a silent cancel', async () => {
+    vi.useFakeTimers();
+    // A fetch that never answers on its own; it rejects only when its signal
+    // aborts (a server that accepts the connection but then hangs).
+    const fetchMock = vi.fn(
+      (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> =>
+        new Promise<Response>((_resolve, reject) => {
+          const sig = init?.signal;
+          sig?.addEventListener(
+            'abort',
+            () => reject(sig.reason ?? new DOMException('Aborted', 'AbortError')),
+            { once: true },
+          );
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { deps, calls } = makeDeps({ validate: { ok: true } });
+      // The manifest path destructures these off the lazy EPT module before it
+      // fetches; expose them, including the typed timeout the fix now throws.
+      (calls.loadEpt as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        validateRemoteEptUrl: calls.validateRemoteEptUrl,
+        describeRemoteEptError: calls.describeRemoteEptError,
+        parseEptMetadata: vi.fn(),
+        EptStreamingPointCloud: vi.fn(),
+        EptChunkDecoder: vi.fn(),
+        EptTimeoutError,
+        eptUrlSearch: vi.fn(() => ''),
+        createEptTransport: vi.fn(),
+      });
+      const p = handleRemoteEpt('https://example.com/ept.json', undefined, deps);
+      // Fire the internal 20 s manifest deadline while the fetch is still hanging.
+      await vi.advanceTimersByTimeAsync(20_000);
+      await p;
+      // The stall was surfaced as an error, NOT swallowed as a cancel...
+      expect(calls.setError).toHaveBeenCalled();
+      // ...and classified as a timeout: the error handed to the describer carries
+      // code 'timeout', so isAbortError never read it as a user cancel.
+      const errArg = calls.describeRemoteEptError.mock.calls.at(-1)?.[0];
+      expect(errArg).toBeInstanceOf(EptTimeoutError);
+      expect((errArg as { code?: string }).code).toBe('timeout');
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 });
 

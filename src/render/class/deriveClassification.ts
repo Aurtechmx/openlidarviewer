@@ -168,6 +168,19 @@ export interface DeriveClassificationOptions {
   readonly returnNumber?: Uint8Array;
   readonly returnCount?: Uint8Array;
   /**
+   * When true (and `colors` are supplied), a return in the ground band whose
+   * normalised Excess-Green exceeds {@link vegGreennessMin} is labelled Low
+   * vegetation (ASPRS class 3) rather than Ground (class 2). A photosynthetic
+   * surface is vegetation regardless of height: the Excess-Green index
+   * (2G − R − B)/(R + G + B) (Woebbecke 1995; Meyer & Neto 2008) separates live
+   * foliage from bare soil, gravel and concrete, which all sit below the
+   * threshold. Default false — the reclassified returns are then dropped by the
+   * bare-earth ground filter, so enabling it trades DTM point density over
+   * vegetated ground for ASPRS-faithful low-vegetation labels. Geometry-only
+   * clouds (no colours) are unaffected.
+   */
+  readonly lowVegByGreenness?: boolean;
+  /**
    * Low-outlier rejection, as a multiple of the one-cell drop the classifier's
    * own terrain model allows (`elevThresholdM + slope × cellSize`). A cell whose
    * lowest return sits further below the MEDIAN of its measured neighbours than
@@ -888,6 +901,14 @@ export function deriveClassification(
     return sum > 0 ? (2 * g - r - bl) / sum : 0;
   };
   const useGreen = colorStride >= 3;
+  // Opt-in: honour greenness INSIDE the ground band too, so a low green return
+  // (a cover crop, a small plant) is Low vegetation (ASPRS class 3) rather than
+  // Ground (class 2). A photosynthetic surface is vegetation regardless of
+  // height; the same Excess-Green threshold that separates canopy from a roof
+  // separates live foliage from bare soil here. Off by default — the
+  // reclassified returns are dropped by the bare-earth ground filter, so this
+  // trades DTM density over vegetated ground for label fidelity.
+  const useLowVegGreen = useGreen && (options.lowVegByGreenness ?? false);
 
   // Optional return-number cue. A TALL point from a MULTI-return pulse
   // (returnCount > 1) penetrated a canopy — a solid roof reflects the whole pulse
@@ -921,7 +942,10 @@ export function deriveClassification(
       supportSum += s; supportN++;
       if (s < 0.5) lowSupportN++;
       if (h <= o.groundBandM) {
-        code = DERIVED_GROUND;
+        // Ground band: bare earth, UNLESS the caller opted to honour greenness
+        // here and this return reads as live foliage (see useLowVegGreen).
+        code =
+          useLowVegGreen && greenAt(i) >= o.vegGreennessMin ? DERIVED_LOW_VEG : DERIVED_GROUND;
       } else if (s < o.minGroundSupport) {
         // Tall point, but its height was sampled mostly against hole-filled
         // void — we cannot trust the HAG, so we refuse to guess a class here.

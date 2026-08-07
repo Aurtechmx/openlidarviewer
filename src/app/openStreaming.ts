@@ -89,10 +89,17 @@ export function isEptUrl(url: string): boolean {
  * The Stage URL-field Cancel aborts the linked signal while a fetch or range
  * probe is in flight; neither rejection is our `LoadCancelledError`, so cancel
  * handling must recognise all three shapes.
+ *
+ * An internal request timeout is NOT one of them: the COPC transport surfaces it
+ * as `RangeReadError` code `'timeout'` and the EPT transport as `EptTimeoutError`
+ * (`code: 'timeout'`), and both stay VISIBLE failures rather than silent
+ * cancellations. The explicit `'timeout'` guard below keeps that true even if a
+ * timeout ever reached here carrying an abort-ish name.
  */
 export function isAbortError(err: unknown): boolean {
   if (typeof err !== 'object' || err === null) return false;
   const e = err as { name?: unknown; code?: unknown };
+  if (e.code === 'timeout') return false;
   if (e.name === 'AbortError') return true;
   return e.name === 'RangeReadError' && e.code === 'aborted';
 }
@@ -470,6 +477,12 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
       return;
     }
+    // Every remote request below uses the validator's RETURNED url, not the raw
+    // input. `validateRemoteEptUrl` -> `validateRemoteCopcUrl` runs the shared
+    // host-safety gate (`isBlockedHost` rejects loopback, private, link-local and
+    // metadata hosts), so the fetched url is the one that passed the SSRF barrier
+    // rather than an unchecked user string.
+    const safeUrl = check.url;
     // The actual streaming open touches viewer state — defer until the lazy
     // Viewer chunk is up.
     await deps.viewerReady;
@@ -478,7 +491,7 @@ export async function handleRemoteEpt(
     // the manifest read + node streaming supersede it with staged progress.
     deps.dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
     deps.dropZone.setCancelHandler(() => controller.abort());
-    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder } = eptUrlMod;
+    const { parseEptMetadata, EptStreamingPointCloud, EptChunkDecoder, EptTimeoutError } = eptUrlMod;
 
     // Fetch the manifest. We use plain `fetch` rather than the HttpRangeSource:
     // ept.json is a small JSON document, not a range-served binary. It gets the
@@ -491,10 +504,25 @@ export async function handleRemoteEpt(
     const manifestTimer = setTimeout(() => manifestTimeout.abort(), MANIFEST_TIMEOUT_MS);
     const onOuterAbort = () => manifestTimeout.abort();
     controller.signal.addEventListener('abort', onOuterAbort, { once: true });
-    const manifestResponse = await fetch(url, { signal: manifestTimeout.signal }).finally(() => {
+    let manifestResponse: Response;
+    try {
+      manifestResponse = await fetch(safeUrl, { signal: manifestTimeout.signal });
+    } catch (err) {
+      // manifestTimeout is aborted by the 20 s timer OR, composed, by the outer
+      // load-cancel. Only the timer firing with no user cancel is a timeout:
+      // surface it as the typed EptTimeoutError (code 'timeout') so isAbortError
+      // does not read it as a cancel and describeRemoteEptError renders it as a
+      // timeout rather than a silent stop. A real user cancel rethrows unchanged.
+      if (isAbortError(err) && !controller.signal.aborted) {
+        throw new EptTimeoutError(
+          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${url}`,
+        );
+      }
+      throw err;
+    } finally {
       clearTimeout(manifestTimer);
       controller.signal.removeEventListener('abort', onOuterAbort);
-    });
+    }
     if (!manifestResponse.ok) {
       throw new Error(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
@@ -516,14 +544,14 @@ export async function handleRemoteEpt(
 
     // Compute the dataset base URL by stripping the ept.json filename;
     // the source uses it to build hierarchy + tile URLs.
-    const baseUrl = url.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
+    const baseUrl = safeUrl.replace(/ept\.json(?:\?.*)?(?:#.*)?$/i, '');
     // The base URL drops the manifest's query, so re-attach the auth query
     // (e.g. an Azure SAS / CDN `?token=…`) to every derived hierarchy + tile
     // request — otherwise a signed dataset validates, loads ept.json, then
     // 401/403s on the first hierarchy fetch. (A per-object presigned signature
     // bound to ept.json alone still can't authorise the hierarchy — that stays
     // an honest hierarchy-fetch error.)
-    const eptSearch = eptUrlMod.eptUrlSearch(url);
+    const eptSearch = eptUrlMod.eptUrlSearch(safeUrl);
 
     // hardened EPT transport: retry-with-backoff (3 retries),
     // per-attempt timeout (20 s), abort discipline composed with the outer

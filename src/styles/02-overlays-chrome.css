@@ -1,0 +1,235 @@
+/*
+ * v0.3.9 workflow recorder badge — fixed pill on the top edge of
+ * the viewport that displays the current state ("● Recording…" or
+ * "▶ Playing 3/12") with a Stop button. Pulsing rose dot during
+ * recording, steady cyan dot during playback so the user can tell
+ * which mode is active at a glance.
+ */
+.olv-workflow-badge {
+  position: absolute;
+  top: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--space-md);
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  padding: var(--space-sm) var(--space-xl);
+  z-index: 90;
+  font-size: var(--text-xs); color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.olv-workflow-badge-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-faint);
+}
+.olv-workflow-badge-recording { border-color: rgba(255, 120, 120, 0.55); }
+.olv-workflow-badge-recording .olv-workflow-badge-dot {
+  background: #ff7a7a;
+  animation: olv-workflow-pulse 1.4s ease-in-out infinite;
+}
+.olv-workflow-badge-playing { border-color: rgba(0, 178, 255, 0.55); }
+.olv-workflow-badge-playing .olv-workflow-badge-dot { background: var(--accent); }
+@keyframes olv-workflow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.olv-workflow-badge-label { font-family: var(--mono); font-size: var(--text-xs); }
+.olv-workflow-badge-stop {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-md); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
+}
+.olv-workflow-badge-stop:hover { color: var(--text); border-color: var(--accent); }
+
+/*
+ * v0.3.9 command palette — centred modal overlay opened via Cmd-K
+ * (macOS) / Ctrl-K (Windows + Linux). Layered above everything so
+ * a Measure draft, an inspect card, or a streaming progress toast
+ * never bleed through. The backdrop captures clicks outside the
+ * card so the palette can dismiss without an explicit close button.
+ */
+.olv-palette {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; align-items: flex-start; justify-content: center;
+  padding-top: clamp(60px, 12vh, 140px);
+}
+.olv-palette-backdrop {
+  position: absolute; inset: 0;
+  background: rgba(8, 14, 28, 0.66);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.olv-palette-card {
+  position: relative;
+  width: clamp(320px, 80vw, 620px);
+  max-height: 70vh;
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: 12px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.olv-palette-input {
+  width: 100%;
+  font-family: var(--font); font-size: 15px;
+  color: var(--text);
+  background: transparent;
+  border: none; outline: none;
+  padding: var(--space-2xl) var(--space-3xl);
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-palette-input::placeholder { color: var(--text-faint); }
+.olv-palette-list {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-sm) var(--space-md);
+}
+.olv-palette-section {
+  font-size: var(--text-xs); color: var(--text-faint);
+  letter-spacing: 0.07em; text-transform: uppercase;
+  padding: var(--space-lg) var(--space-xl) var(--space-xs);
+}
+.olv-palette-section:first-child { padding-top: var(--space-xs); }
+.olv-palette-row {
+  display: flex; align-items: center; gap: var(--space-lg);
+  width: 100%; text-align: left;
+  background: transparent; border: none; cursor: pointer;
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font);
+}
+.olv-palette-row-active {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.olv-palette-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-palette-row-title { font-size: var(--text-md); }
+.olv-palette-row-hint { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-palette-row-key {
+  font-family: var(--mono); font-size: var(--text-xs);
+  color: var(--accent);
+  background: rgba(0, 178, 255, 0.10);
+  border: 0.5px solid rgba(0, 178, 255, 0.3);
+  border-radius: var(--radius-xs); padding: var(--space-2xs) var(--space-sm);
+  flex-shrink: 0;
+}
+.olv-palette-empty {
+  font-size: var(--text-md); color: var(--text-dim);
+  padding: var(--space-4xl) var(--space-3xl) 28px;
+  text-align: center;
+}
+.olv-palette-hint {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-xl);
+  border-top: 0.5px solid var(--hairline);
+  font-size: var(--text-xs); color: var(--text-faint);
+}
+.olv-palette-hint > span:not(.olv-palette-hint-key) {
+  margin-right: var(--space-xl);
+}
+.olv-palette-hint-key {
+  font-family: var(--mono); font-size: var(--text-2xs);
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-xs); padding: 1px var(--space-sm);
+}
+
+/*
+ * v0.4.3 header theme toggle — a single shape-morphing button in the
+ * top-right header (relocated from the Inspector chip rail). One tap
+ * cycles Dark → Light → High-contrast → Dark. The three icon states
+ * (moon / sun / split-circle) are stacked in one box and cross-faded:
+ * only the active one is opaque, the others fade out and scale down.
+ * Everything is `currentColor` so the glyph inherits the header text
+ * colour and stays visible in all three themes.
+ */
+.olv-theme-toggle {
+  position: relative;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  padding: 0; margin: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
+}
+.olv-theme-toggle:hover {
+  color: var(--text);
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.06);
+}
+.olv-theme-toggle:active { transform: scale(0.94); }
+.olv-theme-toggle:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* Full-screen toggle — same ghost-icon treatment as the theme toggle so the
+   header cluster reads as one family (Gestalt similarity). */
+.olv-fs-toggle, .olv-recenter {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; margin: 0;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0.5px solid transparent;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard),
+    background var(--dur-fast) var(--ease-standard),
+    transform 90ms var(--ease-standard);
+}
+.olv-fs-toggle svg, .olv-recenter svg { width: 17px; height: 17px; display: block; }
+/* Rendered only while a scan is loaded. */
+body:not(.olv-has-scan) .olv-recenter { display: none; }
+/* Coarse-pointer touch target: 44 px minimum (28 px on fine pointers). */
+@media (pointer: coarse) {
+  .olv-fs-toggle, .olv-recenter { width: 44px; height: 44px; }
+  .olv-fs-toggle svg, .olv-recenter svg { width: 20px; height: 20px; }
+}
+.olv-fs-toggle:hover, .olv-recenter:hover {
+  color: var(--text);
+  border-color: var(--hairline);
+  background: rgba(255, 255, 255, 0.04);
+  transform: scale(1.06);
+}
+.olv-fs-toggle:active, .olv-recenter:active { transform: scale(0.94); }
+.olv-fs-toggle.is-fs { color: var(--accent); }
+.olv-fs-toggle:focus-visible, .olv-recenter:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-fs-toggle, .olv-recenter { transition: none; }
+  .olv-fs-toggle:hover, .olv-fs-toggle:active,
+  .olv-recenter:hover, .olv-recenter:active { transform: none; }
+}
+/* Each icon state is absolutely stacked in the same 18px box. */
+.olv-theme-icon {
+  position: absolute; inset: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  opacity: 0;
+  transform: scale(0.6) rotate(-30deg);
+  transition: opacity var(--dur-base) var(--ease-standard),
+    transform var(--dur-base) var(--ease-standard);
+  pointer-events: none;
+}
+.olv-theme-icon svg { width: 18px; height: 18px; display: block; }
+.olv-theme-icon-active {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+}
+/* Respect reduced-motion: cut the morph transition + the hover scale so
+ * the icon just swaps instantly. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-theme-toggle, .olv-theme-icon { transition: none; }
+  .olv-theme-toggle:hover, .olv-theme-toggle:active { transform: none; }
+  .olv-theme-icon { transform: scale(1) rotate(0); }
+}
+
