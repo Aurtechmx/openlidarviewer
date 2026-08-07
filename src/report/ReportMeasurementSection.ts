@@ -27,7 +27,7 @@ import {
 // polygon reads the same units in the PDF report as on the overlay — the same
 // surface that produced it. Length and volume keep this module's own
 // cm/ha-free report conventions; only area was drifting (acre vs sq ft).
-import { formatArea } from '../render/measure/format';
+import { formatArea, displayDecimals } from '../render/measure/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math
@@ -122,14 +122,24 @@ function formatLinear(metres: number, system: UnitSystem): string {
   // `formatVolume` two functions down already returned an em dash for the same
   // input.
   if (!Number.isFinite(metres)) return '—';
+  // Adaptive precision through the shared measure policy, so a report length
+  // carries the same significant figures the panel and CSV do — a sub-centimetre
+  // separation no longer rounds to `0.00`.
   if (system === 'imperial') {
     const ft = metres * 3.28084;
-    if (ft >= 5280) return `${(ft / 5280).toFixed(2)} mi`;
-    return `${ft.toFixed(2)} ft`;
+    if (ft >= 5280) {
+      const mi = ft / 5280;
+      return `${mi.toFixed(displayDecimals(mi, 3, 4))} mi`;
+    }
+    return `${ft.toFixed(displayDecimals(ft, 2, 4))} ft`;
   }
-  if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
-  if (metres >= 1) return `${metres.toFixed(2)} m`;
-  return `${(metres * 100).toFixed(1)} cm`;
+  if (metres >= 1000) {
+    const km = metres / 1000;
+    return `${km.toFixed(displayDecimals(km, 3, 4))} km`;
+  }
+  if (metres >= 1) return `${metres.toFixed(displayDecimals(metres, 2, 4))} m`;
+  const cm = metres * 100;
+  return `${cm.toFixed(displayDecimals(cm, 1, 4))} cm`;
 }
 
 /**
@@ -143,9 +153,9 @@ function formatVolume(cubicMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(cubicMetres)) return '—';
   if (system === 'imperial') {
     const cuYd = cubicMetres * 1.30795;
-    return `${cuYd.toFixed(2)} yd³`;
+    return `${cuYd.toFixed(displayDecimals(cuYd, 2, 4))} yd³`;
   }
-  return `${cubicMetres.toFixed(2)} m³`;
+  return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} m³`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

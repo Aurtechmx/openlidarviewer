@@ -462,9 +462,9 @@ describe('buildMeasurementRows', () => {
 
   it('formats metric values correctly', () => {
     const rows = buildMeasurementRows(measurements, 'metric');
-    expect(rows[0].value).toBe('10.00 m');
+    expect(rows[0].value).toBe('10.000 m');
     expect(rows[1].value).toBe('100.00 m²');
-    expect(rows[2].value).toBe('3.00 m');
+    expect(rows[2].value).toBe('3.0000 m');
   });
 
   it('formats imperial values correctly', () => {
@@ -498,10 +498,10 @@ describe('buildMeasurementRows', () => {
   describe('unitToMetres factor', () => {
     const FT = 0.3048; // international foot → metres
 
-    it('scales lengths ×f: a 10 ft span reads 3.05 m, not 10 m', () => {
+    it('scales lengths ×f: a 10 ft span reads 3.0480 m, not 10 m', () => {
       const rows = buildMeasurementRows(measurements, 'metric', FT);
-      expect(rows[0].value).toBe('3.05 m'); // 10 ft × 0.3048
-      expect(rows[2].value).toBe('91.4 cm'); // 3 ft height
+      expect(rows[0].value).toBe('3.0480 m'); // 10 ft × 0.3048
+      expect(rows[2].value).toBe('91.440 cm'); // 3 ft height
     });
 
     it('scales areas ×f²: a 10×10 ft footprint reads 9.2903 m²', () => {
@@ -510,9 +510,9 @@ describe('buildMeasurementRows', () => {
       expect(rows[1].value).toBe('9.2903 m²');
     });
 
-    it('round-trips imperial: a 10 ft span on a foot CRS reads 10.00 ft', () => {
+    it('round-trips imperial: a 10 ft span on a foot CRS reads 10.000 ft', () => {
       const rows = buildMeasurementRows(measurements, 'imperial', FT);
-      expect(rows[0].value).toBe('10.00 ft');
+      expect(rows[0].value).toBe('10.000 ft');
     });
 
     it('scales volumes ×f³ (box and cut/fill)', () => {
@@ -537,9 +537,9 @@ describe('buildMeasurementRows', () => {
       ];
       const rows = buildMeasurementRows(vols, 'metric', FT);
       // 24 cu render-units × 0.3048³ = 0.679604… m³
-      expect(rows[0].value).toBe('0.68 m³');
+      expect(rows[0].value).toBe('0.6796 m³');
       expect(rows[1].value).toContain('9.2903 m²'); // footprint ×f²
-      expect(rows[1].value).toContain('+0.68 m³ fill'); // fill ×f³
+      expect(rows[1].value).toContain('+0.6796 m³ fill'); // fill ×f³
     });
 
     it('leaves ratios (slope / angle) unscaled', () => {
