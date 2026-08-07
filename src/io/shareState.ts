@@ -56,12 +56,12 @@ function asCamera(v: unknown): SavedCameraState | null {
 
 /** Encode a string to URL-safe base64 (no `+`, `/`, or `=` padding). */
 function toBase64Url(text: string): string {
-  return btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return btoa(text).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
 /** Decode a URL-safe base64 string. */
 function fromBase64Url(encoded: string): string {
-  const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = encoded.replaceAll('-', '+').replaceAll('_', '/');
   return atob(padded);
 }
 

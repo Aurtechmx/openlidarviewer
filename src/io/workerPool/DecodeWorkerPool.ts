@@ -511,7 +511,7 @@ export class DecodeWorkerPool<T> {
     // Free the worker only for the job it was actually running. A duplicate or
     // unknown request id must never release a slot that has since been given a
     // different job — that is how two live decodes would end up on one worker.
-    if (slot.job && slot.job.requestId === reply.requestId) slot.job = null;
+    if (slot.job?.requestId === reply.requestId) slot.job = null;
 
     const job = this._settle(reply.requestId);
     if (!job) {

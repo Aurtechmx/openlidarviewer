@@ -165,10 +165,8 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
           `and may not register with the rest of the cloud.`,
       );
     }
-    if (!scannerOrigin) {
-      // The transform's 4th row is the scanner's registered world position.
-      scannerOrigin = [m[3][0], m[3][1], m[3][2]];
-    }
+    // The transform's 4th row is the scanner's registered world position.
+    scannerOrigin ??= [m[3][0], m[3][1], m[3][2]];
     i += HEADER_LINES;
 
     const total = cols * rows;
@@ -195,7 +193,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       const it = Number(tok[3]);
       intensityVals.push(Number.isFinite(it) ? it : 0);
 
-      if (hasColor === null) hasColor = tok.length >= 7;
+      hasColor ??= tok.length >= 7;
       if (hasColor) {
         rgb.push(Number(tok[4]) || 0, Number(tok[5]) || 0, Number(tok[6]) || 0);
       }
@@ -233,7 +231,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   const intensity = new Uint16Array(count);
   for (let p = 0; p < count; p++) {
     const v = Math.round(intensityVals[p] * scale);
-    intensity[p] = v < 0 ? 0 : v > 65535 ? 65535 : v;
+    intensity[p] = Math.max(0, Math.min(65535, v));
   }
 
   // Colour — PTX RGB, when present, is 0–255 per channel.
@@ -242,7 +240,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     colors = new Uint8Array(count * 3);
     for (let k = 0; k < count * 3; k++) {
       const v = Math.round(rgb[k]);
-      colors[k] = v < 0 ? 0 : v > 255 ? 255 : v;
+      colors[k] = Math.max(0, Math.min(255, v));
     }
   }
 

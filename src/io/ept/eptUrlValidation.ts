@@ -11,13 +11,12 @@
  */
 
 import {
-  MAX_REMOTE_COPC_URL_LENGTH,
   validateRemoteCopcUrl,
   sanitizeUrlForDisplay,
 } from '../range/RangeSource';
 
 /** Maximum acceptable length of an EPT URL — same guard as the COPC entry. */
-export const MAX_REMOTE_EPT_URL_LENGTH = MAX_REMOTE_COPC_URL_LENGTH;
+export { MAX_REMOTE_COPC_URL_LENGTH as MAX_REMOTE_EPT_URL_LENGTH } from '../range/RangeSource';
 
 /**
  * Validate a remote EPT entry URL. The rules layer on top of

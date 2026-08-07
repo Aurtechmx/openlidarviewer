@@ -303,7 +303,7 @@ const E57_CORE_NS = /^https?:\/\/(?:www\.)?astm\.org\/[^?#]*E57/i;
 /** Trimmed element text, or undefined when the element is missing / empty. */
 function declaredText(node: XmlNode | undefined): string | undefined {
   const t = node?.text.trim();
-  return t ? t : undefined;
+  return t || undefined;
 }
 
 /** Element text as a re-printed number, or undefined when missing / empty / NaN. */

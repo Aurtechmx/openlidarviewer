@@ -21,12 +21,16 @@ import { sanitizeAndRecenter } from './sanitizeCloud';
 
 /** Clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
-  return v < 0 ? 0 : v > 255 ? 255 : Math.round(v);
+  if (v < 0) return 0;
+  if (v > 255) return 255;
+  return Math.round(v);
 }
 
 /** Clamp a value into the 0–65535 uint16 range. */
 function clampU16(v: number): number {
-  return v < 0 ? 0 : v > 65535 ? 65535 : Math.round(v);
+  if (v < 0) return 0;
+  if (v > 65535) return 65535;
+  return Math.round(v);
 }
 
 /**
@@ -48,7 +52,7 @@ function intensityScaleFor(scan: E57ScanData): number {
     return scan.intensityMax > 0 && scan.intensityMax <= 1 ? 65535 : 1;
   }
   let max = 0;
-  for (let i = 0; i < col.length; i++) if (col[i] > max) max = col[i];
+  for (const v of col) if (v > max) max = v;
   return max > 0 && max <= 1 ? 65535 : 1;
 }
 

@@ -97,7 +97,7 @@ export function wktChildNodes(node: WktNode): WktNode[] {
  */
 export function wktNodeName(node: WktNode): string | undefined {
   const first = node.children[0];
-  return first && first.type === 'string' ? first.value : undefined;
+  return first?.type === 'string' ? first.value : undefined;
 }
 
 /** The node's first numeric child, or `undefined` when it has none. */
@@ -220,9 +220,9 @@ function parseTokens(tokens: Tok[]): WktNode | null {
   /** Parse `IDENT [ child (, child)* ]` — assumes tokens[pos] is the keyword. */
   const parseNode = (depth: number): WktNode | null => {
     const idTok = tokens[pos];
-    if (!idTok || idTok.t !== 'ident') return null;
+    if (idTok?.t !== 'ident') return null;
     const lb = tokens[pos + 1];
-    if (!lb || lb.t !== 'lb') return null;
+    if (lb?.t !== 'lb') return null;
 
     const keyword = idTok.v;
     const start = idTok.i;
@@ -238,7 +238,7 @@ function parseTokens(tokens: Tok[]): WktNode | null {
       if (tk.t === 'lb') { skipBlock(); continue; } // stray bracket — skip its block
       // ident: a nested node when followed by '[', otherwise a bare keyword token.
       const nxt = tokens[pos + 1];
-      if (nxt && nxt.t === 'lb') {
+      if (nxt?.t === 'lb') {
         if (depth < MAX_DEPTH) {
           const child = parseNode(depth + 1);
           if (child) children.push({ type: 'node', node: child });

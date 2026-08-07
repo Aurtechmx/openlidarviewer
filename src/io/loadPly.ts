@@ -45,7 +45,7 @@ function readAsciiVertices(
   if (header?.format !== 'ascii') return null;
   if (typeof header.headerLength !== 'number' || header.headerLength <= 0) return null;
   const vertex = header.elements?.[0];
-  if (!vertex || vertex.name !== 'vertex' || vertex.count !== expectedCount) return null;
+  if (vertex?.name !== 'vertex' || vertex?.count !== expectedCount) return null;
   const props = vertex.properties;
   if (props.some((p) => p.type === 'list')) return null;
   const xi = props.findIndex((p) => p.name === 'x');

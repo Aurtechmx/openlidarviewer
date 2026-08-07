@@ -238,11 +238,14 @@ export async function readLazChunkTable(
   let firstPointIndex = 0;
   for (let i = 0; i < numChunks; i++) {
     const end = start + startDeltas[i];
-    const pointCount = countDeltas
-      ? countDeltas[i]
-      : i < numChunks - 1
-        ? vlr.chunkSize
-        : header.pointCount - vlr.chunkSize * (numChunks - 1);
+    let pointCount: number;
+    if (countDeltas) {
+      pointCount = countDeltas[i];
+    } else if (i < numChunks - 1) {
+      pointCount = vlr.chunkSize;
+    } else {
+      pointCount = header.pointCount - vlr.chunkSize * (numChunks - 1);
+    }
     if (startDeltas[i] <= 0) {
       return unsupported(`chunk ${i} has a non-positive byte length`);
     }

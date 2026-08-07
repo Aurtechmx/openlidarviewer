@@ -42,7 +42,6 @@ import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import {
   allocRawPoints,
-  classificationMaskFor,
   decodeContext,
   decodeRecord,
   decodingUpdate,
@@ -51,7 +50,7 @@ import {
 } from './lasDecodeShared';
 
 // Re-export so external callers (analysis modules) keep their existing import path.
-export { classificationMaskFor };
+export { classificationMaskFor } from './lasDecodeShared';
 
 /**
  * Decode an uncompressed `.las` file. With `stride > 1` the records are split
