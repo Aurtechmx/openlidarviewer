@@ -22,6 +22,16 @@ import type { SavedCameraState } from '../render/annotate/types';
 /** The tag identifying messages this viewer sends. */
 const SOURCE = 'openlidarviewer';
 
+/**
+ * Byte ceiling on an embed `load-file` buffer. The host pushes the whole file in
+ * one `postMessage`, which structured-clones (copies) the ArrayBuffer into this
+ * frame before the loader ever sees it, so an unbounded `byteLength` is a claim
+ * this frame is made to allocate. 2 GiB is past any practical postMessage
+ * transfer while rejecting an absurd allocation up front rather than in the
+ * decoder. An over-limit buffer is dropped exactly like a malformed one.
+ */
+export const MAX_EMBED_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+
 /** A validated inbound command — the discriminated result of one message. */
 export type EmbedCommand =
   | { kind: 'load-file'; buffer: ArrayBuffer; name: string }
@@ -69,7 +79,11 @@ export function interpretEmbedMessage(data: unknown): EmbedCommand | null {
   if (!isRecord(data)) return null;
   switch (data.type) {
     case 'load-file':
-      return data.buffer instanceof ArrayBuffer && typeof data.name === 'string'
+      // The buffer is host-supplied and copied into this frame whole; cap its
+      // byteLength so an absurd size is dropped here, not in the decoder.
+      return data.buffer instanceof ArrayBuffer &&
+        data.buffer.byteLength <= MAX_EMBED_FILE_BYTES &&
+        typeof data.name === 'string'
         ? { kind: 'load-file', buffer: data.buffer, name: data.name }
         : null;
     case 'jump-camera': {
@@ -183,8 +197,14 @@ export function startEmbedBridge(
 
   const onMessage = (event: MessageEvent): void => {
     // Only the actual embedding parent may drive the viewer — never a sibling
-    // iframe, an opener, or a popup that postMessages into this window.
-    if (window.parent !== window && event.source !== window.parent) return;
+    // iframe, an opener, or a popup that postMessages into this window. The
+    // source check runs UNCONDITIONALLY: at top level `window.parent === window`,
+    // so this accepts only a message from the window itself and drops an opener
+    // (which is a DIFFERENT window). Guarding it behind `window.parent !== window`
+    // — as this once did — skipped the check entirely at top level and let an
+    // opener that did `window.open('…?embed=1')` then postMessage drive the app.
+    // A genuine iframe embed is unaffected: `event.source === window.parent` still.
+    if (event.source !== window.parent) return;
     if (allow && allow.length > 0 && !allow.includes(event.origin)) return;
     const command = interpretEmbedMessage(event.data);
     if (!command) return;

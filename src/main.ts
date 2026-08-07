@@ -2941,24 +2941,24 @@ const kmlDeps: KmlActionDeps = {
   worldUp: () => viewer.measure.worldUp,
   unitToMetres: () => viewer.measure.unitToMetres,
   // Static: the bounds of the points actually loaded. Streaming: the LAS header
-  // extent, which is what the source DECLARES and can be wider than the nodes
-  // downloaded so far. The basis travels into the file rather than being
-  // smoothed over, because the two are different claims about the same scan.
+  // extent, which the source DECLARES and can be wider than the nodes fetched so
+  // far — different claims, so the basis travels into the file. So does the
+  // up-axis: X/Y is the horizontal plane only in a Z-up frame, and the footprint
+  // gate refuses the rest. Streaming COPC/EPT are LAS-derived, hence Z-up.
   scanExtent: () => {
     const c = scans.activeCloud();
     if (c) {
       const b = c.bounds();
       return {
         extent: { minX: b.min[0], minY: b.min[1], maxX: b.max[0], maxY: b.max[1] },
-        basis: 'the resident points',
+        basis: 'the resident points', upAxis: isZUpFormat(c.sourceFormat) ? 'z' : 'y',
       };
     }
-    const sc = viewer?.streamingCloud;
-    if (!sc) return null;
-    const b = sc.dataBounds();
+    const b = viewer?.streamingCloud?.dataBounds();
+    if (!b) return null;
     return {
       extent: { minX: b[0], minY: b[1], maxX: b[3], maxY: b[4] },
-      basis: 'the declared header extent',
+      basis: 'the declared header extent', upAxis: 'z',
     };
   },
   baseName: (name) => baseName(name),
@@ -4926,7 +4926,7 @@ async function exportSession(): Promise<void> {
     const b = cloud.bounds();
     scanSummary = {
       fileName: cloud.name,
-      sourcePoints: cloud.pointCount,
+      sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
       width: b.max[0] - b.min[0],
       depth: b.max[1] - b.min[1],
       height: b.max[2] - b.min[2],

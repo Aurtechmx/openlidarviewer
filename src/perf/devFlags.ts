@@ -12,18 +12,31 @@
  *   ?streamingScore=legacy   parse-only, see Staged below
  *   ?uploadQueue=off         parse-only, see Staged below
  *   ?angularPrediction=off   parse-only, see Staged below
+ *   ?decodePool=on           OPT-IN: pooled COPC/EPT decode workers
+ *   ?decodeWorkers=N         OPT-IN: pooled decode with exactly N (1-4) workers
+ *
+ * `decodePool` runs the other way round from the flags above: it is OFF by
+ * default and can only be turned ON. Both decode clients ship on the historical
+ * single-worker path until a browser measurement on a real COPC/EPT dataset
+ * shows pooled decoding behaving under a fast camera sweep — throughput and the
+ * memory cost of one laz-perf WASM heap per worker. Either flag enables it:
+ * `?decodePool=on` uses the device-aware size policy, `?decodeWorkers=N` pins
+ * the count and implies the pool is on.
  *
  * Consumer status, kept honest — a flag with no consumer changes nothing:
  *   - Live: `handPan` (NavController pan mode, the G/Digit4 bindings, the
  *     middle-mouse temporary grab, and the NavBar Pan surfaces via
  *     `Viewer.handPanEnabled`); `wheelDolly` (NavController's wheel handler);
  *     `adaptiveDpr` and `refinementPhase` (the Viewer's resolution/refinement
- *     loop).
+ *     loop); `decodePool` and `decodeWorkers` (both decode worker clients,
+ *     read once when the client is constructed).
  *   - Staged: `streamingScore`, `uploadQueue`, and `angularPrediction` have
  *     tested cores but are not wired into the live render/stream path yet, so
  *     their flags are parse-only. The metrics export lists these under
  *     `stagedControllers`, never as active flags.
  * Defaults equal the new-behavior-ON path; `off` / `legacy` restores v0.5.4.
+ * The one exception is the `decodePool` pair described above, which defaults to
+ * the OLD path and must be opted into.
  *
  * Pure — no DOM at module scope, no three.js — fully unit-tested in Node.
  * NOT part of the index chunk: only lazy modules may import it, and the
@@ -69,6 +82,21 @@ export interface DevFlags {
    * that actually stands the queue up.
    */
   streamingCommitMode: StreamingCommitMode;
+  /**
+   * Pooled COPC/EPT decode workers requested. OFF by default: absent the flag,
+   * both decode clients run the historical single-worker path. `?decodePool=on`
+   * opts in and the device policy picks the size. This is the inverse of the
+   * flags above — it can only ever turn something ON, so a stray or malformed
+   * value can never move a session off the shipping default.
+   */
+  decodePool: boolean;
+  /**
+   * Explicit decode worker count, or null for "not specified". Only 1-4 are
+   * accepted; anything else, including garbage and out-of-range values, reads
+   * as null. A value here also opts INTO the pool — asking for N workers and
+   * getting one would be a flag that lies.
+   */
+  decodeWorkers: number | null;
 }
 
 /**
@@ -85,6 +113,12 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   uploadQueue: true,
   angularPrediction: true,
   streamingCommitMode: 'immediate',
+  // Pooled decoding is the one flag whose default is the OLD path. It stays
+  // opt-in until a browser run on a real dataset measures it; shipping an
+  // unverified change on the default decode path is the mistake the multi-layer
+  // mount already made once.
+  decodePool: false,
+  decodeWorkers: null,
 });
 
 /** `legacy` (any case) selects the legacy implementation; all else = default. */
@@ -117,6 +151,34 @@ function parseOnOff(value: string | null): boolean {
 }
 
 /**
+ * Opt-IN switch, the mirror of {@link parseOnOff}: only `on`, `1` or `true`
+ * (any case) enables; absence, empty, `off` and garbage all keep the shipping
+ * default. Used where the default is the OLD behaviour and the flag exists to
+ * request the new one, so no malformed URL can move a user off the safe path.
+ */
+function parseOptIn(value: string | null): boolean {
+  if (value === null) return false;
+  const v = value.trim().toLowerCase();
+  return v === 'on' || v === '1' || v === 'true';
+}
+
+/**
+ * Decode worker count. Only a whole number in `[1, 4]` counts; absence, a
+ * fraction, a negative, a huge value and outright garbage all read as null so
+ * the device policy decides. The upper bound mirrors
+ * `DECODE_POOL_HARD_CAP` — kept as a literal here because devFlags is pure
+ * parsing and importing an io module for one number would invert the layering.
+ * The pool clamps to the same cap regardless, so the two cannot disagree in a
+ * way that matters.
+ */
+function parseWorkerCount(value: string | null): number | null {
+  if (value === null) return null;
+  const n = Number(value.trim());
+  if (!Number.isInteger(n) || n < 1 || n > 4) return null;
+  return n;
+}
+
+/**
  * Parse the development flags from a query string or URLSearchParams.
  * Never throws — malformed input degrades to the defaults, field by field.
  */
@@ -136,6 +198,8 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     uploadQueue: parseOnOff(params.get('uploadQueue')),
     angularPrediction: parseOnOff(params.get('angularPrediction')),
     streamingCommitMode: parseCommitMode(params.get('streamingCommitMode')),
+    decodePool: parseOptIn(params.get('decodePool')),
+    decodeWorkers: parseWorkerCount(params.get('decodeWorkers')),
   };
 }
 
