@@ -48,6 +48,48 @@ A 100 × 100 m interior crop of the Estonian Land Board 2020 national LiDAR (til
 |---|---|---|---|
 | Gridding correctness | **scipy** `binned_statistic_2d` mean | OLV bins and averages real LCC coordinates correctly | max 0.04 mm, RMSE 0.01 mm |
 
+## The Marsh Island leg — absolute accuracy vs INDEPENDENT surveyed checkpoints
+
+The other legs compare OLV to an independent *implementation* on the same points. This one compares OLV to independent *surveyed ground truth*: the USGS Marsh Island / New Bedford MA UAS survey (Over et al. 2024, DOI 10.5066/P19TLXVG, CC0 / public domain) ships **104 RTK check shots** (Emlid RS3) that are separate from the aerial control points. The classified point cloud's Z and the checkpoints are both **NAVD88 orthometric** in NAD83(2011) UTM 19N, so they compare with no vertical-datum reconciliation.
+
+OLV grids the committed class-2 ground with the production `rasterizeDtm` (point-in-cell mean), and each checkpoint is compared to the DTM cell it falls in. Matching protocol, fixed before the accuracy was computed: nearest cell, no interpolation; a checkpoint whose cell has no classified ground is rejected; a residual over 1 m is a gross outlier (a check shot above the bare-earth surface) reported separately on a physical 1 m threshold.
+
+| Metric | OLV DTM vs checkpoints |
+|---|---|
+| N used / rejected | 101 / 3 (no classified ground) |
+| RMSE | 2.8 cm |
+| MAE | 2.3 cm |
+| median \|err\| | 1.8 cm |
+| signed bias | −0.2 cm |
+| max \|err\| | 8.2 cm |
+
+The asserted bounds in the test come from the accuracy budget (RTK ~2 cm + a UAS bare-earth product's ~10 cm class), not from these figures. This is OLV's first absolute-accuracy result against surveyed truth; the datum matches, so it is not limited by geoid reconciliation.
+
+## The Coconino leg — absolute accuracy in steep, forested terrain
+
+Marsh Island is flat coastal marsh. This leg adds the hard case it does not cover: bare-earth extraction **under canopy**. Source is the USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; NGTOC task order 140G0219F0247), public domain via the USGS 3D Elevation Program. Its aerial-accuracy checkpoints (NVA + VVA, project-report Tables 8/9) are held **separate from the 12 LiDAR Control Points**, so they are an independent vertical-accuracy set, not reused for calibration. Checkpoints are reprojected from UTM 12N to the tile CRS (NAD83(2011) / Conus Albers, EPSG:6350); tile Z and checkpoint Z are both **NAVD88 orthometric (Geoid12B)**, so there is no vertical-datum reconciliation.
+
+The checkpoints are sparse — 1–2 per 1 km tile across the whole ~50×110 km project — so a given tile usually contains none. The committed tile `w1407n1486` contains exactly one: **TR03**, a *vegetated* (VVA) checkpoint at 2567.66 m in forest. OLV grids the committed class-2 ground with the production `rasterizeDtm` at 1.0 m (the USGS 3DEP QL2 bare-earth DEM resolution) and compares TR03 to its DTM cell.
+
+| Metric | OLV DTM vs TR03 (forest VVA) |
+|---|---|
+| N used / rejected | 1 / 0 |
+| residual (1 m cell) | +3.9 cm |
+| mean of ground within 3 m | 2567.66 m vs 2567.66 m surveyed (−0.1 cm) |
+
+The per-checkpoint bound in the test is the USGS accuracy class for the checkpoint's type (NVA 0.30 m, VVA 0.60 m), not a figure fitted to the result. A single checkpoint is one measurement, not a distribution: this is strong per-point agreement under canopy, and the fixture and test grow with N automatically as more project tiles are added (`scripts/terrain-field/generate-coconino-reference.py <tile.laz ...>`).
+
+## The Coconino slope/aspect leg (real steep terrain)
+
+The slope/aspect cross-checks otherwise run on a synthetic analytic DEM and on flat White Sands. This leg adds real steep ground: a 150 × 150 m crop of the same Coconino tile with 40 m of relief, local slopes to ~45° in conifer forest, gridded to a 1 m point-in-cell DTM. OLV's `hornSlopeAspect` is compared two ways on that DTM (`tests/coconinoSlopeAspect.test.ts`):
+
+| Reference | What it proves | Result |
+|---|---|---|
+| **NumPy Horn** — same convention, separate codebase, 735 frozen interior cells | the implementation on steep real ground | max 3e-8 (slope), 1e-7 rad (aspect) |
+| **gdaldem 3.13.1** `slope -alg Horn` — a different tool | OLV agrees with a mainstream tool on real steep terrain | max 0.013°, mean 0.003° over 19,834 cells |
+
+This broadens the slope cross-implementation evidence from the analytic surface to national-survey terrain. It does not, on its own, promote the claim beyond E4 — it is still cross-implementation agreement, not accuracy against surveyed truth. Reproduction: `scripts/terrain-field/generate-coconino-slope-reference.md`.
+
 ## Reliability studies (beyond the reference comparisons)
 
 The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):

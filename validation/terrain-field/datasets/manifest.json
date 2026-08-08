@@ -86,6 +86,43 @@
    "terrain": "flat boreal plain; classified national survey; ~1.6 m of relief in the crop",
    "licence": "CC BY 4.0",
    "role": "third projection family \u2014 Lambert Conformal Conic gridding correctness leg"
+  },
+  {
+   "datasetId": "USGS-MARSH-ISLAND-2024",
+   "title": "USGS Marsh Island / New Bedford MA UAS survey, 2024 (site 2025-009-FA)",
+   "source": "U.S. Geological Survey data release",
+   "doi": "10.5066/P19TLXVG",
+   "citation": "Over, J.R., Cramer, J.M., Millo, A., Brosnahan, S.M., Ackerman, S.D., and Ganju, N.K., 2024, Topographic, multispectral, and GPS data collected during UAS operations at Marsh Island, New Bedford, Massachusetts (ver. 2.0, May 2026), USGS data release.",
+   "sourceFile": "2025009FA_MI_Mar_YSMP_LPC_classified.laz",
+   "sourceSha256": "ca1d5360f91b1493cfa854139d741361aa450cf0358d581edcfe4400bb89ae67",
+   "checkpointFile": "2025009FA_MI_Mar_GPS_Emlid_RS3_checkpoints.csv",
+   "checkpointSha256": "d2a93bbe47212ace4f50071471a82ad5e2a11ca96c58ddc9e01833e3b8239a91",
+   "horizontalCrs": "NAD83(2011) / UTM zone 19N (EPSG:6348)",
+   "verticalDatum": "NAVD88 orthometric (GEOID18)",
+   "units": "metre",
+   "sensor": "Agisoft Metashape photogrammetry/LiDAR (UAS); Emlid RS3 RTK checkpoints",
+   "independentCheckpoints": 104,
+   "terrain": "coastal salt marsh; bare-earth near sea level (~1.5-3.5 m NAVD88)",
+   "licence": "CC0 1.0 Universal / public domain (U.S. Government work); no use constraints",
+   "role": "absolute vertical accuracy vs INDEPENDENT surveyed RTK checkpoints (same NAVD88 datum as the cloud; no reconciliation)"
+  },
+  {
+   "datasetId": "USGS-COCONINO-B1-2019",
+   "title": "USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; task order AZ_CoconinoUSFS_2019_B19)",
+   "source": "U.S. Geological Survey 3D Elevation Program (3DEP) / The National Map",
+   "citation": "U.S. Geological Survey, 2020, USGS Lidar Point Cloud AZ_CoconinoUSFS_2019_B19 (USGS project 19049; NGTOC task order 140G0219F0247, contract G16PC00042): U.S. Geological Survey 3D Elevation Program (3DEP). Public domain.",
+   "sourceFile": "USGS_LPC_AZ_Coconino_2019_B19_w1407n1486.laz",
+   "sourceSha256": "cf7f2cecc502f97504965e4acc15942015342e27e4fa1e6b3cb63b0a24d53a39",
+   "checkpointFile": "19049 Project Report, Tables 8 (NVA) & 9 (VVA), reprojected to references/coconino-b19-2019__checkpoints.json",
+   "checkpointSha256": "7f13f2166996de1d0d87fb68479e43c6dfdd1b68b8dbc800d683b99eee13416d",
+   "horizontalCrs": "NAD83(2011) / Conus Albers (EPSG:6350)",
+   "verticalDatum": "NAVD88 orthometric (Geoid12B)",
+   "units": "metre",
+   "sensor": "Optech Galaxy Prime airborne LiDAR (summer 2019, leaf-on); ground survey NVA/VVA checkpoints held separate from the 12 LiDAR Control Points",
+   "independentCheckpoints": "121 project-wide (1 inside tile w1407n1486: TR03, a vegetated/VVA checkpoint at 2567.66 m)",
+   "terrain": "steep forested plateau, Coconino National Forest (~2500-2730 m NAVD88); bare-earth under canopy",
+   "licence": "Public domain (U.S. Geological Survey / The National Map); no use constraints",
+   "role": "absolute vertical accuracy vs INDEPENDENT surveyed VVA/NVA checkpoints (same NAVD88 datum as the cloud; no reconciliation); the forested VVA case complements the flat-marsh Marsh Island leg"
   }
  ]
 }
