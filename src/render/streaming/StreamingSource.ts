@@ -86,6 +86,13 @@ export type StreamingSourceKind = 'copc' | 'ept';
  * {@link kind}.
  */
 export interface StreamingSource {
+  /**
+   * The stable shell id for this streaming session — non-null and distinct per
+   * open, minted by {@link nextStreamingScanId}. A streaming scan never enters
+   * the static cloud registry, so this is the only identity the export/terrain
+   * scan-identity guards can compare to catch a streaming→streaming swap.
+   */
+  readonly id: string;
   /** Which on-disk format is open. */
   readonly kind: StreamingSourceKind;
   /** Display name — the file or scan name surfaced in the UI. */

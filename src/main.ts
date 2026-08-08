@@ -2266,7 +2266,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeId,
+    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -2983,7 +2983,7 @@ const exportPanel = new ExportPanel({
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.
   isStreamingPending: () => viewer?.streamingCloud != null && viewer.exportFrontierPointTotal() === 0,
-  getActiveClip: () => viewer.getClip(), getActiveScanId: () => scans.activeId,
+  getActiveClip: () => viewer.getClip(), getActiveScanId: () => scans.activeExportTargetId(),
   hasFullSource: () => scans.activeId != null && sourceFileById.has(scans.activeId),
   hasClassEdits: () => scans.activeId != null && (viewer?.canUndoClassification(scans.activeId) ?? false),
   // A streaming snapshot exports only resident points, so it is a reduced subset
