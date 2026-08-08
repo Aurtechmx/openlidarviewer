@@ -77,6 +77,10 @@ export function describeRemoteCopcError(err: unknown, url: string): string {
     if (err.code === 'server-error') {
       return `${err.message} The host returned a server-side error — wait a moment and try again.`;
     }
+    if (err.code === 'resource-changed') {
+      // The message already says what happened and what to do; nothing to add.
+      return err.message;
+    }
     return err.message;
   }
   const detail = err instanceof Error ? err.message : 'unknown error';
