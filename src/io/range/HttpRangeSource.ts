@@ -13,9 +13,16 @@
  * backoff retries on transient transport failures (retry-with-backoff), (b) hard
  * per-attempt request timeouts (per-attempt timeout), (c) `Content-Range` validation on
  * 206 responses (Content-Range validation), (d) a `Range: bytes=0-0` GET fallback when HEAD
- * is unusable (ranged-GET fallback). The new behaviour is fully dependency-injected for
+ * is unusable (ranged-GET fallback), and (e) OBJECT-IDENTITY PINNING: a load is
+ * dozens of range reads over seconds to minutes, so a file re-uploaded partway
+ * through would splice two versions into one decode. The object's validators
+ * (ETag / Last-Modified) and total size are pinned at probe time; every read
+ * sends `If-Match` when a strong ETag is held and is re-checked against the pin,
+ * failing with the non-retryable `resource-changed` code on any mismatch or a
+ * `412`. `If-Match` downgrades once if it trips a CORS preflight, keeping the
+ * client-side check. The new behaviour is fully dependency-injected for
  * deterministic tests — pass a fake `fetchImpl`, `now`, and `random` and
- * exercise the retry / timeout / mismatch paths exactly.
+ * exercise the retry / timeout / mismatch / identity paths exactly.
  *
  * Pure of three.js; uses `fetch`, which is available on both the main thread
  * and in workers.
@@ -33,6 +40,12 @@ const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_BASE_MS = 250;
 /** HTTP statuses we DO retry on (transient transport faults). */
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
+/** The server's answer to our `If-Match`: the object is no longer the one we pinned. */
+const PRECONDITION_FAILED = 412;
+/** Shown when a mid-load object change is detected. Not retryable — the bytes
+ *  already decoded belong to a version that no longer exists. */
+const RESOURCE_CHANGED_MESSAGE =
+  'The file on the server changed while it was loading. Reload to read the current version.';
 
 /** Tunables for {@link HttpRangeSource}. Defaulted, injected for unit tests. */
 export interface HttpRangeSourceOptions {
@@ -63,6 +76,33 @@ export class HttpRangeSource implements RangeSource {
   private readonly _random: () => number;
   private readonly _sleep: (ms: number) => Promise<void>;
   private _size: number | undefined;
+  // ── Object identity, pinned at probe time (a COPC/EPT load is dozens of
+  // range reads over seconds to minutes; a file re-uploaded partway through
+  // splices two versions into one decode, which is silent where a crash is
+  // not). Pin the object's validators once and re-check every response. ──
+  /** The `ETag` pinned at probe time, verbatim (quotes and any `W/` kept). */
+  private _etag: string | null = null;
+  /**
+   * Whether {@link _etag} is a STRONG validator. `If-Match` is defined for
+   * strong comparison, so a weak `W/"…"` tag must not be sent as a
+   * precondition; it is still kept to compare against what comes back.
+   */
+  private _etagIsStrong = false;
+  /** The `Last-Modified` pinned at probe time — the weaker fallback validator. */
+  private _lastModified: string | null = null;
+  /**
+   * Send `If-Match` on range reads. Starts on when a strong ETag is held and
+   * downgrades at most once: `If-Match` is not a CORS-safelisted request
+   * header, so a bucket whose CORS lists `Range` explicitly (not `*`) fails
+   * the preflight for it and the browser reports an opaque transport error.
+   * Refusing such a dataset would trade a rare correctness hazard for a common
+   * outage, so the first conditional read that dies at the transport layer
+   * before any conditional read has succeeded drops to unconditional reads —
+   * every response is still checked against the pinned validators.
+   */
+  private _useConditionalRead = true;
+  /** True once a conditional read has actually reached a response. */
+  private _conditionalReadProven = false;
 
   constructor(url: string, options: HttpRangeSourceOptions = {}) {
     this._url = url;
@@ -113,6 +153,9 @@ export class HttpRangeSource implements RangeSource {
           `Server returned ${head.status} for ${sanitizeUrlForDisplay(this._url)}`,
         );
       }
+      // Pin the object's validators from the first successful response; every
+      // later read is checked against them.
+      this._pinIdentity(head);
       const acceptRanges = head.headers.get('accept-ranges');
       if (acceptRanges === 'none') {
         // Server explicitly declares it doesn't support ranges.
@@ -180,10 +223,14 @@ export class HttpRangeSource implements RangeSource {
     if (clamped === 0) return new ArrayBuffer(0);
 
     const end = offset + clamped - 1;
-    const response = await this._fetchWithRetryAndTimeout(
-      { headers: { Range: `bytes=${offset}-${end}` } },
-      signal,
-    );
+    const response = await this._fetchRangeWithIdentity(offset, end, signal);
+    // The server evaluated our `If-Match` and says the object is no longer the
+    // one we pinned. Distinct from every transport code: the read cannot be
+    // retried into correctness, because the bytes already decoded belong to a
+    // version that no longer exists.
+    if (response.status === PRECONDITION_FAILED) {
+      throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
+    }
     // 206 Partial Content is the expected success. A 200 means the server
     // ignored the Range header and is sending the whole file — that defeats
     // streaming, so it is treated as range-unsupported rather than accepted.
@@ -217,6 +264,10 @@ export class HttpRangeSource implements RangeSource {
     // before. When Content-Range is absent the exact-length check IS the only
     // integrity guard, so it stays; when present, it still bounds the read.
     if (contentRange === null) {
+      // No Content-Range to read a total from, so identity rests on the
+      // validators (ETag / Last-Modified) alone here. The bounded read then
+      // enforces the exact requested length.
+      this._assertSameObject(response, null);
       return readExactlyBounded(response, expected, { signal });
     }
     if (!isContentRangeMatch(contentRange, offset, end)) {
@@ -225,6 +276,11 @@ export class HttpRangeSource implements RangeSource {
         `Server returned a 206 with mismatched Content-Range "${contentRange}" for ${offset}-${end}.`,
       );
     }
+    // The Content-Range total is the object's size on this response; a
+    // re-uploaded file of a different size is caught here even if it kept its
+    // validators or the server exposes none. The bounded read then enforces
+    // the exact requested length.
+    this._assertSameObject(response, parseContentRangeTotal(contentRange));
     return readExactlyBounded(response, expected, { signal });
   }
 
@@ -257,6 +313,9 @@ export class HttpRangeSource implements RangeSource {
         `Probe returned an unexpected status ${response.status}`,
       );
     }
+    // Pin the object's validators when HEAD was skipped and this ranged GET is
+    // the first successful response.
+    this._pinIdentity(response);
     // Tear the one-byte probe body down without reading it. `arrayBuffer()`
     // here would materialise whatever the server actually sent — a host that
     // answers a `bytes=0-0` probe with a huge body would be read in full into a
@@ -287,6 +346,85 @@ export class HttpRangeSource implements RangeSource {
       'The server confirmed range support but didn\'t expose the file size. ' +
         'If you control the bucket, add Content-Length and Content-Range to its CORS ExposeHeaders.',
     );
+  }
+
+  /**
+   * Record the object's validators from the first response that carries them.
+   * Later responses are CHECKED against these, never allowed to overwrite them
+   * — a pin that follows the server around is not a pin.
+   */
+  private _pinIdentity(response: Response): void {
+    if (this._etag === null) {
+      const etag = response.headers.get('etag');
+      if (etag !== null && etag.trim() !== '') {
+        this._etag = etag.trim();
+        this._etagIsStrong = !/^W\//i.test(this._etag);
+      }
+    }
+    if (this._lastModified === null) {
+      const lastModified = response.headers.get('last-modified');
+      if (lastModified !== null && lastModified.trim() !== '') {
+        this._lastModified = lastModified.trim();
+      }
+    }
+  }
+
+  /**
+   * Fail the read if this response describes a different object than the one
+   * pinned at probe time. Each check is skipped when either side is absent —
+   * the graceful degradation for a host that stops exposing a validator — so a
+   * present-but-changed signal is what fires, never a missing one.
+   */
+  private _assertSameObject(response: Response, total: number | null): void {
+    const etag = response.headers.get('etag')?.trim();
+    if (this._etag !== null && etag !== undefined && etag !== '' && etag !== this._etag) {
+      throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
+    }
+    const lastModified = response.headers.get('last-modified')?.trim();
+    if (this._lastModified !== null && lastModified !== undefined && lastModified !== '' && lastModified !== this._lastModified) {
+      throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
+    }
+    // The total from Content-Range is the identity signal every compliant range
+    // server sends, exposed cross-origin with no extra CORS header beyond the
+    // Content-Range already read. A re-uploaded object of a different size is
+    // caught here even when it kept its ETag.
+    if (total !== null && this._size !== undefined && total !== this._size) {
+      throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
+    }
+  }
+
+  /**
+   * Issue the range request, sending `If-Match` when a strong ETag is pinned,
+   * and downgrading to unconditional reads once if that trips a CORS preflight
+   * — see {@link _useConditionalRead}. Either way the response is still checked
+   * against the pinned validators by {@link _assertSameObject}.
+   */
+  private async _fetchRangeWithIdentity(
+    offset: number,
+    end: number,
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const conditional =
+      this._useConditionalRead && this._etag !== null && this._etagIsStrong;
+    const headers: Record<string, string> = { Range: `bytes=${offset}-${end}` };
+    if (conditional) headers['If-Match'] = this._etag as string;
+    try {
+      const response = await this._fetchWithRetryAndTimeout({ headers }, signal);
+      if (conditional) this._conditionalReadProven = true;
+      return response;
+    } catch (err) {
+      const preflightSuspect =
+        conditional &&
+        !this._conditionalReadProven &&
+        err instanceof RangeReadError &&
+        err.code === 'transport';
+      if (!preflightSuspect) throw err;
+      this._useConditionalRead = false;
+      return this._fetchWithRetryAndTimeout(
+        { headers: { Range: `bytes=${offset}-${end}` } },
+        signal,
+      );
+    }
   }
 
   /**
