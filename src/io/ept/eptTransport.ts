@@ -22,6 +22,7 @@
  */
 
 import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud';
+import { sanitizeUrlForDisplay } from '../range/RangeSource';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -106,7 +107,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
       // outer-signal abort propagates unchanged for the caller to treat as one.
       if (timeoutController.signal.aborted && !outer?.aborted) {
         throw new EptTimeoutError(
-          `EPT request timed out after ${requestTimeoutMs} ms for ${url}`,
+          `EPT request timed out after ${requestTimeoutMs} ms for ${sanitizeUrlForDisplay(url)}`,
         );
       }
       throw err;
@@ -156,11 +157,11 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
         // 4xx (except 408/429) — permanent. Don't retry; throw immediately.
         if (!RETRYABLE_STATUSES.has(response.status)) {
           throw new Error(
-            `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${url}`,
+            `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${sanitizeUrlForDisplay(url)}`,
           );
         }
         lastError = new Error(
-          `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${url}`,
+          `EPT ${label} fetch failed (${response.status} ${response.statusText}) for ${sanitizeUrlForDisplay(url)}`,
         );
       }
       // Backoff before the next attempt (unless we're out of retries).
@@ -169,7 +170,7 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
       }
     }
     if (lastError instanceof Error) throw lastError;
-    throw new Error(`EPT ${label} fetch failed for ${url}`);
+    throw new Error(`EPT ${label} fetch failed for ${sanitizeUrlForDisplay(url)}`);
   }
 
   return {
