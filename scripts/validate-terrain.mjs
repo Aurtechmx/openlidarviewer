@@ -30,6 +30,7 @@ const MARK = { pass: 'PASS', fail: 'FAIL', skipped: 'SKIP' };
 
 const HARNESS_FILES = [
   'tests/terrainFieldValidation.test.ts',
+  'tests/marshIslandCheckpoints.test.ts',
   'tests/terrainBoundary.test.ts',
   'tests/terrainBoundaryReal.test.ts',
   'tests/terrainPipelineBenchmark.test.ts',

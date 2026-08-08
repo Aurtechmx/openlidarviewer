@@ -48,6 +48,23 @@ A 100 × 100 m interior crop of the Estonian Land Board 2020 national LiDAR (til
 |---|---|---|---|
 | Gridding correctness | **scipy** `binned_statistic_2d` mean | OLV bins and averages real LCC coordinates correctly | max 0.04 mm, RMSE 0.01 mm |
 
+## The Marsh Island leg — absolute accuracy vs INDEPENDENT surveyed checkpoints
+
+The other legs compare OLV to an independent *implementation* on the same points. This one compares OLV to independent *surveyed ground truth*: the USGS Marsh Island / New Bedford MA UAS survey (Over et al. 2024, DOI 10.5066/P19TLXVG, CC0 / public domain) ships **104 RTK check shots** (Emlid RS3) that are separate from the aerial control points. The classified point cloud's Z and the checkpoints are both **NAVD88 orthometric** in NAD83(2011) UTM 19N, so they compare with no vertical-datum reconciliation.
+
+OLV grids the committed class-2 ground with the production `rasterizeDtm` (point-in-cell mean), and each checkpoint is compared to the DTM cell it falls in. Matching protocol, fixed before the accuracy was computed: nearest cell, no interpolation; a checkpoint whose cell has no classified ground is rejected; a residual over 1 m is a gross outlier (a check shot above the bare-earth surface) reported separately on a physical 1 m threshold.
+
+| Metric | OLV DTM vs checkpoints |
+|---|---|
+| N used / rejected | 101 / 3 (no classified ground) |
+| RMSE | 2.8 cm |
+| MAE | 2.3 cm |
+| median \|err\| | 1.8 cm |
+| signed bias | −0.2 cm |
+| max \|err\| | 8.2 cm |
+
+The asserted bounds in the test come from the accuracy budget (RTK ~2 cm + a UAS bare-earth product's ~10 cm class), not from these figures. This is OLV's first absolute-accuracy result against surveyed truth; the datum matches, so it is not limited by geoid reconciliation.
+
 ## Reliability studies (beyond the reference comparisons)
 
 The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):
