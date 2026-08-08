@@ -30,6 +30,7 @@
 
 import type { RangeSource, RangeSourceKind } from './RangeSource';
 import { RangeReadError, clampRange, sanitizeUrlForDisplay } from './RangeSource';
+import { readExactlyBounded } from './boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
@@ -255,18 +256,19 @@ export class HttpRangeSource implements RangeSource {
     // returning the wrong bytes.
     const contentRange = response.headers.get('content-range');
     const expected = end - offset + 1;
+    // Both success paths stream the body through a bounded reader: it refuses a
+    // declared length above the request before reading a byte, stops and
+    // cancels on the chunk that would cross the ceiling, and races an idle /
+    // whole-body clock so a host that sends headers and then trickles (or
+    // stalls) can't hang the read. A too-short body is rejected the same as
+    // before. When Content-Range is absent the exact-length check IS the only
+    // integrity guard, so it stays; when present, it still bounds the read.
     if (contentRange === null) {
       // No Content-Range to read a total from, so identity rests on the
-      // validators (ETag / Last-Modified) alone here.
+      // validators (ETag / Last-Modified) alone here. The bounded read then
+      // enforces the exact requested length.
       this._assertSameObject(response, null);
-      const body = await response.arrayBuffer();
-      if (body.byteLength !== expected) {
-        throw new RangeReadError(
-          'content-mismatch',
-          `Server returned a 206 without Content-Range and a body length ${body.byteLength} that didn't match the requested ${expected} bytes.`,
-        );
-      }
-      return body;
+      return readExactlyBounded(response, expected, { signal });
     }
     if (!isContentRangeMatch(contentRange, offset, end)) {
       throw new RangeReadError(
@@ -276,9 +278,10 @@ export class HttpRangeSource implements RangeSource {
     }
     // The Content-Range total is the object's size on this response; a
     // re-uploaded file of a different size is caught here even if it kept its
-    // validators or the server exposes none.
+    // validators or the server exposes none. The bounded read then enforces
+    // the exact requested length.
     this._assertSameObject(response, parseContentRangeTotal(contentRange));
-    return response.arrayBuffer();
+    return readExactlyBounded(response, expected, { signal });
   }
 
   /**
@@ -313,9 +316,18 @@ export class HttpRangeSource implements RangeSource {
     // Pin the object's validators when HEAD was skipped and this ranged GET is
     // the first successful response.
     this._pinIdentity(response);
-    // Drain the one-byte body so the connection can be reused. Skipping
-    // this can leave the response in a half-read state on some runtimes.
-    void response.arrayBuffer().catch(() => undefined);
+    // Tear the one-byte probe body down without reading it. `arrayBuffer()`
+    // here would materialise whatever the server actually sent — a host that
+    // answers a `bytes=0-0` probe with a huge body would be read in full into a
+    // buffer nobody looks at. Cancelling the stream releases the connection
+    // and refuses that body outright. Guarded for runtimes / test stand-ins
+    // whose Response has no streaming body.
+    const probeBody = response.body as ReadableStream<Uint8Array> | null | undefined;
+    if (probeBody && typeof probeBody.cancel === 'function') {
+      void probeBody.cancel().catch(() => undefined);
+    } else {
+      void response.arrayBuffer().catch(() => undefined);
+    }
     const total = parseContentRangeTotal(response.headers.get('content-range'));
     if (total !== null && total > 0) {
       this._size = total;
