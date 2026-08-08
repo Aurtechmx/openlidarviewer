@@ -16,14 +16,16 @@ run.
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
 | `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
 | `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0–255 |
+| `CONTOURS` | GDAL 3.13.1 `gdal_contour` | `tests/contourCrossCheck.test.ts` | 2,222 vertices | 2.9×10⁻⁵ m vs GDAL (2.0×10⁻⁷ vs closed form) | 0.05 m |
 
-All three tolerances were registered in `REFERENCE_SLOTS` before the references
-were generated. Each GDAL raster, the exact command, the tool version and the
-checksums are committed beside the input DEM — the aspect and hillshade
-references reuse the slope fixture's DEM rather than copying it, and each pins
-it by hash, so one surface backs all three products.
+All four tolerances were registered in `REFERENCE_SLOTS` before the references
+were generated. Each GDAL output, the exact command, the tool version and the
+checksums are committed beside the input DEM. The three rasters share one DEM,
+each pinning it by hash; contours use their own tilted-plane DEM, because on a
+plane linear interpolation is exact and the tolerance measures cross-implementation
+agreement rather than the interpolation error a curved surface would add.
 
-This validates the slope, aspect and hillshade *algorithms* against an
+This validates the slope, aspect, hillshade and contour *algorithms* against an
 independent implementation on a known surface. It does not validate the
 point-cloud-to-DTM pipeline, does not establish field or survey-grade accuracy,
 and says nothing about the other terrain products — each carries its own claim
@@ -153,6 +155,26 @@ size, extent, and row order), so the two can be compared cell for cell.
    intensity as `1 + 254·h` with 0 reserved for nodata, while ours is `255·h` —
    compare the levels as they are and report the offset rather than removing
    it. See `tests/fixtures/reference/hillshade/README.md`.
+
+### Contours (GDAL)
+
+1. Generate the tilted-plane DEM, then run `gdal_contour` at the same interval
+   the test uses:
+
+   ```
+   node scripts/make-contour-fixture.mjs
+   gdal_contour -i 0.5 -a elev input-dem.asc contour-gdal.geojson
+   ```
+
+2. Use the plane fixture, not the quadratic slope DEM. Contour vertices are
+   placed by linear edge interpolation on both sides, which is exact on a plane
+   and only approximate on a curved surface — where the error is largest in
+   low-gradient regions, so a curved DEM would fail contours for a reason that
+   is not a bug. The comparison measures each of our vertices as its distance to
+   the nearest GDAL contour of the same level, against the 0.05 m slot tolerance,
+   and separately checks both against the analytic line so a wrong DEM or a
+   half-cell georeferencing offset shows up rather than averaging into agreement.
+   The full reasoning is in `tests/fixtures/reference/contour/README.md`.
 
 ### Ground filter (CloudCompare or PDAL SMRF)
 
