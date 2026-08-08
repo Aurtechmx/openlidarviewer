@@ -244,7 +244,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     }
     // Phones get a tighter point budget — limited GPU memory and fill-rate.
     // The dropped file is wrapped in a LocalFileSource — the source
-    // abstraction; v0.3 streaming sources slot in beside it.
+    // abstraction; remote streaming runs on its own path (openStreaming).
     const result = await deps.loadLocalSource(
       file,
       {

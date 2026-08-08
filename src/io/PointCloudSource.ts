@@ -1,16 +1,17 @@
 /**
  * PointCloudSource.ts
  *
- * The abstraction every point-cloud origin implements — a local file today,
- * and (in v0.3) a remote file, a COPC dataset, or a range-request stream.
+ * The abstraction a whole-file point-cloud origin implements — today that is
+ * the local dropped or picked file (`LocalFileSource`).
  *
  * `metadata()` is the cheap preflight: enough to tell the user what the source
  * is and how it will load, with no body decode. `load()` runs the full decode.
  * Splitting the two is what lets the UI show a confident "PTX scan detected,
  * large-file optimization enabled" summary before committing to the load.
  *
- * ships exactly one implementation — `LocalFileSource`. The interface is
- * the seam for v0.3 streaming; no remote loading is implemented here.
+ * Ships exactly one implementation — `LocalFileSource`. Remote streaming
+ * (COPC, EPT) shipped on its own path — `RangeSource` / `StreamingHost` —
+ * rather than through this seam, so no remote loading is implemented here.
  *
  * Pure types — no DOM, no three.js.
  */
@@ -18,7 +19,8 @@
 import type { SourceFormat } from './sniffFormat';
 import type { LoadResult, LoadCallbacks, LoadOptions } from './loadFile';
 
-/** Where a point cloud comes from. Extended in v0.3 (`url`, `copc`). */
+/** Where a whole-file point cloud comes from. `url`/`copc` are reserved; the
+ *  remote streaming path routes through `RangeSource`, not this type. */
 export type SourceType = 'local-file' | 'url' | 'copc';
 
 /** The cheap preflight result — what a source is, before any body decode. */
@@ -46,7 +48,7 @@ export interface SourceMetadata {
  * regardless of where the bytes came from.
  */
 export interface PointCloudSource {
-  /** The kind of source — drives diagnostics and v0.3 routing. */
+  /** The kind of source — drives diagnostics. */
   type(): SourceType;
   /** Cheap preflight: format, size, and (when known) point count + load mode. */
   metadata(options?: LoadOptions): Promise<SourceMetadata>;
