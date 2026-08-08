@@ -29,6 +29,7 @@ import { resolve } from 'node:path';
 import { rasterizeDtm } from '../src/terrain/ground/rasterizeDtm';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import { crossCheck } from '../src/validation/crossCheck';
+import { deriveClassification } from '../src/render/class/deriveClassification';
 
 const DIR = resolve(__dirname, '../validation/terrain-field');
 const GROUND = resolve(DIR, 'crops/whitesands-dune__ground.f32');
@@ -127,6 +128,83 @@ describe('OLV DTM vs real USGS 3DEP ground (White Sands dune crop)', () => {
       // eslint-disable-next-line no-console
       console.log(`[terrain-field] OLV vs PDAL windowed: verdict=${r.verdict} cells=${r.count} max=${r.maxAbsDiff?.toExponential(3)} rmse=${r.rmse?.toExponential(3)} within=${r.withinTolFraction?.toFixed(4)}`);
       expect(r.count).toBeGreaterThan(1000);
+      expect(r.verdict).toBe('agree');
+    },
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// StREAM Lab (VT drone survey) — a survey-CLASSIFIED riparian crop. Unlike the
+// bare desert, it carries real above-ground truth (ground / high vegetation),
+// so OLV's classifier and DTM can be checked against a published classification.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SL_BIN = resolve(DIR, 'crops/sl-field.bin');
+const SL_REF_BINCELL = resolve(DIR, 'references/sl-field__bincell-dtm.asc');
+const SL_GRID = { originH1: 549240, originH2: 4118390, cols: 40, rows: 40, cellSizeM: 1 } as const;
+
+/** Decode the packed SL crop: [xyz f32 n*3][rgb u16 n*3][rn u8 n][nr u8 n][cls u8 n]. */
+function readSl() {
+  const buf = readFileSync(SL_BIN);
+  // n from the total length: 12 (xyz) + 6 (rgb) + 1 + 1 + 1 = 21 bytes/point.
+  const n = buf.byteLength / 21;
+  let off = buf.byteOffset;
+  const xyz = new Float32Array(buf.buffer, off, n * 3); off += n * 12;
+  const rgb = new Uint16Array(buf.buffer, off, n * 3); off += n * 6;
+  const rn = new Uint8Array(buf.buffer, off, n); off += n;
+  const nr = new Uint8Array(buf.buffer, off, n); off += n;
+  const cls = new Uint8Array(buf.buffer, off, n);
+  return { n, xyz, rgb, rn, nr, cls };
+}
+
+describe('OLV on survey-classified drone data (StREAM Lab riparian crop)', () => {
+  const has = existsSync(SL_BIN);
+
+  // Leg A — ground classification against the survey. OLV's ground is more
+  // INCLUSIVE than the survey's (the survey leaves ambiguous near-ground returns
+  // Unclassified; OLV assigns them ground), so precision against the survey's
+  // conservative class 2 is not the right metric — a definitional difference,
+  // not an error. The robust checks are: OLV catches the survey's ground (high
+  // recall), and when OLV calls a point vegetation it really is vegetation
+  // (high precision). RGB and return counts are supplied, the same cues the
+  // survey classifier had.
+  (has ? it : it.skip)('catches survey ground and does not over-call vegetation', () => {
+    const { n, xyz, rgb, rn, nr, cls } = readSl();
+    const res = deriveClassification(new Float32Array(xyz), n, { colors: new Uint16Array(rgb), returnNumber: new Uint8Array(rn), returnCount: new Uint8Array(nr) });
+    const codes = res.codes;
+    let gtp = 0, gfn = 0, vtp = 0, vfp = 0;
+    for (let i = 0; i < n; i++) {
+      const refGround = cls[i] === 2, gotGround = codes[i] === 2;
+      if (refGround && gotGround) gtp++; else if (refGround && !gotGround) gfn++;
+      const refVeg = cls[i] >= 3 && cls[i] <= 5, gotVeg = codes[i] >= 3 && codes[i] <= 5;
+      if (gotVeg && refVeg) vtp++; else if (gotVeg && !refVeg) vfp++;
+    }
+    const groundRecall = gtp / (gtp + gfn);
+    const vegPrecision = vtp / (vtp + vfp);
+    // eslint-disable-next-line no-console
+    console.log(`[terrain-field] StREAM classification: groundRecall=${groundRecall.toFixed(3)} vegPrecision=${vegPrecision.toFixed(3)}`);
+    expect(groundRecall).toBeGreaterThan(0.95);
+    expect(vegPrecision).toBeGreaterThan(0.95);
+  });
+
+  // Leg B — DTM on the survey's ground returns (class 2), against the same
+  // independent point-in-cell mean. Confirms OLV's gridding on ultra-dense drone
+  // data at a different UTM zone (17N) matches the reference the way it does on
+  // the sparse airborne desert.
+  (existsSync(SL_REF_BINCELL) && has ? it : it.skip)(
+    'grids survey ground into a DTM matching an independent point-in-cell mean',
+    () => {
+      const { n, xyz, cls } = readSl();
+      const pts: TerrainPoint[] = [];
+      for (let i = 0; i < n; i++) if (cls[i] === 2) pts.push({ x: xyz[i * 3] + SL_GRID.originH1, y: xyz[i * 3 + 1] + SL_GRID.originH2, z: xyz[i * 3 + 2] });
+      const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid: SL_GRID, aggregation: 'mean' });
+      const ref = readAsciiSouthUp(SL_REF_BINCELL);
+      const ours = Array.from(raster.z, (v) => (Number.isFinite(v) ? v : NaN));
+      const refArr = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
+      const r = crossCheck(ours, refArr, { toleranceAbs: 0.005, minCells: 200 });
+      // eslint-disable-next-line no-console
+      console.log(`[terrain-field] StREAM DTM vs scipy: verdict=${r.verdict} cells=${r.count} max=${r.maxAbsDiff?.toExponential(3)} rmse=${r.rmse?.toExponential(3)}`);
+      expect(r.count).toBeGreaterThan(200);
       expect(r.verdict).toBe('agree');
     },
   );

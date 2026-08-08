@@ -45,7 +45,17 @@
       "sensor": "UAV lidar",
       "terrain": "boreal forest; dense canopy — ground under canopy is the hard case, OLV reads it as an object",
       "licence": "see Zenodo record terms",
-      "role": "stress case: ground extraction / DTM under dense forest canopy"
+      "role": "stress case: ground extraction / DTM under dense forest canopy (source cloud is unclassified, so it validates OLV's classifier, not against one)"
+    },
+    {
+      "datasetId": "PANGANDARAN-COASTAL-2025",
+      "title": "Drone LiDAR of Pangandaran coastal tourism hotspots (tsunami/climate risk)",
+      "source": "Zenodo (Syamsuddin et al., 2025)",
+      "doi": "10.5281/zenodo.17073404",
+      "sourceFiles": ["6-7.las", "attached.las"],
+      "terrain": "coastal; built + vegetated tourism area — flat coastal ground plus structures",
+      "licence": "see Zenodo record terms",
+      "role": "future leg: coastal ground + building/structure classification"
     }
   ]
 }
