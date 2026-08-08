@@ -79,6 +79,17 @@ The checkpoints are sparse — 1–2 per 1 km tile across the whole ~50×110 km 
 
 The per-checkpoint bound in the test is the USGS accuracy class for the checkpoint's type (NVA 0.30 m, VVA 0.60 m), not a figure fitted to the result. A single checkpoint is one measurement, not a distribution: this is strong per-point agreement under canopy, and the fixture and test grow with N automatically as more project tiles are added (`scripts/terrain-field/generate-coconino-reference.py <tile.laz ...>`).
 
+## The Coconino slope/aspect leg (real steep terrain)
+
+The slope/aspect cross-checks otherwise run on a synthetic analytic DEM and on flat White Sands. This leg adds real steep ground: a 150 × 150 m crop of the same Coconino tile with 40 m of relief, local slopes to ~45° in conifer forest, gridded to a 1 m point-in-cell DTM. OLV's `hornSlopeAspect` is compared two ways on that DTM (`tests/coconinoSlopeAspect.test.ts`):
+
+| Reference | What it proves | Result |
+|---|---|---|
+| **NumPy Horn** — same convention, separate codebase, 735 frozen interior cells | the implementation on steep real ground | max 3e-8 (slope), 1e-7 rad (aspect) |
+| **gdaldem 3.13.1** `slope -alg Horn` — a different tool | OLV agrees with a mainstream tool on real steep terrain | max 0.013°, mean 0.003° over 19,834 cells |
+
+This broadens the slope cross-implementation evidence from the analytic surface to national-survey terrain. It does not, on its own, promote the claim beyond E4 — it is still cross-implementation agreement, not accuracy against surveyed truth. Reproduction: `scripts/terrain-field/generate-coconino-slope-reference.md`.
+
 ## Reliability studies (beyond the reference comparisons)
 
 The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):
