@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "description": "Real airborne LiDAR datasets the terrain field-validation harness runs OLV terrain outputs against. All are public and citable. Raw clouds are NOT committed (too large); each records its DOI/source, spatial reference, and the sha256 of the source file the committed crops were cut from.",
+  "datasets": [
+    {
+      "datasetId": "USGS-3DEP-WHITESANDS-2020",
+      "title": "USGS 3DEP LPC, White Sands NM 2020, tile w3597n3635",
+      "source": "USGS 3D Elevation Program (3DEP) Lidar Point Cloud",
+      "sourceFile": "USGS_LPC_NM_WhiteSandsNM_2020_D20_w3597n3635.laz",
+      "sourceSha256": "0723bee90b548738a9f795907da051fbcadbf36ada5d9777dad28063cfadd931",
+      "horizontalCrs": "NAD83(2011) / UTM zone 13N (EPSG:6342)",
+      "verticalDatum": "NAVD88 height, Geoid12B (EPSG:5703)",
+      "units": "metre",
+      "sensor": "Optech Galaxy (airborne)",
+      "pointCount": 9753124,
+      "tileExtent": { "minx": 359700, "miny": 3635700, "maxx": 360700, "maxy": 3636700 },
+      "terrain": "bare-earth gypsum dunes; sparse vegetation; clean ground",
+      "licence": "public domain (US Government work)",
+      "role": "primary bare-earth DTM + ground-classification reference"
+    },
+    {
+      "datasetId": "VT-STREAM-LAB-2026",
+      "title": "Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey",
+      "source": "OpenTopography",
+      "doi": "10.5069/G9NZ85W7",
+      "sourceFile": "SL_Spring2026_classified_projected_clipped_1.laz",
+      "horizontalCrs": "NAD83(2011) / UTM zone 17N (EPSG:6346)",
+      "verticalDatum": "NAVD88 height (EPSG:5703)",
+      "units": "metre",
+      "sensor": "DJI Matrice 350 RTK + Zenmuse L1 (UAV)",
+      "publishedProducts": "0.1 m DTM (with interpolated stream bathymetry) and 0.1 m CHM",
+      "terrain": "riparian; open field + dirt road (good ground) beside dense trees + stream (poor ground)",
+      "licence": "see OpenTopography dataset terms",
+      "role": "high-density DTM/CHM real-reference leg; crop to open-field ground away from the stream (bathymetry is interpolated in the published DTM)"
+    },
+    {
+      "datasetId": "HYYTIALA-UAV-2025",
+      "title": "Hyytiälä UAV Point Cloud Demo Dataset 2025",
+      "source": "Zenodo (Atherton, J. & Miettinen, I. E., 2026)",
+      "doi": "10.5281/zenodo.20793895",
+      "sourceFile": "cloud7_clip.las",
+      "horizontalCrs": "WGS 84 / UTM zone 35N (EPSG:32635)",
+      "verticalDatum": "not established in the file",
+      "units": "metre",
+      "sensor": "UAV lidar",
+      "terrain": "boreal forest; dense canopy — ground under canopy is the hard case, OLV reads it as an object",
+      "licence": "see Zenodo record terms",
+      "role": "stress case: ground extraction / DTM under dense forest canopy"
+    }
+  ]
+}
