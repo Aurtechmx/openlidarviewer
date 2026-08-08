@@ -1,0 +1,21 @@
+{
+ "source": "USGS AZ Coconino B1 2019 (project 19049) \u2014 Aerial LiDAR accuracy checkpoints",
+ "verticalDatum": "NAVD88 orthometric (Geoid12B) \u2014 same reference as the LiDAR tile Z, so no vertical reconciliation.",
+ "horizontalCrs": {
+  "epsg": 6350,
+  "name": "NAD83(2011) / Conus Albers",
+  "note": "Checkpoints reprojected from UTM 12N (EPSG:6341) to match the LiDAR tile CRS."
+ },
+ "originAlbersE": -1406431.1,
+ "originAlbersN": 1486454.869,
+ "groundPoints": 220,
+ "checkpoints": [
+  {
+   "id": "TR03",
+   "type": "VVA",
+   "e": 2.966,
+   "n": 2.976,
+   "z": 2567.662
+  }
+ ]
+}
