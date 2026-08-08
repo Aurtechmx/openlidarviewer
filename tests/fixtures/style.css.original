@@ -8713,10 +8713,10 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   gap: var(--space-sm);
 }
 .olv-process-studio[hidden] { display: none; }
-.olv-ps-title { margin: 0; font-size: 0.95rem; font-weight: 600; letter-spacing: 0.01em; }
+.olv-ps-title { margin: 0; font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.01em; }
 .olv-ps-subtitle {
   margin: var(--space-md) 0 var(--space-2xs);
-  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.08em;
   color: var(--text-dim);
 }
 .olv-ps-stages { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
@@ -8725,7 +8725,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   border: 0.5px solid var(--hairline);
   border-radius: 999px;
   padding: 0.15rem 0.55rem;
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
 }
 .olv-ps-products, .olv-ps-qa {
   list-style: none; margin: 0; padding: 0;
@@ -8737,9 +8737,10 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   padding: 0.3rem 0.5rem;
   border-radius: var(--radius-sm, 6px);
   background: var(--surface-sunken, rgba(0, 0, 0, 0.18));
+  font-size: var(--text-xs);
 }
 .olv-ps-badge {
-  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em;
   font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 5px;
   white-space: nowrap;
 }
@@ -8752,7 +8753,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-ps-blocked .olv-ps-badge, .olv-ps-block .olv-ps-badge {
   background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92);
 }
-.olv-ps-empty { color: var(--text-dim); font-size: 0.85rem; margin: 0; }
+.olv-ps-empty { color: var(--text-dim); font-size: var(--text-xs); margin: 0; }
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE GUI REFRESH (v0.6.x) — hero-console material + accent on phones
    ═══════════════════════════════════════════════════════════════════════════
