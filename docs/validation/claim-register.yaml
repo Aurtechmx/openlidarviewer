@@ -4,13 +4,14 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Three claims
-#     currently reach E4: SLOPE-RASTER, ASPECT-RASTER and HILLSHADE, each
-#     cross-implemented against GDAL 3.13.1 on the same frozen analytic fixture
-#     (0.5 degree for slope and aspect, 1.0 8-bit level for hillshade). Two of
-#     those three tolerances were registered before the reference was generated:
-#     slope and hillshade were fixed in the harness commit a78b0f9 on 2026-07-05,
-#     weeks ahead of their results. ASPECT-RASTER was NOT. Its slot, its
+#   - currentEvidence must reflect evidence that EXISTS today. Four claims
+#     currently reach E4: SLOPE-RASTER, ASPECT-RASTER, HILLSHADE and CONTOURS,
+#     each cross-implemented against GDAL 3.13.1 on a frozen analytic fixture
+#     (0.5 degree for slope and aspect, 1.0 8-bit level for hillshade, 0.05 m
+#     contour-position distance for contours). The slope, hillshade and contour
+#     tolerances were registered before the reference was generated: all three
+#     were fixed in the harness commit a78b0f9 on 2026-07-05, weeks ahead of
+#     their results. ASPECT-RASTER was NOT. Its slot, its
 #     tolerance, its flat-ground exclusion and its reference raster all landed in
 #     40e2ca1 on 2026-07-26, so no commit shows its gate while it had no result;
 #     carrying slope's number over is defensible, and it is not a preregistration
@@ -408,20 +409,21 @@ claims:
     algorithm: Marching squares + stitching + evidence grading
     algorithmVersion: v0.4.x
     claim: "Iso-elevation contours graded solid/dashed/gap by supporting confidence."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/contoursAt.test.ts, tests/stitchContours.test.ts, tests/contourPipeline.integration.test.ts]
-    supportingDatasets: [synthetic surfaces]
+    supportingTests: [tests/contoursAt.test.ts, tests/stitchContours.test.ts, tests/contourPipeline.integration.test.ts, tests/contourCrossCheck.test.ts]
+    supportingDatasets: [synthetic surfaces, analytic tilted-plane DEM with GDAL gdal_contour reference]
+    supportingStudies: [OLV-XS-002-CONTOURS-GDAL-PLANE]
     units: [metres]
     crsDatum: metric
     assumptions: ["depends on DTM validity"]
     failureModes: ["gaps interpolated → dashed", "noise → jagged isolines"]
     exportAllowed: true
-    userLabel: "Synthetically validated contours"
+    userLabel: "Cross-implemented contours"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: pending
-    approvedClaim: "Contours validated against synthetic surfaces; grade tracks confidence."
+    approvedClaim: "Contours cross-implemented against GDAL gdal_contour on an analytic surface, agreeing within 0.05 m; grade tracks confidence."
     prohibitedClaim: ["survey-grade contours"]
     scope:
       supported: []

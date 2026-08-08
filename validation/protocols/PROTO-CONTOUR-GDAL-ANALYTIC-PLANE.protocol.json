@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-CONTOUR-GDAL-ANALYTIC-PLANE",
+  "example": false,
+  "title": "Contours against GDAL 3.13.1 gdal_contour on a frozen analytic tilted plane",
+  "question": "On one frozen analytic tilted-plane DEM, do this project's marching-squares contours agree with GDAL gdal_contour's, measured as contour-position distance, within the preregistered 0.05 m tolerance?",
+  "recordWrittenOn": "2026-08-07",
+  "referenceTool": "GDAL",
+  "referenceVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "claims": [
+    {
+      "claimId": "CONTOURS",
+      "datasetIds": [
+        "OLV-DS-020-CONTOUR-PLANE-DEM"
+      ],
+      "parameterSetIds": [
+        "PS-CONTOUR-GDAL-0P5M"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.05,
+        "toleranceUnit": "metre",
+        "minimumComparableCells": 100,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "0.05 m is the contour-position agreement a reader would need for two implementations to be reporting the same isoline at this cell size, coarse enough that a real coding or registration error cannot hide under it while far tighter than the differences an actual mismatch produces. The minimum of 100 comparable vertices is the count tests/contourCrossCheck.test.ts requires before it reads agreement, so a handful of coincidental matches cannot pass.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-07-05",
+        "witnessCommit": "a78b0f9a9ca84802cd9e2de9af57598e46cc1288",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at a78b0f9 reads { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' } — the harness commit of 2026-07-05, a month before any GDAL contour output existed. git show a78b0f9:src/validation/crossCheck.ts shows the tolerance with the slot pending, and tests/fixtures/reference/contour/contour-gdal.geojson is not added until 122657b1.",
+        "resultLandedOn": "2026-08-07",
+        "resultCommit": "122657b1e8a8b7cb5bc235257527825a9761479f"
+      }
+    }
+  ],
+  "decisionRule": "Compare this project's marching-squares contours to gdal_contour's on the analytic DEM, at the interval the parameter set names, measuring each of our vertices as its distance to the nearest GDAL contour of the same level. The comparison is recorded as agree when the compared-vertex count reaches minimumComparableCells and the fraction within toleranceAbs reaches requiredWithinToleranceFraction; anything short is recorded as partial or disagree with the numbers that produced it. The tolerance is not to be widened, the surface is not to be curved to inflate the interpolation error into a looser-looking number, and the two contour sets are not to be resampled onto each other, because each manufactures the agreement being measured.",
+  "notes": [
+    "A tilted plane is used deliberately: linear edge interpolation is exact on it, so ours, GDAL and the closed-form line coincide and the tolerance measures cross-implementation agreement rather than the interpolation error a curved surface would add. sx != sy and the north-first-versus-south-up row order mean a transpose or a missed row flip still moves contours off their level.",
+    "Two implementations of one isoline can agree while both being wrong the same way, so the comparison runs as a triangle: ours against the analytic line, GDAL against the analytic line, and ours against GDAL. Only the last is cross-implementation evidence; the middle leg shows the operator ran the command this protocol names.",
+    "Agreement with GDAL is not accuracy against surveyed contours, and this DEM is not terrain. Everything this protocol can establish stops at the E4 boundary; E5 needs external ground truth.",
+    "This protocol governs the frozen-plane contour comparison only."
+  ],
+  "digest": "sha256:bdefbd6ecd26b2f09473849a9a0142369d5a2e2612c3e284849357dca008d1b7"
+}

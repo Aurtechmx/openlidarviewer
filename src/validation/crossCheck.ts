@@ -222,14 +222,15 @@ export interface ReferenceSlot {
  * badges and the release lints read, and it deliberately shows the strongest
  * state reached per claim rather than the full study set behind it.
  *
- * The reference-fixture manifest. SLOPE-RASTER, ASPECT-RASTER and HILLSHADE are
- * `supplied` (all three compared against GDAL 3.13.1 on the SAME analytic
- * fixture — one DEM, pinned by hash in each reference directory); the remaining
- * slots are `pending`: the harness is in place and the procedure is documented,
- * but no external reference output has been generated and committed for those,
- * so only slope, aspect and hillshade have reached E4. When a reference is
- * produced per `docs/validation/cross-implementation.md`, flip its `status` to
- * `supplied` and wire the loaded grids into `crossCheck`.
+ * The reference-fixture manifest. SLOPE-RASTER, ASPECT-RASTER, HILLSHADE and
+ * CONTOURS are `supplied` (all compared against GDAL 3.13.1 on an analytic
+ * fixture pinned by hash — the three rasters share one DEM; CONTOURS uses its
+ * own tilted-plane DEM so linear interpolation is exact and the tolerance
+ * measures agreement, not interpolation noise); the remaining slots are
+ * `pending`: the harness is in place and the procedure is documented, but no
+ * external reference output has been generated and committed for those. When a
+ * reference is produced per `docs/validation/cross-implementation.md`, flip its
+ * `status` to `supplied` and register its study manifest.
  */
 export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
@@ -247,7 +248,7 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // measured agreement and that limitation are both recorded in
   // tests/hillshadeCrossCheck.test.ts and docs/validation/cross-implementation.md.
   { claimId: 'HILLSHADE', referenceTool: 'GDAL', toleranceAbs: 1.0, unit: '(0–255)', status: 'supplied' },
-  { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
+  { claimId: 'CONTOURS', referenceTool: 'GDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
   { claimId: 'GROUND-FILTER', referenceTool: 'PDAL', toleranceAbs: 0, unit: 'class', status: 'pending' },
 ] as const;
 

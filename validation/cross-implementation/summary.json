@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 7,
-  "countedStudies": 6,
+  "studiesRead": 8,
+  "countedStudies": 7,
   "byStatus": {
-    "agree": 5,
+    "agree": 6,
     "partial": 1
   },
   "byClaim": {
@@ -37,6 +37,18 @@
       ],
       "parameterSetIds": [
         "PS-HORN-COMPASS-METRE-NOEDGES"
+      ]
+    },
+    "CONTOURS": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-020-CONTOUR-PLANE-DEM"
+      ],
+      "parameterSetIds": [
+        "PS-CONTOUR-GDAL-0P5M"
       ]
     },
     "DSM": {
@@ -111,10 +123,10 @@
     }
   },
   "agreement": {
-    "denominator": 6,
+    "denominator": 7,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 5,
-    "fraction": 0.8333333333333334
+    "agree": 6,
+    "fraction": 0.8571428571428571
   },
   "excludedFromCounts": [
     {
