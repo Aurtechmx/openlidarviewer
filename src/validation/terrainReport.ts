@@ -95,6 +95,67 @@ export function buildReport(legs: readonly LegResult[], generatedAt: string): Te
   };
 }
 
+/**
+ * Study-level completeness — separate from whether the executed legs passed.
+ *
+ * A validation universe is a DECLARED set of studies the suite is expected to
+ * run. Completeness asks a different question from the pass/fail verdict: did we
+ * run everything we declared? A study can be executed (pass / review / fail) or
+ * skipped (its fixture or reference was absent, so it did not run at all). The
+ * universe is complete only when every declared study was executed — none
+ * skipped, none missing entirely.
+ *
+ * The two must not be conflated. "Everything we ran passed" is not "we ran
+ * everything we declared": a suite where every executed study passes but one
+ * declared study was skipped is NOT fully validated, and its overall standing is
+ * REVIEW, not PASS.
+ */
+export interface StudyResult {
+  readonly id: string;
+  readonly status: LegStatus;
+}
+
+export interface CompletenessSummary {
+  readonly expected: number;
+  readonly executed: number;
+  readonly passed: number;
+  readonly review: number;
+  readonly failed: number;
+  readonly skipped: number;
+  /** True only when every declared study was executed (none skipped or missing). */
+  readonly validationUniverseComplete: boolean;
+  /** IDs declared but not executed (skipped or absent from the results). */
+  readonly missing: readonly string[];
+}
+
+/**
+ * Summarise a set of study results against the DECLARED universe of study IDs.
+ * A study counts as executed when it is present with a non-skipped status; a
+ * declared study that is skipped or absent leaves the universe incomplete.
+ * `review` here counts studies whose status is neither a clean pass nor a hard
+ * fail (mapped from `skipped`? no — skipped is not executed); it is reserved for
+ * an explicit review status if the caller supplies one via `fail`-vs-`pass`.
+ */
+export function summarizeStudies(results: readonly StudyResult[], expected: readonly string[]): CompletenessSummary {
+  const byId = new Map(results.map((r) => [r.id, r.status]));
+  const status = (id: string): LegStatus | undefined => byId.get(id);
+  const executedIds = expected.filter((id) => { const s = status(id); return s === 'pass' || s === 'fail'; });
+  const missing = expected.filter((id) => !executedIds.includes(id));
+  return {
+    expected: expected.length,
+    executed: executedIds.length,
+    passed: expected.filter((id) => status(id) === 'pass').length,
+    // No dedicated review status in LegStatus; a study that ran but is under
+    // review is modelled by the caller as a non-pass executed result. Kept 0
+    // here unless the vocabulary is extended, so the field stays explicit.
+    review: 0,
+    failed: expected.filter((id) => status(id) === 'fail').length,
+    skipped: expected.filter((id) => status(id) === 'skipped' || status(id) === undefined).length,
+    validationUniverseComplete: missing.length === 0,
+    missing,
+  };
+}
+
 const MARK: Record<LegStatus, string> = { pass: 'PASS', fail: 'FAIL', skipped: 'SKIP' };
 
 /** Render the report as fixed-width text for a terminal or a log. */

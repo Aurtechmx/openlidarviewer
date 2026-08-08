@@ -31,10 +31,21 @@ const MARK = { pass: 'PASS', fail: 'FAIL', skipped: 'SKIP' };
 const HARNESS_FILES = [
   'tests/terrainFieldValidation.test.ts',
   'tests/terrainBoundary.test.ts',
+  'tests/terrainBoundaryReal.test.ts',
   'tests/terrainPipelineBenchmark.test.ts',
   'tests/terrainMetrics.test.ts',
+  'tests/terrainPerturbation.test.ts',
+  'tests/terrainVerticalNoise.test.ts',
+  'tests/terrainXYJitter.test.ts',
+  'tests/terrainClassDegradation.test.ts',
+  'tests/slopeAspectSpotCheck.test.ts',
+  'tests/contourSupportPreservation.test.ts',
+  'tests/terrainStudyRerun.test.ts',
+  'tests/terrainCompleteness.test.ts',
   'tests/evidenceMonotonicity.test.ts',
+  'tests/coverageMonotonicityChain.test.ts',
   'tests/processPlanInvariants.test.ts',
+  'tests/processPlanCounterfactualMatrix.test.ts',
   'tests/failClosedCounterfactuals.test.ts',
   'tests/evidenceReEval.test.ts',
 ];
@@ -67,8 +78,8 @@ try {
 // Metric lines the legs logged, keyed loosely so we can attach them as detail.
 const metricLines = (run.stdout ?? '')
   .split('\n')
-  .filter((l) => l.includes('[terrain-field]') || l.includes('[terrain-boundary]') || l.includes('[terrain-pipeline]'))
-  .map((l) => l.replace(/^.*\[(terrain-field|terrain-boundary|terrain-pipeline)\]\s*/, '').trim());
+  .filter((l) => l.includes('[terrain-field]') || l.includes('[terrain-boundary]') || l.includes('[terrain-boundary-real]') || l.includes('[terrain-pipeline]'))
+  .map((l) => l.replace(/^.*\[(terrain-field|terrain-boundary-real|terrain-boundary|terrain-pipeline)\]\s*/, '').trim());
 
 const legs = [];
 for (const file of vitest.testResults ?? []) {
@@ -81,6 +92,17 @@ for (const file of vitest.testResults ?? []) {
 }
 
 const report = buildReport(legs, new Date().toISOString());
+// Completeness (quick-win 10): vitest reports skipped legs too, so every
+// DECLARED leg is present. The universe is complete only when none were skipped
+// — running every leg that ran is not the same as running every leg declared.
+report.completeness = {
+  expected: legs.length,
+  executed: legs.filter((l) => l.status !== 'skipped').length,
+  passed: report.summary.passed,
+  failed: report.summary.failed,
+  skipped: report.summary.skipped,
+  validationUniverseComplete: report.summary.skipped === 0 && legs.length > 0,
+};
 
 if (outPath) writeFileSync(resolve(outPath), JSON.stringify(report, null, 2) + '\n');
 
@@ -127,6 +149,10 @@ function renderReport(report) {
   lines.push('-'.repeat(66));
   const s = report.summary;
   lines.push(`  ${s.passed} passed, ${s.failed} failed, ${s.skipped} skipped of ${s.total}`);
+  if (report.completeness) {
+    const c = report.completeness;
+    lines.push(`  COMPLETENESS: ${c.executed}/${c.expected} declared legs executed — validationUniverseComplete: ${c.validationUniverseComplete}`);
+  }
   lines.push(`  VERDICT: ${report.verdict}`);
   if (report.verdict === 'REVIEW' && s.skipped > 0) {
     lines.push(`  (REVIEW: ${s.skipped} leg(s) skipped — their reference or crop fixture was absent,`);
