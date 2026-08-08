@@ -217,6 +217,7 @@ describe('OLV on survey-classified drone data (StREAM Lab riparian crop)', () =>
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { gridErrorStats } from '../src/validation/terrainMetrics';
+import { readEstoniaGround, readAsciiSouthUp as readAscii2, EST_GRID, EST_REF_BINCELL, hasEstonia } from './support/terrainField';
 
 /** Keep every k-th point — a deterministic density reduction (no seed needed). */
 function decimate(pts: TerrainPoint[], k: number): TerrainPoint[] {
@@ -269,5 +270,42 @@ describe('perturbation — density reduction degrades coverage and accuracy toge
     expect(a.n).toBe(b.n);
     expect(a.rmse).toBe(b.rmse);
     expect(a.coverage).toBe(b.coverage);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Estonia National LiDAR (Estonian Land Board, 2020) — a THIRD projection
+// family. L-EST97 is a Lambert Conformal Conic grid (EPSG:3301) with an EH2000
+// vertical datum, unlike the UTM/TM White Sands and StREAM crops. Gridding real
+// class-2 ground here checks OLV bins and averages LCC easting/northing the way
+// an independent tool does, on flat boreal-plain terrain (~1.6 m of relief).
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('OLV DTM vs real Estonia National LiDAR ground (Lambert Conformal Conic)', () => {
+  const has = hasEstonia();
+
+  (existsSync(EST_REF_BINCELL) && has ? it : it.skip)(
+    'grids real class-2 ground into a DTM matching an independent point-in-cell mean (scipy)',
+    () => {
+      const pts = readEstoniaGround();
+      const z = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid: EST_GRID, aggregation: 'mean' }).z;
+      const ref = readAscii2(EST_REF_BINCELL);
+      const ours = Array.from(z, (v) => (Number.isFinite(v) ? v : NaN));
+      const refArr = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
+      const r = crossCheck(ours, refArr, { toleranceAbs: 0.005, minCells: 1000 });
+      // eslint-disable-next-line no-console
+      console.log(`[terrain-field] Estonia DTM vs scipy: verdict=${r.verdict} cells=${r.count} max=${r.maxAbsDiff?.toExponential(3)} rmse=${r.rmse?.toExponential(3)}`);
+      expect(r.count).toBeGreaterThan(1000);
+      expect(r.verdict).toBe('agree');
+    },
+  );
+
+  (has ? it : it.skip)('carries the real EH2000 elevation range of the crop', () => {
+    const z = rasterizeDtm(readEstoniaGround(), new Uint8Array(readEstoniaGround().length).fill(1), { grid: EST_GRID, aggregation: 'mean' }).z;
+    let zmin = Infinity, zmax = -Infinity, filled = 0;
+    for (const v of z) if (Number.isFinite(v)) { zmin = Math.min(zmin, v); zmax = Math.max(zmax, v); filled++; }
+    expect(filled).toBeGreaterThan(1000);
+    expect(zmin).toBeGreaterThan(47);
+    expect(zmax).toBeLessThan(51);
   });
 });

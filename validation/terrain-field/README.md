@@ -40,6 +40,14 @@ A 40 × 40 m riparian crop of the VT StREAM Lab drone survey (OpenTopography DOI
 
 **Why recall and vegetation-precision, not ground-precision.** OLV's ground is more *inclusive* than the survey's: the survey leaves ambiguous near-ground returns Unclassified, and OLV assigns those to ground, so ground precision against the survey's conservative class 2 measures a definitional difference, not an error. The honest, robust statements are that OLV catches the survey's ground (recall) and that when OLV calls a point vegetation it really is vegetation (precision). Both hold above 0.95 on real riparian terrain. The DTM leg is the same point-in-cell check as White Sands, confirming the gridding on ultra-dense drone data at a different UTM zone.
 
+## The Estonia leg (Lambert Conformal Conic national survey)
+
+A 100 × 100 m interior crop of the Estonian Land Board 2020 national LiDAR (tile 568539, Zenodo DOI 10.5281/zenodo.19232743, CC BY 4.0). Its coordinate system is **L-EST97 / Lambert Conformal Conic (EPSG:3301)** with an EH2000 vertical datum — a third projection family beside the UTM/TM White Sands and StREAM crops, so it checks OLV grids LCC easting/northing correctly. Flat boreal plain, ~1.6 m of relief, 12,571 class-2 ground returns.
+
+| Leg | Reference | What it proves | Result |
+|---|---|---|---|
+| Gridding correctness | **scipy** `binned_statistic_2d` mean | OLV bins and averages real LCC coordinates correctly | max 0.04 mm, RMSE 0.01 mm |
+
 ## Reliability studies (beyond the reference comparisons)
 
 The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):

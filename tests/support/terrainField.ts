@@ -60,6 +60,24 @@ export function streamLabGround(): TerrainPoint[] {
   return pts;
 }
 
+// ── Estonia National LiDAR (EPSG:3301 L-EST97, Lambert Conformal Conic) ───────
+export const EST_GROUND = resolve(DIR, 'crops/estonia-tava__ground.f32');
+export const EST_REF_BINCELL = resolve(DIR, 'references/estonia-tava__bincell-dtm.asc');
+export const EST_GRID = { originH1: 539450, originH2: 6568450, cols: 100, rows: 100, cellSizeM: 1 } as const;
+
+/** Read the Estonia ground fixture (Float32 x,y,z relative to the grid origin). */
+export function readEstoniaGround(): TerrainPoint[] {
+  const buf = readFileSync(EST_GROUND);
+  const f = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
+  const n = f.length / 3;
+  const pts: TerrainPoint[] = new Array(n);
+  for (let i = 0; i < n; i++) {
+    pts[i] = { x: f[i * 3] + EST_GRID.originH1, y: f[i * 3 + 1] + EST_GRID.originH2, z: f[i * 3 + 2] };
+  }
+  return pts;
+}
+export const hasEstonia = (): boolean => existsSync(EST_GROUND);
+
 // ── ESRI ASCII grid (south-up) ───────────────────────────────────────────────
 export function readAsciiSouthUp(path: string): { cols: number; rows: number; nodata: number; z: Float64Array } {
   const lines = readFileSync(path, 'utf8').split('\n');
