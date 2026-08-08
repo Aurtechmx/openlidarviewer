@@ -47,7 +47,7 @@ OBJ and glTF meshes are shown as their vertices. Faces and materials are not ren
 
 ## Not in scope, for now
 
-Full GIS layers and analysis, photogrammetry, survey-grade measurement, CRS reprojection, and editing of point data are deliberately left to dedicated tools.
+Full GIS layers and analysis, photogrammetry, survey-grade measurement, CRS reprojection, and general-purpose point geometry editing are deliberately left to dedicated tools. Classification editing is in scope: OLV derives, paints and reverts classes, tracks class history, and exports classified LAS.
 
 ## Reporting issues
 

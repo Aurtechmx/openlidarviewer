@@ -32,8 +32,8 @@ export interface BenchmarkResult {
   /**
    * Milliseconds from the file arriving to its first rendered frame — the
    * headline benchmark number. In the single-shot load path this is
-   * also the time to a fully ready scene; a v0.3 streaming source would let
-   * first-render land earlier than full-ready.
+   * also the time to a fully ready scene; the streaming path lets first-render
+   * land earlier than full-ready.
    */
   timeToFirstRenderMs: number;
   /** The per-stage timing breakdown the load recorded. */

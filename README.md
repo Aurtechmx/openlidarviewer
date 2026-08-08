@@ -188,7 +188,7 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/valid
 <details>
 <summary><b>Multi-scan & embed</b></summary>
 
-- Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
+- Open a second scan to compare two epochs (cut and fill against a "before"), or close the current scan from the tool dock to start fresh with another. Independent multi-layer co-registration is disabled in v0.6.4
 - An embed mode for `<iframe>` use (`?embed=1`), with a validated `postMessage` bridge for host-page control
 - Developer diagnostics: a live performance overlay (`?debug=1`) and a structured benchmark mode (`?benchmark=1`)
 </details>
