@@ -49,6 +49,12 @@ export type RangeReadErrorCode =
   | 'range-unsupported'
   | 'timeout'
   | 'content-mismatch'
+  // The remote object changed under a load in progress: a later response
+  // carries a different validator (ETag / Last-Modified) or total size than the
+  // one pinned at probe time, or the server failed our `If-Match`. Distinct
+  // from a transport fault because the read cannot be retried into correctness
+  // — the bytes already decoded belong to a version that no longer exists.
+  | 'resource-changed'
   | 'server-error';
 
 /** A typed range-read failure. */
