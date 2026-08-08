@@ -45,7 +45,9 @@ export interface BuildingPoint {
 /** Extract footprints from building points over the given grid. */
 export function extractBuildingFootprints(points: readonly BuildingPoint[], grid: FootprintGrid): Footprint[] {
   const cell = grid.cellSizeM;
-  if (!(cell > 0) || points.length === 0) return [];
+  // cell must be a positive, finite size; the explicit NaN check keeps a NaN
+  // cell from slipping past a bare `cell <= 0` guard.
+  if (Number.isNaN(cell) || cell <= 0 || points.length === 0) return [];
   const minPts = grid.minPointsPerCell ?? 1;
   const minArea = grid.minAreaM2 ?? 4;
 
@@ -57,8 +59,10 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
     const cy = Math.floor((p.y - grid.originY) / cell);
     const k = `${cx}:${cy}`;
     counts.set(k, (counts.get(k) ?? 0) + 1);
-    if (cx < cMinCx) cMinCx = cx; if (cx > cMaxCx) cMaxCx = cx;
-    if (cy < cMinCy) cMinCy = cy; if (cy > cMaxCy) cMaxCy = cy;
+    if (cx < cMinCx) cMinCx = cx;
+    if (cx > cMaxCx) cMaxCx = cx;
+    if (cy < cMinCy) cMinCy = cy;
+    if (cy > cMaxCy) cMaxCy = cy;
   }
   // Occupied set.
   const occ = new Set<string>();
@@ -94,8 +98,10 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
       const wy = grid.originY + (cy + 0.5) * cell;
       sx += wx; sy += wy;
       const lx = grid.originX + cx * cell, ly = grid.originY + cy * cell;
-      if (lx < minX) minX = lx; if (lx + cell > maxX) maxX = lx + cell;
-      if (ly < minY) minY = ly; if (ly + cell > maxY) maxY = ly + cell;
+      if (lx < minX) minX = lx;
+      if (lx + cell > maxX) maxX = lx + cell;
+      if (ly < minY) minY = ly;
+      if (ly + cell > maxY) maxY = ly + cell;
     }
     footprints.push({
       cellCount: cells.length, areaM2,

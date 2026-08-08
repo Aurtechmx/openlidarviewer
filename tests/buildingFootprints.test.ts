@@ -20,7 +20,7 @@ describe('extractBuildingFootprints', () => {
     const b = rect(30, 30, 40, 40); // 100 m²
     const c = rect(0, 50, 5, 55);   // 25 m²
     const fps = extractBuildingFootprints([...a, ...b, ...c], GRID);
-    expect(fps.length).toBe(3);
+    expect(fps).toHaveLength(3);
     // Largest first (deterministic order).
     expect(fps[0].areaM2).toBeGreaterThan(fps[1].areaM2);
     // The 10×10 building's area and centroid.
@@ -34,14 +34,14 @@ describe('extractBuildingFootprints', () => {
   it('merges an L-shaped building into one footprint (8-connectivity)', () => {
     const l = [...rect(0, 0, 12, 4), ...rect(0, 4, 4, 12)];
     const fps = extractBuildingFootprints(l, GRID);
-    expect(fps.length).toBe(1);
+    expect(fps).toHaveLength(1);
   });
 
   it('drops sub-threshold noise clusters (honest: a stray point is not a building)', () => {
     const building = rect(0, 0, 10, 10);
     const noise: BuildingPoint[] = [{ x: 50, y: 50 }, { x: 51, y: 51 }]; // < minAreaM2
     const fps = extractBuildingFootprints([...building, ...noise], GRID);
-    expect(fps.length).toBe(1); // only the real building survives
+    expect(fps).toHaveLength(1); // only the real building survives
   });
 
   it('empty input and non-positive cell size yield no footprints', () => {
@@ -53,6 +53,6 @@ describe('extractBuildingFootprints', () => {
     // Sparse scatter: ~1 point per few cells → with minPointsPerCell 3, nothing occupies.
     const sparse: BuildingPoint[] = [];
     for (let i = 0; i < 40; i++) sparse.push({ x: i * 2, y: (i % 5) * 2 });
-    expect(extractBuildingFootprints(sparse, { ...GRID, minPointsPerCell: 3 }).length).toBe(0);
+    expect(extractBuildingFootprints(sparse, { ...GRID, minPointsPerCell: 3 })).toHaveLength(0);
   });
 });

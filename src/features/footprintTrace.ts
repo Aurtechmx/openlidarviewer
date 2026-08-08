@@ -46,7 +46,7 @@ export function traceOccupancyBoundary(
   }
   if (edges.size === 0) return [];
   // Walk the ring: start at the lexicographically smallest corner.
-  const start = [...edges.keys()].sort()[0];
+  const start = [...edges.keys()].sort((a, b) => a.localeCompare(b))[0];
   const ring: string[] = [start];
   const used = new Set<string>();
   let cur = start;
@@ -135,7 +135,7 @@ export function orthogonaliseRing(ring: readonly Pt2[], angleTolDeg = 12, domina
 function dp(pts: readonly Pt2[], tol: number): Pt2[] {
   if (pts.length < 3) return [...pts];
   let maxD = -1, idx = 0;
-  const a = pts[0], b = pts[pts.length - 1];
+  const a = pts[0], b = pts.at(-1) as Pt2;
   for (let i = 1; i < pts.length - 1; i++) {
     const d = perpDist(pts[i], a, b);
     if (d > maxD) { maxD = d; idx = i; }

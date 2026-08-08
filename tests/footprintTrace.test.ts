@@ -23,7 +23,7 @@ describe('traceOccupancyBoundary + simplifyRing', () => {
     const ring = traceOccupancyBoundary(cells, 1, 0, 0);
     expect(ringArea(ring)).toBeCloseTo(60, 6);
     const simp = simplifyRing(ring, 0.01);
-    expect(simp.length).toBe(4);
+    expect(simp).toHaveLength(4);
     expect(ringArea(simp)).toBeCloseTo(60, 6);
   });
 
@@ -33,7 +33,7 @@ describe('traceOccupancyBoundary + simplifyRing', () => {
     const area = ringArea(ring);
     expect(area).toBeCloseTo(12 * 4 + 4 * 8, 6); // 48 + 32 = 80
     const simp = simplifyRing(ring, 0.01);
-    expect(simp.length).toBe(6);
+    expect(simp).toHaveLength(6);
     expect(ringArea(simp)).toBeCloseTo(area, 6);
   });
 });

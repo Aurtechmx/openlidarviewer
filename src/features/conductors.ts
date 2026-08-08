@@ -40,7 +40,7 @@ const ZERO_DIR: Vec3 = [0, 0, 0];
  *  points are not accepted as a wire. */
 export function fitConductor(points: readonly Vec3[], minLinearity = 0.9): ConductorFit {
   const n = points.length;
-  const base = { centerlineDir: ZERO_DIR, linearity: 0, spanM: 0, sagM: 0, residualRms: NaN, n };
+  const base = { centerlineDir: ZERO_DIR, linearity: 0, spanM: 0, sagM: 0, residualRms: Number.NaN, n };
   if (n < 5) return { ...base, ok: false, reason: 'TOO_FEW_POINTS' };
 
   const flat: number[] = new Array(n * 3);
@@ -63,7 +63,8 @@ export function fitConductor(points: readonly Vec3[], minLinearity = 0.9): Condu
     const dx = points[i][0] - mx, dy = points[i][1] - my, dz = points[i][2] - mz;
     s[i] = dx * dir[0] + dy * dir[1] + dz * dir[2];
     z[i] = points[i][2];
-    if (s[i] < sMin) sMin = s[i]; if (s[i] > sMax) sMax = s[i];
+    if (s[i] < sMin) sMin = s[i];
+    if (s[i] > sMax) sMax = s[i];
   }
   const spanM = sMax - sMin;
 
