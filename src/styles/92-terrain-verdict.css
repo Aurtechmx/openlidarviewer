@@ -106,17 +106,23 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    Descriptive (never a good/bad colour); the density caveat below it reuses
    the .olv-caveat honesty primitive. */
 .olv-analyse-derived {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs);
   margin-top: var(--space-sm); padding-top: var(--space-sm);
   border-top: 0.5px solid var(--hairline);
 }
 .olv-analyse-derived-label {
+  cursor: pointer; list-style: none; user-select: none;
   font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
+.olv-analyse-derived-label::-webkit-details-marker { display: none; }
+.olv-analyse-derived-label::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-analyse-derived[open] > .olv-analyse-derived-label::before { transform: rotate(90deg); }
 .olv-analyse-derived-value {
   font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; margin-top: var(--space-xs);
 }
 .olv-analyse-derived-caveat { margin-top: var(--space-xs); }
 

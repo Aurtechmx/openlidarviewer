@@ -3901,15 +3901,59 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   .olv-bc-dialog,
   .olv-wfc-card,
   .olv-left-panels,
+  .olv-analyse-panel,
   .olv-inspector,
   .olv-streaming-panel,
   .olv-catalog-results,
   .olv-mp-stations-wrap,
   .olv-shortcuts-list {
     scrollbar-width: thin;
-    scrollbar-color: var(--hairline-strong) transparent;
+    scrollbar-color: color-mix(in srgb, var(--accent) 44%, var(--panel)) transparent;
   }
 }
+
+/* Always-on thin themed scrollbar (not gated on classic mode) for the tall
+   panels, so a macOS "always show scrollbars" setting — or any non-overlay
+   platform — reads a slim accent bar rather than the chunky OS default. The
+   thumb mirrors the classic-mode style: accent-tinted fill, inset with a
+   transparent border, full accent on hover. Chromium/WebKit only; Firefox
+   uses the block above. */
+.olv-analyse-panel::-webkit-scrollbar,
+.olv-streaming-panel::-webkit-scrollbar,
+.olv-inspector::-webkit-scrollbar,
+.olv-measure-panel::-webkit-scrollbar {
+  width: 7px; height: 7px;
+}
+/* The outer column carries the whole stack, so its bar sits a touch wider
+   than the slim inner-panel bars while sharing their thumb colour. */
+.olv-left-panels::-webkit-scrollbar {
+  width: 9px; height: 9px;
+}
+.olv-left-panels::-webkit-scrollbar-track,
+.olv-analyse-panel::-webkit-scrollbar-track,
+.olv-streaming-panel::-webkit-scrollbar-track,
+.olv-inspector::-webkit-scrollbar-track,
+.olv-measure-panel::-webkit-scrollbar-track { background: transparent; }
+.olv-left-panels::-webkit-scrollbar-thumb,
+.olv-analyse-panel::-webkit-scrollbar-thumb,
+.olv-streaming-panel::-webkit-scrollbar-thumb,
+.olv-inspector::-webkit-scrollbar-thumb,
+.olv-measure-panel::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 44%, var(--panel)); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.olv-left-panels::-webkit-scrollbar-thumb:hover,
+.olv-analyse-panel::-webkit-scrollbar-thumb:hover,
+.olv-streaming-panel::-webkit-scrollbar-thumb:hover,
+.olv-inspector::-webkit-scrollbar-thumb:hover,
+.olv-measure-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--accent); background-clip: padding-box;
+}
+.olv-left-panels::-webkit-scrollbar-corner,
+.olv-analyse-panel::-webkit-scrollbar-corner,
+.olv-streaming-panel::-webkit-scrollbar-corner,
+.olv-inspector::-webkit-scrollbar-corner,
+.olv-measure-panel::-webkit-scrollbar-corner { background: transparent; }
 .olv-classic-scrollbars .olv-palette-list::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-modal-body::-webkit-scrollbar,
 .olv-classic-scrollbars .olv-help-body::-webkit-scrollbar,
@@ -4052,6 +4096,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   position: relative;
   min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
+  /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
+     doesn't eat into the content width and clip the right edge of a reading. */
+  scrollbar-gutter: stable;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
@@ -4133,7 +4180,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
  * like "5.46 m × 11.53 m × 14.13 m · 889.54 m³" overflowed the box). */
 .olv-mp-row { display: flex; align-items: flex-start; gap: var(--space-sm); min-width: 0; }
 /* Profile measurements stack the headline row over a compact chart strip. */
-.olv-mp-row-stack { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-mp-row-stack { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
 /* Profile chart strip beneath a profile row. v0.3.10
  * #402: bumped from 36 px → 140 px so the curve is actually readable,
  * and made the box resizable along the vertical axis so an analyst
@@ -4577,6 +4624,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-confidence {
   font-size: var(--text-xs); color: var(--text-faint);
   text-align: right; line-height: 1.35; cursor: help;
+  /* Wrap to a second line instead of clipping at the panel edge when the label
+     ("Viewer measurement · datum resolved") is wider than a narrow panel. */
+  white-space: normal; overflow-wrap: anywhere;
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
@@ -4593,7 +4643,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-top: 0.5px solid var(--hairline);
 }
 .olv-mp-action {
-  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
+  flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-sm);
@@ -6613,6 +6663,20 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   padding-left: var(--space-md); position: relative;
 }
 .olv-fit-caveat::before { content: '⚠'; position: absolute; left: 0; }
+/* Caveats collapsed behind a "Notes" disclosure — they restate the checklist in
+   longer form, so they stay one tap away instead of stacking under it. */
+.olv-fit-caveats { margin-top: var(--space-2xs); display: flex; flex-direction: column; gap: var(--space-2xs); }
+.olv-fit-caveats-summary {
+  cursor: pointer; list-style: none; user-select: none;
+  font-size: var(--text-2xs); font-weight: 500; color: var(--text-faint);
+  padding: var(--space-2xs) 0;
+}
+.olv-fit-caveats-summary::-webkit-details-marker { display: none; }
+.olv-fit-caveats-summary::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-fit-caveats[open] > .olv-fit-caveats-summary::before { transform: rotate(90deg); }
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
@@ -7025,17 +7089,23 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
    Descriptive (never a good/bad colour); the density caveat below it reuses
    the .olv-caveat honesty primitive. */
 .olv-analyse-derived {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-xs);
   margin-top: var(--space-sm); padding-top: var(--space-sm);
   border-top: 0.5px solid var(--hairline);
 }
 .olv-analyse-derived-label {
+  cursor: pointer; list-style: none; user-select: none;
   font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
+.olv-analyse-derived-label::-webkit-details-marker { display: none; }
+.olv-analyse-derived-label::before {
+  content: '▸'; display: inline-block; margin-right: var(--space-2xs);
+  font-size: 0.85em; transition: transform 0.12s ease;
+}
+.olv-analyse-derived[open] > .olv-analyse-derived-label::before { transform: rotate(90deg); }
 .olv-analyse-derived-value {
   font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; margin-top: var(--space-xs);
 }
 .olv-analyse-derived-caveat { margin-top: var(--space-xs); }
 

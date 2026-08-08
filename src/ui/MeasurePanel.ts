@@ -413,7 +413,7 @@ export class MeasurePanel {
     });
     const importBtn = el('button', {
       className: 'olv-mp-action',
-      text: 'Open session',
+      text: 'Open',
       title:
         'Open a saved .olvsession — restores measurements, annotations, views, ' +
         'camera, render + colour settings. You can also just drag the ' +

@@ -19,6 +19,9 @@
   position: relative;
   min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
+  /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
+     doesn't eat into the content width and clip the right edge of a reading. */
+  scrollbar-gutter: stable;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-lg); padding: var(--space-xl);
 }
@@ -100,7 +103,7 @@
  * like "5.46 m × 11.53 m × 14.13 m · 889.54 m³" overflowed the box). */
 .olv-mp-row { display: flex; align-items: flex-start; gap: var(--space-sm); min-width: 0; }
 /* Profile measurements stack the headline row over a compact chart strip. */
-.olv-mp-row-stack { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-mp-row-stack { display: flex; flex-direction: column; gap: var(--space-xs); min-width: 0; }
 /* Profile chart strip beneath a profile row. v0.3.10
  * #402: bumped from 36 px → 140 px so the curve is actually readable,
  * and made the box resizable along the vertical axis so an analyst
@@ -544,6 +547,9 @@
 .olv-mp-confidence {
   font-size: var(--text-xs); color: var(--text-faint);
   text-align: right; line-height: 1.35; cursor: help;
+  /* Wrap to a second line instead of clipping at the panel edge when the label
+     ("Viewer measurement · datum resolved") is wider than a narrow panel. */
+  white-space: normal; overflow-wrap: anywhere;
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
@@ -560,7 +566,7 @@
   border-top: 0.5px solid var(--hairline);
 }
 .olv-mp-action {
-  flex: 1; font-size: var(--text-xs); color: var(--text-dim);
+  flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-sm);

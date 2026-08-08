@@ -24,20 +24,39 @@ import { applyClassicScrollbarClass } from './classicScrollbars';
  * the observer fires with a zero box when the toolbar hides and the column
  * snaps back up. No-ops (keeping the static layout) where ResizeObserver
  * is unavailable.
+ *
+ * The push-down only applies when the centred toolbar actually overlaps the
+ * column horizontally. On a wide viewport the toolbar clears the far-left
+ * column entirely, so pushing the panels down just opens dead space above
+ * them; there the column stays at the shared 56px band and its top lines up
+ * with the toolbar's. Overlap depends on viewport width (the centred bar
+ * slides as the window resizes without its own box changing), so a window
+ * resize listener recomputes alongside the ResizeObserver.
  */
 export function wireMeasureBarClearance(bar: HTMLElement, column: HTMLElement): void {
-  if (typeof ResizeObserver === 'undefined') return;
-  try {
-    const ro = new ResizeObserver(() => {
-      const h = bar.offsetHeight; // 0 while .olv-hidden (display: none)
-      // 8px = the column's own --space-md gap, so toolbar → first panel
-      // reads with the same rhythm as panel → panel.
-      column.style.setProperty('--olv-measure-bar-clear', h > 0 ? `${h + 8}px` : '0px');
-    });
-    ro.observe(bar);
-  } catch {
-    /* Static layout fallback — only ancient engines, overlap is cosmetic. */
+  const update = (): void => {
+    const h = bar.offsetHeight; // 0 while .olv-hidden (display: none)
+    if (h <= 0) { column.style.setProperty('--olv-measure-bar-clear', '0px'); return; }
+    const b = bar.getBoundingClientRect();
+    const c = column.getBoundingClientRect();
+    // Only clear vertically when the toolbar and column boxes actually meet
+    // horizontally; the 8px slack matches the column's --space-md gap.
+    const overlaps = b.left < c.right + 8 && b.right > c.left;
+    // 8px = the column's own --space-md gap, so toolbar → first panel reads
+    // with the same rhythm as panel → panel.
+    column.style.setProperty('--olv-measure-bar-clear', overlaps ? `${h + 8}px` : '0px');
+  };
+  if (typeof ResizeObserver !== 'undefined') {
+    try {
+      const ro = new ResizeObserver(update);
+      ro.observe(bar);
+      ro.observe(column);
+    } catch {
+      /* Static layout fallback — only ancient engines, overlap is cosmetic. */
+    }
   }
+  if (typeof window !== 'undefined') window.addEventListener('resize', update);
+  update();
 }
 
 /**

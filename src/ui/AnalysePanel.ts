@@ -863,21 +863,24 @@ export class AnalysePanel {
     // measured nothing (no fabricated band).
     const cx = this._result.complexity;
     if (cx?.band) {
-      const line = el('div', { className: 'olv-analyse-derived' });
-      line.append(
-        el('span', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
-        el('span', {
+      // Collapsed by default: the VRM/TPI detail and its cited reliability
+      // caveat are deep metrics, kept one tap away so the assessment reads at
+      // a glance instead of ending in a wall of statistics.
+      const details = el('details', { className: 'olv-analyse-derived' });
+      details.append(
+        el('summary', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
+        el('div', {
           className: 'olv-analyse-derived-value',
           text: `${cx.bandLabel} — ${cx.detail}`,
         }),
       );
-      this._assessmentRow.append(line);
       const caveat = cx.warnings.find((w) => w.includes('reliability threshold'));
       if (caveat) {
-        this._assessmentRow.append(
+        details.append(
           el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: caveat }),
         );
       }
+      this._assessmentRow.append(details);
     }
   }
 
@@ -2777,8 +2780,21 @@ export class AnalysePanel {
     }
     this._fitnessRow.append(grid);
 
-    for (const c of f.caveats) {
-      this._fitnessRow.append(el('div', { className: 'olv-fit-caveat', text: c }));
+    if (f.caveats.length > 0) {
+      // Collapsed by default: the caveats restate the checklist dimensions above
+      // in longer form, so they sit behind one disclosure instead of stacking a
+      // wall of repeated text under the list.
+      const notes = el('details', { className: 'olv-fit-caveats' });
+      notes.append(
+        el('summary', {
+          className: 'olv-fit-caveats-summary',
+          text: `Notes (${f.caveats.length})`,
+        }),
+      );
+      for (const c of f.caveats) {
+        notes.append(el('div', { className: 'olv-fit-caveat', text: c }));
+      }
+      this._fitnessRow.append(notes);
     }
   }
 
