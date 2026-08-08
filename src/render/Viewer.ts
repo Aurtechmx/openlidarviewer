@@ -224,6 +224,7 @@ import {
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
+import { DoubleTapDetector } from './doubleTapDetector';
 import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
@@ -1111,6 +1112,16 @@ export class Viewer {
   private readonly _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
   private readonly _touchTracker = new TouchTracker();
+  // Touch double-tap → focus-on-point. `dblclick` doesn't fire on a
+  // touch-action:none, pointer-captured canvas on iOS, so the double-tap that
+  // focuses the camera is recognised from the raw taps. The detector owns the
+  // timing; the fields below let the Viewer feed it only CLEAN single taps —
+  // one finger, no drag, no second finger during the sequence.
+  private readonly _doubleTap = new DoubleTapDetector();
+  private _tapDownX = 0;
+  private _tapDownY = 0;
+  private _tapMoved = false;
+  private _tapSeqHadTwo = false;
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
    * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
@@ -1541,7 +1552,7 @@ export class Viewer {
     //    stored as a bound reference and removed in `dispose()`, so a
     //    re-created Viewer on the same canvas does not pile up listeners
     //    across the 50-scan open/close cycle.
-    this._onCanvasDblClick = (e) => this._handleDoubleClick(e, canvas);
+    this._onCanvasDblClick = (e) => this._handleDoubleClick(e);
     this._onCanvasClick = (e) => {
       // While paused (hold-Space to re-orient), the click belongs to camera
       // navigation, not the tool — don't place a point / pick / annotation.
@@ -1558,6 +1569,13 @@ export class Viewer {
       this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
+      // Drag slop for the double-tap detector: once a touch moves past a few
+      // px it is a drag (orbit), not a tap, so it can't complete a double-tap.
+      if (e.pointerType === 'touch' && !this._tapMoved) {
+        const ddx = e.offsetX - this._tapDownX;
+        const ddy = e.offsetY - this._tapDownY;
+        if (ddx * ddx + ddy * ddy > 100) this._tapMoved = true; // 10 px
+      }
       // Touch-gesture path (D.7.2). Only fires when we have exactly two
       // active touch pointers AND no picking tool owns the canvas, so a
       // measurement drag is never hijacked. The 1-pointer path stays with
@@ -1589,6 +1607,17 @@ export class Viewer {
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
+      // Double-tap bookkeeping. The first finger of a sequence starts a tap
+      // candidate; a second finger marks the sequence as multi-touch (a pinch
+      // or two-finger pan), which can never be a tap.
+      if (this._touchTracker.size === 1) {
+        this._tapDownX = e.offsetX;
+        this._tapDownY = e.offsetY;
+        this._tapMoved = false;
+        this._tapSeqHadTwo = false;
+      } else if (this._touchTracker.size >= 2) {
+        this._tapSeqHadTwo = true;
+      }
       // Capture so we keep getting moves even if the finger slides off
       // the canvas before lift.
       try {
@@ -1606,6 +1635,23 @@ export class Viewer {
       } catch {
         // Already released — ignore.
       }
+      // Double-tap → focus-on-point, but only for a clean single-finger tap:
+      // no tool active, the whole sequence has now lifted, the finger did not
+      // drag, and no second finger was ever down. This is the touch equivalent
+      // of the desktop dblclick focus, which the platform does not deliver here.
+      if (
+        this._toolMode === 'none'
+        && this._touchTracker.size === 0
+        && !this._tapMoved
+        && !this._tapSeqHadTwo
+      ) {
+        const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+        if (this._doubleTap.tap(now, e.offsetX, e.offsetY)) {
+          this._focusOnCanvasPoint(e.offsetX, e.offsetY);
+        }
+      }
+      // Sequence ended — clear the multi-touch flag for the next one.
+      if (this._touchTracker.size === 0) this._tapSeqHadTwo = false;
     };
     this._onCanvasPointerCancel = this._onCanvasPointerUp;
     this._onWindowKeyDown = (e) => {
@@ -4022,6 +4068,7 @@ export class Viewer {
         TWO: THREE.TOUCH.DOLLY_PAN,
       };
       this._touchTracker.clear();
+      this._doubleTap.reset();
     } else {
       this._controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -5016,6 +5063,7 @@ export class Viewer {
     this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
     this._touchTracker.clear();
+    this._doubleTap.reset();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -5932,7 +5980,7 @@ export class Viewer {
     return best;
   }
 
-  private _handleDoubleClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+  private _handleDoubleClick(e: MouseEvent): void {
     // Polygon kinds (area / volume / polyline / profile) commit on
     // double-click — the tooltips promise this and the user expects
     // it. Distance / height / angle / slope are k-point kinds that
@@ -5944,8 +5992,17 @@ export class Viewer {
       return;
     }
     if (this._toolMode !== 'none') return; // other tools handle their own dbl
-    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
-    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    this._focusOnCanvasPoint(e.offsetX, e.offsetY);
+  }
+
+  /**
+   * Focus the camera on the point under a canvas-local (offsetX, offsetY).
+   * Shared by the desktop dblclick path and the touch double-tap path so both
+   * pick and focus identically.
+   */
+  private _focusOnCanvasPoint(offsetX: number, offsetY: number): void {
+    const ndcX = (offsetX / this._canvas.clientWidth) * 2 - 1;
+    const ndcY = -(offsetY / this._canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
   }
