@@ -50,6 +50,7 @@ import { eptStringToKey } from '../../io/ept/eptTypes';
 import { eptHierarchyUrl, eptTileUrl } from '../../io/ept/eptUrls';
 import { decodeEptBinaryTile } from '../../io/ept/eptBinaryDecode';
 import { EptOctree } from './EptOctree';
+import { nextStreamingScanId } from './streamingScanId';
 import type { CrsInfo } from '../../io/crs';
 import { resolveEptCrs } from './eptCrs';
 
@@ -82,6 +83,8 @@ function pickRenderOriginFromCube(cube: Box6): [number, number, number] {
 }
 
 export class EptStreamingPointCloud implements StreamingSource {
+  /** Stable shell id for this streaming session; see {@link nextStreamingScanId}. */
+  readonly id: string = nextStreamingScanId();
   readonly kind: StreamingSourceKind = 'ept';
   readonly name: string;
   readonly renderOrigin: [number, number, number];
