@@ -224,7 +224,7 @@ import {
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
-import { DoubleTapDetector } from './doubleTapDetector';
+import { TouchTapGate } from './touchTapGate';
 import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
@@ -1112,16 +1112,8 @@ export class Viewer {
   private readonly _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
   private readonly _touchTracker = new TouchTracker();
-  // Touch double-tap → focus-on-point. `dblclick` doesn't fire on a
-  // touch-action:none, pointer-captured canvas on iOS, so the double-tap that
-  // focuses the camera is recognised from the raw taps. The detector owns the
-  // timing; the fields below let the Viewer feed it only CLEAN single taps —
-  // one finger, no drag, no second finger during the sequence.
-  private readonly _doubleTap = new DoubleTapDetector();
-  private _tapDownX = 0;
-  private _tapDownY = 0;
-  private _tapMoved = false;
-  private _tapSeqHadTwo = false;
+  // Touch double-tap → focus (dblclick doesn't fire on a captured iOS canvas).
+  private readonly _tapGate = new TouchTapGate();
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
    * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
@@ -1569,17 +1561,9 @@ export class Viewer {
       this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
-      // Drag slop for the double-tap detector: once a touch moves past a few
-      // px it is a drag (orbit), not a tap, so it can't complete a double-tap.
-      if (e.pointerType === 'touch' && !this._tapMoved) {
-        const ddx = e.offsetX - this._tapDownX;
-        const ddy = e.offsetY - this._tapDownY;
-        if (ddx * ddx + ddy * ddy > 100) this._tapMoved = true; // 10 px
-      }
-      // Touch-gesture path (D.7.2). Only fires when we have exactly two
-      // active touch pointers AND no picking tool owns the canvas, so a
-      // measurement drag is never hijacked. The 1-pointer path stays with
-      // OrbitControls' inherited rotate-by-touch behaviour.
+      if (e.pointerType === 'touch') this._tapGate.move(e.offsetX, e.offsetY);
+      // Touch-gesture path (D.7.2): only two touch pointers with no picking tool
+      // active; the 1-pointer path stays with OrbitControls' rotate-by-touch.
       if (
         e.pointerType !== 'touch' ||
         !this._twoFingerTwistEnabled ||
@@ -1587,8 +1571,6 @@ export class Viewer {
       ) {
         return;
       }
-      // The tracker owns the two-pointer state machine and the recogniser;
-      // this handler keeps only the DOM concerns above it.
       const delta = this._touchTracker.move(e.pointerId, e.offsetX, e.offsetY);
       if (delta) this._applyTouchGesture(delta);
     };
@@ -1597,61 +1579,30 @@ export class Viewer {
       this._pointerMoved = true;
     };
     // ── Touch gesture wiring (D.7.2) ──────────────────────────────────────
-    // Track active touch pointers so the recogniser can run on every
-    // 2-pointer move. Mouse pointers are ignored — OrbitControls still
-    // owns the desktop wheel-zoom + click-drag path. The recogniser is
-    // also suspended while a picking tool (measure / inspect / annotate)
-    // owns the canvas, so a 2-finger measurement drag isn't hijacked.
+    // Track touch pointers so the recogniser runs on every 2-pointer move.
+    // Mouse pointers stay with OrbitControls; a picking tool suspends it so a
+    // 2-finger measurement drag isn't hijacked.
     this._onCanvasPointerDown = (e) => {
       this._bumpRenderActivity();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
-      // Double-tap bookkeeping. The first finger of a sequence starts a tap
-      // candidate; a second finger marks the sequence as multi-touch (a pinch
-      // or two-finger pan), which can never be a tap.
-      if (this._touchTracker.size === 1) {
-        this._tapDownX = e.offsetX;
-        this._tapDownY = e.offsetY;
-        this._tapMoved = false;
-        this._tapSeqHadTwo = false;
-      } else if (this._touchTracker.size >= 2) {
-        this._tapSeqHadTwo = true;
-      }
-      // Capture so we keep getting moves even if the finger slides off
-      // the canvas before lift.
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch {
-        // Pointer-capture can throw on devices that already lost the
-        // pointer; safe to ignore — we'll receive pointerup naturally.
-      }
+      this._tapGate.down(this._touchTracker.size, e.offsetX, e.offsetY);
+      // Capture so moves keep arriving if the finger slides off before lift.
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* pointerup still arrives */ }
     };
     this._onCanvasPointerUp = (e) => {
       if (e.pointerType !== 'touch') return;
       this._touchTracker.up(e.pointerId);
       try {
         canvas.releasePointerCapture(e.pointerId);
-      } catch {
-        // Already released — ignore.
-      }
-      // Double-tap → focus-on-point, but only for a clean single-finger tap:
-      // no tool active, the whole sequence has now lifted, the finger did not
-      // drag, and no second finger was ever down. This is the touch equivalent
-      // of the desktop dblclick focus, which the platform does not deliver here.
-      if (
-        this._toolMode === 'none'
-        && this._touchTracker.size === 0
-        && !this._tapMoved
-        && !this._tapSeqHadTwo
-      ) {
+      } catch { /* already released */ }
+      // Double-tap → focus-on-point (touch equivalent of the desktop dblclick).
+      if (this._toolMode === 'none') {
         const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
-        if (this._doubleTap.tap(now, e.offsetX, e.offsetY)) {
-          this._focusOnCanvasPoint(e.offsetX, e.offsetY);
-        }
+        const focus = this._tapGate.up(this._touchTracker.size, now, e.offsetX, e.offsetY);
+        if (focus) this._handleDoubleClick({ offsetX: focus.x, offsetY: focus.y } as MouseEvent);
       }
-      // Sequence ended — clear the multi-touch flag for the next one.
-      if (this._touchTracker.size === 0) this._tapSeqHadTwo = false;
     };
     this._onCanvasPointerCancel = this._onCanvasPointerUp;
     this._onWindowKeyDown = (e) => {
@@ -4068,7 +4019,7 @@ export class Viewer {
         TWO: THREE.TOUCH.DOLLY_PAN,
       };
       this._touchTracker.clear();
-      this._doubleTap.reset();
+      this._tapGate.reset();
     } else {
       this._controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -5063,7 +5014,7 @@ export class Viewer {
     this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
     this._touchTracker.clear();
-    this._doubleTap.reset();
+    this._tapGate.reset();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -5992,17 +5943,8 @@ export class Viewer {
       return;
     }
     if (this._toolMode !== 'none') return; // other tools handle their own dbl
-    this._focusOnCanvasPoint(e.offsetX, e.offsetY);
-  }
-
-  /**
-   * Focus the camera on the point under a canvas-local (offsetX, offsetY).
-   * Shared by the desktop dblclick path and the touch double-tap path so both
-   * pick and focus identically.
-   */
-  private _focusOnCanvasPoint(offsetX: number, offsetY: number): void {
-    const ndcX = (offsetX / this._canvas.clientWidth) * 2 - 1;
-    const ndcY = -(offsetY / this._canvas.clientHeight) * 2 + 1;
+    const ndcX = (e.offsetX / this._canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / this._canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
   }
