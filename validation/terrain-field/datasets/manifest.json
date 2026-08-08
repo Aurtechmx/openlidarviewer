@@ -86,6 +86,25 @@
    "terrain": "flat boreal plain; classified national survey; ~1.6 m of relief in the crop",
    "licence": "CC BY 4.0",
    "role": "third projection family \u2014 Lambert Conformal Conic gridding correctness leg"
+  },
+  {
+   "datasetId": "USGS-MARSH-ISLAND-2024",
+   "title": "USGS Marsh Island / New Bedford MA UAS survey, 2024 (site 2025-009-FA)",
+   "source": "U.S. Geological Survey data release",
+   "doi": "10.5066/P19TLXVG",
+   "citation": "Over, J.R., Cramer, J.M., Millo, A., Brosnahan, S.M., Ackerman, S.D., and Ganju, N.K., 2024, Topographic, multispectral, and GPS data collected during UAS operations at Marsh Island, New Bedford, Massachusetts (ver. 2.0, May 2026), USGS data release.",
+   "sourceFile": "2025009FA_MI_Mar_YSMP_LPC_classified.laz",
+   "sourceSha256": "ca1d5360f91b1493cfa854139d741361aa450cf0358d581edcfe4400bb89ae67",
+   "checkpointFile": "2025009FA_MI_Mar_GPS_Emlid_RS3_checkpoints.csv",
+   "checkpointSha256": "d2a93bbe47212ace4f50071471a82ad5e2a11ca96c58ddc9e01833e3b8239a91",
+   "horizontalCrs": "NAD83(2011) / UTM zone 19N (EPSG:6348)",
+   "verticalDatum": "NAVD88 orthometric (GEOID18)",
+   "units": "metre",
+   "sensor": "Agisoft Metashape photogrammetry/LiDAR (UAS); Emlid RS3 RTK checkpoints",
+   "independentCheckpoints": 104,
+   "terrain": "coastal salt marsh; bare-earth near sea level (~1.5-3.5 m NAVD88)",
+   "licence": "CC0 1.0 Universal / public domain (U.S. Government work); no use constraints",
+   "role": "absolute vertical accuracy vs INDEPENDENT surveyed RTK checkpoints (same NAVD88 datum as the cloud; no reconciliation)"
   }
  ]
 }
