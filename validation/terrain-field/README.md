@@ -40,6 +40,15 @@ A 40 × 40 m riparian crop of the VT StREAM Lab drone survey (OpenTopography DOI
 
 **Why recall and vegetation-precision, not ground-precision.** OLV's ground is more *inclusive* than the survey's: the survey leaves ambiguous near-ground returns Unclassified, and OLV assigns those to ground, so ground precision against the survey's conservative class 2 measures a definitional difference, not an error. The honest, robust statements are that OLV catches the survey's ground (recall) and that when OLV calls a point vegetation it really is vegetation (precision). Both hold above 0.95 on real riparian terrain. The DTM leg is the same point-in-cell check as White Sands, confirming the gridding on ultra-dense drone data at a different UTM zone.
 
+## Reliability studies (beyond the reference comparisons)
+
+The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):
+
+- **Comparators** — MAE, RMSE, median absolute error, signed bias, max, and coverage / rejection fractions, plus a wraparound-safe circular aspect comparator so 359° and 1° read as 2° apart (`tests/terrainMetrics.test.ts`).
+- **Density perturbation** — a deterministic 1:1 → 1:64 thinning of the real White Sands ground shows coverage falling 1.00 → 0.19 and RMSE rising to ~3.4 cm as support weakens, reproducibly (`tests/terrainFieldValidation.test.ts`). Input degrades → coverage drops → error grows, on real data.
+- **Boundary behaviour** — slope/aspect error grouped by distance from an artificial crop edge: the interior (≥ 1 cell in) matches the full-surface truth exactly, and only the edge ring carries the kernel's clamp error (`tests/terrainBoundary.test.ts`).
+- **Evidence monotonicity** — a derived product may never out-rank its source: readiness, product-grade, coverage and export-evidence ladders, with resident-only / sampled never promotable to full (`tests/evidenceMonotonicity.test.ts`).
+
 ## Boundaries
 
 This validates OLV's DTM **gridding** against independent implementations on real ground (two datasets, two UTM zones), and OLV's **ground classification** against a real survey classification. It does not on its own establish survey-grade accuracy (that needs surveyed ground control), and it does not yet cover: the StREAM Lab published 0.1 m DTM/CHM as a raster reference (needs the published product downloaded), ground extraction under the Hyytiälä forest canopy, and coastal ground + structure classification on the Pangandaran dataset. Those are the next crops, staged in `datasets/manifest.json`.
