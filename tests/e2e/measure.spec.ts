@@ -112,6 +112,60 @@ test(
   },
 );
 
+// Regression: an object/interior scan routes the tall Object/Space panel into
+// the shared left column. `.olv-measure-panel` carries `overflow: auto` (for its
+// horizontal resize), which drops its flex auto-min-height to 0 — so the flex
+// column used to shrink the Measurements panel down to just its header (~25px),
+// clipping the profile chart and readings, whenever the column ran out of room.
+// The fix pins `flex-shrink: 0` so the readout keeps its natural height in
+// object-scan mode exactly as in terrain mode, and the COLUMN scrolls instead.
+test(
+  'the Measurements panel is not flex-shrunk in object-scan mode',
+  async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(500); // let the test API mount on viewerLoaded
+    await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+
+    // A committed measurement so the panel is populated and visible.
+    await page.evaluate(() => {
+      const api = (window as unknown as { __OLV_TEST_API__?: {
+        setMeasureKind: (k: string) => void;
+        placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+      } }).__OLV_TEST_API__;
+      if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+      api.setMeasureKind('distance');
+      api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+      api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
+    });
+    await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+
+    // Force the object-scan route via the "Treat scan as" control. A direct DOM
+    // click drives its change handler without depending on the control's
+    // scroll/expand state — the tall Object panel then shares the left column
+    // with the Measurements panel, the layout that used to collapse it.
+    await page
+      .locator('.olv-scan-type-opt', { hasText: /^Object$/ })
+      .evaluate((el: HTMLElement) => el.click());
+    await expect(page.locator('.olv-object-panel')).toBeVisible();
+
+    // The panel must refuse to be flex-shrunk by the column so it keeps its
+    // natural height (the pre-fix bug collapsed it to its ~25px header).
+    const flexShrink = await page
+      .locator('.olv-measure-panel')
+      .evaluate((el) => getComputedStyle(el).flexShrink);
+    expect(flexShrink).toBe('0');
+
+    // And observably: the panel stays far taller than a header-only sliver.
+    const height = await page
+      .locator('.olv-measure-panel')
+      .evaluate((el) => el.getBoundingClientRect().height);
+    expect(height).toBeGreaterThan(60);
+  },
+);
+
 test('exporting produces a session download', async ({ page }) => {
   await loadSampleAndMeasure(page);
   const [download] = await Promise.all([
