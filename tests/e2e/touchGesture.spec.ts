@@ -85,7 +85,75 @@ async function twoFingerGesture(
   );
 }
 
+/**
+ * Dispatch a synthesized single-finger tap at a canvas-local pixel position:
+ * one pointerdown immediately followed by a pointerup, no move between them.
+ */
+async function singleTap(page: Page, x: number, y: number): Promise<void> {
+  await page.evaluate(
+    ([x, y]) => {
+      const canvas = document.querySelector('.olv-canvas') as HTMLElement | null;
+      if (!canvas) throw new Error('no canvas');
+      const rect = canvas.getBoundingClientRect();
+      const id = 2001;
+      const fire = (type: string) => {
+        const ev = new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId: id,
+          pointerType: 'touch',
+          clientX: rect.left + x,
+          clientY: rect.top + y,
+          isPrimary: true,
+        });
+        Object.defineProperty(ev, 'offsetX', { get: () => x });
+        Object.defineProperty(ev, 'offsetY', { get: () => y });
+        canvas.dispatchEvent(ev);
+      };
+      fire('pointerdown');
+      fire('pointerup');
+    },
+    [x, y] as const,
+  );
+}
+
 test.describe('mobile touch model — twist + pinch + pan decomposition', () => {
+  test('a single-finger double-tap focuses the camera on a point (dblclick does not fire on touch)', async ({
+    page,
+    context,
+    browserName,
+  }) => {
+    // Same clipboard-oracle capability gap as the twist tests below.
+    test.skip(
+      browserName !== 'chromium',
+      `${browserName} (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read`,
+    );
+    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.goto('/');
+    await dropTinyPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(1500);
+
+    const before = await readShareLink(page);
+
+    // Two quick taps at the centre, where the dropped cloud sits — the touch
+    // double-tap the platform's dblclick never delivers on a touch-action:none
+    // canvas. It should pick the point under the taps and focus the camera.
+    const canvasBox = await page.locator('.olv-canvas').boundingBox();
+    if (!canvasBox) throw new Error('no canvas bounding box');
+    const cx = canvasBox.width / 2;
+    const cy = canvasBox.height / 2;
+    await singleTap(page, cx, cy);
+    await page.waitForTimeout(80);
+    await singleTap(page, cx, cy);
+    await page.waitForTimeout(600);
+
+    const after = await readShareLink(page);
+    expect(before).not.toBe('');
+    expect(after).not.toBe(before);
+  });
+
+
   test('a 2-finger twist moves the camera (share-link pose changes)', async ({
     page,
     context,

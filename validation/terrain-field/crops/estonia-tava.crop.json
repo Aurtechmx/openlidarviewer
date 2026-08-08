@@ -1,0 +1,17 @@
+{
+  "id": "estonia-tava",
+  "dataset": "EST-ELB-TAVA-2020",
+  "crs": {
+    "horizontalEpsg": 3301,
+    "name": "L-EST97 / Lambert Conformal Conic",
+    "verticalDatum": "EH2000"
+  },
+  "originH1": 539450.0,
+  "originH2": 6568450.0,
+  "cols": 100,
+  "rows": 100,
+  "cellSizeM": 1.0,
+  "groundPoints": 12571,
+  "zMin": 48.5,
+  "zMax": 50.12
+}
