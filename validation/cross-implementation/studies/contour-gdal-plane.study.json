@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "studyId": "OLV-XS-002-CONTOURS-GDAL-PLANE",
+  "claimId": "CONTOURS",
+  "example": false,
+  "notes": [
+    "The candidate side is recomputed from input-dem.asc by tests/contourCrossCheck.test.ts on every run, which is stronger than a stored copy: a stored copy can drift from the code it claims to come from, and this cannot.",
+    "This is two implementations placing one isoline on one analytic plane. It catches coding and registration errors. It does not validate against surveyed contours, and it says nothing about the point-cloud-to-DTM path, because it starts from a DEM."
+  ],
+  "protocolRef": {
+    "protocolId": "PROTO-CONTOUR-GDAL-ANALYTIC-PLANE",
+    "digest": "sha256:bdefbd6ecd26b2f09473849a9a0142369d5a2e2612c3e284849357dca008d1b7"
+  },
+  "candidate": {
+    "revision": "122657b1e8a8b7cb5bc235257527825a9761479f",
+    "version": "0.6.4",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container runtime was used; the executable path, the version GDAL reports, the exact command line and the artifact's own sha256 stand in for an image digest.",
+    "executablePath": "/opt/homebrew/bin/gdal_contour",
+    "commandLine": "gdal_contour -i 0.5 -a elev input-dem.asc contour-gdal.geojson",
+    "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-020-CONTOUR-PLANE-DEM",
+      "description": "The frozen analytic tilted-plane DEM: z = sx*(X-Xc)+sy*(Y-Yc)+z0, 120 x 100 cells at 1 m. sx != sy so a transpose is visible.",
+      "path": "tests/fixtures/reference/contour/input-dem.asc",
+      "sha256": "403d01b54770b245dc2bc47b8a94936cef3f6ce6c443e0a558110481046ef4dc"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-CONTOUR-GDAL-0P5M",
+      "description": "Marching-squares isolines at a 0.5 m interval vs gdal_contour at the same interval; agreement measured as contour-position distance in metres.",
+      "candidateParameters": {
+        "algorithm": "marching-squares",
+        "intervalMetres": 0.5
+      },
+      "referenceParameters": {
+        "subcommand": "gdal_contour",
+        "interval": 0.5,
+        "attribute": "elev",
+        "format": "GeoJSON"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.05,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 100,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 2222 compared contour vertices lie within the preregistered 0.05 m tolerance of a GDAL contour of the same level, with a maximum distance of 2.9e-5 m. Our vertices sit on the analytic level to 2.0e-7 m and GDAL's to 0.015 m, so the reference is the contour set the command says it is.",
+  "result": {
+    "comparableCells": 2222,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.000028994248659682177,
+    "rmse": 0.000004261479960820942,
+    "meanDiff": 6.263384048896237e-7
+  },
+  "rawArtifacts": [
+    {
+      "path": "tests/fixtures/reference/contour/input-dem.asc",
+      "sha256": "403d01b54770b245dc2bc47b8a94936cef3f6ce6c443e0a558110481046ef4dc",
+      "role": "candidate-input"
+    },
+    {
+      "path": "tests/fixtures/reference/contour/contour-gdal.geojson",
+      "sha256": "318ea16c74b9e98ec3b9bdeb7f299ea0e1e8f6cc37a287c97e75e7781e3bd0fe",
+      "role": "reference-output"
+    },
+    {
+      "path": "tests/fixtures/reference/contour/command.txt",
+      "sha256": "fbbfed5a93cc8f4f93d7359fd7bcf832f92845ef3e124747f34236e4f32a17a4",
+      "role": "reference-command"
+    },
+    {
+      "path": "tests/fixtures/reference/contour/environment.json",
+      "sha256": "14b1c9d1968bf8d4b3829f4d88465d7cd679a3fbb9027e6f10d920c428d19ee8",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-020-CONTOUR-PLANE-DEM",
+        "parameterSetId": "PS-CONTOUR-GDAL-0P5M"
+      }
+    ],
+    "unsupported": [
+      "Curved terrain. The surface is a plane, chosen so interpolation is exact; a curved surface adds interpolation error this study does not measure.",
+      "The point-cloud-to-DTM pipeline. This study starts from a DEM.",
+      "Accuracy against surveyed contours. Agreement with GDAL is agreement between two implementations, not a measurement against ground truth."
+    ]
+  },
+  "protocolDigest": "sha256:33cbffca68c0fd70af0cb9caaf062748b9435a45b73d6553878ce0260503b259"
+}
