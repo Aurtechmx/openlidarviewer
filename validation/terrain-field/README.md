@@ -48,6 +48,10 @@ The harness also carries the reliability invariants the terrain-hardening pass a
 - **Density perturbation** — a deterministic 1:1 → 1:64 thinning of the real White Sands ground shows coverage falling 1.00 → 0.19 and RMSE rising to ~3.4 cm as support weakens, reproducibly (`tests/terrainFieldValidation.test.ts`). Input degrades → coverage drops → error grows, on real data.
 - **Boundary behaviour** — slope/aspect error grouped by distance from an artificial crop edge: the interior (≥ 1 cell in) matches the full-surface truth exactly, and only the edge ring carries the kernel's clamp error (`tests/terrainBoundary.test.ts`).
 - **Evidence monotonicity** — a derived product may never out-rank its source: readiness, product-grade, coverage and export-evidence ladders, with resident-only / sampled never promotable to full (`tests/evidenceMonotonicity.test.ts`).
+- **Capability ↔ evidence agreement** — the ProcessPlan evaluator and the evidence-monotonicity guard can't disagree: degrading coverage or losing unit trust only weakens a verdict, each step is a valid non-promoting evidence transition, and the evaluator is idempotent (`tests/processPlanInvariants.test.ts`).
+- **Fail-closed counterfactuals** — every guard paired with the one fact that, flipped, would let the product through, so a dead guard shows up as an already-ready counterfactual; a missing fact reads as the closed state, never a default (`tests/failClosedCounterfactuals.test.ts`).
+- **Full-pipeline benchmark** — points → DTM → slope/aspect → contours on the real crop, checked for well-formed stages and byte-identical determinism across two runs; stage times logged, never asserted (`tests/terrainPipelineBenchmark.test.ts`).
+- **Evidence re-evaluation** — the assessment surface is idempotent and one-directional: re-running never upgrades a level, and a cross-check with no real matching reference stays pending, never agree (`tests/evidenceReEval.test.ts`).
 
 ## Running it
 
