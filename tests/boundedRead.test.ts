@@ -40,7 +40,9 @@ function streamingResponse(
 
 /** A Response with no streaming body — exercises the arrayBuffer fallback. */
 function bufferResponse(bytes: Uint8Array, headers: Record<string, string> = {}): Response {
-  const r = new Response(bytes, { headers });
+  // `bytes.slice().buffer` is a fresh, exactly-sized ArrayBuffer — a BodyInit
+  // the Response type accepts, where a bare Uint8Array view is not.
+  const r = new Response(bytes.slice().buffer, { headers });
   Object.defineProperty(r, 'body', { value: null });
   return r;
 }
