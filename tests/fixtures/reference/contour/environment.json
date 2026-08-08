@@ -1,0 +1,7 @@
+{
+  "referenceTool": "GDAL",
+  "gdalVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "command": "gdal_contour -i 0.5 -a elev (0.5 m interval, elevation attribute, GeoJSON)",
+  "platform": "macOS-26.5.2-arm64-arm-64bit-Mach-O",
+  "architecture": "arm64"
+}

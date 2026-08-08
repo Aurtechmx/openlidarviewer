@@ -52,7 +52,6 @@ function dist(id: string, len: number): Measurement {
 describe('evidenceStatus (central helper)', () => {
   it('is exploratory for a below-required product', () => {
     expect(evidenceStatus('MEAS-DISTANCE')).toBe('exploratory');
-    expect(evidenceStatus('CONTOURS')).toBe('exploratory');
     expect(evidenceStatus('DTM')).toBe('exploratory');
   });
 
@@ -157,11 +156,15 @@ const MODEL: ContourFeatureModel = {
 };
 
 describe('map-sheet PDF — routed through the gate', () => {
-  it('the collar claim is CONTOURS and reads exploratory today', () => {
+  it('the collar claim is CONTOURS and reads validated now it meets its required E4', () => {
+    // CONTOURS reached E4_CROSS_IMPLEMENTATION_VALIDATED (its required level)
+    // once the gdal_contour cross-check landed, so the gate routes the map sheet
+    // as a validated export. "Validated" means it meets its required evidence,
+    // not survey-grade — that claim stays prohibited in the register.
     expect(MAP_SHEET_CLAIM).toBe('CONTOURS');
-    expect(mapSheetEvidenceNote()).toMatch(/exploratory/i);
-    expect(mapSheetEvidenceLine()).toMatch(/exploratory export/i);
-    expect(mapSheetEvidenceLine()).not.toMatch(/validated export/i);
+    expect(mapSheetEvidenceNote()).toMatch(/validated/i);
+    expect(mapSheetEvidenceLine()).toMatch(/validated export/i);
+    expect(mapSheetEvidenceLine()).not.toMatch(/exploratory export/i);
   });
 
   it('the note is derived from the gate, not hardcoded (validated for a met claim)', () => {
