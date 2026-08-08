@@ -31,8 +31,12 @@ const MARK = { pass: 'PASS', fail: 'FAIL', skipped: 'SKIP' };
 const HARNESS_FILES = [
   'tests/terrainFieldValidation.test.ts',
   'tests/terrainBoundary.test.ts',
+  'tests/terrainPipelineBenchmark.test.ts',
   'tests/terrainMetrics.test.ts',
   'tests/evidenceMonotonicity.test.ts',
+  'tests/processPlanInvariants.test.ts',
+  'tests/failClosedCounterfactuals.test.ts',
+  'tests/evidenceReEval.test.ts',
 ];
 
 const args = process.argv.slice(2);
@@ -63,8 +67,8 @@ try {
 // Metric lines the legs logged, keyed loosely so we can attach them as detail.
 const metricLines = (run.stdout ?? '')
   .split('\n')
-  .filter((l) => l.includes('[terrain-field]') || l.includes('[terrain-boundary]'))
-  .map((l) => l.replace(/^.*\[(terrain-field|terrain-boundary)\]\s*/, '').trim());
+  .filter((l) => l.includes('[terrain-field]') || l.includes('[terrain-boundary]') || l.includes('[terrain-pipeline]'))
+  .map((l) => l.replace(/^.*\[(terrain-field|terrain-boundary|terrain-pipeline)\]\s*/, '').trim());
 
 const legs = [];
 for (const file of vitest.testResults ?? []) {
