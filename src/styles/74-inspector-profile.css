@@ -19,6 +19,15 @@
   position: relative;
   min-width: 222px; max-width: 760px;
   resize: horizontal; overflow: auto;
+  /* `overflow: auto` (needed for the horizontal resize + scrollbar-gutter) drops
+   * this flex child's automatic min-height to 0, so the left column's flex layout
+   * would shrink the panel to just its header whenever the column runs out of
+   * room. That happens acutely for an object/interior scan, where the tall
+   * Object/Space panel fills the column and squeezed the Measurements panel down
+   * to a ~25px sliver — the profile chart and readings clipped away. Pin the
+   * shrink so the panel always keeps its natural height and the COLUMN scrolls
+   * instead; the readout then sizes identically in object-scan and terrain mode. */
+  flex-shrink: 0;
   /* Reserve the scrollbar's track so an always-on (macOS) vertical scrollbar
      doesn't eat into the content width and clip the right edge of a reading. */
   scrollbar-gutter: stable;
