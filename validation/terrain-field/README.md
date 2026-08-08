@@ -65,6 +65,20 @@ OLV grids the committed class-2 ground with the production `rasterizeDtm` (point
 
 The asserted bounds in the test come from the accuracy budget (RTK ~2 cm + a UAS bare-earth product's ~10 cm class), not from these figures. This is OLV's first absolute-accuracy result against surveyed truth; the datum matches, so it is not limited by geoid reconciliation.
 
+## The Coconino leg — absolute accuracy in steep, forested terrain
+
+Marsh Island is flat coastal marsh. This leg adds the hard case it does not cover: bare-earth extraction **under canopy**. Source is the USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; NGTOC task order 140G0219F0247), public domain via the USGS 3D Elevation Program. Its aerial-accuracy checkpoints (NVA + VVA, project-report Tables 8/9) are held **separate from the 12 LiDAR Control Points**, so they are an independent vertical-accuracy set, not reused for calibration. Checkpoints are reprojected from UTM 12N to the tile CRS (NAD83(2011) / Conus Albers, EPSG:6350); tile Z and checkpoint Z are both **NAVD88 orthometric (Geoid12B)**, so there is no vertical-datum reconciliation.
+
+The checkpoints are sparse — 1–2 per 1 km tile across the whole ~50×110 km project — so a given tile usually contains none. The committed tile `w1407n1486` contains exactly one: **TR03**, a *vegetated* (VVA) checkpoint at 2567.66 m in forest. OLV grids the committed class-2 ground with the production `rasterizeDtm` at 1.0 m (the USGS 3DEP QL2 bare-earth DEM resolution) and compares TR03 to its DTM cell.
+
+| Metric | OLV DTM vs TR03 (forest VVA) |
+|---|---|
+| N used / rejected | 1 / 0 |
+| residual (1 m cell) | +3.9 cm |
+| mean of ground within 3 m | 2567.66 m vs 2567.66 m surveyed (−0.1 cm) |
+
+The per-checkpoint bound in the test is the USGS accuracy class for the checkpoint's type (NVA 0.30 m, VVA 0.60 m), not a figure fitted to the result. A single checkpoint is one measurement, not a distribution: this is strong per-point agreement under canopy, and the fixture and test grow with N automatically as more project tiles are added (`scripts/terrain-field/generate-coconino-reference.py <tile.laz ...>`).
+
 ## Reliability studies (beyond the reference comparisons)
 
 The harness also carries the reliability invariants the terrain-hardening pass asks for, built on shared validation-only numerics (`src/validation/terrainMetrics.ts`, `src/validation/evidenceMonotonicity.ts`):
