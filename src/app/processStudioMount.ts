@@ -96,6 +96,9 @@ export interface MountedProcessStudio {
 export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStudio {
   const panel = new ProcessStudioPanel();
   panel.update(null);
+  // Start hidden: the shell reveals it on scan load (like the class legend) and
+  // hides it on scan close, so the boot shell never shows an empty studio.
+  panel.hide();
   return {
     panel,
     refresh() {
