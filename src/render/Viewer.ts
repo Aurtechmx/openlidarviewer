@@ -224,6 +224,7 @@ import {
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
+import { TouchTapGate } from './touchTapGate';
 import { RenderActivityGate } from './renderActivityGate';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
@@ -1111,6 +1112,8 @@ export class Viewer {
   private readonly _onCanvasPointerCancel!: (e: PointerEvent) => void;
   /** Active touch pointers, keyed by pointerId. */
   private readonly _touchTracker = new TouchTracker();
+  // Touch double-tap → focus (dblclick doesn't fire on a captured iOS canvas).
+  private readonly _tapGate = new TouchTapGate();
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
    * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
@@ -1541,7 +1544,7 @@ export class Viewer {
     //    stored as a bound reference and removed in `dispose()`, so a
     //    re-created Viewer on the same canvas does not pile up listeners
     //    across the 50-scan open/close cycle.
-    this._onCanvasDblClick = (e) => this._handleDoubleClick(e, canvas);
+    this._onCanvasDblClick = (e) => this._handleDoubleClick(e);
     this._onCanvasClick = (e) => {
       // While paused (hold-Space to re-orient), the click belongs to camera
       // navigation, not the tool — don't place a point / pick / annotation.
@@ -1558,10 +1561,9 @@ export class Viewer {
       this._pointerClientY = e.clientY;
       this._pointerOnCanvas = true;
       this._pointerMoved = true;
-      // Touch-gesture path (D.7.2). Only fires when we have exactly two
-      // active touch pointers AND no picking tool owns the canvas, so a
-      // measurement drag is never hijacked. The 1-pointer path stays with
-      // OrbitControls' inherited rotate-by-touch behaviour.
+      if (e.pointerType === 'touch') this._tapGate.move(e.offsetX, e.offsetY);
+      // Touch-gesture path (D.7.2): only two touch pointers with no picking tool
+      // active; the 1-pointer path stays with OrbitControls' rotate-by-touch.
       if (
         e.pointerType !== 'touch' ||
         !this._twoFingerTwistEnabled ||
@@ -1569,8 +1571,6 @@ export class Viewer {
       ) {
         return;
       }
-      // The tracker owns the two-pointer state machine and the recogniser;
-      // this handler keeps only the DOM concerns above it.
       const delta = this._touchTracker.move(e.pointerId, e.offsetX, e.offsetY);
       if (delta) this._applyTouchGesture(delta);
     };
@@ -1579,32 +1579,29 @@ export class Viewer {
       this._pointerMoved = true;
     };
     // ── Touch gesture wiring (D.7.2) ──────────────────────────────────────
-    // Track active touch pointers so the recogniser can run on every
-    // 2-pointer move. Mouse pointers are ignored — OrbitControls still
-    // owns the desktop wheel-zoom + click-drag path. The recogniser is
-    // also suspended while a picking tool (measure / inspect / annotate)
-    // owns the canvas, so a 2-finger measurement drag isn't hijacked.
+    // Track touch pointers so the recogniser runs on every 2-pointer move.
+    // Mouse pointers stay with OrbitControls; a picking tool suspends it so a
+    // 2-finger measurement drag isn't hijacked.
     this._onCanvasPointerDown = (e) => {
       this._bumpRenderActivity();
       if (e.pointerType !== 'touch') return;
       if (this._toolMode !== 'none') return;
       this._touchTracker.down(e.pointerId, e.offsetX, e.offsetY);
-      // Capture so we keep getting moves even if the finger slides off
-      // the canvas before lift.
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch {
-        // Pointer-capture can throw on devices that already lost the
-        // pointer; safe to ignore — we'll receive pointerup naturally.
-      }
+      this._tapGate.down(this._touchTracker.size, e.offsetX, e.offsetY);
+      // Capture so moves keep arriving if the finger slides off before lift.
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* pointerup still arrives */ }
     };
     this._onCanvasPointerUp = (e) => {
       if (e.pointerType !== 'touch') return;
       this._touchTracker.up(e.pointerId);
       try {
         canvas.releasePointerCapture(e.pointerId);
-      } catch {
-        // Already released — ignore.
+      } catch { /* already released */ }
+      // Double-tap → focus-on-point (touch equivalent of the desktop dblclick).
+      if (this._toolMode === 'none') {
+        const now = typeof performance !== 'undefined' && performance.now ? performance.now() : Date.now();
+        const focus = this._tapGate.up(this._touchTracker.size, now, e.offsetX, e.offsetY);
+        if (focus) this._handleDoubleClick({ offsetX: focus.x, offsetY: focus.y } as MouseEvent);
       }
     };
     this._onCanvasPointerCancel = this._onCanvasPointerUp;
@@ -4022,6 +4019,7 @@ export class Viewer {
         TWO: THREE.TOUCH.DOLLY_PAN,
       };
       this._touchTracker.clear();
+      this._tapGate.reset();
     } else {
       this._controls.touches = {
         ONE: THREE.TOUCH.ROTATE,
@@ -5016,6 +5014,7 @@ export class Viewer {
     this._canvas.removeEventListener('pointerup', this._onCanvasPointerUp);
     this._canvas.removeEventListener('pointercancel', this._onCanvasPointerCancel);
     this._touchTracker.clear();
+    this._tapGate.reset();
     window.removeEventListener('keydown', this._onWindowKeyDown);
     if (typeof document !== 'undefined' && this._onVisibilityChange) {
       document.removeEventListener('visibilitychange', this._onVisibilityChange);
@@ -5932,7 +5931,7 @@ export class Viewer {
     return best;
   }
 
-  private _handleDoubleClick(e: MouseEvent, canvas: HTMLCanvasElement): void {
+  private _handleDoubleClick(e: MouseEvent): void {
     // Polygon kinds (area / volume / polyline / profile) commit on
     // double-click — the tooltips promise this and the user expects
     // it. Distance / height / angle / slope are k-point kinds that
@@ -5944,8 +5943,8 @@ export class Viewer {
       return;
     }
     if (this._toolMode !== 'none') return; // other tools handle their own dbl
-    const ndcX = (e.offsetX / canvas.clientWidth) * 2 - 1;
-    const ndcY = -(e.offsetY / canvas.clientHeight) * 2 + 1;
+    const ndcX = (e.offsetX / this._canvas.clientWidth) * 2 - 1;
+    const ndcY = -(e.offsetY / this._canvas.clientHeight) * 2 + 1;
     const point = this._pickPoint(ndcX, ndcY);
     if (point) this._nav.focusOn(point);
   }
