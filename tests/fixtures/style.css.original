@@ -8699,6 +8699,60 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   font-size: var(--text-xs); color: var(--text-dim);
 }
 
+/* Process Studio panel: adaptive stages, product eligibility and QA checks.
+ * Display-only view (src/ui/ProcessStudioPanel.ts) over the Phase 1/2 services.
+ * Colours reuse the semantic ready/review/blocked grammar; the accent hue is not
+ * used for status so status reads on its own. */
+.olv-process-studio {
+  background: var(--panel);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.olv-process-studio[hidden] { display: none; }
+.olv-ps-title { margin: 0; font-size: 0.95rem; font-weight: 600; letter-spacing: 0.01em; }
+.olv-ps-subtitle {
+  margin: var(--space-md) 0 var(--space-2xs);
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim);
+}
+.olv-ps-stages { display: flex; flex-wrap: wrap; gap: var(--space-2xs); }
+.olv-ps-stage {
+  background: var(--surface-raised, rgba(255, 255, 255, 0.05));
+  border: 0.5px solid var(--hairline);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+}
+.olv-ps-products, .olv-ps-qa {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.2rem;
+}
+.olv-ps-product, .olv-ps-check {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--surface-sunken, rgba(0, 0, 0, 0.18));
+}
+.olv-ps-badge {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em;
+  font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 5px;
+  white-space: nowrap;
+}
+.olv-ps-ready .olv-ps-badge, .olv-ps-pass .olv-ps-badge {
+  background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0);
+}
+.olv-ps-review .olv-ps-badge {
+  background: var(--warn-bg, rgba(230, 180, 40, 0.18)); color: var(--warn, #e9d16b);
+}
+.olv-ps-blocked .olv-ps-badge, .olv-ps-block .olv-ps-badge {
+  background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92);
+}
+.olv-ps-empty { color: var(--text-dim); font-size: 0.85rem; margin: 0; }
 /* ═══════════════════════════════════════════════════════════════════════════
    MOBILE GUI REFRESH (v0.6.x) — hero-console material + accent on phones
    ═══════════════════════════════════════════════════════════════════════════
