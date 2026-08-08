@@ -22,6 +22,50 @@ import { ProcessStudioPanel } from '../ui/ProcessStudioPanel';
 import { deriveScanFacts } from '../process/scanFacts';
 import type { RawScanSignals } from '../process/scanFacts';
 import type { ScanFacts } from '../process/ProcessPlan';
+import type { CrsInfo } from '../io/crs';
+
+/** LAS standard classification codes the panel keys ground/building on. */
+const CLASS_GROUND = 2;
+const CLASS_BUILDING = 6;
+
+/**
+ * Granular reads of the live shell the composition root already holds. Each is
+ * a plain getter so this stays Node-testable with fakes and never touches the
+ * viewer or GPU directly.
+ */
+export interface LiveScanAccessors {
+  /** Source point count when a streaming source is mounted; null/undefined otherwise (its presence marks the scan as streaming). */
+  getStreamingPointCount(): number | null | undefined;
+  /** Point count of the active static cloud; null/undefined when none is loaded. */
+  getActivePointCount(): number | null | undefined;
+  /** The resolved CRS, or null when unknown — never assumed. */
+  getResolvedCrs(): CrsInfo | null | undefined;
+  /** Classification codes currently present on the active scan (empty when none). */
+  getPresentClassCodes(): readonly number[];
+}
+
+/**
+ * Build the loose signal set from live accessors, fail-closed. A streaming
+ * source wins over a static cloud (it is the active scan when mounted). Returns
+ * null when nothing is loaded. Classification is reported as `partial` whenever
+ * any class code is present — the conservative floor, never `full` — and ground
+ * / building trust follows only from the actual class-2 / class-6 codes.
+ */
+export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
+  const streamPts = a.getStreamingPointCount();
+  const staticPts = a.getActivePointCount();
+  const isStreaming = streamPts != null;
+  if (!isStreaming && staticPts == null) return null;
+  const codes = a.getPresentClassCodes();
+  return {
+    kind: isStreaming ? 'streaming' : 'static',
+    pointCount: isStreaming ? (streamPts as number) : (staticPts as number),
+    crs: a.getResolvedCrs() ?? null,
+    classification: codes.length > 0 ? 'partial' : 'none',
+    groundClassified: codes.includes(CLASS_GROUND),
+    hasBuildingClass: codes.includes(CLASS_BUILDING),
+  };
+}
 
 export interface ProcessStudioDeps {
   /** Live signals for the active scan, or null when none is loaded. */
@@ -58,4 +102,9 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
       panel.update(resolveActiveScanFacts(deps));
     },
   };
+}
+
+/** Convenience wiring for the composition root: create the studio straight from live accessors. */
+export function createProcessStudioFromLive(accessors: LiveScanAccessors): MountedProcessStudio {
+  return createProcessStudio({ getSignals: () => signalsFromLive(accessors) });
 }
