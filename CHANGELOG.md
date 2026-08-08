@@ -2,6 +2,50 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.5] - 2026-08-08
+
+### Added
+
+- A Process Studio capability evaluator (`src/process/processCapabilities.ts`).
+  `evaluateCapabilities` turns a plain-data description of the loaded scan(s)
+  into a `ProcessPlan` where each product reads `ready`, `review` or `blocked`
+  with a stable reason code. It is the single source of product eligibility, so
+  the UI and the exporters read the same verdict rather than each deciding for
+  itself, and it fails closed: an unconfirmed linear unit blocks the metric
+  products, a missing or differing vertical reference blocks cross-epoch height
+  math, and resident-only streaming coverage cannot back a full-dataset product.
+- A stable shell id for every streaming scan, so the export and terrain
+  scan-identity guards catch a streaming-to-streaming swap that the previous
+  null id let through.
+
+### Changed
+
+- Contours are now cross-implemented against GDAL. `CONTOURS` reaches
+  `E4_CROSS_IMPLEMENTATION_VALIDATED`: our marching-squares isolines agree with
+  `gdal_contour` on a frozen analytic surface within 0.05 m, recorded in a
+  freeze-verified study manifest. The map-sheet export now routes as a validated
+  export rather than exploratory, where validated means the product meets its
+  required evidence level, not survey-grade.
+- README, `docs/limitations.md` and several source comments corrected to match
+  what ships: the two-epoch compare workflow rather than the disabled multi-layer
+  mount, classification editing as in scope, and streaming as shipped rather than
+  a future seam.
+
+### Security
+
+- Signed remote EPT URLs are scrubbed from transport error messages. A SAS or
+  presigned dataset carries its credential in the URL query, and four throw
+  sites interpolated the raw URL into user-visible errors; every one now routes
+  through `sanitizeUrlForDisplay`.
+- Every remote range read is bounded in bytes and time. A host answering a small
+  range request with a huge body, or trickling one that never finishes, is now
+  refused mid-stream rather than read into memory or waited on forever.
+- The remote object's identity is pinned across a load. A file re-uploaded
+  partway through a COPC or EPT session is caught by a changed validator
+  (ETag / Last-Modified), a changed total size, or an `If-Match` failure, and
+  the read fails with a non-retryable `resource-changed` code rather than
+  splicing two versions into one decode.
+
 ## [0.6.4] - 2026-08-07
 
 ### Added
