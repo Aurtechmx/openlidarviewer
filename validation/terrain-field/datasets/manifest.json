@@ -105,6 +105,24 @@
    "terrain": "coastal salt marsh; bare-earth near sea level (~1.5-3.5 m NAVD88)",
    "licence": "CC0 1.0 Universal / public domain (U.S. Government work); no use constraints",
    "role": "absolute vertical accuracy vs INDEPENDENT surveyed RTK checkpoints (same NAVD88 datum as the cloud; no reconciliation)"
+  },
+  {
+   "datasetId": "USGS-COCONINO-B1-2019",
+   "title": "USGS AZ Coconino B1 2019 airborne LiDAR (Atlantic project 19049; task order AZ_CoconinoUSFS_2019_B19)",
+   "source": "U.S. Geological Survey 3D Elevation Program (3DEP) / The National Map",
+   "citation": "U.S. Geological Survey, 2020, USGS Lidar Point Cloud AZ_CoconinoUSFS_2019_B19 (USGS project 19049; NGTOC task order 140G0219F0247, contract G16PC00042): U.S. Geological Survey 3D Elevation Program (3DEP). Public domain.",
+   "sourceFile": "USGS_LPC_AZ_Coconino_2019_B19_w1407n1486.laz",
+   "sourceSha256": "cf7f2cecc502f97504965e4acc15942015342e27e4fa1e6b3cb63b0a24d53a39",
+   "checkpointFile": "19049 Project Report, Tables 8 (NVA) & 9 (VVA), reprojected to references/coconino-b19-2019__checkpoints.json",
+   "checkpointSha256": "7f13f2166996de1d0d87fb68479e43c6dfdd1b68b8dbc800d683b99eee13416d",
+   "horizontalCrs": "NAD83(2011) / Conus Albers (EPSG:6350)",
+   "verticalDatum": "NAVD88 orthometric (Geoid12B)",
+   "units": "metre",
+   "sensor": "Optech Galaxy Prime airborne LiDAR (summer 2019, leaf-on); ground survey NVA/VVA checkpoints held separate from the 12 LiDAR Control Points",
+   "independentCheckpoints": "121 project-wide (1 inside tile w1407n1486: TR03, a vegetated/VVA checkpoint at 2567.66 m)",
+   "terrain": "steep forested plateau, Coconino National Forest (~2500-2730 m NAVD88); bare-earth under canopy",
+   "licence": "Public domain (U.S. Geological Survey / The National Map); no use constraints",
+   "role": "absolute vertical accuracy vs INDEPENDENT surveyed VVA/NVA checkpoints (same NAVD88 datum as the cloud; no reconciliation); the forested VVA case complements the flat-marsh Marsh Island leg"
   }
  ]
 }

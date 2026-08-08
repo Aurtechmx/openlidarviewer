@@ -1,0 +1,869 @@
+{
+ "source": "USGS AZ Coconino B1 2019 (project 19049) \u2014 Aerial LiDAR accuracy checkpoints",
+ "citation": "U.S. Geological Survey, 2020, USGS Lidar Point Cloud AZ_CoconinoUSFS_2019_B19 (USGS project 19049; NGTOC task order 140G0219F0247, contract G16PC00042): U.S. Geological Survey 3D Elevation Program (3DEP). Public domain.",
+ "acquisition": "Summer 2019 (leaf-on), Coconino and Mohave counties, Arizona; aggregate nominal pulse spacing <=0.35 m; USGS National Geospatial Program Lidar Base Specification.",
+ "license": "Public domain (U.S. Geological Survey / The National Map). No use restrictions.",
+ "reference": "19049 Project Report, Tables 8 (NVA) & 9 (VVA); public domain (USGS 3DEP / The National Map)",
+ "independence": "Checkpoints (NVA+VVA) are held separate from the 12 LiDAR Control Points; not reused for calibration.",
+ "tileScheme": "Albers 1000 m x 1000 m; tiles named w{-X/1000}n{Y/1000} in EPSG:6350.",
+ "horizontalCrs": {
+  "epsg": 6350,
+  "name": "NAD83(2011) / Conus Albers",
+  "note": "Checkpoints reprojected from UTM 12N (EPSG:6341) to match the LiDAR tile CRS."
+ },
+ "verticalDatum": "NAVD88 orthometric (Geoid12B) \u2014 same reference as the LiDAR tile Z, so no vertical reconciliation.",
+ "counts": {
+  "total": 121,
+  "NVA": 70,
+  "VVA": 51
+ },
+ "checkpoints": [
+  {
+   "id": "BE01",
+   "type": "NVA",
+   "albersE": -1417253.084,
+   "albersN": 1503061.141,
+   "z": 2111.005
+  },
+  {
+   "id": "BE02",
+   "type": "NVA",
+   "albersE": -1400786.913,
+   "albersN": 1430653.19,
+   "z": 2231.153
+  },
+  {
+   "id": "BE03",
+   "type": "NVA",
+   "albersE": -1410218.183,
+   "albersN": 1473246.174,
+   "z": 2248.105
+  },
+  {
+   "id": "BE04",
+   "type": "NVA",
+   "albersE": -1397660.726,
+   "albersN": 1475529.884,
+   "z": 2154.678
+  },
+  {
+   "id": "BE05",
+   "type": "NVA",
+   "albersE": -1418623.302,
+   "albersN": 1429953.686,
+   "z": 1507.873
+  },
+  {
+   "id": "BE06",
+   "type": "NVA",
+   "albersE": -1391072.624,
+   "albersN": 1457761.54,
+   "z": 2007.737
+  },
+  {
+   "id": "BE07",
+   "type": "NVA",
+   "albersE": -1402757.848,
+   "albersN": 1396826.843,
+   "z": 1894.659
+  },
+  {
+   "id": "BE08",
+   "type": "NVA",
+   "albersE": -1395230.876,
+   "albersN": 1473252.35,
+   "z": 2050.194
+  },
+  {
+   "id": "BE09",
+   "type": "NVA",
+   "albersE": -1391089.692,
+   "albersN": 1480069.712,
+   "z": 2146.508
+  },
+  {
+   "id": "BE10",
+   "type": "NVA",
+   "albersE": -1402955.471,
+   "albersN": 1408514.611,
+   "z": 2000.638
+  },
+  {
+   "id": "BE12",
+   "type": "NVA",
+   "albersE": -1412676.142,
+   "albersN": 1501971.132,
+   "z": 2182.438
+  },
+  {
+   "id": "BE13",
+   "type": "NVA",
+   "albersE": -1389610.23,
+   "albersN": 1453810.466,
+   "z": 1985.101
+  },
+  {
+   "id": "BE14",
+   "type": "NVA",
+   "albersE": -1385785.073,
+   "albersN": 1425389.383,
+   "z": 2219.64
+  },
+  {
+   "id": "BE15",
+   "type": "NVA",
+   "albersE": -1399313.884,
+   "albersN": 1473087.407,
+   "z": 2222.656
+  },
+  {
+   "id": "BE16",
+   "type": "NVA",
+   "albersE": -1385612.605,
+   "albersN": 1432450.443,
+   "z": 2212.465
+  },
+  {
+   "id": "BE17",
+   "type": "NVA",
+   "albersE": -1382299.572,
+   "albersN": 1413792.997,
+   "z": 2127.871
+  },
+  {
+   "id": "BE18",
+   "type": "NVA",
+   "albersE": -1416947.17,
+   "albersN": 1494693.659,
+   "z": 2356.733
+  },
+  {
+   "id": "BE19",
+   "type": "NVA",
+   "albersE": -1400419.623,
+   "albersN": 1450832.815,
+   "z": 2094.009
+  },
+  {
+   "id": "BE20",
+   "type": "NVA",
+   "albersE": -1415963.147,
+   "albersN": 1485735.157,
+   "z": 2442.1
+  },
+  {
+   "id": "OT01",
+   "type": "NVA",
+   "albersE": -1410718.288,
+   "albersN": 1494660.753,
+   "z": 2324.533
+  },
+  {
+   "id": "OT02",
+   "type": "NVA",
+   "albersE": -1382371.435,
+   "albersN": 1469529.157,
+   "z": 1899.009
+  },
+  {
+   "id": "OT03",
+   "type": "NVA",
+   "albersE": -1412876.449,
+   "albersN": 1494937.173,
+   "z": 2299.489
+  },
+  {
+   "id": "OT04",
+   "type": "NVA",
+   "albersE": -1396965.869,
+   "albersN": 1434918.153,
+   "z": 2181.466
+  },
+  {
+   "id": "OT05",
+   "type": "NVA",
+   "albersE": -1388228.52,
+   "albersN": 1450853.178,
+   "z": 2024.758
+  },
+  {
+   "id": "OT06",
+   "type": "NVA",
+   "albersE": -1415836.027,
+   "albersN": 1476642.879,
+   "z": 2330.529
+  },
+  {
+   "id": "OT07",
+   "type": "NVA",
+   "albersE": -1403607.82,
+   "albersN": 1493033.27,
+   "z": 2228.023
+  },
+  {
+   "id": "OT08",
+   "type": "NVA",
+   "albersE": -1407992.821,
+   "albersN": 1470690.569,
+   "z": 2199.918
+  },
+  {
+   "id": "OT09",
+   "type": "NVA",
+   "albersE": -1397382.685,
+   "albersN": 1468806.863,
+   "z": 2075.491
+  },
+  {
+   "id": "OT10",
+   "type": "NVA",
+   "albersE": -1408115.371,
+   "albersN": 1490821.507,
+   "z": 2383.703
+  },
+  {
+   "id": "OT11",
+   "type": "NVA",
+   "albersE": -1397372.111,
+   "albersN": 1455933.924,
+   "z": 2177.17
+  },
+  {
+   "id": "OT12",
+   "type": "NVA",
+   "albersE": -1401929.857,
+   "albersN": 1490614.744,
+   "z": 2158.408
+  },
+  {
+   "id": "OT13",
+   "type": "NVA",
+   "albersE": -1395085.403,
+   "albersN": 1478579.664,
+   "z": 2084.778
+  },
+  {
+   "id": "OT14",
+   "type": "NVA",
+   "albersE": -1396149.534,
+   "albersN": 1486817.146,
+   "z": 2089.387
+  },
+  {
+   "id": "OT15",
+   "type": "NVA",
+   "albersE": -1390777.228,
+   "albersN": 1489469.726,
+   "z": 1968.951
+  },
+  {
+   "id": "OT16",
+   "type": "NVA",
+   "albersE": -1394573.161,
+   "albersN": 1484950.363,
+   "z": 2243.041
+  },
+  {
+   "id": "OT17",
+   "type": "NVA",
+   "albersE": -1390636.51,
+   "albersN": 1481944.256,
+   "z": 2147.218
+  },
+  {
+   "id": "OT18",
+   "type": "NVA",
+   "albersE": -1382712.652,
+   "albersN": 1467934.254,
+   "z": 1860.098
+  },
+  {
+   "id": "OT19",
+   "type": "NVA",
+   "albersE": -1412338.506,
+   "albersN": 1468042.87,
+   "z": 2302.495
+  },
+  {
+   "id": "OT20",
+   "type": "NVA",
+   "albersE": -1415330.697,
+   "albersN": 1461184.61,
+   "z": 2187.357
+  },
+  {
+   "id": "UR01",
+   "type": "NVA",
+   "albersE": -1395784.362,
+   "albersN": 1483386.629,
+   "z": 2189.388
+  },
+  {
+   "id": "UR02",
+   "type": "NVA",
+   "albersE": -1396227.417,
+   "albersN": 1480238.219,
+   "z": 2154.884
+  },
+  {
+   "id": "UR03",
+   "type": "NVA",
+   "albersE": -1394944.36,
+   "albersN": 1476018.858,
+   "z": 2044.553
+  },
+  {
+   "id": "UR04",
+   "type": "NVA",
+   "albersE": -1395985.05,
+   "albersN": 1471235.83,
+   "z": 2042.912
+  },
+  {
+   "id": "UR05",
+   "type": "NVA",
+   "albersE": -1395494.021,
+   "albersN": 1465445.657,
+   "z": 2043.657
+  },
+  {
+   "id": "UR06",
+   "type": "NVA",
+   "albersE": -1389160.909,
+   "albersN": 1462688.463,
+   "z": 1956.323
+  },
+  {
+   "id": "UR07",
+   "type": "NVA",
+   "albersE": -1401610.318,
+   "albersN": 1466113.608,
+   "z": 2086.686
+  },
+  {
+   "id": "UR08",
+   "type": "NVA",
+   "albersE": -1405169.223,
+   "albersN": 1464433.803,
+   "z": 2095.175
+  },
+  {
+   "id": "UR09",
+   "type": "NVA",
+   "albersE": -1392651.15,
+   "albersN": 1439135.364,
+   "z": 2207.96
+  },
+  {
+   "id": "UR10",
+   "type": "NVA",
+   "albersE": -1395439.642,
+   "albersN": 1430664.31,
+   "z": 2171.382
+  },
+  {
+   "id": "UR11",
+   "type": "NVA",
+   "albersE": -1411634.361,
+   "albersN": 1436717.537,
+   "z": 1969.543
+  },
+  {
+   "id": "UR12",
+   "type": "NVA",
+   "albersE": -1424166.873,
+   "albersN": 1423525.986,
+   "z": 1321.601
+  },
+  {
+   "id": "UR13",
+   "type": "NVA",
+   "albersE": -1408321.563,
+   "albersN": 1462738.343,
+   "z": 2098.371
+  },
+  {
+   "id": "UR14",
+   "type": "NVA",
+   "albersE": -1411098.422,
+   "albersN": 1429205.548,
+   "z": 1945.958
+  },
+  {
+   "id": "UR15",
+   "type": "NVA",
+   "albersE": -1409117.154,
+   "albersN": 1420803.706,
+   "z": 1941.392
+  },
+  {
+   "id": "UR16",
+   "type": "NVA",
+   "albersE": -1394278.089,
+   "albersN": 1420468.433,
+   "z": 2275.772
+  },
+  {
+   "id": "UR17",
+   "type": "NVA",
+   "albersE": -1391964.875,
+   "albersN": 1408091.992,
+   "z": 2234.202
+  },
+  {
+   "id": "UR18",
+   "type": "NVA",
+   "albersE": -1391325.632,
+   "albersN": 1399450.699,
+   "z": 2076.782
+  },
+  {
+   "id": "UR19",
+   "type": "NVA",
+   "albersE": -1408102.031,
+   "albersN": 1388097.577,
+   "z": 1924.829
+  },
+  {
+   "id": "UR20",
+   "type": "NVA",
+   "albersE": -1409644.163,
+   "albersN": 1460641.003,
+   "z": 2119.457
+  },
+  {
+   "id": "XNVA101",
+   "type": "NVA",
+   "albersE": -1394513.228,
+   "albersN": 1460700.583,
+   "z": 2047.577
+  },
+  {
+   "id": "XNVA102",
+   "type": "NVA",
+   "albersE": -1383637.125,
+   "albersN": 1483092.966,
+   "z": 1888.74
+  },
+  {
+   "id": "XNVA103",
+   "type": "NVA",
+   "albersE": -1415137.886,
+   "albersN": 1499118.592,
+   "z": 2225.405
+  },
+  {
+   "id": "XNVA104",
+   "type": "NVA",
+   "albersE": -1414964.772,
+   "albersN": 1483343.258,
+   "z": 2484.142
+  },
+  {
+   "id": "XNVA105",
+   "type": "NVA",
+   "albersE": -1397697.015,
+   "albersN": 1449540.778,
+   "z": 2086.803
+  },
+  {
+   "id": "XNVA501",
+   "type": "NVA",
+   "albersE": -1395648.359,
+   "albersN": 1416872.655,
+   "z": 2242.194
+  },
+  {
+   "id": "XNVA502",
+   "type": "NVA",
+   "albersE": -1405391.241,
+   "albersN": 1416367.17,
+   "z": 1955.146
+  },
+  {
+   "id": "XNVA503",
+   "type": "NVA",
+   "albersE": -1409563.615,
+   "albersN": 1389420.196,
+   "z": 1909.917
+  },
+  {
+   "id": "XNVA701",
+   "type": "NVA",
+   "albersE": -1421644.869,
+   "albersN": 1452186.774,
+   "z": 2173.314
+  },
+  {
+   "id": "XNVA702",
+   "type": "NVA",
+   "albersE": -1411505.693,
+   "albersN": 1453486.37,
+   "z": 2057.019
+  },
+  {
+   "id": "XNVA703",
+   "type": "NVA",
+   "albersE": -1403189.416,
+   "albersN": 1455283.324,
+   "z": 2081.584
+  },
+  {
+   "id": "BR01",
+   "type": "VVA",
+   "albersE": -1413792.406,
+   "albersN": 1496913.431,
+   "z": 2271.414
+  },
+  {
+   "id": "BR02",
+   "type": "VVA",
+   "albersE": -1398134.352,
+   "albersN": 1427162.841,
+   "z": 2223.06
+  },
+  {
+   "id": "BR03",
+   "type": "VVA",
+   "albersE": -1423365.408,
+   "albersN": 1456051.188,
+   "z": 2185.824
+  },
+  {
+   "id": "BR04",
+   "type": "VVA",
+   "albersE": -1412266.946,
+   "albersN": 1489107.036,
+   "z": 2405.165
+  },
+  {
+   "id": "BR05",
+   "type": "VVA",
+   "albersE": -1388884.317,
+   "albersN": 1441281.386,
+   "z": 2182.101
+  },
+  {
+   "id": "BR06",
+   "type": "VVA",
+   "albersE": -1404361.043,
+   "albersN": 1487748.239,
+   "z": 2418.897
+  },
+  {
+   "id": "BR07",
+   "type": "VVA",
+   "albersE": -1395027.994,
+   "albersN": 1482849.199,
+   "z": 2127.38
+  },
+  {
+   "id": "BR08",
+   "type": "VVA",
+   "albersE": -1386185.154,
+   "albersN": 1423945.356,
+   "z": 2230.102
+  },
+  {
+   "id": "BR09",
+   "type": "VVA",
+   "albersE": -1383514.48,
+   "albersN": 1413428.813,
+   "z": 2132.697
+  },
+  {
+   "id": "BR10",
+   "type": "VVA",
+   "albersE": -1413520.422,
+   "albersN": 1475212.169,
+   "z": 2278.721
+  },
+  {
+   "id": "BR11",
+   "type": "VVA",
+   "albersE": -1409625.655,
+   "albersN": 1480468.133,
+   "z": 2834.154
+  },
+  {
+   "id": "BR12",
+   "type": "VVA",
+   "albersE": -1390783.242,
+   "albersN": 1473436.931,
+   "z": 2010.413
+  },
+  {
+   "id": "BR13",
+   "type": "VVA",
+   "albersE": -1384812.168,
+   "albersN": 1467222.303,
+   "z": 1885.262
+  },
+  {
+   "id": "BR14",
+   "type": "VVA",
+   "albersE": -1402919.133,
+   "albersN": 1467447.145,
+   "z": 2159.954
+  },
+  {
+   "id": "BR15",
+   "type": "VVA",
+   "albersE": -1414188.891,
+   "albersN": 1472114.302,
+   "z": 2236.15
+  },
+  {
+   "id": "BR16",
+   "type": "VVA",
+   "albersE": -1386111.483,
+   "albersN": 1406023.686,
+   "z": 2106.68
+  },
+  {
+   "id": "BR17",
+   "type": "VVA",
+   "albersE": -1393748.221,
+   "albersN": 1462713.19,
+   "z": 2017.016
+  },
+  {
+   "id": "HG01",
+   "type": "VVA",
+   "albersE": -1408145.339,
+   "albersN": 1460651.443,
+   "z": 2109.117
+  },
+  {
+   "id": "HG02",
+   "type": "VVA",
+   "albersE": -1414994.898,
+   "albersN": 1455965.329,
+   "z": 2112.475
+  },
+  {
+   "id": "HG03",
+   "type": "VVA",
+   "albersE": -1421621.055,
+   "albersN": 1452171.74,
+   "z": 2173.303
+  },
+  {
+   "id": "HG04",
+   "type": "VVA",
+   "albersE": -1403184.836,
+   "albersN": 1455272.377,
+   "z": 2080.589
+  },
+  {
+   "id": "HG05",
+   "type": "VVA",
+   "albersE": -1412759.502,
+   "albersN": 1466437.324,
+   "z": 2192.216
+  },
+  {
+   "id": "HG06",
+   "type": "VVA",
+   "albersE": -1411183.628,
+   "albersN": 1464904.881,
+   "z": 2154.591
+  },
+  {
+   "id": "HG07",
+   "type": "VVA",
+   "albersE": -1411516.923,
+   "albersN": 1453511.659,
+   "z": 2056.318
+  },
+  {
+   "id": "HG08",
+   "type": "VVA",
+   "albersE": -1402500.816,
+   "albersN": 1454554.439,
+   "z": 2076.809
+  },
+  {
+   "id": "HG09",
+   "type": "VVA",
+   "albersE": -1392434.883,
+   "albersN": 1446663.112,
+   "z": 2104.195
+  },
+  {
+   "id": "HG10",
+   "type": "VVA",
+   "albersE": -1392267.698,
+   "albersN": 1441489.393,
+   "z": 2116.17
+  },
+  {
+   "id": "HG11",
+   "type": "VVA",
+   "albersE": -1395824.752,
+   "albersN": 1437208.568,
+   "z": 2192.305
+  },
+  {
+   "id": "HG12",
+   "type": "VVA",
+   "albersE": -1396810.735,
+   "albersN": 1432812.497,
+   "z": 2175.914
+  },
+  {
+   "id": "HG13",
+   "type": "VVA",
+   "albersE": -1393169.541,
+   "albersN": 1428915.351,
+   "z": 2219.951
+  },
+  {
+   "id": "HG14",
+   "type": "VVA",
+   "albersE": -1395654.656,
+   "albersN": 1416841.993,
+   "z": 2242.346
+  },
+  {
+   "id": "HG15",
+   "type": "VVA",
+   "albersE": -1393358.465,
+   "albersN": 1411247.465,
+   "z": 2284.593
+  },
+  {
+   "id": "HG16",
+   "type": "VVA",
+   "albersE": -1409555.423,
+   "albersN": 1389428.08,
+   "z": 1910.792
+  },
+  {
+   "id": "HG17",
+   "type": "VVA",
+   "albersE": -1383647.833,
+   "albersN": 1483079.342,
+   "z": 1889.509
+  },
+  {
+   "id": "TR01",
+   "type": "VVA",
+   "albersE": -1411186.047,
+   "albersN": 1433398.567,
+   "z": 1977.574
+  },
+  {
+   "id": "TR02",
+   "type": "VVA",
+   "albersE": -1399085.457,
+   "albersN": 1483129.736,
+   "z": 2373.438
+  },
+  {
+   "id": "TR03",
+   "type": "VVA",
+   "albersE": -1406428.134,
+   "albersN": 1486457.845,
+   "z": 2567.662
+  },
+  {
+   "id": "TR04",
+   "type": "VVA",
+   "albersE": -1414957.464,
+   "albersN": 1483326.765,
+   "z": 2484.703
+  },
+  {
+   "id": "TR05",
+   "type": "VVA",
+   "albersE": -1408809.663,
+   "albersN": 1425936.596,
+   "z": 1978.351
+  },
+  {
+   "id": "TR06",
+   "type": "VVA",
+   "albersE": -1394581.121,
+   "albersN": 1412757.851,
+   "z": 2309.337
+  },
+  {
+   "id": "TR07",
+   "type": "VVA",
+   "albersE": -1397703.675,
+   "albersN": 1449541.839,
+   "z": 2086.528
+  },
+  {
+   "id": "TR08",
+   "type": "VVA",
+   "albersE": -1415365.075,
+   "albersN": 1489899.112,
+   "z": 2413.274
+  },
+  {
+   "id": "TR09",
+   "type": "VVA",
+   "albersE": -1405361.748,
+   "albersN": 1416400.261,
+   "z": 1956.676
+  },
+  {
+   "id": "TR10",
+   "type": "VVA",
+   "albersE": -1400883.458,
+   "albersN": 1450333.56,
+   "z": 2095.684
+  },
+  {
+   "id": "TR11",
+   "type": "VVA",
+   "albersE": -1417132.069,
+   "albersN": 1501499.695,
+   "z": 2185.31
+  },
+  {
+   "id": "TR12",
+   "type": "VVA",
+   "albersE": -1394505.33,
+   "albersN": 1460692.172,
+   "z": 2047.253
+  },
+  {
+   "id": "TR13",
+   "type": "VVA",
+   "albersE": -1415125.462,
+   "albersN": 1499095.151,
+   "z": 2225.294
+  },
+  {
+   "id": "TR14",
+   "type": "VVA",
+   "albersE": -1405579.337,
+   "albersN": 1494086.238,
+   "z": 2229.719
+  },
+  {
+   "id": "TR15",
+   "type": "VVA",
+   "albersE": -1412300.564,
+   "albersN": 1492705.472,
+   "z": 2350.093
+  },
+  {
+   "id": "TR16",
+   "type": "VVA",
+   "albersE": -1404983.76,
+   "albersN": 1469714.481,
+   "z": 2206.78
+  },
+  {
+   "id": "TR17",
+   "type": "VVA",
+   "albersE": -1410737.757,
+   "albersN": 1455567.759,
+   "z": 2063.764
+  }
+ ]
+}
