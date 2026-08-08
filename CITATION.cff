@@ -9,8 +9,8 @@ authors:
     affiliation: "Aurtech"
     orcid: "https://orcid.org/0009-0007-3147-323X"
 
-version: "0.6.4"
-date-released: "2026-08-07"
+version: "0.6.5"
+date-released: "2026-08-08"
 license: MIT
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://lidar.aurtech.mx/"
