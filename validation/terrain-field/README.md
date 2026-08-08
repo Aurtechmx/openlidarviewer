@@ -49,6 +49,20 @@ The harness also carries the reliability invariants the terrain-hardening pass a
 - **Boundary behaviour** — slope/aspect error grouped by distance from an artificial crop edge: the interior (≥ 1 cell in) matches the full-surface truth exactly, and only the edge ring carries the kernel's clamp error (`tests/terrainBoundary.test.ts`).
 - **Evidence monotonicity** — a derived product may never out-rank its source: readiness, product-grade, coverage and export-evidence ladders, with resident-only / sampled never promotable to full (`tests/evidenceMonotonicity.test.ts`).
 
+## Running it
+
+```
+npm run validate:terrain
+```
+
+runs every leg against the committed references and prints one verdict:
+
+- **PASS** — every declared leg ran and agreed.
+- **REVIEW** — nothing disagreed, but a leg was skipped because its reference or crop fixture was absent (a fresh checkout mid-generation), so coverage was partial and PASS cannot be claimed.
+- **FAIL** — a leg disagreed with its reference.
+
+The command is an orchestrator: the legs live in the harness test files and every number comes from the real terrain core and the shared comparators. It exits non-zero only on FAIL, so a checkout missing an optional fixture reviews rather than breaks. `--json` prints the machine-readable report; `--out PATH` also writes it. The report shape is defined and rolled up in `src/validation/terrainReport.ts` (PASS only when every leg ran and passed — the single source of truth for the verdict rule).
+
 ## Boundaries
 
 This validates OLV's DTM **gridding** against independent implementations on real ground (two datasets, two UTM zones), and OLV's **ground classification** against a real survey classification. It does not on its own establish survey-grade accuracy (that needs surveyed ground control), and it does not yet cover: the StREAM Lab published 0.1 m DTM/CHM as a raster reference (needs the published product downloaded), ground extraction under the Hyytiälä forest canopy, and coastal ground + structure classification on the Pangandaran dataset. Those are the next crops, staged in `datasets/manifest.json`.
