@@ -457,7 +457,16 @@ export class ExportPanel {
    */
   private _renderProducts(): void {
     this._products.replaceChildren();
-    if (!this._cb.exportMeasurements) return;
+    // The Products section carries two independent lanes: the measurement
+    // deliverables (which need the measure surface wired) and the map outlines
+    // (the Site KML and the Scan-area polygon). The scan-area polygon is derived
+    // from the loaded cloud's footprint, so it does not depend on a measurement
+    // ever being placed — nor on the measurement export being wired. Render the
+    // section whenever EITHER lane has a host callback, so the always-available
+    // scan-area control surfaces even when no measurement tool is in play.
+    const hasMeasureLane = Boolean(this._cb.exportMeasurements);
+    const hasMapLane = Boolean(this._cb.exportKml || this._cb.exportScanFootprint);
+    if (!hasMeasureLane && !hasMapLane) return;
     // Defensive: this runs during construction, before the host's lazy viewer
     // resolves. A callback that throws (e.g. dereferencing a not-yet-ready
     // viewer) must degrade to 0, never take down panel/app init.
@@ -483,34 +492,36 @@ export class ExportPanel {
       applyOpen();
     });
 
-    const measureRow = el('div', { className: 'olv-export-product-actions' });
-    ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
-      measureRow.append(
-        this._productButton(label, count > 0, () => this._cb.exportMeasurements?.(fmt)),
+    if (hasMeasureLane) {
+      const measureRow = el('div', { className: 'olv-export-product-actions' });
+      ([['geojson', 'GeoJSON'], ['csv', 'CSV']] as const).forEach(([fmt, label]) => {
+        measureRow.append(
+          this._productButton(label, count > 0, () => this._cb.exportMeasurements?.(fmt)),
+        );
+      });
+      // Tamper-evident integrity report (JSON) — the same measurements, stamped
+      // with provenance + a verifiable content digest (catches accidental/casual
+      // edits; not a cryptographic signature). The honest deliverable.
+      if (this._cb.exportIntegrityReport) {
+        const btn = this._productButton(
+          'Integrity report',
+          count > 0,
+          () => this._cb.exportIntegrityReport?.(),
+        );
+        btn.setAttribute('data-testid', 'export-integrity-report');
+        measureRow.append(btn);
+      }
+      const measurePlural = count === 1 ? '' : 's';
+      content.append(
+        this._productGroup(
+          'Measurements',
+          measureRow,
+          count === 0
+            ? 'Place measurements, then export them as open vector formats.'
+            : `${count} measurement${measurePlural} ready to export.`,
+        ),
       );
-    });
-    // Tamper-evident integrity report (JSON) — the same measurements, stamped
-    // with provenance + a verifiable content digest (catches accidental/casual
-    // edits; not a cryptographic signature). The honest deliverable.
-    if (this._cb.exportIntegrityReport) {
-      const btn = this._productButton(
-        'Integrity report',
-        count > 0,
-        () => this._cb.exportIntegrityReport?.(),
-      );
-      btn.setAttribute('data-testid', 'export-integrity-report');
-      measureRow.append(btn);
     }
-    const measurePlural = count === 1 ? '' : 's';
-    content.append(
-      this._productGroup(
-        'Measurements',
-        measureRow,
-        count === 0
-          ? 'Place measurements, then export them as open vector formats.'
-          : `${count} measurement${measurePlural} ready to export.`,
-      ),
-    );
 
     // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
     // Each entry is offered only when the host wires it, and each carries its

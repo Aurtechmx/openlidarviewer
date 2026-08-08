@@ -260,5 +260,53 @@ describe('ExportPanel: Products section', () => {
   });
 });
 
+/**
+ * The scan-area polygon is derived from the loaded cloud's footprint, so it does
+ * not depend on any measurement having been placed — nor on the measurement
+ * export feature being wired at all. It is an always-available map control, so
+ * the Google Earth lane must render it even when the host wires no measurement
+ * callbacks (no `exportMeasurements`).
+ */
+describe('ExportPanel: scan-area export is independent of the measure surface', () => {
+  const noMeasure = {
+    getCloud: () => null,
+    hasFullSource: () => false,
+    isReduced: () => false,
+    getFullCloud: async () => null,
+    // Deliberately NO exportMeasurements / measurementCount.
+  };
+
+  it('offers the scan-area polygon with no measurement callbacks wired', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      ...noMeasure,
+      exportScanFootprint: () => { /* no-op */ },
+      scanFootprintStatus: () => ({ ready: true, reason: '' }),
+    });
+    const root = panel.element as unknown as FakeEl;
+    const btn = root.findOwnText('Scan area (KML polygon)')[0];
+    expect(btn, 'scan-area button should render without a measure surface').toBeDefined();
+    expect(btn.disabled).toBe(false);
+  });
+
+  it('offers the site KML with no measurement callbacks wired', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      ...noMeasure,
+      exportKml: () => { /* no-op */ },
+      kmlStatus: () => ({ ready: true, reason: '' }),
+    });
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findOwnText('Site KML')[0]).toBeDefined();
+  });
+
+  it('renders no Products section at all when nothing is wired', async () => {
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({ ...noMeasure });
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findByClass('olv-export-products-head')).toHaveLength(0);
+  });
+});
+
 // silence "unused" for the shared helper while keeping it available for edits.
 void makePanel;
