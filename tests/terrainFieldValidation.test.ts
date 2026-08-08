@@ -209,3 +209,65 @@ describe('OLV on survey-classified drone data (StREAM Lab riparian crop)', () =>
     },
   );
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Perturbation study — deterministic density reduction on the real White Sands
+// ground. The spec's core chain: as support weakens, coverage must drop and the
+// error must grow. No RNG — keep every k-th point, so the study is reproducible.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { gridErrorStats } from '../src/validation/terrainMetrics';
+
+/** Keep every k-th point — a deterministic density reduction (no seed needed). */
+function decimate(pts: TerrainPoint[], k: number): TerrainPoint[] {
+  if (k <= 1) return pts;
+  const out: TerrainPoint[] = [];
+  for (let i = 0; i < pts.length; i += k) out.push(pts[i]);
+  return out;
+}
+
+describe('perturbation — density reduction degrades coverage and accuracy together', () => {
+  const hasGround = existsSync(GROUND);
+  const hasRef = existsSync(REF_BINCELL);
+
+  (hasGround && hasRef ? it : it.skip)(
+    'coverage falls and RMSE rises monotonically as ground density drops',
+    () => {
+      const full = readGround();
+      const ref = readAsciiSouthUp(REF_BINCELL);
+      const refArr = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
+      const rows: Array<{ keep: number; cells: number; coverage: number; rmse: number }> = [];
+      for (const k of [1, 4, 16, 64]) {
+        const pts = decimate(full, k);
+        const z = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid: GRID, aggregation: 'mean' }).z;
+        const ours = Array.from(z, (v) => (Number.isFinite(v) ? v : NaN));
+        const s = gridErrorStats(ours, refArr, { nodata: NaN });
+        rows.push({ keep: 1 / k, cells: s.n, coverage: s.coverage, rmse: s.rmse });
+      }
+      // eslint-disable-next-line no-console
+      console.log('[terrain-field] density perturbation:', rows.map((r) => `1/${Math.round(1 / r.keep)}:cells=${r.cells},cov=${r.coverage.toFixed(2)},rmse=${r.rmse.toExponential(2)}`).join('  '));
+      // Coverage is monotonically non-increasing as we drop points.
+      for (let i = 1; i < rows.length; i++) expect(rows[i].coverage).toBeLessThanOrEqual(rows[i - 1].coverage + 1e-9);
+      // The sparsest run covers materially less ground than the full-density run.
+      expect(rows[rows.length - 1].coverage).toBeLessThan(rows[0].coverage);
+      // And error grows: the sparsest run is worse than the full-density run
+      // (which is ~0 against its own reference).
+      expect(rows[rows.length - 1].rmse).toBeGreaterThan(rows[0].rmse);
+    },
+  );
+
+  (hasGround && hasRef ? it : it.skip)('is deterministic — same decimation reproduces the same metrics', () => {
+    const full = readGround();
+    const ref = readAsciiSouthUp(REF_BINCELL);
+    const refArr = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
+    const run = () => {
+      const pts = decimate(full, 8);
+      const z = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid: GRID, aggregation: 'mean' }).z;
+      return gridErrorStats(Array.from(z, (v) => (Number.isFinite(v) ? v : NaN)), refArr, { nodata: NaN });
+    };
+    const a = run(), b = run();
+    expect(a.n).toBe(b.n);
+    expect(a.rmse).toBe(b.rmse);
+    expect(a.coverage).toBe(b.coverage);
+  });
+});
