@@ -12,6 +12,7 @@ const noScan: LiveScanAccessors = {
   getActivePointCount: () => null,
   getResolvedCrs: () => null,
   getPresentClassCodes: () => [],
+  getClassificationDerived: () => false,
 };
 
 const staticSignals: RawScanSignals = {

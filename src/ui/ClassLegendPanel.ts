@@ -79,6 +79,9 @@ export class ClassLegendPanel {
   /** The "Derived (heuristic)" provenance caption (hidden unless derived). */
   private readonly _provenance: HTMLElement;
 
+  /** True when the shown classification was OLV-derived, not producer-carried. */
+  private _derived = false;
+
   /** "Counts accrue as the cloud streams" caption (hidden unless streaming). */
   private readonly _streamingNote: HTMLElement;
 
@@ -270,10 +273,17 @@ export class ClassLegendPanel {
    * caveat, so the user sees not just THAT it is derived but how much to trust
    * it. Omit `info` (or pass nothing) for the plain caption.
    */
+  /** Whether the shown classification was OLV-derived (heuristic), not from the
+   *  producer. Read by the capability model so derived ground is not trusted. */
+  classificationIsDerived(): boolean {
+    return this._derived;
+  }
+
   setDerivedProvenance(
     on: boolean,
     info?: { confidencePct?: number | null; warnings?: readonly string[] },
   ): void {
+    this._derived = on;
     this._provenance.classList.toggle('olv-hidden', !on);
     let text = 'Derived (heuristic) — not survey-grade. Validate before relying on it.';
     if (on && info) {
