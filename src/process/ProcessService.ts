@@ -21,6 +21,34 @@ export interface ProcessReadinessSummary {
   readonly anyReady: boolean;
 }
 
+/**
+ * An unforgeable "you may produce this product" token. Issued ONLY by
+ * {@link ProcessService.authorize} and only when the product is `ready`, and it
+ * carries the reason code it was granted from. A run seam that demands this
+ * token cannot be reached with a blocked or review-only product, so a caller
+ * cannot skip the eligibility check the way a bare `isReady()` boolean allows.
+ * There is no public constructor — the type name is exported, its values are
+ * not.
+ */
+export interface ProductAuthorization {
+  readonly product: ProductId;
+  /** The `ready`-verdict reason code this authorization was granted from. */
+  readonly grantedFrom: string;
+  /** Brand so an authorization cannot be structurally forged by a plain object. */
+  readonly __brand: 'process-authorization';
+}
+
+/** The result of a guarded run: the executor's value, or the refusal verdict. */
+export type AuthorizedRun<T> =
+  | { readonly authorized: true; readonly value: T }
+  | {
+      readonly authorized: false;
+      readonly product: ProductId;
+      readonly readiness: Readiness;
+      readonly reasonCode: string;
+      readonly reason: string;
+    };
+
 export class ProcessService {
   private readonly _plan: ProcessPlan;
 
@@ -56,6 +84,42 @@ export class ProcessService {
   /** True only when the product is `ready` — the gate an exporter should use. */
   isReady(product: ProductId): boolean {
     return this.readiness(product) === 'ready';
+  }
+
+  /**
+   * Issue an authorization token for a product, or `null` when it is not
+   * `ready`. The token is the capability an execution path requires (see
+   * {@link runIfAuthorized}); withholding it on a blocked/review product is the
+   * fail-closed default. The token freezes the reason code the grant rested on,
+   * so an audit trail can show WHY production was permitted.
+   */
+  authorize(product: ProductId): ProductAuthorization | null {
+    const cap = this.capability(product);
+    if (cap == null || cap.readiness !== 'ready') return null;
+    return { product, grantedFrom: cap.reasonCode, __brand: 'process-authorization' };
+  }
+
+  /**
+   * Run `executor` ONLY when the product is authorized (`ready`), handing it the
+   * authorization token as proof. When the product is not ready the executor is
+   * never invoked and the plan's refusal verdict is returned instead — so a
+   * blocked or review-only product cannot be produced by routing through this
+   * seam, no matter what the caller intended. This is the unforgeable version of
+   * "check isReady, then export": the check and the action are one call.
+   */
+  runIfAuthorized<T>(product: ProductId, executor: (auth: ProductAuthorization) => T): AuthorizedRun<T> {
+    const auth = this.authorize(product);
+    if (auth == null) {
+      const cap = this.capability(product);
+      return {
+        authorized: false,
+        product,
+        readiness: cap?.readiness ?? 'blocked',
+        reasonCode: cap?.reasonCode ?? 'UNKNOWN_PRODUCT',
+        reason: cap?.reason ?? `No capability verdict exists for ${product}.`,
+      };
+    }
+    return { authorized: true, value: executor(auth) };
   }
 
   /** Count products by readiness. */

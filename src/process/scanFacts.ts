@@ -14,7 +14,7 @@
  */
 
 import type { CrsInfo } from '../io/crs';
-import type { ScanFacts, Coverage, ClassPresence } from './ProcessPlan';
+import type { ScanFacts, Coverage, ClassPresence, ClassificationProvenance } from './ProcessPlan';
 
 /** Loose, possibly-incomplete signals from the shell. Every field is optional. */
 export interface RawScanSignals {
@@ -28,6 +28,10 @@ export interface RawScanSignals {
   readonly hasReturnNumber?: boolean;
   readonly hasPointSourceId?: boolean;
   readonly classification?: ClassPresence;
+  /** Where the classification came from. Omitted ⇒ `producer` (the historical
+   *  assumption); the live shell supplies it explicitly so OLV-derived ground
+   *  is not mistaken for surveyed ground. */
+  readonly classificationProvenance?: ClassificationProvenance;
   readonly groundClassified?: boolean;
   readonly hasBuildingClass?: boolean;
   readonly medianSpacing?: number;
@@ -50,7 +54,18 @@ export function deriveScanFacts(raw: RawScanSignals): ScanFacts {
   const kind = raw.kind ?? 'static';
   const coverage: Coverage = raw.coverage ?? (kind === 'streaming' ? 'resident-only' : 'full');
   const classification: ClassPresence = raw.classification ?? 'none';
-  const groundClassified = raw.groundClassified === true && classification !== 'none';
+  // Provenance: none when unclassified, else the shell's word. An OMITTED
+  // provenance is `unknown` (fail-closed) — we cannot assert producer authority
+  // for a signal that never claimed it, so trust is withheld until a caller
+  // states the source. The live path always sets it explicitly (producer /
+  // derived / none), so this default only guards callers that forget to.
+  const classificationProvenance: ClassificationProvenance =
+    classification === 'none' ? 'none' : (raw.classificationProvenance ?? 'unknown');
+  // Only PRODUCER classes are trusted for a `ready` verdict: OLV-derived or
+  // manually-edited ground/buildings are estimates, so they set neither flag and
+  // fall to `review` in the capability model (never falsely GROUND_TRUSTED).
+  const trusted = classificationProvenance === 'producer';
+  const groundClassified = raw.groundClassified === true && classification !== 'none' && trusted;
   const facts: ScanFacts = {
     kind,
     coverage,
@@ -62,8 +77,9 @@ export function deriveScanFacts(raw: RawScanSignals): ScanFacts {
     hasReturnNumber: raw.hasReturnNumber === true,
     hasPointSourceId: raw.hasPointSourceId === true,
     classification,
+    classificationProvenance,
     groundClassified,
-    hasBuildingClass: raw.hasBuildingClass === true,
+    hasBuildingClass: raw.hasBuildingClass === true && trusted,
   };
   return raw.medianSpacing !== undefined && Number.isFinite(raw.medianSpacing)
     ? { ...facts, medianSpacing: raw.medianSpacing }

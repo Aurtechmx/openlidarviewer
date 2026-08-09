@@ -62,9 +62,13 @@ export function selectRegistrationModel(inp: RegistrationInputs): RegistrationDe
     return { allowed: false, reasonCode: 'LOW_OVERLAP', reason: `Estimated overlap ${(inp.overlapEstimate! * 100).toFixed(0)}% is below the ${(minOverlap * 100).toFixed(0)}% needed to register.` };
   }
 
-  // Airborne change-detection epochs → planar ICP, to protect the vertical signal.
+  // Airborne change-detection epochs WANT planar ICP (yaw + horizontal
+  // translation, Z locked) so vertical change is preserved rather than absorbed
+  // into a Z shift. That solver is not implemented — no planar-constrained ICP
+  // exists under src/registration — so the model is named but registration is
+  // WITHHELD rather than run as full 6-DOF, which would defeat the purpose.
   if (inp.capture === 'airborne' && inp.sameAreaEpochs) {
-    return { model: 'planar-icp', allowed: true, reasonCode: 'AIRBORNE_EPOCH_PLANAR', reason: 'Two airborne epochs of the same area; ICP is constrained to the horizontal plane so vertical change is preserved, not absorbed into a Z shift.' };
+    return { model: 'planar-icp', allowed: false, reasonCode: 'PLANAR_ICP_NOT_IMPLEMENTED', reason: 'Two airborne epochs of the same area need a planar-constrained ICP (yaw + XY, Z locked) to preserve vertical change; that solver is not yet implemented, so registration is withheld rather than run as full 6-DOF (which would absorb real elevation change into a Z shift).' };
   }
 
   // Terrestrial / object → full 6-DOF.
