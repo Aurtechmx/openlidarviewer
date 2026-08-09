@@ -16,8 +16,15 @@ const metreCrs: ScanFacts['crs'] = { source: 'epsg', name: 'X', linearUnit: 'met
 describe('deriveScanFacts gates ground/building trust on provenance', () => {
   const raw = { kind: 'static' as const, coverage: 'full' as const, crs: metreCrs, pointCount: 1000, classification: 'full' as const, groundClassified: true, hasBuildingClass: true };
 
-  it('producer classification is trusted (backward-compatible default)', () => {
-    const facts = deriveScanFacts(raw); // no provenance → producer
+  it('an OMITTED provenance is fail-closed to unknown, never trusted', () => {
+    const facts = deriveScanFacts(raw); // no provenance stated → unknown, untrusted
+    expect(facts.classificationProvenance).toBe('unknown');
+    expect(facts.groundClassified).toBe(false);
+    expect(facts.hasBuildingClass).toBe(false);
+  });
+
+  it('an explicitly-stated producer classification is trusted', () => {
+    const facts = deriveScanFacts({ ...raw, classificationProvenance: 'producer' });
     expect(facts.classificationProvenance).toBe('producer');
     expect(facts.groundClassified).toBe(true);
     expect(facts.hasBuildingClass).toBe(true);

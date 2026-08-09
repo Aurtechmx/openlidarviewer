@@ -54,10 +54,13 @@ export function deriveScanFacts(raw: RawScanSignals): ScanFacts {
   const kind = raw.kind ?? 'static';
   const coverage: Coverage = raw.coverage ?? (kind === 'streaming' ? 'resident-only' : 'full');
   const classification: ClassPresence = raw.classification ?? 'none';
-  // Provenance: none when unclassified, else the shell's word, defaulting to
-  // `producer` when unstated (backward-compatible with pre-provenance callers).
+  // Provenance: none when unclassified, else the shell's word. An OMITTED
+  // provenance is `unknown` (fail-closed) — we cannot assert producer authority
+  // for a signal that never claimed it, so trust is withheld until a caller
+  // states the source. The live path always sets it explicitly (producer /
+  // derived / none), so this default only guards callers that forget to.
   const classificationProvenance: ClassificationProvenance =
-    classification === 'none' ? 'none' : (raw.classificationProvenance ?? 'producer');
+    classification === 'none' ? 'none' : (raw.classificationProvenance ?? 'unknown');
   // Only PRODUCER classes are trusted for a `ready` verdict: OLV-derived or
   // manually-edited ground/buildings are estimates, so they set neither flag and
   // fall to `review` in the capability model (never falsely GROUND_TRUSTED).
