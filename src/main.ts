@@ -176,6 +176,7 @@ import {
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
+import { makeNavPaletteActions } from './app/navPaletteActions';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -829,15 +830,11 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.3 — on-canvas compass / ViewCube. Promoted from the v0.5.2 URL-only flag
-// to a discoverable, persisted control: toggle it from the command palette
-// ("Toggle compass"), and the choice is remembered. It stays OFF by default —
-// the app's left and right edges are full-height panel columns (left panels and
-// the Inspector), so a persistent gizmo has no free corner to occupy without
-// overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. The life cycle — preference, lazy mount, rAF loop,
-// tab-visibility pausing — lives in ui/compassController.ts; see that file for
-// why it is not four module-scope `let`s here.
+// v0.5.3 — on-canvas compass / ViewCube. A discoverable, persisted control
+// toggled from the command palette ("Toggle compass"); OFF by default (the full-
+// height left/Inspector columns leave no free corner). `?viewcube=1/0` forces it.
+// Life cycle (preference, lazy mount, rAF loop, tab-visibility pausing) lives in
+// ui/compassController.ts.
 const compass = createCompassController({
   host: () => stage.overlay,
   urlParams,
@@ -1737,6 +1734,7 @@ async function runDeriveClassification(): Promise<void> {
       warnings: result.warnings,
     });
     classLegendPanel.show();
+    processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
     void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
@@ -1815,6 +1813,7 @@ async function runFillUnclassified(): Promise<void> {
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
+    processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
     const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
@@ -1917,6 +1916,7 @@ const ACTION_REGISTRY = buildActionRegistry({
   hasScan,
   saveCurrentView,
   applyView,
+  ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
