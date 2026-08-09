@@ -3641,7 +3641,7 @@ void viewerLoaded.then(() => {
   });
 });
 
-const dropZone = new DropZone(document.body, (file) => void handleFile(file));
+const dropZone = new DropZone(document.body, (file) => void handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
 // v0.3.10 trust-pass — install the Playwright seam under `?test=1`.
@@ -4485,12 +4485,17 @@ function _isDataSaver(): boolean {
 }
 
 let _loadersPrewarmed = false;
-function schedulePrewarm(): void {
+/**
+ * Warm every lazy chunk the first scan-open needs — the static LAS/LAZ loader,
+ * the COPC decode worker and its laz-perf WASM, the streaming loader, and the
+ * Viewer/three.js chunk — so the open path pays none of that download or
+ * worker-boot cost. Idempotent (guarded by `_loadersPrewarmed`), so it is safe
+ * to call from both the idle scheduler and the drag-intent handler.
+ */
+function prewarmLoaders(): void {
   if (_loadersPrewarmed) return;
-  const fire = (): void => {
-    if (_loadersPrewarmed) return;
-    _loadersPrewarmed = true;
-    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+  _loadersPrewarmed = true;
+  void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
     // Instantiate the COPC decode worker singleton during idle time.
     // The constructor spawns a Web Worker and waits for its WASM
     // (`laz-perf`) module to initialise — about 150-250 ms on a warm
@@ -4513,16 +4518,27 @@ function schedulePrewarm(): void {
     // opens without that download on the critical path. Gated on data
     // charge: skip it under Save-Data or a 2G/3G connection so we never
     // spend a phone's cellular budget on a scan the user hasn't opened yet.
-    if (!_isDataSaver()) {
-      void loadViewer().catch(() => { /* swallow — open() retries */ });
-    }
-  };
+  if (!_isDataSaver()) {
+    void loadViewer().catch(() => { /* swallow — open() retries */ });
+  }
+}
+
+/**
+ * Schedule {@link prewarmLoaders} for the browser's next idle window (or a
+ * short timeout without rIC), so the prewarm never competes with the renderer's
+ * first frames. The drag-intent handler calls `prewarmLoaders` directly
+ * instead, to start the fetch the moment a file is dragged over the page rather
+ * than waiting for idle — the narrow window where a user drops before the idle
+ * prewarm has fired.
+ */
+function schedulePrewarm(): void {
+  if (_loadersPrewarmed) return;
   type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
   const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
   if (typeof rIC === 'function') {
-    rIC(fire, { timeout: 2000 });
+    rIC(prewarmLoaders, { timeout: 2000 });
   } else {
-    setTimeout(fire, 1500);
+    setTimeout(prewarmLoaders, 1500);
   }
 }
 
