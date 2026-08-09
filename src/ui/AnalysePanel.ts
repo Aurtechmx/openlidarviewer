@@ -44,6 +44,15 @@ import {
   COVERAGE_LEGEND,
   COVERAGE_CAPTION,
 } from '../terrain/surface/coverageHeatmap';
+// Colourblind-safe twin of the coverage tile: same confidence buckets on the
+// Cividis palette, so a colour-vision-deficient viewer isn't left with the
+// green/yellow/red ramp. Selected when the colourblind-safe palette is active.
+import {
+  confidenceOverlayImage,
+  CONFIDENCE_LEGEND,
+  CONFIDENCE_CAPTION,
+} from '../terrain/surface/confidenceOverlay';
+import { colorblindSafeClasses } from '../render/colorModes';
 import { interpolatedCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
@@ -1023,6 +1032,16 @@ export class AnalysePanel {
    * Surface models — above-ground height (DSM − DTM), slope distribution, and
    * a north-up hillshade preview the user can export as a PNG.
    */
+  /**
+   * Re-render the surface tiles in place — used when the app-wide colourblind-
+   * safe palette toggles, so the coverage tile swaps between the green/yellow/red
+   * ramp and its Cividis twin without a re-analysis. No-op with no result;
+   * leaves staleness, scan binding and the run button untouched (unlike update).
+   */
+  refreshForPalette(): void {
+    if (this._result) this._renderSurface();
+  }
+
   private _renderSurface(): void {
     // Drop any frame the previous relief tile queued — the tile it would paint
     // is about to be detached by replaceChildren().
@@ -1098,13 +1117,19 @@ export class AnalysePanel {
     const rows = r.dtm.rows;
     if (!(cols > 0 && rows > 0) || r.dtm.confidence.length !== cols * rows) return null;
 
+    // Honour the app's colourblind-safe palette preference for this data tile.
+    const cvd = colorblindSafeClasses();
     const canvas = this._makeCanvas(cols, rows);
     const ctx = canvas.getContext('2d');
     if (ctx) {
       const img = ctx.createImageData(cols, rows);
       // The rasteriser flips north-up to match the other preview tiles; copy
-      // its RGBA straight into the canvas ImageData.
-      const raster = coverageHeatmapImage(r.dtm, { northUp: true });
+      // its RGBA straight into the canvas ImageData. Under the colourblind-safe
+      // palette, render the Cividis confidence twin instead of the green/yellow/
+      // red ramp — same buckets, accessible colours.
+      const raster = cvd
+        ? confidenceOverlayImage(r.dtm, { northUp: true })
+        : coverageHeatmapImage(r.dtm, { northUp: true });
       img.data.set(raster.data);
       ctx.putImageData(img, 0, 0);
     }
@@ -1113,8 +1138,8 @@ export class AnalysePanel {
     tile.append(el('div', { className: 'olv-analyse-sublabel', text: 'Coverage (trust)' }));
     const wrap = this._rasterWrap(canvas);
     tile.append(wrap.wrap);
-    tile.append(this._coverageLegend());
-    tile.append(el('div', { className: 'olv-analyse-caption', text: COVERAGE_CAPTION }));
+    tile.append(this._coverageLegend(cvd));
+    tile.append(el('div', { className: 'olv-analyse-caption', text: cvd ? CONFIDENCE_CAPTION : COVERAGE_CAPTION }));
 
     const readout = this._sampleReadout();
     this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
@@ -1165,10 +1190,11 @@ export class AnalysePanel {
     btn.setAttribute('aria-pressed', this._confidenceColorActive ? 'true' : 'false');
   }
 
-  /** A discrete 3-stop coverage legend: green / yellow / red = strong / moderate / weak. */
-  private _coverageLegend(): HTMLElement {
+  /** A discrete 3-stop coverage legend: the green/yellow/red ramp, or the Cividis
+   *  confidence twin when the colourblind-safe palette is active. Same buckets. */
+  private _coverageLegend(colorblindSafe = false): HTMLElement {
     const wrap = el('div', { className: 'olv-analyse-coverage-legend' });
-    for (const stop of COVERAGE_LEGEND) {
+    for (const stop of colorblindSafe ? CONFIDENCE_LEGEND : COVERAGE_LEGEND) {
       const item = el('div', { className: 'olv-analyse-coverage-legend-item' });
       const sw = el('span', { className: 'olv-analyse-coverage-swatch' });
       sw.style.background = `rgb(${stop.color.r},${stop.color.g},${stop.color.b})`;

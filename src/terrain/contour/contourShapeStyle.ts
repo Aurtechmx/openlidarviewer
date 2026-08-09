@@ -93,10 +93,6 @@ export function contourShapeStyleLabel(style: ContourShapeStyle): string {
   return STYLE_BY_VALUE.get(style)?.label ?? style;
 }
 
-/** Whether a style is a known preset. */
-export function isContourShapeStyle(value: unknown): value is ContourShapeStyle {
-  return typeof value === 'string' && STYLE_BY_VALUE.has(value as ContourShapeStyle);
-}
 
 /** Clone a polyline (new vertex array, vertices shared — they are readonly). */
 function clonePolyline(poly: ContourPolyline): ContourPolyline {
