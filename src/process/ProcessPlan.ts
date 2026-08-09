@@ -30,6 +30,16 @@ export type Coverage = 'full' | 'sampled' | 'resident-only';
 /** Whether a scan carries classification, and how completely. */
 export type ClassPresence = 'none' | 'partial' | 'full';
 
+/**
+ * Where a scan's classification came from. This is an EPISTEMIC fact, not just a
+ * presence flag: a class-2 point the producer surveyed is trusted ground; a
+ * class-2 point OLV derived from geometry is a heuristic estimate; a manually
+ * edited class carries the editor's judgement. The capability model treats them
+ * differently — only producer classes back a `ready` verdict; derived, manual
+ * or unknown provenance can at most reach `review`.
+ */
+export type ClassificationProvenance = 'producer' | 'derived' | 'manual' | 'unknown' | 'none';
+
 /** The products the capability model reasons about in Phase 1. */
 export type ProductId =
   | 'classify-gaps'
@@ -61,9 +71,13 @@ export interface ScanFacts {
   readonly hasPointSourceId: boolean;
   /** Classification presence, from the producer or a prior derive. */
   readonly classification: ClassPresence;
-  /** True when class 2 (ground) is present and trustworthy. */
+  /** Where the classification came from — gates trusted vs derived verdicts.
+   *  Always set by `deriveScanFacts`; optional so hand-built facts need not. */
+  readonly classificationProvenance?: ClassificationProvenance;
+  /** True when TRUSTED (producer) class 2 (ground) is present. Derived or
+   *  manually edited ground does not set this — it can only reach `review`. */
   readonly groundClassified: boolean;
-  /** True when class 6 (building) points are present. */
+  /** True when TRUSTED (producer) class 6 (building) points are present. */
   readonly hasBuildingClass: boolean;
   /** Median point spacing in metres, when measurable. */
   readonly medianSpacing?: number;

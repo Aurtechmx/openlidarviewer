@@ -51,6 +51,14 @@ export interface GridRecommendation {
   readonly cellOptionsM: number[];
   /** Estimated average point spacing, metres (NaN when not derivable). */
   readonly pointSpacingM: number;
+  /**
+   * Whether any ladder cell fits the memory budget. False means even the
+   * coarsest rung ({@link GRID_LADDER_M} end) blows the budget, so `cellSizeM`
+   * is a fall-back the caller must NOT allocate blindly — coarsen further,
+   * tile, or refuse. Guards against silently recommending a grid too large to
+   * build.
+   */
+  readonly feasible: boolean;
   /** Human-readable rationale. */
   readonly reasons: string[];
 }
@@ -81,9 +89,13 @@ export function recommendGrid(input: GridRecommendationInput): GridRecommendatio
   const cellFits = (cell: number): boolean =>
     area === 0 || (width / cell) * (depth / cell) <= budget;
   const cellOptionsM = GRID_LADDER_M.filter(cellFits);
+  const feasible = area === 0 || cellOptionsM.length > 0;
   let cellSizeM = densityCell;
-  if (!cellFits(cellSizeM)) {
-    cellSizeM = cellOptionsM.length > 0 ? cellOptionsM[0] : GRID_LADDER_M.at(-1)!;
+  if (!feasible) {
+    cellSizeM = GRID_LADDER_M.at(-1)!;
+    reasons.push(`No ladder grid fits the ${Math.round(area)} m² extent in memory — even a ${cellSizeM} m cell exceeds the ${budget.toLocaleString()}-cell budget. Coarsen further, tile the extent, or refuse; do not allocate this grid as-is.`);
+  } else if (!cellFits(cellSizeM)) {
+    cellSizeM = cellOptionsM[0];
     reasons.push(`Grid coarsened to ${cellSizeM} m so the ${Math.round(area)} m² extent fits in memory.`);
   } else if (Number.isFinite(spacing)) {
     reasons.push(
@@ -107,5 +119,5 @@ export function recommendGrid(input: GridRecommendationInput): GridRecommendatio
     reasons.push('Recommended contour interval 1 m (relief unknown).');
   }
 
-  return { cellSizeM, contourIntervalM, cellOptionsM, pointSpacingM: spacing, reasons };
+  return { cellSizeM, contourIntervalM, cellOptionsM, pointSpacingM: spacing, feasible, reasons };
 }

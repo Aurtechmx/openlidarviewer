@@ -44,10 +44,35 @@ export function rigidSolve(
   source: readonly Vec3[],
   target: readonly Vec3[],
   minCorrespondences = 3,
+  /**
+   * Optional fit-quality gate: the maximum acceptable RMS residual (same linear
+   * unit as the coordinates). A closed-form solve always returns SOME transform,
+   * even for mismatched or garbage correspondences; without a gate `ok:true`
+   * means only "a transform was computed", not "the fit is good". When this is a
+   * finite positive number and the residual exceeds it, the result is `ok:false`
+   * with reason `FIT_RMSE_EXCEEDED` — the transform and rmse are still returned
+   * so the caller can inspect them. Omitted ⇒ no fit gate (unchanged behaviour).
+   */
+  maxRmse?: number,
 ): RigidResult {
-  const n = Math.min(source.length, target.length);
+  // Correspondences must pair one-to-one: a length mismatch is a caller bug, not
+  // a set to silently truncate to the shorter of the two (which would fit points
+  // to the wrong partners).
+  if (source.length !== target.length) {
+    return { R: IDENT, t: [0, 0, 0], rmse: NaN, n: 0, ok: false, reason: 'CORRESPONDENCE_COUNT_MISMATCH' };
+  }
+  const n = source.length;
   if (n < Math.max(3, minCorrespondences)) {
     return { R: IDENT, t: [0, 0, 0], rmse: NaN, n, ok: false, reason: 'TOO_FEW_CORRESPONDENCES' };
+  }
+  // Non-finite coordinates would poison the centroid and covariance; reject
+  // rather than emit a transform built from NaN/Inf.
+  for (let i = 0; i < n; i++) {
+    const p = source[i], q = target[i];
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !Number.isFinite(p[2]) ||
+        !Number.isFinite(q[0]) || !Number.isFinite(q[1]) || !Number.isFinite(q[2])) {
+      return { R: IDENT, t: [0, 0, 0], rmse: NaN, n, ok: false, reason: 'NON_FINITE_CORRESPONDENCE' };
+    }
   }
 
   // Centroids.
@@ -118,7 +143,13 @@ export function rigidSolve(
     const dz = rp[2] + t[2] - target[i][2];
     sse += dx * dx + dy * dy + dz * dz;
   }
-  return { R, t, rmse: Math.sqrt(sse / n), n, ok: true };
+  const rmse = Math.sqrt(sse / n);
+  // Fit-quality gate: a solved transform whose residual exceeds the caller's
+  // tolerance is refused, so `ok:true` cannot stand for a garbage fit.
+  if (Number.isFinite(maxRmse) && (maxRmse as number) > 0 && rmse > (maxRmse as number)) {
+    return { R, t, rmse, n, ok: false, reason: 'FIT_RMSE_EXCEEDED' };
+  }
+  return { R, t, rmse, n, ok: true };
 }
 
 // ── small 3×3 helpers ────────────────────────────────────────────────────────

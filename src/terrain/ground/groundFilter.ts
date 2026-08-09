@@ -335,7 +335,7 @@ export function classifyGroundSmrf(
   const groundSurface = work;
 
   // ── 5. classify points against the opened surface ─────────────────
-  const slopeGrid = surfaceSlope(groundSurface, cols, rows, cellSizeM);
+  const slopeGrid = surfaceSlope(groundSurface, cols, rows, cellSizeZUnits);
   const isGround = new Uint8Array(sourcePointCount);
   let groundPointCount = 0;
   for (let pi = 0; pi < sourcePointCount; pi++) {
@@ -596,8 +596,15 @@ export function surfaceSlope(
   surface: Float32Array,
   cols: number,
   rows: number,
-  cellSizeM: number,
+  cellRunZUnits: number,
 ): Float32Array {
+  // Slope must be dimensionless (rise/run). The rise is a Δz in the surface's
+  // vertical unit, so the run must be the cell size expressed in that SAME unit
+  // — `cellSizeZUnits`, not the metric cell size. On a metric frame the two
+  // coincide; on foot-Z or geographic-XY they do not, and dividing a native Δz
+  // by a metric run would tilt the slope the SMRF tolerance reacts to. This is
+  // the same dimensional fix already applied to the morphological-opening
+  // threshold and to despike / cellConfidence roughness.
   const out = new Float32Array(surface.length);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
@@ -608,7 +615,7 @@ export function surfaceSlope(
       if (col < cols - 1) maxDiff = Math.max(maxDiff, Math.abs(z - surface[i + 1]));
       if (row > 0) maxDiff = Math.max(maxDiff, Math.abs(z - surface[i - cols]));
       if (row < rows - 1) maxDiff = Math.max(maxDiff, Math.abs(z - surface[i + cols]));
-      out[i] = cellSizeM > 0 ? maxDiff / cellSizeM : 0;
+      out[i] = cellRunZUnits > 0 ? maxDiff / cellRunZUnits : 0;
     }
   }
   return out;

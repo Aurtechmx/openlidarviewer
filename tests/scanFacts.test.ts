@@ -27,8 +27,11 @@ describe('deriveScanFacts — unknowns default to the safe side', () => {
   it('ground can never be trusted on an unclassified cloud', () => {
     // groundClassified true but classification none → forced false.
     expect(deriveScanFacts({ groundClassified: true }).groundClassified).toBe(false);
-    // With classification present, it stands.
-    expect(deriveScanFacts({ groundClassified: true, classification: 'full' }).groundClassified).toBe(true);
+    // With classification present AND stated producer provenance, it stands.
+    expect(deriveScanFacts({ groundClassified: true, classification: 'full', classificationProvenance: 'producer' }).groundClassified).toBe(true);
+    // But an OMITTED provenance is fail-closed (unknown → untrusted), so ground
+    // is withheld until a caller states the source.
+    expect(deriveScanFacts({ groundClassified: true, classification: 'full' }).groundClassified).toBe(false);
   });
 
   it('a negative or non-finite point count clamps to 0', () => {
