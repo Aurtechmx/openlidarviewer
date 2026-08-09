@@ -8,6 +8,22 @@ import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
 const ground = (pts: TerrainPoint[]) => new Uint8Array(pts.length).fill(1);
 
+describe('rasterizeDtm grid-budget guard', () => {
+  it('refuses a pathological tiny-cell / huge-extent grid instead of allocating it', () => {
+    // A 100 km × 100 km grid at a 0.05 m cell is 2,000,000² cells — the real
+    // 3.7-billion-cell case. The guard must return an empty raster with a
+    // warning, never attempt the (multi-terabyte) allocation.
+    const n = 2_000_000;
+    const grid = { originH1: 0, originH2: 0, cols: n, rows: n, cellSizeM: 0.05 };
+    const pts: TerrainPoint[] = [{ x: 1, y: 1, z: 3 }];
+    const r = rasterizeDtm(pts, ground(pts), { grid });
+    expect(r.cols).toBe(0);
+    expect(r.rows).toBe(0);
+    expect(r.z.length).toBe(0);
+    expect(r.warnings.some((w) => /refused/i.test(w))).toBe(true);
+  });
+});
+
 describe('rasterizeDtm', () => {
   it('averages multiple ground returns in a cell (mean)', () => {
     const pts: TerrainPoint[] = [
