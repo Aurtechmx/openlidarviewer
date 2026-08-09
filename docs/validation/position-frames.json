@@ -8,6 +8,13 @@
   },
   "entries": [
     {
+      "file": "src/app/compareLoadedLayers.ts",
+      "symbol": "compareLoadedLayers",
+      "frame": "world",
+      "reads": 3,
+      "why": "Each buffer is paired with its own sourceOrigin so the two epochs are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations."
+    },
+    {
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",
@@ -111,13 +118,6 @@
       "frame": "project-local",
       "reads": 6,
       "why": "Every read is the gather result from Viewer.gatherTerrainPositions, whose assembler folds each layer placement as it copies."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "compareLoadedLayers",
-      "frame": "world",
-      "reads": 3,
-      "why": "Each buffer is paired with its own sourceOrigin so the two epochs are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations."
     },
     {
       "file": "src/main.ts",

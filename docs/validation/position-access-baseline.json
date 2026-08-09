@@ -1,6 +1,7 @@
 {
   "total": 147,
   "files": {
+    "src/app/compareLoadedLayers.ts": 3,
     "src/app/terrainAnalysisRunner.ts": 3,
     "src/io/copc/copcChunkDecode.ts": 1,
     "src/io/lasDecodeShared.ts": 3,
@@ -14,7 +15,7 @@
     "src/io/loadPtx.ts": 1,
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 2,
-    "src/main.ts": 17,
+    "src/main.ts": 14,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/InspectTool.ts": 1,

@@ -179,6 +179,7 @@ import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/
 import { makeNavPaletteActions } from './app/navPaletteActions';
 import { sampleStreamingDebug } from './app/streamingDebugSample';
 import { createLassoToast } from './ui/lassoToast';
+import { compareLoadedLayers as runCompareLoadedLayers } from './app/compareLoadedLayers';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -235,10 +236,6 @@ import {
   loadFullCloudGradeAction,
   loadSession,
   loadExportProvenance,
-  loadCompareEpochs,
-  loadAlignEpochs,
-  loadCompareDtms,
-  loadChangeRaster,
   loadApplyDisplayProfile,
   loadColorbarOverlay,
   loadAnalysePanel,
@@ -268,8 +265,7 @@ import { CatalogPanel } from './ui/CatalogPanel';
 import type { CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
-import { spatialContextFrom, verticalMetresPerUnit } from './geo/SpatialContext';
-import { epochFrameFacts, epochFrameOptions } from './geo/frameCompatibility';
+import { verticalMetresPerUnit } from './geo/SpatialContext';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -277,7 +273,7 @@ import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
-import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
+import { deriveVolumeRecord } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { createAppRuntime } from './app/AppRuntime';
@@ -5555,105 +5551,13 @@ function resetToEmptyState(): void {
 
 
 function compareLoadedLayers(): void {
-  const ids = viewer.clouds();
-  if (ids.length !== 2) return;
-  const a = viewer.getCloud(ids[0]) ?? null;
-  const b = viewer.getCloud(ids[1]) ?? null;
-  if (!a || !b) return;
-  inspector.setCompareResult(['Comparing elevations… running ground filters, one moment.']);
-  inspector.setDifferenceAvailable(false);
-  layers.lastDifference = null;
-  void (async () => {
-    // Load the change-detection code on demand, then yield a frame so the
-    // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms }, { alignEpochClouds, summarizeAlignment }, { compareDtms, summarizeChange }, { changeToEsriAscii }] =
-      await Promise.all([
-        loadCompareEpochs(),
-        loadAlignEpochs(),
-        loadCompareDtms(),
-        loadChangeRaster(),
-      ]);
-    await new Promise((resolve) => setTimeout(resolve, 16));
-    try {
-      // Pass each cloud's origin: the two are recentred by their own origins, so
-      // the comparison must align them in a common world frame, not raw local.
-      // Unit info rides along so the shared grid's ~0.25 m cell floor is
-      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25 —
-      // and it now comes from ONE context per epoch, built at this boundary, so
-      // alignment, difference and exported raster cannot disagree about the
-      // metre scale (`epochFrameOptions`) or the declared frame
-      // (`declaredFrameLabel` keeps two UNDECLARED scans off the "same frame"
-      // branch instead of matching them on the display placeholder).
-      const ctxA = spatialContextFrom(a.metadata?.crs);
-      const ctxB = spatialContextFrom(b.metadata?.crs);
-      const frames = epochFrameOptions(ctxA, ctxB);
-      // `sourceOrigin`, not the live project origin: this is the epoch world
-      // comparison. The frame facts come from each epoch's context.
-      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) };
-      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) };
-      // Coarse-register the after cloud onto the before cloud first (yaw + x/y
-      // only — a real vertical change is the signal, so z is preserved), so a
-      // small horizontal misregistration between epochs is not read as movement.
-      // Refuse a fit whose residual exceeds 10% of the scene span: that means the
-      // two clouds never registered, so it's compared as-is rather than shifted.
-      // The span is measured in SOURCE units (horizontalSpanXY is unit-agnostic)
-      // while the gate option is metres, so convert by the CRS's linear factor —
-      // geographic frames don't have one, but alignment refuses those outright.
-      const span = horizontalSpanXY(a.positions, a.sourceOrigin);
-      const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
-      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: frames.horizontalUnitKnown, // one shared verdict: the alignment and the difference below read the SAME frame facts, so a shift reported in metres is never followed by a difference that refuses metres
-      });
-      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter);
-      if (!dtms) {
-        inspector.setCompareResult(['Could not compare — a layer has no ground points.']);
-        return;
-      }
-      // Unit factors so cut/fill is m³ and Δz/LoD metres, not source units; a
-      // geographic frame has no such factor at all, which `frames` flags so the
-      // comparison refuses volumes rather than printing degree² figures as m³.
-      const cmp = compareDtms(dtms.before, dtms.after, {
-        ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
-        verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
-      });
-      const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
-      // A georeferenced .asc of the signed difference. The shared grid is built
-      // in the common world frame, so its origin IS the scan's projected corner.
-      // The .asc grid geometry (cellsize + corners) is in the source LINEAR
-      // unit, but detectChange returns Δz in metres. Express the cell values in
-      // that same linear unit so the raster is internally consistent (a foot-CRS
-      // export otherwise carries foot geometry with metre values, and any GIS
-      // volume mixes ft² with m). Metre / compound-metre-horizontal CRS ⇒ 1, a
-      // byte-identical no-op; OLV never reprojects, so the grid unit stays source.
-      // A provably frame-incompatible pair reports no numbers, so it must not
-      // hand out a difference raster either.
-      if (cmp.frameIncompatible) {
-        inspector.setDifferenceAvailable(false);
-        return;
-      }
-      const gridUnitToMetres = frames.horizontalUnitToMetres ?? 1;
-      const ascDiff =
-        gridUnitToMetres === 1
-          ? cmp.result.diff
-          : cmp.result.diff.map((v) => v / gridUnitToMetres);
-      layers.lastDifference = {
-        stem: `${baseName(a.name)}-to-${baseName(b.name)}-difference`,
-        asc: () =>
-          changeToEsriAscii({
-            diff: ascDiff,
-            ncols: dtms.cols,
-            nrows: dtms.rows,
-            cellSizeM: dtms.cellSizeM,
-            xllCorner: dtms.before.originH1,
-            yllCorner: dtms.before.originH2,
-          }),
-      };
-      inspector.setDifferenceAvailable(true);
-    } catch (err) {
-      inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
-    }
-  })();
+  runCompareLoadedLayers({
+    cloudIds: () => viewer.clouds(),
+    getCloud: (id) => viewer.getCloud(id) ?? null,
+    setCompareResult: (l) => inspector.setCompareResult(l),
+    setDifferenceAvailable: (v) => inspector.setDifferenceAvailable(v),
+    setLastDifference: (d) => { layers.lastDifference = d; },
+  });
 }
 
 /** Download the most recent elevation difference as an ESRI ASCII grid. */
