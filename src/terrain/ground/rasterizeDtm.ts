@@ -26,6 +26,7 @@
 import type { TerrainPoint, TerrainCoverageMode } from '../TerrainContracts';
 import type { VerticalAxis } from './groundFilter';
 import { quantileSorted } from '../quantile';
+import { checkGridBudget } from '../quality/gridBudget';
 
 /** A grid the raster should align to (e.g. the `groundFilter` grid). */
 export interface GridSpec {
@@ -96,6 +97,9 @@ export interface DemRaster {
   readonly analyzedPointCount: number;
   /** Cells that received at least one ground return. */
   readonly filledCellCount: number;
+  /** Analyzed points rejected for falling materially outside the grid extent.
+   *  Always set by `rasterizeDtm`; optional so hand-built rasters need not. */
+  readonly outsideGridPointCount?: number;
   readonly warnings: string[];
 }
 
@@ -169,6 +173,19 @@ export function rasterizeDtm(
   }
 
   const { originH1, originH2, cols, rows, cellSizeM } = grid;
+
+  // Central allocation guard: a manual/mosaic grid can ask for a tiny cell over
+  // a huge extent (the 3.7-billion-cell case), which would exhaust memory before
+  // a single cell is written. Refuse a blocked grid fail-closed rather than
+  // attempt the allocation. `coarsen` is allowed through with a warning — the
+  // grid is large but representable, and rasterizeDtm cannot re-pick the cell.
+  const budget = checkGridBudget({ cols, rows });
+  if (budget.verdict === 'blocked') {
+    warnings.push(`DTM grid refused — ${budget.reason}`);
+    return emptyRaster(cellSizeM, warnings);
+  }
+  if (budget.verdict === 'coarsen') warnings.push(budget.reason);
+
   const nCells = cols * rows;
   const z = new Float32Array(nCells).fill(Number.NaN);
   const counts = new Uint32Array(nCells);
@@ -180,11 +197,24 @@ export function rasterizeDtm(
     ? new Array<number[] | undefined>(nCells)
     : null;
 
+  // Points materially outside the grid extent are REJECTED, not edge-clamped:
+  // clamping pulls a point that is physically off the raster onto its border,
+  // contaminating boundary cells on crops, tiles, mosaics and checkpoint-local
+  // rasters. A point within a numerical epsilon of an edge (e.g. exactly on the
+  // far corner) is a legitimate boundary point and is binned into the edge cell.
+  const EPS_CELLS = 1e-6;
+  let outsideGridPointCount = 0;
   for (let i = 0; i < analyzed; i++) {
-    let col = Math.floor((gx[i] - originH1) / cellSizeM);
-    let row = Math.floor((gy[i] - originH2) / cellSizeM);
+    const fx = (gx[i] - originH1) / cellSizeM;
+    const fy = (gy[i] - originH2) / cellSizeM;
+    if (fx < -EPS_CELLS || fx > cols + EPS_CELLS || fy < -EPS_CELLS || fy > rows + EPS_CELLS) {
+      outsideGridPointCount++;
+      continue;
+    }
+    let col = Math.floor(fx);
     if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
+    else if (col >= cols) col = cols - 1; // ε-boundary point → last cell
+    let row = Math.floor(fy);
     if (row < 0) row = 0;
     else if (row >= rows) row = rows - 1;
     const c = row * cols + col;
@@ -246,6 +276,7 @@ export function rasterizeDtm(
     sourcePointCount: groundOffered,
     analyzedPointCount: analyzed,
     filledCellCount,
+    outsideGridPointCount,
     warnings,
   };
 }
@@ -263,6 +294,7 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
     sourcePointCount: 0,
     analyzedPointCount: 0,
     filledCellCount: 0,
+    outsideGridPointCount: 0,
     warnings,
   };
 }

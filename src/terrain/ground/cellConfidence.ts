@@ -149,6 +149,14 @@ export interface CellConfidenceParams {
    */
   readonly maxInterpDistanceCells?: number;
   /**
+   * Explicit, bounded nearest-fill policy for voids the IDW interpolator cannot
+   * reach. When set, a void within this many cells of measured data is filled
+   * from the nearest measured cell; beyond it the cell stays NaN (unsupported).
+   * Undefined (the default) means NO nearest-fill: an unreachable void is NaN,
+   * so the interpolation radius is never silently bypassed.
+   */
+  readonly nearestFallbackMaxCells?: number;
+  /**
    * DTM hardening — withhold interpolated cells whose local surface slope
    * (rise/run, Horn) exceeds this: interpolating across steep ground invents
    * the least trustworthy surface. Undefined = no limit (the default).
@@ -282,14 +290,24 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
           verticalUnitToMetres: params.verticalUnitToMetres,
         })
       : idwFill(raster.z, hadData, cols, rows, {});
-  const z = new Float32Array(nCells);
-  for (let i = 0; i < nCells; i++) {
-    if (hadData[i] === 1) z[i] = raster.z[i];
-    else z[i] = Number.isFinite(idw[i]) ? idw[i] : nearest[i];
-  }
 
   // Distance-to-data in cells (multi-source BFS, 8-connectivity).
   const interpDistanceCells = distanceToData(hadData, cols, rows);
+
+  // Fill contract (v0.6.5 hardening): a void the interpolator can defend gets
+  // its IDW value (INTERPOLATED); a void beyond IDW's support radius is
+  // UNSUPPORTED and stays NaN — nearest-fill would otherwise invent a height
+  // from arbitrarily far away, making the interpolation radius meaningless. A
+  // caller that genuinely wants nearest-fill must opt in with an explicit
+  // bounded distance (`nearestFallbackMaxCells`); beyond that bound it is still
+  // NaN, and such cells carry lower confidence downstream.
+  const nearestBound = params.nearestFallbackMaxCells;
+  const z = new Float32Array(nCells);
+  for (let i = 0; i < nCells; i++) {
+    if (hadData[i] === 1) { z[i] = raster.z[i]; continue; }
+    if (Number.isFinite(idw[i])) { z[i] = idw[i]; continue; }
+    z[i] = nearestBound != null && interpDistanceCells[i] <= nearestBound ? nearest[i] : Number.NaN;
+  }
 
   // Target density: explicit, else median of measured counts.
   const target = params.targetCount ?? medianMeasuredCount(raster.counts);
@@ -331,8 +349,11 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       const relative = clamp01(count / safeTarget);
       const absolute = absoluteHalfCount > 0 ? count / (count + absoluteHalfCount) : 1;
       confidence[i] = Math.round(100 * relative * absolute);
-    } else if (Number.isFinite(interpDistanceCells[i])) {
+    } else if (Number.isFinite(z[i]) && Number.isFinite(interpDistanceCells[i])) {
       // interpolated from reachable data — unless DTM hardening withholds it.
+      // Requires a finite filled value: a BFS-reachable cell the IDW interpolator
+      // could not defend (z left NaN, no nearest policy) is UNSUPPORTED, not
+      // interpolated, so coverage never disagrees with the height it describes.
       const tooFar = maxInterpDist != null && interpDistanceCells[i] > maxInterpDist;
       const tooSteep = maxInterpSlope != null && slope[i] > maxInterpSlope;
       if (tooFar || tooSteep) {
