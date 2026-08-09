@@ -10,7 +10,7 @@
  * Pure — no DOM, no three.js.
  */
 
-import type { StreamingNodeRecord, VoxelKey } from '../../io/copc/copcTypes';
+import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
 
 /**
  * A node's lifecycle state.
@@ -79,7 +79,3 @@ export function nodeId(node: StreamingNode): string {
   return node.record.id;
 }
 
-/** A node's octree key. */
-export function nodeKey(node: StreamingNode): VoxelKey {
-  return node.record.key;
-}
