@@ -45,16 +45,26 @@ export interface BuildingPoint {
 /** Extract footprints from building points over the given grid. */
 export function extractBuildingFootprints(points: readonly BuildingPoint[], grid: FootprintGrid): Footprint[] {
   const cell = grid.cellSizeM;
-  // cell must be a positive, finite size; the explicit NaN check keeps a NaN
-  // cell from slipping past a bare `cell <= 0` guard.
-  if (Number.isNaN(cell) || cell <= 0 || points.length === 0) return [];
-  const minPts = grid.minPointsPerCell ?? 1;
-  const minArea = grid.minAreaM2 ?? 4;
+  // cell must be a positive, FINITE size. `Number.isFinite` rejects NaN AND
+  // Infinity in one check — an Infinity cell would bin every point into one
+  // cell and report an Infinity area.
+  if (!Number.isFinite(cell) || cell <= 0 || points.length === 0) return [];
+  // minPoints/minArea thresholds must be real numbers; a NaN or negative
+  // threshold silently disables the filter (`n >= NaN` and `area < NaN` are both
+  // false), which would admit noise as a building. Fall back to the defaults.
+  const rawMinPts = grid.minPointsPerCell ?? 1;
+  const minPts = Number.isFinite(rawMinPts) && rawMinPts >= 1 ? rawMinPts : 1;
+  const rawMinArea = grid.minAreaM2 ?? 4;
+  const minArea = Number.isFinite(rawMinArea) && rawMinArea >= 0 ? rawMinArea : 4;
 
   // Bin points to integer cell coordinates and count per cell.
   const counts = new Map<string, number>();
   let cMinCx = Infinity, cMinCy = Infinity, cMaxCx = -Infinity, cMaxCy = -Infinity;
   for (const p of points) {
+    // Reject non-finite XY: a NaN/Infinity coordinate floors to a NaN cell index
+    // ("NaN:NaN") and poisons the occupancy bbox. Skip it rather than let one
+    // bad point invent or corrupt a footprint.
+    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
     const cx = Math.floor((p.x - grid.originX) / cell);
     const cy = Math.floor((p.y - grid.originY) / cell);
     const k = `${cx}:${cy}`;

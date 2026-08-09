@@ -49,6 +49,33 @@ describe('extractBuildingFootprints', () => {
     expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: 0 })).toEqual([]);
   });
 
+  it('rejects a non-finite (NaN / Infinity) cell size fail-closed', () => {
+    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: Number.NaN })).toEqual([]);
+    expect(extractBuildingFootprints(rect(0, 0, 5, 5), { ...GRID, cellSizeM: Infinity })).toEqual([]);
+  });
+
+  it('skips non-finite XY points without corrupting the footprint', () => {
+    const building = rect(0, 0, 10, 10);
+    const bad: BuildingPoint[] = [
+      { x: Number.NaN, y: 5 }, { x: 5, y: Infinity }, { x: -Infinity, y: -Infinity },
+    ];
+    const clean = extractBuildingFootprints(building, GRID);
+    const withBad = extractBuildingFootprints([...building, ...bad], GRID);
+    // The bad points neither create a spurious footprint nor move the real one.
+    expect(withBad).toHaveLength(1);
+    expect(withBad).toEqual(clean);
+  });
+
+  it('treats a non-finite minArea/minPoints as the default, not a disabled filter', () => {
+    const building = rect(0, 0, 10, 10);
+    const noise: BuildingPoint[] = [{ x: 50, y: 50 }, { x: 51, y: 51 }];
+    // NaN thresholds must not silently admit the noise cluster.
+    const fps = extractBuildingFootprints([...building, ...noise], {
+      ...GRID, minAreaM2: Number.NaN, minPointsPerCell: Number.NaN,
+    });
+    expect(fps).toHaveLength(1);
+  });
+
   it('a higher minPointsPerCell suppresses sparse (tree-like) occupancy', () => {
     // Sparse scatter: ~1 point per few cells → with minPointsPerCell 3, nothing occupies.
     const sparse: BuildingPoint[] = [];
