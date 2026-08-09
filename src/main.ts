@@ -75,6 +75,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
 import { createMeasurePanelMount } from './app/measurePanelMount';
+import { createProcessStudioFromLive } from './app/processStudioMount';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -2427,10 +2428,17 @@ let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null =
 
 const classLegendPanel = new ClassLegendPanel();
 
-// Manual classification-edit panel — lazy-loaded and mounted just below the
-// legend the first time a classification appears, so its controls + lasso tool
-// stay out of the startup shell. `showReclassifyUi()` is called wherever a
-// classification becomes available; `hideReclassifyUi()` on detach.
+// Process Studio — fail-closed readiness over the Phase-1/2 services. Accessors
+// stay multi-line so the deferred `viewer.*` read is not a top-level deref.
+const processStudio = createProcessStudioFromLive({
+  getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
+  getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
+  getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null,
+  getPresentClassCodes: () => classLegendPanel.presentCodes(),
+});
+
+// Manual classification-edit panel — lazy-loaded below the legend on first
+// classification. `showReclassifyUi()` on availability; `hideReclassifyUi()` on detach.
 let reclassifyUi: ReclassifyUi | null = null;
 let reclassifyUiLoading: Promise<void> | null = null;
 async function showReclassifyUi(): Promise<void> {
@@ -3074,6 +3082,7 @@ const exportPanel = new ExportPanel({
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
+  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else processStudio.panel.hide(); // reveal on scan load (static/streaming), hide on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
@@ -3486,11 +3495,9 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
-  // The legend is revealed even for a class-less scan: it renders a designed
-  // empty state (explanatory message + disabled "Show all") that is the entry
-  // point to Classify (derive a classification). Hiding it would remove that
-  // affordance — the empty legend is intentional, not a defect.
+  // The legend reveals even for a class-less scan (empty state = entry to Classify); Process Studio too.
   classLegendPanel.show();
+  processStudio.refresh(); // pick up class-derived facts once classification is known
   void showReclassifyUi();
   // Reset the inspector's copy/JSON scope stamp — the fresh legend is
   // all-visible, so this clears any stamp left by a prior filtered scan.
@@ -3758,16 +3765,9 @@ void viewerLoaded.then(() => {
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
     leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    // NOTE: analysePanel.element AND objectPanel.element are intentionally ABSENT
-    // here — both panels are lazy-mounted on first scan load (v0.6 P1). The Object
-    // panel inserts itself just before the class-legend panel, and the Analyse
-    // panel between the class-legend and export panels, via
-    // `mountObjectPanelElement` / `mountAnalysePanelElement` below.
-    // NOTE: measurePanel.element is intentionally ABSENT here — the Measurements
-    // panel is lazy-mounted on first scan load and inserts itself at the FRONT of
-    // this column via `mountMeasurePanelElement` below (alongside analysePanel /
-    // objectPanel, which mount the same way).
-    leftPanels.append(annotationPanel.element, classLegendPanel.element, exportPanel.element, clipPanel.element);
+    // NOTE: analysePanel / objectPanel / measurePanel lazy-mount on first scan load
+    // via `mount{Object,Analyse,Measure}PanelElement` below. Process Studio starts hidden.
+    leftPanels.append(annotationPanel.element, classLegendPanel.element, processStudio.panel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
@@ -3853,7 +3853,7 @@ void viewerLoaded.then(() => {
       // legend and annotations, its canonical order) only once it exists. A
       // mobile empty-state boot runs this with it still null — it slots itself in
       // via `mountMeasurePanelElement` when it later mounts.
-      const layersPanels: HTMLElement[] = [classLegendPanel.element];
+      const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
       if (measureMount.panel) layersPanels.push(measureMount.panel.element);
       layersPanels.push(annotationPanel.element, exportPanel.element);
       mobileSheet.slot('layers').append(...layersPanels);
@@ -3886,7 +3886,7 @@ void viewerLoaded.then(() => {
       if (measureMount.panel) desktopPanels.push(measureMount.panel.element);
       desktopPanels.push(annotationPanel.element);
       if (objectPanel) desktopPanels.push(objectPanel.element);
-      desktopPanels.push(classLegendPanel.element);
+      desktopPanels.push(classLegendPanel.element, processStudio.panel.element);
       if (analysePanel) desktopPanels.push(analysePanel.element);
       desktopPanels.push(exportPanel.element);
       leftPanels.append(...desktopPanels);
@@ -5104,7 +5104,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   getEptLaszipDecoder: () => eptLaszipDecoder,
   setEptLaszipDecoder: (d) => { eptLaszipDecoder = d; },
   getStreamingQuality: () => streamingQuality,
-  setLastStreamingReportCloud: (c) => { lastStreamingReportCloud = c; },
+  setLastStreamingReportCloud: (c) => { lastStreamingReportCloud = c; processStudio.refresh(); },
   debug,
   benchmark,
   showToast: showLassoToast,
@@ -5572,8 +5572,8 @@ function resetToEmptyState(): void {
   activeElevFilter = null;
   activeIntenFilter = null;
   streamingFilterSeeded = false;
-  // Hide + clear the classification legend so it doesn't linger with a stale
-  // class list after the scan is closed. v0.4.1.
+  // Hide + clear the class legend (and Process Studio) so neither lingers with a
+  // stale scan after close. v0.4.1.
   classLegendPanel.setClasses(new Map());
   classLegendPanel.hide();
   hideReclassifyUi();
