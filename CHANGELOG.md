@@ -2,6 +2,23 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.5] - 2026-08-09
+
+### Added
+
+- A Process Studio panel in the left rail that reports what a loaded scan can safely produce (DTM, DSM, contours, building footprints, cross-epoch change, volume), each as `ready`, `review`, or `blocked` with a plain reason, alongside the adaptive processing stages and independent quality checks. It reads the same capability model the exporters read, so the panel and a real export never disagree, and it fails closed on an unconfirmed unit or a missing vertical reference.
+- A feature-extraction core that turns classified building points into footprint candidates (occupancy grid, connected components, boundary trace, Douglas-Peucker simplification, dominance-gated orthogonalisation), exported as RFC 7946 GeoJSON marked as derived candidates, plus a conductor primitive that fits a centerline and a quadratic sag to linear point sets.
+- A registration core: a Kabsch/Horn rigid solve, a trimmed general ICP, tie-point alignment, and a non-destructive Float64 transform store.
+- Absolute-accuracy terrain evidence against surveyed checkpoints at two public USGS sites (Marsh Island, 101 checkpoints at 2.8 cm RMSE; AZ Coconino, a forested checkpoint at 3.9 cm), a slope cross-check on real steep Coconino terrain, and a ground-filter cross-check against PDAL on real low-relief Estonian terrain.
+
+### Changed
+
+- Multi-layer mounting is enabled. Two georeferenced layers that declare the same projected CRS place into one shared frame at their real separation, non-destructively; the Float64 per-layer-frame migration keeps every boundary reading the world coordinate in the frame it names.
+- Contours are promoted to E4 with a GDAL `gdal_contour` cross-implementation check on a frozen analytic plane (agreement to 2.9e-5 m).
+- Remote streaming is hardened: signed URLs are scrubbed from error messages, every range read is bounded in bytes and time, the remote object's identity is pinned across a load, and a streaming scan carries a stable shell id.
+
+Full notes: [RELEASE_NOTES_v0.6.5.md](docs/releases/RELEASE_NOTES_v0.6.5.md)
+
 ## [0.6.4] - 2026-08-07
 
 ### Added
