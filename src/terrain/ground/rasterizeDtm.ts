@@ -26,6 +26,7 @@
 import type { TerrainPoint, TerrainCoverageMode } from '../TerrainContracts';
 import type { VerticalAxis } from './groundFilter';
 import { quantileSorted } from '../quantile';
+import { checkGridBudget } from '../quality/gridBudget';
 
 /** A grid the raster should align to (e.g. the `groundFilter` grid). */
 export interface GridSpec {
@@ -169,6 +170,19 @@ export function rasterizeDtm(
   }
 
   const { originH1, originH2, cols, rows, cellSizeM } = grid;
+
+  // Central allocation guard: a manual/mosaic grid can ask for a tiny cell over
+  // a huge extent (the 3.7-billion-cell case), which would exhaust memory before
+  // a single cell is written. Refuse a blocked grid fail-closed rather than
+  // attempt the allocation. `coarsen` is allowed through with a warning — the
+  // grid is large but representable, and rasterizeDtm cannot re-pick the cell.
+  const budget = checkGridBudget({ cols, rows });
+  if (budget.verdict === 'blocked') {
+    warnings.push(`DTM grid refused — ${budget.reason}`);
+    return emptyRaster(cellSizeM, warnings);
+  }
+  if (budget.verdict === 'coarsen') warnings.push(budget.reason);
+
   const nCells = cols * rows;
   const z = new Float32Array(nCells).fill(Number.NaN);
   const counts = new Uint32Array(nCells);
