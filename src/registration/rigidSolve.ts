@@ -45,9 +45,24 @@ export function rigidSolve(
   target: readonly Vec3[],
   minCorrespondences = 3,
 ): RigidResult {
-  const n = Math.min(source.length, target.length);
+  // Correspondences must pair one-to-one: a length mismatch is a caller bug, not
+  // a set to silently truncate to the shorter of the two (which would fit points
+  // to the wrong partners).
+  if (source.length !== target.length) {
+    return { R: IDENT, t: [0, 0, 0], rmse: NaN, n: 0, ok: false, reason: 'CORRESPONDENCE_COUNT_MISMATCH' };
+  }
+  const n = source.length;
   if (n < Math.max(3, minCorrespondences)) {
     return { R: IDENT, t: [0, 0, 0], rmse: NaN, n, ok: false, reason: 'TOO_FEW_CORRESPONDENCES' };
+  }
+  // Non-finite coordinates would poison the centroid and covariance; reject
+  // rather than emit a transform built from NaN/Inf.
+  for (let i = 0; i < n; i++) {
+    const p = source[i], q = target[i];
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || !Number.isFinite(p[2]) ||
+        !Number.isFinite(q[0]) || !Number.isFinite(q[1]) || !Number.isFinite(q[2])) {
+      return { R: IDENT, t: [0, 0, 0], rmse: NaN, n, ok: false, reason: 'NON_FINITE_CORRESPONDENCE' };
+    }
   }
 
   // Centroids.
