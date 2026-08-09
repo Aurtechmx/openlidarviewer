@@ -108,4 +108,27 @@ describe('rigidSolve refuses rather than guesses', () => {
     expect(r.ok).toBe(false);
     expect(r.reason).toBe('DEGENERATE_SOURCE');
   });
+
+  it('a residual over the maxRmse gate is refused (no ok:true on a bad fit)', () => {
+    // A non-rigid (sheared) correspondence set: no rigid transform fits it well,
+    // so the residual is large. With a tight gate it must be refused.
+    const src: Vec3[] = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1], [1, 1, 1]];
+    const dst: Vec3[] = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 5], [1, 1, 9]];
+    const gated = rigidSolve(src, dst, 3, 0.01);
+    expect(gated.ok).toBe(false);
+    expect(gated.reason).toBe('FIT_RMSE_EXCEEDED');
+    expect(gated.rmse).toBeGreaterThan(0.01); // the residual is still reported
+    // The SAME solve without a gate returns ok:true (closed-form always solves).
+    const ungated = rigidSolve(src, dst, 3);
+    expect(ungated.ok).toBe(true);
+    expect(ungated.rmse).toBeGreaterThan(0.01);
+  });
+
+  it('a good fit within the gate still passes', () => {
+    const src: Vec3[] = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const dst = src.map((p) => [p[0] + 2, p[1] - 1, p[2] + 3] as Vec3); // pure translation
+    const r = rigidSolve(src, dst, 3, 0.001);
+    expect(r.ok).toBe(true);
+    expect(r.rmse).toBeLessThan(0.001);
+  });
 });
