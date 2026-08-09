@@ -18,6 +18,7 @@ function report(
   nmad = Number.NaN,
 ): ValidationReport {
   return {
+    estimand: 'point-reconstruction',
     rmse,
     mae: rmse * 0.8,
     p95,

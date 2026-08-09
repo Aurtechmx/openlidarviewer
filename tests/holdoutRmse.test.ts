@@ -34,6 +34,16 @@ describe('holdoutValidateDtm', () => {
     expect(r.mae).toBeLessThan(1e-6);
   });
 
+  it('types the report as point-reconstruction, never external-checkpoint accuracy', () => {
+    const { points, mask } = surface(() => 5);
+    const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });
+    // A random-point hold-out estimates local reconstruction under dense
+    // sampling; the typed estimand stops any consumer relabelling it as an
+    // independent-checkpoint accuracy (which alone could back an ASPRS claim).
+    expect(r.estimand).toBe('point-reconstruction');
+    expect(r.estimand).not.toBe('external-checkpoint');
+  });
+
   it('discloses the classify-before-split limitation in its warnings', () => {
     const { points, mask } = surface((x) => 0.3 * x);
     const r = holdoutValidateDtm(points, mask, { cellSizeM: 1, holdoutFraction: 0.3, seed: 1 });

@@ -483,6 +483,10 @@ export function holdoutValidateDtm(
   const nmad = normalizedMedianAbsDeviation(allSigned);
 
   return {
+    // Random-point hold-out: nearby same-surface points remain in training, so
+    // this estimates local reconstruction under dense sampling, never external
+    // checkpoint accuracy. Typed so no consumer can relabel it.
+    estimand: 'point-reconstruction',
     rmse,
     mae,
     p95,
@@ -517,6 +521,7 @@ function normalizedMedianAbsDeviation(values: readonly number[]): number {
 
 function emptyReport(holdoutFraction: number, warnings: string[]): ValidationReport {
   return {
+    estimand: 'point-reconstruction',
     rmse: Number.NaN,
     mae: Number.NaN,
     p95: Number.NaN,
