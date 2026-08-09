@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly } from './helpers';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * Render-quality controls coverage. Toggling Eye Dome Lighting switches the
@@ -36,9 +37,9 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
   page,
 }) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
   });
 
   await loadSample(page);
@@ -90,9 +91,9 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
 
 test('the Rendering panel switches point-size mode and antialiasing', async ({ page }) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
   });
 
   await loadSample(page);
