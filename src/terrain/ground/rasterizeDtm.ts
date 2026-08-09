@@ -96,6 +96,9 @@ export interface DemRaster {
   readonly analyzedPointCount: number;
   /** Cells that received at least one ground return. */
   readonly filledCellCount: number;
+  /** Analyzed points rejected for falling materially outside the grid extent.
+   *  Always set by `rasterizeDtm`; optional so hand-built rasters need not. */
+  readonly outsideGridPointCount?: number;
   readonly warnings: string[];
 }
 
@@ -180,11 +183,24 @@ export function rasterizeDtm(
     ? new Array<number[] | undefined>(nCells)
     : null;
 
+  // Points materially outside the grid extent are REJECTED, not edge-clamped:
+  // clamping pulls a point that is physically off the raster onto its border,
+  // contaminating boundary cells on crops, tiles, mosaics and checkpoint-local
+  // rasters. A point within a numerical epsilon of an edge (e.g. exactly on the
+  // far corner) is a legitimate boundary point and is binned into the edge cell.
+  const EPS_CELLS = 1e-6;
+  let outsideGridPointCount = 0;
   for (let i = 0; i < analyzed; i++) {
-    let col = Math.floor((gx[i] - originH1) / cellSizeM);
-    let row = Math.floor((gy[i] - originH2) / cellSizeM);
+    const fx = (gx[i] - originH1) / cellSizeM;
+    const fy = (gy[i] - originH2) / cellSizeM;
+    if (fx < -EPS_CELLS || fx > cols + EPS_CELLS || fy < -EPS_CELLS || fy > rows + EPS_CELLS) {
+      outsideGridPointCount++;
+      continue;
+    }
+    let col = Math.floor(fx);
     if (col < 0) col = 0;
-    else if (col >= cols) col = cols - 1;
+    else if (col >= cols) col = cols - 1; // ε-boundary point → last cell
+    let row = Math.floor(fy);
     if (row < 0) row = 0;
     else if (row >= rows) row = rows - 1;
     const c = row * cols + col;
@@ -246,6 +262,7 @@ export function rasterizeDtm(
     sourcePointCount: groundOffered,
     analyzedPointCount: analyzed,
     filledCellCount,
+    outsideGridPointCount,
     warnings,
   };
 }
@@ -263,6 +280,7 @@ function emptyRaster(cellSizeM: number, warnings: string[]): DemRaster {
     sourcePointCount: 0,
     analyzedPointCount: 0,
     filledCellCount: 0,
+    outsideGridPointCount: 0,
     warnings,
   };
 }
