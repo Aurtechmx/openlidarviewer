@@ -1,0 +1,325 @@
+{
+ "study": "Coconino B1 2019 independent external DTM validation",
+ "source": {
+  "project": "USGS AZ Coconino B1 2019 (Atlantic 19049; NGTOC task order 140G0219F0247)",
+  "program": "USGS 3DEP",
+  "license": "public domain (US Government work)"
+ },
+ "horizontalCrs": "NAD83(2011) / Conus Albers (EPSG:6350)",
+ "verticalDatum": "NAVD88 orthometric",
+ "geoid": "Geoid12B",
+ "checkpointSource": "19049 Project Report Tables 8 (NVA) & 9 (VVA), reprojected to Albers; the frozen 121-checkpoint table validation/terrain-field/references/coconino-b19-2019__checkpoints.json",
+ "checkpointReferenceSha256": "7f13f2166996de1d0d87fb68479e43c6dfdd1b68b8dbc800d683b99eee13416d",
+ "independence": "NVA/VVA checkpoints held separate from the 12 LiDAR Control Points; not used for calibration, registration, strip adjustment, classification tuning, or OLV parameter tuning.",
+ "matchRule": "A checkpoint is IN the universe iff its Albers (E,N) falls inside a downloaded tile's header bounds. Membership frozen here, before any residual is computed. No checkpoint removed for a large error.",
+ "downloadedTiles": [
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1384n1483.laz",
+   "tileId": "w1384n1483",
+   "sha256": "0d38297abe7afb48d211ba391701e2b790e5351060d53242474b75a9996b4834",
+   "bytes": 70485431,
+   "pointCount": 14515220,
+   "boundsAlbers": {
+    "xmin": -1383999.999,
+    "xmax": -1383000.0,
+    "ymin": 1483000.001,
+    "ymax": 1483999.999,
+    "zmin": 1678.767,
+    "zmax": 2105.73
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1396n1416.laz",
+   "tileId": "w1396n1416",
+   "sha256": "b63b6a36da3768f726ddcc0d8e471bcb252f54ac9d5361bddd3fc9b6bfa5310d",
+   "bytes": 75914600,
+   "pointCount": 15098407,
+   "boundsAlbers": {
+    "xmin": -1395999.999,
+    "xmax": -1395000.0,
+    "ymin": 1416000.001,
+    "ymax": 1417000.0,
+    "zmin": 2234.965,
+    "zmax": 2297.442
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1404n1455.laz",
+   "tileId": "w1404n1455",
+   "sha256": "9022b287307d7b850555944cdb21cb20af5382b8155dbde8c9e8df96eee8ebf6",
+   "bytes": 86715545,
+   "pointCount": 16197661,
+   "boundsAlbers": {
+    "xmin": -1403999.999,
+    "xmax": -1403000.0,
+    "ymin": 1455000.001,
+    "ymax": 1456000.0,
+    "zmin": 1894.411,
+    "zmax": 2287.421
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1406n1486.laz",
+   "tileId": "w1406n1486",
+   "sha256": "d211a48041a74d4f0e9998388a0e00cd4fdaed1271c65e436fa5c33cf7a9e2a2",
+   "bytes": 107626236,
+   "pointCount": 18932348,
+   "boundsAlbers": {
+    "xmin": -1405999.999,
+    "xmax": -1405000.0,
+    "ymin": 1486000.001,
+    "ymax": 1487000.0,
+    "zmin": 2419.727,
+    "zmax": 2723.67
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1407n1486.laz",
+   "tileId": "w1407n1486",
+   "sha256": "cf7f2cecc502f97504965e4acc15942015342e27e4fa1e6b3cb63b0a24d53a39",
+   "bytes": 84625438,
+   "pointCount": 15604926,
+   "boundsAlbers": {
+    "xmin": -1406999.999,
+    "xmax": -1406000.0,
+    "ymin": 1486000.001,
+    "ymax": 1487000.0,
+    "zmin": 2503.358,
+    "zmax": 2731.848
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1410n1389.laz",
+   "tileId": "w1410n1389",
+   "sha256": "b67696554f7a93082f11629e1e0e05f4c7b9b11144dfd68dc7bace1b9747eafc",
+   "bytes": 61071628,
+   "pointCount": 13111867,
+   "boundsAlbers": {
+    "xmin": -1409999.999,
+    "xmax": -1409000.0,
+    "ymin": 1389000.001,
+    "ymax": 1390000.0,
+    "zmin": 1876.072,
+    "zmax": 1994.716
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1412n1453.laz",
+   "tileId": "w1412n1453",
+   "sha256": "b40c7ee3290fc2529b0f96746ac2eb7edb0b198a397047bee9819cb78073c2ba",
+   "bytes": 64412769,
+   "pointCount": 13766226,
+   "boundsAlbers": {
+    "xmin": -1411999.999,
+    "xmax": -1411000.0,
+    "ymin": 1453000.001,
+    "ymax": 1454000.0,
+    "zmin": 2043.453,
+    "zmax": 2147.507
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  },
+  {
+   "file": "USGS_LPC_AZ_Coconino_2019_B19_w1422n1452.laz",
+   "tileId": "w1422n1452",
+   "sha256": "d8decbc639ceca4b9dab7e0b56c5593590c42ba2c77e7fe8b9774406e844369e",
+   "bytes": 50139871,
+   "pointCount": 13218377,
+   "boundsAlbers": {
+    "xmin": -1421999.999,
+    "xmax": -1421000.0,
+    "ymin": 1452000.001,
+    "ymax": 1453000.0,
+    "zmin": 2172.196,
+    "zmax": 2210.484
+   },
+   "crs": "NAD83(2011) / Conus Albers + NAVD88 height - Geoid12B (metre)"
+  }
+ ],
+ "matchedCheckpointCount": 13,
+ "matchedCheckpoints": [
+  {
+   "id": "XNVA102",
+   "type": "NVA",
+   "albersE": -1383637.125,
+   "albersN": 1483092.966,
+   "z": 1888.74,
+   "tile": "w1384n1483",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1384n1483.laz"
+  },
+  {
+   "id": "XNVA501",
+   "type": "NVA",
+   "albersE": -1395648.359,
+   "albersN": 1416872.655,
+   "z": 2242.194,
+   "tile": "w1396n1416",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1396n1416.laz"
+  },
+  {
+   "id": "XNVA503",
+   "type": "NVA",
+   "albersE": -1409563.615,
+   "albersN": 1389420.196,
+   "z": 1909.917,
+   "tile": "w1410n1389",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1410n1389.laz"
+  },
+  {
+   "id": "XNVA701",
+   "type": "NVA",
+   "albersE": -1421644.869,
+   "albersN": 1452186.774,
+   "z": 2173.314,
+   "tile": "w1422n1452",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1422n1452.laz"
+  },
+  {
+   "id": "XNVA702",
+   "type": "NVA",
+   "albersE": -1411505.693,
+   "albersN": 1453486.37,
+   "z": 2057.019,
+   "tile": "w1412n1453",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1412n1453.laz"
+  },
+  {
+   "id": "XNVA703",
+   "type": "NVA",
+   "albersE": -1403189.416,
+   "albersN": 1455283.324,
+   "z": 2081.584,
+   "tile": "w1404n1455",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1404n1455.laz"
+  },
+  {
+   "id": "HG03",
+   "type": "VVA",
+   "albersE": -1421621.055,
+   "albersN": 1452171.74,
+   "z": 2173.303,
+   "tile": "w1422n1452",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1422n1452.laz"
+  },
+  {
+   "id": "HG04",
+   "type": "VVA",
+   "albersE": -1403184.836,
+   "albersN": 1455272.377,
+   "z": 2080.589,
+   "tile": "w1404n1455",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1404n1455.laz"
+  },
+  {
+   "id": "HG07",
+   "type": "VVA",
+   "albersE": -1411516.923,
+   "albersN": 1453511.659,
+   "z": 2056.318,
+   "tile": "w1412n1453",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1412n1453.laz"
+  },
+  {
+   "id": "HG14",
+   "type": "VVA",
+   "albersE": -1395654.656,
+   "albersN": 1416841.993,
+   "z": 2242.346,
+   "tile": "w1396n1416",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1396n1416.laz"
+  },
+  {
+   "id": "HG16",
+   "type": "VVA",
+   "albersE": -1409555.423,
+   "albersN": 1389428.08,
+   "z": 1910.792,
+   "tile": "w1410n1389",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1410n1389.laz"
+  },
+  {
+   "id": "HG17",
+   "type": "VVA",
+   "albersE": -1383647.833,
+   "albersN": 1483079.342,
+   "z": 1889.509,
+   "tile": "w1384n1483",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1384n1483.laz"
+  },
+  {
+   "id": "TR03",
+   "type": "VVA",
+   "albersE": -1406428.134,
+   "albersN": 1486457.845,
+   "z": 2567.662,
+   "tile": "w1407n1486",
+   "tileFile": "USGS_LPC_AZ_Coconino_2019_B19_w1407n1486.laz"
+  }
+ ],
+ "metrics": {
+  "overall": {
+   "n": 13,
+   "rmse_cm": 8.65,
+   "mae_cm": 6.16,
+   "median_cm": 2.86,
+   "bias_cm": 2.24,
+   "nmad_cm": 4.91,
+   "p90_cm": 14.72,
+   "p95_cm": 22.84,
+   "max_cm": 22.84
+  },
+  "NVA": {
+   "n": 6,
+   "rmse_cm": 4.83,
+   "mae_cm": 4.03,
+   "median_cm": 2.86,
+   "bias_cm": 0.58,
+   "nmad_cm": 7.75,
+   "p90_cm": 9.04,
+   "p95_cm": 9.04,
+   "max_cm": 9.04
+  },
+  "VVA": {
+   "n": 7,
+   "rmse_cm": 10.9,
+   "mae_cm": 7.98,
+   "median_cm": 5.06,
+   "bias_cm": 3.67,
+   "nmad_cm": 8.16,
+   "p90_cm": 22.84,
+   "p95_cm": 22.84,
+   "max_cm": 22.84
+  },
+  "candidate": 13,
+  "usable": 13,
+  "rejected": 0
+ },
+ "evidenceIndependence": {
+  "separateFromControlPoints": true,
+  "usedForCalibration": false,
+  "usedForRegistration": false,
+  "usedForStripAdjustment": false,
+  "usedForClassificationTuning": false,
+  "usedForParameterTuning": false,
+  "note": "NVA/VVA accuracy checkpoints held separate from the 12 LiDAR Control Points; the DTM was produced by the unchanged production terrain path with no reference to these checkpoints."
+ },
+ "evidenceDetermination": {
+  "achievedLevel": "E3_SYNTHETICALLY_VALIDATED (unchanged); recorded as strong EXTERNAL CHECKPOINT AGREEMENT below the grade line",
+  "e5Reached": false,
+  "limitingReasons": [
+   "PREREGISTRATION (verify-field-study F10): the USGS Coconino survey is 2019; an OLV protocol registers 2026, so registeredAt > fieldwork.startedAt. Found third-party checkpoints cannot satisfy the repo's E5 preregistration bar, which requires the checkpoint survey to be frozen against the protocol before fieldwork.",
+   "SAMPLE SIZE (verify-field-study F7): 13 usable checkpoints (6 NVA, 7 VVA) is below the 40-total / 12-per-stratum minimum, and below the USGS/ASPRS >=20-NVA standard for a formal vertical-accuracy statement."
+  ],
+  "confounders": {
+   "sharedSolutionWithReference": false,
+   "checkpointLeakage": false
+  },
+  "conclusion": "The evidence model does not reach E5. DTM stays E3. This study records genuine external agreement with independent surveyed truth (overall RMSE 8.65 cm, NVA 4.83 cm, VVA 10.9 cm over 13 checkpoints, all within USGS accuracy classes), which strengthens the DTM's real-data footing but is not a preregistered field campaign and is under the count threshold."
+ }
+}
