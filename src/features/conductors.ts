@@ -1,6 +1,11 @@
 /**
  * conductors.ts — fit a power-line conductor's centreline and sag (Phase 6).
  *
+ * STATUS: Experimental / Research Preview. The fit is implemented and tested
+ * against synthetic spans, but the subsystem has not been validated on surveyed
+ * conductor data; treat its span / sag figures as a preview, not survey-grade
+ * output. (Mirrors the floor-plan preview labelling.)
+ *
  * Candidate conductor points (class-14 wire) form a thin, sagging arc. This fits
  * the horizontal centreline as the point set's principal direction, projects the
  * points onto it to get an along-span parameter, and fits the vertical profile as
