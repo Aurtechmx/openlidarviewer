@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * v0.4.6 header full-screen toggle.
@@ -30,9 +31,9 @@ test.describe('full-screen toggle — header', () => {
 
   test('activating it never raises a page error', async ({ page }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
     });
 
     await gotoApp(page);

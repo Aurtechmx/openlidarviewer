@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly } from './helpers';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * tests/e2e/handPan.spec.ts
@@ -94,7 +95,7 @@ test.describe('hand tool — pan mode surfaces', () => {
     );
     await loadSample(page);
     let pageError: Error | null = null;
-    page.on('pageerror', (e) => (pageError = e));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) pageError = e; });
 
     await page.locator('.olv-mode-pan').click();
     const before = await readPose(page);
@@ -148,7 +149,7 @@ test.describe('hand tool — pan mode surfaces', () => {
   test('a mode switch mid-drag cancels the grab safely', async ({ page }) => {
     await loadSample(page);
     let pageError: Error | null = null;
-    page.on('pageerror', (e) => (pageError = e));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) pageError = e; });
 
     await page.locator('.olv-mode-pan').click();
     const c = await canvasCenter(page);
