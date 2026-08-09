@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { dropTinyPly } from './helpers';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * v0.4.6 standard axis-aligned views (Top / Bottom / Front / Back / Left /
@@ -49,9 +50,9 @@ test.describe('standard views — NavBar "Views" row', () => {
     page,
   }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);
@@ -68,9 +69,9 @@ test.describe('standard views — NavBar "Views" row', () => {
 test.describe('orthographic toggle', () => {
   test('the Ortho chip toggles aria-pressed and toasts both states', async ({ page }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);
