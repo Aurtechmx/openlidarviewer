@@ -20,6 +20,7 @@ const staticSignals: RawScanSignals = {
   pointCount: 1000,
   crs: null,
   classification: 'full',
+  classificationProvenance: 'producer', // stated source → trusted (fail-closed default is unknown)
   groundClassified: true,
 };
 
