@@ -833,8 +833,7 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // v0.5.3 — on-canvas compass / ViewCube. A discoverable, persisted control
 // toggled from the command palette ("Toggle compass"); OFF by default (the full-
 // height left/Inspector columns leave no free corner). `?viewcube=1/0` forces it.
-// Life cycle (preference, lazy mount, rAF loop, tab-visibility pausing) lives in
-// ui/compassController.ts.
+// Life cycle lives in ui/compassController.ts (preference, lazy mount, rAF loop).
 const compass = createCompassController({
   host: () => stage.overlay,
   urlParams,
@@ -2090,6 +2089,7 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
+  onCommandPalette: () => void openCommandPalette(),
   onClose: () => closeScan(),
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
