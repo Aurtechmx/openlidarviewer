@@ -2486,13 +2486,13 @@ classLegendPanel.onPaletteChange((on) => {
   // Intelligence tier dots + confidence chip) via a body class.
   document.body.classList.toggle('olv-cvd', on);
   // Persist the choice and recolour any classification view in place. Only the
-  // classification colour pass reads the class palette, so other modes need no
-  // refresh; the legend repaints its own swatches.
+  // classification pass reads the class palette; the legend repaints its own swatches.
   persistPrefs();
   if (currentColorMode === 'classification') {
     if (scans.activeId) viewer.setColorMode(scans.activeId, 'classification');
     if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
   }
+  analysePanel?.refreshForPalette(); // coverage tile follows the colourblind preference, live
 });
 
 /**

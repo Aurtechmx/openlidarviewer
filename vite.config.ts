@@ -478,6 +478,12 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('node_modules/three/build/three.core')) {
             return 'vendor-three-webgpu';
           }
+          // cellConfidence is a ~20 KiB confidence/grading module shared across
+          // the lazy terrain chunks (no eager importer). Pin it to its own chunk
+          // so a new static import edge — e.g. the colourblind confidence overlay
+          // reaching gradeForConfidence — can't let the heuristic hoist it into
+          // the eager index bundle and blow its budget.
+          if (id.includes('/terrain/ground/cellConfidence')) return 'cellConfidence';
           return undefined;
         },
       },

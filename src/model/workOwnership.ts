@@ -107,10 +107,6 @@ export function projectFrameOwnership(
   return out as WorkOwnership;
 }
 
-/** Whether a value is a usable ownership record. */
-export function isWellFormedOwnership(v: unknown): v is WorkOwnership {
-  return parseWorkOwnership(v) !== null;
-}
 
 /**
  * Read a stored ownership record, or null when it states nothing usable.
