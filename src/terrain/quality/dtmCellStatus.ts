@@ -33,15 +33,6 @@ export const CELL_STATUS_CODE = {
   edgeRisk: 4,
 } as const;
 
-/** Reverse map for readability. */
-export const CELL_STATUS_NAME: Record<number, CellStatus> = {
-  0: 'empty',
-  1: 'measured',
-  2: 'interpolated',
-  3: 'lowConfidence',
-  4: 'edgeRisk',
-};
-
 /** Options for {@link classifyCellStatus}. */
 export interface CellStatusParams {
   /** Confidence below this (0..100) marks a covered cell `lowConfidence`. Default = dashed threshold. */
