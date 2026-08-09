@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "description": "View supported LiDAR and point-cloud datasets locally in a browser. No installation or account required; local files are not uploaded.",
   "license": "MIT",
   "author": "A. Urias",
@@ -141,8 +141,7 @@
     "validation:classifier-corpus:verify": "node scripts/verify-classifier-corpus.mjs",
     "validation:matrix:update": "MATRIX_WRITE=1 vitest run tests/rasterAgreementMatrix.test.ts",
     "lint:doc-links": "node scripts/lint-doc-links.mjs",
-    "lint:worker-registry": "node scripts/lint-worker-registry.mjs",
-    "validate:terrain": "node scripts/validate-terrain.mjs"
+    "lint:worker-registry": "node scripts/lint-worker-registry.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

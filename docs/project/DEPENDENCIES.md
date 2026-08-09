@@ -1,7 +1,7 @@
-# Dependency audit (v0.6.4)
+# Dependency audit (v0.6.5)
 
 This is the committed dependency baseline for OpenLiDARViewer, re-verified for
-v0.6.4 on 2026-08-05 (UTC) from the committed `package-lock.json`. The v0.6.4
+v0.6.5 on 2026-08-05 (UTC) from the committed `package-lock.json`. The v0.6.5
 cycle added and removed no runtime or development package, so the resolved set
 below is unchanged from v0.6.3. It is a baseline, not
 the per-release record: the exact commit, toolchain, and lockfile hash for a
@@ -19,7 +19,7 @@ unaffected.
 
 | Field | Value |
 |---|---|
-| Release line | v0.6.4 |
+| Release line | v0.6.5 |
 | Baseline date (UTC) | 2026-07-25 |
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
