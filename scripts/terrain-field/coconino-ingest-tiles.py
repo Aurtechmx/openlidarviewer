@@ -88,20 +88,34 @@ def target_tiles(want_all):
     return chosen
 
 
-def fetch(tile):
+def fetch(tile, retries=4):
+    """Download one tile, verifying the byte count against content-length so a
+    dropped stream can never leave a silently-truncated .laz behind. Resumable:
+    a complete file is not re-fetched; a short one is retried."""
     CACHE.mkdir(parents=True, exist_ok=True)
     url = BASE_URL + TILE_FILE.format(tile=tile)
     dst = CACHE / TILE_FILE.format(tile=tile)
-    with urllib.request.urlopen(url) as r:
-        remote = int(r.headers.get("content-length", 0))
-        if dst.exists() and dst.stat().st_size == remote and remote > 0:
-            return dst  # resumable: already complete
-        tmp = dst.with_suffix(".part")
-        with open(tmp, "wb") as f:
-            while chunk := r.read(1 << 20):
-                f.write(chunk)
-        tmp.replace(dst)
-    return dst
+    last = None
+    for attempt in range(1, retries + 1):
+        try:
+            with urllib.request.urlopen(url) as r:
+                remote = int(r.headers.get("content-length", 0))
+                if dst.exists() and remote > 0 and dst.stat().st_size == remote:
+                    return dst  # already complete
+                tmp = dst.with_suffix(".part")
+                with open(tmp, "wb") as f:
+                    while chunk := r.read(1 << 20):
+                        f.write(chunk)
+                got = tmp.stat().st_size
+                if remote > 0 and got != remote:
+                    tmp.unlink(missing_ok=True)
+                    raise IOError(f"{tile}: got {got} bytes, expected {remote}")
+                tmp.replace(dst)
+            return dst
+        except Exception as e:  # network drop / short read — retry
+            last = e
+            print(f"  retry {attempt}/{retries} for {tile}: {e}", file=sys.stderr)
+    raise RuntimeError(f"failed to fetch {tile} after {retries} tries: {last}")
 
 
 def rebuild_universe(cached_tiles):
