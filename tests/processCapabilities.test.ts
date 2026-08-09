@@ -149,6 +149,28 @@ describe('cross-epoch change & volume — two-scan fail-closed rules', () => {
     expect(v.reasonCode).toBe('VERTICAL_REF_DIFFERS');
   });
 
+  it('blocked when the same datum carries different vertical units (ft vs m)', () => {
+    const feet = scan({ crs: crs({ verticalDatum: 'NAVD88', verticalUnitToMetres: 0.3048 }), groundClassified: true });
+    const metres = scan({ crs: crs({ verticalDatum: 'NAVD88', verticalUnitToMetres: 1 }), groundClassified: true });
+    const v = verdict([feet, metres], 'volume-cut-fill', true);
+    expect(v.readiness).toBe('blocked');
+    expect(v.reasonCode).toBe('VERTICAL_UNIT_CONFLICT');
+  });
+
+  it('ready when the same datum shares a known vertical unit', () => {
+    const a = scan({ crs: crs({ verticalDatum: 'NAVD88', verticalUnitToMetres: 1 }), groundClassified: true });
+    const b = scan({ crs: crs({ verticalDatum: 'NAVD88', verticalUnitToMetres: 1 }), groundClassified: true });
+    expect(verdict([a, b], 'cross-epoch-change', true).readiness).toBe('ready');
+  });
+
+  it('does not read two placeholder datums as a shared reference (fail closed)', () => {
+    const p1 = scan({ crs: crs({ verticalDatum: 'unknown' }), groundClassified: true });
+    const p2 = scan({ crs: crs({ verticalDatum: 'unknown' }), groundClassified: true });
+    const v = verdict([p1, p2], 'volume-cut-fill', true);
+    expect(v.readiness).toBe('blocked');
+    expect(v.reasonCode).toBe('VERTICAL_REF_DIFFERS');
+  });
+
   it('review when the frame compatibility is not yet proven', () => {
     const v = verdict([epochA, epochB], 'cross-epoch-change', undefined);
     expect(v.readiness).toBe('review');

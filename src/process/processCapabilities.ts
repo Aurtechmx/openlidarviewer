@@ -42,16 +42,55 @@ function isFullCoverage(scan: ScanFacts): boolean {
   return scan.coverage === 'full';
 }
 
+/** A datum label that carries no real identity — never a match, even to itself. */
+const VERTICAL_DATUM_PLACEHOLDERS = new Set(['', 'unknown', 'unspecified', 'n/a', 'none']);
+
 /**
- * Two scans share a usable vertical reference when both declare a vertical
- * datum and the two agree. A missing or mismatched vertical reference fails
- * closed — cross-epoch height math on incompatible references is exactly the
- * silent wrong number the model exists to prevent.
+ * The vertical identity a scan declares, normalised, or `null` when it declares
+ * none. Trimming and lower-casing so 'NAVD88' and 'navd88' are one identity, and
+ * rejecting placeholder labels so two undeclared scans both stamped 'unknown' do
+ * NOT read as a shared reference (the fail-OPEN a raw `===` would allow).
  */
-function sharedVerticalReference(a: ScanFacts, b: ScanFacts): boolean {
-  const va = a.crs?.verticalDatum;
-  const vb = b.crs?.verticalDatum;
-  return va != null && vb != null && va === vb;
+function verticalIdentityOf(scan: ScanFacts): string | null {
+  const raw = scan.crs?.verticalDatum;
+  if (raw == null) return null;
+  const norm = raw.trim().toLowerCase();
+  return norm.length > 0 && !VERTICAL_DATUM_PLACEHOLDERS.has(norm) ? norm : null;
+}
+
+/** The structured outcome of comparing two scans' vertical references. */
+type VerticalReferenceVerdict =
+  | { readonly ok: true }
+  /** A missing/placeholder datum on either side, or two proven-different datums. */
+  | { readonly ok: false; readonly code: 'VERTICAL_REF_DIFFERS' }
+  /** Same datum, but a proven-different vertical UNIT (e.g. NAVD88 ft vs NAVD88 m). */
+  | { readonly ok: false; readonly code: 'VERTICAL_UNIT_CONFLICT' };
+
+/**
+ * Compare two scans' vertical references, structured and fail-closed. Two scans
+ * share a usable reference only when both declare the SAME real vertical datum
+ * AND no proven vertical-unit conflict exists between them. A missing or
+ * mismatched datum, or a same-datum pair whose vertical units are both known and
+ * differ, each fails closed — cross-epoch height math across either mismatch is
+ * exactly the silent wrong number the model exists to prevent. A same-datum pair
+ * whose units are not both known is left to pass on the datum evidence (an
+ * unproven unit is unverified, not a proven conflict).
+ */
+function compareVerticalReference(a: ScanFacts, b: ScanFacts): VerticalReferenceVerdict {
+  const va = verticalIdentityOf(a);
+  const vb = verticalIdentityOf(b);
+  if (va == null || vb == null || va !== vb) return { ok: false, code: 'VERTICAL_REF_DIFFERS' };
+
+  // Same datum: reject only a PROVEN unit conflict (both known, positive, unequal).
+  const ua = a.crs?.verticalUnitToMetres;
+  const ub = b.crs?.verticalUnitToMetres;
+  const uaKnown = typeof ua === 'number' && Number.isFinite(ua) && ua > 0;
+  const ubKnown = typeof ub === 'number' && Number.isFinite(ub) && ub > 0;
+  if (uaKnown && ubKnown) {
+    const differ = Math.abs(ua - ub) > Math.max(Math.abs(ua), Math.abs(ub)) * 1e-12;
+    if (differ) return { ok: false, code: 'VERTICAL_UNIT_CONFLICT' };
+  }
+  return { ok: true };
 }
 
 /** Classification of unclassified points — geometry-driven, no CRS needed. */
@@ -148,8 +187,11 @@ function twoScanProduct(product: ProductId, inputs: ProcessInputs, noun: string)
   if (!isLinearUnitKnown(a.crs) || !isLinearUnitKnown(b.crs)) {
     return cap(product, 'blocked', 'UNIT_UNKNOWN', `${noun} is a metric product, so an unconfirmed linear unit on either scan blocks it.`);
   }
-  if (!sharedVerticalReference(a, b)) {
-    return cap(product, 'blocked', 'VERTICAL_REF_DIFFERS', `${noun} compares heights, so a missing or differing vertical reference between the two scans blocks it.`);
+  const vref = compareVerticalReference(a, b);
+  if (!vref.ok) {
+    return vref.code === 'VERTICAL_UNIT_CONFLICT'
+      ? cap(product, 'blocked', 'VERTICAL_UNIT_CONFLICT', `${noun} compares heights, and the two scans share a vertical datum but declare different vertical units — one factor cannot convert both, so it is blocked.`)
+      : cap(product, 'blocked', 'VERTICAL_REF_DIFFERS', `${noun} compares heights, so a missing or differing vertical reference between the two scans blocks it.`);
   }
   if (inputs.projectFrameCompatible !== true) {
     return cap(product, 'review', 'FRAME_UNPROVEN', `The two scans' spatial frames are not yet proven compatible, so ${noun.toLowerCase()} is offered for review pending alignment.`);
