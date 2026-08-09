@@ -2823,14 +2823,14 @@ const terrainRunner = createTerrainAnalysisRunner({
       originH2: d.originH2,
     });
     inspector.setCoverageAvailable(true);
+    processStudio.markProduced(['dtm', 'contours']); // run generated the DTM + contours — show them produced
     // Fold the run's real analysed-point count into the Dataset Intelligence
     // card — the same `dtm.analyzedPointCount` the terrain report's
     // "Analysed points" row prints, so card and PDF agree. The streaming
     // attach-time summary necessarily wrote `analyzedPointCount: 0` (nothing
     // analysed yet); without this the Details row reads "Analyzed Points 0"
-    // forever on streamed scans. The refresher only acts when the last
-    // summary came from the streaming path, and the runner's stale-result
-    // guard means this never fires for a closed/replaced scan.
+    // forever on streamed scans. The refresher only acts when the last summary
+    // came from streaming, and the stale-result guard skips closed/replaced scans.
     inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
     // Fold the run's ENGINE-DERIVED terrain complexity (the VRM/TPI summary
     // computed alongside the core, off the interactive path) into the card:
@@ -3082,7 +3082,7 @@ const exportPanel = new ExportPanel({
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
-  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else processStudio.panel.hide(); // reveal on scan load (static/streaming), hide on close
+  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
