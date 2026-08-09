@@ -1,36 +1,31 @@
 /**
  * coconinoCheckpoints.test.ts — OLV's DTM against INDEPENDENT surveyed ground
- * truth in steep, forested terrain.
+ * truth across a frozen multi-tile Coconino checkpoint universe.
  *
  * Dataset: USGS AZ Coconino B1 2019 (project 19049), public domain (USGS 3DEP /
- * The National Map). The project's aerial-LiDAR accuracy checkpoints (NVA +
- * VVA, Tables 8/9 of the project report) are held separate from the 12 LiDAR
- * Control Points, so they are an independent set used solely for vertical
- * accuracy — not reused for calibration. Checkpoints are reprojected to the tile
- * CRS (NAD83(2011) / Conus Albers). The tile's Z and the checkpoint Z are BOTH
- * NAVD88 orthometric (Geoid12B), so OLV's DTM and the checkpoints are compared
- * with no vertical-datum reconciliation.
+ * The National Map). The project's aerial-LiDAR NVA/VVA accuracy checkpoints are
+ * held separate from the 12 LiDAR Control Points — an independent vertical-
+ * accuracy set, not reused for calibration, registration, strip adjustment,
+ * classification tuning, or OLV parameter tuning. Checkpoints are reprojected to
+ * the tile CRS (NAD83(2011) / Conus Albers). Tile Z and checkpoint Z are both
+ * NAVD88 orthometric (Geoid12B), so there is no vertical-datum reconciliation.
  *
- * This complements the Marsh Island leg (flat coastal marsh) with the hard case
- * Marsh Island does not cover: a VVA checkpoint is surveyed in VEGETATED ground,
- * so this measures bare-earth extraction under canopy. A single forested tile
- * yields N=1 (TR03); the fixture and this test grow with N as more project tiles
- * are added — no code change.
+ * The checkpoint universe is FROZEN in
+ * validation/terrain-field/coconino/input-universe.json: every downloaded tile
+ * is hashed, and a checkpoint is IN the universe iff its Albers (E,N) falls
+ * inside a downloaded tile's header bounds. Membership is fixed before any
+ * residual is computed; no checkpoint is removed for a large error. OLV grids
+ * the committed class-2 ground with the production rasterizeDtm at 1.0 m (the
+ * USGS 3DEP QL2 bare-earth DEM resolution) and compares each checkpoint to its
+ * DTM cell, nearest cell, no interpolation; a checkpoint whose cell carries no
+ * classified ground is REJECTED, not counted.
  *
- * The crop + matched reference are produced by
- * scripts/terrain-field/generate-coconino-reference.py from the downloaded
- * tile(s); until they exist this test skips (it never fabricates truth).
- *
- * MATCHING PROTOCOL (fixed before any accuracy was computed):
- *  - OLV grids the committed class-2 ground with the production rasterizeDtm
- *    (point-in-cell mean) at 1.0 m — the USGS 3DEP QL2 bare-earth DEM resolution;
- *  - each checkpoint is compared to the DTM cell it falls in, nearest cell, no
- *    interpolation;
- *  - a checkpoint whose cell carries no classified ground is REJECTED, not
- *    counted;
- *  - the per-checkpoint bound is the USGS accuracy class for its type, not a
- *    figure fitted to the result: NVA (non-vegetated) 0.30 m, VVA (vegetated)
- *    0.60 m. The measured residuals / RMSE are logged unchanged.
+ * Per-checkpoint bounds are the USGS accuracy class for the type (NVA 0.30 m,
+ * VVA 0.60 m), spec-derived, not fitted. This is external checkpoint agreement,
+ * not an E5 field campaign: the checkpoints are found public data (not surveyed
+ * under a protocol frozen before the survey), and N is below the formal count
+ * threshold, so per validation/terrain-field/coconino/coconino-validation-summary.json
+ * the DTM grade stays E3. The measured metrics are logged unchanged.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -42,67 +37,90 @@ import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 const DIR = resolve(__dirname, '../validation/terrain-field');
 const GROUND = resolve(DIR, 'crops/coconino__ground.f32');
 const MATCHED = resolve(DIR, 'references/coconino__matched.json');
+const UNIVERSE = resolve(DIR, 'coconino/input-universe.json');
 const CELL = 1.0; // m — USGS 3DEP QL2 bare-earth DEM resolution
-
-// USGS accuracy classes (spec-derived, not fitted): a per-checkpoint bare-earth
-// residual bound by checkpoint type.
 const BOUND: Record<string, number> = { NVA: 0.3, VVA: 0.6 };
 
-interface Matched {
-  readonly checkpoints: ReadonlyArray<{ id: string; type: 'NVA' | 'VVA'; e: number; n: number; z: number }>;
-}
+interface Cp { id: string; type: 'NVA' | 'VVA'; e: number; n: number; z: number }
 
 function readGround(): TerrainPoint[] {
   const buf = readFileSync(GROUND);
   const f = new Float32Array(buf.buffer, buf.byteOffset, buf.byteLength / 4);
-  const n = f.length / 3;
-  const pts: TerrainPoint[] = new Array(n);
-  for (let i = 0; i < n; i++) pts[i] = { x: f[i * 3], y: f[i * 3 + 1], z: f[i * 3 + 2] };
+  const pts: TerrainPoint[] = new Array(f.length / 3);
+  for (let i = 0; i < pts.length; i++) pts[i] = { x: f[i * 3], y: f[i * 3 + 1], z: f[i * 3 + 2] };
   return pts;
 }
 
-describe('OLV DTM vs independent USGS checkpoints (Coconino forest, NAVD88↔NAVD88)', () => {
+describe('OLV DTM vs independent USGS checkpoints (Coconino, NAVD88↔NAVD88)', () => {
   const has = existsSync(GROUND) && existsSync(MATCHED);
 
   (has ? it : it.skip)('agrees with surveyed ground truth within each checkpoint\'s USGS accuracy class', () => {
     const pts = readGround();
-    let maxX = 0, maxY = 0;
-    for (const p of pts) { if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y; }
-    const cols = Math.ceil(maxX / CELL) + 1;
-    const rows = Math.ceil(maxY / CELL) + 1;
-    const grid = { originH1: 0, originH2: 0, cols, rows, cellSizeM: CELL } as const;
-    const z = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { grid, aggregation: 'mean' }).z;
+    const cps = (JSON.parse(readFileSync(MATCHED, 'utf8')) as { checkpoints: Cp[] }).checkpoints;
 
-    const cps = (JSON.parse(readFileSync(MATCHED, 'utf8')) as Matched).checkpoints;
-    const residuals: number[] = [];
-    let rejected = 0;
+    // No control points may enter the accuracy set: every matched checkpoint is
+    // an NVA or VVA accuracy point, never a LiDAR Control Point.
+    for (const c of cps) expect(['NVA', 'VVA']).toContain(c.type);
+
+    // The checkpoints span the whole project, so each is gridded in its OWN
+    // local frame (a small window around it) rather than one universe-wide grid.
+    // The DTM value is the production rasterizeDtm cell that contains the point.
+    const HALO = 4; // m — local window; the crop only holds ground within 3 m
+    const dtmAt = (c: Cp): number => {
+      const oH1 = Math.floor(c.e) - HALO, oH2 = Math.floor(c.n) - HALO;
+      const span = 2 * HALO + 1;
+      const local: TerrainPoint[] = [];
+      for (const p of pts) {
+        if (p.x >= oH1 && p.x < oH1 + span && p.y >= oH2 && p.y < oH2 + span) local.push(p);
+      }
+      if (local.length === 0) return NaN;
+      const z = rasterizeDtm(local, new Uint8Array(local.length).fill(1), { grid: { originH1: oH1, originH2: oH2, cols: span, rows: span, cellSizeM: CELL }, aggregation: 'mean' }).z;
+      const col = Math.floor((c.e - oH1) / CELL), row = Math.floor((c.n - oH2) / CELL);
+      return z[row * span + col];
+    };
+
+    const all: number[] = [], nva: number[] = [], vva: number[] = [];
     const failures: string[] = [];
+    let rejected = 0;
     for (const c of cps) {
-      const col = Math.floor(c.e / CELL), row = Math.floor(c.n / CELL);
-      if (col < 0 || col >= cols || row < 0 || row >= rows) { rejected++; continue; }
-      const v = z[row * cols + col];
+      const v = dtmAt(c);
       if (!Number.isFinite(v)) { rejected++; continue; } // no classified ground → reject
       const resid = v - c.z;
-      residuals.push(resid);
+      all.push(resid);
+      (c.type === 'NVA' ? nva : vva).push(resid);
       if (Math.abs(resid) > (BOUND[c.type] ?? 0.6)) {
-        failures.push(`${c.id} (${c.type}): ${(resid * 100).toFixed(1)}cm > ${(BOUND[c.type] * 100)}cm`);
+        failures.push(`${c.id} (${c.type}): ${(resid * 100).toFixed(1)}cm > ${BOUND[c.type] * 100}cm`);
       }
     }
 
-    const n = residuals.length;
-    expect(n, 'at least one checkpoint had classified ground beneath it').toBeGreaterThan(0);
-    const abs = residuals.map(Math.abs).sort((a, b) => a - b);
-    const rmse = Math.sqrt(residuals.reduce((s, r) => s + r * r, 0) / n);
-    const mae = abs.reduce((s, r) => s + r, 0) / n;
-    const median = abs[Math.floor(n / 2)];
-    const bias = residuals.reduce((s, r) => s + r, 0) / n;
+    const stat = (r: number[]) => {
+      const n = r.length; const abs = r.map(Math.abs).sort((a, b) => a - b);
+      const rmse = Math.sqrt(r.reduce((s, x) => s + x * x, 0) / n);
+      return { n, rmse_cm: (rmse * 100).toFixed(2), mae_cm: ((abs.reduce((s, x) => s + x, 0) / n) * 100).toFixed(2), bias_cm: ((r.reduce((s, x) => s + x, 0) / n) * 100).toFixed(2), max_cm: (abs[n - 1] * 100).toFixed(2) };
+    };
     // eslint-disable-next-line no-console
-    console.log(`[terrain-field] Coconino OLV DTM vs ${n} USGS checkpoints (rej ${rejected}): rmse=${(rmse * 100).toFixed(2)}cm mae=${(mae * 100).toFixed(2)}cm median=${(median * 100).toFixed(2)}cm bias=${(bias * 100).toFixed(2)}cm`);
+    console.log(`[terrain-field] Coconino DTM vs ${all.length} USGS checkpoints (rej ${rejected}): overall ${JSON.stringify(stat(all))} | NVA ${nva.length >= 5 ? JSON.stringify(stat(nva)) : 'INSUFFICIENT_N'} | VVA ${vva.length >= 5 ? JSON.stringify(stat(vva)) : 'INSUFFICIENT_N'}`);
 
-    // Every matched checkpoint sits within its own USGS accuracy class.
+    // No checkpoint is silently dropped: candidates == usable + rejected.
+    expect(all.length + rejected).toBe(cps.length);
+    // A real multi-tile universe, not a single point.
+    expect(all.length).toBeGreaterThanOrEqual(10);
+    // Every usable checkpoint sits within its own USGS accuracy class.
     expect(failures, `checkpoints outside their USGS class:\n${failures.join('\n')}`).toHaveLength(0);
-    // Once the sample is large enough to be a distribution, the aggregate RMSE
-    // stays inside the coarser (vegetated) class.
-    if (n >= 10) expect(rmse).toBeLessThan(0.6);
+  });
+
+  const hasUni = existsSync(UNIVERSE) && existsSync(MATCHED);
+  (hasUni ? it : it.skip)('the frozen universe and the matched crop agree, and E5 is not falsely claimed', () => {
+    const uni = JSON.parse(readFileSync(UNIVERSE, 'utf8'));
+    const matched = (JSON.parse(readFileSync(MATCHED, 'utf8')) as { checkpoints: Cp[] }).checkpoints;
+    // The crop covers exactly the frozen matched universe — deterministic membership.
+    expect(matched.length).toBe(uni.matchedCheckpointCount);
+    const uniIds = new Set(uni.matchedCheckpoints.map((c: { id: string }) => c.id));
+    for (const c of matched) expect(uniIds.has(c.id)).toBe(true);
+    // Evidence cannot be silently promoted: the determination stays E3 / not-E5,
+    // with the limiting reasons recorded.
+    expect(uni.evidenceDetermination.e5Reached).toBe(false);
+    expect(uni.evidenceDetermination.limitingReasons.length).toBeGreaterThan(0);
+    expect(uni.evidenceIndependence.usedForParameterTuning).toBe(false);
   });
 });
