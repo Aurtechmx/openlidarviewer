@@ -154,6 +154,13 @@ function twoScanProduct(product: ProductId, inputs: ProcessInputs, noun: string)
   if (inputs.projectFrameCompatible !== true) {
     return cap(product, 'review', 'FRAME_UNPROVEN', `The two scans' spatial frames are not yet proven compatible, so ${noun.toLowerCase()} is offered for review pending alignment.`);
   }
+  // Coverage honesty, symmetric with the single-scan surface products: a full-
+  // dataset change/volume product needs the WHOLE of both scans. If either is
+  // resident-only or sampled, the result would cover only the resident overlap,
+  // so it is offered for review scoped to that overlap, never as a full product.
+  if (a.coverage !== 'full' || b.coverage !== 'full') {
+    return cap(product, 'review', 'RESIDENT_OVERLAP_ONLY', `${noun} needs the whole of both scans; one is resident-only or sampled, so the result would cover only the resident overlap and is offered for review scoped to that overlap.`);
+  }
   return cap(product, 'ready', 'COMPATIBLE', `Two scans in a compatible frame with a shared vertical reference support ${noun.toLowerCase()}.`);
 }
 

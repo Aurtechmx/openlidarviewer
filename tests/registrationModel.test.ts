@@ -16,10 +16,14 @@ describe('selectRegistrationModel', () => {
     expect(d.reasonCode).toBe('PROVEN_FRAME_MOUNT');
   });
 
-  it('airborne same-area epochs → PLANAR ICP (protects the vertical change signal)', () => {
+  it('airborne same-area epochs → PLANAR ICP recommended but WITHHELD (solver not implemented)', () => {
     const d = selectRegistrationModel({ ...base, capture: 'airborne', sameAreaEpochs: true });
+    // The model is named (planar ICP is the right method) but not authorized,
+    // because no planar-constrained solver exists — running full 6-DOF instead
+    // would absorb vertical change, so registration is withheld.
     expect(d.model).toBe('planar-icp');
-    expect(d.reasonCode).toBe('AIRBORNE_EPOCH_PLANAR');
+    expect(d.allowed).toBe(false);
+    expect(d.reasonCode).toBe('PLANAR_ICP_NOT_IMPLEMENTED');
   });
 
   it('a full 6-DOF fit is NOT chosen for airborne epochs — the key change-detection guard', () => {
