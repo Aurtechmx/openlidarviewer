@@ -45,10 +45,10 @@ describe('lint:release-truth', () => {
     expect(problems.some((p) => p.includes('7,635'))).toBe(true);
   });
 
-  it('fails on a prior-release present-tense mounting claim', () => {
-    // Version-agnostic: corrupt whatever the CURRENT doc says into a stale
-    // prerelease identifier — the rule must flag it at stable versions too.
-    const doc = realRead(KNOWN)!.replace(/DISABLED in [\w.]+/, 'DISABLED in alpha.2');
+  it('fails on a present-tense prerelease "DISABLED in <pre>" claim', () => {
+    // Rule 2 flags a present-tense claim tied to a prerelease identifier, at
+    // stable versions too. Inject one; the surrounding subject is irrelevant.
+    const doc = realRead(KNOWN)! + '\n\nThe monolith split was DISABLED in alpha.2.\n';
     const problems = problemsFor(withOverride(KNOWN, doc));
     expect(problems.some((p) => p.includes('DISABLED in alpha.2'))).toBe(true);
   });
@@ -104,21 +104,22 @@ describe('lint:release-truth', () => {
 
   const SERVICE = 'src/app/LayerService.ts';
 
-  it('fails when the mount flag is ON while the docs say mounting is disabled', () => {
-    // The real docs state mounting is disabled; flip only the shipped flag to
-    // true to reproduce the post-tag PR #238 contradiction.
-    const svc = realRead(SERVICE)!.replace(
-      'MULTI_LAYER_MOUNT_ENABLED = false',
-      'MULTI_LAYER_MOUNT_ENABLED = true',
-    );
-    const problems = problemsFor(withOverride(SERVICE, svc));
+  it('fails when a truth doc says mounting is disabled while the flag is ON', () => {
+    // The real docs and flag both state mounting is enabled; make one truth doc
+    // contradict the shipped flag with a disabled claim.
+    const doc = realRead(KNOWN)! + '\n\nMulti-layer mounting is disabled in this build.\n';
+    const problems = problemsFor(withOverride(KNOWN, doc));
     expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = true'))).toBe(true);
   });
 
-  it('fails when the mount flag is OFF while a doc claims mounting is enabled', () => {
-    // Keep the real (disabled) flag; make one truth doc claim mounting is on.
-    const doc = realRead(KNOWN)! + '\n\nMulti-layer mounting is enabled in this release.\n';
-    const problems = problemsFor(withOverride(KNOWN, doc));
+  it('fails when the mount flag is OFF while the docs say mounting is enabled', () => {
+    // The real docs state mounting is enabled; flip only the shipped flag to
+    // false to reproduce the inverse contradiction.
+    const svc = realRead(SERVICE)!.replace(
+      'MULTI_LAYER_MOUNT_ENABLED = true',
+      'MULTI_LAYER_MOUNT_ENABLED = false',
+    );
+    const problems = problemsFor(withOverride(SERVICE, svc));
     expect(problems.some((p) => p.includes('MULTI_LAYER_MOUNT_ENABLED = false'))).toBe(true);
   });
 });

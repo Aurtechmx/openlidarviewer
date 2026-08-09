@@ -76,24 +76,35 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
 /**
  * Whether layers are physically rebased onto a shared project origin.
  *
- * DISABLED pending the multi-layer per-layer-frame fixes. The mount mechanism
- * is a Float64 placement transform (`Viewer.setLayerPlacement`), not a rewrite
- * of the position array: the source vertices never move, rendering places the
- * mesh by its transform, each layer's CPU work reads its own source-local frame
- * (per-cloud origin), and combined estimators run only across `verified`
- * layers. But a non-anchor mounted layer still corrupts data — lasso reclassify
- * edits the wrong points, and session and measurement export write the wrong
- * coordinates — because those paths do not yet read each layer's own frame.
- * Until that per-layer-frame model lands, mounting stays off, which keeps the
- * three v0.6.3 truth docs accurate and the corruption unreachable.
+ * ENABLED in v0.6.5. The mount mechanism is a Float64 placement transform
+ * (`Viewer.setLayerPlacement`), not a rewrite of the position array: the source
+ * vertices never move (`tests/sourceGeometryImmutable.test.ts`), rendering
+ * places the mesh by its transform, each layer's CPU work reads its own
+ * source-local frame (per-cloud origin), and combined estimators run only across
+ * `verified` layers. The per-layer-frame fixes that previously blocked the flag
+ * have landed: the world coordinate is recovered per boundary in the frame each
+ * one names — picking/inspection through `cloud.worldXYZ(index)` (not the placed
+ * point), reclassify and the project-frame estimators through the
+ * `layerPlacement` fold, and the exporters through each cloud's own
+ * `sourceOrigin` (`exportGeoContext`). The invariant that a mount never moves the
+ * world coordinate a boundary computes is pinned under a non-identity placement
+ * by `tests/frameWorldCoords.test.ts`, and the browser mount is exercised by
+ * `tests/e2e/twoScanMount.spec.ts` (real separation, source untouched,
+ * add/remove no-move).
  *
- * The precision gate above still refuses a placement it cannot represent, and
- * an unaligned or foreign-CRS layer carries no placement and stays in its own
+ * One item remains a precision refinement, not a correctness defect: for
+ * far-apart mounts the renderer's mesh position should fold `− renderOrigin` on
+ * the CPU per mesh to keep the Float32 GPU residual small. It is bounded and
+ * refused past 1 mm by the `mountPrecision` gate below (`PointCloud.rebaseQuantum`;
+ * geographic frames refused outright), so a placement that would lose a
+ * millimetre never mounts.
+ *
+ * An unaligned or foreign-CRS layer carries no placement and stays in its own
  * frame, so `mounted: false` still makes the combined estimators refuse rather
  * than average unlike frames. Single-layer work is unaffected: a lone layer's
  * placement is the identity.
  */
-export const MULTI_LAYER_MOUNT_ENABLED = false;
+export const MULTI_LAYER_MOUNT_ENABLED = true;
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that
