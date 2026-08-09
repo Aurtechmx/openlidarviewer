@@ -154,10 +154,10 @@ import type { ShareState } from './io/shareState';
 // is set — see `loadDiagnostics()` below. The types stay reachable for the
 // variable annotations.
 import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
-import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
+import type { DebugOverlay } from './ui/DebugOverlay';
 // Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
-import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
+import { estimateGpuBytes } from './render/streaming/streamingBudget';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
@@ -177,6 +177,7 @@ import {
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
+import { sampleStreamingDebug } from './app/streamingDebugSample';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -4104,7 +4105,7 @@ if (debug || benchmark) {
     debugOverlay = new d.DebugOverlay(() => ({
       backend: viewerReady ? viewer.activeBackend() : null,
       stats: viewerReady ? viewer.frameStats() : null,
-      streaming: streamingDebugSample(),
+      streaming: sampleStreamingDebug({ isViewerReady: () => viewerReady, getViewer: () => viewer, getBenchmark: () => streamingBenchmark }),
       terrainCompute: readTerrainComputePath(),
     }));
     stage.overlay.append(debugOverlay.element);
@@ -4168,59 +4169,6 @@ function cancelFullCloudGrade(): void {
 }
 
 /** Sample live COPC streaming counters for the debug overlay, or null. */
-function streamingDebugSample(): StreamingDebugStats | null {
-  // Returns null before the lazy Viewer chunk has resolved — the debug
-  // overlay polls on a timer from the moment it starts, which can fire
-  // before `viewer` is non-null.
-  if (!viewerReady) return null;
-  const cloud = viewer.streamingCloud;
-  const scheduler = viewer.streamingScheduler;
-  if (!cloud || !scheduler) return null;
-  const counts = cloud.counts();
-  const stats = scheduler.stats();
-  const cs = scheduler.cacheStats();
-  const sample: StreamingDebugStats = {
-    knownNodes: counts.known,
-    visibleNodes: stats.visible,
-    queuedNodes: stats.queued,
-    loadingNodes: stats.loading,
-    residentNodes: counts.resident,
-    displayedPoints: cloud.residentPointCount,
-    sourcePoints: cloud.sourcePointCount,
-    cacheBytes: cs.byteSize,
-    decodedBytes: estimateDecodedBytes(cloud.residentPointCount),
-    gpuBytes: estimateGpuBytes(cloud.residentPointCount),
-    schedulerMs: stats.lastTickMs,
-    cacheHits: cs.hits,
-    cacheMisses: cs.misses,
-    cacheEvictions: cs.evictions,
-  };
-  if (streamingBenchmark) {
-    sample.thrashEvents = streamingBenchmark.thrashEvents;
-    const tier = streamingBenchmark.tierCounters();
-    sample.nodesReady = tier.nodesReady;
-    sample.nodesEvicted = tier.nodesEvicted;
-    const recent = streamingBenchmark.recentSchedulerTickStats(60);
-    if (recent.count > 0) {
-      sample.schedulerRecent = {
-        count: recent.count,
-        p50: recent.p50,
-        p95: recent.p95,
-        max: recent.max,
-      };
-    }
-    // Metered-commit backlog. Left absent in the default immediate mode, where
-    // no upload queue runs and the driver never records a pass — so the overlay
-    // shows this line only once metering is actually committing.
-    const up = streamingBenchmark.uploadCounters();
-    if (up.committedPerFrame.count > 0 || up.pendingNodes > 0) {
-      sample.commitPending = up.pendingNodes;
-      sample.commitPendingBytes = up.pendingBytes;
-      sample.nodesCommitted = up.nodesCommitted;
-    }
-  }
-  return sample;
-}
 
 /**
  * Run every registered validation module and flatten the rows. The optional
