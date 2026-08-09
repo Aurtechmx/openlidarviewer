@@ -4117,8 +4117,6 @@ function cancelFullCloudGrade(): void {
   fullCloudGradeController?.abort();
 }
 
-/** Sample live COPC streaming counters for the debug overlay, or null. */
-
 /**
  * Run every registered validation module and flatten the rows. The optional
  * `scope` is threaded into each module so class-dependent figures honour the
