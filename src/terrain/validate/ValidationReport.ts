@@ -68,7 +68,40 @@ export interface ZoneError {
 }
 
 /** The result of a hold-out cross-validation pass. */
+/**
+ * What a validation report actually ESTIMATES — the estimand. The four are not
+ * interchangeable accuracy figures, and a report typed as one must never be read
+ * as another:
+ *
+ *  - `point-reconstruction` — random-point hold-out. Nearby points from the SAME
+ *    local surface stay in training, so it estimates how well the surface
+ *    reconstructs a withheld point under DENSE sampling. It is NOT external
+ *    accuracy and must not be printed as one.
+ *  - `cell-reconstruction` — a whole cell's returns are withheld together.
+ *  - `spatial-gap` — spatially-blocked hold-out: a whole region is withheld, so
+ *    the estimate reflects performance in genuine gaps, not interpolation between
+ *    dense neighbours.
+ *  - `external-checkpoint` — residuals against INDEPENDENT survey checkpoints
+ *    measured by a higher-accuracy method. Only this estimand may back an ASPRS
+ *    conformance claim.
+ *
+ * Carrying the estimand as a closed union (not a free-text label) is what stops a
+ * downstream panel or export from relabelling a point-reconstruction figure as
+ * external-checkpoint accuracy.
+ */
+export type HoldoutEstimand =
+  | 'point-reconstruction'
+  | 'cell-reconstruction'
+  | 'spatial-gap'
+  | 'external-checkpoint';
+
 export interface ValidationReport {
+  /**
+   * What this report estimates. See {@link HoldoutEstimand}. A consumer that
+   * prints an accuracy figure MUST key on this before choosing its wording — a
+   * `point-reconstruction` report is not external accuracy.
+   */
+  readonly estimand: HoldoutEstimand;
   /** Root-mean-square vertical residual across all covered held-out points. */
   readonly rmse: number;
   /** Mean absolute residual. */
