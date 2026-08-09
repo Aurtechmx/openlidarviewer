@@ -1032,6 +1032,16 @@ export class AnalysePanel {
    * Surface models — above-ground height (DSM − DTM), slope distribution, and
    * a north-up hillshade preview the user can export as a PNG.
    */
+  /**
+   * Re-render the surface tiles in place — used when the app-wide colourblind-
+   * safe palette toggles, so the coverage tile swaps between the green/yellow/red
+   * ramp and its Cividis twin without a re-analysis. No-op with no result;
+   * leaves staleness, scan binding and the run button untouched (unlike update).
+   */
+  refreshForPalette(): void {
+    if (this._result) this._renderSurface();
+  }
+
   private _renderSurface(): void {
     // Drop any frame the previous relief tile queued — the tile it would paint
     // is about to be detached by replaceChildren().
