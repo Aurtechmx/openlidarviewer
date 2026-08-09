@@ -23,6 +23,44 @@ describe('ProcessService', () => {
     expect(svc.readiness('contours')).toBe('ready');
   });
 
+  it('authorize issues a token only for a ready product', () => {
+    const svc = ProcessService.fromFacts([healthy]);
+    const auth = svc.authorize('dtm');
+    expect(auth).not.toBeNull();
+    expect(auth?.product).toBe('dtm');
+    expect(auth?.grantedFrom.length).toBeGreaterThan(0);
+    // A two-scan product with a single scan is blocked → no token.
+    expect(svc.authorize('cross-epoch-change')).toBeNull();
+  });
+
+  it('runIfAuthorized invokes the executor only when the product is ready', () => {
+    const svc = ProcessService.fromFacts([healthy]);
+    let ran = 0;
+    const ok = svc.runIfAuthorized('dtm', (auth) => {
+      ran++;
+      expect(auth.product).toBe('dtm');
+      return 42;
+    });
+    expect(ran).toBe(1);
+    expect(ok.authorized).toBe(true);
+    if (ok.authorized) expect(ok.value).toBe(42);
+  });
+
+  it('runIfAuthorized refuses a blocked product without invoking the executor', () => {
+    const svc = ProcessService.fromFacts([healthy]);
+    let ran = 0;
+    const res = svc.runIfAuthorized('cross-epoch-change', () => {
+      ran++;
+      return 'produced';
+    });
+    expect(ran).toBe(0); // executor never reached — the gate held
+    expect(res.authorized).toBe(false);
+    if (!res.authorized) {
+      expect(res.readiness).not.toBe('ready');
+      expect(res.reasonCode.length).toBeGreaterThan(0);
+    }
+  });
+
   it('an unknown product reads blocked, never accidentally ready', () => {
     const svc = ProcessService.fromFacts([healthy]);
     // A product id the model does not carry defaults to blocked.
