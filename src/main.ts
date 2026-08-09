@@ -2428,15 +2428,17 @@ let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null =
 
 const classLegendPanel = new ClassLegendPanel();
 
-// Process Studio — display-only readiness view over the pure Phase-1/2 services,
-// from live scan signals (fail-closed: unknown ⇒ conservative), mounted in the
-// left rail and hidden until a scan loads. Logic lives in `processStudioMount`.
-const processStudio = createProcessStudioFromLive({ getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null, getActivePointCount: () => scans.activeCloud()?.pointCount ?? null, getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null, getPresentClassCodes: () => classLegendPanel.presentCodes() });
+// Process Studio — fail-closed readiness over the Phase-1/2 services. Accessors
+// stay multi-line so the deferred `viewer.*` read is not a top-level deref.
+const processStudio = createProcessStudioFromLive({
+  getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
+  getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
+  getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null,
+  getPresentClassCodes: () => classLegendPanel.presentCodes(),
+});
 
-// Manual classification-edit panel — lazy-loaded and mounted just below the
-// legend the first time a classification appears, so its controls + lasso tool
-// stay out of the startup shell. `showReclassifyUi()` is called wherever a
-// classification becomes available; `hideReclassifyUi()` on detach.
+// Manual classification-edit panel — lazy-loaded below the legend on first
+// classification. `showReclassifyUi()` on availability; `hideReclassifyUi()` on detach.
 let reclassifyUi: ReclassifyUi | null = null;
 let reclassifyUiLoading: Promise<void> | null = null;
 async function showReclassifyUi(): Promise<void> {
@@ -3493,8 +3495,7 @@ function refreshClassLegend(classification?: ArrayLike<number>): void {
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());
-  // The legend is revealed even for a class-less scan: its designed empty state
-  // is the entry point to Classify. Process Studio reveals alongside it.
+  // The legend reveals even for a class-less scan (empty state = entry to Classify); Process Studio too.
   classLegendPanel.show();
   processStudio.refresh(); // pick up class-derived facts once classification is known
   void showReclassifyUi();
@@ -3764,9 +3765,8 @@ void viewerLoaded.then(() => {
     const leftPanels = document.createElement('div');
     leftPanels.className = 'olv-left-panels';
     leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    // NOTE: analysePanel / objectPanel / measurePanel are ABSENT here — all three
-    // lazy-mount on first scan load (v0.6 P1) into their canonical order via
-    // `mount{Object,Analyse,Measure}PanelElement` below. Process Studio starts hidden.
+    // NOTE: analysePanel / objectPanel / measurePanel lazy-mount on first scan load
+    // via `mount{Object,Analyse,Measure}PanelElement` below. Process Studio starts hidden.
     leftPanels.append(annotationPanel.element, classLegendPanel.element, processStudio.panel.element, exportPanel.element, clipPanel.element);
     stage.overlay.append(leftPanels);
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
