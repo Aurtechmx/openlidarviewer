@@ -277,6 +277,7 @@ import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNamin
 import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
+import { yUpOriginToCanonicalZUp } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
@@ -2334,14 +2335,28 @@ function newAnalysePanel(
       // (the lon/lat converter) and for `linearUnit`, where "no scan yet" and
       // "unknown CRS" differ and the context collapses them.
       const ctx = crsService.context();
+      // The terrain the exporters place is the CANONICAL Z-up DTM the analysis
+      // runner built (a Y-up scan is rotated (x,y,z)→(x,−z,y) before analysis),
+      // so the origin added back must be in that same canonical frame. Returning
+      // the raw source origin for a Y-up scan georeferenced a correctly-rotated
+      // surface to the wrong place — the runner's own worldOriginY already
+      // canonicalises; getMapContext was the seam that didn't (#5).
+      const upAxis = terrainRunner.getLastSourceUpAxis();
+      const placedOrigin: [number, number, number] | null = origin
+        ? (upAxis === 'y'
+            ? yUpOriginToCanonicalZUp([origin[0], origin[1], origin[2]])
+            : [origin[0], origin[1], origin[2]])
+        : null;
       return {
         // All three axes: contour serialization shifts elevations by `z` so
         // exported contour levels read in real-world (e.g. orthometric) height
         // rather than the recentred local frame.
-        worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
+        worldOrigin: placedOrigin
+          ? { x: placedOrigin[0], y: placedOrigin[1], z: placedOrigin[2] }
+          : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        isGeographic: ctx.isGeographic, sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
+        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
         wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
