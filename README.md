@@ -222,7 +222,7 @@ Format support varies with browser memory, GPU capacity, dataset size, preproces
 <details>
 <summary><b>System requirements</b></summary>
 
-OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari are supported (a WebGL fallback may apply).
+OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari run OLV through the WebGL 2 fallback: a boot-and-render smoke on both engines is a **mandatory** check (`.github/workflows/browser-smoke.yml`), and the full deterministic end-to-end suite runs on both as an advisory cross-browser matrix.
 
 | Component | Minimum | Recommended |
 |---|---|---|
