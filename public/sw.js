@@ -19,10 +19,14 @@
  *     /assets/* files are content-hashed and immutable, so this is safe.
  */
 
-// Bump on every release: `activate` deletes any cache whose name !== VERSION,
-// so changing the name is what prunes the previous release's cached bundles.
-// Tied to the app version so a tagged release prunes automatically.
-const VERSION = 'olv-shell-0.6.5';
+// Bump on every release: `activate` prunes any OLV cache whose name !== VERSION,
+// so changing the name is what drops the previous release's cached bundles.
+// Tied to the app version so a tagged release prunes automatically. The
+// `olv-shell-` prefix is load-bearing: CacheStorage is ORIGIN-wide, not scoped
+// to this service worker, so activate must only delete OLV's own caches — never
+// a co-hosted app's cache on the same origin.
+const CACHE_PREFIX = 'olv-shell-';
+const VERSION = `${CACHE_PREFIX}0.6.5`;
 const SHELL = [
   './',
   './index.html',
@@ -52,7 +56,12 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((keys) =>
+        Promise.all(
+          // Only OLV's own caches — never a co-hosted app's cache on this origin.
+          keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION).map((k) => caches.delete(k)),
+        ),
+      )
       .then(() => self.clients.claim()),
   );
 });
