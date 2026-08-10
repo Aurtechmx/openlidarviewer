@@ -265,8 +265,8 @@ import { CatalogPanel } from './ui/CatalogPanel';
 import type { CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
-import { spatialContextFrom, verticalMetresPerUnit } from './geo/SpatialContext';
-import { epochFrameFacts, epochFrameOptions, epochVerticalScalesComparable } from './geo/frameCompatibility';
+import { verticalMetresPerUnit } from './geo/SpatialContext';
+import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -277,7 +277,7 @@ import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNamin
 import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
-import { yUpOriginToCanonicalZUp } from './terrain/canonicalFrame';
+import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
@@ -1210,8 +1210,7 @@ const layerService = createLayerService({
   context: runtime.context,
   refreshCompass: () => compass.refresh(),
   projectFrame,
-  resolveCrs: (name, detected) =>
-    crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  resolveCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
 });
 
 const inspector = new Inspector({
@@ -2335,18 +2334,9 @@ function newAnalysePanel(
       // (the lon/lat converter) and for `linearUnit`, where "no scan yet" and
       // "unknown CRS" differ and the context collapses them.
       const ctx = crsService.context();
-      // The terrain the exporters place is the CANONICAL Z-up DTM the analysis
-      // runner built (a Y-up scan is rotated (x,y,z)→(x,−z,y) before analysis),
-      // so the origin added back must be in that same canonical frame. Returning
-      // the raw source origin for a Y-up scan georeferenced a correctly-rotated
-      // surface to the wrong place — the runner's own worldOriginY already
-      // canonicalises; getMapContext was the seam that didn't (#5).
+      // Canonicalise the origin for a Y-up scan so exporters place the rotated DTM right (#5).
       const upAxis = terrainRunner.getLastSourceUpAxis();
-      const placedOrigin: [number, number, number] | null = origin
-        ? (upAxis === 'y'
-            ? yUpOriginToCanonicalZUp([origin[0], origin[1], origin[2]])
-            : [origin[0], origin[1], origin[2]])
-        : null;
+      const placedOrigin = placedWorldOrigin(origin, upAxis);
       return {
         // All three axes: contour serialization shifts elevations by `z` so
         // exported contour levels read in real-world (e.g. orthometric) height
@@ -2450,11 +2440,7 @@ const classLegendPanel = new ClassLegendPanel();
 const processStudio = createProcessStudioFromLive({
   getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
   getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
-  // The service's current resolved CRS — the SAME value the Inspector shows,
-  // with any user override applied — not the raw file metadata. Reading
-  // `activeCloud().metadata.crs` here let Process Studio decide capability from
-  // a CRS the user had already corrected (C7). `current()` tracks whichever
-  // scan (static or streaming) is active, so the two surfaces cannot disagree.
+  // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
   getResolvedCrs: () => crsService.current(),
   getPresentClassCodes: () => classLegendPanel.presentCodes(),
 });
@@ -5696,47 +5682,14 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      // Pass each cloud's origin: the two are recentred by their own origins, so
-      // the comparison must align them in a common world frame, not raw local.
-      // Unit info rides along so the shared grid's ~0.25 m cell floor is
-      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25 —
-      // and it now comes from ONE context per epoch, built at this boundary, so
-      // alignment, difference and exported raster cannot disagree about the
-      // metre scale (`epochFrameOptions`) or the declared frame
-      // (`declaredFrameLabel` keeps two UNDECLARED scans off the "same frame"
-      // branch instead of matching them on the display placeholder).
-      // Resolve each epoch's CRS through the service (detected + any user
-      // override), NOT the raw file metadata — otherwise a CRS the user
-      // corrected in the Inspector is silently ignored here and the comparison
-      // runs in the rejected original frame (C5). resolveFor is per-cloud and
-      // non-mutating, so both epochs resolve independently even though only one
-      // scan is "active".
-      const ctxA = spatialContextFrom(
-        crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' }),
-      );
-      const ctxB = spatialContextFrom(
-        crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr' }),
-      );
-      // C6: the Δz math (`(bv - av) * vM`) subtracts the two DTMs' raw
-      // source-unit Z and scales the difference by ONE factor. That is only
-      // valid when both epochs share the vertical scale. If both declare a
-      // vertical unit and the scales DIFFER (e.g. metres vs feet), subtracting
-      // before normalising is meaningless — refuse rather than print a wrong
-      // elevation change. (Both unknown, or equal, keeps the shared-factor path.)
-      if (!epochVerticalScalesComparable(ctxA, ctxB)) {
-        inspector.setCompareResult([
-          `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`,
-          'Cannot compare — the two epochs declare different vertical units. ' +
-            'Re-export them in a common vertical unit first.',
-        ]);
+      const { ctxA, comparable, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
+      if (!comparable) {
+        inspector.setCompareResult(
+          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`),
+        );
         inspector.setDifferenceAvailable(false);
         return;
       }
-      const frames = epochFrameOptions(ctxA, ctxB);
-      // `sourceOrigin`, not the live project origin: this is the epoch world
-      // comparison. The frame facts come from each epoch's context.
-      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) };
-      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) };
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.

@@ -8,6 +8,13 @@
   },
   "entries": [
     {
+      "file": "src/app/epochFramePrep.ts",
+      "symbol": "prepareEpochFrames",
+      "frame": "world",
+      "reads": 2,
+      "why": "Each epoch's buffer is paired with its own sourceOrigin so the two are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations. Extracted from compareLoadedLayers."
+    },
+    {
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",
@@ -116,8 +123,8 @@
       "file": "src/main.ts",
       "symbol": "compareLoadedLayers",
       "frame": "world",
-      "reads": 3,
-      "why": "Each buffer is paired with its own sourceOrigin so the two epochs are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations."
+      "reads": 1,
+      "why": "The before epoch's buffer paired with its sourceOrigin measures the horizontal span for the ICP residual gate, in the common world frame the two epochs are gridded in."
     },
     {
       "file": "src/main.ts",
