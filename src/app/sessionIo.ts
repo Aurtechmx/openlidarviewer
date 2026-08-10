@@ -38,6 +38,7 @@ import type {
   SessionSpatialClaims,
   SessionSpatialVerdict,
 } from '../io/session';
+import type { WorkOwnership } from '../model/workOwnership';
 
 /**
  * Whole-file byte ceiling for a `.olvsession`, checked on the File's size BEFORE
@@ -212,6 +213,13 @@ export interface SessionIoDeps {
   readonly appVersion: string;
   /** The active scan id, or null when none is loaded. */
   getActiveScanId: () => string | null;
+  /**
+   * The stable LAYER-IDENTITY id of the active scan (resolved from its source
+   * facts through the identity registry), or null when it carries no proven
+   * identity. This is the owner restored work is attributed to — never the
+   * scan/viewer id, which is not stable across a close and reopen.
+   */
+  getActiveLayerId: () => string | null;
   /** The active static cloud, or null (streaming / no scan). */
   getActiveCloud: () => PointCloud | null;
   /** The source-frame origin the session's geometry is rebased against (`exportGeoContext().origin`). */
@@ -394,8 +402,34 @@ export async function importSession(
       deps.showToast('Session not applied — the active scan changed while it was importing.');
       return;
     }
-    viewer.measure.loadMeasurements(geo.measurements);
-    viewer.annotate.loadAnnotations(geo.annotations);
+    // Import-side ownership resolution (#22). Work restored from a session must
+    // carry the identity of the layer it belongs to among whatever is open now,
+    // not the saved file's layer id. `matchSessionToScan` above already refused
+    // an import whose scan does not match the loaded one, so the active layer IS
+    // the owner of every item the file left unowned; resolve it from source facts
+    // (never the scan/viewer id) and stamp it. This only fills ownership the file
+    // omitted — declared owners are left exactly as written — and it records
+    // metadata about which frame the coordinates are already in, so it moves no
+    // geometry. When the active layer carries no proven identity, the work is
+    // left unattributed rather than given a guessed owner (fail closed).
+    // Lazy: the ownership migrator lives off the index chunk — session restore is
+    // on-demand, so its cost belongs on the restore path, not the initial load.
+    const { migrateSessionOwnership } = await import('../io/sessionOwnership');
+    const ownership = migrateSessionOwnership(session, {
+      loadedLayerId: deps.getActiveLayerId() ?? undefined,
+    });
+    const measureOwners = new Map<string, WorkOwnership>();
+    for (const m of ownership.measurements) if (m.owner) measureOwners.set(m.id, m.owner);
+    const annotationOwners = new Map<string, WorkOwnership>();
+    for (const a of ownership.annotations) if (a.owner) annotationOwners.set(a.id, a.owner);
+    const ownedMeasurements = geo.measurements.map((m) =>
+      m.owner || !measureOwners.has(m.id) ? m : { ...m, owner: measureOwners.get(m.id) },
+    );
+    const ownedAnnotations = geo.annotations.map((a) =>
+      a.owner || !annotationOwners.has(a.id) ? a : { ...a, owner: annotationOwners.get(a.id) },
+    );
+    viewer.measure.loadMeasurements(ownedMeasurements);
+    viewer.annotate.loadAnnotations(ownedAnnotations);
     // v7 — a view may carry a display bundle beyond its camera; hydrate it
     // into the in-memory shape so restoring by name reapplies the lot. A
     // v6 file's views have no bundle fields, so `buildViewState` returns
