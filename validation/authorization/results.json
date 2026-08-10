@@ -1,5 +1,5 @@
 {
-  "benchmarkVersion": 2,
+  "benchmarkVersion": 3,
   "source": "src/validation/authorizationBenchmark.ts",
   "metrics": {
     "UOAR": 0,
@@ -8,7 +8,7 @@
     "SAAR": 0
   },
   "totals": {
-    "adversarial": 15,
+    "adversarial": 18,
     "control": 2,
     "authorized": 2
   },
@@ -168,6 +168,36 @@
       "title": "support completeness complete → incomplete (unit / vertical reference)",
       "kind": "adversarial",
       "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A17",
+      "title": "evidence scope narrowed after authorization (building class removed) — broader dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "building-footprints",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A18",
+      "title": "requested claim widened beyond evidence scope (sampled coverage, full-dataset DTM requested) — refused",
+      "kind": "adversarial",
+      "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A19",
+      "title": "supporting evidence removed (one epoch collapses to resident-only) — stronger dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "cross-epoch-change",
       "authorized": false,
       "authentic": false,
       "provenanceResolvable": false,

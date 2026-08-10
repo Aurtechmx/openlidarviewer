@@ -27,4 +27,7 @@ Frozen adversarial cases for scientific-output authorization. Each perturbs a fu
 | A14 | adversarial | dtm | refused | ✓ | authentic token reused for another dataset |
 | A15 | adversarial | dtm | refused | ✓ | subject completeness full → partial (coverage) |
 | A16 | adversarial | dtm | refused | ✓ | support completeness complete → incomplete (unit / vertical reference) |
+| A17 | adversarial | building-footprints | refused | ✓ | evidence scope narrowed after authorization (building class removed) — broader dependent claim withdrawn |
+| A18 | adversarial | dtm | refused | ✓ | requested claim widened beyond evidence scope (sampled coverage, full-dataset DTM requested) — refused |
+| A19 | adversarial | cross-epoch-change | refused | ✓ | supporting evidence removed (one epoch collapses to resident-only) — stronger dependent claim withdrawn |
 | A20 | control | dtm | authorized | ✓ | valid state-bound control — token verified against its own unchanged state |

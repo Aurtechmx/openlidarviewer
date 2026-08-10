@@ -1,9 +1,9 @@
 {
-  "benchmarkVersion": 2,
+  "benchmarkVersion": 3,
   "description": "Frozen scientific-output authorization adversarial benchmark (A01–A20).",
-  "caseCount": 17,
+  "caseCount": 20,
   "controlCount": 2,
-  "unsupportedCount": 15,
+  "unsupportedCount": 18,
   "cases": [
     {
       "id": "A01",
@@ -100,6 +100,24 @@
       "title": "support completeness complete → incomplete (unit / vertical reference)",
       "kind": "adversarial",
       "product": "dtm"
+    },
+    {
+      "id": "A17",
+      "title": "evidence scope narrowed after authorization (building class removed) — broader dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "building-footprints"
+    },
+    {
+      "id": "A18",
+      "title": "requested claim widened beyond evidence scope (sampled coverage, full-dataset DTM requested) — refused",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A19",
+      "title": "supporting evidence removed (one epoch collapses to resident-only) — stronger dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "cross-epoch-change"
     },
     {
       "id": "A20",

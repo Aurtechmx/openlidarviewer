@@ -19,7 +19,7 @@ function writeArtifactsIfRequested(): void {
   const dir = resolve(__dirname, '../validation/authorization');
   mkdirSync(dir, { recursive: true });
   const cases = AUTHORIZATION_CASES.map((c) => ({ id: c.id, title: c.title, kind: c.kind, product: c.product }));
-  const benchmarkVersion = 2; // v1 = A01–A12; v2 adds A13–A16 + A20 (freshness/completeness) + SAAR.
+  const benchmarkVersion = 3; // v1 = A01–A12; v2 adds A13–A16 + A20 (freshness/completeness) + SAAR; v3 adds A17–A19 (scope non-broadening).
   writeFileSync(resolve(dir, 'cases.json'), JSON.stringify({
     benchmarkVersion,
     description: 'Frozen scientific-output authorization adversarial benchmark (A01–A20).',
@@ -76,15 +76,15 @@ describe('authorization mutation benchmark (A01–A12)', () => {
     expect(score.saar).toBe(0);
   });
 
-  it('preserves the frozen A01–A12 and adds A13–A16 + A20 (freshness/completeness)', () => {
+  it('preserves the frozen A01–A16 + A20 and adds A17–A19 (scope non-broadening)', () => {
     const ids = AUTHORIZATION_CASES.map((c) => c.id);
-    for (const original of ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12']) {
+    for (const original of ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15', 'A16', 'A20']) {
       expect(ids).toContain(original);
     }
-    for (const added of ['A13', 'A14', 'A15', 'A16', 'A20']) expect(ids).toContain(added);
+    for (const added of ['A17', 'A18', 'A19']) expect(ids).toContain(added);
     expect(new Set(ids).size).toBe(ids.length); // unique
-    expect(AUTHORIZATION_CASES.filter((c) => c.kind === 'control')).toHaveLength(2); // A12 + A20
-    expect(AUTHORIZATION_CASES.filter((c) => c.staleCase)).toHaveLength(4); // A13–A16
+    expect(AUTHORIZATION_CASES.filter((c) => c.kind === 'control')).toHaveLength(2); // A12 + A20 (A18 is adversarial)
+    expect(AUTHORIZATION_CASES.filter((c) => c.staleCase)).toHaveLength(6); // A13–A16 + A17 + A19
   });
 });
 

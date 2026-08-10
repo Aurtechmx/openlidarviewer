@@ -165,6 +165,28 @@ export const AUTHORIZATION_CASES: readonly BenchmarkCase[] = [
     id: 'A16', title: 'support completeness complete → incomplete (unit / vertical reference)', kind: 'adversarial', product: 'dtm', staleCase: true,
     run: () => reuseAcross([BASE], [{ ...BASE, crs: crs({ verticalDatum: undefined }) }], 'dtm'),
   },
+  // A17–A19: scope non-broadening under evidence change (build on A01–A16, which stay frozen).
+  {
+    id: 'A17', title: 'evidence scope narrowed after authorization (building class removed) — broader dependent claim withdrawn', kind: 'adversarial', product: 'building-footprints', staleCase: true,
+    // Footprints were authorized while the building class was present. Removing it
+    // narrows the sensor evidence scope (the after-state only reaches review); an
+    // authentic token from the wider state must not survive that narrowing.
+    run: () => reuseAcross([BASE], [{ ...BASE, hasBuildingClass: false }], 'building-footprints'),
+  },
+  {
+    id: 'A18', title: 'requested claim widened beyond evidence scope (sampled coverage, full-dataset DTM requested) — refused', kind: 'adversarial', product: 'dtm',
+    // The evidence backs only a partial (sampled) surface; requesting a full-dataset
+    // DTM widens the subject scope past what the evidence supports, so no authorization
+    // is issued at all (distinct from A05's resident-only path).
+    run: () => obtain(svcOf({ ...BASE, kind: 'streaming', coverage: 'sampled' }), 'dtm'),
+  },
+  {
+    id: 'A19', title: 'supporting evidence removed (one epoch collapses to resident-only) — stronger dependent claim withdrawn', kind: 'adversarial', product: 'cross-epoch-change', staleCase: true,
+    // The change claim depends on BOTH epochs covering the whole scene. Collapsing one
+    // epoch to resident-only removes the supporting evidence for the wider claim; the
+    // token issued while both epochs were complete must not be re-accepted.
+    run: () => reuseAcross([BASE, BASE], [BASE, { ...BASE, kind: 'streaming', coverage: 'resident-only' }], 'cross-epoch-change', true),
+  },
   {
     id: 'A20', title: 'valid state-bound control — token verified against its own unchanged state', kind: 'control', product: 'dtm',
     run: () => {
