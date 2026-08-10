@@ -4999,6 +4999,7 @@ const sessionIoDeps: SessionIoDeps = {
   loadSession,
   appVersion: __APP_VERSION__,
   getActiveScanId: () => scans.activeId,
+  getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
   exportOrigin: () => exportGeoContext().origin,
   bookmarks,
@@ -5273,7 +5274,6 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     loading = false;
   }
 }
-
 
 
 

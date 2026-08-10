@@ -66,6 +66,7 @@ function makeDeps(
     static?: StaticOpts;
     origin?: readonly [number, number, number];
     appVersion?: string;
+    activeLayerId?: string | null;
   } = {},
 ) {
   const loadMeasurements = vi.fn();
@@ -113,6 +114,7 @@ function makeDeps(
     loadSession: async () => realSessionModule,
     appVersion: over.appVersion ?? CURRENT,
     getActiveScanId: () => over.static?.scanId ?? null,
+    getActiveLayerId: () => over.activeLayerId ?? null,
     getActiveCloud: () => (staticCloud as unknown as import('../src/model/PointCloud').PointCloud | null),
     exportOrigin: () => over.origin ?? [0, 0, 0],
     bookmarks: { restore, names: () => ['V1'] },
@@ -391,6 +393,28 @@ describe('importSession — scan-identity gate against a loaded cloud', () => {
     );
     expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
     expect(calls.showToast).toHaveBeenCalledWith(expect.stringContaining('realigned'));
+  });
+
+  it('stamps the resolved layer owner on restored work the file left unowned (#22)', async () => {
+    // The session matches the loaded scan, so the active layer owns its work.
+    // Its measurement carries no owner in the file; the import resolves the
+    // active layer's proven identity and stamps it, so multi-layer session
+    // ownership is correct without the file having to have declared it.
+    const { deps, calls } = makeDeps({ streaming: loadedStreaming, activeLayerId: 'layer-x' });
+    await importSession(asFile(sessionJson({ scanSummary: summary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    const applied = calls.loadMeasurements.mock.calls[0][0] as Measurement[];
+    expect(applied[0]).toMatchObject({ id: 'a', owner: expect.objectContaining({ layerId: 'layer-x' }) });
+  });
+
+  it('leaves restored work unattributed when the active layer has no proven identity (#22, fail closed)', async () => {
+    // No proven identity for the active layer → no owner is invented. A wrong
+    // owner would misattribute saved work; a missing one leaves it as-is.
+    const { deps, calls } = makeDeps({ streaming: loadedStreaming, activeLayerId: null });
+    await importSession(asFile(sessionJson({ scanSummary: summary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalledTimes(1);
+    const applied = calls.loadMeasurements.mock.calls[0][0] as Measurement[];
+    expect(applied[0].owner).toBeUndefined();
   });
 
   it('holds a partial match behind an "Apply anyway" confirmation, then applies on skip', async () => {
