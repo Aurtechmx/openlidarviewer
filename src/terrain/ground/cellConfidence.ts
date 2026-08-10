@@ -49,10 +49,24 @@ export type CellCoverage =
   | 1 // interpolated — filled from nearest measured cell
   | 2; // measured — at least one ground return landed here
 
-/** Evidence grade derived from confidence — the shared visual grammar. */
-export type EvidenceGrade = 'solid' | 'dashed' | 'gap';
+/**
+ * Contour DISPLAY grade derived from confidence — the shared visual grammar.
+ * `solid | dashed | gap` is a PRESENTATION choice (how firmly the line is drawn),
+ * derived from support/confidence. It is NOT scientific provenance: a solid line
+ * does not mean "measured" and a dashed line does not mean "interpolated". Source
+ * provenance is carried separately (see `ContourSegmentEvidence`) and must never
+ * be reconstructed from this grade.
+ */
+export type ContourDisplayGrade = 'solid' | 'dashed' | 'gap';
 
-/** Confidence cutoffs for the evidence grades (single source of truth). */
+/**
+ * @deprecated Renamed to {@link ContourDisplayGrade} to stop display grade being
+ * read as scientific evidence. Kept for one release for compatibility; migrate
+ * imports to `ContourDisplayGrade`.
+ */
+export type EvidenceGrade = ContourDisplayGrade;
+
+/** Confidence cutoffs for the display grades (single source of truth). */
 export const EVIDENCE_THRESHOLDS = {
   /** >= solid → drawn as a confident, continuous line. */
   solid: 66,
@@ -61,8 +75,8 @@ export const EVIDENCE_THRESHOLDS = {
   // < dashed → `gap`: not drawn / drawn as an explicit break.
 } as const;
 
-/** Map a 0..100 confidence to its evidence grade. */
-export function gradeForConfidence(confidence: number): EvidenceGrade {
+/** Map a 0..100 confidence to its display grade. */
+export function gradeForConfidence(confidence: number): ContourDisplayGrade {
   if (!Number.isFinite(confidence) || confidence < EVIDENCE_THRESHOLDS.dashed) return 'gap';
   if (confidence < EVIDENCE_THRESHOLDS.solid) return 'dashed';
   return 'solid';
