@@ -31,6 +31,7 @@ import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 
 import type { RangeSource } from '../io/range/RangeSource';
+import { sanitizeUrlForDisplay } from '../io/range/RangeSource';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { StreamingBenchmark } from '../render/streaming/streamingBenchmark';
 import type { CopcWorkerClient } from '../io/copc/worker/copcWorkerClient';
@@ -514,8 +515,12 @@ export async function handleRemoteEpt(
       // does not read it as a cancel and describeRemoteEptError renders it as a
       // timeout rather than a silent stop. A real user cancel rethrows unchanged.
       if (isAbortError(err) && !controller.signal.aborted) {
+        // Sanitize the URL for the message: a signed EPT URL (?sig=…, SAS token)
+        // must not reach err.message, which the debug path logs to console.error.
+        // The hierarchy/tile/retry transport paths already do this; the manifest
+        // timeout was the one seam that still used the raw URL.
         throw new EptTimeoutError(
-          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${url}`,
+          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${sanitizeUrlForDisplay(url)}`,
         );
       }
       throw err;
