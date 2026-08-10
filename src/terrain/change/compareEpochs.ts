@@ -50,14 +50,6 @@ export interface EpochCloud {
   readonly isGeographic?: boolean | null;
   /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
   readonly linearUnitToMetres?: number | null;
-  /**
-   * Metres per source VERTICAL unit (~0.3048 for a foot height). Default 1.
-   * The ground filter's metre-valued tolerances are converted into this unit
-   * before classification, so a foot-vertical epoch gets a 0.5 m tolerance, not
-   * 0.5 ft — matching the live analysis pipeline. Kept separate from the
-   * horizontal factor for compound CRSs (metre horizontal + foot height).
-   */
-  readonly verticalUnitToMetres?: number | null;
 }
 
 /** The shared grid spec both epochs are rasterised onto. */
@@ -157,25 +149,11 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
 /** Build one cloud's DTM on the shared world grid, matching the live analysis surface. */
 function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
   const points = boxPoints(cloud.positions, cloud.origin ?? ZERO);
-  // Match the live pipeline's unit handling (resolveGroundFilterParams): the
-  // metre-valued tolerances are compared against Δz in the SOURCE vertical unit,
-  // so convert metres → source-Z units. cellSizeZUnits carries the slope-growth
-  // run in Z units too. For a metre epoch every factor is 1 (a no-op); a foot
-  // epoch otherwise got a 0.5 ft / 2.5 ft tolerance instead of 0.5 m / 2.5 m.
-  const vertToMetres =
-    cloud.verticalUnitToMetres && cloud.verticalUnitToMetres > 0 ? cloud.verticalUnitToMetres : 1;
-  const horizToMetres = cloud.isGeographic
-    ? METRES_PER_DEGREE
-    : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
-      ? cloud.linearUnitToMetres
-      : 1;
   const gf = classifyGroundSmrf(points, {
     cellSizeM: grid.cellSizeM,
-    cellSizeZUnits: grid.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: 8,
     slope: 0.2,
-    elevationThresholdM: 0.5 / vertToMetres,
-    maxElevationThresholdM: 2.5 / vertToMetres,
+    elevationThresholdM: 0.5,
     floorPercentile: 5,
     verticalAxis: 'z',
   });
