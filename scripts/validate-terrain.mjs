@@ -23,7 +23,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const MARK = { pass: 'PASS', fail: 'FAIL', skipped: 'SKIP' };
@@ -58,13 +58,30 @@ const asJson = args.includes('--json');
 const outIdx = args.indexOf('--out');
 const outPath = outIdx >= 0 ? args[outIdx + 1] : null;
 
+// REFUSE to run without the locked, installed vitest. This script drives the
+// harness through vitest; if node_modules is absent (a clean source archive with
+// no `npm ci`), `npx vitest` would try to FETCH vitest over the network — an
+// unlocked, externally-obtained tool, which is exactly what a reproducibility
+// check must never do. Guard on the local binary and exit `needs-install` so the
+// archive-portability verifier records this as an uninstalled dependency, not a
+// failure and not a silent network fetch.
+if (!existsSync(resolve('node_modules', 'vitest'))) {
+  process.stderr.write(
+    'validate:terrain — needs-install: the locked vitest is not installed ' +
+      '(node_modules absent). Run `npm ci` first; this script will not fetch ' +
+      'vitest over the network.\n',
+  );
+  process.exit(2);
+}
+
 // Run the harness. vitest's JSON reporter writes the machine result to a file;
 // stdout still carries the legs' console.log metric lines, which we fold in as
-// each leg's detail.
+// each leg's detail. `--no-install` on npx is belt-and-braces: even past the
+// guard above, npx must resolve the LOCAL vitest and never reach the registry.
 const jsonOut = resolve('release', 'terrain-validation.vitest.json');
 const run = spawnSync(
   'npx',
-  ['vitest', 'run', ...HARNESS_FILES, '--reporter=json', '--outputFile', jsonOut, '--reporter=dot'],
+  ['--no-install', 'vitest', 'run', ...HARNESS_FILES, '--reporter=json', '--outputFile', jsonOut, '--reporter=dot'],
   { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
 );
 
