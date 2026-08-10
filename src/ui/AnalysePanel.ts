@@ -130,7 +130,7 @@ import {
 } from './scanTypeControl';
 import { buildScanFitness, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
-import { horizontalUnitLabel, verticalUnitSuffix } from '../units/units';
+import { horizontalUnitLabel, verticalUnitSuffix, verticalUnitLabel } from '../units/units';
 
 /** Callbacks the host (main.ts) provides. */
 export interface AnalysePanelCallbacks {
@@ -1034,9 +1034,10 @@ export class AnalysePanel {
     if (!r || !s) return;
     const fmt = (v: number, d = 1): string => (Number.isFinite(v) ? v.toFixed(d) : '—');
 
+    const vu = this._verticalSuffix();
     const stats = el('div', { className: 'olv-analyse-surface-stats' });
     stats.append(
-      el('div', { className: 'olv-analyse-surface-stat', text: `Above-ground height: p95 ${fmt(s.canopy.p95HeightM)} m · max ${fmt(s.canopy.maxHeightM)} m` }),
+      el('div', { className: 'olv-analyse-surface-stat', text: `Above-ground height: p95 ${fmt(s.canopy.p95HeightM)}${vu} · max ${fmt(s.canopy.maxHeightM)}${vu}` }),
       el('div', { className: 'olv-analyse-surface-stat', text: `Slope: mean ${fmt(s.slope.meanDeg)}° · max ${fmt(s.slope.maxDeg)}°` }),
     );
     const total = s.slope.bands.flat + s.slope.bands.moderate + s.slope.bands.steep;
@@ -1061,7 +1062,7 @@ export class AnalysePanel {
       : 1;
     const chm = this._rasterPreview({
       label: 'Canopy height (CHM)',
-      caption: `Above ground · p95 ${fmt(s.canopy.p95HeightM)} m · max ${fmt(s.canopy.maxHeightM)} m`,
+      caption: `Above ground · p95 ${fmt(s.canopy.p95HeightM)}${vu} · max ${fmt(s.canopy.maxHeightM)}${vu}`,
       values: s.canopy.heightM,
       cols: r.dtm.cols,
       rows: r.dtm.rows,
@@ -1070,7 +1071,7 @@ export class AnalysePanel {
         return [c.r, c.g, c.b];
       },
       visible: (v) => Number.isFinite(v) && v > 0.05,
-      legend: { min: 0, max: s.canopy.maxHeightM, palette: DEFAULT_CANOPY_PALETTE, unit: 'm' },
+      legend: { min: 0, max: s.canopy.maxHeightM, palette: DEFAULT_CANOPY_PALETTE, unit: this._verticalUnitToken() },
       filename: 'canopy-height',
     });
     if (chm) this._surfaceRow.append(chm);
@@ -1535,12 +1536,31 @@ export class AnalysePanel {
     });
   }
 
+  /**
+   * The surface rasters (elevation, canopy height) keep Z in the source file's
+   * VERTICAL unit — the terrain core never converts it. So the on-screen labels
+   * must name that unit, not hardcode "m": a US-foot scan's 30 ft canopy was
+   * being printed as "30 m". Derived from the map context's
+   * `verticalUnitToMetres`; unknown surfaces as an explicit "unverified" tag,
+   * never a false metre claim.
+   */
+  private _verticalSuffix(): string {
+    return verticalUnitSuffix(this._cb.getMapContext?.()?.verticalUnitToMetres);
+  }
+
+  /** The bare vertical-unit token ('m' | 'ft' | 'units') for legend captions. */
+  private _verticalUnitToken(): string {
+    const vum = this._cb.getMapContext?.()?.verticalUnitToMetres;
+    return vum != null && Number.isFinite(vum) && vum > 0 ? verticalUnitLabel(vum) : 'units';
+  }
+
   /** Format a terrain sample for the readout line. */
   private _sampleReadoutText(sample: ReturnType<typeof sampleTerrain>): string {
     if (!sample) return SAMPLE_HINT;
     if (!sample.covered) return 'Sample · outside coverage';
     const f = (v: number, d = 1): string => (Number.isFinite(v) ? v.toFixed(d) : '—');
-    return `Sample · ${f(sample.elevationM, 2)} m · slope ${f(sample.slopeDeg)}° · canopy ${f(sample.canopyM)} m`;
+    const u = this._verticalSuffix();
+    return `Sample · ${f(sample.elevationM, 2)}${u} · slope ${f(sample.slopeDeg)}° · canopy ${f(sample.canopyM)}${u}`;
   }
 
   /** Upscale a preview canvas to ~2048 px long edge and download as PNG. */
@@ -1600,7 +1620,7 @@ export class AnalysePanel {
     wrap.append(el('div', {
       className: 'olv-analyse-caption',
       text:
-        `${fmt(hist.min)} – ${fmt(hist.max)} m · ${hist.total.toLocaleString()} cells` +
+        `${fmt(hist.min)} – ${fmt(hist.max)}${this._verticalSuffix()} · ${hist.total.toLocaleString()} cells` +
         (absolute ? '' : ' · local frame (no vertical origin)'),
     }));
     return wrap;
