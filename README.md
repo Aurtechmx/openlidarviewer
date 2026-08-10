@@ -394,7 +394,7 @@ For reviewers, and anyone who wants to check the claims above rather than take t
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [security policy](.github/SECURITY.md), and the [code of conduct](.github/CODE_OF_CONDUCT.md). The codebase is small, test-first (Vitest and Playwright), written in strict TypeScript, and modular.
+Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [security policy](.github/SECURITY.md), and the [code of conduct](.github/CODE_OF_CONDUCT.md). The codebase is test-first (Vitest and Playwright), written in strict TypeScript, and organized around explicit module boundaries.
 
 ## Acknowledgements
 
