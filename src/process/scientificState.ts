@@ -29,6 +29,9 @@ function factTuple(s: ScanFacts): readonly (string | number | boolean | null)[] 
     s.classification,
     s.classificationProvenance ?? 'none',
     s.groundClassified,
+    // Building-class presence gates footprint eligibility, so it is part of the
+    // scientific state: a token must go stale if the class it relied on is gone.
+    s.hasBuildingClass,
     // Horizontal + vertical authority: the fields the metric/vertical gates read.
     crs?.epsg ?? null,
     crs?.linearUnit ?? null,

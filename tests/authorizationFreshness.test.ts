@@ -53,6 +53,12 @@ describe('state-bound authorization freshness', () => {
   it('coverage change → stale', () => expect(verifyAfter({ ...BASE, kind: 'streaming', coverage: 'resident-only' })).toEqual(STALE));
   it('ground-trust (evidence) change → stale', () => expect(verifyAfter({ ...BASE, groundClassified: false })).toEqual(STALE));
 
+  it('building-class removal → a building-footprints token goes stale (regression: signature must include hasBuildingClass)', () => {
+    const token = svc(BASE).authorize('building-footprints')!;
+    expect(token).not.toBeNull();
+    expect(svc({ ...BASE, hasBuildingClass: false }).verifyAuthorization(token, 'building-footprints')).toEqual(STALE);
+  });
+
   it('a forged token WITH the correct current signature is still rejected (authenticity first)', () => {
     const s = svc(BASE);
     const forged = { product: 'dtm', grantedFrom: 'GROUND_TRUSTED', stateSignature: s.stateSignature, __brand: 'process-authorization' };
