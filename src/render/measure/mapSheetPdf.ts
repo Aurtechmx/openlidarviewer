@@ -64,12 +64,16 @@ export function mapSheetEvidenceNote(claimId: string = MAP_SHEET_CLAIM): string 
  */
 export function mapSheetEvidenceLine(claimId: string = MAP_SHEET_CLAIM): string {
   const status = evidenceStatus(claimId);
-  // Name the property that is validated. For the contour map sheet that is the
-  // GEOMETRY (cross-implementation position agreement), not source provenance
-  // (measured/interpolated, carried per segment) nor DTM absolute accuracy —
-  // a generic "validated export" would imply every field is certified.
   if (status === 'validated') {
-    return 'Evidence: geometry validated at its required level (cross-implementation); provenance and DTM accuracy not certified by it.';
+    // Name the property that is validated. For the contour map sheet that is the
+    // GEOMETRY (cross-implementation position agreement), not source provenance
+    // (measured/interpolated, carried per segment) nor DTM absolute accuracy —
+    // a generic "validated export" would imply every field is certified. For any
+    // other claim, state that it meets its required level without over-claiming.
+    if (claimId === MAP_SHEET_CLAIM) {
+      return 'Evidence: contour geometry validated at its required level (cross-implementation); provenance and DTM accuracy not certified by it.';
+    }
+    return 'Evidence: validated — meets its required evidence level (not survey-grade).';
   }
   if (status === 'refused') return 'Evidence: export not permitted at current evidence level.';
   return 'Evidence: exploratory export - below required evidence level.';
