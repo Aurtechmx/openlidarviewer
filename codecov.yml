@@ -30,9 +30,17 @@ comment:
 
 # Excluded from the measurement because a percentage over them says nothing
 # about whether the software works.
+#
+# `src/main.ts` is the composition root — wiring only, decomposed under a
+# shrink-only monolith ratchet with its logic extracted into testable modules.
+# A coverage number over its wiring/callbacks says nothing about correctness, so
+# every PR that added a wiring line reddened the advisory Codecov check for no
+# real reason. The release gate's mandatory coverage stage is unaffected (main.ts
+# is not in its `include` set either).
 ignore:
   - "tests/**"
   - "benchmarks/**"
   - "scripts/**"
   - "docs-site/**"
   - "**/*.d.ts"
+  - "src/main.ts"

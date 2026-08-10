@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { yUpToCanonicalZUp, yUpOriginToCanonicalZUp, canonicalZUpToYUp } from '../src/terrain/canonicalFrame';
+import { yUpToCanonicalZUp, yUpOriginToCanonicalZUp, canonicalZUpToYUp, placedWorldOrigin } from '../src/terrain/canonicalFrame';
 import { sceneUpAxisPolicy } from '../src/io/sniffFormat';
 
 describe('yUpToCanonicalZUp', () => {
@@ -142,5 +142,22 @@ describe('canonicalZUpToYUp', () => {
     // Northing 5 in canonical becomes scene −Z; the naive (x, z, y) swap would
     // put it at +Z and mirror the map.
     expect([...canonicalZUpToYUp(Float32Array.from([0, 5, 0]))]).toEqual([0, 0, -5]);
+  });
+});
+
+describe('placedWorldOrigin', () => {
+  it('canonicalises the origin for a Y-up source (the export seam #5)', () => {
+    // Source Y-up origin [100, 200, 300] → canonical [100, -300, 200].
+    expect(placedWorldOrigin([100, 200, 300], 'y')).toEqual([100, -300, 200]);
+  });
+
+  it('leaves a Z-up origin unchanged', () => {
+    expect(placedWorldOrigin([100, 200, 300], 'z')).toEqual([100, 200, 300]);
+    expect(placedWorldOrigin([100, 200, 300], undefined)).toEqual([100, 200, 300]);
+  });
+
+  it('passes null/undefined through', () => {
+    expect(placedWorldOrigin(null, 'y')).toBeNull();
+    expect(placedWorldOrigin(undefined, 'z')).toBeNull();
   });
 });
