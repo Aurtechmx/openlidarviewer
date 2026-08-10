@@ -1,13 +1,16 @@
 {
+  "benchmarkVersion": 2,
+  "source": "src/validation/authorizationBenchmark.ts",
   "metrics": {
     "UOAR": 0,
     "ORR": 0,
-    "ATR": 1
+    "ATR": 1,
+    "SAAR": 0
   },
   "totals": {
-    "adversarial": 11,
-    "control": 1,
-    "authorized": 1
+    "adversarial": 15,
+    "control": 2,
+    "authorized": 2
   },
   "results": [
     {
@@ -123,6 +126,56 @@
     {
       "id": "A12",
       "title": "valid control — complete supported state",
+      "kind": "control",
+      "product": "dtm",
+      "authorized": true,
+      "authentic": true,
+      "provenanceResolvable": true,
+      "correct": true
+    },
+    {
+      "id": "A13",
+      "title": "authentic token reused after a relevant state revision (classification)",
+      "kind": "adversarial",
+      "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A14",
+      "title": "authentic token reused for another dataset",
+      "kind": "adversarial",
+      "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A15",
+      "title": "subject completeness full → partial (coverage)",
+      "kind": "adversarial",
+      "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A16",
+      "title": "support completeness complete → incomplete (unit / vertical reference)",
+      "kind": "adversarial",
+      "product": "dtm",
+      "authorized": false,
+      "authentic": false,
+      "provenanceResolvable": false,
+      "correct": true
+    },
+    {
+      "id": "A20",
+      "title": "valid state-bound control — token verified against its own unchanged state",
       "kind": "control",
       "product": "dtm",
       "authorized": true,

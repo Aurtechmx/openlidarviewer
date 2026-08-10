@@ -19,9 +19,19 @@ function writeArtifactsIfRequested(): void {
   const dir = resolve(__dirname, '../validation/authorization');
   mkdirSync(dir, { recursive: true });
   const cases = AUTHORIZATION_CASES.map((c) => ({ id: c.id, title: c.title, kind: c.kind, product: c.product }));
-  writeFileSync(resolve(dir, 'cases.json'), JSON.stringify({ description: 'Frozen scientific-output authorization adversarial benchmark (A01–A12).', cases }, null, 2) + '\n');
+  const benchmarkVersion = 2; // v1 = A01–A12; v2 adds A13–A16 + A20 (freshness/completeness) + SAAR.
+  writeFileSync(resolve(dir, 'cases.json'), JSON.stringify({
+    benchmarkVersion,
+    description: 'Frozen scientific-output authorization adversarial benchmark (A01–A20).',
+    caseCount: cases.length,
+    controlCount: cases.filter((c) => c.kind === 'control').length,
+    unsupportedCount: cases.filter((c) => c.kind === 'adversarial').length,
+    cases,
+  }, null, 2) + '\n');
   writeFileSync(resolve(dir, 'results.json'), JSON.stringify({
-    metrics: { UOAR: score.uoar, ORR: score.orr, ATR: score.atr },
+    benchmarkVersion,
+    source: 'src/validation/authorizationBenchmark.ts',
+    metrics: { UOAR: score.uoar, ORR: score.orr, ATR: score.atr, SAAR: score.saar },
     totals: score.totals,
     results: score.results,
   }, null, 2) + '\n');
@@ -33,7 +43,8 @@ function writeArtifactsIfRequested(): void {
     `| Metric | Value | Target |\n|---|---|---|\n` +
     `| UOAR (unsupported authorized) | ${score.uoar} | 0 |\n` +
     `| ORR (valid controls refused) | ${score.orr} | 0 |\n` +
-    `| ATR (authorized w/ provenance) | ${score.atr} | 1 |\n\n` +
+    `| ATR (authorized w/ provenance) | ${score.atr} | 1 |\n` +
+    `| SAAR (stale tokens accepted) | ${score.saar} | 0 |\n\n` +
     `| Case | Kind | Product | Outcome | Correct | What it perturbs |\n|---|---|---|---|---|---|\n` +
     score.results.map(line).join('\n') + '\n');
 }
@@ -61,12 +72,19 @@ describe('authorization mutation benchmark (A01–A12)', () => {
     expect(score.orr).toBe(0);
   });
 
-  it('is a frozen 12-case set with exactly one valid control', () => {
-    expect(AUTHORIZATION_CASES).toHaveLength(12);
-    expect(AUTHORIZATION_CASES.filter((c) => c.kind === 'control')).toHaveLength(1);
-    // ids are unique and A01…A12
+  it('SAAR = 0 — no reused-across-state (stale) token is accepted', () => {
+    expect(score.saar).toBe(0);
+  });
+
+  it('preserves the frozen A01–A12 and adds A13–A16 + A20 (freshness/completeness)', () => {
     const ids = AUTHORIZATION_CASES.map((c) => c.id);
-    expect(new Set(ids).size).toBe(12);
+    for (const original of ['A01', 'A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08', 'A09', 'A10', 'A11', 'A12']) {
+      expect(ids).toContain(original);
+    }
+    for (const added of ['A13', 'A14', 'A15', 'A16', 'A20']) expect(ids).toContain(added);
+    expect(new Set(ids).size).toBe(ids.length); // unique
+    expect(AUTHORIZATION_CASES.filter((c) => c.kind === 'control')).toHaveLength(2); // A12 + A20
+    expect(AUTHORIZATION_CASES.filter((c) => c.staleCase)).toHaveLength(4); // A13–A16
   });
 });
 

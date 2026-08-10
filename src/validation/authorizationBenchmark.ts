@@ -55,8 +55,18 @@ export interface BenchmarkCase {
   readonly kind: CaseKind;
   /** The product the case targets. */
   readonly product: ProductId;
+  /** True when the case reuses an authentic token across a state change (SAAR denominator). */
+  readonly staleCase?: boolean;
   /** Runs the case against the real authorization machinery. */
   readonly run: () => CaseOutcome;
+}
+
+/** Issue a genuine token for `product` on `before`, then verify it against `after`. */
+function reuseAcross(before: ScanFacts[], after: ScanFacts[], product: ProductId, frame?: boolean): CaseOutcome {
+  const token = ProcessService.fromFacts(before, frame).authorize(product);
+  const check = ProcessService.fromFacts(after, frame).verifyAuthorization(token, product);
+  // For a reuse case "authorized" == the stale/changed-state token was ACCEPTED (which must not happen).
+  return { authorized: check.ok, authentic: check.ok, provenanceResolvable: check.ok };
 }
 
 /** Obtain-and-verify: authorize `product`, then require runtime authenticity. */
@@ -138,6 +148,33 @@ export const AUTHORIZATION_CASES: readonly BenchmarkCase[] = [
     id: 'A12', title: 'valid control — complete supported state', kind: 'control', product: 'dtm',
     run: () => obtain(svcOf(BASE), 'dtm'),
   },
+  // A13–A20: state-bound freshness + dual completeness (build on A01–A12, which stay frozen).
+  {
+    id: 'A13', title: 'authentic token reused after a relevant state revision (classification)', kind: 'adversarial', product: 'dtm', staleCase: true,
+    run: () => reuseAcross([BASE], [{ ...BASE, classification: 'partial' }], 'dtm'),
+  },
+  {
+    id: 'A14', title: 'authentic token reused for another dataset', kind: 'adversarial', product: 'dtm', staleCase: true,
+    run: () => reuseAcross([BASE], [{ ...BASE, pointCount: BASE.pointCount - 1 }], 'dtm'),
+  },
+  {
+    id: 'A15', title: 'subject completeness full → partial (coverage)', kind: 'adversarial', product: 'dtm', staleCase: true,
+    run: () => reuseAcross([BASE], [{ ...BASE, kind: 'streaming', coverage: 'resident-only' }], 'dtm'),
+  },
+  {
+    id: 'A16', title: 'support completeness complete → incomplete (unit / vertical reference)', kind: 'adversarial', product: 'dtm', staleCase: true,
+    run: () => reuseAcross([BASE], [{ ...BASE, crs: crs({ verticalDatum: undefined }) }], 'dtm'),
+  },
+  {
+    id: 'A20', title: 'valid state-bound control — token verified against its own unchanged state', kind: 'control', product: 'dtm',
+    run: () => {
+      const svc = svcOf(BASE);
+      const token = svc.authorize('dtm');
+      const check = svc.verifyAuthorization(token, 'dtm');
+      const auth = check.ok && isAuthenticAuthorization(token, 'dtm');
+      return { authorized: auth, authentic: auth, provenanceResolvable: auth && typeof (token as ProductAuthorization).grantedFrom === 'string' };
+    },
+  },
 ];
 
 export interface CaseResult extends CaseOutcome {
@@ -158,6 +195,8 @@ export interface BenchmarkScore {
   readonly orr: number;
   /** Authorization Traceability Rate — authorized outputs with resolvable provenance. Target 1. */
   readonly atr: number;
+  /** Stale Authorization Acceptance Rate — reused-across-state tokens wrongly accepted. Target 0. */
+  readonly saar: number;
 }
 
 /** Run every case and score the three integrity metrics. Deterministic. */
@@ -171,12 +210,15 @@ export function scoreAuthorizationBenchmark(cases: readonly BenchmarkCase[] = AU
   const adversarial = results.filter((r) => r.kind === 'adversarial');
   const controls = results.filter((r) => r.kind === 'control');
   const authorized = results.filter((r) => r.authorized);
+  const staleCases = cases.filter((c) => c.staleCase);
+  const staleResults = results.filter((r) => staleCases.some((c) => c.id === r.id));
   const uoar = adversarial.length === 0 ? 0 : adversarial.filter((r) => r.authorized).length / adversarial.length;
   const orr = controls.length === 0 ? 0 : controls.filter((r) => !r.authorized).length / controls.length;
   const atr = authorized.length === 0 ? 1 : authorized.filter((r) => r.provenanceResolvable).length / authorized.length;
+  const saar = staleResults.length === 0 ? 0 : staleResults.filter((r) => r.authorized).length / staleResults.length;
   return {
     results,
     totals: { adversarial: adversarial.length, control: controls.length, authorized: authorized.length },
-    uoar, orr, atr,
+    uoar, orr, atr, saar,
   };
 }

@@ -1,5 +1,9 @@
 {
-  "description": "Frozen scientific-output authorization adversarial benchmark (A01–A12).",
+  "benchmarkVersion": 2,
+  "description": "Frozen scientific-output authorization adversarial benchmark (A01–A20).",
+  "caseCount": 17,
+  "controlCount": 2,
+  "unsupportedCount": 15,
   "cases": [
     {
       "id": "A01",
@@ -70,6 +74,36 @@
     {
       "id": "A12",
       "title": "valid control — complete supported state",
+      "kind": "control",
+      "product": "dtm"
+    },
+    {
+      "id": "A13",
+      "title": "authentic token reused after a relevant state revision (classification)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A14",
+      "title": "authentic token reused for another dataset",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A15",
+      "title": "subject completeness full → partial (coverage)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A16",
+      "title": "support completeness complete → incomplete (unit / vertical reference)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A20",
+      "title": "valid state-bound control — token verified against its own unchanged state",
       "kind": "control",
       "product": "dtm"
     }

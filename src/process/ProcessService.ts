@@ -12,6 +12,7 @@
 import type { ProcessPlan, ProductCapability, ProductId, Readiness, ScanFacts } from './ProcessPlan';
 import { evaluateCapabilities, capabilityFor } from './processCapabilities';
 import { deriveScanFacts, type RawScanSignals } from './scanFacts';
+import { scientificStateSignature } from './scientificState';
 
 export interface ProcessReadinessSummary {
   readonly ready: number;
@@ -34,9 +35,24 @@ export interface ProductAuthorization {
   readonly product: ProductId;
   /** The `ready`-verdict reason code this authorization was granted from. */
   readonly grantedFrom: string;
+  /**
+   * The scientific-state signature this token was issued against (see
+   * {@link scientificStateSignature}). A token whose signature no longer matches
+   * the current service's is STALE: an authentic token issued for one state must
+   * not be honoured after a scientifically-relevant change.
+   */
+  readonly stateSignature: string;
   /** Brand so an authorization cannot be structurally forged by a plain object. */
   readonly __brand: 'process-authorization';
 }
+
+/** Why an authorization was refused at the consumption boundary. */
+export type AuthorizationRejection = 'NOT_AUTHENTIC' | 'WRONG_PRODUCT' | 'STALE_AUTHORIZATION';
+
+/** The result of verifying a token against a live service. */
+export type AuthorizationCheck =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: AuthorizationRejection };
 
 /**
  * Module-private registry of the tokens this service ACTUALLY issued. The
@@ -78,14 +94,24 @@ export type AuthorizedRun<T> =
 
 export class ProcessService {
   private readonly _plan: ProcessPlan;
+  private readonly _stateSignature: string;
 
-  private constructor(plan: ProcessPlan) {
+  private constructor(plan: ProcessPlan, stateSignature: string) {
     this._plan = plan;
+    this._stateSignature = stateSignature;
   }
 
   /** Build from already-normalised scan facts (e.g. tests, worker payloads). */
   static fromFacts(scans: readonly ScanFacts[], projectFrameCompatible?: boolean): ProcessService {
-    return new ProcessService(evaluateCapabilities({ scans, projectFrameCompatible }));
+    return new ProcessService(
+      evaluateCapabilities({ scans, projectFrameCompatible }),
+      scientificStateSignature(scans),
+    );
+  }
+
+  /** The scientific-state signature every token this service issues is bound to. */
+  get stateSignature(): string {
+    return this._stateSignature;
   }
 
   /** Build from loose shell signals; each is normalised fail-closed first. */
@@ -129,10 +155,27 @@ export class ProcessService {
     const token: ProductAuthorization = Object.freeze({
       product,
       grantedFrom: cap.reasonCode,
+      stateSignature: this._stateSignature,
       __brand: 'process-authorization' as const,
     });
     _issuedAuthorizations.add(token);
     return token;
+  }
+
+  /**
+   * Verify a token at the consumption boundary against THIS live service:
+   * authentic (genuinely issued, not forged/cloned) AND for the right product
+   * AND bound to the current scientific state. A token that was authentic for an
+   * earlier state fails `STALE_AUTHORIZATION` — an authentic token must not
+   * survive a scientifically-relevant change. O(1): three field comparisons, no
+   * point data. Order matters — authenticity is checked first so a forged object
+   * can never reach the state comparison.
+   */
+  verifyAuthorization(token: unknown, product: ProductId): AuthorizationCheck {
+    if (!isAuthenticAuthorization(token)) return { ok: false, reason: 'NOT_AUTHENTIC' };
+    if (token.product !== product) return { ok: false, reason: 'WRONG_PRODUCT' };
+    if (token.stateSignature !== this._stateSignature) return { ok: false, reason: 'STALE_AUTHORIZATION' };
+    return { ok: true };
   }
 
   /**

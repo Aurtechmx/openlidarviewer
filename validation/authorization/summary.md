@@ -7,6 +7,7 @@ Frozen adversarial cases for scientific-output authorization. Each perturbs a fu
 | UOAR (unsupported authorized) | 0 | 0 |
 | ORR (valid controls refused) | 0 | 0 |
 | ATR (authorized w/ provenance) | 1 | 1 |
+| SAAR (stale tokens accepted) | 0 | 0 |
 
 | Case | Kind | Product | Outcome | Correct | What it perturbs |
 |---|---|---|---|---|---|
@@ -22,3 +23,8 @@ Frozen adversarial cases for scientific-output authorization. Each perturbs a fu
 | A10 | adversarial | dtm | refused | ✓ | validated export through an unauthorized path |
 | A11 | adversarial | dsm | refused | ✓ | use an authorization for the wrong product |
 | A12 | control | dtm | authorized | ✓ | valid control — complete supported state |
+| A13 | adversarial | dtm | refused | ✓ | authentic token reused after a relevant state revision (classification) |
+| A14 | adversarial | dtm | refused | ✓ | authentic token reused for another dataset |
+| A15 | adversarial | dtm | refused | ✓ | subject completeness full → partial (coverage) |
+| A16 | adversarial | dtm | refused | ✓ | support completeness complete → incomplete (unit / vertical reference) |
+| A20 | control | dtm | authorized | ✓ | valid state-bound control — token verified against its own unchanged state |
