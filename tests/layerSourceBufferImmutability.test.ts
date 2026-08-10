@@ -15,6 +15,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createLayerService } from '../src/app/LayerService';
+import { resolvedFromCrsInfo, unknownCrs } from '../src/geo/CoordinateTypes';
 import { createAppContext } from '../src/app/appContext';
 import { createProjectFrameService } from '../src/app/projectFrame';
 import { PointCloud } from '../src/model/PointCloud';
@@ -73,6 +74,8 @@ function mountHarness(clouds: Record<string, PointCloud>, multiLayerMount: boole
     getViewer: () => viewer,
     getInspector: () => inspector,
     context,
+    resolveCrs: (_name, detected) =>
+      resolvedFromCrsInfo(detected ?? undefined, 'las-vlr') ?? unknownCrs(),
     refreshCompass: () => {},
     projectFrame: createProjectFrameService(context),
     multiLayerMount,

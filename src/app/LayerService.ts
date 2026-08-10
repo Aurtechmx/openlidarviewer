@@ -27,6 +27,8 @@ import {
 } from '../model/layerCompatibility';
 import { loadLayerHealth } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsInfo } from '../io/crs';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 
@@ -41,6 +43,14 @@ export interface LayerServiceDeps {
   refreshCompass: () => void;
   /** The project's shared spatial frame, reseeded on every layer-set change. */
   projectFrame: ProjectFrameService;
+  /**
+   * Resolve a layer's authoritative CRS — the loader's detected CRS combined
+   * with any user override — so multi-layer compatibility / mount / project-frame
+   * decisions run on the SAME CRS the Inspector shows, not raw file metadata
+   * (C8). Wired to `crsService.resolveFor`; per-cloud and non-mutating, so every
+   * layer resolves independently regardless of which scan is active.
+   */
+  resolveCrs: (name: string, detected: CrsInfo | null | undefined) => ResolvedCrs;
   /**
    * Override {@link MULTI_LAYER_MOUNT_ENABLED}. Exists so both states stay
    * under test: the mount is disabled by default in v0.6.0, and its behaviour
@@ -167,20 +177,30 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     const viewer = getViewer();
     return viewer.clouds().map((id) => {
       const c = viewer.getCloud(id);
-      const crs = c?.metadata?.crs ?? null;
+      // Resolve through the service (detected + override), not raw metadata, so
+      // a CRS the user corrected in the Inspector drives layer compatibility /
+      // mount / project-frame decisions too (C8).
+      const crs = deps.resolveCrs(c?.name ?? id, c?.metadata?.crs);
+      // A genuinely-unknown resolved CRS (no detection, no override) must carry
+      // the same "nothing declared" shape a raw null used to — undefined name /
+      // unit / geographic — so the compatibility classifier still reads it as
+      // `unknown` and not a declared-but-incompatible frame. A real override
+      // lands as projected/geographic/local, so overrides still flow through.
+      const known = crs.kind !== 'unknown';
       return {
         id,
         name: c?.name ?? id,
         pointCount: c?.pointCount ?? 0,
         visible: layers.visible.get(id) ?? true,
         locked: viewer.isCloudLocked(id),
-        epsg: crs?.epsg,
-        crsName: crs?.name,
-        verticalDatum: crs?.verticalDatum,
-        verticalEpsg: crs?.verticalEpsg,
-        isGeographic: crs?.isGeographic,
-        linearUnitToMetres: crs?.linearUnitToMetres,
-        verticalUnitToMetres: crs?.verticalUnitToMetres,
+        epsg: crs.epsg,
+        crsName: known ? crs.name : undefined,
+        verticalDatum: crs.verticalDatum,
+        verticalEpsg: crs.verticalEpsg,
+        // ResolvedCrs carries `kind`, not the CrsInfo `isGeographic` flag.
+        isGeographic: known ? crs.kind === 'geographic' : undefined,
+        linearUnitToMetres: known ? crs.linearUnitToMetres : undefined,
+        verticalUnitToMetres: crs.verticalUnitToMetres,
       };
     });
   }
@@ -366,7 +386,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       const frame2 = deps.projectFrame.frame;
       const healthLayers = infos.map((info) => {
         const c = viewer2.getCloud(info.id);
-        const crs = c?.metadata?.crs ?? null;
+        // Same resolved CRS the compatibility flags above used (C8) — the health
+        // card must not report the raw file CRS the user already overrode.
+        const crs = deps.resolveCrs(c?.name ?? info.id, c?.metadata?.crs);
         const inFrame =
           frame2 != null && !lastUnmounted.includes(info.id) &&
           !deps.projectFrame.unaligned.includes(info.id);

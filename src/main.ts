@@ -1209,6 +1209,8 @@ const layerService = createLayerService({
   context: runtime.context,
   refreshCompass: () => compass.refresh(),
   projectFrame,
+  resolveCrs: (name, detected) =>
+    crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
 });
 
 const inspector = new Inspector({
