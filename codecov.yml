@@ -36,3 +36,8 @@ ignore:
   - "scripts/**"
   - "docs-site/**"
   - "**/*.d.ts"
+  # The composition root: wiring only, decomposed under a shrink-only ratchet
+  # (docs/architecture/architecture-map.md). Its logic lives in testable modules;
+  # a coverage percentage over the wiring says nothing about whether the software
+  # works, and each new binding here otherwise drops patch coverage on unrelated PRs.
+  - "src/main.ts"
