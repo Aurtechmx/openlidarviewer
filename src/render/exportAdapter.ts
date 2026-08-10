@@ -23,6 +23,8 @@
 import type { ColorMode } from './colorModes';
 import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
+import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
+import { placeAabb } from './layerPlacement';
 import type { ExportSceneAdapter, FigureViewContext } from '../export/types';
 import { linearUnitLabel } from '../io/crs';
 // Provenance classifier for `captureLabel` — surfaces capture-type + confidence
@@ -35,10 +37,20 @@ import {
 } from '../diagnostics/provenanceSignals';
 import { classificationCoverage } from './class/deriveClassification';
 
-/** The per-cloud slice the adapter reads — a structural subset of the Viewer's entry. */
+/**
+ * The per-cloud slice the adapter reads — a structural subset of the Viewer's
+ * entry. `visible` and `placement` were added so the adapter can answer every
+ * scene question over the layers that actually render, where they render: the
+ * exported image is WYSIWYG, so a HIDDEN layer must not enable a colour mode,
+ * inflate a point count, or stretch the export bounds (pass-7 #4/#6), and a
+ * MOUNTED layer must be framed at its placed position, not its source-local one
+ * (#5). `placement` is null for an identity (unmounted) layer.
+ */
 export interface ExportAdapterCloud {
   readonly cloud: PointCloud;
   readonly mode: ColorMode;
+  readonly visible: boolean;
+  readonly placement: LayerSpatialTransform | null;
 }
 
 /** The streaming slice the adapter reads — a structural subset of the session. */
@@ -83,6 +95,13 @@ export interface ExportAdapterHost {
 
 /** Build the {@link ExportSceneAdapter} the Studio exporters drive. */
 export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter {
+  // The exported image is WYSIWYG — it shows the VISIBLE scene. So every scene
+  // question (capabilities, counts, bounds, provenance) is answered over the
+  // visible static clouds only, so a hidden layer cannot enable a colour mode,
+  // inflate a point count, stretch the bounds, or supply provenance for pixels
+  // it did not contribute (pass-7 #4/#6/#7).
+  const visibleEntries = (): ExportAdapterCloud[] =>
+    [...host.clouds().values()].filter((c) => c.visible);
   return {
     setExportColorMode(mode: ColorMode): void {
       // Apply to every loaded cloud + the streaming subsystem so every
@@ -114,7 +133,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // first static cloud's mode, otherwise the runtime default.
       const streaming = host.streaming();
       if (streaming) return streaming.renderer.colorMode;
-      const first = host.clouds().values().next().value;
+      const first = visibleEntries()[0];
       return first ? first.mode : 'rgb';
     },
     hasRgb(): boolean {
@@ -126,7 +145,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         // Red/Green/Blue attrs).
         return streaming.cloud.availableColorModes().includes('rgb');
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.colors) return true;
       }
       return false;
@@ -141,7 +160,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) {
         return streaming.cloud.availableColorModes().includes('intensity');
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.intensity) return true;
       }
       return false;
@@ -154,7 +173,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) {
         return streaming.cloud.availableColorModes().includes('classification');
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.classification) return true;
       }
       return false;
@@ -166,7 +185,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (host.streaming()) return null;
       let total = 0;
       let assigned = 0;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (!cloud.classification) continue;
         const { producer } = classificationCoverage(cloud.classification, cloud.pointCount);
         total += cloud.pointCount;
@@ -180,7 +199,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
       // sometimes do — check the field explicitly.
       if (host.streaming()) return false;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.normals) return true;
       }
       return false;
@@ -212,7 +231,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     sourceName(): string {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.name;
-      const first = host.clouds().values().next().value;
+      const first = visibleEntries()[0];
       return first?.cloud.name ?? 'scan';
     },
     sourcePointCount(): number {
@@ -223,7 +242,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // Summing the strided `pointCount` under-reported "Points" and inflated
       // the export card's density divisor disagreement with every other panel.
       let total = 0;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
           ? cloud.declaredPointCount
           : cloud.pointCount;
@@ -238,7 +257,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // 5M) reported 100M resident (E8). Sum the real per-cloud pointCount,
       // matching Viewer.residentPointTotal().
       let total = 0;
-      for (const { cloud } of host.clouds().values()) total += cloud.pointCount;
+      for (const { cloud } of visibleEntries()) total += cloud.pointCount;
       return total;
     },
     crsLabel(): { name: string; unit: string; epsg?: number } | null {
@@ -254,7 +273,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           epsg: fromStreaming.epsg,
         };
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         const crs = cloud.metadata?.crs;
         if (crs) {
           return {
@@ -280,7 +299,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           );
           return { label: f.label, confidence: f.confidence };
         }
-        const first = host.clouds().values().next().value;
+        const first = visibleEntries()[0];
         if (first) {
           const f = classifyProvenance(
             signalsForStaticCloud(first.cloud as never),
@@ -307,12 +326,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) {
         return streaming.cloud.localBounds();
       }
-      // Fold every static cloud's bounds into a combined AABB.
+      // Fold every VISIBLE static cloud's bounds into a combined AABB, each
+      // shifted by its Float64 placement so a mounted layer contributes the
+      // extent it actually RENDERS at (pass-7 #5). Reading raw cloud.bounds()
+      // framed the top-down export camera on the unplaced source-local box, so
+      // a layer mounted +1000 away was cropped out of its own export.
       let minX = Infinity, minY = Infinity, minZ = Infinity;
       let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
       let any = false;
-      for (const { cloud } of host.clouds().values()) {
-        const bb = cloud.bounds();
+      for (const { cloud, placement } of visibleEntries()) {
+        const bb = placeAabb(cloud.bounds(), placement);
         any = true;
         if (bb.min[0] < minX) minX = bb.min[0];
         if (bb.min[1] < minY) minY = bb.min[1];
@@ -345,7 +368,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       let worldOrigin: { x: number; y: number } | null = null;
       let wkt: string | null = null;
       let any = false;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         any = true;
         const o = cloud.sourceOrigin;
         if (!o) return null;

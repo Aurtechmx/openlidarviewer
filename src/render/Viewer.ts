@@ -65,6 +65,7 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
+import type { ExportAdapterCloud } from './exportAdapter';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
@@ -4769,7 +4770,17 @@ export class Viewer {
    */
   private _buildExportAdapter(): ExportSceneAdapter {
     return buildExportAdapter({
-      clouds: () => this._clouds,
+      // Project each live entry into the adapter's slice, carrying the render
+      // visibility (mesh.visible) and Float64 placement so the export answers
+      // over the visible, placed scene (pass-7 #4/#5/#6). Rebuilt per call, so
+      // it always reflects the current layer set + their current visibility.
+      clouds: () => {
+        const out = new Map<string, ExportAdapterCloud>();
+        for (const [id, e] of this._clouds) {
+          out.set(id, { cloud: e.cloud, mode: e.mode, visible: e.mesh.visible, placement: e.placement ?? null });
+        }
+        return out;
+      },
       streaming: () => this._streaming,
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),

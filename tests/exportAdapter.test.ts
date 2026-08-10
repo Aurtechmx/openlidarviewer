@@ -25,6 +25,10 @@ function cloud(over: Record<string, unknown> = {}): ExportAdapterCloud {
   };
   return {
     mode: 'rgb',
+    // Visible + unplaced by default; individual cases override to exercise the
+    // WYSIWYG (hidden-layer) and placement folding paths.
+    visible: over.visible ?? true,
+    placement: over.placement ?? null,
     cloud: {
       ...cloudFields,
       // A real PointCloud sets sourceOrigin from its load origin; the export
@@ -222,5 +226,76 @@ describe('export adapter — recolour resilience', () => {
     a.setExportColorMode('intensity');
     expect(setStreamingColorMode).toHaveBeenCalledWith('intensity');
     warn.mockRestore();
+  });
+});
+
+describe('export adapter — visible, placed scene (pass-7 #4/#5/#6/#7)', () => {
+  it('excludes a hidden layer from combined bounds (WYSIWYG)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['vis', cloud({ bounds: () => ({ min: [0, 0, 0], max: [5, 5, 5] }) })],
+            ['hid', cloud({ visible: false, bounds: () => ({ min: [900, 900, 0], max: [1000, 1000, 5] }) })],
+          ]),
+      }),
+    );
+    // The hidden layer 900 units away must not stretch the export frame.
+    expect(a.localBoundsAabb()).toEqual([0, 0, 0, 5, 5, 5]);
+  });
+
+  it('folds a mounted layer placement into the bounds (#5)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['a', cloud({ bounds: () => ({ min: [0, 0, 0], max: [100, 100, 10] }),
+              placement: { sourceToProject: [1000, 0, 0] } })],
+          ]),
+      }),
+    );
+    // Rendered at +1000 in X, so the export camera must frame 1000..1100.
+    expect(a.localBoundsAabb()).toEqual([1000, 0, 0, 1100, 100, 10]);
+  });
+
+  it('does not count a hidden layer toward source/resident points (#6)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['vis', cloud({ pointCount: 1_000 })],
+            ['hid', cloud({ visible: false, pointCount: 100_000_000 })],
+          ]),
+      }),
+    );
+    expect(a.sourcePointCount()).toBe(1_000);
+    expect(a.residentPointCount()).toBe(1_000);
+  });
+
+  it('does not let a HIDDEN classification layer enable the mode (#4)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['vis', cloud({ colors: new Uint8Array(3) })],
+            ['hid', cloud({ visible: false, classification: new Uint8Array(1) })],
+          ]),
+      }),
+    );
+    expect(a.hasClassification()).toBe(false);
+    expect(a.hasRgb()).toBe(true);
+  });
+
+  it('names the first VISIBLE layer, not the first registered (#7)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['hid', cloud({ visible: false, name: 'hidden-first.laz' })],
+            ['vis', cloud({ name: 'shown.laz' })],
+          ]),
+      }),
+    );
+    expect(a.sourceName()).toBe('shown.laz');
   });
 });
