@@ -815,7 +815,11 @@ export class MeasureController {
    * geographic refusal spares heights and angles.
    */
   private static readonly VERTICAL_MISMATCH_KINDS: ReadonlySet<MeasurementKind> =
-    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile']);
+    // `angle` is included: a 3D angle is invariant only under UNIFORM scaling,
+    // so when the height unit differs from the horizontal unit the raw-coordinate
+    // angle mixes the two axes and is physically wrong (pass-6 M3). Height, box
+    // and volume are exactly rescaled by the vertical factor and stay out.
+    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile', 'angle']);
 
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the
@@ -1562,11 +1566,13 @@ export class MeasureController {
       residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
       // Geographic (degree) frame: the refusal applies to every kind whose
       // NUMBER mixes degree X/Y with linear Z — lengths, areas, grades,
-      // profiles, boxes, volumes. Pure-vertical heights (Δ along up, in the
-      // Z unit) and unit-free angles keep their ordinary grade; the panel's
-      // persistent caveat still covers them.
+      // profiles, boxes, volumes, AND angles. Only a pure-vertical height (Δ
+      // along up, in the Z unit) keeps its ordinary grade. A 3D angle is NOT
+      // unit-free unless the axes share a scale: it is invariant under UNIFORM
+      // scaling only, so an arm mixing degree horizontal with linear vertical
+      // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs:
-        this._geographicCrs && m.kind !== 'height' && m.kind !== 'angle',
+        this._geographicCrs && m.kind !== 'height',
       // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
       // number mixes the two axes. Heights, boxes and volumes are exactly
       // rescaled by the vertical factor, so they keep their ordinary grade.
