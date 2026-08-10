@@ -266,7 +266,7 @@ import type { CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
 import { spatialContextFrom, verticalMetresPerUnit } from './geo/SpatialContext';
-import { epochFrameFacts, epochFrameOptions } from './geo/frameCompatibility';
+import { epochFrameFacts, epochFrameOptions, epochVerticalScalesComparable } from './geo/frameCompatibility';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -5683,8 +5683,33 @@ function compareLoadedLayers(): void {
       // metre scale (`epochFrameOptions`) or the declared frame
       // (`declaredFrameLabel` keeps two UNDECLARED scans off the "same frame"
       // branch instead of matching them on the display placeholder).
-      const ctxA = spatialContextFrom(a.metadata?.crs);
-      const ctxB = spatialContextFrom(b.metadata?.crs);
+      // Resolve each epoch's CRS through the service (detected + any user
+      // override), NOT the raw file metadata — otherwise a CRS the user
+      // corrected in the Inspector is silently ignored here and the comparison
+      // runs in the rejected original frame (C5). resolveFor is per-cloud and
+      // non-mutating, so both epochs resolve independently even though only one
+      // scan is "active".
+      const ctxA = spatialContextFrom(
+        crsService.resolveFor({ name: a.name, detected: a.metadata?.crs ?? undefined, source: 'las-vlr' }),
+      );
+      const ctxB = spatialContextFrom(
+        crsService.resolveFor({ name: b.name, detected: b.metadata?.crs ?? undefined, source: 'las-vlr' }),
+      );
+      // C6: the Δz math (`(bv - av) * vM`) subtracts the two DTMs' raw
+      // source-unit Z and scales the difference by ONE factor. That is only
+      // valid when both epochs share the vertical scale. If both declare a
+      // vertical unit and the scales DIFFER (e.g. metres vs feet), subtracting
+      // before normalising is meaningless — refuse rather than print a wrong
+      // elevation change. (Both unknown, or equal, keeps the shared-factor path.)
+      if (!epochVerticalScalesComparable(ctxA, ctxB)) {
+        inspector.setCompareResult([
+          `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`,
+          'Cannot compare — the two epochs declare different vertical units. ' +
+            'Re-export them in a common vertical unit first.',
+        ]);
+        inspector.setDifferenceAvailable(false);
+        return;
+      }
       const frames = epochFrameOptions(ctxA, ctxB);
       // `sourceOrigin`, not the live project origin: this is the epoch world
       // comparison. The frame facts come from each epoch's context.
