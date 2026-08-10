@@ -78,11 +78,28 @@ export interface FigureViewContext {
  * module free of a circular dependency on `render/Viewer.ts` and makes every
  * exporter trivially unit-testable with a hand-rolled stub.
  */
+/**
+ * The runtime colour state before an export forced one mode across the scene —
+ * captured PER LAYER, not as one value. Restoring the whole scene to a single
+ * "prior" mode clobbered layers that had distinct modes (A=RGB, B=Intensity,
+ * C=Classification all came back RGB); see {@link ExportSceneAdapter.snapshotColorModes}.
+ */
+export interface ExportColorModeSnapshot {
+  /** Each static layer's mode, keyed by id. */
+  readonly staticModes: ReadonlyMap<string, ColorMode>;
+  /** The streaming source's mode, or null when no streaming scan is active. */
+  readonly streamingMode: ColorMode | null;
+}
+
 export interface ExportSceneAdapter {
   /** Force the runtime colour mode for the duration of a render call. */
   setExportColorMode(mode: ColorMode): void;
   /** The colour mode the runtime was in before the export started. */
   currentColorMode(): ColorMode;
+  /** Capture every layer's current colour mode so it can be restored per-layer. */
+  snapshotColorModes(): ExportColorModeSnapshot;
+  /** Restore each layer to the mode it held in `snapshot`, independently. */
+  restoreColorModes(snapshot: ExportColorModeSnapshot): void;
   /** Does any loaded cloud carry per-point RGB? */
   hasRgb(): boolean;
   /** Does any loaded cloud carry per-point intensity? */

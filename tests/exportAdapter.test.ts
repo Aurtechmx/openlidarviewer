@@ -24,7 +24,7 @@ function cloud(over: Record<string, unknown> = {}): ExportAdapterCloud {
     ...over,
   };
   return {
-    mode: 'rgb',
+    mode: (over.mode as ExportAdapterCloud['mode']) ?? 'rgb',
     // Visible + unplaced by default; individual cases override to exercise the
     // WYSIWYG (hidden-layer) and placement folding paths.
     visible: over.visible ?? true,
@@ -297,5 +297,34 @@ describe('export adapter — visible, placed scene (pass-7 #4/#5/#6/#7)', () => 
       }),
     );
     expect(a.sourceName()).toBe('shown.laz');
+  });
+});
+
+describe('export adapter — per-layer colour-mode snapshot/restore (pass-7 #2)', () => {
+  it('snapshots each layer independently and restores each to its own mode', () => {
+    const setCalls: Array<[string, string]> = [];
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['a', cloud({ mode: 'rgb' })],
+            ['b', cloud({ mode: 'intensity' })],
+            ['c', cloud({ mode: 'classification' })],
+          ]),
+        setColorMode: (id, mode) => { setCalls.push([id, mode]); },
+      }),
+    );
+    const snap = a.snapshotColorModes();
+    expect(snap.staticModes.get('a')).toBe('rgb');
+    expect(snap.staticModes.get('b')).toBe('intensity');
+    expect(snap.staticModes.get('c')).toBe('classification');
+
+    // Force a scientific mode across the scene, then restore.
+    a.setExportColorMode('classification');
+    setCalls.length = 0; // ignore the forcing calls; assert only the restore
+    a.restoreColorModes(snap);
+
+    // Each layer comes back to ITS OWN mode — not a single "prior" clobber.
+    expect(setCalls).toEqual([['a', 'rgb'], ['b', 'intensity'], ['c', 'classification']]);
   });
 });

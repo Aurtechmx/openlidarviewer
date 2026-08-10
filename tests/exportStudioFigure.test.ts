@@ -52,6 +52,8 @@ function figureAdapter(opts: {
   const adapter: ExportSceneAdapter = {
     setExportColorMode: (mode) => calls.push(`setColorMode:${mode}`),
     currentColorMode: () => 'rgb',
+    snapshotColorModes: () => ({ staticModes: new Map(), streamingMode: null }),
+    restoreColorModes: () => calls.push('restoreColorModes'),
     hasRgb: () => true,
     hasIntensity: () => true,
     hasClassification: () => true,
@@ -216,8 +218,9 @@ test('the re-render runs INSIDE the colour-mode swap, and the swap is restored',
   await runStudioExport(figureContext(adapter), 'height-map', 'Height Map', 'elevation', {
     width: 2048,
   });
-  // Forced into elevation, re-rendered, restored to the prior rgb.
-  expect(calls).toEqual(['setColorMode:elevation', 'renderFigure:2048x-', 'setColorMode:rgb']);
+  // Forced into elevation, re-rendered, then each layer restored to its own
+  // prior mode (per-layer restore, not a single-scalar setColorMode — pass-7 #2).
+  expect(calls).toEqual(['setColorMode:elevation', 'renderFigure:2048x-', 'restoreColorModes']);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

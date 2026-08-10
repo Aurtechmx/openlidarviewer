@@ -25,7 +25,7 @@ import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
 import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { placeAabb } from './layerPlacement';
-import type { ExportSceneAdapter, FigureViewContext } from '../export/types';
+import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot } from '../export/types';
 import { linearUnitLabel } from '../io/crs';
 // Provenance classifier for `captureLabel` — surfaces capture-type + confidence
 // into every exported image's scan-report card. Same path the Inspector and the
@@ -135,6 +135,32 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) return streaming.renderer.colorMode;
       const first = visibleEntries()[0];
       return first ? first.mode : 'rgb';
+    },
+    snapshotColorModes(): ExportColorModeSnapshot {
+      // Capture EVERY registered layer's mode (not just visible — a hidden
+      // layer's mode must be restored too), so restore is exact per-layer.
+      const staticModes = new Map<string, ColorMode>();
+      for (const [id, c] of host.clouds()) staticModes.set(id, c.mode);
+      const streaming = host.streaming();
+      return { staticModes, streamingMode: streaming ? streaming.renderer.colorMode : null };
+    },
+    restoreColorModes(snapshot: ExportColorModeSnapshot): void {
+      // Restore each layer to the mode it actually held. The single-scalar
+      // restore clobbered layers with distinct modes to the first layer's mode.
+      for (const [id, mode] of snapshot.staticModes) {
+        try {
+          host.setColorMode(id, mode);
+        } catch (err) {
+          console.warn(`[export] restoring cloud "${id}" to ${mode} skipped:`, err);
+        }
+      }
+      if (snapshot.streamingMode !== null) {
+        try {
+          host.setStreamingColorMode(snapshot.streamingMode);
+        } catch (err) {
+          console.warn(`[export] restoring streaming to ${snapshot.streamingMode} skipped:`, err);
+        }
+      }
     },
     hasRgb(): boolean {
       const streaming = host.streaming();
