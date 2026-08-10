@@ -141,14 +141,14 @@ function dsm(scan: ScanFacts): ProductCapability {
   return cap(p, 'ready', 'SURFACE_READY', 'The upper surface can be gridded from all returns.');
 }
 
-/** Contours — a metric product; a confirmed unit is required, not optional. */
+/** Contours — a confirmed unit is required for a VALIDATED contour, but an exploratory one can be produced for inspection. */
 function contours(scan: ScanFacts, dtmVerdict: ProductCapability): ProductCapability {
   const p: ProductId = 'contours';
   if (dtmVerdict.readiness === 'blocked') {
     return cap(p, 'blocked', 'NO_DTM', 'Contours derive from a DTM, which is not available for this scan.');
   }
   if (!isLinearUnitKnown(scan.crs)) {
-    return cap(p, 'blocked', 'UNIT_UNKNOWN', 'A contour interval is a metric distance, so an unconfirmed linear unit blocks contours rather than guessing metres.');
+    return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so a validated metric interval cannot be claimed; exploratory contours can still be produced for inspection with the deliverable withheld — the same output the Contour Studio launcher offers.');
   }
   if (dtmVerdict.readiness === 'review') {
     return cap(p, 'review', 'DTM_REVIEW', 'The underlying DTM is for review, so its contours carry the same caveat.');

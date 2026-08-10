@@ -69,9 +69,10 @@ describe('ProcessService', () => {
   });
 
   it('fromSignals normalises fail-closed, so a missing CRS blocks metric products', () => {
-    // No crs supplied → deriveScanFacts nulls it → contours (metric) blocked.
+    // No crs supplied → deriveScanFacts nulls it → building-footprints (metric
+    // area, no inspection path) blocked. Contours instead cap to exploratory.
     const svc = ProcessService.fromSignals([{ pointCount: 1000, classification: 'full', groundClassified: true }]);
-    expect(svc.readiness('contours')).toBe('blocked');
+    expect(svc.readiness('building-footprints')).toBe('blocked');
   });
 
   it('summary counts products by readiness', () => {

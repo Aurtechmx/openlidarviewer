@@ -109,10 +109,11 @@ describe('losing unit trust can only weaken a verdict (fail-closed axis, §12)',
   });
 
   it('a metric product actually drops when the unit is lost (the axis has teeth)', () => {
-    // If nothing moved, the monotonicity check above would be vacuous. Contours
-    // is metric, so an unknown unit must pull it strictly below ready.
-    expect(readinessByProduct(scan())['contours']).toBe('ready');
-    expect(readinessByProduct(scan({ crs: crs({ linearUnit: 'unknown' }) }))['contours']).toBe('blocked');
+    // If nothing moved, the monotonicity check above would be vacuous.
+    // building-footprints is a metric AREA product with no inspection path, so an
+    // unknown unit must pull it strictly below ready (hard block, not review).
+    expect(readinessByProduct(scan({ hasBuildingClass: true }))['building-footprints']).toBe('ready');
+    expect(readinessByProduct(scan({ hasBuildingClass: true, crs: crs({ linearUnit: 'unknown' }) }))['building-footprints']).toBe('blocked');
   });
 });
 

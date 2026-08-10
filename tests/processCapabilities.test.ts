@@ -95,9 +95,9 @@ describe('contours — a metric product blocks on unknown unit', () => {
   it('ready over a trusted DTM with a known unit', () => {
     expect(verdict([scan({ groundClassified: true })], 'contours').readiness).toBe('ready');
   });
-  it('blocked when the unit is unknown, even though a surface could be drawn', () => {
+  it('review (exploratory) when the unit is unknown — inspection contours, validated deliverable withheld', () => {
     const v = verdict([scan({ groundClassified: true, crs: crs({ linearUnit: 'unknown' }) })], 'contours');
-    expect(v.readiness).toBe('blocked');
+    expect(v.readiness).toBe('review');
     expect(v.reasonCode).toBe('UNIT_UNKNOWN');
   });
   it('review when the DTM itself is only for review', () => {
