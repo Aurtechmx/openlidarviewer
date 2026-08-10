@@ -38,6 +38,33 @@ export interface ProductAuthorization {
   readonly __brand: 'process-authorization';
 }
 
+/**
+ * Module-private registry of the tokens this service ACTUALLY issued. The
+ * branded interface is compile-time only — structural typing lets any plain
+ * object with a matching `__brand` string satisfy `ProductAuthorization` at
+ * runtime, and a spread/clone of a real token is a new object that also
+ * satisfies it. Runtime identity closes that: a WeakSet holds each issued token
+ * BY REFERENCE, so a forged look-alike (never added) and a clone (a different
+ * object) are both non-members. Local-only — no hashing, no crypto, no
+ * point-data traversal; the WeakSet also lets a token be GC'd with its scope.
+ */
+const _issuedAuthorizations = new WeakSet<ProductAuthorization>();
+
+/**
+ * Whether `token` is an authorization this service genuinely issued — not a
+ * structurally-forged or cloned look-alike — and, when `product` is given, that
+ * it was issued for THAT product. A path that consumes an authorization as proof
+ * of eligibility calls this instead of trusting the object's shape.
+ */
+export function isAuthenticAuthorization(
+  token: unknown,
+  product?: ProductId,
+): token is ProductAuthorization {
+  if (typeof token !== 'object' || token === null) return false;
+  if (!_issuedAuthorizations.has(token as ProductAuthorization)) return false;
+  return product === undefined || (token as ProductAuthorization).product === product;
+}
+
 /** The result of a guarded run: the executor's value, or the refusal verdict. */
 export type AuthorizedRun<T> =
   | { readonly authorized: true; readonly value: T }
@@ -96,7 +123,16 @@ export class ProcessService {
   authorize(product: ProductId): ProductAuthorization | null {
     const cap = this.capability(product);
     if (cap == null || cap.readiness !== 'ready') return null;
-    return { product, grantedFrom: cap.reasonCode, __brand: 'process-authorization' };
+    // Freeze so the returned token cannot be mutated in place, and register it
+    // in the module-private WeakSet so {@link isAuthenticAuthorization} can tell
+    // this genuine token from a structural forgery or a clone.
+    const token: ProductAuthorization = Object.freeze({
+      product,
+      grantedFrom: cap.reasonCode,
+      __brand: 'process-authorization' as const,
+    });
+    _issuedAuthorizations.add(token);
+    return token;
   }
 
   /**
