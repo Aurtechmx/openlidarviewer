@@ -154,8 +154,31 @@ export class CrsService {
    * same ResolvedCrs for the caller's convenience.
    */
   resolveForScan(input: ResolveForScanInput): ResolvedCrs {
+    this._currentDatasetKey = keyForDataset(input.name);
+    const resolved = this._resolve(input);
+    this._setCurrent(resolved);
+    return resolved;
+  }
+
+  /**
+   * Resolve the authoritative CRS for ANY cloud — combining its detected CRS
+   * with any persisted override — WITHOUT making it the active scan or touching
+   * listeners. This is THE primitive every non-active consumer must use so it
+   * sees the same resolved CRS the Inspector shows instead of reaching for raw
+   * `cloud.metadata.crs`: epoch A/B comparison, each project layer, conversion,
+   * and every export seam. `resolveForScan` is this plus "make it current".
+   *
+   * Pure w.r.t. service state (reads the override port only), so it is safe to
+   * call for several clouds in one frame — the single-active-scan `current()`
+   * cache cannot represent more than one cloud, which is exactly why the
+   * multi-cloud consumers needed this.
+   */
+  resolveFor(input: ResolveForScanInput): ResolvedCrs {
+    return this._resolve(input);
+  }
+
+  private _resolve(input: ResolveForScanInput): ResolvedCrs {
     const datasetKey = keyForDataset(input.name);
-    this._currentDatasetKey = datasetKey;
     const override = this._port.get(datasetKey);
     // An override belongs to the file it was made for. The key is the dataset
     // NAME, so `site-a/points.laz` and an unrelated `site-b/points.laz` collide
@@ -168,11 +191,9 @@ export class CrsService {
       input.detected?.epsg === undefined ||
       override.detectedEpsg === input.detected.epsg;
     const applicable = override && belongsToThisFile ? override : undefined;
-    const resolved = this._resolveDatum(applicable
+    return this._resolveDatum(applicable
       ? this._fromOverride(applicable, input.detected)
       : (resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs()));
-    this._setCurrent(resolved);
-    return resolved;
   }
 
   /**
@@ -370,7 +391,21 @@ export class CrsService {
       source: 'user-override',
       confidence: 'high',
       userConfirmed: true,
-      wkt: detected?.wkt,
+      // The WKT describes the DETECTED horizontal frame. An override to a
+      // different EPSG makes it describe the wrong CRS — carrying it would let
+      // `terrain.prj` identify the rejected original while the numbers use the
+      // chosen one. Keep it ONLY when the override confirms the detected EPSG;
+      // otherwise drop it (same gate as name / unit / datum above). Was
+      // unconditional `detected?.wkt` — the C1 contradiction.
+      wkt: detected?.epsg === override.epsg ? detected?.wkt : undefined,
+      // Vertical component is independent of a HORIZONTAL override — a compound
+      // CRS keeps its height datum/unit when the user corrects the horizontal
+      // EPSG (and a same-EPSG confirmation must not lose it at all). Preserve the
+      // detected vertical fields unconditionally; without this even confirming
+      // the detected EPSG stripped valid vertical metadata (the C2 defect).
+      verticalEpsg: detected?.verticalEpsg,
+      verticalDatum: detected?.verticalDatum,
+      verticalUnitToMetres: detected?.verticalUnitToMetres,
     };
   }
 
