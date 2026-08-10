@@ -24,7 +24,7 @@ unaffected.
 | Canonical Node | 22.17.1 (`.nvmrc`) |
 | Canonical npm | 10.9.2 (`package.json` `packageManager`) |
 | `package-lock` lockfileVersion | 3 |
-| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.4`, 59 components |
+| SBOM | CycloneDX 1.6, root `openlidarviewer@0.6.5`, 56 components |
 
 The CycloneDX bill of materials for the production dependency set is in
 [sbom.json](../../sbom.json). Licences are credited in
