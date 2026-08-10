@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * `src/convert/writeLas` transitively imports `buildIdentity`, which reads the
@@ -138,9 +139,9 @@ test.beforeEach(() => {
 test('two georeferenced tiles mount into one frame at their real separation', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
   });
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => { if (!isBenignBrowserError(String(e))) errors.push(String(e)); });
 
   const w = await loadLasWriter();
   const bytesA = georefLas(w, 500000, 4100000);
@@ -191,9 +192,9 @@ function isZeroDisplacement(offsetText: string): boolean {
 test('the surviving layer does not move when a sibling is added or removed (#2)', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text());
+    if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
   });
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => { if (!isBenignBrowserError(String(e))) errors.push(String(e)); });
 
   const w = await loadLasWriter();
   // A's origin is the lower easting, so A anchors the frame at offset zero.

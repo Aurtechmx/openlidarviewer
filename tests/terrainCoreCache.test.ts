@@ -343,9 +343,16 @@ describe('getOrComputeCore', () => {
   it('defaults compute to the real computeTerrainCore (smoke)', () => {
     // No compute argument → uses the bound default; just assert it returns a
     // core-shaped object with a dtm and is cached on the second call.
-    const pos = makeCloud(600);
-    const r1 = getOrComputeCore(pos, BASE_PARAMS);
-    const r2 = getOrComputeCore(pos, BASE_PARAMS);
+    //
+    // Use a COARSE grid (few cells) so the real terrain pipeline stays cheap.
+    // Grid resolution is irrelevant to what this smoke checks, and under the
+    // coverage job's v8 instrumentation the per-cell hot loops run many times
+    // slower — a fine grid here tipped the real compute past the 60 s per-test
+    // timeout. A handful of cells keeps it well clear.
+    const pos = makeCloud(120);
+    const params = { ...BASE_PARAMS, cellSizeM: 25 };
+    const r1 = getOrComputeCore(pos, params);
+    const r2 = getOrComputeCore(pos, params);
     expect(r1).toBe(r2);
     expect(r1.dtm).toBeDefined();
   });

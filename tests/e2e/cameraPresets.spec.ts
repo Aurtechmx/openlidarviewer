@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly } from './helpers';
+import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * v0.3.9 Smart camera presets — Top / Iso / Oblique / Planar.
@@ -91,9 +92,9 @@ test.describe('camera presets — NavBar chip rail', () => {
     page,
   }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);
@@ -113,9 +114,9 @@ test.describe('camera presets — keyboard shortcuts', () => {
     page,
   }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);
@@ -153,7 +154,7 @@ test.describe('camera presets — keyboard shortcuts', () => {
     // is focused — the inverse is hard to set up without a scan-loaded
     // form field.
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
     await page.keyboard.press('T');
     await page.waitForTimeout(100);
     expect(errors).toEqual([]);

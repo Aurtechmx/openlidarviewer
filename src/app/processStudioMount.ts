@@ -42,6 +42,9 @@ export interface LiveScanAccessors {
   getResolvedCrs(): CrsInfo | null | undefined;
   /** Classification codes currently present on the active scan (empty when none). */
   getPresentClassCodes(): readonly number[];
+  /** True when the present classification was DERIVED by OLV (heuristic), not
+   *  carried by the producer. Distinguishes trusted vs derived ground/buildings. */
+  getClassificationDerived(): boolean;
 }
 
 /**
@@ -57,11 +60,19 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
   const isStreaming = streamPts != null;
   if (!isStreaming && staticPts == null) return null;
   const codes = a.getPresentClassCodes();
+  const hasClasses = codes.length > 0;
+  // Provenance: a classification OLV derived is `derived` (heuristic); one the
+  // producer carried is `producer` (trusted). This keeps OLV-derived class-2
+  // from reading as surveyed ground in the capability model.
+  const classificationProvenance = !hasClasses
+    ? 'none'
+    : (a.getClassificationDerived() ? 'derived' : 'producer');
   return {
     kind: isStreaming ? 'streaming' : 'static',
     pointCount: isStreaming ? (streamPts as number) : (staticPts as number),
     crs: a.getResolvedCrs() ?? null,
-    classification: codes.length > 0 ? 'partial' : 'none',
+    classification: hasClasses ? 'partial' : 'none',
+    classificationProvenance,
     groundClassified: codes.includes(CLASS_GROUND),
     hasBuildingClass: codes.includes(CLASS_BUILDING),
   };

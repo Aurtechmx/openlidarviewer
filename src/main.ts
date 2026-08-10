@@ -2428,13 +2428,13 @@ let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null =
 
 const classLegendPanel = new ClassLegendPanel();
 
-// Process Studio — fail-closed readiness over the Phase-1/2 services. Accessors
-// stay multi-line so the deferred `viewer.*` read is not a top-level deref.
+// Process Studio — fail-closed readiness over the Phase-1/2 services (multi-line so the deferred `viewer.*` read is not a top-level deref).
 const processStudio = createProcessStudioFromLive({
   getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
   getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
   getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null,
   getPresentClassCodes: () => classLegendPanel.presentCodes(),
+  getClassificationDerived: () => classLegendPanel.classificationIsDerived(),
 });
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
@@ -2486,13 +2486,13 @@ classLegendPanel.onPaletteChange((on) => {
   // Intelligence tier dots + confidence chip) via a body class.
   document.body.classList.toggle('olv-cvd', on);
   // Persist the choice and recolour any classification view in place. Only the
-  // classification colour pass reads the class palette, so other modes need no
-  // refresh; the legend repaints its own swatches.
+  // classification pass reads the class palette; the legend repaints its own swatches.
   persistPrefs();
   if (currentColorMode === 'classification') {
     if (scans.activeId) viewer.setColorMode(scans.activeId, 'classification');
     if (viewer.hasStreamingCloud) viewer.setStreamingColorMode('classification');
   }
+  analysePanel?.refreshForPalette(); // coverage tile follows the colourblind preference, live
 });
 
 /**

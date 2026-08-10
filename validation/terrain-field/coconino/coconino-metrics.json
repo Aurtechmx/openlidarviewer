@@ -1,0 +1,38 @@
+{
+ "overall": {
+  "n": 13,
+  "rmse_cm": 8.65,
+  "mae_cm": 6.16,
+  "median_cm": 2.86,
+  "bias_cm": 2.24,
+  "nmad_cm": 4.91,
+  "p90_cm": 14.72,
+  "p95_cm": 22.84,
+  "max_cm": 22.84
+ },
+ "NVA": {
+  "n": 6,
+  "rmse_cm": 4.83,
+  "mae_cm": 4.03,
+  "median_cm": 2.86,
+  "bias_cm": 0.58,
+  "nmad_cm": 7.75,
+  "p90_cm": 9.04,
+  "p95_cm": 9.04,
+  "max_cm": 9.04
+ },
+ "VVA": {
+  "n": 7,
+  "rmse_cm": 10.9,
+  "mae_cm": 7.98,
+  "median_cm": 5.06,
+  "bias_cm": 3.67,
+  "nmad_cm": 8.16,
+  "p90_cm": 22.84,
+  "p95_cm": 22.84,
+  "max_cm": 22.84
+ },
+ "candidate": 13,
+ "usable": 13,
+ "rejected": 0
+}
