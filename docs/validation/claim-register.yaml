@@ -422,7 +422,7 @@ claims:
     userLabel: "Cross-implemented contours"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
-    externalValidationStatus: pending
+    externalValidationStatus: partial
     approvedClaim: "Contours cross-implemented against GDAL gdal_contour on an analytic surface, agreeing within 0.05 m; grade tracks confidence."
     prohibitedClaim: ["survey-grade contours"]
     scope:
