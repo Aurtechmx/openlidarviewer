@@ -626,13 +626,27 @@ export function resolveGroundFilterParams(
     params.verticalUnitToMetres && params.verticalUnitToMetres > 0
       ? params.verticalUnitToMetres
       : 1;
+  // The base tolerance (0.5 m), its slope-scaled cap (2.5 m) and any scaling
+  // factor are PHYSICAL metre quantities, but the leaf compares them against Δz
+  // in the SOURCE vertical unit, so convert metres → source-Z units here — the
+  // same convert-at-the-boundary rule cellSizeZUnits above already applies to
+  // the slope-growth run. Without this a foot-CRS scan got a 0.5 ft / 2.5 ft
+  // tolerance instead of 0.5 m / 2.5 m: a different ground classification (hence
+  // a different DTM and different contours) for the same physical terrain.
+  const metresToZUnits = (metres: number): number => metres / vertToMetres;
   return {
     cellSizeM: params.cellSizeM,
     cellSizeZUnits: params.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: params.ground?.maxWindowCells ?? 8,
     slope: params.ground?.slope ?? 0.2,
-    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
-    scalingFactorM: params.ground?.scalingFactorM,
+    elevationThresholdM: metresToZUnits(params.ground?.elevationThresholdM ?? 0.5),
+    scalingFactorM:
+      params.ground?.scalingFactorM != null
+        ? metresToZUnits(params.ground.scalingFactorM)
+        : undefined,
+    // Set explicitly (converted) so the leaf's raw 2.5 m default is never used
+    // as if it were 2.5 source-Z units on a non-metre CRS.
+    maxElevationThresholdM: metresToZUnits(params.ground?.maxElevationThresholdM ?? 2.5),
     // Despike by default in the pipeline (the leaf stays strict-min).
     floorPercentile: params.ground?.floorPercentile ?? 5,
     verticalAxis,

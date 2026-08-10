@@ -5720,8 +5720,12 @@ function compareLoadedLayers(): void {
       const frames = epochFrameOptions(ctxA, ctxB);
       // `sourceOrigin`, not the live project origin: this is the epoch world
       // comparison. The frame facts come from each epoch's context.
-      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) };
-      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) };
+      // verticalUnitToMetres rides along so each epoch's DTM ground filter sees
+      // its metre-valued tolerances in the source vertical unit (#2), matching
+      // the live analysis pipeline. Only meaningful when the scale is known;
+      // undefined falls back to 1 (the metre assumption) in dtmOnGrid.
+      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA), verticalUnitToMetres: ctxA.verticalScaleKnown ? ctxA.verticalUnitToMetres : undefined };
+      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB), verticalUnitToMetres: ctxB.verticalScaleKnown ? ctxB.verticalUnitToMetres : undefined };
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.

@@ -66,3 +66,35 @@ describe('classifyGroundSmrf — geographic (degree) frame parity', () => {
     expect(Math.abs(metreFrac - degreeFrac)).toBeLessThan(0.02);
   });
 });
+
+const M_PER_FT = 0.3048;
+
+describe('resolveGroundFilterParams — vertical-unit invariance (pass-4 #2)', () => {
+  const resolve = (verticalUnitToMetres: number, horizontalUnitToMetres: number) =>
+    resolveGroundFilterParams(
+      { cellSizeM: 1, isGeographic: false, latitudeDeg: null, verticalUnitToMetres, horizontalUnitToMetres },
+      'z',
+    );
+
+  it('leaves a metre CRS at the physical 0.5 m / 2.5 m tolerances', () => {
+    const m = resolve(1, 1);
+    expect(m.elevationThresholdM).toBeCloseTo(0.5, 9);
+    expect(m.maxElevationThresholdM).toBeCloseTo(2.5, 9);
+  });
+
+  it('converts the metre tolerances into source feet for a foot-vertical CRS', () => {
+    const ft = resolve(M_PER_FT, M_PER_FT);
+    // 0.5 m ≈ 1.640 ft, 2.5 m ≈ 8.202 ft — the classifier works in source Z,
+    // so the number must grow to keep the PHYSICAL boundary fixed.
+    expect(ft.elevationThresholdM).toBeCloseTo(0.5 / M_PER_FT, 6);
+    expect(ft.maxElevationThresholdM).toBeCloseTo(2.5 / M_PER_FT, 6);
+  });
+
+  it('holds the invariant: identical physical tolerance in metres and feet', () => {
+    const m = resolve(1, 1);
+    const ft = resolve(M_PER_FT, M_PER_FT);
+    // threshold × metres-per-unit is the same metre quantity in both frames.
+    expect(ft.elevationThresholdM * M_PER_FT).toBeCloseTo(m.elevationThresholdM * 1, 6);
+    expect(ft.maxElevationThresholdM! * M_PER_FT).toBeCloseTo(m.maxElevationThresholdM! * 1, 6);
+  });
+});
