@@ -4784,6 +4784,7 @@ export class Viewer {
       streaming: () => this._streaming,
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
+      setVisible: (id, visible) => this.setCloudVisible(id, visible),
       snapshot: (options) => this.snapshot(options),
       renderFramedTopDown: (aabb, widthPx) => this._renderFramedTopDown(aabb, widthPx),
       renderFigure: (options) => this.renderFigure(options),

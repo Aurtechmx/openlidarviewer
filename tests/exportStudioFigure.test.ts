@@ -54,6 +54,8 @@ function figureAdapter(opts: {
     currentColorMode: () => 'rgb',
     snapshotColorModes: () => ({ staticModes: new Map(), streamingMode: null }),
     restoreColorModes: () => calls.push('restoreColorModes'),
+    excludeUnsupported: () => [],
+    restoreVisibility: () => {},
     hasRgb: () => true,
     hasIntensity: () => true,
     hasClassification: () => true,

@@ -73,10 +73,13 @@ export async function withColorMode<T>(
   // A=RGB, B=Intensity, C=Classification at once, and restoring all three to a
   // single "prior" left B and C permanently on A's mode (pass-7 #2).
   const snapshot = adapter.snapshotColorModes();
+  // Hide visible layers that cannot carry this channel, so a scientific export
+  // shows only the layers that legitimately do (pass-7 #3). Restored in finally.
+  const hidden = adapter.excludeUnsupported(mode);
   // Defensive structure: the initial swap is INSIDE the try block so a
   // throw from `setExportColorMode` (e.g. one cloud's missing channel
   // before the adapter's per-cloud try/catch landed) still hits the
-  // finally and restores each layer to the mode it actually held.
+  // finally and restores each layer's mode + visibility.
   let swapped = false;
   try {
     adapter.setExportColorMode(mode);
@@ -90,6 +93,13 @@ export async function withColorMode<T>(
         // The restoration itself can in principle throw; swallow it so
         // a throw inside `fn()` still propagates (not the restoration).
         console.warn('[export] color-mode restoration failed:', err);
+      }
+    }
+    if (hidden.length > 0) {
+      try {
+        adapter.restoreVisibility(hidden);
+      } catch (err) {
+        console.warn('[export] visibility restoration failed:', err);
       }
     }
   }

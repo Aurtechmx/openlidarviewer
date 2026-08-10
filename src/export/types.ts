@@ -100,6 +100,15 @@ export interface ExportSceneAdapter {
   snapshotColorModes(): ExportColorModeSnapshot;
   /** Restore each layer to the mode it held in `snapshot`, independently. */
   restoreColorModes(snapshot: ExportColorModeSnapshot): void;
+  /**
+   * Hide the visible static layers that cannot render `mode`, so a scientific
+   * export contains only layers that legitimately carry that channel — a
+   * "Classification" PNG must not include an RGB-only layer. Returns the ids
+   * hidden, for {@link restoreVisibility}.
+   */
+  excludeUnsupported(mode: ColorMode): readonly string[];
+  /** Restore the visibility of layers hidden by {@link excludeUnsupported}. */
+  restoreVisibility(ids: readonly string[]): void;
   /** Does any loaded cloud carry per-point RGB? */
   hasRgb(): boolean;
   /** Does any loaded cloud carry per-point intensity? */

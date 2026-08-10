@@ -44,6 +44,7 @@ function host(over: Partial<ExportAdapterHost> = {}): ExportAdapterHost {
     streaming: () => null,
     setColorMode: vi.fn(),
     setStreamingColorMode: vi.fn(),
+    setVisible: vi.fn(),
     snapshot: vi.fn(async () => new Blob()),
     renderFramedTopDown: vi.fn(async () => null),
     renderFigure: vi.fn(async () => null),
@@ -326,5 +327,47 @@ describe('export adapter — per-layer colour-mode snapshot/restore (pass-7 #2)'
 
     // Each layer comes back to ITS OWN mode — not a single "prior" clobber.
     expect(setCalls).toEqual([['a', 'rgb'], ['b', 'intensity'], ['c', 'classification']]);
+  });
+});
+
+describe('export adapter — excludeUnsupported (pass-7 #3)', () => {
+  it('hides a visible layer that lacks the export channel, and restores it', () => {
+    const vis = new Map<string, boolean>([['clsf', true], ['rgbOnly', true]]);
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['clsf', cloud({ visible: vis.get('clsf'), classification: new Uint8Array(1) })],
+            ['rgbOnly', cloud({ visible: vis.get('rgbOnly'), colors: new Uint8Array(3) })],
+          ]),
+        setVisible: (id, v) => { vis.set(id, v); },
+      }),
+    );
+    // A Classification export must exclude the RGB-only layer so the PNG is not
+    // a mixed classification+RGB image (pass-7 #3).
+    const hidden = a.excludeUnsupported('classification');
+    expect(hidden).toEqual(['rgbOnly']);
+    expect(vis.get('rgbOnly')).toBe(false);
+    expect(vis.get('clsf')).toBe(true);
+
+    a.restoreVisibility(hidden);
+    expect(vis.get('rgbOnly')).toBe(true);
+  });
+
+  it('hides nothing for a universally-renderable mode (elevation)', () => {
+    const a = buildExportAdapter(
+      host({ clouds: () => new Map([['a', cloud({ colors: new Uint8Array(3) })]]) }),
+    );
+    expect(a.excludeUnsupported('elevation')).toEqual([]);
+  });
+
+  it('excludes nothing on the streaming path (single source, gated elsewhere)', () => {
+    const a = buildExportAdapter(
+      host({
+        streaming: () =>
+          ({ cloud: { availableColorModes: () => ['rgb'] } }) as unknown as ReturnType<ExportAdapterHost['streaming']>,
+      }),
+    );
+    expect(a.excludeUnsupported('classification')).toEqual([]);
   });
 });

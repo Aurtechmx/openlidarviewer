@@ -69,6 +69,8 @@ export interface ExportAdapterHost {
   streaming(): ExportAdapterStreaming | null;
   setColorMode(id: string, mode: ColorMode): void;
   setStreamingColorMode(mode: ColorMode): void;
+  /** Toggle a static layer's render visibility (for the export scope). */
+  setVisible(id: string, visible: boolean): void;
   snapshot(options: {
     measurements: boolean;
     annotations: boolean;
@@ -91,6 +93,27 @@ export interface ExportAdapterHost {
     heightPx: number;
   } | null>;
   figureViewContext(): FigureViewContext;
+}
+
+/**
+ * Whether a static layer carries the channel `mode` draws from. Elevation (and
+ * any scalar derivable from XYZ) is always renderable; the channel modes need
+ * the matching per-point attribute. An unknown mode is treated as supported so
+ * a new mode never silently hides layers.
+ */
+function staticLayerSupportsMode(cloud: PointCloud, mode: ColorMode): boolean {
+  switch (mode) {
+    case 'rgb':
+      return !!cloud.colors;
+    case 'intensity':
+      return !!cloud.intensity;
+    case 'classification':
+      return !!cloud.classification;
+    case 'normal':
+      return !!cloud.normals;
+    default:
+      return true;
+  }
 }
 
 /** Build the {@link ExportSceneAdapter} the Studio exporters drive. */
@@ -159,6 +182,33 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           host.setStreamingColorMode(snapshot.streamingMode);
         } catch (err) {
           console.warn(`[export] restoring streaming to ${snapshot.streamingMode} skipped:`, err);
+        }
+      }
+    },
+    excludeUnsupported(mode: ColorMode): readonly string[] {
+      // Streaming is a single source; its own availability gate decides whether
+      // the export runs at all. Only the multi-layer STATIC path can mix a
+      // supported layer with one that lacks the channel and would otherwise
+      // render in its stale colour under a scientific title (pass-7 #3).
+      if (host.streaming()) return [];
+      const hidden: string[] = [];
+      for (const [id, c] of host.clouds()) {
+        if (!c.visible || staticLayerSupportsMode(c.cloud, mode)) continue;
+        try {
+          host.setVisible(id, false);
+          hidden.push(id);
+        } catch (err) {
+          console.warn(`[export] hiding unsupported layer "${id}" for ${mode} skipped:`, err);
+        }
+      }
+      return hidden;
+    },
+    restoreVisibility(ids: readonly string[]): void {
+      for (const id of ids) {
+        try {
+          host.setVisible(id, true);
+        } catch (err) {
+          console.warn(`[export] restoring visibility of "${id}" skipped:`, err);
         }
       }
     },
