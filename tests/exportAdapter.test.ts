@@ -130,6 +130,41 @@ describe('export adapter — point totals', () => {
     );
     expect(a.residentPointCount()).toBe(42);
   });
+
+  it('resident count is the loaded points, NOT the back-scaled declared total (E8)', () => {
+    // A strided load: 5M resident of a declared 100M. sourcePointCount reports
+    // the declared total, but residentPointCount must report what is actually in.
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([['a', cloud({ pointCount: 5_000_000, declaredPointCount: 100_000_000 })]]),
+      }),
+    );
+    expect(a.sourcePointCount()).toBe(100_000_000);
+    expect(a.residentPointCount()).toBe(5_000_000);
+  });
+});
+
+describe('export adapter — streaming capability gates', () => {
+  const streamingHost = (modes: string[]) =>
+    host({
+      streaming: () =>
+        ({
+          cloud: {
+            availableColorModes: () => modes,
+            residentPointCount: 1,
+            sourcePointCount: 1,
+            name: 'stream',
+          },
+        }) as unknown as ReturnType<ExportAdapterHost['streaming']>,
+    });
+
+  it('reports intensity only when the streaming source actually exposes it (E9)', () => {
+    // An EPT whose schema has no Intensity dimension must NOT enable the
+    // Intensity exporter — the old `return true` did, then the recolor failed.
+    expect(buildExportAdapter(streamingHost(['rgb', 'elevation'])).hasIntensity()).toBe(false);
+    expect(buildExportAdapter(streamingHost(['rgb', 'intensity'])).hasIntensity()).toBe(true);
+  });
 });
 
 describe('export adapter — combined bounds', () => {

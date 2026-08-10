@@ -132,8 +132,15 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       return false;
     },
     hasIntensity(): boolean {
-      // Streaming COPC clouds always carry intensity (PDRF 6/7/8).
-      if (host.streaming()) return true;
+      // Dispatch on the abstract `availableColorModes()` for streaming, exactly
+      // as hasClassification does — COPC PDRF 6/7/8 carry intensity but an
+      // arbitrary EPT may have no Intensity dimension, and the EPT source
+      // already reports that. `return true` here lit the Intensity exporter for
+      // an intensity-less EPT, whose recolor then silently failed (E9).
+      const streaming = host.streaming();
+      if (streaming) {
+        return streaming.cloud.availableColorModes().includes('intensity');
+      }
       for (const { cloud } of host.clouds().values()) {
         if (cloud.intensity) return true;
       }
@@ -226,8 +233,13 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     residentPointCount(): number {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.residentPointCount;
-      // Static clouds: every loaded point is resident.
-      return this.sourcePointCount();
+      // The ACTUALLY-loaded points, not sourcePointCount() — that back-scales to
+      // the file's declared total, so a strided load (declared 100M, resident
+      // 5M) reported 100M resident (E8). Sum the real per-cloud pointCount,
+      // matching Viewer.residentPointTotal().
+      let total = 0;
+      for (const { cloud } of host.clouds().values()) total += cloud.pointCount;
+      return total;
     },
     crsLabel(): { name: string; unit: string; epsg?: number } | null {
       // read off the abstract `cloud.crs()` so both COPC and
