@@ -46,9 +46,9 @@ The live entry chunk is measured into `docs/validation/test-evidence.json` and c
 
 `npm run coverage` and `npm run mutation` both pass. Coverage is a blocking stage of the release-mode gate and its output ships inside `gate.log`. Mutation runs on its own schedule, and the release record cites that run, its score and the commit it was measured at, refusing the release outright when no result exists. Ordinary branch CI runs neither, so between releases treat the figures as a working measurement rather than a preserved claim.
 
-## Evidence ceiling: three cross-implemented products, no field validation
+## Evidence ceiling: four cross-implemented products, no field validation
 
-Three products have been compared against an independent implementation. Slope, aspect and hillshade each agreed with GDAL 3.13.1, and with the surface's closed-form gradient, on one frozen analytic DEM, within tolerances registered before the references were generated. `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE` are at E4 on that basis. Every other terrain product tops out at E3, which is synthetic known-truth against this project's own implementation. E5 is unreached, and nothing here is field-validated. This release does not claim survey-grade accuracy, standards compliance or independent field validation.
+Four products have been compared against an independent implementation. Slope, aspect and hillshade each agreed with GDAL 3.13.1, and with the surface's closed-form gradient, on one frozen analytic DEM, within tolerances registered before the references were generated. Contours agreed with GDAL `gdal_contour` on a frozen analytic tilted plane, where linear interpolation is exact, to a maximum vertex separation of 2.9×10⁻⁵ m, again under a tolerance registered before the reference was generated. `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS` are at E4 on that basis. Every other terrain product tops out at E3, which is synthetic known-truth against this project's own implementation. E5 is unreached, and nothing here is field-validated. This release does not claim survey-grade accuracy, standards compliance or independent field validation.
 
 ## No cross-CRS reprojection
 
@@ -56,7 +56,7 @@ Unchanged from prior releases: the viewer does not reproject between coordinate 
 
 ## Axis and compound-unit handling is correct but not yet uniform
 
-An explicit model spanning up-axis, horizontal unit, vertical unit and CRS now exists as `SpatialContext` (`src/geo/SpatialContext.ts`), but not every metric path consumes it yet, so an unusual combination can still be silently plausible where a caller reads the raw fields instead of the model. A box measurement is stored as axis-aligned min/max corners and throws on a genuinely tilted up vector rather than reporting the extent along the nearest axis. No scan the viewer sets can currently trigger that, so the refusal guards the contract rather than gating a feature. Full adoption of `SpatialContext` across every metric path is a stable-v0.6 requirement.
+An explicit model spanning up-axis, horizontal unit, vertical unit and CRS now exists as `SpatialContext` (`src/geo/SpatialContext.ts`), but not every metric path consumes it yet, so an unusual combination can still be silently plausible where a caller reads the raw fields instead of the model. A box measurement is stored as axis-aligned min/max corners and throws on a genuinely tilted up vector rather than reporting the extent along the nearest axis. No scan the viewer sets can currently trigger that, so the refusal guards the contract rather than gating a feature. Threading `SpatialContext` through every remaining metric path is ongoing hardening across the v0.6 series; the fail-closed refusal above bounds the risk until it is complete, so it is not a v0.6.5 runtime blocker.
 
 ## Compatibility fallback verified against a forced configuration, not every device
 

@@ -25,7 +25,7 @@ npm ci
 | Regenerate analysis/benchmark figures | `npm run repro` |
 | Package source + deploy archives | `npm run package` |
 
-The authoritative deterministic gate is `npm run test:release` (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke). The broader browser matrix that a device varies — the full end-to-end suite and the mobile responsive job — runs in CI (`.github/workflows/ci.yml`), not in `test:release`. The remaining physical-device coverage gaps for a tagged release are recorded in `docs/releases/RELEASE_NOTES_v0.6.4.md`.
+The authoritative deterministic gate is `npm run test:release` (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke). The broader browser matrix that a device varies — the full end-to-end suite and the mobile responsive job — runs in CI (`.github/workflows/ci.yml`), not in `test:release`. The remaining physical-device coverage gaps for a tagged release are recorded in `docs/releases/RELEASE_NOTES_v0.6.5.md`.
 
 ### End-to-end browsers
 
