@@ -60,7 +60,7 @@ const MATRIX: Row[] = [
     product: 'dtm',
     normal: () => verdict([scan({ kind: 'streaming', coverage: 'full' })], 'dtm'),
     degraded: () => verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm'),
-    expectNormal: 'ready', expectDegraded: 'blocked', degradedReason: 'RESIDENT_ONLY',
+    expectNormal: 'ready', expectDegraded: 'review', degradedReason: 'RESIDENT_ONLY',
   },
   {
     condition: 'ground: producer → derived',

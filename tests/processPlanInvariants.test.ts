@@ -125,12 +125,13 @@ describe('idempotence and terminal blocks (§19)', () => {
   });
 
   it('a blocked product stays blocked when an UNRELATED fact improves', () => {
-    // resident-only blocks the DTM. Adding RGB (irrelevant to coverage) must not
-    // lift the block — only fixing the blocking fact (coverage) may.
-    const blocked = scan({ kind: 'streaming', coverage: 'resident-only', hasRgb: false });
+    // resident-only blocks building-footprints (missing returns would drop
+    // buildings). Adding RGB (irrelevant to coverage) must not lift the block —
+    // only fixing the blocking fact (coverage) may.
+    const blocked = scan({ kind: 'streaming', coverage: 'resident-only', hasBuildingClass: true, hasRgb: false });
     const stillBlocked = { ...blocked, hasRgb: true };
-    expect(capabilityFor(evaluateCapabilities({ scans: [blocked] }), 'dtm')!.readiness).toBe('blocked');
-    expect(capabilityFor(evaluateCapabilities({ scans: [stillBlocked] }), 'dtm')!.readiness).toBe('blocked');
+    expect(capabilityFor(evaluateCapabilities({ scans: [blocked] }), 'building-footprints')!.readiness).toBe('blocked');
+    expect(capabilityFor(evaluateCapabilities({ scans: [stillBlocked] }), 'building-footprints')!.readiness).toBe('blocked');
   });
 });
 

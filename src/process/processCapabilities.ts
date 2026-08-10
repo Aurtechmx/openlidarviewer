@@ -115,7 +115,7 @@ function dtm(scan: ScanFacts): ProductCapability {
     return cap(p, 'blocked', 'NO_POINTS', 'The scan has no points to grid.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'blocked', 'RESIDENT_ONLY', 'A surface needs the whole dataset; a resident-only streaming view cannot back a DTM.');
+    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');
@@ -133,7 +133,7 @@ function dsm(scan: ScanFacts): ProductCapability {
     return cap(p, 'blocked', 'NO_POINTS', 'The scan has no points to grid.');
   }
   if (!isFullCoverage(scan)) {
-    return cap(p, 'blocked', 'RESIDENT_ONLY', 'A surface needs the whole dataset; a resident-only streaming view cannot back a DSM.');
+    return cap(p, 'review', 'RESIDENT_ONLY', 'Only the resident streaming set is loaded, so a surface can be built for inspection but a whole-dataset product is withheld until the full cloud is graded.');
   }
   if (!isLinearUnitKnown(scan.crs)) {
     return cap(p, 'review', 'UNIT_UNKNOWN', 'The linear unit is unconfirmed, so the surface can be built for inspection but its georeferenced export is withheld.');

@@ -51,10 +51,15 @@ describe('unit trust — metric products fail closed on a missing or unknown uni
   });
 });
 
-describe('coverage — full-dataset products fail closed on resident-only streaming', () => {
-  it('dtm: resident-only blocks, full coverage is ready (guard is load-bearing)', () => {
-    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm')).toBe('blocked');
+describe('coverage — surfaces degrade to review on resident-only streaming', () => {
+  it('dtm: resident-only degrades to review, full coverage is ready (guard is load-bearing)', () => {
+    // A resident-only surface is exploratory (whole-dataset export withheld), not a
+    // hard block — matching the module contract and the Contour Studio launcher.
+    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm')).toBe('review');
     expect(verdict([scan({ kind: 'streaming', coverage: 'full' })], 'dtm')).toBe('ready'); // only coverage changed
+  });
+  it('building-footprints still fail closed on resident-only — missing returns would drop buildings', () => {
+    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only', hasBuildingClass: true })], 'building-footprints')).toBe('blocked');
   });
 });
 

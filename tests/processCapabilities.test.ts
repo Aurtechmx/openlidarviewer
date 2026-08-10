@@ -84,9 +84,9 @@ describe('dtm — fail closed on unit and coverage', () => {
     expect(v.readiness).toBe('review');
     expect(v.reasonCode).toBe('UNIT_UNKNOWN');
   });
-  it('blocked on resident-only streaming', () => {
+  it('review (exploratory) on resident-only streaming — a surface for inspection, whole-dataset export withheld', () => {
     const v = verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm');
-    expect(v.readiness).toBe('blocked');
+    expect(v.readiness).toBe('review');
     expect(v.reasonCode).toBe('RESIDENT_ONLY');
   });
 });
@@ -103,10 +103,10 @@ describe('contours — a metric product blocks on unknown unit', () => {
   it('review when the DTM itself is only for review', () => {
     expect(verdict([scan({ groundClassified: false })], 'contours').readiness).toBe('review');
   });
-  it('blocked when no DTM is possible (resident-only)', () => {
+  it('review over a resident-only DTM (exploratory contours), not blocked', () => {
     const v = verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'contours');
-    expect(v.readiness).toBe('blocked');
-    expect(v.reasonCode).toBe('NO_DTM');
+    expect(v.readiness).toBe('review');
+    expect(v.reasonCode).toBe('DTM_REVIEW');
   });
 });
 
