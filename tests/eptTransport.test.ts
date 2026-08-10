@@ -35,7 +35,7 @@ function neverAnsweringFetch(): { fn: typeof fetch; calls: number } {
 /** Build a fetch fake that returns a scripted sequence of responses. */
 function scriptedFetch(
   steps: Array<
-    | { status: number; body?: string }
+    | { status: number; body?: string; headers?: Record<string, string> }
     | { throws: Error }
   >,
 ): { fn: typeof fetch; calls: number } {
@@ -48,6 +48,7 @@ function scriptedFetch(
     return new Response(step.body ?? '', {
       status: step.status,
       statusText: step.status === 200 ? 'OK' : 'Err',
+      headers: step.headers,
     });
   }) as typeof fetch;
   return handle;
@@ -254,5 +255,38 @@ describe('createEptTransport — internal timeout is a distinct outcome from a u
     expect((err as Error).name).toBe('AbortError');
     expect(err).not.toBeInstanceOf(EptTimeoutError);
     expect(handle.calls).toBe(1); // only the first attempt ran; the retry pre-check caught the cancel
+  });
+});
+
+describe('createEptTransport — bounded bodies (OOM defense)', () => {
+  test('fetchText refuses a hierarchy whose Content-Length exceeds the 64 MiB cap', async () => {
+    const handle = scriptedFetch([
+      { status: 200, body: '{}', headers: { 'content-length': String(65 * 1024 * 1024) } },
+    ]);
+    const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
+    const err = await t
+      .fetchText('https://example.com/ept-hierarchy/0-0-0-0.json')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/limit/i);
+  });
+
+  test('fetchBytes refuses a tile whose Content-Length exceeds the 256 MiB cap', async () => {
+    const handle = scriptedFetch([
+      { status: 200, body: 'AAAA', headers: { 'content-length': String(257 * 1024 * 1024) } },
+    ]);
+    const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
+    const err = await t
+      .fetchBytes('https://example.com/ept-data/0-0-0-0.bin')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toMatch(/limit/i);
+  });
+
+  test('a legitimate small body still passes through unchanged', async () => {
+    const handle = scriptedFetch([{ status: 200, body: 'AAAA' }]);
+    const t = createEptTransport({ fetchImpl: handle.fn, sleep: () => Promise.resolve() });
+    const buf = await t.fetchBytes('https://example.com/ept-data/0-0-0-0.bin');
+    expect(new TextDecoder().decode(new Uint8Array(buf))).toBe('AAAA');
   });
 });

@@ -383,3 +383,60 @@ test('EptStreamingPointCloud.localBounds yields the cube in render space', async
   expect(b[4] - b[1]).toBeCloseTo(100, 6);
   expect(b[5] - b[2]).toBeCloseTo(50, 6);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// close() aborts the background hierarchy deepening
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('EptStreamingPointCloud.close() aborts the background hierarchy deepening', async () => {
+  // A depth-chain longer than FIRST_PAINT_HIERARCHY_FILES (24): each `i-0-0-0`
+  // links to `(i+1)-0-0-0` (x=0 = 2·0 is a valid child at every depth). The
+  // first 24 files load in the awaited initial phase; the 25th (`24-0-0-0`) is
+  // the first the fire-and-forget continueHierarchy fetches — we block it and
+  // capture the signal it was handed to prove close() aborts that signal.
+  const N = 30;
+  const chain: Record<string, string> = {};
+  for (let i = 0; i < N; i++) {
+    const key = `${i}-0-0-0`;
+    chain[key] =
+      i < N - 1
+        ? JSON.stringify({ [key]: 100, [`${i + 1}-0-0-0`]: -1 })
+        : JSON.stringify({ [key]: 100 });
+  }
+
+  let deepenSignal: AbortSignal | undefined;
+  const transport: EptTransport = {
+    fetchText: (url, signal) => {
+      const m = url.match(/ept-hierarchy\/(\d+-\d+-\d+-\d+)\.json/);
+      const key = m?.[1] ?? '';
+      const depth = Number(key.split('-')[0]);
+      if (depth < 24) return Promise.resolve(chain[key]);
+      // The first background file: capture its signal and block until aborted.
+      deepenSignal = signal;
+      return new Promise<string>((_resolve, reject) => {
+        if (signal?.aborted) return reject(new DOMException('aborted', 'AbortError'));
+        signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('aborted', 'AbortError')),
+          { once: true },
+        );
+      });
+    },
+    fetchBytes: () => Promise.reject(new Error('no tile fetch in this test')),
+  };
+
+  const cloud = await EptStreamingPointCloud.open(
+    loadFixtureMetadata(),
+    'fixture://ept-tiny/',
+    'ept-chain',
+    transport,
+  );
+  // Let continueHierarchy schedule + reach the blocked 25th fetch.
+  await new Promise((r) => setTimeout(r, 0));
+  expect(deepenSignal).toBeDefined();
+  expect(deepenSignal!.aborted).toBe(false);
+
+  // Closing the session must abort the in-flight deepening.
+  await cloud.close();
+  expect(deepenSignal!.aborted).toBe(true);
+});

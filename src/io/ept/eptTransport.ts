@@ -23,9 +23,23 @@
 
 import type { EptTransport } from '../../render/streaming/EptStreamingPointCloud';
 import { sanitizeUrlForDisplay } from '../range/RangeSource';
+import { readAtMostBounded, readTextAtMost } from '../range/boundedRead';
 
 /** Per-attempt timeout for one HTTP request, in milliseconds. */
 const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+/**
+ * Whole-body ceilings for the two EPT read shapes. Without a cap, `.text()` /
+ * `.arrayBuffer()` read whatever a host returns — a hostile or misconfigured
+ * server can stream a multi-GB body and OOM the tab. These are defense-in-depth
+ * limits set far above any legitimate document, not tight fits: a hierarchy
+ * page is JSON metadata (KBs–low MBs); a single node's point payload is bounded
+ * by its point count (a 4M-point node in the widest binary layout is ~140 MB).
+ * The `boundedRead` helper refuses a `Content-Length` above the cap before
+ * reading a byte, then streams with a running counter that cancels the body on
+ * the chunk that would cross it — so a lying or absent length can't slip past.
+ */
+const HIERARCHY_MAX_BYTES = 64 * 1024 * 1024;
+const TILE_MAX_BYTES = 256 * 1024 * 1024;
 /** Maximum retries beyond the initial attempt (so up to 4 total). */
 const DEFAULT_MAX_RETRIES = 3;
 /** Base backoff before the first retry — doubled each attempt, jittered. */
@@ -179,11 +193,32 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
   return {
     fetchText: async (url, signal) => {
       const response = await fetchWithRetry(url, 'hierarchy', signal);
-      return response.text();
+      // Cap the body: the retry loop only bounds the header round-trip, not the
+      // bytes that follow. `boundedRead` carries the size ceiling plus its own
+      // idle/total stall clock, and stays wired to the caller's cancel.
+      return readTextAtMost(
+        response,
+        HIERARCHY_MAX_BYTES,
+        `EPT hierarchy at ${sanitizeUrlForDisplay(url)}`,
+        { signal },
+      );
     },
     fetchBytes: async (url, signal) => {
       const response = await fetchWithRetry(url, 'tile', signal);
-      return response.arrayBuffer();
+      const bytes = await readAtMostBounded(
+        response,
+        TILE_MAX_BYTES,
+        `EPT tile at ${sanitizeUrlForDisplay(url)}`,
+        { signal },
+      );
+      // Hand back an exact-size ArrayBuffer; a pooled/oversized backing buffer
+      // would hand the decoder trailing bytes that aren't part of the tile. The
+      // cast is sound — a fetch body is never a SharedArrayBuffer — and mirrors
+      // the fixture transport's own slice.
+      return bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
     },
   };
 }
