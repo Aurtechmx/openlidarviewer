@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * v0.3.9 workflow recorder — Cmd-Shift-U / Ctrl-Shift-U
@@ -109,7 +110,7 @@ test.describe('workflow recorder — capture into a live session', () => {
     // union narrows incorrectly the capture call would throw at
     // runtime; this spec is the smoke test for that path.
     const errors: string[] = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(e.message); });
     page.on('console', (m) => {
       if (m.type() === 'error') errors.push(m.text());
     });

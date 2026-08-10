@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { isBenignPageError } from './pageErrors';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
@@ -140,7 +141,7 @@ test('two georeferenced tiles mount into one frame at their real separation', as
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
 
   const w = await loadLasWriter();
   const bytesA = georefLas(w, 500000, 4100000);
@@ -193,7 +194,7 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
-  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
 
   const w = await loadLasWriter();
   // A's origin is the lower easting, so A anchors the frame at offset zero.

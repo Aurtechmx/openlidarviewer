@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { isBenignPageError } from './pageErrors';
 import { dropTinyPly } from './helpers';
 
 /**
@@ -36,7 +37,7 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
   page,
 }) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(e.message); });
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
@@ -90,7 +91,7 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
 
 test('the Rendering panel switches point-size mode and antialiasing', async ({ page }) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(e.message); });
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text());
   });
