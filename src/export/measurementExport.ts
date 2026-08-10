@@ -64,6 +64,25 @@ function num(v: number, d = 3): number | null {
 }
 
 /**
+ * Express a source-frame point in an isotropic METRE frame: scale the component
+ * along the (unit) up-axis by the vertical factor and the perpendicular
+ * (horizontal) part by the horizontal factor. Computing 3D geometry on these
+ * points is then physically correct even for a COMPOUND CRS (metre eastings over
+ * foot heights) — where scaling a 3D distance or a slope grade by one factor
+ * mixed the two axes and produced a self-contradictory export: grade 100 % beside
+ * rise 0.3048 m / run 1 m (pass-6 M2). For a single-unit CRS both factors are
+ * equal, so this is a uniform scale and every metric is byte-identical to before.
+ */
+function toMetricFrame(p: Vec3, up: Vec3, h: number, v: number): Vec3 {
+  const along = p[0] * up[0] + p[1] * up[1] + p[2] * up[2]; // dot(p, up)
+  return [
+    (p[0] - along * up[0]) * h + along * up[0] * v,
+    (p[1] - along * up[1]) * h + along * up[1] * v,
+    (p[2] - along * up[2]) * h + along * up[2] * v,
+  ];
+}
+
+/**
  * The applicable derived metrics for one measurement, in METRES / m² / m³ /
  * degrees / %. Only the keys that the kind actually establishes are present;
  * a value the geometry can't compute is simply omitted (never zero-filled).
@@ -80,45 +99,49 @@ export function measurementMetrics(
   };
   const pts = m.points;
   const L = unitToMetres;
-  const A = unitToMetres * unitToMetres;
-  // Vertical (up-axis) factor for heights/drops, and the volume factor
-  // linear²·vertical — matching the panel headline (_fmtVertical / _fmtCutFill).
-  // Defaults to L, so a single-unit CRS is byte-identical; a compound CRS
-  // (metre eastings over foot heights) no longer scales height by the
-  // horizontal factor and disagreeing with the on-screen value.
+  // Vertical (up-axis) factor; defaults to L so a single-unit CRS is uniform.
   const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : L;
-  const Vol = A * Vv;
+  // Volume factor for STORED cut/fill (not point-derived): linear²·vertical.
+  const Vol = L * L * Vv;
   if (!isComplete(m)) return out;
+
+  // Every point-derived metric is computed in the isotropic METRE frame, so the
+  // result is already in metres and no per-axis factor is juggled onto a 3D
+  // quantity — the compound-CRS self-contradiction (M2). Single-unit CRSs make
+  // this a uniform scale, so the numbers are byte-identical to before.
+  const mp = pts.map((p) => toMetricFrame(p, up, L, Vv));
 
   switch (m.kind) {
     case 'distance':
-      set('length_m', num(distance(pts[0], pts[1]) * L));
+      set('length_m', num(distance(mp[0], mp[1])));
       break;
     case 'polyline':
-      set('length_m', num(polylineLength(pts).total * L));
+      set('length_m', num(polylineLength(mp).total));
       break;
     case 'height': {
-      const v = verticalDelta(pts[0], pts[1], up);
-      set('vertical_m', num(v.vertical * Vv));
-      set('horizontal_m', num(v.horizontal * L));
+      const v = verticalDelta(mp[0], mp[1], up);
+      set('vertical_m', num(v.vertical));
+      set('horizontal_m', num(v.horizontal));
       break;
     }
     case 'angle':
-      set('angle_deg', num(angleAtVertex(pts[0], pts[1], pts[2])));
+      // Physically correct now — the arms are in the metric frame, so a mix of
+      // horizontal and vertical units no longer skews the angle (M3's compute).
+      set('angle_deg', num(angleAtVertex(mp[0], mp[1], mp[2])));
       break;
     case 'slope': {
-      const s = slopeBetween(pts[0], pts[1], up);
+      const s = slopeBetween(mp[0], mp[1], up);
       set('grade_pct', num(s.gradePercent));
       set('angle_deg', num(s.angleDeg));
-      set('rise_m', num(s.rise * Vv));
-      set('run_m', num(s.run * L));
+      set('rise_m', num(s.rise));
+      set('run_m', num(s.run));
       break;
     }
     case 'profile': {
-      const p = profileMetrics(pts[0], pts[1], up);
-      set('length_m', num(p.length3d * L));
-      set('horizontal_m', num(p.lengthHorizontal * L));
-      set('vertical_m', num(p.verticalDrop * Vv));
+      const p = profileMetrics(mp[0], mp[1], up);
+      set('length_m', num(p.length3d));
+      set('horizontal_m', num(p.lengthHorizontal));
+      set('vertical_m', num(p.verticalDrop));
       set('grade_pct', num(p.gradePercent));
       break;
     }
@@ -128,24 +151,23 @@ export function measurementMetrics(
       // Exporting the horizontal projection here made a vertical 1 m×1 m wall
       // read ~1 m² on screen but 0 m² in the file (pass-6 M4). The map footprint
       // is still exported alongside as `horizontal_area_m2` for GIS use.
-      set('area_m2', num(polygonAreaPlanar(pts) * A));
-      set('horizontal_area_m2', num(polygonAreaHorizontal(pts, up) * A));
-      set('perimeter_m', num(polygonPerimeter(pts) * L));
+      set('area_m2', num(polygonAreaPlanar(mp)));
+      set('horizontal_area_m2', num(polygonAreaHorizontal(mp, up)));
+      set('perimeter_m', num(polygonPerimeter(mp)));
       break;
     case 'box': {
-      const mb = boxMetrics(boxFromCorners(pts[0], pts[1]), up);
-      set('width_m', num(mb.width * L));
-      set('depth_m', num(mb.depth * L));
-      set('height_m', num(mb.height * Vv));
-      set('volume_m3', num(mb.volume * Vol));
+      const mb = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
+      set('width_m', num(mb.width));
+      set('depth_m', num(mb.depth));
+      set('height_m', num(mb.height));
+      set('volume_m3', num(mb.volume));
       break;
     }
     case 'volume':
-      set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
+      // A volume's base is a horizontal footprint (the map area under it).
+      set('area_m2', num(polygonAreaHorizontal(mp, up)));
       if (m.volume) {
-        // cut/fill/net are stored in the cloud's native (render) linear units.
-        // Convert to cubic metres with linear²·vertical (the box-volume factor
-        // and the panel's _fmtCutFill). Single-unit CRS collapses to L³.
+        // cut/fill/net are stored volumes in native units, not point-derived.
         set('cut_m3', num(m.volume.cut * Vol));
         set('fill_m3', num(m.volume.fill * Vol));
         set('net_m3', num(m.volume.net * Vol));

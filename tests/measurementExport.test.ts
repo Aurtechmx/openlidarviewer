@@ -75,6 +75,19 @@ describe('measurementMetrics', () => {
     expect(m.perimeter_m).toBe(40);
   });
 
+  it('compound CRS: slope/distance computed in a physical metric frame (M2)', () => {
+    // metre horizontal (unitToMetres=1) over foot vertical (verticalToMetres=0.3048).
+    // A 1-unit run with a 1-unit (= 1 ft) rise.
+    const slope = measurementMetrics(mk('slope', [[0, 0, 0], [1, 0, 1]]), UP, 1, 0.3048);
+    // Physical grade 0.3048 m / 1 m = 30.48 %, NOT the raw-coordinate 100 %.
+    expect(slope.grade_pct).toBeCloseTo(30.48, 1);
+    expect(slope.rise_m).toBeCloseTo(0.3048, 3);
+    expect(slope.run_m).toBeCloseTo(1, 3);
+    // And the 3D distance scales each axis by its own factor.
+    const dist = measurementMetrics(mk('distance', [[0, 0, 0], [1, 0, 1]]), UP, 1, 0.3048);
+    expect(dist.length_m).toBeCloseTo(Math.hypot(1, 0.3048), 3); // 1.0453, not 1.4142
+  });
+
   it('area_m2 is the PLANAR (live) area, with the map footprint alongside (M4)', () => {
     // A vertical 10×10 wall in the XZ plane: its true tilted-plane area is 100
     // (what the live headline shows), but its horizontal projection is ~0. The
