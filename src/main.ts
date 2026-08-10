@@ -176,6 +176,7 @@ import {
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
+import { makeNavPaletteActions } from './app/navPaletteActions';
 import { ModuleRegistry } from './analysis/ModuleApi';
 import type { AnalysisRow } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
@@ -829,15 +830,10 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   });
 });
 
-// v0.5.3 — on-canvas compass / ViewCube. Promoted from the v0.5.2 URL-only flag
-// to a discoverable, persisted control: toggle it from the command palette
-// ("Toggle compass"), and the choice is remembered. It stays OFF by default —
-// the app's left and right edges are full-height panel columns (left panels and
-// the Inspector), so a persistent gizmo has no free corner to occupy without
-// overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. The life cycle — preference, lazy mount, rAF loop,
-// tab-visibility pausing — lives in ui/compassController.ts; see that file for
-// why it is not four module-scope `let`s here.
+// v0.5.3 — on-canvas compass / ViewCube. A discoverable, persisted control
+// toggled from the command palette ("Toggle compass"); OFF by default (the full-
+// height left/Inspector columns leave no free corner). `?viewcube=1/0` forces it.
+// Life cycle lives in ui/compassController.ts (preference, lazy mount, rAF loop).
 const compass = createCompassController({
   host: () => stage.overlay,
   urlParams,
@@ -1737,6 +1733,7 @@ async function runDeriveClassification(): Promise<void> {
       warnings: result.warnings,
     });
     classLegendPanel.show();
+    processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
     void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
@@ -1815,6 +1812,7 @@ async function runFillUnclassified(): Promise<void> {
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
+    processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
     const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
@@ -1917,6 +1915,7 @@ const ACTION_REGISTRY = buildActionRegistry({
   hasScan,
   saveCurrentView,
   applyView,
+  ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
@@ -2090,6 +2089,7 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
+  onCommandPalette: () => void openCommandPalette(),
   onClose: () => closeScan(),
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
@@ -2823,14 +2823,14 @@ const terrainRunner = createTerrainAnalysisRunner({
       originH2: d.originH2,
     });
     inspector.setCoverageAvailable(true);
+    processStudio.markProduced(['dtm', 'contours']); // run generated the DTM + contours — show them produced
     // Fold the run's real analysed-point count into the Dataset Intelligence
     // card — the same `dtm.analyzedPointCount` the terrain report's
     // "Analysed points" row prints, so card and PDF agree. The streaming
     // attach-time summary necessarily wrote `analyzedPointCount: 0` (nothing
     // analysed yet); without this the Details row reads "Analyzed Points 0"
-    // forever on streamed scans. The refresher only acts when the last
-    // summary came from the streaming path, and the runner's stale-result
-    // guard means this never fires for a closed/replaced scan.
+    // forever on streamed scans. The refresher only acts when the last summary
+    // came from streaming, and the stale-result guard skips closed/replaced scans.
     inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
     // Fold the run's ENGINE-DERIVED terrain complexity (the VRM/TPI summary
     // computed alongside the core, off the interactive path) into the card:
@@ -3082,7 +3082,7 @@ const exportPanel = new ExportPanel({
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
-  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else processStudio.panel.hide(); // reveal on scan load (static/streaming), hide on close
+  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
