@@ -23,6 +23,20 @@ export type DecodedColumns = Record<string, Float64Array>;
 const COMPRESSED_VECTOR_SECTION = 1;
 const DATA_PACKET = 1;
 
+/**
+ * Read a little-endian uint64 that MUST be a safe integer. E57 offsets and
+ * lengths above 2^53 are unsupported (a browser cannot address them anyway),
+ * and coercing them through `Number` silently loses precision — so a value that
+ * large is a corrupt or hostile file and fails here, named.
+ */
+function safeUint64(view: DataView, offset: number, what: string): number {
+  const raw = view.getBigUint64(offset, true);
+  if (raw > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error(`E57: ${what} ${raw} exceeds the safe-integer range — unsupported.`);
+  }
+  return Number(raw);
+}
+
 /** Decode a scan's CompressedVector into per-field columns. */
 export function decodeCompressedVector(
   logical: Uint8Array,
@@ -37,8 +51,12 @@ export function decodeCompressedVector(
   if (logical[sectionStart] !== COMPRESSED_VECTOR_SECTION) {
     throw new Error('E57: expected a CompressedVector section.');
   }
-  const sectionLogicalLength = Number(view.getBigUint64(sectionStart + 8, true));
-  const dataPhysicalOffset = Number(view.getBigUint64(sectionStart + 16, true));
+  // Strict uint64 — the header path already refuses a non-safe-integer length,
+  // and these two section fields size the walk + a page-offset conversion, so a
+  // value above 2^53 must fail loudly here rather than silently lose precision
+  // (M7). `Number(getBigUint64)` alone drops bits above the safe range.
+  const sectionLogicalLength = safeUint64(view, sectionStart + 8, 'CompressedVector section length');
+  const dataPhysicalOffset = safeUint64(view, sectionStart + 16, 'CompressedVector data offset');
   // The data packets belong to this section only. In a multi-scan file the
   // next scan's section header follows immediately — and a section id is also
   // 1, identical to a data-packet type — so the walk must stop at the section
@@ -86,9 +104,29 @@ export function decodeCompressedVector(
     if (bytestreamCount !== fieldCount) {
       throw new Error('E57: packet bytestream count does not match the prototype.');
     }
-    let chunkAt = packetAt + 6 + bytestreamCount * 2;
+    // The packet must lie wholly inside this section AND the real buffer — a
+    // corrupt packetLength could otherwise run the walk past the section into
+    // the next scan, or past the file. `subarray` alone clamps to the buffer
+    // but knows nothing of the logical section/packet boundary (pass-4 #4).
+    const packetEnd = packetAt + packetLength;
+    if (packetEnd > sectionEnd || packetEnd > logical.length) {
+      throw new Error('E57: a data packet extends past its section or the file.');
+    }
+    // The 6-byte header + the uint16-per-stream length table must fit before the
+    // first bytestream; a packetLength shorter than that is malformed.
+    const streamsStart = packetAt + 6 + bytestreamCount * 2;
+    if (streamsStart > packetEnd) {
+      throw new Error('E57: packet too short for its bytestream length table.');
+    }
+    let chunkAt = streamsStart;
     for (let f = 0; f < fieldCount; f++) {
       const length = view.getUint16(packetAt + 6 + f * 2, true);
+      // Each bytestream must end within the packet payload. Without this a
+      // stream length larger than the packet consumed bytes from the NEXT
+      // packet/section, decoding into plausible-but-wrong coordinates.
+      if (chunkAt + length > packetEnd) {
+        throw new Error('E57: a bytestream extends past its packet boundary.');
+      }
       chunks[f].push(logical.subarray(chunkAt, chunkAt + length));
       chunkAt += length;
     }

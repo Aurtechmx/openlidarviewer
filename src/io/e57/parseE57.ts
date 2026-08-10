@@ -60,7 +60,15 @@ export function parseE57(buffer: ArrayBuffer): E57ParseResult {
   const { logical } = depage(buffer, header.pageSize);
 
   const xmlStart = physicalToLogical(header.xmlPhysicalOffset, header.pageSize);
-  const xmlBytes = logical.subarray(xmlStart, xmlStart + header.xmlLogicalLength);
+  // Prove the declared XML range fits the de-paged buffer before slicing it.
+  // `subarray` silently clips an out-of-range end, so a corrupt xmlLogicalLength
+  // would otherwise hand a truncated (or empty) document to the parser as if it
+  // were complete, rather than failing (M7).
+  const xmlEnd = xmlStart + header.xmlLogicalLength;
+  if (!Number.isSafeInteger(xmlEnd) || xmlEnd > logical.length) {
+    throw new Error('E57: the declared XML section extends past the file.');
+  }
+  const xmlBytes = logical.subarray(xmlStart, xmlEnd);
   const document = readE57Document(parseXml(new TextDecoder().decode(xmlBytes)));
 
   if (document.scans.length === 0) {
