@@ -95,7 +95,10 @@ export function createEptTransport(options: EptTransportOptions = {}): EptTransp
     const onTimeoutAbort = (): void => composed.abort();
     timeoutController.signal.addEventListener('abort', onTimeoutAbort, { once: true });
     try {
-      const response = await fetchFn(url, { signal: composed.signal });
+      // `redirect: 'error'`: the EPT host was validated against the SSRF
+      // block-list, but a redirect could reach a private address the literal
+      // check never resolved. Refuse redirect hops on every hierarchy/tile read.
+      const response = await fetchFn(url, { signal: composed.signal, redirect: 'error' });
       return response;
     } catch (err) {
       // A per-attempt timeout aborts the in-flight fetch exactly as a user
