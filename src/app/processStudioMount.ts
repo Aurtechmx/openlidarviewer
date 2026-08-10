@@ -23,6 +23,7 @@ import { deriveScanFacts } from '../process/scanFacts';
 import type { RawScanSignals } from '../process/scanFacts';
 import type { ScanFacts } from '../process/ProcessPlan';
 import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** LAS standard classification codes the panel keys ground/building on. */
 const CLASS_GROUND = 2;
@@ -38,8 +39,8 @@ export interface LiveScanAccessors {
   getStreamingPointCount(): number | null | undefined;
   /** Point count of the active static cloud; null/undefined when none is loaded. */
   getActivePointCount(): number | null | undefined;
-  /** The resolved CRS, or null when unknown — never assumed. */
-  getResolvedCrs(): CrsInfo | null | undefined;
+  /** The resolved CRS (override applied), or null when unknown — never assumed. */
+  getResolvedCrs(): CrsInfo | ResolvedCrs | null | undefined;
   /** Classification codes currently present on the active scan (empty when none). */
   getPresentClassCodes(): readonly number[];
 }

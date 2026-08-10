@@ -20,6 +20,7 @@
  */
 
 import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** How ready a derivable product is, given the loaded data. */
 export type Readiness = 'ready' | 'review' | 'blocked';
@@ -51,7 +52,7 @@ export interface ScanFacts {
   /** How much of the scan the operation can read — drives coverage honesty. */
   readonly coverage: Coverage;
   /** Detected CRS, or null when none is recoverable. */
-  readonly crs: CrsInfo | null;
+  readonly crs: CrsInfo | ResolvedCrs | null;
   /** Total points in the source (not the resident count). */
   readonly pointCount: number;
   readonly hasRgb: boolean;

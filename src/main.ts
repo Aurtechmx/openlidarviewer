@@ -2433,7 +2433,12 @@ const classLegendPanel = new ClassLegendPanel();
 const processStudio = createProcessStudioFromLive({
   getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
   getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
-  getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null,
+  // The service's current resolved CRS — the SAME value the Inspector shows,
+  // with any user override applied — not the raw file metadata. Reading
+  // `activeCloud().metadata.crs` here let Process Studio decide capability from
+  // a CRS the user had already corrected (C7). `current()` tracks whichever
+  // scan (static or streaming) is active, so the two surfaces cannot disagree.
+  getResolvedCrs: () => crsService.current(),
   getPresentClassCodes: () => classLegendPanel.presentCodes(),
 });
 
