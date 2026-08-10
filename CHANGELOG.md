@@ -6,66 +6,18 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Added
 
-- A Process Studio panel in the left rail that reads the loaded scan and reports
-  what it can safely produce — DTM, DSM, contours, building footprints,
-  cross-epoch change, volume — as `ready`, `review`, or `blocked` with a plain
-  reason, alongside the adaptive processing stages that apply and a set of
-  independent quality checks. It is display-only and reads the same capability
-  model the exporters read, so the panel and a real export cannot disagree about
-  what is eligible. It fails closed: an unconfirmed linear unit blocks the
-  georeferenced products, a missing or differing vertical reference blocks
-  cross-epoch height math, resident-only streaming coverage cannot back a
-  full-dataset product, and an unknown scan fact reads as the conservative state.
-- A feature-extraction core that turns classified building points into footprint
-  candidates (occupancy grid, connected components, boundary trace,
-  Douglas–Peucker simplification, dominance-gated orthogonalisation), exported as
-  RFC 7946 GeoJSON whose properties mark the polygons as derived candidates, not
-  surveyed outlines. A conductor primitive fits a principal-direction centerline
-  and a quadratic sag to linear point sets behind a linearity gate.
-- A registration core: a Kabsch/Horn rigid solve, a trimmed general ICP,
-  tie-point alignment, and a non-destructive Float64 transform store. The
-  interactive surfaces that drive it are staged for a later cycle.
-- Two absolute-accuracy DTM results against surveyed USGS checkpoints — 2.8 cm
-  RMSE on the Marsh Island UAS survey (101 of 104 RTK shots) and 3.9 cm on a
-  single forested Coconino checkpoint — both NAVD88 orthometric. These are
-  external agreement on found data, not a preregistered field campaign, and the
-  forest result is one measurement.
+- A Process Studio panel in the left rail that reports what a loaded scan can safely produce (DTM, DSM, contours, building footprints, cross-epoch change, volume), each as `ready`, `review`, or `blocked` with a plain reason, alongside the adaptive processing stages and independent quality checks. It reads the same capability model the exporters read, so the panel and a real export never disagree, and it fails closed on an unconfirmed unit or a missing vertical reference.
+- A feature-extraction core that turns classified building points into footprint candidates (occupancy grid, connected components, boundary trace, Douglas-Peucker simplification, dominance-gated orthogonalisation), exported as RFC 7946 GeoJSON marked as derived candidates, plus a conductor primitive that fits a centerline and a quadratic sag to linear point sets.
+- A registration core: a Kabsch/Horn rigid solve, a trimmed general ICP, tie-point alignment, and a non-destructive Float64 transform store.
+- Absolute-accuracy terrain evidence against surveyed checkpoints at two public USGS sites (Marsh Island, 101 checkpoints at 2.8 cm RMSE; AZ Coconino, a forested checkpoint at 3.9 cm), a slope cross-check on real steep Coconino terrain, and a ground-filter cross-check against PDAL on real low-relief Estonian terrain.
 
 ### Changed
 
-- Contours move from E3 to `E4_CROSS_IMPLEMENTATION_VALIDATED`: OLV's
-  marching-squares isolines agree with GDAL `gdal_contour` to a maximum
-  separation of 2.9×10⁻⁵ m on a frozen analytic tilted plane, recorded in a
-  freeze-verified study manifest. The map-sheet export routes as a validated
-  export; survey-grade contours remain a prohibited claim.
-- Slope stays at E4, with its cross-check now also run on a real 150 m Coconino
-  crop (~45° local slopes), agreeing with gdaldem to a maximum of 0.013° over
-  19,834 cells.
-- The SMRF-core ground filter is cross-checked against PDAL's full
-  `filters.smrf`: agreement on 0.99985 of 95,005 returns over a real boreal crop,
-  scoped to low-relief terrain.
-- `npm run validate:terrain` rolls the terrain field-validation legs into one
-  PASS / REVIEW / FAIL verdict.
+- Multi-layer mounting is enabled. Two georeferenced layers that declare the same projected CRS place into one shared frame at their real separation, non-destructively; the Float64 per-layer-frame migration keeps every boundary reading the world coordinate in the frame it names.
+- Contours are promoted to E4 with a GDAL `gdal_contour` cross-implementation check on a frozen analytic plane (agreement to 2.9e-5 m).
+- Remote streaming is hardened: signed URLs are scrubbed from error messages, every range read is bounded in bytes and time, the remote object's identity is pinned across a load, and a streaming scan carries a stable shell id.
 
-### Fixed
-
-- Signed remote EPT URLs are scrubbed from transport error messages, so a SAS or
-  presigned dataset's credential can no longer reach a screenshot or a support
-  ticket.
-- Every remote range read is bounded in bytes and in time: an over-large body is
-  refused mid-stream, and a stalled body is bounded by an idle and a whole-body
-  clock rather than hanging the load.
-- The remote object's identity is pinned across a load (validators and total
-  size re-checked on every read, `If-Match` where offered), so a file re-uploaded
-  mid-decode fails with a distinct code instead of splicing two versions.
-- A streaming scan carries a stable shell id, so the export and terrain
-  scan-identity guards catch a streaming-to-streaming swap that a previous null
-  id read as the same scan.
-
-### Internal
-
-- Multi-layer mounting remains disabled behind its flag while the per-layer
-  frame work completes; the two-scan mount stays held disabled.
+Full notes: [RELEASE_NOTES_v0.6.5.md](docs/releases/RELEASE_NOTES_v0.6.5.md)
 
 ## [0.6.4] - 2026-08-07
 

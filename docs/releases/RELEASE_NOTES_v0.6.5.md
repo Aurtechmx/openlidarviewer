@@ -12,7 +12,7 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 ## Feature extraction and registration
 
 - a feature-extraction core turns classified building points into footprint candidates: occupancy grid, connected components, boundary trace, Douglas–Peucker simplification, and a dominance-gated orthogonalisation, exported as RFC 7946 GeoJSON whose properties mark the polygons as derived candidates, not surveyed outlines. A conductor primitive fits a principal-direction centerline and a quadratic sag to linear point sets, behind a linearity gate;
-- a registration core lands the rigid-alignment maths — a Kabsch/Horn solve, a trimmed general ICP, tie-point alignment, and a non-destructive Float64 transform store — with the two-scan mount held disabled until the per-layer frame work completes. These are pure, tested cores; the interactive surfaces that drive them are staged for a later cycle.
+- a registration core lands the rigid-alignment maths (a Kabsch/Horn solve, a trimmed general ICP, tie-point alignment, and a non-destructive Float64 transform store). The per-layer frame work these depended on has landed, so the two-scan mount is enabled this cycle: two georeferenced tiles that declare the same projected CRS place into one shared frame at their real separation, non-destructively. The rigid-alignment cores are pure and tested; the interactive surfaces that drive registration from tie points are staged for a later cycle.
 
 ## Terrain evidence on real airborne LiDAR
 
@@ -35,7 +35,7 @@ Contours move from E3 to `E4_CROSS_IMPLEMENTATION_VALIDATED`. Our marching-squar
 
 ## Known limitations
 
-The complete list is in `KNOWN_LIMITATIONS_v0.6.5.md`. Carried forward from v0.6.4 and unchanged: multi-layer mounting remains disabled behind its flag; a large class of terrain and measurement products still fail closed on an unconfirmed unit rather than guess; there is no cross-CRS reprojection into a common viewer frame; and the residual streaming flicker at the point-budget boundary is unchanged. New this cycle: the DTM checkpoint results are external agreement on found data, not a preregistered field campaign, and the forest checkpoint is N=1; the ground-filter agreement holds on low-relief terrain and diverges on steep terrain, which is out of scope; multi-scan mounting and the feature and registration UIs are staged, not shipped.
+The complete list is in `KNOWN_LIMITATIONS_v0.6.5.md`. Carried forward from v0.6.4 and unchanged: a large class of terrain and measurement products still fail closed on an unconfirmed unit rather than guess; there is no cross-CRS reprojection into a common viewer frame; and the residual streaming flicker at the point-budget boundary is unchanged. New this cycle: multi-layer mounting is enabled, with one outstanding precision refinement (the renderer's far-apart-mount render-origin fold, bounded and refused past 1 mm by the mount-precision gate) and a dedicated pick/measure-on-a-mounted-tile browser assertion still to be written; the DTM checkpoint results are external agreement on found data, not a preregistered field campaign, and the forest checkpoint is N=1; the ground-filter agreement holds on low-relief terrain and diverges on steep terrain, which is out of scope; the feature-extraction and registration interactive UIs are staged, not shipped.
 
 ## Compatibility
 
