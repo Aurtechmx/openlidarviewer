@@ -26,7 +26,11 @@
 // to this service worker, so activate must only delete OLV's own caches — never
 // a co-hosted app's cache on the same origin.
 const CACHE_PREFIX = 'olv-shell-';
-const VERSION = `${CACHE_PREFIX}0.6.5`;
+// Kept as a plain string literal (not an interpolation of CACHE_PREFIX) so the
+// release verifier can machine-check the version by grep. Must stay prefixed
+// with CACHE_PREFIX's value; `lint:release-sync` enforces the version part on
+// release.
+const VERSION = 'olv-shell-0.6.5';
 const SHELL = [
   './',
   './index.html',
