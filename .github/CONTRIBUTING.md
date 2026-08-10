@@ -99,6 +99,16 @@ access their task needs, reviewed again when their role changes. Branch
 protection applies to everyone: pull requests, passing checks, resolved
 conversations, and linear history are required, with no direct pushes to `main`.
 
+## Scientific contributions
+
+Not every contribution is code. Independent reproduction, a surveyed-checkpoint
+dataset, a cross-check against ArcGIS or PDAL, or a careful read of a validation
+report all help, and they feed the evidence record the releases depend on.
+[docs/collaboration/RESEARCH_COLLABORATION.md](../docs/collaboration/RESEARCH_COLLABORATION.md)
+explains what is useful and what we can offer in return. Open an issue or a
+discussion to start, or email <info@aurtech.mx> for data you cannot post
+publicly.
+
 ## A note on honesty
 
 Do not describe a format, feature, or accuracy level as supported unless the
