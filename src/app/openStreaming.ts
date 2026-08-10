@@ -343,11 +343,12 @@ export async function openStreamingCopc(
   } catch (err) {
     if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
   }
-  // A streaming scan is exclusive — clear open static layers at the last
-  // moment, after the source opened above and just before its replacement
-  // attaches, so a failed open left the current scene intact. The abort check
-  // at the open still guards this; nothing yields between it and here.
-  deps.clearOpenStaticLayers();
+  // A streaming scan is exclusive, but the replacement must be TRANSACTIONAL:
+  // attach the new cloud FIRST (attachStreamingCloud disposes any prior
+  // streaming session only after it has built the new one), and only then clear
+  // the open static layers. Clearing before the attach meant a throw from
+  // attachStreamingCloud left the valid static scene already destroyed with no
+  // replacement — a blank viewer (pass-7 A).
   await viewer.attachStreamingCloud(
     cloud,
     copcDecoder,
@@ -356,8 +357,11 @@ export async function openStreamingCopc(
     deps.getStreamingBenchmark(),
   );
   // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-  // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
+  // drop the fresh cloud so a cancel adds nothing — the prior static scene is
+  // still intact because the clear below has not run yet.
   if (signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+  // The attach succeeded — now it is safe to retire the static layers.
+  deps.clearOpenStaticLayers();
   viewer.setMode('orbit');
   viewer.frameAll();
 
@@ -593,12 +597,13 @@ export async function handleRemoteEpt(
       cloud,
       cloud.dataType === 'laszip' ? deps.getEptLaszipDecoder() : null,
     );
-    // A streaming scan is exclusive — replace any prior streaming/static scene
-    // at the last moment, after the EPT source opened and the decoder is ready,
-    // so a failed or cancelled step above left the current scene intact.
+    // A streaming scan is exclusive, but the replacement is TRANSACTIONAL.
+    // attachStreamingCloud disposes any prior STREAMING session only after it
+    // has built the new one, so there is no eager closeStreaming() here — that
+    // tore the previous scene (and its UI) down before the new cloud was proven
+    // attachable, leaving a blank viewer on any failure. Static layers are
+    // cleared only after the attach succeeds (pass-7 A).
     if (controller.signal.aborted) throw new LoadCancelledError();
-    if (viewer.hasStreamingCloud) deps.closeStreaming();
-    deps.clearOpenStaticLayers();
     await viewer.attachStreamingCloud(
       cloud,
       decoder,
@@ -607,8 +612,10 @@ export async function handleRemoteEpt(
       null,
     );
     // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-    // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
+    // drop the fresh cloud so a cancel adds nothing — the prior scene is still
+    // intact because the static-layer clear below has not run yet.
     if (controller.signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+    deps.clearOpenStaticLayers();
     viewer.setMode('orbit');
     viewer.frameAll();
 

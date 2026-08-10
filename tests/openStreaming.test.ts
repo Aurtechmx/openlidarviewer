@@ -326,7 +326,7 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
  * assert whether the exclusive-scene teardown (clear static layers + attach the
  * replacement) ran — and it must run ONLY once the candidate has opened.
  */
-function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boolean } = {}) {
+function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; priorStreamingCloud?: boolean } = {}) {
   // A structurally-complete streaming cloud so the post-open panel/inspector
   // wiring runs without a stray undefined-access aborting the flow early.
   const cloud = {
@@ -345,7 +345,9 @@ function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boole
     if (over.openRejects) throw new Error('malformed COPC hierarchy');
     return cloud;
   });
-  const attachStreamingCloud = vi.fn(async () => {});
+  const attachStreamingCloud = vi.fn(async () => {
+    if (over.attachRejects) throw new Error('GPU mesh build failed');
+  });
   const viewer = {
     ready: Promise.resolve(),
     hasStreamingCloud: over.priorStreamingCloud ?? true,
@@ -474,5 +476,18 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     expect(calls.openSpy).toHaveBeenCalledTimes(1);
     expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the static scene when the ATTACH itself fails (pass-7 A)', async () => {
+    // The candidate opens, but attachStreamingCloud throws (e.g. GPU mesh build).
+    // Because the static-layer clear is deferred until AFTER a successful attach,
+    // a failed attach must leave the static scene intact — not a blank viewer.
+    const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/GPU mesh build failed/);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // The attach threw BEFORE the clear ran, so the static layers survive.
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
   });
 });
