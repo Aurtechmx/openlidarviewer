@@ -694,7 +694,7 @@ export class Inspector {
   /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
   private readonly _crsSection: HTMLElement | null = null;
   /** Caller registers this to react to user CRS overrides. */
-  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
+  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
   /** Lazily-created one-line CRS-mismatch note under the layer list. */
   private _layerNote: HTMLElement | null = null;
@@ -2189,7 +2189,7 @@ export class Inspector {
    * effective CRS, then feeding the result back through `setCrs`.
    */
   setOnCrsOverride(
-    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void,
+    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void,
   ): void {
     this._onCrsOverride = cb;
   }
@@ -2318,11 +2318,15 @@ export class Inspector {
       if (!this._onCrsOverride) return;
       const v = select.value;
       if (v === '__detected__') {
-        // Caller restores the detected CRS by re-running detection.
-        this._onCrsOverride({ epsg: null, kind: 'local' /* tag value, caller ignores */ });
+        // "Use detected" — clear any override and re-run detection. Distinct
+        // from "Local coordinates" below: both used to send the same
+        // { epsg: null, kind: 'local' }, so choosing local silently reverted to
+        // the detected CRS and a genuine local override could never persist (C3).
+        this._onCrsOverride({ epsg: null, kind: 'detected' });
         return;
       }
       if (v === '__local__') {
+        // Pin genuine local coordinates (no CRS) — persisted, not cleared.
         this._onCrsOverride({ epsg: null, kind: 'local' });
         return;
       }

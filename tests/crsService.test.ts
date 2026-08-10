@@ -271,7 +271,9 @@ describe('CrsService.setOverride', () => {
       source: 'las-vlr',
     });
     const next = svc.setOverride({
-      override: { epsg: null, kind: 'local' },
+      // 'detected' is the clear/use-detected command (C3) — 'local' now PERSISTS
+      // a genuine local override instead of clearing.
+      override: { epsg: null, kind: 'detected' },
       detected: NAD83_UTM_18N,
       source: 'las-vlr',
     });
@@ -655,5 +657,37 @@ describe('CrsService — resolveFor resolves any cloud without mutating state', 
     const r = svc.resolveFor({ name: 'x.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
     expect(r.epsg).toBe(26918);
     expect(r.userConfirmed).toBe(false);
+  });
+});
+
+// ── C3: "use detected" and "local" are distinct commands ────────────
+
+describe('CrsService — detected vs local are distinct (C3)', () => {
+  it("'detected' clears the override and falls back to the detected CRS", () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    // First pin a projected override, so there is something to clear.
+    svc.setOverride({ override: { epsg: 32612, kind: 'projected' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(svc.current()?.epsg).toBe(32612);
+    // 'detected' clears it → back to the detected 26918.
+    const r = svc.setOverride({ override: { epsg: null, kind: 'detected' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(r?.epsg).toBe(26918);
+    expect(r?.userConfirmed).toBe(false);
+    expect(port.store.has('s.laz')).toBe(false); // cleared
+  });
+
+  it("'local' PERSISTS a genuine local-coordinates override (does not revert to detected)", () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const r = svc.setOverride({ override: { epsg: null, kind: 'local' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(r?.kind).toBe('local');
+    // The override is stored (not cleared)…
+    expect(port.store.get('s.laz')?.kind).toBe('local');
+    // …and survives a re-resolve of the same scan — it does NOT fall back to
+    // the detected 26918 the way the old collided sentinel did.
+    const reresolved = svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(reresolved.kind).toBe('local');
   });
 });

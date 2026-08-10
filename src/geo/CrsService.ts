@@ -201,14 +201,17 @@ export class CrsService {
    * configured port, re-resolves immediately, and broadcasts the new
    * CRS to listeners. No-op when there's no active scan.
    *
-   * `epsg === null && kind === 'local'` is the "use detected" sentinel
-   * — clear the persisted override and fall back to whatever the
-   * loader supplied for the active dataset.
+   * `kind === 'detected'` is the "use detected" command — clear the persisted
+   * override and fall back to whatever the loader supplied. It is DISTINCT from
+   * `kind === 'local'` (with `epsg: null`), which persists a genuine
+   * local-coordinates override; the two used to collide on the same
+   * `{ epsg: null, kind: 'local' }` value, so "Local coordinates" silently
+   * restored the detected CRS instead of pinning local (C3).
    */
   setOverride(args: {
     readonly override: {
       readonly epsg: number | null;
-      readonly kind: 'projected' | 'geographic' | 'local';
+      readonly kind: 'projected' | 'geographic' | 'local' | 'detected';
     };
     /**
      * The detected CRS for the active dataset, so the service can
@@ -219,7 +222,7 @@ export class CrsService {
     readonly source: CrsSource;
   }): ResolvedCrs | null {
     if (!this._currentDatasetKey) return null;
-    if (args.override.epsg === null && args.override.kind === 'local') {
+    if (args.override.kind === 'detected') {
       this._port.clear(this._currentDatasetKey);
       const resolved = this._resolveDatum(
         resolvedFromCrsInfo(args.detected, args.source) ?? unknownCrs(),

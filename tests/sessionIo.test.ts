@@ -473,6 +473,23 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 
+  it('restores a LOCAL session CRS as a persisted local override (C4)', async () => {
+    // The file has no declared CRS; the author pinned "Local coordinates". The
+    // old `epsg != null` gate dropped this, so the local choice never
+    // round-tripped. It must now restore as { epsg: null, kind: 'local' }.
+    const { deps, calls } = makeDeps({ streaming: strongStreaming() });
+    await importSession(
+      asFile(sessionJson({
+        crs: resolvedCrs({ kind: 'local', epsg: undefined, linearUnit: 'unknown', name: 'Local coordinates (no CRS)' }),
+        scanSummary: strongSummary(),
+      })),
+      {},
+      deps,
+    );
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: null, kind: 'local' });
+  });
+
   it('keeps the file’s CRS when the session declares none — no override, no conflict', async () => {
     const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613 }) });
     await importSession(asFile(sessionJson({ scanSummary: strongSummary() })), {}, deps);

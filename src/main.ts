@@ -4991,6 +4991,11 @@ async function exportSession(): Promise<void> {
         // serializer omits it when undefined so no-analysis sessions keep their
         // byte-shape.
         processingManifest,
+        // The active scan's RESOLVED CRS (detection + any user override), so the
+        // choice round-trips and a re-open does not silently re-prompt or revert
+        // to the file's declared CRS (C4). The v4 schema already carries this
+        // field; the exporter simply never populated it.
+        crs: crsService.current() ?? undefined,
       });
     },
   });

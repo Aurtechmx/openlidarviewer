@@ -431,12 +431,19 @@ export async function importSession(
     // with the file's, or no cloud is loaded for it to disagree with. Restore the
     // author's CRS override so an Evidence Capsule round-trips without
     // re-prompting; a session that declared no usable CRS leaves the file's own.
+    // A projected/geographic override needs its EPSG; a local override is
+    // epsg-less by definition, so the old `epsg != null` gate silently dropped
+    // it and a saved "Local coordinates" choice never round-tripped (C4). Allow
+    // local through (it persists post-C3); an unknown CRS still leaves the
+    // file's own.
     if (
-      session.crs?.epsg != null &&
-      (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
+      session.crs &&
+      (session.crs.kind === 'local' ||
+        ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
+          session.crs.epsg != null))
     ) {
       deps.setCrsOverride({
-        override: { epsg: session.crs.epsg, kind: session.crs.kind },
+        override: { epsg: session.crs.epsg ?? null, kind: session.crs.kind },
         detected: deps.getActiveScanId()
           ? viewer.getCloud(deps.getActiveScanId()!)?.metadata?.crs ?? undefined
           : undefined,
