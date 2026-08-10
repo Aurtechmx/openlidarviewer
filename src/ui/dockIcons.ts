@@ -53,6 +53,11 @@ export const ICON_LINK = svg(
     `<path d="M14 10a3.5 3.5 0 0 1 0 5l-2 2a3.5 3.5 0 0 1-5-5l1-1"/>`,
 );
 
+/** Command palette — a search magnifier (the palette is a searchable command list). */
+export const ICON_COMMAND = svg(
+  `<circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/>`,
+);
+
 /** Help — a question mark in a circle. */
 export const ICON_HELP = svg(
   `<circle cx="12" cy="12" r="9"/>` +

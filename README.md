@@ -406,6 +406,12 @@ OpenLiDARViewer stands on a lot of open work, and we're grateful for it.
 
 **Standards & formats:** ASPRS (LAS/LAZ), the Khronos Group (glTF/GLB), ASTM (E57), and OGC / IOGP-EPSG (coordinate systems). Particular thanks to **Howard Butler** and **Hobu, Inc.**, whose work on laz-perf, COPC, and Entwine this viewer relies on.
 
+## Citation & research collaboration
+
+OpenLiDARViewer is MIT-licensed so its code and methods stay open. The licence lets you use, change, and redistribute the software, and it says nothing about citation. Citation is a separate request: if the software, its validation framework, algorithms, or documentation helped your research, software, thesis, or commercial work, please cite it. GitHub's "Cite this repository" button reads [CITATION.cff](CITATION.cff) and gives you the current reference, including BibTeX.
+
+Being cited is the minimum; working together is the better outcome. Independent reproduction, new surveyed-checkpoint datasets, terrain and contour cross-checks against a reference tool, and method comparisons feed the evidence record directly, and a result that holds or fails on your data tells us more than one that only holds on ours. If you have a dataset or a study in mind, open an issue or a discussion. The specifics, and what we can offer in return, are in [docs/collaboration/RESEARCH_COLLABORATION.md](docs/collaboration/RESEARCH_COLLABORATION.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE). If you use OpenLiDARViewer in research, a [CITATION.cff](CITATION.cff) is included. Developed by Aurtech ([aurtech.mx](https://aurtech.mx)).
