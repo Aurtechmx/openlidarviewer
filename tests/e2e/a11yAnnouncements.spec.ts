@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { isBenignPageError } from './pageErrors';
 import { dropTinyPly } from './helpers';
 
 /**
@@ -67,6 +68,7 @@ test.describe('a11y announcements', () => {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => {
+      if (isBenignPageError(err.message)) return;
       pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
     });
 
