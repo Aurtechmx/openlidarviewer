@@ -26,6 +26,7 @@ import {
   polylineLength,
   profileMetrics,
   polygonAreaHorizontal,
+  polygonAreaPlanar,
   polygonPerimeter,
   angleAtVertex,
   slopeBetween,
@@ -122,7 +123,13 @@ export function measurementMetrics(
       break;
     }
     case 'area':
-      set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
+      // `area_m2` is the PRIMARY Area measurement — the true tilted-plane area
+      // the live headline and the aggregate chain both report (polygonAreaPlanar).
+      // Exporting the horizontal projection here made a vertical 1 m×1 m wall
+      // read ~1 m² on screen but 0 m² in the file (pass-6 M4). The map footprint
+      // is still exported alongside as `horizontal_area_m2` for GIS use.
+      set('area_m2', num(polygonAreaPlanar(pts) * A));
+      set('horizontal_area_m2', num(polygonAreaHorizontal(pts, up) * A));
       set('perimeter_m', num(polygonPerimeter(pts) * L));
       break;
     case 'box': {
@@ -236,7 +243,7 @@ export function measurementsToGeoJSON(
 const CSV_COLUMNS = [
   'id', 'name', 'kind', 'vertices',
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
-  'grade_pct', 'angle_deg', 'area_m2', 'perimeter_m',
+  'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
   'evidence',
 ] as const;

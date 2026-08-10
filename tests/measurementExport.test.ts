@@ -75,6 +75,16 @@ describe('measurementMetrics', () => {
     expect(m.perimeter_m).toBe(40);
   });
 
+  it('area_m2 is the PLANAR (live) area, with the map footprint alongside (M4)', () => {
+    // A vertical 10×10 wall in the XZ plane: its true tilted-plane area is 100
+    // (what the live headline shows), but its horizontal projection is ~0. The
+    // export used to write the projection as `area_m2`, contradicting the screen.
+    const wall = mk('area', [[0, 0, 0], [10, 0, 0], [10, 0, 10], [0, 0, 10]], { closed: true });
+    const m = measurementMetrics(wall, UP, 1);
+    expect(m.area_m2).toBeCloseTo(100, 6);
+    expect(m.horizontal_area_m2).toBeCloseTo(0, 6);
+  });
+
   it('box → width / depth / height / volume', () => {
     expect(measurementMetrics(BOX, UP, 1)).toMatchObject({
       width_m: 2, depth_m: 3, height_m: 4, volume_m3: 24,
