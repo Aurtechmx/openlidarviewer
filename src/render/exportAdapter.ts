@@ -64,12 +64,17 @@ export interface ExportAdapterStreaming {
  * snapshots, so the adapter always reflects the CURRENT loaded clouds — the
  * property the previous inline construction had by being rebuilt per call.
  */
-/** A cloud's export CRS reduced to what the georeference gate needs: the WKT to
- *  stamp into the `.prj` (null = do not georeference), and a stable equality key
- *  (null = no declared CRS, which never forces a conflict). */
+/** A cloud's RESOLVED export CRS: the WKT to stamp into the `.prj` (null = do not
+ *  georeference), a stable equality key (null = no declared CRS, never a
+ *  conflict), and the display label / unit / epsg so the export report's CRS name
+ *  and scale-bar unit match the `.prj` rather than the rejected declared CRS
+ *  (1C). All null for a local / unknown resolution. */
 export interface ExportCloudCrs {
   readonly wkt: string | null;
   readonly key: string | null;
+  readonly name: string | null;
+  readonly unit: string | null;
+  readonly epsg: number | null;
 }
 
 export interface ExportAdapterHost {
@@ -147,7 +152,13 @@ function metadataCrsKeyWkt(cloud: PointCloud): ExportCloudCrs {
       : detected?.name
         ? `name:${detected.name.trim().toLowerCase()}`
         : null;
-  return { wkt: detected?.wkt ?? null, key };
+  return {
+    wkt: detected?.wkt ?? null,
+    key,
+    name: detected?.name ?? null,
+    unit: detected ? linearUnitLabel(detected.linearUnit) : null,
+    epsg: detected?.epsg ?? null,
+  };
 }
 
 /** Build the {@link ExportSceneAdapter} the Studio exporters drive. */
@@ -383,14 +394,15 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           epsg: fromStreaming.epsg,
         };
       }
+      // Static clouds: the RESOLVED CRS (override applied) via the wired resolver,
+      // so the export report's CRS name and scale-bar unit match the .prj rather
+      // than the rejected declared CRS (1C). A local resolution yields a null name
+      // and is skipped — a local scan reports no CRS, not the rejected one. Falls
+      // back to declared metadata only when no resolver is wired (pure tests).
       for (const { cloud } of visibleEntries()) {
-        const crs = cloud.metadata?.crs;
-        if (crs) {
-          return {
-            name: crs.name,
-            unit: linearUnitLabel(crs.linearUnit),
-            epsg: crs.epsg,
-          };
+        const rc = host.resolveCloudCrs ? host.resolveCloudCrs(cloud) : metadataCrsKeyWkt(cloud);
+        if (rc.name) {
+          return { name: rc.name, unit: rc.unit ?? 'units', epsg: rc.epsg ?? undefined };
         }
       }
       return null;

@@ -134,7 +134,7 @@ describe('export adapter — georeference honesty', () => {
       host({
         clouds: () =>
           new Map([['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32612, wkt: 'DECLARED-WKT' } } })]]),
-        resolveCloudCrs: () => ({ wkt: null, key: null }),
+        resolveCloudCrs: () => ({ wkt: null, key: null, name: null, unit: null, epsg: null }),
       }),
     );
     expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: null });
@@ -146,10 +146,33 @@ describe('export adapter — georeference honesty', () => {
         clouds: () =>
           new Map([['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32611, wkt: 'DECLARED-11N' } } })]]),
         // Authority resolved the override to 12N.
-        resolveCloudCrs: () => ({ wkt: 'RESOLVED-12N', key: 'epsg:32612' }),
+        resolveCloudCrs: () => ({ wkt: 'RESOLVED-12N', key: 'epsg:32612', name: 'UTM 12N', unit: 'm', epsg: 32612 }),
       }),
     );
     expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: 'RESOLVED-12N' });
+  });
+
+  it('crsLabel reports the RESOLVED name/unit, not the declared metadata (1C)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([['a', cloud({ metadata: { crs: { epsg: 32611, name: 'DECLARED 11N', linearUnit: 'foot' } } })]]),
+        resolveCloudCrs: () => ({ wkt: 'W', key: 'epsg:32612', name: 'UTM 12N', unit: 'metres', epsg: 32612 }),
+      }),
+    );
+    // Label + unit come from the resolved CRS so the export report matches the .prj.
+    expect(a.crsLabel!()).toEqual({ name: 'UTM 12N', unit: 'metres', epsg: 32612 });
+  });
+
+  it('crsLabel reports no CRS when resolved to local, though metadata declares one (1C)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([['a', cloud({ metadata: { crs: { epsg: 32611, name: 'DECLARED', linearUnit: 'metre' } } })]]),
+        resolveCloudCrs: () => ({ wkt: null, key: null, name: null, unit: null, epsg: null }),
+      }),
+    );
+    expect(a.crsLabel!()).toBeNull();
   });
 });
 

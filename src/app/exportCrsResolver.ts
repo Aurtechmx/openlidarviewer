@@ -19,6 +19,7 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ExportCloudCrs } from '../render/exportAdapter';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { crsIsKnown } from './kmlActions';
+import { linearUnitLabel } from '../io/crs';
 
 export interface ExportCrsResolverDeps {
   /** The active scan's resolved CRS (override applied), or null. */
@@ -43,10 +44,19 @@ export function makeExportCrsResolver(
   return (cloud) => {
     const resolved =
       cloud === deps.activeCloud() ? deps.current() : deps.resolveForCloud(cloud);
-    // A local / unknown / unresolved CRS must not georeference: null WKT (no
-    // .prj) and null key (never a false conflict). This is the C10 guard — a
-    // rejected override resolves to local here, so its declared CRS never ships.
-    if (!resolved || !crsIsKnown(resolved)) return { wkt: null, key: null };
-    return { wkt: resolved.wkt ?? null, key: crsKeyOf(resolved) };
+    // A local / unknown / unresolved CRS must not georeference OR label: every
+    // field null (no .prj, no false conflict, no CRS name/unit in the export
+    // report). This is the C10/1C guard — a rejected override resolves to local
+    // here, so its declared CRS never ships in any form.
+    if (!resolved || !crsIsKnown(resolved)) {
+      return { wkt: null, key: null, name: null, unit: null, epsg: null };
+    }
+    return {
+      wkt: resolved.wkt ?? null,
+      key: crsKeyOf(resolved),
+      name: resolved.name,
+      unit: linearUnitLabel(resolved.linearUnit),
+      epsg: resolved.epsg ?? null,
+    };
   };
 }
