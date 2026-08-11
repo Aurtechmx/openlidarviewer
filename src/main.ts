@@ -131,6 +131,7 @@ import {
   siteKmlStatus,
   type KmlActionDeps,
 } from './app/kmlActions';
+import { makeExportCrsResolver } from './app/exportCrsResolver';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -541,6 +542,14 @@ const viewerLoaded: Promise<Viewer> = (async () => {
   // the renderer picks WebGL 2 instead of throwing on the first scan open.
   const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
   viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackend(gpu)) === 'webgl2');
+  // Feed the export adapter the RESOLVED CRS per cloud, so a rejected/local
+  // override never reaches the ortho .prj (C10). Rule lives in the app module.
+  viewer.setExportCrsResolver(makeExportCrsResolver({
+    current: () => crsService.current(),
+    resolveForCloud: (cloud) =>
+      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
+    activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
+  }));
   return viewer;
 })();
 

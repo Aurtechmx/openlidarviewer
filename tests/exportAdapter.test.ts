@@ -125,6 +125,32 @@ describe('export adapter — georeference honesty', () => {
     );
     expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: 'WKT' });
   });
+
+  it('a resolved LOCAL override does not resurrect the declared CRS into the .prj (C10)', () => {
+    // The file DECLARES EPSG:32612 with a WKT, but the CRS authority resolves it
+    // to Local (the user rejected it). With the resolver wired, the ortho must
+    // NOT georeference — no WKT — rather than stamping the rejected CRS.
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32612, wkt: 'DECLARED-WKT' } } })]]),
+        resolveCloudCrs: () => ({ wkt: null, key: null }),
+      }),
+    );
+    expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: null });
+  });
+
+  it('uses the RESOLVED wkt (override applied), not the declared one (C10)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32611, wkt: 'DECLARED-11N' } } })]]),
+        // Authority resolved the override to 12N.
+        resolveCloudCrs: () => ({ wkt: 'RESOLVED-12N', key: 'epsg:32612' }),
+      }),
+    );
+    expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: 'RESOLVED-12N' });
+  });
 });
 
 describe('export adapter — point totals', () => {

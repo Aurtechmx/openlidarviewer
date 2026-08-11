@@ -64,9 +64,24 @@ export interface ExportAdapterStreaming {
  * snapshots, so the adapter always reflects the CURRENT loaded clouds — the
  * property the previous inline construction had by being rebuilt per call.
  */
+/** A cloud's export CRS reduced to what the georeference gate needs: the WKT to
+ *  stamp into the `.prj` (null = do not georeference), and a stable equality key
+ *  (null = no declared CRS, which never forces a conflict). */
+export interface ExportCloudCrs {
+  readonly wkt: string | null;
+  readonly key: string | null;
+}
+
 export interface ExportAdapterHost {
   clouds(): ReadonlyMap<string, ExportAdapterCloud>;
   streaming(): ExportAdapterStreaming | null;
+  /**
+   * The RESOLVED CRS for a static cloud (CRS authority, override applied), or
+   * omitted when the host wires no resolver — then the adapter falls back to the
+   * cloud's declared metadata. Wiring this is what stops a rejected/local CRS
+   * override from reaching the ortho `.prj` (pass-5 C10).
+   */
+  resolveCloudCrs?: (cloud: PointCloud) => ExportCloudCrs;
   setColorMode(id: string, mode: ColorMode): void;
   setStreamingColorMode(mode: ColorMode): void;
   /** Toggle a static layer's render visibility (for the export scope). */
@@ -114,6 +129,25 @@ function staticLayerSupportsMode(cloud: PointCloud, mode: ColorMode): boolean {
     default:
       return true;
   }
+}
+
+/**
+ * The georeference CRS derived from a cloud's DECLARED metadata — the fallback
+ * when no resolver is wired. EPSG when declared, else the display name, mirroring
+ * `layerCompatibility.horizontalKey`; the WKT is the file's own. Source-declared
+ * provenance, so it does not honour a user override (that is what a wired
+ * `resolveCloudCrs` is for) — but it never resurrects a rejected CRS on its own,
+ * because with a resolver wired this helper is not consulted.
+ */
+function metadataCrsKeyWkt(cloud: PointCloud): ExportCloudCrs {
+  const detected = cloud.metadata?.crs;
+  const key =
+    detected?.epsg != null && Number.isFinite(detected.epsg)
+      ? `epsg:${detected.epsg}`
+      : detected?.name
+        ? `name:${detected.name.trim().toLowerCase()}`
+        : null;
+  return { wkt: detected?.wkt ?? null, key };
 }
 
 /** Build the {@link ExportSceneAdapter} the Studio exporters drive. */
@@ -460,18 +494,21 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
           return null; // conflicting frames — honestly not georeferenceable
         }
-        const detected = cloud.metadata?.crs;
-        const key =
-          detected?.epsg != null && Number.isFinite(detected.epsg)
-            ? `epsg:${detected.epsg}`
-            : detected?.name
-              ? `name:${detected.name.trim().toLowerCase()}`
-              : null;
-        if (key !== null) {
-          if (crsKey === null) crsKey = key;
-          else if (crsKey !== key) return null; // conflicting CRS — not georeferenceable
+        // The RESOLVED CRS (CRS authority, override applied) when the host wires
+        // a resolver — so a user who rejected the file's declared CRS (chose
+        // Local, or a different one) can never have the rejected CRS stamped into
+        // the .prj (pass-5 C10). A local resolution yields a null wkt AND a null
+        // key, so it neither georeferences nor forces a false CRS conflict. When
+        // no resolver is wired (the pure-adapter tests) we fall back to the file's
+        // declared metadata — the same source-declared provenance as before.
+        const rc = host.resolveCloudCrs
+          ? host.resolveCloudCrs(cloud)
+          : metadataCrsKeyWkt(cloud);
+        if (rc.key !== null) {
+          if (crsKey === null) crsKey = rc.key;
+          else if (crsKey !== rc.key) return null; // conflicting CRS — not georeferenceable
         }
-        wkt ??= detected?.wkt ?? null;
+        wkt ??= rc.wkt;
       }
       return any ? { worldOrigin, wkt } : null;
     },

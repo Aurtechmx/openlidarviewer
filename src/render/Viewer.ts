@@ -65,7 +65,7 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
-import type { ExportAdapterCloud } from './exportAdapter';
+import type { ExportAdapterCloud, ExportCloudCrs } from './exportAdapter';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
@@ -4780,8 +4780,23 @@ export class Viewer {
    * to drive the live Viewer. Held inline (not as a stored field) so the
    * adapter always reflects the current loaded clouds without bookkeeping.
    */
+  /**
+   * The app wires the CRS authority in here so the export adapter's georeference
+   * reads the RESOLVED CRS (override applied), not the file's declared metadata —
+   * a rejected/local override then can't reach the ortho `.prj` (C10). Null until
+   * wired; the adapter falls back to declared metadata, matching the pre-wiring
+   * behaviour the pure adapter tests exercise.
+   */
+  private _exportCrsResolver: ((cloud: PointCloud) => ExportCloudCrs) | null = null;
+
+  setExportCrsResolver(fn: (cloud: PointCloud) => ExportCloudCrs): void {
+    this._exportCrsResolver = fn;
+  }
+
   private _buildExportAdapter(): ExportSceneAdapter {
+    const resolveCloudCrs = this._exportCrsResolver;
     return buildExportAdapter({
+      ...(resolveCloudCrs ? { resolveCloudCrs } : {}),
       // Project each live entry into the adapter's slice, carrying the render
       // visibility (mesh.visible) and Float64 placement so the export answers
       // over the visible, placed scene (pass-7 #4/#5/#6). Rebuilt per call, so
