@@ -2,6 +2,10 @@
 
 The version-agnostic toolchain, pinning, and method are in [REPRODUCIBILITY.md](../../REPRODUCIBILITY.md). This note fixes the figures reported for this release to the commands that produce them, so a reviewer can regenerate each rather than take it on trust.
 
+## Validation baseline
+
+The frozen validation snapshot under `validation/snapshot/` is the 0.6.2 validation baseline, carried forward. 0.6.3 through 0.6.5 added features and evidence but did not re-run the cross-platform portability workflow or a defect audit, so the snapshot's defect registry, portability record (`docs/validation/evidence/portability-v0.6.2/`), and build-identity are the 0.6.2 ones, unchanged because the runs that would refresh them were not repeated. Its checks still hold on its own bytes; it is a baseline this release inherits, not a fresh 0.6.5 run.
+
 ## Toolchain
 
 - Node.js ≥ 22 (CI uses 22); dependencies pinned by `package-lock.json`.
