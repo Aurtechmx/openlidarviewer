@@ -108,7 +108,6 @@ docs/project/RELEASE_CHECKLIST.md export-ignore
 # reviewer-facing document. Kept out of the deposit like the other plans.
 docs/architecture/coordinate-integrity-roadmap.md export-ignore
 
-# Internal agent/tool design specs (superpowers) are development records —
-# planning notes with "not in this change" scope language, not reviewer-facing
+# Internal working notes and draft design specs, not reviewer-facing
 # documentation. Kept in git history; excluded from the scholarly deposit.
 docs/superpowers/ export-ignore
