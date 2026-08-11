@@ -9,6 +9,7 @@ import { reprojectGlobal } from '../src/convert/reproject';
 import { cloudToGlobal } from '../src/convert/globalPoints';
 import { convertCloud } from '../src/convert/convertCloud';
 import type { CrsInfo } from '../src/io/crs';
+import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 
 function utmCloud(crs?: CrsInfo | null): PointCloud {
   // A few points near UTM 11N easting 500000 / northing 4000000.
@@ -141,6 +142,14 @@ describe('convertCloud — resolved source CRS wins over declared metadata', () 
   const declared11N = utmCloud({
     source: 'wkt', name: 'UTM 11N', epsg: 32611, linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false,
   });
+  const resolved = (epsg: number, wkt?: string): ResolvedCrs => ({
+    kind: 'projected', name: `EPSG:${epsg}`, epsg, wkt,
+    linearUnit: 'metre', linearUnitToMetres: 1, source: 'wkt', confidence: 'high', userConfirmed: true,
+  } as unknown as ResolvedCrs);
+  const resolvedLocal = (): ResolvedCrs => ({
+    kind: 'local', name: 'Local coordinates (no CRS)', linearUnit: 'unknown', linearUnitToMetres: 1,
+    source: 'none', confidence: 'low', userConfirmed: true,
+  } as unknown as ResolvedCrs);
 
   it('no override is byte-identical to the pre-fix path (metadata fallback)', () => {
     const withUndefined = convertCloud(declared11N, { format: 'las' });
@@ -152,7 +161,7 @@ describe('convertCloud — resolved source CRS wins over declared metadata', () 
   it('reprojects FROM the resolved override, not the rejected declared CRS', () => {
     const r = convertCloud(declared11N, {
       format: 'xyz', crsMode: 'reproject', targetEpsg: 4326,
-      resolvedSourceCrs: { epsg: 32612 }, // user overrode to UTM 12N
+      resolvedSourceCrs: resolved(32612), // user overrode to UTM 12N
     });
     expect(r.report.ok).toBe(true);
     // 12N places these eastings ~6° further east than 11N would, so the fix is
@@ -167,7 +176,7 @@ describe('convertCloud — resolved source CRS wins over declared metadata', () 
     // keep mode: with a local resolved CRS the output must read "no CRS", never
     // the rejected 32611 from metadata.
     const r = convertCloud(declared11N, {
-      format: 'las', crsMode: 'keep', resolvedSourceCrs: { epsg: null },
+      format: 'las', crsMode: 'keep', resolvedSourceCrs: resolvedLocal(),
     });
     expect(r.report.crsNote).toMatch(/no CRS|local/i);
     expect(r.report.crsNote).not.toMatch(/32611/);
@@ -175,7 +184,7 @@ describe('convertCloud — resolved source CRS wins over declared metadata', () 
 
   it('a local override refuses a reproject rather than transforming from the rejected CRS', () => {
     const r = convertCloud(declared11N, {
-      format: 'las', crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: { epsg: null },
+      format: 'las', crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: resolvedLocal(),
     });
     // No usable source CRS → the same honest refusal as a code-less file, NOT a
     // silent reprojection from the declared-but-rejected 32611.

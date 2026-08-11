@@ -15,7 +15,8 @@ import { el } from './dom';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
-import type { ResolvedSourceCrs } from '../convert/transformProvenance';
+import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
@@ -87,7 +88,7 @@ export interface ExportPanelCallbacks {
    * `metadata.crs` — a rejected CRS can never reproject or tag the output
    * (blocker #2D). Omitted → the converter falls back to the detected metadata.
    */
-  getResolvedSourceCrs?: () => ResolvedSourceCrs | null;
+  getResolvedSourceCrs?: () => CrsInfo | ResolvedCrs | null;
   /** Whether a full-resolution re-decode of the source is possible (local file). */
   hasFullSource: () => boolean;
   /** Whether the loaded cloud is a reduced subset of the source. */

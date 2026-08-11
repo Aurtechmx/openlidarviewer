@@ -7,7 +7,9 @@
  * output formats. Everything here is deterministic and unit-testable.
  */
 
-import type { TransformProvenance, ResolvedSourceCrs } from './transformProvenance';
+import type { TransformProvenance } from './transformProvenance';
+import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** Output formats the converter can write. */
 export type ConvertFormat = 'las14' | 'las' | 'laz' | 'xyz' | 'asc';
@@ -59,8 +61,12 @@ export interface ConvertOptions {
    * `undefined` = no resolver in play (the pure convert path), which falls back
    * to the detected metadata. A resolved value with a null `epsg` is a local /
    * code-less frame — honoured as "no CRS", never back-filled from metadata.
+   * Carries the full resolved CRS (epsg, WKT, horizontal + vertical units and
+   * datum, name), so the output's CRS record, `.prj` WKT and unit metadata all
+   * describe the resolved CRS rather than mixing a resolved EPSG with the
+   * declared WKT/units (blocker 2).
    */
-  readonly resolvedSourceCrs?: ResolvedSourceCrs | null;
+  readonly resolvedSourceCrs?: CrsInfo | ResolvedCrs | null;
   /** Target EPSG for `assign` (the tag to write) and `reproject` (the destination). */
   readonly targetEpsg?: number | null;
   /**
