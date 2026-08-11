@@ -157,7 +157,7 @@ find "$TMP/source" -type f -exec chmod 644 {} +
 #
 # So this asserts the OUTCOME over the assembled tree rather than trusting the
 # rules. A new internal document is caught the first time it is packaged.
-INTERNAL_PATTERNS='READINESS_REPORT|/_audit/|-plan\.md$|HANDOFF|ROADMAP-INTERNAL|_PRIVATE|GITHUB-PUBLISH-CHECKLIST'
+INTERNAL_PATTERNS='READINESS_REPORT|/_audit/|-plan\.md$|HANDOFF|ROADMAP-INTERNAL|_PRIVATE|GITHUB-PUBLISH-CHECKLIST|/superpowers/'
 LEAKED="$(cd "$TMP/source" && find . -type f | sed 's|^\./||' | grep -E "$INTERNAL_PATTERNS" || true)"
 if [[ -n "$LEAKED" ]]; then
   echo "✗ internal material in the source archive:" >&2
