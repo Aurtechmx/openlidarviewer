@@ -59,6 +59,13 @@ export interface ComposeReportInputs {
    * (metre / local scans, and every pre-existing caller, are unaffected).
    */
   readonly unitToMetres?: number;
+  /**
+   * Scene up-axis and vertical unit factor, so the PDF's measurement values
+   * match the live tool on a Y-up scan and a compound CRS (M6). Default to
+   * Z-up / single-unit — every pre-existing caller is unaffected.
+   */
+  readonly worldUp?: readonly [number, number, number];
+  readonly verticalToMetres?: number;
   readonly technicalNotes?: string;
   /**
    * Provenance fingerprint from the classifier. When supplied AND the
@@ -111,6 +118,8 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.measurements,
       input.unitSystem,
       input.unitToMetres ?? 1,
+      input.worldUp ? [...input.worldUp] : [0, 0, 1],
+      input.verticalToMetres ?? input.unitToMetres ?? 1,
     ),
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,

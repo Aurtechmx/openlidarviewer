@@ -456,7 +456,7 @@ describe('buildAnnotationRows', () => {
 describe('buildMeasurementRows', () => {
   const measurements: Measurement[] = [
     { id: 'd1', kind: 'distance', name: 'Wall length', points: [[0, 0, 0], [10, 0, 0]] },
-    { id: 'a1', kind: 'area', name: 'Roof', points: [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]] },
+    { id: 'a1', kind: 'area', name: 'Roof', closed: true, points: [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]] },
     { id: 'h1', kind: 'height', name: 'Floor to ceiling', points: [[0, 0, 0], [0, 0, 3]] },
   ];
 
@@ -558,6 +558,49 @@ describe('buildMeasurementRows', () => {
       expect(buildMeasurementRows(measurements, 'metric', 1)).toEqual(plain);
       expect(buildMeasurementRows(measurements, 'metric', 0)).toEqual(plain);
       expect(buildMeasurementRows(measurements, 'metric', Number.NaN)).toEqual(plain);
+    });
+  });
+
+  // ── M6: PDF shares the live measurement engine (worldUp + compound CRS) ──────
+  // Before pass-6 M6 the report carried its own inline Z-up geometry, so a Y-up
+  // scan and a compound CRS produced a PDF that disagreed with the live panel and
+  // with the CSV/GeoJSON exports. It now consumes measurementMetrics, so the same
+  // number reaches every surface.
+  describe('shared measurement engine (M6)', () => {
+    it('measures height along the scene up-axis, not a hard-coded Z', () => {
+      // A 3-unit rise expressed on a Y-up scan. The old Z-up engine read the
+      // vertical delta off Z (0) and printed "0 cm"; the shared engine reads it
+      // along worldUp = +Y.
+      const yUp: Measurement[] = [
+        { id: 'h', kind: 'height', name: 'Storey', points: [[0, 0, 0], [0, 3, 0]] },
+      ];
+      const zUpRows = buildMeasurementRows(yUp, 'metric'); // default up = [0,0,1]
+      expect(zUpRows[0].value).toBe('0.0 cm'); // wrong axis → no rise seen
+      const yUpRows = buildMeasurementRows(yUp, 'metric', 1, [0, 1, 0]);
+      expect(yUpRows[0].value).toBe('3.0000 m');
+    });
+
+    it('agrees with the live panel to the digit (adaptive precision, not mm columns)', () => {
+      // 3 ft height on a foot CRS → 0.9144 m. The tabular exports round to 3 dp
+      // (91.4 cm); the report must keep sub-centimetre precision (91.440 cm).
+      const rows = buildMeasurementRows(
+        [{ id: 'h', kind: 'height', name: 'H', points: [[0, 0, 0], [0, 0, 3]] }],
+        'metric',
+        0.3048,
+      );
+      expect(rows[0].value).toBe('91.440 cm');
+    });
+
+    it('keeps a compound-CRS slope grade consistent with its rise/run', () => {
+      // Metre eastings over foot heights: a 1-unit rise over a 1-unit run reads
+      // as a foot rise over a metre run. The old single-factor scaling made the
+      // grade contradict the rise; the metric-frame compute keeps them coherent.
+      const slope: Measurement[] = [
+        { id: 's', kind: 'slope', name: 'Bank', points: [[0, 0, 0], [1, 0, 1]] },
+      ];
+      const rows = buildMeasurementRows(slope, 'metric', 1, [0, 0, 1], 0.3048);
+      // rise = 1 ft = 0.3048 m, run = 1 m → grade 30.48%.
+      expect(rows[0].value).toBe('30.48%');
     });
   });
 });

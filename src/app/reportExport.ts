@@ -380,6 +380,11 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // (B2, v0.4.5) — so the report PDF's measurement values agree with the
     // panel to the digit on foot-based CRSs.
     unitToMetres: viewer.measure.unitToMetres,
+    // Scene up-axis and vertical factor, so the PDF matches the live tool on a
+    // Y-up scan and a compound CRS (M6) — the same inputs the panel derives its
+    // readouts from, now that the report shares measurementMetrics.
+    worldUp: viewer.measure.worldUp,
+    verticalToMetres: viewer.measure.verticalUnitToMetres,
     provenance: provenanceFp,
     // The file's own declared source metadata (E57 today) — verbatim,
     // rendered by the report's "Declared source metadata" section under the

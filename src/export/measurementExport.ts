@@ -92,10 +92,18 @@ export function measurementMetrics(
   up: Vec3,
   unitToMetres: number,
   verticalToMetres: number = unitToMetres,
+  decimals = 3,
 ): Record<string, number> {
   const out: Record<string, number> = {};
+  // Round at the surface's chosen precision. The tabular exports (CSV / GeoJSON /
+  // KML / integrity) keep the default 3 decimals — millimetre columns, byte-
+  // identical to before. The PDF report and any display path pass a higher
+  // `decimals` so a value like 0.9144 m survives to feed formatLinear's adaptive
+  // sub-centimetre precision and agree with the live panel to the digit (M6);
+  // `num` still drops a non-finite value to null (omitted, never zero-filled).
   const set = (k: string, v: number | null): void => {
-    if (v !== null) out[k] = v;
+    const r = v === null ? null : num(v, decimals);
+    if (r !== null) out[k] = r;
   };
   const pts = m.points;
   const L = unitToMetres;
@@ -113,36 +121,36 @@ export function measurementMetrics(
 
   switch (m.kind) {
     case 'distance':
-      set('length_m', num(distance(mp[0], mp[1])));
+      set('length_m', distance(mp[0], mp[1]));
       break;
     case 'polyline':
-      set('length_m', num(polylineLength(mp).total));
+      set('length_m', polylineLength(mp).total);
       break;
     case 'height': {
       const v = verticalDelta(mp[0], mp[1], up);
-      set('vertical_m', num(v.vertical));
-      set('horizontal_m', num(v.horizontal));
+      set('vertical_m', v.vertical);
+      set('horizontal_m', v.horizontal);
       break;
     }
     case 'angle':
       // Physically correct now — the arms are in the metric frame, so a mix of
       // horizontal and vertical units no longer skews the angle (M3's compute).
-      set('angle_deg', num(angleAtVertex(mp[0], mp[1], mp[2])));
+      set('angle_deg', angleAtVertex(mp[0], mp[1], mp[2]));
       break;
     case 'slope': {
       const s = slopeBetween(mp[0], mp[1], up);
-      set('grade_pct', num(s.gradePercent));
-      set('angle_deg', num(s.angleDeg));
-      set('rise_m', num(s.rise));
-      set('run_m', num(s.run));
+      set('grade_pct', s.gradePercent);
+      set('angle_deg', s.angleDeg);
+      set('rise_m', s.rise);
+      set('run_m', s.run);
       break;
     }
     case 'profile': {
       const p = profileMetrics(mp[0], mp[1], up);
-      set('length_m', num(p.length3d));
-      set('horizontal_m', num(p.lengthHorizontal));
-      set('vertical_m', num(p.verticalDrop));
-      set('grade_pct', num(p.gradePercent));
+      set('length_m', p.length3d);
+      set('horizontal_m', p.lengthHorizontal);
+      set('vertical_m', p.verticalDrop);
+      set('grade_pct', p.gradePercent);
       break;
     }
     case 'area':
@@ -151,26 +159,26 @@ export function measurementMetrics(
       // Exporting the horizontal projection here made a vertical 1 m×1 m wall
       // read ~1 m² on screen but 0 m² in the file (pass-6 M4). The map footprint
       // is still exported alongside as `horizontal_area_m2` for GIS use.
-      set('area_m2', num(polygonAreaPlanar(mp)));
-      set('horizontal_area_m2', num(polygonAreaHorizontal(mp, up)));
-      set('perimeter_m', num(polygonPerimeter(mp)));
+      set('area_m2', polygonAreaPlanar(mp));
+      set('horizontal_area_m2', polygonAreaHorizontal(mp, up));
+      set('perimeter_m', polygonPerimeter(mp));
       break;
     case 'box': {
       const mb = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
-      set('width_m', num(mb.width));
-      set('depth_m', num(mb.depth));
-      set('height_m', num(mb.height));
-      set('volume_m3', num(mb.volume));
+      set('width_m', mb.width);
+      set('depth_m', mb.depth);
+      set('height_m', mb.height);
+      set('volume_m3', mb.volume);
       break;
     }
     case 'volume':
       // A volume's base is a horizontal footprint (the map area under it).
-      set('area_m2', num(polygonAreaHorizontal(mp, up)));
+      set('area_m2', polygonAreaHorizontal(mp, up));
       if (m.volume) {
         // cut/fill/net are stored volumes in native units, not point-derived.
-        set('cut_m3', num(m.volume.cut * Vol));
-        set('fill_m3', num(m.volume.fill * Vol));
-        set('net_m3', num(m.volume.net * Vol));
+        set('cut_m3', m.volume.cut * Vol);
+        set('fill_m3', m.volume.fill * Vol);
+        set('net_m3', m.volume.net * Vol);
       }
       break;
   }

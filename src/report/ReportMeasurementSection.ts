@@ -28,6 +28,13 @@ import {
 // surface that produced it. Length and volume keep this module's own
 // cm/ha-free report conventions; only area was drifting (acre vs sq ft).
 import { formatArea, displayDecimals } from '../render/measure/format';
+// The headline VALUES come from the one shared metrics function every other
+// surface (live panel, CSV, GeoJSON, KML, integrity) uses, so the PDF can never
+// diverge again — it was its own second engine that assumed X/Y horizontal +
+// Z vertical and took only a horizontal factor, so a Y-up scan or a compound
+// CRS printed wrong (pass-6 M6). measurementMetrics returns metres already, in
+// the scene's real up-axis and per-axis units; this module only formats them.
+import { measurementMetrics } from '../export/measurementExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline math
@@ -38,79 +45,10 @@ function dist(a: Vec3, b: Vec3): number {
   return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 
-function polyLen(points: readonly Vec3[]): number {
-  let total = 0;
-  for (let i = 1; i < points.length; i++) total += dist(points[i - 1], points[i]);
-  return total;
-}
-
-/**
- * Planar polygon area via the Newell-normal-projected shoelace. Same
- * formulation `render/measure/geometry.ts` uses; inlined to keep the
- * report module free of a back-dependency on the measure tool.
- */
-function polyArea(points: readonly Vec3[]): number {
-  if (points.length < 3) return 0;
-  // Newell normal accumulation.
-  let nx = 0, ny = 0, nz = 0;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    nx += (a[1] - b[1]) * (a[2] + b[2]);
-    ny += (a[2] - b[2]) * (a[0] + b[0]);
-    nz += (a[0] - b[0]) * (a[1] + b[1]);
-  }
-  return 0.5 * Math.sqrt(nx * nx + ny * ny + nz * nz);
-}
-
-/**
- * Horizontal-projected polygon area via XY shoelace, assuming a world
- * up of `[0, 0, 1]`. Used for the `volume` measurement headline so the
- * report matches the live UI's `polygonAreaHorizontal()` exactly. For
- * a horizontal polygon this equals `polyArea()`; for a tilted polygon
- * it diverges, and the live UI deliberately reports the horizontal
- * footprint area (volume against a horizontal datum). v0.3.10
- * deliverable-completion deep-review #1.
- */
-function polyAreaHorizontal(points: readonly Vec3[]): number {
-  if (points.length < 3) return 0;
-  let twiceArea = 0;
-  for (let i = 0; i < points.length; i++) {
-    const a = points[i];
-    const b = points[(i + 1) % points.length];
-    twiceArea += a[0] * b[1] - b[0] * a[1];
-  }
-  return Math.abs(twiceArea) * 0.5;
-}
-
-/**
- * Grade as a percentage, matching `render/measure/geometry.ts`'s
- * `gradePercentOf`. A zero horizontal run has no grade at all, so it yields
- * ±Infinity and the caller renders the word "vertical" — the same answer the
- * live overlay gives. Returning 0 here instead stated a level grade for a
- * vertical face, which is the one number in this module a reader could not
- * have caught.
- */
-function slopePercent(a: Vec3, b: Vec3): number {
-  const dz = b[2] - a[2];
-  const dxy = Math.sqrt((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2);
-  if (dxy === 0) {
-    if (dz === 0) return 0;
-    return dz > 0 ? Infinity : -Infinity;
-  }
-  return (dz / dxy) * 100;
-}
-
-function angleAtVertex(a: Vec3, b: Vec3, c: Vec3): number {
-  const ux = a[0] - b[0], uy = a[1] - b[1], uz = a[2] - b[2];
-  const vx = c[0] - b[0], vy = c[1] - b[1], vz = c[2] - b[2];
-  const dot = ux * vx + uy * vy + uz * vz;
-  const lu = Math.sqrt(ux * ux + uy * uy + uz * uz);
-  const lv = Math.sqrt(vx * vx + vy * vy + vz * vz);
-  if (lu === 0 || lv === 0) return 0;
-  const cos = Math.max(-1, Math.min(1, dot / (lu * lv)));
-  return (Math.acos(cos) * 180) / Math.PI;
-}
+// `dist` above is the only inline geometry that remains — the profile-station
+// detail block below still measures a straight 3D chord. Every measurement
+// HEADLINE now goes through the shared measurementMetrics (M6), so the polygon /
+// slope / angle engines this module used to carry were deleted.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formatters
@@ -172,79 +110,48 @@ function formatVolume(cubicMetres: number, system: UnitSystem): string {
  * areas ×f², volumes ×f³. Angles and slope grades are ratios and need no
  * scaling. Default 1 (metre / local scans are unaffected).
  */
-function computeValue(m: Measurement, system: UnitSystem, f: number): string {
+function computeValue(
+  m: Measurement,
+  system: UnitSystem,
+  up: Vec3,
+  unitToMetres: number,
+  verticalToMetres: number,
+): string {
+  // One shared, up-axis- and compound-CRS-correct computation for every kind;
+  // this function only formats the metre values it returns (M6).
+  // Pass full precision (6 dp) — the formatters below apply the report's own
+  // adaptive sub-centimetre rounding, so the PDF matches the live panel to the
+  // digit rather than inheriting the tabular exports' millimetre columns (M6).
+  const mm = measurementMetrics(m, up, unitToMetres, verticalToMetres, 6);
   switch (m.kind) {
     case 'distance':
-      return m.points.length >= 2
-        ? formatLinear(dist(m.points[0], m.points[1]) * f, system)
-        : '—';
     case 'polyline':
-      return formatLinear(polyLen(m.points) * f, system);
+    case 'profile':
+      return mm.length_m != null ? formatLinear(mm.length_m, system) : '—';
     case 'area':
-      return formatArea(polyArea(m.points) * f * f, system);
+      return mm.area_m2 != null ? formatArea(mm.area_m2, system) : '—';
     case 'height':
-      return m.points.length >= 2
-        ? formatLinear(Math.abs(m.points[1][2] - m.points[0][2]) * f, system)
-        : '—';
+      return mm.vertical_m != null ? formatLinear(Math.abs(mm.vertical_m), system) : '—';
     case 'angle':
-      return m.points.length >= 3
-        ? `${angleAtVertex(m.points[0], m.points[1], m.points[2]).toFixed(1)}°`
-        : '—';
-    case 'slope': {
-      if (m.points.length < 2) return '—';
-      const grade = slopePercent(m.points[0], m.points[1]);
-      // Same wording as `formatGrade` in render/measure/format.ts, so the PDF
-      // and the overlay describe a vertical pair identically. The report keeps
-      // its own two-decimal precision.
-      return Number.isFinite(grade) ? `${grade.toFixed(2)}%` : 'vertical';
-    }
-    case 'profile': {
-      // Profile reports the 3D length as its headline value; the rest of
-      // the metrics (Δh, grade) live in the live overlay and will be
-      // expanded into a per-measurement card when the report engine grows
-      // measurement-detail blocks.
-      if (m.points.length < 2) return '—';
-      const length3d = dist(m.points[0], m.points[1]);
-      return formatLinear(length3d * f, system);
-    }
-    case 'box': {
-      // v0.3.10 deliverable-completion patch — the report engine used to
-      // fall through for `box`, leaving the PDF showing "—" for what is
-      // actually one of the cleanest measurements to render. Box dims
-      // are pure 2-corner picks, so the volume is exact regardless of
-      // streaming state; we just compute and format. The two picked
-      // points are opposite diagonals; normalise per-axis so any pick
-      // order yields the same headline.
-      if (m.points.length < 2) return '—';
-      const a = m.points[0];
-      const b = m.points[1];
-      const w = Math.abs(b[0] - a[0]);
-      const d = Math.abs(b[1] - a[1]);
-      const h = Math.abs(b[2] - a[2]);
-      const cubicMetres = w * d * h * f * f * f;
-      return formatVolume(cubicMetres, system);
-    }
+      return mm.angle_deg != null ? `${mm.angle_deg.toFixed(1)}°` : '—';
+    case 'slope':
+      // Three outcomes: a finite grade, a genuinely vertical pair (grade omitted
+      // but the geometry ran, so `rise_m` is present), or a degenerate/incomplete
+      // measurement (nothing computed) which must read "—", not "vertical".
+      if (mm.grade_pct != null) return `${mm.grade_pct.toFixed(2)}%`;
+      return mm.rise_m != null ? 'vertical' : '—';
+    case 'box':
+      return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system) : '—';
     case 'volume': {
-      // v0.3.10 deliverable-completion patch (deep-review #1) — the
-      // earlier fall-through silently dropped volume from the report.
-      // The first-pass fix surfaced ONLY net, which disagreed with the
-      // live UI: MeasurePanel shows
-      //   "<area> · +<fill> fill · −<cut> cut · net <net> <netSign>"
-      // — a user saving a session, exporting a PDF, and handing it to
-      // a client would see less data than they had on screen. That is
-      // the same deliverable-disagreement shape the Share-button leak
-      // had: the artefact contradicts the live tool. Mirror the live
-      // headline exactly here (see MeasureController._headlineText)
+      // Mirror the live headline exactly (see MeasureController._headlineText)
       // so the PDF and the panel agree to the digit.
-      if (m.points.length < 3) return '—';
-      const area = formatArea(polyAreaHorizontal(m.points) * f * f, system);
-      const v = m.volume;
-      if (!v) return `${area} footprint · cut/fill —`;
-      const f3 = f * f * f;
-      const fill = formatVolume(Math.max(0, v.fill) * f3, system);
-      const cut = formatVolume(Math.max(0, v.cut) * f3, system);
-      const net = formatVolume(Math.abs(v.net) * f3, system);
-      const netSign = v.net < 0 ? 'cut' : 'fill';
+      if (mm.area_m2 == null) return '—';
+      const area = formatArea(mm.area_m2, system);
+      if (mm.cut_m3 == null) return `${area} footprint · cut/fill —`;
+      const fill = formatVolume(Math.max(0, mm.fill_m3 ?? 0), system);
+      const cut = formatVolume(Math.max(0, mm.cut_m3 ?? 0), system);
+      const net = formatVolume(Math.abs(mm.net_m3 ?? 0), system);
+      const netSign = (mm.net_m3 ?? 0) < 0 ? 'cut' : 'fill';
       return `${area} · +${fill} fill · −${cut} cut · net ${net} ${netSign}`;
     }
   }
@@ -363,12 +270,18 @@ export function buildMeasurementRows(
   measurements: readonly Measurement[],
   unitSystem: UnitSystem,
   unitToMetres = 1,
+  // The scene's real up-axis and vertical unit factor, so the PDF matches the
+  // live tool on a Y-up scan and a compound CRS (M6). Default to Z-up /
+  // single-unit so existing callers are unchanged.
+  worldUp: Vec3 = [0, 0, 1],
+  verticalToMetres = unitToMetres,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   return measurements.map((m) => ({
     name: m.name,
     kind: m.kind,
-    value: computeValue(m, unitSystem, f),
+    value: computeValue(m, unitSystem, worldUp, f, vf),
     pointCount: m.points.length,
     profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem, f) : undefined,
   }));
