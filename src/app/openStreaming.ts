@@ -156,6 +156,54 @@ export function shouldDropCandidateOnPostCommitCancel(
 }
 
 /**
+ * Publish a COMMITTED streaming cloud to global application state.
+ *
+ * Runs ONLY after `attachStreamingCloud` has committed the new scene, so a
+ * failed or cancelled candidate never makes its CRS, provenance, usage counter
+ * or empty-state authoritative over the scene the user still has (blocker #3:
+ * before this, COPC refreshed CrsService and the Inspector provenance BEFORE the
+ * attach, so a build failure left visible-scene-A beside resolved-CRS-B). COPC
+ * and EPT share this one seam so their post-commit behaviour cannot drift — and
+ * it is how an EPT cloud reaches CrsService at all (blocker #2: the EPT path
+ * previously never published its CRS, leaving the authority null or on the prior
+ * dataset). It publishes only; scene construction stays in the attach path.
+ */
+export function activateCommittedStreamingCloud(
+  cloud: {
+    readonly kind: 'copc' | 'ept';
+    readonly name: string;
+    readonly sourcePointCount?: number;
+    crs(): CrsInfo | null | undefined;
+  },
+  deps: OpenStreamingDeps,
+): void {
+  deps.stage.hideEmptyState();
+  // Local-first counter — categorical only ('copc' or 'ept'); never the URL. Only
+  // a COMMITTED open is counted now, not an attempt that failed to build.
+  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
+  // Provenance fingerprint. Wrapped: a malformed cloud shape must not break the
+  // rest of the activation (CRS, panels).
+  try {
+    deps.inspectorCards.refreshProvenanceFromStreaming(cloud);
+  } catch (err) {
+    if (deps.debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err);
+  }
+  // CRS for streaming clouds — same merge rule as the static path. The coordinator
+  // types crs() as `CrsInfo | undefined`; the streaming sources return
+  // `CrsInfo | null`, so the cast bridges that one nullish difference (as the
+  // former inline call did).
+  try {
+    deps.crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
+      readonly name: string;
+      readonly kind: 'copc' | 'ept';
+      crs(): CrsInfo | undefined;
+    });
+  } catch (err) {
+    if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
+  }
+}
+
+/**
  * Wire an optional outer abort signal (the Stage URL field's Cancel button) into
  * a load's own AbortController (the progress toast's Cancel) so EITHER cancel
  * aborts the in-flight fetches. Returns a cleanup that detaches the listener —
@@ -373,26 +421,6 @@ export async function openStreamingCopc(
     ? (ms) => deps.getStreamingBenchmark()?.recordDecodeMs(ms)
     : undefined;
 
-  deps.stage.hideEmptyState();
-  // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
-  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
-  // Provenance fingerprint for streaming clouds — fed with the cloud's
-  // declared point count + extent so the classifier has signal even though
-  // the resident set is small. Wrapped because a malformed cloud shape
-  // shouldn't break the rest of the streaming load (CRS, attach, color
-  // modes, navBar reveal).
-  try { deps.inspectorCards.refreshProvenanceFromStreaming(cloud); }
-  catch (err) { if (deps.debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
-  // CRS for streaming clouds — same merge rule as the static path.
-  try {
-    deps.crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
-      readonly name: string;
-      readonly kind: 'copc' | 'ept';
-      crs(): CrsInfo | undefined;
-    });
-  } catch (err) {
-    if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
-  }
   // A streaming scan is exclusive, but the replacement must be TRANSACTIONAL:
   // attach the new cloud FIRST (attachStreamingCloud disposes any prior
   // streaming session only after it has built the new one), and only then clear
@@ -424,6 +452,10 @@ export async function openStreamingCopc(
   }
   // The attach succeeded — now it is safe to retire the static layers.
   deps.clearOpenStaticLayers();
+  // COMMIT APPLICATION METADATA: the scene is now the sole valid one, so publish
+  // its CRS / provenance / usage to global state (blocker #3 — never before the
+  // commit). Shared with the EPT path.
+  activateCommittedStreamingCloud(cloud, deps);
   viewer.setMode('orbit');
   viewer.frameAll();
 
@@ -671,8 +703,6 @@ export async function handleRemoteEpt(
     );
     if (controller.signal.aborted) throw new LoadCancelledError();
 
-    deps.stage.hideEmptyState();
-
     // Laszip tiles are CPU-heavy (laz-perf decompress + coordinate transform);
     // decode them off the main thread in a dedicated worker, created lazily and
     // reused for the session like the COPC decode worker. The binary path stays
@@ -718,6 +748,11 @@ export async function handleRemoteEpt(
     // The candidate is now the sole committed scene — a later-step throw must not
     // tear it down in the catch (blocker #4A).
     committed = true;
+    // COMMIT APPLICATION METADATA through the shared seam: the EPT path did not
+    // publish its CRS or provenance to global state at all before this, leaving
+    // the authority null or on the prior dataset (blocker #2). Now both paths
+    // publish here, only after the commit.
+    activateCommittedStreamingCloud(cloud, deps);
     viewer.setMode('orbit');
     viewer.frameAll();
 

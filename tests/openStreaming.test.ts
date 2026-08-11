@@ -7,6 +7,7 @@ import {
   openStreamingCopc,
   shouldTidyFailedStreamingOpen,
   shouldDropCandidateOnPostCommitCancel,
+  activateCommittedStreamingCloud,
   type OpenStreamingDeps,
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
@@ -408,6 +409,10 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     attachStreamingCloud,
     closeStreaming: vi.fn(),
     clearOpenStaticLayers: vi.fn(),
+    // Post-commit activation spies (blockers #2/#3): a failed open must never fire these.
+    hideEmptyState: vi.fn(),
+    refreshProvenance: vi.fn(),
+    refreshCrs: vi.fn(),
   };
 
   const stub = <K extends keyof OpenStreamingDeps>(): OpenStreamingDeps[K] =>
@@ -449,7 +454,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
       setCancelHandler: vi.fn(),
       setProgress: vi.fn(),
     },
-    stage: { hideEmptyState: vi.fn() },
+    stage: { hideEmptyState: calls.hideEmptyState },
     inspector: {
       element: { classList: { remove: vi.fn() } },
       setImageExportEnabled: vi.fn(),
@@ -471,11 +476,11 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
       getVisibility: () => ({ isFiltered: () => false }),
     } as unknown as OpenStreamingDeps['classLegendPanel'],
     inspectorCards: {
-      refreshProvenanceFromStreaming: vi.fn(),
+      refreshProvenanceFromStreaming: calls.refreshProvenance,
       refreshDatasetIntelligenceFromStreamingCloud: vi.fn(),
     } as unknown as OpenStreamingDeps['inspectorCards'],
     crsCoordinator: {
-      refreshCrsForStreamingCloud: vi.fn(),
+      refreshCrsForStreamingCloud: calls.refreshCrs,
     } as unknown as OpenStreamingDeps['crsCoordinator'],
     bookmarks: { clear: vi.fn() },
     isPhone: () => false,
@@ -558,5 +563,55 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
     expect(calls.closeStreaming).not.toHaveBeenCalled();
     expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-commit application-metadata activation (blockers #2 and #3). A candidate's
+// CRS / provenance / usage must become authoritative ONLY after the scene commits.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('activateCommittedStreamingCloud — the shared publish seam', () => {
+  it('publishes empty-state, provenance and CRS for a committed cloud', () => {
+    const { deps, calls } = makeCopcDeps();
+    activateCommittedStreamingCloud(
+      { kind: 'ept', name: 'site.ept', sourcePointCount: 9, crs: () => null },
+      deps,
+    );
+    expect(calls.hideEmptyState).toHaveBeenCalledTimes(1);
+    expect(calls.refreshProvenance).toHaveBeenCalledTimes(1);
+    // This is how EPT reaches CrsService at all (blocker #2).
+    expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('openStreamingCopc — metadata is published only AFTER commit (blocker #3)', () => {
+  it('a successful open publishes CRS + provenance exactly once', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
+    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
+    expect(calls.refreshProvenance).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ATTACH failure never publishes the candidate CRS or provenance', async () => {
+    // Streaming A active; candidate B fails to attach. B's CRS/provenance must NOT
+    // become authoritative — that was the silent visible-A / CRS-B corruption.
+    const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/GPU mesh build failed/);
+    expect(calls.refreshCrs).not.toHaveBeenCalled();
+    expect(calls.refreshProvenance).not.toHaveBeenCalled();
+    expect(calls.hideEmptyState).not.toHaveBeenCalled();
+  });
+
+  it('an OPEN failure (before attach) never publishes candidate metadata', async () => {
+    const { deps, calls } = makeCopcDeps({ openRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/malformed COPC/i);
+    expect(calls.refreshCrs).not.toHaveBeenCalled();
+    expect(calls.refreshProvenance).not.toHaveBeenCalled();
   });
 });
