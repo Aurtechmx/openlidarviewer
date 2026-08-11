@@ -49,10 +49,11 @@ mutation:
 Supporting services in the same layer: `crsCoordinator`, `terrainAnalysisRunner`,
 `inspectorCardRefreshers`, `staleChunkReload`.
 
-No module-level mutable application state remains in `main.ts`. That is what makes
-the next step possible: a block of orchestration can now move into its own module
-and close over services, instead of closing over file-scope `let`s that pin it in
-place.
+Shared domain/application state is owned by services (`AppContext`, `CrsService`,
+the layer/scan services); `main.ts` retains explicitly bounded shell-local
+composition and lifecycle state. Moving domain state out is what makes the next
+step possible: a block of orchestration can now move into its own module and close
+over services, instead of closing over file-scope `let`s that pin it in place.
 
 ## The two monoliths, and the target shape
 
