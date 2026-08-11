@@ -117,6 +117,45 @@ export function isAbortError(err: unknown): boolean {
 }
 
 /**
+ * Whether a FAILED streaming open should tidy up (call `closeStreaming`).
+ *
+ * The current valid scene must survive any failed replacement (release blocker
+ * #4A). Close ONLY when the attempt left nothing valid behind:
+ *  - `committed` true  → the candidate is now the sole valid scene; keep it.
+ *  - `hadStreamingScene` true → a prior streaming scene is still intact, because
+ *    `attachStreamingCloud` is transactional (it disposes the old session only
+ *    after building the new one, and its pre-commit gate aborts before that); a
+ *    candidate that failed before commit never touched it.
+ * So the only case that tidies up is a first-open (or a static-replacing open)
+ * that never committed — where a half-built candidate is the only streaming
+ * residue and no prior streaming scene exists to protect.
+ */
+export function shouldTidyFailedStreamingOpen(
+  committed: boolean,
+  hadStreamingScene: boolean,
+): boolean {
+  return !committed && !hadStreamingScene;
+}
+
+/**
+ * Whether a cancel observed in the tiny window AFTER the streaming commit should
+ * drop the freshly-attached candidate.
+ *
+ * Drop it ONLY when static layers are still present to fall back to
+ * (`replacingStatic`) — the static-layer clear has not run yet, so closing the
+ * new stream returns the user to the scene they had. A streaming→streaming
+ * replace has already disposed the old scene inside `attachStreamingCloud`, so
+ * the committed candidate is now the only valid scene; dropping it would blank
+ * the viewer, so a post-commit cancel keeps it (blocker #4).
+ */
+export function shouldDropCandidateOnPostCommitCancel(
+  replacingStatic: boolean,
+  aborted: boolean,
+): boolean {
+  return replacingStatic && aborted;
+}
+
+/**
  * Wire an optional outer abort signal (the Stage URL field's Cancel button) into
  * a load's own AbortController (the progress toast's Cancel) so EITHER cancel
  * aborts the in-flight fetches. Returns a cleanup that detaches the listener —
@@ -360,17 +399,29 @@ export async function openStreamingCopc(
   // the open static layers. Clearing before the attach meant a throw from
   // attachStreamingCloud left the valid static scene already destroyed with no
   // replacement — a blank viewer (pass-7 A).
+  // Whether this replaces STATIC layers — captured before the attach commits so
+  // the post-attach cancel handling below knows which scene the user still has.
+  const replacingStatic = viewer.clouds().length > 0;
+  // attachStreamingCloud observes `signal` and aborts BEFORE its internal commit,
+  // so a cancel during the build keeps the previous scene (blocker #4). Passing it
+  // makes a streaming→streaming replace transactional.
   await viewer.attachStreamingCloud(
     cloud,
     copcDecoder,
     deps.getStreamingQuality(),
     deps.isPhone(),
     deps.getStreamingBenchmark(),
+    signal,
   );
-  // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-  // drop the fresh cloud so a cancel adds nothing — the prior static scene is
-  // still intact because the clear below has not run yet.
-  if (signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+  // A cancel that lands in the tiny window AFTER the commit: if this replaced
+  // STATIC layers they are still present (the clear below has not run), so drop
+  // the fresh stream and keep them. A streaming→streaming replace has already
+  // disposed the old scene inside attach, so the freshly committed one is now the
+  // valid scene — keep it rather than blanking the viewer.
+  if (shouldDropCandidateOnPostCommitCancel(replacingStatic, signal.aborted)) {
+    deps.closeStreaming();
+    throw new LoadCancelledError();
+  }
   // The attach succeeded — now it is safe to retire the static layers.
   deps.clearOpenStaticLayers();
   viewer.setMode('orbit');
@@ -483,6 +534,13 @@ export async function handleRemoteEpt(
   // classifier when the module loaded, and a plain classifier when the
   // chunk fetch itself was the failure.
   let eptUrlMod: Awaited<ReturnType<OpenStreamingDeps['loadEpt']>> | null = null;
+  // Ownership tracking for a transactional replacement (blocker #4A). `committed`
+  // turns true once the candidate B is the sole valid scene; `hadStreamingScene`
+  // records whether a valid streaming A existed before this attempt. The catch
+  // then closes streaming ONLY when this failed open left nothing valid behind —
+  // never tearing down a still-intact previous scene or a just-committed new one.
+  let committed = false;
+  let hadStreamingScene = false;
   try {
     // URL validation is pure — run it before awaiting the lazy Viewer so a
     // malformed URL always surfaces an error toast, even if the Viewer chunk
@@ -503,6 +561,9 @@ export async function handleRemoteEpt(
     // Viewer chunk is up.
     await deps.viewerReady;
     const viewer = deps.getViewer();
+    // The prior scene state, read before any teardown: if a valid streaming A is
+    // on screen, a failed candidate B must leave it intact (blocker #4A).
+    hadStreamingScene = viewer.hasStreamingCloud;
     // Blue blinking "Opening …" first, consistent with the COPC + device paths;
     // the manifest read + node streaming supersede it with staged progress.
     deps.dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
@@ -631,18 +692,32 @@ export async function handleRemoteEpt(
     // attachable, leaving a blank viewer on any failure. Static layers are
     // cleared only after the attach succeeds (pass-7 A).
     if (controller.signal.aborted) throw new LoadCancelledError();
+    // Whether this replaces STATIC layers — captured before the commit so the
+    // post-attach cancel handling knows which scene the user still has.
+    const replacingStatic = viewer.clouds().length > 0;
+    // attachStreamingCloud observes the load-cancel signal and aborts BEFORE its
+    // internal commit, so a cancel during the build keeps the previous scene and a
+    // failed candidate B never disposes a valid streaming A (blocker #4).
     await viewer.attachStreamingCloud(
       cloud,
       decoder,
       deps.getStreamingQuality(),
       deps.isPhone(),
       null,
+      controller.signal,
     );
-    // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-    // drop the fresh cloud so a cancel adds nothing — the prior scene is still
-    // intact because the static-layer clear below has not run yet.
-    if (controller.signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+    // A cancel in the tiny window AFTER the commit: if this replaced STATIC layers
+    // they are still present (the clear below has not run), so drop the fresh
+    // stream and keep them. A streaming→streaming replace already disposed the old
+    // scene inside attach, so the committed one is now the valid scene — keep it.
+    if (shouldDropCandidateOnPostCommitCancel(replacingStatic, controller.signal.aborted)) {
+      deps.closeStreaming();
+      throw new LoadCancelledError();
+    }
     deps.clearOpenStaticLayers();
+    // The candidate is now the sole committed scene — a later-step throw must not
+    // tear it down in the catch (blocker #4A).
+    committed = true;
     viewer.setMode('orbit');
     viewer.frameAll();
 
@@ -731,7 +806,11 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(
         eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
       );
-      deps.closeStreaming();
+      // Only tidy up when this failed open left NOTHING valid behind (blocker #4A):
+      // a committed candidate is the current valid scene, and a prior streaming A
+      // survives a candidate that failed before commit (attach is transactional),
+      // so closing in either case would blank a scene the user still has.
+      if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();

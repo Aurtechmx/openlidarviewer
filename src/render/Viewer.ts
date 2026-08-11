@@ -1940,6 +1940,7 @@ export class Viewer {
     quality: StreamingQuality,
     isMobile: boolean,
     benchmark?: StreamingBenchmark | null,
+    signal?: AbortSignal,
   ): Promise<void> {
     // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
     this._resetGpuErrorHistory();
@@ -1951,6 +1952,17 @@ export class Viewer {
       isMobile,
       benchmark ?? null,
     );
+    // Pre-commit cancellation gate (release blocker #4). The candidate session
+    // is fully built, but the previous scene is still live and `detach` below is
+    // the atomic COMMIT. If the load was cancelled while we were building, dispose
+    // the CANDIDATE and leave the committed scene exactly as it was — never
+    // detach-old, then discover-cancel, then close-new, which blanks the viewer on
+    // a streaming→streaming replace. Checked here, immediately before the swap, so
+    // the window between the check and the commit is a synchronous line.
+    if (signal?.aborted) {
+      disposeStreamingSession(session);
+      throw new DOMException('Streaming attach cancelled before commit', 'AbortError');
+    }
     // Detach the prior streaming cloud only now that the replacement renderer
     // and scheduler are built. A throw in the lazy load or the constructors
     // above then leaves the current scan on screen instead of a blank scene.

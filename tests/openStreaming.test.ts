@@ -5,6 +5,8 @@ import {
   linkAbortSignals,
   handleRemoteEpt,
   openStreamingCopc,
+  shouldTidyFailedStreamingOpen,
+  shouldDropCandidateOnPostCommitCancel,
   type OpenStreamingDeps,
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
@@ -213,6 +215,47 @@ function makeDeps(
   return { deps, calls };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Transactional streaming replacement — the ownership decisions (blocker #4).
+// The current valid scene must survive any failed or cancelled replacement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('shouldTidyFailedStreamingOpen — a failed open never blanks a valid scene', () => {
+  it('keeps a committed candidate (it is now the valid scene)', () => {
+    expect(shouldTidyFailedStreamingOpen(true, false)).toBe(false);
+    expect(shouldTidyFailedStreamingOpen(true, true)).toBe(false);
+  });
+
+  it('keeps a prior streaming scene when the candidate failed before commit (blocker #4A)', () => {
+    // streaming A on screen, candidate B throws during build → A is intact
+    // (attach is transactional), so the failure handler must NOT close it.
+    expect(shouldTidyFailedStreamingOpen(false, true)).toBe(false);
+  });
+
+  it('tidies up only a first / static-replacing open that never committed', () => {
+    // No prior streaming scene and nothing committed: a half-built candidate is
+    // the only streaming residue, so closing it is correct and blanks nothing.
+    expect(shouldTidyFailedStreamingOpen(false, false)).toBe(true);
+  });
+});
+
+describe('shouldDropCandidateOnPostCommitCancel — a post-commit cancel never blanks the viewer', () => {
+  it('drops the fresh stream back to still-present static layers', () => {
+    expect(shouldDropCandidateOnPostCommitCancel(true, true)).toBe(true);
+  });
+
+  it('keeps a streaming→streaming candidate (the old scene is already gone)', () => {
+    // No static layers to fall back to: dropping the committed candidate would
+    // blank the viewer, so the late cancel keeps it.
+    expect(shouldDropCandidateOnPostCommitCancel(false, true)).toBe(false);
+  });
+
+  it('does nothing when there was no cancel', () => {
+    expect(shouldDropCandidateOnPostCommitCancel(true, false)).toBe(false);
+    expect(shouldDropCandidateOnPostCommitCancel(false, false)).toBe(false);
+  });
+});
+
 describe('handleRemoteEpt — the guarded remote-open decisions', () => {
   it('refuses a second open while one is in flight, without claiming the flag', async () => {
     const { deps, calls } = makeDeps({ loading: true });
@@ -326,7 +369,7 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
  * assert whether the exclusive-scene teardown (clear static layers + attach the
  * replacement) ran — and it must run ONLY once the candidate has opened.
  */
-function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; priorStreamingCloud?: boolean } = {}) {
+function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; priorStreamingCloud?: boolean; staticLayers?: number } = {}) {
   // A structurally-complete streaming cloud so the post-open panel/inspector
   // wiring runs without a stray undefined-access aborting the flow early.
   const cloud = {
@@ -351,6 +394,9 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
   const viewer = {
     ready: Promise.resolve(),
     hasStreamingCloud: over.priorStreamingCloud ?? true,
+    // Static layers present before the open — drives `replacingStatic`. Default
+    // 0 so the streaming→streaming cases below exercise the no-fallback path.
+    clouds: () => Array.from({ length: over.staticLayers ?? 0 }, () => ({})),
     attachStreamingCloud,
     setMode: vi.fn(),
     frameAll: vi.fn(),
@@ -488,6 +534,29 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     ).rejects.toThrow(/GPU mesh build failed/);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
     // The attach threw BEFORE the clear ran, so the static layers survive.
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+  });
+
+  it('hands the load-cancel signal to attachStreamingCloud so it can gate its own commit (#4C)', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
+    const signal = new AbortController().signal;
+    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', signal, deps);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // The 6th positional argument is the AbortSignal — the seam the pre-commit
+    // gate reads to keep the previous scene on a streaming→streaming cancel.
+    expect(calls.attachStreamingCloud.mock.calls[0][5]).toBe(signal);
+  });
+
+  it('a cancel before the candidate opens tears nothing down (early guard)', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true, staticLayers: 2 });
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', ac.signal, deps),
+    ).rejects.toThrow();
+    // Cancelled before the exclusive-scene teardown: no attach, no close, no clear.
+    expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
     expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
   });
 });
