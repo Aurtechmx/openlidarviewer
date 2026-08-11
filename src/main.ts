@@ -131,6 +131,8 @@ import {
   type KmlActionDeps,
 } from './app/kmlActions';
 import { makeExportCrsResolver } from './app/exportCrsResolver';
+import { isRgbAppearancePresetId } from './render/rgbAppearance';
+import { isSkyPreset } from './render/skyPresets';
 import {
   exportMeasurementsFile,
   exportMeasurementIntegrityReport,
@@ -1419,7 +1421,7 @@ const inspector = new Inspector({
     persistPrefs();
   },
   onSkyPreset: (id) => {
-    if (isSkyPresetId(id)) {
+    if (isSkyPreset(id)) {
       viewer.setSky(id);
       syncInspectorVisuals();
       persistPrefs();
@@ -2007,36 +2009,6 @@ if (WORKFLOW_RECORDER_ENABLED) {
 }
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
-function isRgbAppearancePresetId(
-  id: string,
-): id is import('./render/rgbAppearance').RgbAppearancePresetId {
-  return (
-    id === 'natural' ||
-    id === 'survey' ||
-    id === 'rgb-inspection' ||
-    id === 'high-contrast' ||
-    id === 'drone-rgb' ||
-    id === 'mobile-lidar' ||
-    id === 'infrastructure' ||
-    id === 'photoreal-rgb'
-  );
-}
-function isSkyPresetId(
-  id: string,
-): id is import('./render/inspectionPresets').SkyPreset {
-  return (
-    id === 'deep' ||
-    id === 'survey-blue' ||
-    id === 'terrain-sand' ||
-    id === 'foliage-teal' ||
-    id === 'qa-cool' ||
-    id === 'studio-dark' ||
-    id === 'blueprint' ||
-    id === 'survey-light' ||
-    id === 'terrain' ||
-    id === 'black'
-  );
-}
 
 /**
  * Visuals Studio — push the Viewer's Visuals Studio state into the

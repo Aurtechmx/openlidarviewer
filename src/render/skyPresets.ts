@@ -107,3 +107,13 @@ export const SKY_PRESET_ORDER: readonly SkyPreset[] = [
   // Visuals Studio — Black flat backdrop.
   'black',
 ];
+
+/** The valid sky-preset ids, derived from the one ordered inventory above so a
+ *  new preset is recognised the moment it is listed — no second hand-kept list
+ *  to drift out of sync. */
+const SKY_PRESET_IDS: ReadonlySet<string> = new Set(SKY_PRESET_ORDER);
+
+/** Type-guard for an unknown string against the canonical sky-preset inventory. */
+export function isSkyPreset(v: unknown): v is SkyPreset {
+  return typeof v === 'string' && SKY_PRESET_IDS.has(v);
+}
