@@ -32,6 +32,7 @@ import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 
 import type { RangeSource } from '../io/range/RangeSource';
 import { sanitizeUrlForDisplay } from '../io/range/RangeSource';
+import { readAtMostBounded } from '../io/range/boundedRead';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { StreamingBenchmark } from '../render/streaming/streamingBenchmark';
 import type { CopcWorkerClient } from '../io/copc/worker/copcWorkerClient';
@@ -59,6 +60,16 @@ import type {
 // Pure decisions the extraction exposes — decidable without a Viewer, the
 // network or the DOM, so `tests/openStreaming.test.ts` pins each one directly.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ceiling for the EPT manifest body (`ept.json`). The manifest is a small JSON
+ * document — schema, bounds, SRS, hierarchy type — while the hierarchy and tiles
+ * are separate files, so even a continent-scale dataset's ept.json is kilobytes.
+ * 8 MiB is ~1000× any realistic manifest yet far below a memory hazard, so it
+ * refuses a hostile or misconfigured oversized body without ever rejecting a
+ * legitimate one. Enforced while streaming (not via Content-Length alone).
+ */
+export const MAX_EPT_MANIFEST_BYTES = 8 * 1024 * 1024;
 
 /**
  * True when `url` is an EPT entry point (an `ept.json`), so the shell's URL
@@ -541,7 +552,23 @@ export async function handleRemoteEpt(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
       );
     }
-    const manifestText = await manifestResponse.text();
+    // Bound + cancel the manifest body. The header fetch above is timed and
+    // abortable, but the body read was an unbounded `response.text()`: a hostile
+    // or misconfigured host could stream an oversized ept.json, stall mid-body,
+    // or keep sending after the user cancelled, over-allocating on the main
+    // thread. Reuse the hardened bounded reader the hierarchy/tile transport
+    // uses — it refuses a declared oversize before the first byte, stops on the
+    // chunk that crosses MAX_EPT_MANIFEST_BYTES, honours an idle silence budget,
+    // and is wired to the outer load-cancel so an abort after headers stops
+    // promptly. BoundedReadError carries only the label 'EPT manifest', never
+    // the signed URL, so a ?sig=… token cannot leak through its message.
+    const manifestBytes = await readAtMostBounded(
+      manifestResponse,
+      MAX_EPT_MANIFEST_BYTES,
+      'EPT manifest',
+      { signal: controller.signal, idleTimeoutMs: MANIFEST_TIMEOUT_MS },
+    );
+    const manifestText = new TextDecoder().decode(manifestBytes);
     const detection = parseEptMetadata(manifestText);
     if (!detection.isEpt) {
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
