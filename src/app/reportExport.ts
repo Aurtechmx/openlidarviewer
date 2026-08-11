@@ -176,14 +176,21 @@ export interface ReportExportDeps {
 export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
   const viewer = deps.getViewer();
   // The label comes from the RESOLVED CRS, the same rule every export path uses.
+  // The label comes ONLY from the RESOLVED CRS. It must NOT fall back to the
+  // file's declared metadata name: when the user resolved the scan to Local /
+  // no-CRS, `effectiveCrsName` is undefined, and the report then states local /
+  // unknown honestly rather than resurrecting the rejected source CRS (1B). A
+  // streaming scan reaches the resolved authority now that EPT publishes its CRS
+  // to CrsService on commit (blocker 2). Source A, when wanted, belongs only in a
+  // field explicitly labelled source-declared, never in the active CRS label.
   const crsName = effectiveCrsName(deps.crsCurrent());
   if (deps.scans.activeId) {
     const c = viewer.getCloud(deps.scans.activeId);
     // SOURCE frame (float64-transform.md step 2): sessions save + import here.
-    if (c) return { origin: c.sourceOrigin, crsName: crsName ?? c.metadata?.crs?.name, name: c.name };
+    if (c) return { origin: c.sourceOrigin, crsName, name: c.name };
   }
   const sc = viewer.streamingCloud;
-  if (sc) return { origin: sc.renderOrigin, crsName: crsName ?? sc.crs()?.name ?? undefined, name: sc.name };
+  if (sc) return { origin: sc.renderOrigin, crsName, name: sc.name };
   return { origin: [0, 0, 0], crsName: undefined, name: null };
 }
 

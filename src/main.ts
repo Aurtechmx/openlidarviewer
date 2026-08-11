@@ -2332,7 +2332,13 @@ function newAnalysePanel(
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
         isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
-        wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
+        // The ACTIVE RESOLVED CRS's WKT (override applied), the same authority
+        // every other field in this context reads — not the file's declared
+        // metadata WKT. A user who resolved source A to B stamps B's .prj; a Local
+        // override resolves to no WKT, so the export is not georeferenced rather
+        // than resurrecting the rejected CRS (1A). EPT reaches `cur` too now that
+        // it publishes to CrsService on commit.
+        wkt: cur?.wkt ?? null,
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
         // scale note says ft — and a local/unresolved frame stamps an honest
