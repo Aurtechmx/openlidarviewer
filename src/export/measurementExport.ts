@@ -19,7 +19,7 @@
 
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
-import { evidenceNote, evidenceStatus } from '../validation/exportEvidenceNote';
+import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat } from '../validation/exportEvidenceNote';
 import { crsUrn } from './crsIdentifier';
 import {
   distance,
@@ -54,6 +54,14 @@ export interface MeasurementExportContext {
   readonly crsName?: string;
   /** True when `toOutput` yields geographic WGS84 lon/lat (RFC 7946 default frame). */
   readonly geographic?: boolean;
+  /**
+   * True when the scan's linear scale is KNOWN (a resolved CRS unit), so the
+   * `_m` / `_m2` / `_m3` columns genuinely mean metres. False for a local /
+   * unknown-unit scan, where the factor is an inert 1 and the export must not
+   * claim metres — the evidence note then carries an explicit units caveat
+   * (pass-6 M1). Defaults to true so every georeferenced caller is unchanged.
+   */
+  readonly unitsVerified?: boolean;
 }
 
 /** A finite number rounded to `d` decimals, or null when not finite. */
@@ -257,7 +265,7 @@ export function measurementsToGeoJSON(
   // their required evidence level, so the file carries the exploratory verdict
   // rather than leaving with no gate stamp at all. RFC 7946 permits foreign
   // members on a FeatureCollection, so a reader that ignores it is unaffected.
-  fc.evidence = evidenceNote('MEAS-DISTANCE');
+  fc.evidence = evidenceNote('MEAS-DISTANCE') + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
   return JSON.stringify(fc, null, 2);
 }
 
@@ -303,7 +311,12 @@ export function measurementsToCsv(
   // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
   // measurements sit below their required evidence level, so every row carries
   // the exploratory verdict rather than leaving with no gate stamp at all.
-  const evidence = evidenceStatus('MEAS-DISTANCE');
+  // The gate token, plus a units-unverified marker when the scan has no known
+  // scale so a spreadsheet reader sees the same caveat the GeoJSON note carries
+  // — the `_m` columns then read as nominal, not confirmed metres (M1).
+  const evidence = (ctx.unitsVerified ?? true)
+    ? evidenceStatus('MEAS-DISTANCE')
+    : `${evidenceStatus('MEAS-DISTANCE')}; units-unverified (source render units, not metres)`;
   for (const m of measurements) {
     const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     const base: Record<string, string | number> = {

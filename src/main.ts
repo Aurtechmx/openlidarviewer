@@ -3050,6 +3050,9 @@ const exportPanel = new ExportPanel({
       verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
       crsName: geo.crsName,
       geographic: false,
+      // A local / unknown-unit scan has an inert factor of 1, so the `_m`
+      // columns are nominal, not metres — the evidence note then says so (M1).
+      unitsVerified: viewer.measure.crsKnown,
     };
     const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
     const text = format === 'geojson'
@@ -3074,6 +3077,8 @@ const exportPanel = new ExportPanel({
       new Date().toISOString(),
       scans.activeId ? viewer.classificationEpoch(scans.activeId) : 0,
       __APP_VERSION__,
+      // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
+      viewer.measure.crsKnown,
     );
     downloadText(f.filename, f.text);
   },

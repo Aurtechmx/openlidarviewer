@@ -263,3 +263,30 @@ describe('measurementsToGeoJSON — a resolvable CRS identifier', () => {
     expect(fc.crs).toBeUndefined();
   });
 });
+
+// ── M1: unknown scale must not silently claim metres ─────────────────────────
+// A local / unknown-unit scan has an inert unitToMetres of 1, so the `_m`
+// columns are nominal render units, not confirmed metres. The evidence note on
+// each surface must say so; a georeferenced export (unitsVerified true / unset)
+// is byte-identical to before.
+describe('unverified units caveat (M1)', () => {
+  it('GeoJSON evidence carries the caveat only when the scale is unverified', () => {
+    const verified = JSON.parse(measurementsToGeoJSON([DISTANCE], CTX));
+    expect(verified.evidence).not.toMatch(/units unverified/i);
+
+    const unverified = JSON.parse(
+      measurementsToGeoJSON([DISTANCE], { ...CTX, unitsVerified: false }),
+    );
+    expect(unverified.evidence).toMatch(/units unverified/i);
+    // The value is still emitted — the geometry is real, only the unit label is nominal.
+    expect(unverified.features[0].properties.length_m).toBe(5);
+  });
+
+  it('CSV evidence column carries the caveat only when the scale is unverified', () => {
+    const verified = measurementsToCsv([DISTANCE], CTX);
+    expect(verified).not.toMatch(/units-unverified/);
+
+    const unverified = measurementsToCsv([DISTANCE], { ...CTX, unitsVerified: false });
+    expect(unverified).toMatch(/units-unverified/);
+  });
+});

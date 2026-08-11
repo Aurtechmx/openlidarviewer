@@ -827,6 +827,16 @@ export class MeasureController {
    * is 1 for BOTH a metric CRS and a CRS-less cloud, so the factor alone can't
    * tell a georeferenced metre survey from an ungeoreferenced one.
    */
+  /**
+   * True when the scan's linear scale is KNOWN (a resolved CRS unit), so a
+   * measurement's `_m` value genuinely means metres. False for a local /
+   * unknown-unit cloud, where `unitToMetres` is an inert 1 — the export path
+   * reads this to caveat its metre labels (pass-6 M1).
+   */
+  get crsKnown(): boolean {
+    return this._crsKnown;
+  }
+
   setCrsKnown(known: boolean): void {
     if (known === this._crsKnown) return;
     this._crsKnown = known;
