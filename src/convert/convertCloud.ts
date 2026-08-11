@@ -78,7 +78,18 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
-  const sourceEpsg = cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null;
+  // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
+  // authority — it honours any user override, so `cloud.metadata.crs` stays
+  // source-declared PROVENANCE only. Given a resolved value we never consult
+  // metadata, so a rejected or local override can't resurrect the file's declared
+  // CRS into the output tag or a reprojection (blocker #2D). `undefined` means no
+  // resolver is in play (the pure module's own callers / tests), which falls back
+  // to the detected metadata exactly as before — a byte-identical no-override path.
+  const resolvedProvided = opts.resolvedSourceCrs !== undefined;
+  const sourceCrs = resolvedProvided ? opts.resolvedSourceCrs : (cloud.metadata?.crs ?? null);
+  const sourceEpsg = resolvedProvided
+    ? (opts.resolvedSourceCrs?.epsg ?? opts.sourceEpsg ?? null)
+    : (cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null);
   let g = cloudToGlobal(cloud);
   // Every output format here reads Z as elevation (LAS by spec; the ASCII
   // writers by the same convention), which is wrong for the Y-up mesh formats:
@@ -150,7 +161,7 @@ export function convertCloud(
     // TransformProvenance carries the realization-preserving datum name and the
     // source coordinate epoch. Hints affect only the metadata, never the
     // reprojected coordinates.
-    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs: cloud.metadata?.crs ?? null });
+    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs });
     g = r.points;
     // Provenance is present on every reproject outcome (applied / approximate /
     // skipped) — keep it for the report instead of discarding it.

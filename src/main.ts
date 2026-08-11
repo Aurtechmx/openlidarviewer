@@ -2995,6 +2995,10 @@ const exportPanel = new ExportPanel({
     };
   },
   getCloud: () => (scans.activeId ? viewer.getCloud(scans.activeId) ?? null : streamingExportCloud()),
+  // Resolved source CRS (override applied), so a convert/export uses the CRS the
+  // user chose, not the file's rejected declared one (blocker #2D). Same authority
+  // the Inspector and Studio read (C7).
+  getResolvedSourceCrs: () => crsService.current(),
   // Pending = a streaming cloud is attached but its export frontier is still
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.

@@ -134,6 +134,57 @@ describe('convertCloud', () => {
   });
 });
 
+// ── blocker #2D: the RESOLVED source CRS is authoritative, metadata is provenance
+describe('convertCloud — resolved source CRS wins over declared metadata', () => {
+  // A file DECLARES UTM 11N (32611), but the user has RESOLVED it to UTM 12N
+  // (32612): the file's metadata.crs is the rejected, provenance-only CRS.
+  const declared11N = utmCloud({
+    source: 'wkt', name: 'UTM 11N', epsg: 32611, linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false,
+  });
+
+  it('no override is byte-identical to the pre-fix path (metadata fallback)', () => {
+    const withUndefined = convertCloud(declared11N, { format: 'las' });
+    // resolvedSourceCrs omitted → undefined → detected metadata is used, exactly
+    // as before the fix. "kept WGS 84 / UTM zone 11N".
+    expect(withUndefined.report.crsNote).toMatch(/kept.*11N/i);
+  });
+
+  it('reprojects FROM the resolved override, not the rejected declared CRS', () => {
+    const r = convertCloud(declared11N, {
+      format: 'xyz', crsMode: 'reproject', targetEpsg: 4326,
+      resolvedSourceCrs: { epsg: 32612 }, // user overrode to UTM 12N
+    });
+    expect(r.report.ok).toBe(true);
+    // 12N places these eastings ~6° further east than 11N would, so the fix is
+    // observable in the coordinates, not just the label.
+    const lon = parseFloat(new TextDecoder().decode(r.file!.bytes).split('\n')[0].split(' ')[0]);
+    // 500000E in 12N is ~ -111° longitude; in 11N it would be ~ -117°.
+    expect(lon).toBeGreaterThan(-113);
+    expect(lon).toBeLessThan(-109);
+  });
+
+  it('a local override (epsg null) does NOT resurrect the declared CRS', () => {
+    // keep mode: with a local resolved CRS the output must read "no CRS", never
+    // the rejected 32611 from metadata.
+    const r = convertCloud(declared11N, {
+      format: 'las', crsMode: 'keep', resolvedSourceCrs: { epsg: null },
+    });
+    expect(r.report.crsNote).toMatch(/no CRS|local/i);
+    expect(r.report.crsNote).not.toMatch(/32611/);
+  });
+
+  it('a local override refuses a reproject rather than transforming from the rejected CRS', () => {
+    const r = convertCloud(declared11N, {
+      format: 'las', crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: { epsg: null },
+    });
+    // No usable source CRS → the same honest refusal as a code-less file, NOT a
+    // silent reprojection from the declared-but-rejected 32611.
+    expect(r.file).toBeNull();
+    expect(r.report.ok).toBe(false);
+    expect(r.report.log.some((l) => /source CRS/i.test(l.message))).toBe(true);
+  });
+});
+
 describe('convertCloud — omitClassification guard', () => {
   /** Read the per-point classification bytes back out of a written LAS file. */
   function classFromLas(bytes: Uint8Array): number[] {

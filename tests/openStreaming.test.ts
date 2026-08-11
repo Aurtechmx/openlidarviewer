@@ -544,7 +544,7 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
     // The 6th positional argument is the AbortSignal — the seam the pre-commit
     // gate reads to keep the previous scene on a streaming→streaming cancel.
-    expect(calls.attachStreamingCloud.mock.calls[0][5]).toBe(signal);
+    expect((calls.attachStreamingCloud.mock.calls[0] as unknown[])[5]).toBe(signal);
   });
 
   it('a cancel before the candidate opens tears nothing down (early guard)', async () => {

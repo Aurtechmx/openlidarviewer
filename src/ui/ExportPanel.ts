@@ -15,6 +15,7 @@ import { el } from './dom';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
+import type { ResolvedSourceCrs } from '../convert/transformProvenance';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
@@ -79,6 +80,14 @@ export interface ExportPanelCallbacks {
   summaryInfo?: () => ExportCloudSummary | null;
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
   getCloud: () => PointCloud | null;
+  /**
+   * The active scan's RESOLVED source CRS (CRS authority, override applied), or
+   * null for a local / code-less scan. Passed to the converter as the
+   * authoritative source CRS so a user override wins over the file's declared
+   * `metadata.crs` — a rejected CRS can never reproject or tag the output
+   * (blocker #2D). Omitted → the converter falls back to the detected metadata.
+   */
+  getResolvedSourceCrs?: () => ResolvedSourceCrs | null;
   /** Whether a full-resolution re-decode of the source is possible (local file). */
   hasFullSource: () => boolean;
   /** Whether the loaded cloud is a reduced subset of the source. */
@@ -766,6 +775,11 @@ export class ExportPanel {
         crsMode: this._crsMode,
         targetEpsg: target,
         sourceEpsg: parseEpsg(this._sourceEpsg),
+        // Resolved source CRS (override applied) is authoritative — the file's
+        // declared metadata.crs is provenance only, so a rejected/local override
+        // never tags or reprojects the output (blocker #2D). undefined when the
+        // host wires no resolver, which keeps the detected-metadata fallback.
+        resolvedSourceCrs: this._cb.getResolvedSourceCrs?.(),
         omitClassification: !this._includeClass,
       };
       const { file, report } = convertCloud(cloud, options);

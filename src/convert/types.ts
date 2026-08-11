@@ -7,7 +7,7 @@
  * output formats. Everything here is deterministic and unit-testable.
  */
 
-import type { TransformProvenance } from './transformProvenance';
+import type { TransformProvenance, ResolvedSourceCrs } from './transformProvenance';
 
 /** Output formats the converter can write. */
 export type ConvertFormat = 'las14' | 'las' | 'laz' | 'xyz' | 'asc';
@@ -46,10 +46,21 @@ export interface ConvertOptions {
   /** CRS handling. Defaults to `keep`. */
   readonly crsMode?: CrsMode;
   /**
-   * Source EPSG. Used for `reproject` when the file carries no CRS of its
-   * own (otherwise the file's detected CRS wins). Ignored for `keep`.
+   * Source EPSG. Used for `reproject` when there is no resolved or detected CRS
+   * (a genuinely code-less scan the user tags by hand). Ignored for `keep`.
    */
   readonly sourceEpsg?: number | null;
+  /**
+   * The RESOLVED source CRS from the CRS authority (CrsService), honouring any
+   * user override. When provided it is authoritative: `cloud.metadata.crs` is
+   * treated as source-declared provenance only and is NOT consulted for the
+   * conversion's source CRS, so a rejected or local override can never resurrect
+   * the file's declared CRS into the output or a reprojection (blocker #2D).
+   * `undefined` = no resolver in play (the pure convert path), which falls back
+   * to the detected metadata. A resolved value with a null `epsg` is a local /
+   * code-less frame — honoured as "no CRS", never back-filled from metadata.
+   */
+  readonly resolvedSourceCrs?: ResolvedSourceCrs | null;
   /** Target EPSG for `assign` (the tag to write) and `reproject` (the destination). */
   readonly targetEpsg?: number | null;
   /**
