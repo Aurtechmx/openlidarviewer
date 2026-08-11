@@ -120,7 +120,6 @@ import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
-import type { MeasurementExportContext } from './export/measurementExport';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { writeScanScopedExport, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -132,6 +131,11 @@ import {
   type KmlActionDeps,
 } from './app/kmlActions';
 import { makeExportCrsResolver } from './app/exportCrsResolver';
+import {
+  exportMeasurementsFile,
+  exportMeasurementIntegrityReport,
+  type MeasurementExportActionDeps,
+} from './app/measurementExportActions';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -2959,6 +2963,20 @@ const kmlDeps: KmlActionDeps = {
   loadKmlExport,
 };
 
+// Bind the measurement-export orchestration to the live measure state, the
+// resolved export frame, and the lazy serializers (see measurementExportActions).
+const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
+  measure: v.measure,
+  geo: exportGeoContext,
+  baseName,
+  downloadText,
+  loadMeasurementExport,
+  loadMeasurementReport,
+  activeClassificationEpoch: () => (scans.activeId ? v.classificationEpoch(scans.activeId) : 0),
+  appVersion: __APP_VERSION__,
+  now: () => new Date().toISOString(),
+});
+
 const exportPanel = new ExportPanel({
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
@@ -3044,56 +3062,14 @@ const exportPanel = new ExportPanel({
   // happens before the lazy `viewer` chunk resolves, so it must tolerate a null
   // viewer (return 0) instead of dereferencing it and crashing app init.
   measurementCount: () => (viewer ? viewer.measure.getMeasurements().length : 0),
+  // Measurement deliverables — orchestration lives in measurementExportActions.
   exportMeasurements: async (format) => {
     if (!viewer) return;
-    const measurements = viewer.measure.getMeasurements();
-    if (measurements.length === 0) return;
-    // Measurement points are LOCAL (recentered); add the origin back to land them
-    // in the source projected/local frame. `exportGeoContext` resolves the
-    // origin for streaming scans too (renderOrigin) — a plain static-only read
-    // would export at render-frame coordinates. Geographic reprojection
-    // (→ lon/lat) is a later option — for now we emit in the scan's own frame.
-    // Resolved BEFORE the import below (as exportIntegrityReport already does),
-    // so the frame and the measurements come from one instant, not two.
-    const geo = exportGeoContext();
-    const ctx: MeasurementExportContext = {
-      toOutput: (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
-      up: viewer.measure.worldUp,
-      unitToMetres: viewer.measure.unitToMetres,
-      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
-      crsName: geo.crsName,
-      geographic: false,
-      // A local / unknown-unit scan has an inert factor of 1, so the `_m`
-      // columns are nominal, not metres — the evidence note then says so (M1).
-      unitsVerified: viewer.measure.crsKnown,
-    };
-    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
-    const text = format === 'geojson'
-      ? measurementsToGeoJSON(measurements, ctx)
-      : measurementsToCsv(measurements, ctx);
-    const stem = geo.name ? baseName(geo.name) : 'measurements';
-    downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
+    await exportMeasurementsFile(format, measurementExportActionDeps(viewer));
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
-    const ms = viewer.measure.getMeasurements();
-    if (ms.length === 0) return;
-    const geo = exportGeoContext();
-    const { integrityReportFile } = await loadMeasurementReport();
-    const f = integrityReportFile(
-      ms,
-      viewer.measure.worldUp,
-      viewer.measure.unitToMetres,
-      viewer.measure.verticalUnitToMetres,
-      geo.name ? baseName(geo.name) : 'scan',
-      geo.crsName,
-      new Date().toISOString(),
-      scans.activeId ? viewer.classificationEpoch(scans.activeId) : 0,
-      __APP_VERSION__,
-      // Local / unknown-unit scan → the findings' metre labels are nominal (M1).
-      viewer.measure.crsKnown,
-    );
-    downloadText(f.filename, f.text);
+    await exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
   },
   exportKml: () => void exportSiteKml(kmlDeps),
   kmlStatus: () => siteKmlStatus(kmlDeps),

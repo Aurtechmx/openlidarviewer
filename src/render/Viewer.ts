@@ -66,6 +66,7 @@ import {
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
 import type { ExportAdapterCloud, ExportCloudCrs } from './exportAdapter';
+import { imageExportModeAvailability, type ExportModeAvailability } from './exportModeAvailability';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
@@ -4705,74 +4706,18 @@ export class Viewer {
    * `unavailableReason`. The contract is one-way: a mode missing from this
    * map renders as disabled.
    */
-  availableImageExportModes(): ReadonlyMap<
-    ExportMode,
-    { readonly available: boolean; readonly reason?: string }
-  > {
+  availableImageExportModes(): ReadonlyMap<ExportMode, ExportModeAvailability> {
+    // Compute the scene facts from the live export adapter; the pure module turns
+    // them into the per-mode availability + reasons (extracted for the monolith).
     const adapter = this._buildExportAdapter();
     const aabb = adapter.localBoundsAabb();
-    const hasAabb = aabb !== null;
-    const zRange = aabb ? aabb[5] - aabb[2] : 0;
-    const hasIntensity = adapter.hasIntensity();
-    const hasClassification = adapter.hasClassification();
-    const hasNormals = adapter.hasNormals();
-
-    const out = new Map<
-      ExportMode,
-      { readonly available: boolean; readonly reason?: string }
-    >();
-
-    // orthographic-rgb — always available (current-mode passthrough).
-    out.set('orthographic-rgb', { available: true });
-
-    // height-map — needs an AABB with a non-degenerate Z extent.
-    if (!hasAabb) {
-      out.set('height-map', { available: false, reason: 'No cloud is loaded.' });
-    } else if (zRange <= 1e-4) {
-      out.set('height-map', {
-        available: false,
-        reason: 'Cloud has no measurable height range.',
-      });
-    } else {
-      out.set('height-map', { available: true });
-    }
-
-    // intensity — needs an AABB + the channel.
-    if (!hasAabb) {
-      out.set('intensity', { available: false, reason: 'No cloud is loaded.' });
-    } else if (!hasIntensity) {
-      out.set('intensity', {
-        available: false,
-        reason: 'This cloud has no per-point intensity channel.',
-      });
-    } else {
-      out.set('intensity', { available: true });
-    }
-
-    // classification — needs an AABB + the channel.
-    if (!hasAabb) {
-      out.set('classification', { available: false, reason: 'No cloud is loaded.' });
-    } else if (!hasClassification) {
-      out.set('classification', {
-        available: false,
-        reason: 'This cloud has no per-point classification channel.',
-      });
-    } else {
-      out.set('classification', { available: true });
-    }
-
-    // normal — needs the channel. LiDAR captures rarely include normals.
-    if (!hasNormals) {
-      out.set('normal', {
-        available: false,
-        reason:
-          'This cloud has no per-point normals. LiDAR captures rarely include them; PCD / PTX / GLTF scans with normals are supported.',
-      });
-    } else {
-      out.set('normal', { available: true });
-    }
-
-    return out;
+    return imageExportModeAvailability({
+      hasAabb: aabb !== null,
+      zRange: aabb ? aabb[5] - aabb[2] : 0,
+      hasIntensity: adapter.hasIntensity(),
+      hasClassification: adapter.hasClassification(),
+      hasNormals: adapter.hasNormals(),
+    });
   }
 
   /**
