@@ -440,9 +440,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // Static path: only assert a single, unambiguous frame. With several
       // clouds loaded the per-cloud origins can differ — a world file in
       // one cloud's frame would silently misplace the others, so we only
-      // georeference when every loaded cloud shares the SAME origin.
+      // georeference when every loaded cloud shares the SAME origin AND the
+      // SAME declared CRS. Sharing an origin is not sharing a coordinate
+      // system: two layers on the same local grid but declaring different
+      // EPSG codes would otherwise pass, and the ortho's .prj would stamp the
+      // first cloud's CRS over the whole combined raster (pass-5 C9). A stable
+      // key per cloud — EPSG when declared, else the display name — mirrors
+      // layerCompatibility.horizontalKey; a conflict refuses the georeference.
       let worldOrigin: { x: number; y: number } | null = null;
       let wkt: string | null = null;
+      let crsKey: string | null = null;
       let any = false;
       for (const { cloud } of visibleEntries()) {
         any = true;
@@ -453,7 +460,18 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
           return null; // conflicting frames — honestly not georeferenceable
         }
-        wkt ??= cloud.metadata?.crs?.wkt ?? null;
+        const detected = cloud.metadata?.crs;
+        const key =
+          detected?.epsg != null && Number.isFinite(detected.epsg)
+            ? `epsg:${detected.epsg}`
+            : detected?.name
+              ? `name:${detected.name.trim().toLowerCase()}`
+              : null;
+        if (key !== null) {
+          if (crsKey === null) crsKey = key;
+          else if (crsKey !== key) return null; // conflicting CRS — not georeferenceable
+        }
+        wkt ??= detected?.wkt ?? null;
       }
       return any ? { worldOrigin, wkt } : null;
     },

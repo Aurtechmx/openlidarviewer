@@ -96,6 +96,35 @@ describe('export adapter — georeference honesty', () => {
   it('reports nothing rather than an empty frame when no cloud is loaded', () => {
     expect(buildExportAdapter(host()).georefContext!()).toBeNull();
   });
+
+  it('refuses when two clouds share an origin but declare different CRSs (C9)', () => {
+    // Sharing a local grid origin is NOT sharing a coordinate system. Stamping
+    // the first cloud's EPSG over a raster that also contains a differently-
+    // projected cloud silently misplaces half the pixels, so refuse.
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32612, wkt: 'WKT-A' } } })],
+            ['b', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32613, wkt: 'WKT-B' } } })],
+          ]),
+      }),
+    );
+    expect(a.georefContext!()).toBeNull();
+  });
+
+  it('georeferences when two clouds share both origin and CRS (C9)', () => {
+    const a = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['a', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32612, wkt: 'WKT' } } })],
+            ['b', cloud({ origin: [10, 20, 0], metadata: { crs: { epsg: 32612, wkt: 'WKT' } } })],
+          ]),
+      }),
+    );
+    expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: 'WKT' });
+  });
 });
 
 describe('export adapter — point totals', () => {
