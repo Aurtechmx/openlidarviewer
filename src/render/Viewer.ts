@@ -131,6 +131,7 @@ import {
   type CameraPresetName,
   type StandardView,
 } from './camera/cameraPresets';
+import { makeOrthoCamera, followPerspective } from './camera/orthoCamera';
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
@@ -523,14 +524,6 @@ const PHASE_CENTER_PROXY_MS = 250;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
-/**
- * Near-orthographic FOV. A very long "lens" — the camera pulls far back and
- * the frustum becomes almost parallel, so walls/floors read flat for accurate
- * measuring with no perspective skew. This keeps the existing perspective
- * camera (and the whole WebGPU render graph, culling, LOD and picking tools)
- * untouched, rather than swapping in a separate OrthographicCamera.
- */
-const ORTHO_FOV = 2;
 
 /**
  * Absolute GPU-upload point ceiling. The device-aware load budget already
@@ -774,6 +767,10 @@ export class Viewer {
   private readonly _renderer: THREE.WebGPURenderer;
   private readonly _scene: THREE.Scene;
   private readonly _camera: THREE.PerspectiveCamera;
+  /** The true-orthographic camera. A per-frame follower of `_camera` (the sole
+   *  control master): same pose, frustum sized to what the perspective camera
+   *  spans at the orbit target, so one set of OrbitControls drives both. */
+  private readonly _orthoCamera: THREE.OrthographicCamera;
   private readonly _controls: OrbitControls;
   private readonly _nav: NavController;
   // Three.js `Clock` was deprecated in r170 in favour of `Timer`, which has
@@ -1036,10 +1033,8 @@ export class Viewer {
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
 
-  /** Near-orthographic (parallel) projection toggle — see ORTHO_FOV. */
+  /** True orthographic (parallel) projection toggle — drives `_activeCamera`. */
   private _orthographic = false;
-  /** The last axis-aligned standard view applied, so toggling ortho re-frames it. */
-  private _lastStandardView: StandardView | null = null;
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
   /**
@@ -1216,6 +1211,7 @@ export class Viewer {
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
     this._camera = new THREE.PerspectiveCamera(DEFAULT_FOV, aspect, 0.1, 5_000_000);
     this._camera.position.set(0, 0, 100);
+    this._orthoCamera = makeOrthoCamera(this._camera.near, this._camera.far);
 
     // ── Post-processing pipeline (Eye Dome Lighting) ──────────────────────
     // The scene renders into a pass; the EDL node shades it from the pass's
@@ -3135,8 +3131,8 @@ export class Viewer {
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return { changedCount: 0, pointCount: 0 };
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._camera.projectionMatrix;
-    const viewMatrix = this._camera.matrixWorldInverse;
+    const projMatrix = this._activeCamera().projectionMatrix;
+    const viewMatrix = this._activeCamera().matrixWorldInverse;
     const off = accumulatorOffset(entry.placement);
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
@@ -3863,8 +3859,8 @@ export class Viewer {
     // walk that needs three.js, which is why it stays here and the rest moved
     // to a module that can be tested without a WebGL context.
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._camera.projectionMatrix;
-    const viewMatrix = this._camera.matrixWorldInverse;
+    const projMatrix = this._activeCamera().projectionMatrix;
+    const viewMatrix = this._activeCamera().matrixWorldInverse;
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number) => {
       tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
@@ -4330,7 +4326,7 @@ export class Viewer {
     return true;
   }
 
-  /** Whether the near-orthographic (parallel) projection is active. */
+  /** Whether the true orthographic (parallel) projection is active. */
   get orthographic(): boolean {
     return this._orthographic;
   }
@@ -4339,7 +4335,7 @@ export class Viewer {
    * Snap to one of the six standard axis-aligned views (Top / Bottom / Front /
    * Back / Left / Right) — the Polycam-style "look straight at a face" framing
    * that makes a wall or floor read flat for measuring. Honours the current
-   * projection (perspective or near-orthographic). Returns false when no scan
+   * projection (perspective or orthographic). Returns false when no scan
    * is loaded.
    */
   /**
@@ -4358,7 +4354,6 @@ export class Viewer {
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
-    this._lastStandardView = view;
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
@@ -4379,37 +4374,38 @@ export class Viewer {
     return true;
   }
 
+  /** The camera the renderer, picker and overlays draw through: the true
+   *  orthographic follower when ortho is on, else the perspective master. */
+  private _activeCamera(): THREE.Camera {
+    return this._orthographic ? this._orthoCamera : this._camera;
+  }
+
+  /** Refresh the orthographic follower to the perspective master's current view
+   *  and point the scene pass at the active camera. Called before every render
+   *  and pick; cheap, idempotent, and a no-op while perspective is active. */
+  private _syncActiveCamera(): void {
+    if (this._orthographic) {
+      followPerspective(
+        this._orthoCamera, this._camera, this._controls.target,
+        this._camera.fov, this._camera.aspect, this._camera.near, this._camera.far,
+      );
+    }
+    (this._scenePass as unknown as { camera: THREE.Camera }).camera = this._activeCamera();
+  }
+
   /**
-   * Toggle the near-orthographic projection. Implemented as a very long lens
-   * (ORTHO_FOV) rather than a separate OrthographicCamera, so the WebGPU
-   * render graph, frustum culling, LOD streaming and the picking tools all
-   * keep working unchanged — only the FOV + framing distance change. Re-frames
-   * the current view so the scan stays the same apparent size.
+   * Switch to a true orthographic projection, or back to perspective. The
+   * orthographic camera is a per-frame follower of the perspective master (same
+   * pose, frustum matched to what perspective spans at the orbit target), so a
+   * switch only flips the mode and re-points the render pass — no reframe, the
+   * follower already frames exactly what is on screen. OrbitControls keep
+   * driving the perspective camera, which drives the follower's zoom.
    */
   setOrthographic(on: boolean): boolean {
+    if (this._orthographic === on) return true;
     this._orthographic = on;
-    this._camera.fov = on ? ORTHO_FOV : DEFAULT_FOV;
-    this._camera.updateProjectionMatrix();
-
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return false;
-
-    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    const fitDist = (Math.max(sphere.radius, 1e-3) / Math.sin(fovRad / 2)) * 1.2;
-    this._applyProjectionRanges(sphere.radius, fitDist);
-
-    // Re-frame so the cloud keeps its apparent size at the new lens. If a
-    // standard view is active, re-apply it; otherwise pull along the current
-    // view direction to the new fit distance.
-    if (this._lastStandardView) {
-      this.setStandardView(this._lastStandardView);
-    } else {
-      const target = this._controls.target.clone();
-      const dir = this._camera.position.clone().sub(target);
-      if (dir.lengthSq() < 1e-9) dir.copy(this._horizontalAxis());
-      dir.normalize();
-      this._nav.tweenTo(target.clone().addScaledVector(dir, fitDist), target, 0.6);
-    }
+    this._syncActiveCamera();
+    this.requestFrame();
     return true;
   }
 
@@ -4604,17 +4600,18 @@ export class Viewer {
     return {
       ready: () => this.ready,
       renderFrame: () => {
+        this._syncActiveCamera();
         if (this._edlEnabled) this._post.render();
-        else this._renderer.render(this._scene, this._camera);
+        else this._renderer.render(this._scene, this._activeCamera());
       },
       glCanvas: () => this._renderer.domElement as HTMLCanvasElement,
       activeColorbar: () => this.activeColorbar(),
       measurementsOverlaySVG: () => {
-        this._measure.render(this._camera, this._canvas);
+        this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas);
         return this._measure.overlaySVG();
       },
       annotationsOverlaySVG: () => {
-        this._annotate.render(this._camera, this._canvas);
+        this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas);
         return this._annotate.markerSVG();
       },
       inspectorOverlaySVG: () => {
@@ -5739,7 +5736,8 @@ export class Viewer {
   } | null {
     if (this._streamingPickData.size === 0) return null;
     this._pickNdc.set(ndcX, ndcY);
-    this._raycaster.setFromCamera(this._pickNdc, this._camera);
+    this._syncActiveCamera();
+    this._raycaster.setFromCamera(this._pickNdc, this._activeCamera());
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
     // Resident-only pick invariant — pick from resident meshes only. Prune any orphan
@@ -5864,7 +5862,8 @@ export class Viewer {
     ndcY: number,
   ): { cloud: PointCloud; index: number; point: THREE.Vector3 } | null {
     this._pickNdc.set(ndcX, ndcY);
-    this._raycaster.setFromCamera(this._pickNdc, this._camera);
+    this._syncActiveCamera();
+    this._raycaster.setFromCamera(this._pickNdc, this._activeCamera());
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
 
@@ -6073,8 +6072,8 @@ export class Viewer {
     if (!this._streaming) return;
     this._camera.updateMatrixWorld();
     this._streamingViewProj.multiplyMatrices(
-      this._camera.projectionMatrix,
-      this._camera.matrixWorldInverse,
+      this._activeCamera().projectionMatrix,
+      this._activeCamera().matrixWorldInverse,
     );
     this._streamingCamPos[0] = this._camera.position.x;
     this._streamingCamPos[1] = this._camera.position.y;
@@ -6246,8 +6245,8 @@ export class Viewer {
         this._applyAdaptiveDpr(moving, delta, nowMs, rendered),
       noteRendered: () => this._renderGate.noteRendered(),
       noteSkipped: () => this._renderGate.noteSkipped(),
-      renderEdl: () => this._post.render(),
-      renderScene: () => this._renderer.render(this._scene, this._camera),
+      renderEdl: () => { this._syncActiveCamera(); this._post.render(); },
+      renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,
       setEdlPaintedAtRest: (value) => {
         this._edlPaintedAtRest = value;
@@ -6279,9 +6278,9 @@ export class Viewer {
         return hit ? this._infoForStreamingHit(hit) : null;
       },
       updateProbe: (info, clientX, clientY) => this._probe.update(info, clientX, clientY),
-      renderMeasureOverlay: () => this._measure.render(this._camera, this._canvas),
+      renderMeasureOverlay: () => this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
       renderInspectOverlay: () => this._inspect.render(),
-      renderAnnotateOverlay: () => this._annotate.render(this._camera, this._canvas),
+      renderAnnotateOverlay: () => this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
     };
   }
 

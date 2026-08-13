@@ -4,7 +4,7 @@ import { isBenignPageError } from './pageErrors';
 
 /**
  * v0.4.6 standard axis-aligned views (Top / Bottom / Front / Back / Left /
- * Right) and the near-orthographic ("parallel") projection toggle.
+ * Right) and the orthographic ("parallel") projection toggle.
  *
  * The view geometry is covered by cameraPresets.test.ts (standardViewPose +
  * STANDARD_VIEW_ORDER unit tests). This spec pins the DOM + handler wiring: the
