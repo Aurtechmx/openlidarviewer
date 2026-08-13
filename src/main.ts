@@ -109,7 +109,7 @@ import { classificationLabel } from './render/pointInfo';
 // above) inside `ensureObjectPanel()`.
 import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
-import { DesktopWorkspace } from './ui/workspace/DesktopWorkspace';
+import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import {
@@ -2050,10 +2050,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
+  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('work'); },
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => viewer.setAnnotateMode(!viewer.annotateMode),
+  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('work'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
@@ -2066,6 +2066,7 @@ const dock = new ToolDock({
     routing.pin();
     analyseDesiredVisible = show;
     if (show) {
+      showWorkspaceMode?.('analyse');
       // Opening: ensure the panel is mounted, then show it.
       void ensureAnalysePanel().then((p) => p.setVisible(true));
       // Opening Analyse demotes the Object panel — track the intent (so a still-
@@ -3388,6 +3389,10 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 // lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
+// Presentation-only bridge: a tool activation (Measure/Annotate/Analyse) reveals
+// its workspace mode. Set once the lazy workspace exists; the tool callbacks stay
+// authoritative — this only changes which mode is shown, never tool behaviour.
+let showWorkspaceMode: ((mode: WorkspaceMode) => void) | null = null;
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
 // only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
@@ -3741,6 +3746,7 @@ void viewerLoaded.then(() => {
     // so the rail-collapse chrome, clearance vars and wheel containment target it
     // unchanged. measure/analyse/object lazy-mount into their modes below.
     const workspace = new DesktopWorkspace();
+    showWorkspaceMode = (m) => workspace.setMode(m);
     const leftPanels = workspace.element;
     // Data mode = the live layer browser (re-parented out of the Inspector, which
     // keeps updating the same nodes) + the class legend. Reused on mobile return.
