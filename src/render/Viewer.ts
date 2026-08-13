@@ -132,6 +132,7 @@ import {
   type StandardView,
 } from './camera/cameraPresets';
 import { makeOrthoCamera, followPerspective } from './camera/orthoCamera';
+import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
@@ -3781,25 +3782,32 @@ export class Viewer {
       mode: this._nav.mode,
     };
     if (this._camera.fov !== DEFAULT_FOV) state.fov = this._camera.fov;
+    if (this._orthographic) state.projection = 'orthographic';
     return state;
   }
 
   /**
    * Restore a camera state captured by {@link getCameraState}. The mode is
-   * applied first so the pose tween runs under the right navigation model;
-   * the fov, if present, is set before the tween starts.
+   * applied first so the pose tween runs under the right navigation model; the
+   * projection is set last. A legacy view has no `projection` field but a
+   * `fov ≈ 2` (the old near-ortho lens), which restores as orthographic; a real
+   * perspective fov is clamped and applied to the perspective camera.
    */
   applyCameraState(state: SavedCameraState): void {
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
-    // Clamp imported FOV to a sane perspective range — a share/session file
-    // could carry a non-finite or extreme value that breaks the projection.
-    const rawFov = state.fov ?? DEFAULT_FOV;
-    const fov = Math.min(120, Math.max(10, Number.isFinite(rawFov) ? rawFov : DEFAULT_FOV));
-    if (this._camera.fov !== fov) {
-      this._camera.fov = fov;
-      this._camera.updateProjectionMatrix();
+    const ortho = state.projection === 'orthographic'
+      || projectionFromLegacyFov(state.fov, 2) === 'orthographic';
+    // A non-ortho saved fov is a genuine perspective lens. Clamp it to a sane
+    // range — a share/session file could carry a non-finite or extreme value.
+    if (!ortho && state.fov != null) {
+      const fov = Math.min(120, Math.max(10, Number.isFinite(state.fov) ? state.fov : DEFAULT_FOV));
+      if (this._camera.fov !== fov) {
+        this._camera.fov = fov;
+        this._camera.updateProjectionMatrix();
+      }
     }
     this._nav.applyPose({ position: state.position, target: state.target });
+    this.setOrthographic(ortho);
   }
 
   /** Look up a loaded cloud by id — used by the app to export it. */
