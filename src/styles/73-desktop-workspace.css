@@ -5,10 +5,15 @@
    wheel containment all still target `.olv-left-panels` unchanged
    (72-panel-rails.css). This file reorganises what is INSIDE that host. */
 
-/* The rail is a column: a fixed tab strip above one scrolling mode body. */
+/* The rail is a column: a fixed tab strip above one scrolling mode body. The
+   inner body is the scroller now, so the rail itself must NOT reserve a
+   scrollbar gutter — that gutter made the rail's content narrower than
+   `--olv-rail-width` while the collapse grabber is positioned from that
+   variable, leaving a visible sliver between the panels and the handle. */
 .olv-left-panels {
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: auto;
 }
 
 /* Tab strip — hidden until a scan loads (`olv-ws-ready`), so the empty rail

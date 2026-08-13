@@ -3761,6 +3761,7 @@ void viewerLoaded.then(() => {
       export: exportPanel.element,
     };
     workspace.layoutDesktop(workspacePanels);
+    exportPanel.element.classList.remove('olv-collapsed'); // ditto, at first build
     stage.overlay.append(leftPanels);
     stage.addTeardown(() => workspace.dispose());
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
@@ -3843,8 +3844,9 @@ void viewerLoaded.then(() => {
       // Restore the desktop default collapsed state we dropped for the mobile
       // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
       // compact desktop panels back rather than fully-expanded ones.
-      analysePanel?.element.classList.add('olv-collapsed');
-      exportPanel.element.classList.add('olv-collapsed');
+      // One mode at a time: a collapsed lone panel would hide its main action.
+      analysePanel?.element.classList.remove('olv-collapsed');
+      exportPanel.element.classList.remove('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
       // Inspector returns to the right context rail (below the Streaming card);
@@ -3884,18 +3886,15 @@ void viewerLoaded.then(() => {
     mobileMql?.addEventListener('change', applyMobileSheet);
     applyMobileSheet();
 
-    // The lazy Analyse panel inserts itself here once its chunk resolves. When
-    // the mobile sheet is active it goes into the Analyse slot ahead of the
-    // object panel; otherwise between the class-legend and export panels in the
-    // left column. Robust to either target panel not being where we expect
-    // (falls back to append) so a mid-flip mount can never throw.
+    // The lazy Analyse panel inserts itself here once its chunk resolves: ahead
+    // of the object panel in the mobile Analyse slot, else the Analyse mode.
     mountAnalysePanelElement = (el: HTMLElement): void => {
+      el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
       if (mobileApplied) {
         const slot = mobileSheet.slot('analyse');
         // insertBefore(firstChild) puts Analyse first (object panel follows);
         // acts as append when the slot is empty.
         slot.insertBefore(el, slot.firstChild);
-        el.classList.remove('olv-collapsed');
       } else {
         workspace.mountInMode('analyse', el);
       }
