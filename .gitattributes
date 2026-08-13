@@ -111,3 +111,8 @@ docs/architecture/coordinate-integrity-roadmap.md export-ignore
 # Internal working notes and draft design specs, not reviewer-facing
 # documentation. Kept in git history; excluded from the scholarly deposit.
 docs/superpowers/ export-ignore
+
+# Keep TypeScript/source as text so a stray byte never flips a diff to binary
+*.ts text
+*.tsx text
+*.mjs text

@@ -137,6 +137,15 @@ function staticLayerSupportsMode(cloud: PointCloud, mode: ColorMode): boolean {
 }
 
 /**
+ * Conflict-detection key for a cloud that resolves to Local/unknown (null CRS
+ * key). Real keys are `epsg:…` / `name:…` (see `metadataCrsKeyWkt`), so this
+ * sentinel can never equal one: a local layer therefore matches other local
+ * layers but conflicts with any projected layer, forcing the georeference to be
+ * refused when the two are mixed.
+ */
+const LOCAL_CRS_SENTINEL = '\u0000local';
+
+/**
  * The georeference CRS derived from a cloud's DECLARED metadata — the fallback
  * when no resolver is wired. EPSG when declared, else the display name, mirroring
  * `layerCompatibility.horizontalKey`; the WKT is the file's own. Source-declared
@@ -510,16 +519,21 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         // a resolver — so a user who rejected the file's declared CRS (chose
         // Local, or a different one) can never have the rejected CRS stamped into
         // the .prj (pass-5 C10). A local resolution yields a null wkt AND a null
-        // key, so it neither georeferences nor forces a false CRS conflict. When
-        // no resolver is wired (the pure-adapter tests) we fall back to the file's
-        // declared metadata — the same source-declared provenance as before.
+        // key; it still PARTICIPATES in conflict detection under a sentinel key,
+        // because a visible local/unknown layer beside a projected one is a
+        // genuine conflict — the user declared its pixels are NOT in the projected
+        // frame, so stamping that frame's .prj over the combined raster would
+        // misgeoreference them (pass-6 C10). An all-local scene shares the
+        // sentinel with no wkt, so it still refuses to georeference rather than
+        // being falsely flagged as a conflict. When no resolver is wired (the
+        // pure-adapter tests) we fall back to the file's declared metadata — the
+        // same source-declared provenance as before.
         const rc = host.resolveCloudCrs
           ? host.resolveCloudCrs(cloud)
           : metadataCrsKeyWkt(cloud);
-        if (rc.key !== null) {
-          if (crsKey === null) crsKey = rc.key;
-          else if (crsKey !== rc.key) return null; // conflicting CRS — not georeferenceable
-        }
+        const conflictKey = rc.key ?? LOCAL_CRS_SENTINEL;
+        if (crsKey === null) crsKey = conflictKey;
+        else if (crsKey !== conflictKey) return null; // conflicting CRS — not georeferenceable
         wkt ??= rc.wkt;
       }
       return any ? { worldOrigin, wkt } : null;

@@ -152,6 +152,41 @@ describe('export adapter — georeference honesty', () => {
     expect(a.georefContext!()).toEqual({ worldOrigin: { x: 10, y: 20 }, wkt: 'RESOLVED-12N' });
   });
 
+  it('refuses when a visible local layer sits beside a projected one at the same origin (C10)', () => {
+    // Two clouds share a sourceOrigin, but the user declared layer A Local
+    // (unknown CRS) while layer B resolves to a projected EPSG. Stamping B's
+    // .prj over the combined raster would misgeoreference A's pixels, which the
+    // user explicitly said are NOT in that CRS — so refuse to georeference.
+    const resolver = (c: unknown) =>
+      (c as { name: string }).name === 'projected'
+        ? { wkt: 'WKT-B', key: 'epsg:32612', name: 'UTM 12N', unit: 'm', epsg: 32612 }
+        : { wkt: null, key: null, name: null, unit: null, epsg: null };
+    // Both layer orderings: the local layer must force a conflict whether it is
+    // seen before or after the projected one (guards the `wkt ??=` short-circuit).
+    const localFirst = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['a', cloud({ name: 'local', origin: [10, 20, 0] })],
+            ['b', cloud({ name: 'projected', origin: [10, 20, 0] })],
+          ]),
+        resolveCloudCrs: resolver as ExportAdapterHost['resolveCloudCrs'],
+      }),
+    );
+    const projectedFirst = buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map([
+            ['b', cloud({ name: 'projected', origin: [10, 20, 0] })],
+            ['a', cloud({ name: 'local', origin: [10, 20, 0] })],
+          ]),
+        resolveCloudCrs: resolver as ExportAdapterHost['resolveCloudCrs'],
+      }),
+    );
+    expect(localFirst.georefContext!()).toBeNull();
+    expect(projectedFirst.georefContext!()).toBeNull();
+  });
+
   it('crsLabel reports the RESOLVED name/unit, not the declared metadata (1C)', () => {
     const a = buildExportAdapter(
       host({
