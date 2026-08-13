@@ -51,12 +51,17 @@
 }
 .olv-ws-tab:hover {
   color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 /* Active carries fill + text-colour (two channels, never colour alone) plus the
-   tablist's own aria-selected — legible under forced-colors. */
-.olv-ws-tab.is-active {
+   tablist's own aria-selected — legible under forced-colors. The inset highlight
+   matches OLV's raised-surface vocabulary so the segment reads as a pressed key. */
+.olv-ws-tab.is-active,
+.olv-ws-tab.is-active:hover {
   color: var(--on-accent);
   background: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 6px -1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .olv-ws-tab:focus-visible {
   outline: 2px solid var(--accent);
