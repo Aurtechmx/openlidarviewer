@@ -57,6 +57,23 @@ export interface WorkspaceStorage {
   setItem(key: string, value: string): void;
 }
 
+/**
+ * The live panel elements the desktop layout hosts, by role. Lazy panels
+ * (measure/analyse/object) may be absent until they mount.
+ */
+export interface WorkspacePanels {
+  readonly dataLayers: HTMLElement;
+  readonly dataLayerHealth: HTMLElement;
+  readonly classLegend: HTMLElement;
+  readonly annotation: HTMLElement;
+  readonly clip: HTMLElement;
+  readonly processStudio: HTMLElement;
+  readonly export: HTMLElement;
+  readonly measure?: HTMLElement | null;
+  readonly analyse?: HTMLElement | null;
+  readonly object?: HTMLElement | null;
+}
+
 export interface DesktopWorkspaceOptions {
   /** The mode to start on. Overridden by a persisted choice when one exists. */
   readonly initialMode?: WorkspaceMode;
@@ -154,6 +171,26 @@ export class DesktopWorkspace {
    */
   setAvailable(available: boolean): void {
     this.element.classList.toggle('olv-ws-ready', available);
+  }
+
+  /**
+   * Place every desktop panel into its mode in canonical order, re-parenting the
+   * live nodes. Called on first build and whenever the layout returns from the
+   * mobile sheet, so the panel→mode mapping lives here, not scattered in the
+   * composition root. Lazy panels (measure/analyse/object) are placed only once
+   * they exist; they otherwise route themselves in via {@link mountInMode}.
+   */
+  layoutDesktop(p: WorkspacePanels): void {
+    this.mountInMode('data', p.dataLayers);
+    this.mountInMode('data', p.dataLayerHealth);
+    this.mountInMode('data', p.classLegend);
+    if (p.measure) this.mountInMode('work', p.measure);
+    this.mountInMode('work', p.annotation);
+    this.mountInMode('work', p.clip);
+    this.mountInMode('analyse', p.processStudio);
+    if (p.analyse) this.mountInMode('analyse', p.analyse);
+    if (p.object) this.mountInMode('analyse', p.object);
+    this.mountInMode('output', p.export);
   }
 
   /** The live host container a mode's panels are re-parented into (stable). */

@@ -16,6 +16,13 @@
 .olv-ws-tabs {
   display: none;
 }
+/* Before a scan the whole rail is empty: hide the tab strip AND the mode body so
+   `.olv-left-panels` collapses to zero height and its grabber stays hidden on the
+   start screen (the Data mode now hosts the Inspector's always-present Layers
+   section, which would otherwise give the empty rail height). */
+.olv-left-panels:not(.olv-ws-ready) .olv-ws-body {
+  display: none;
+}
 .olv-left-panels.olv-ws-ready .olv-ws-tabs {
   display: flex;
   gap: var(--space-2xs);

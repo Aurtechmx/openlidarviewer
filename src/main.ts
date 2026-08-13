@@ -3737,11 +3737,19 @@ void viewerLoaded.then(() => {
     // unchanged. measure/analyse/object lazy-mount into their modes below.
     const workspace = new DesktopWorkspace();
     const leftPanels = workspace.element;
-    workspace.mountInMode('work', annotationPanel.element);
-    workspace.mountInMode('work', clipPanel.element);
-    workspace.mountInMode('data', classLegendPanel.element);
-    workspace.mountInMode('analyse', processStudio.panel.element);
-    workspace.mountInMode('output', exportPanel.element);
+    // Data mode = the live layer browser (re-parented out of the Inspector, which
+    // keeps updating the same nodes) + the class legend. Reused on mobile return.
+    const dataEls = inspector.workspaceDataElements();
+    const workspacePanels = {
+      dataLayers: dataEls.layers,
+      dataLayerHealth: dataEls.layerHealth,
+      classLegend: classLegendPanel.element,
+      annotation: annotationPanel.element,
+      clip: clipPanel.element,
+      processStudio: processStudio.panel.element,
+      export: exportPanel.element,
+    };
+    workspace.layoutDesktop(workspacePanels);
     stage.overlay.append(leftPanels);
     stage.addTeardown(() => workspace.dispose());
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
@@ -3799,10 +3807,8 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.annotateElements.editor);
     // The live-probe readout follows the cursor above the panels.
     stage.overlay.append(viewer.probeElements.readout);
-    // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
-    // On phones it is superseded by the unified bottom sheet below (CSS hides
-    // it under that breakpoint); on desktop it is unused (the Inspector is a
-    // normal panel there). Kept appended so the desktop/no-sheet path is intact.
+    // Phone-only "Scan Info" launcher — superseded by the bottom sheet on phones
+    // (CSS-hidden), unused on desktop; kept so the no-sheet path stays intact.
     stage.overlay.append(inspector.sheetToggle);
 
     // ── Phone bottom-sheet (design audit 1.3 follow-up) ───────────────────
@@ -3817,17 +3823,12 @@ void viewerLoaded.then(() => {
 
     const toMobileLayout = (): void => {
       mobileSheet.slot('view').append(inspector.element);
-      // Both the Analyse and Object panels are lazy-mounted, so re-parent each
-      // only once it exists (analyse first, then object). A mobile empty-state
-      // boot BEFORE any scan runs this with BOTH still null — the slot stays
-      // empty, and each panel slots itself in via `mountAnalysePanelElement` /
-      // `mountObjectPanelElement` when it later mounts.
+      // Lazy panels (analyse, object, measure) are re-parented only once they
+      // exist; before that each slots itself in via its mount closure on mount.
       if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
       if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
-      // The Measurements panel is lazy-mounted; include it (between the class
-      // legend and annotations, its canonical order) only once it exists. A
-      // mobile empty-state boot runs this with it still null — it slots itself in
-      // via `mountMeasurePanelElement` when it later mounts.
+      // The layer browser leads the mobile Layers tab (it lives in desktop Data).
+      mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
       const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
       if (measureMount.panel) layersPanels.push(measureMount.panel.element);
       layersPanels.push(annotationPanel.element, exportPanel.element);
@@ -3852,14 +3853,12 @@ void viewerLoaded.then(() => {
       // Inspector returns to the overlay in its original slot; the left panels
       // return to their workspace modes (lazy ones only once mounted).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      if (measureMount.panel) workspace.mountInMode('work', measureMount.panel.element);
-      workspace.mountInMode('work', annotationPanel.element);
-      workspace.mountInMode('work', clipPanel.element);
-      workspace.mountInMode('data', classLegendPanel.element);
-      workspace.mountInMode('analyse', processStudio.panel.element);
-      if (analysePanel) workspace.mountInMode('analyse', analysePanel.element);
-      if (objectPanel) workspace.mountInMode('analyse', objectPanel.element);
-      workspace.mountInMode('output', exportPanel.element);
+      workspace.layoutDesktop({
+        ...workspacePanels,
+        measure: measureMount.panel?.element,
+        analyse: analysePanel?.element,
+        object: objectPanel?.element,
+      });
     };
 
     // Layout swap stays keyed to the shared mobile-layout condition (orientation-

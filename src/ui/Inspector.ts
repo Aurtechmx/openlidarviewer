@@ -1645,6 +1645,18 @@ export class Inspector {
   }
 
   /**
+   * The live Data-workspace elements — the Layers section (heading + rows) and
+   * the layer-health slot — for the desktop workspace to re-parent into its Data
+   * mode. Only these two nodes are exposed; the Inspector keeps updating them in
+   * place (addLayer, setLayerHealth, setStreamingMode all target the same live
+   * nodes), so ownership of layer state stays with the Inspector — the workspace
+   * only hosts them.
+   */
+  workspaceDataElements(): { layers: HTMLElement; layerHealth: HTMLElement } {
+    return { layers: this._layersSection, layerHealth: this._layerHealthSlot };
+  }
+
+  /**
    * Hide the Inspector entirely while the user is on the empty state, reveal
    * once a scan attaches. v0.3.6 desktop-audit fix: the panel was painting on
    * the empty state with placeholder controls (Point Size, EDL, Antialiasing,
