@@ -40,15 +40,10 @@ import { measurementMetrics } from '../export/measurementExport';
 // Inline math
 // ─────────────────────────────────────────────────────────────────────────────
 
-function dist(a: Vec3, b: Vec3): number {
-  const dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
-// `dist` above is the only inline geometry that remains — the profile-station
-// detail block below still measures a straight 3D chord. Every measurement
-// HEADLINE now goes through the shared measurementMetrics (M6), so the polygon /
-// slope / angle engines this module used to carry were deleted.
+// No inline geometry remains. Every measurement HEADLINE and the profile
+// deliverable DETAIL block now go through the shared measurementMetrics (M6),
+// so the polygon / slope / angle / 3D-chord engines this module used to carry
+// were deleted — the report never second-guesses the measurement tool.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Formatters
@@ -169,6 +164,13 @@ function buildProfileExtras(
   m: Measurement,
   system: UnitSystem,
   f: number,
+  // The scene's real up-axis and vertical unit factor — the SAME pair the
+  // headline (computeValue → measurementMetrics) uses. Without them this block
+  // was a third geometry engine that read Δh off Z and scaled the vertical by
+  // the horizontal factor, so a Y-up scan or a compound CRS produced a detail
+  // line that contradicted its own headline and the live tool (M6 completion).
+  up: Vec3,
+  vf: number,
 ): ReportProfileDeliverableExtras | undefined {
   if (m.kind !== 'profile' || m.points.length < 2) return undefined;
   const a = m.points[0];
@@ -190,15 +192,19 @@ function buildProfileExtras(
   const grades = slopeGradesPerSegment({ stations, samples });
   const summary = summariseSlopes(grades);
 
-  const length3d = dist(a, b);
-  const dz = Math.abs(b[2] - a[2]);
-  // Grade is a ratio of two same-unit lengths — unit-factor invariant.
-  const gradePercent = horizontalLen > 0 ? ((b[2] - a[2]) / horizontalLen) * 100 : 0;
+  // The summary line's Horizontal / 3D / Δh / grade come from the ONE shared
+  // engine the headline already flows through — same up-axis, same per-axis unit
+  // factors — so the detail line agrees with its headline and the live tool to
+  // the digit. `mm.length_m` here is exactly what `computeValue` formats as the
+  // headline, and `Δh` scales by the vertical factor (compound CRS), not `f`.
+  const mm = measurementMetrics(m, up, f, vf, 6);
+  const fmtM = (v: number | undefined): string =>
+    v != null ? formatLinear(v, system) : '—';
   const summaryLine =
-    `Horizontal ${formatLinear(horizontalLen * f, system)} · ` +
-    `3D ${formatLinear(length3d * f, system)} · ` +
-    `Δh ${formatLinear(dz * f, system)} · ` +
-    `${gradePercent.toFixed(2)}% grade`;
+    `Horizontal ${fmtM(mm.horizontal_m)} · ` +
+    `3D ${fmtM(mm.length_m)} · ` +
+    `Δh ${fmtM(mm.vertical_m != null ? Math.abs(mm.vertical_m) : undefined)} · ` +
+    `${mm.grade_pct != null ? `${mm.grade_pct.toFixed(2)}%` : '—'} grade`;
 
   const stationsLine = stations
     .map((s) => formatLinear(s.chainage * f, system))
@@ -283,6 +289,6 @@ export function buildMeasurementRows(
     kind: m.kind,
     value: computeValue(m, unitSystem, worldUp, f, vf),
     pointCount: m.points.length,
-    profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem, f) : undefined,
+    profileExtras: m.kind === 'profile' ? buildProfileExtras(m, unitSystem, f, worldUp, vf) : undefined,
   }));
 }

@@ -602,6 +602,67 @@ describe('buildMeasurementRows', () => {
       // rise = 1 ft = 0.3048 m, run = 1 m → grade 30.48%.
       expect(rows[0].value).toBe('30.48%');
     });
+
+    // ── profile DETAIL block shares the same engine (M6 completion) ────────────
+    // The profile headline (row.value) already flows through measurementMetrics,
+    // but `buildProfileExtras` was a third, uncorrected geometry engine: it read
+    // Δh off Z and scaled the vertical by the horizontal factor. On a Y-up scan
+    // or a compound CRS the detail line then contradicted its own headline and
+    // the live tool. These pin the detail line to the corrected headline/live
+    // per-quantity values so the three can never diverge again.
+    describe('profile deliverable detail (M6)', () => {
+      it('Y-up scan: detail Δh / grade / 3D use the scene up-axis, matching the headline', () => {
+        // Run 10 along X, rise 3 along worldUp = +Y. The old Z-up engine read
+        // Δh off Z (0) and called the section flat; the shared engine reads the
+        // rise along +Y.
+        const profile: Measurement[] = [
+          { id: 'p', kind: 'profile', name: 'Section', points: [[0, 0, 0], [10, 3, 0]] },
+        ];
+        const rows = buildMeasurementRows(profile, 'metric', 1, [0, 1, 0]);
+        const extras = rows[0].profileExtras;
+        expect(extras).toBeDefined();
+
+        // The live per-quantity truths, from the SAME shared engine every other
+        // surface uses: a height along +Y for Δh, a slope for the grade.
+        const dh = buildMeasurementRows(
+          [{ id: 'h', kind: 'height', name: '', points: [[0, 0, 0], [0, 3, 0]] }],
+          'metric', 1, [0, 1, 0],
+        )[0].value; // '3.0000 m'
+        const grade = buildMeasurementRows(
+          [{ id: 's', kind: 'slope', name: '', points: [[0, 0, 0], [10, 3, 0]] }],
+          'metric', 1, [0, 1, 0],
+        )[0].value; // '30.00%'
+
+        expect(extras!.summary).toContain(`3D ${rows[0].value}`); // 3D length == headline
+        expect(extras!.summary).toContain(`Δh ${dh}`);            // NOT '0 cm'
+        expect(extras!.summary).toContain(`${grade} grade`);      // NOT '0.00%'
+      });
+
+      it('compound CRS: detail Δh uses the vertical factor, grade stays coherent', () => {
+        // Metre eastings over foot heights: run 10 m, rise 3 ft. Δh must scale by
+        // the vertical factor (3 ft = 0.9144 m), not the horizontal one (which
+        // would read a false 3 m and a 30% grade instead of ~9.14%).
+        const profile: Measurement[] = [
+          { id: 'p', kind: 'profile', name: 'Section', points: [[0, 0, 0], [10, 0, 3]] },
+        ];
+        const rows = buildMeasurementRows(profile, 'metric', 1, [0, 0, 1], 0.3048);
+        const extras = rows[0].profileExtras;
+        expect(extras).toBeDefined();
+
+        const dh = buildMeasurementRows(
+          [{ id: 'h', kind: 'height', name: '', points: [[0, 0, 0], [0, 0, 3]] }],
+          'metric', 1, [0, 0, 1], 0.3048,
+        )[0].value; // '91.440 cm'
+        const grade = buildMeasurementRows(
+          [{ id: 's', kind: 'slope', name: '', points: [[0, 0, 0], [10, 0, 3]] }],
+          'metric', 1, [0, 0, 1], 0.3048,
+        )[0].value; // '9.14%'
+
+        expect(extras!.summary).toContain(`3D ${rows[0].value}`);
+        expect(extras!.summary).toContain(`Δh ${dh}`);      // 91.440 cm, NOT 3.000 m
+        expect(extras!.summary).toContain(`${grade} grade`); // ~9.14%, NOT 30%
+      });
+    });
   });
 });
 
