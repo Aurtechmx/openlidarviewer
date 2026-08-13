@@ -2050,10 +2050,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('work'); },
+  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('data'); },
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('work'); },
+  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('data'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
@@ -3930,8 +3930,8 @@ void viewerLoaded.then(() => {
           slot.append(el);
         }
       } else {
-        // Work mode — measure sits with annotations and clip.
-        workspace.mountInMode('work', el);
+        // Data mode — measure sits under the class legend with annotations, clip.
+        workspace.mountInMode('data', el);
       }
     });
     // If either panel already mounted before this wiring ran (possible only if a

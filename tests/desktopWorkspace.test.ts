@@ -1,8 +1,8 @@
 /**
  * desktopWorkspace.test.ts
  *
- * The desktop left-rail workspace shell: a four-way Data · Work · Analyse ·
- * Output tablist over four mode-host slots the host re-parents panels into.
+ * The desktop left-rail workspace shell: a three-way Data · Analyse ·
+ * Output tablist over three mode-host slots the host re-parents panels into.
  * Runs in the node environment through the same recording DOM stub the other
  * UI tests use, asserting on state, ARIA, node identity and persistence rather
  * than pixels.
@@ -110,12 +110,12 @@ describe('DesktopWorkspace', () => {
     expect(root.id).toBe('olv-left-panels');
   });
 
-  it('renders a four-tab tablist over four mode panels wired by aria-controls', async () => {
+  it('renders a three-tab tablist over three mode panels wired by aria-controls', async () => {
     const { root } = await make();
     const tabs = root.findAll((e) => e.attrs['role'] === 'tab');
-    expect(tabs.map((t) => t.dataset.mode)).toEqual(['data', 'work', 'analyse', 'output']);
+    expect(tabs.map((t) => t.dataset.mode)).toEqual(['data', 'analyse', 'output']);
     const panels = root.findAll((e) => e.attrs['role'] === 'tabpanel');
-    expect(panels.map((p) => p.dataset.mode)).toEqual(['data', 'work', 'analyse', 'output']);
+    expect(panels.map((p) => p.dataset.mode)).toEqual(['data', 'analyse', 'output']);
     for (const t of tabs) {
       expect(t.attrs['aria-controls']).toBe(`olv-ws-mode-${t.dataset.mode}`);
     }
@@ -125,9 +125,9 @@ describe('DesktopWorkspace', () => {
     const { ws, tab } = await make();
     expect(ws.getMode()).toBe('data');
     expect(tab('data').attrs['aria-selected']).toBe('true');
-    expect(tab('work').attrs['aria-selected']).toBe('false');
+    expect(tab('analyse').attrs['aria-selected']).toBe('false');
     expect(tab('data').attrs['tabindex']).toBe('0');
-    expect(tab('work').attrs['tabindex']).toBe('-1');
+    expect(tab('analyse').attrs['tabindex']).toBe('-1');
     expect(tab('data').hasClass('is-active')).toBe(true);
   });
 
@@ -138,21 +138,21 @@ describe('DesktopWorkspace', () => {
 
   it('mode(m) returns a stable, distinct host per mode', async () => {
     const { ws } = await make();
-    expect(ws.mode('work')).toBe(ws.mode('work'));
-    expect(ws.mode('work')).not.toBe(ws.mode('data'));
+    expect(ws.mode('analyse')).toBe(ws.mode('analyse'));
+    expect(ws.mode('analyse')).not.toBe(ws.mode('data'));
   });
 
   it('switching modes never recreates a host — a mounted node keeps its identity', async () => {
     const { ws } = await make();
     const panel = new FakeEl('div') as unknown as HTMLElement;
-    ws.mountInMode('work', panel);
-    const workHost = ws.mode('work');
+    ws.mountInMode('analyse', panel);
+    const workHost = ws.mode('analyse');
     expect((workHost as unknown as FakeEl).children).toContain(panel as unknown as FakeEl);
+    ws.setMode('data');
     ws.setMode('analyse');
-    ws.setMode('work');
     // Same host object, same child node — no recreation on a mode round-trip.
-    expect(ws.mode('work')).toBe(workHost);
-    expect((ws.mode('work') as unknown as FakeEl).children).toContain(panel as unknown as FakeEl);
+    expect(ws.mode('analyse')).toBe(workHost);
+    expect((ws.mode('analyse') as unknown as FakeEl).children).toContain(panel as unknown as FakeEl);
   });
 
   it('mountInMode positions before an existing sibling when asked', async () => {
@@ -188,15 +188,15 @@ describe('DesktopWorkspace', () => {
   it('ignores a corrupt persisted value and falls back', async () => {
     const storage = new MemStore();
     storage.setItem('olv.workspace.left.mode', 'bogus');
-    const { ws } = await make({ storage, initialMode: 'work' });
-    expect(ws.getMode()).toBe('work');
+    const { ws } = await make({ storage, initialMode: 'analyse' });
+    expect(ws.getMode()).toBe('analyse');
   });
 
   it('ArrowRight moves the active mode and focuses the next tab', async () => {
     const { ws, tab } = await make();
     tab('data').fire('keydown', { key: 'ArrowRight', preventDefault: () => {} });
-    expect(ws.getMode()).toBe('work');
-    expect(tab('work').focused).toBe(true);
+    expect(ws.getMode()).toBe('analyse');
+    expect(tab('analyse').focused).toBe(true);
   });
 
   it('exposes a callable dispose()', async () => {

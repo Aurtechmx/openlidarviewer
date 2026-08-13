@@ -150,11 +150,11 @@ test(
       .evaluate((el: HTMLElement) => el.click());
 
     // In the v0.6.5 workspace the Object panel lives in the Analyse mode while
-    // Measurements lives in Work, so they no longer share one column. The
-    // enduring guard is that the Measurements panel refuses to be flex-shrunk
-    // within its own (Work) column, keeping its natural height rather than
-    // collapsing to its ~25px header.
-    await showWorkspaceMode(page, 'work');
+    // Measurements lives in Data (under the class legend), so they no longer
+    // share one column. The enduring guard is that the Measurements panel refuses
+    // to be flex-shrunk within its own column, keeping its natural height rather
+    // than collapsing to its ~25px header.
+    await showWorkspaceMode(page, 'data');
     const flexShrink = await page
       .locator('.olv-measure-panel')
       .evaluate((el) => getComputedStyle(el).flexShrink);

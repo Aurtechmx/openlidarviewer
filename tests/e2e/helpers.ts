@@ -37,7 +37,7 @@ import { fileURLToPath } from 'node:url';
  */
 export async function showWorkspaceMode(
   page: Page,
-  mode: 'data' | 'work' | 'analyse' | 'output',
+  mode: 'data' | 'analyse' | 'output',
 ): Promise<void> {
   const tab = page.locator(`.olv-ws-tab[data-mode="${mode}"]`);
   if (await tab.count()) await tab.click();

@@ -4217,10 +4217,13 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 
 /* The panels are now grandchildren of the rail, so re-apply the full-width
-   column alignment 72-panel-rails.css gives its direct children. The Measure
-   panel's user-drag inline width still wins over this. */
+   column alignment 72-panel-rails.css gives its direct children: every mode
+   panel fills the rail (and therefore the tab strip) width, so their right edges
+   line up with the tabs instead of stopping short at each panel's legacy design
+   width. The `.olv-left-panels` prefix gives this (0,2,0) so it beats those
+   per-panel widths; the Measure panel's user-drag inline width still wins. */
 @media (min-width: 768px) {
-  .olv-ws-mode > * {
+  .olv-left-panels .olv-ws-mode > * {
     width: 100%;
     box-sizing: border-box;
   }
