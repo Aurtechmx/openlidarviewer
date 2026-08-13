@@ -6,8 +6,10 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Four products are at E4: **`SLOPE-RASTER`**, **`ASPECT-RASTER`**,
-**`HILLSHADE`** and **`CONTOURS`**. Slope, aspect and hillshade were compared
+Five products are at E4: **`SLOPE-RASTER`**, **`ASPECT-RASTER`**,
+**`HILLSHADE`**, **`CONTOURS`** and **`MEAS-AREA`** (polygon area against
+GDAL/OGR `OGR_GEOM_AREA` on a committed planar-polygon fixture, agreeing to
+machine precision — see `tests/measureAreaCrossCheck.test.ts`). Slope, aspect and hillshade were compared
 against GDAL 3.13.1 on the same frozen analytic fixture, and against the
 surface's closed-form gradient, in the same run; contours were compared against
 GDAL `gdal_contour` on a separate frozen analytic tilted plane (where linear

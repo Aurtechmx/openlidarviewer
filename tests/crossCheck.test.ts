@@ -112,15 +112,16 @@ describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', ()
 });
 
 describe('reference manifest honesty', () => {
-  it('supplies SLOPE-RASTER, ASPECT-RASTER, HILLSHADE and CONTOURS, and ships every other slot as pending', () => {
-    // Each of those four reached E4 once a GDAL reference was committed beside
-    // the fixture; every cross-check agreed with GDAL and with the closed-form
-    // truth inside the preregistered tolerance. No other slot has a real
-    // reference yet, so the rest must still ship pending — a slot cannot read
-    // `supplied` without a committed reference file (that coupling is enforced
-    // in slopeCrossCheck.test.ts, aspectCrossCheck.test.ts,
-    // hillshadeCrossCheck.test.ts and contourCrossCheck.test.ts).
-    const E4 = ['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS'];
+  it('supplies SLOPE-RASTER, ASPECT-RASTER, HILLSHADE, CONTOURS and MEAS-AREA, and ships every other slot as pending', () => {
+    // Each of those reached E4 once an independent reference was committed beside
+    // the fixture; every cross-check agreed with the reference and with the
+    // closed-form truth inside the preregistered tolerance. No other slot has a
+    // real reference yet, so the rest must still ship pending — a slot cannot
+    // read `supplied` without a committed reference file (that coupling is
+    // enforced in slopeCrossCheck.test.ts, aspectCrossCheck.test.ts,
+    // hillshadeCrossCheck.test.ts, contourCrossCheck.test.ts and
+    // measureAreaCrossCheck.test.ts; MEAS-AREA is against GDAL/OGR OGR_GEOM_AREA).
+    const E4 = ['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

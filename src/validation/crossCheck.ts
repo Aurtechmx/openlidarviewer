@@ -253,7 +253,7 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // Planar polygon area (Newell/shoelace) against GDAL/OGR OGR_GEOM_AREA over a
   // committed polygon fixture. 1e-6 m² is coarse against the ~1e-9 the two
   // implementations reach, yet far tighter than any real area-formula error.
-  { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'pending' },
+  { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

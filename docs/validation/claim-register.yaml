@@ -136,20 +136,21 @@ claims:
     algorithm: Polygon shoelace area (planimetric, unit-aware)
     algorithmVersion: v0.5.x
     claim: "Planimetric area of a user polygon in square metres when the horizontal unit is known."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/measureAreaCrossCheck.test.ts]
+    supportingDatasets: [8 planar polygons (OLV-DS-030-AREA-POLYGONS) with a GDAL/OGR OGR_GEOM_AREA reference]
+    supportingStudies: [MEAS-AREA-OGR-PLANAR]
     units: [square-metres, source-units]
     crsDatum: "Refuses area on a geographic-degree grid."
     assumptions: ["planar projection assumed over the polygon extent"]
     failureModes: ["geographic degrees", "non-planar / large extent"]
     exportAllowed: true
-    userLabel: "Visual-inspection-grade area"
+    userLabel: "Cross-implementation validated area (Newell/shoelace)"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: none
-    approvedClaim: "Planimetric area in the stated units; visual-inspection grade."
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Planimetric polygon area agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 0 m² over 8 polygons), within the preregistered 1e-6 m² tolerance. Visual-inspection grade against a real feature."
     prohibitedClaim: ["survey-grade area", "geodetic area"]
     scope:
       supported: []

@@ -15,7 +15,7 @@ export interface RegistryEntry {
 
 export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'MEAS-DISTANCE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'MEAS-AREA': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
+  'MEAS-AREA': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-HEIGHT': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-ANGLE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-PROFILE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
