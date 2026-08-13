@@ -145,6 +145,17 @@ export class DesktopWorkspace {
     this._syncTabs();
   }
 
+  /**
+   * Mark the workspace available (a scan is loaded) or not. When unavailable
+   * the mode tab strip is hidden so an empty workspace collapses to zero height
+   * and the rail-collapse grabber stays hidden in the start-screen empty state,
+   * matching the pre-workspace behaviour. Presentation-only — the panels
+   * themselves are shown/hidden by their own scan lifecycle.
+   */
+  setAvailable(available: boolean): void {
+    this.element.classList.toggle('olv-ws-ready', available);
+  }
+
   /** The live host container a mode's panels are re-parented into (stable). */
   mode(m: WorkspaceMode): HTMLElement {
     const host = this._hosts.get(m);

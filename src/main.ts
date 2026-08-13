@@ -109,6 +109,7 @@ import { classificationLabel } from './render/pointInfo';
 // above) inside `ensureObjectPanel()`.
 import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
+import { DesktopWorkspace } from './ui/workspace/DesktopWorkspace';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import {
@@ -3730,13 +3731,19 @@ void viewerLoaded.then(() => {
     stage.overlay.append(inspector.element);
     stage.overlay.append(streamingPanel.element);
     // The measurement and annotation panels share a stacked left-side column.
-    const leftPanels = document.createElement('div');
-    leftPanels.className = 'olv-left-panels';
-    leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    // NOTE: analysePanel / objectPanel / measurePanel lazy-mount on first scan load
-    // via `mount{Object,Analyse,Measure}PanelElement` below. Process Studio starts hidden.
-    leftPanels.append(annotationPanel.element, classLegendPanel.element, processStudio.panel.element, exportPanel.element, clipPanel.element);
+    // Semantic workspace: one Data/Work/Analyse/Output mode visible at a time,
+    // re-hosting the existing live panels. Root keeps `.olv-left-panels`#olv-left-panels
+    // so the rail-collapse chrome, clearance vars and wheel containment target it
+    // unchanged. measure/analyse/object lazy-mount into their modes below.
+    const workspace = new DesktopWorkspace();
+    const leftPanels = workspace.element;
+    workspace.mountInMode('work', annotationPanel.element);
+    workspace.mountInMode('work', clipPanel.element);
+    workspace.mountInMode('data', classLegendPanel.element);
+    workspace.mountInMode('analyse', processStudio.panel.element);
+    workspace.mountInMode('output', exportPanel.element);
     stage.overlay.append(leftPanels);
+    stage.addTeardown(() => workspace.dispose());
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
     // preventDefault), so no ancestor handler can act on a panel scroll. The
@@ -3842,22 +3849,17 @@ void viewerLoaded.then(() => {
       exportPanel.element.classList.add('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
-      // Inspector returns to the overlay in its original slot (just before the
-      // streaming panel); the left column is rebuilt in its original order. The
-      // Object and Analyse panels are included only once each has lazily mounted
-      // (Object before the class-legend panel, Analyse between the class-legend
-      // and export panels — via mountObjectPanelElement / mountAnalysePanelElement).
+      // Inspector returns to the overlay in its original slot; the left panels
+      // return to their workspace modes (lazy ones only once mounted).
       stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      // Measurements panel is lazy-mounted — front of the column when it exists,
-      // else it inserts itself there via `mountMeasurePanelElement` on mount.
-      const desktopPanels: HTMLElement[] = [];
-      if (measureMount.panel) desktopPanels.push(measureMount.panel.element);
-      desktopPanels.push(annotationPanel.element);
-      if (objectPanel) desktopPanels.push(objectPanel.element);
-      desktopPanels.push(classLegendPanel.element, processStudio.panel.element);
-      if (analysePanel) desktopPanels.push(analysePanel.element);
-      desktopPanels.push(exportPanel.element);
-      leftPanels.append(...desktopPanels);
+      if (measureMount.panel) workspace.mountInMode('work', measureMount.panel.element);
+      workspace.mountInMode('work', annotationPanel.element);
+      workspace.mountInMode('work', clipPanel.element);
+      workspace.mountInMode('data', classLegendPanel.element);
+      workspace.mountInMode('analyse', processStudio.panel.element);
+      if (analysePanel) workspace.mountInMode('analyse', analysePanel.element);
+      if (objectPanel) workspace.mountInMode('analyse', objectPanel.element);
+      workspace.mountInMode('output', exportPanel.element);
     };
 
     // Layout swap stays keyed to the shared mobile-layout condition (orientation-
@@ -3877,6 +3879,9 @@ void viewerLoaded.then(() => {
       // The sheet only shows on a phone WITH a scan loaded; otherwise the empty
       // slots would float a chrome bar over the empty state.
       mobileSheet.setVisible(isMobile && hasScan());
+      // The desktop workspace tab strip appears only once a scan is loaded, so
+      // an empty left rail stays zero-height and its grabber stays hidden.
+      workspace.setAvailable(hasScan());
     };
     // Expose to the scan lifecycle so reveal / reset re-evaluate visibility.
     syncMobileSheet = applyMobileSheet;
@@ -3895,10 +3900,8 @@ void viewerLoaded.then(() => {
         // acts as append when the slot is empty.
         slot.insertBefore(el, slot.firstChild);
         el.classList.remove('olv-collapsed');
-      } else if (exportPanel.element.parentElement === leftPanels) {
-        leftPanels.insertBefore(el, exportPanel.element);
       } else {
-        leftPanels.append(el);
+        workspace.mountInMode('analyse', el);
       }
     };
     // The lazy Object panel inserts itself here once its chunk resolves. When
@@ -3910,10 +3913,8 @@ void viewerLoaded.then(() => {
       if (mobileApplied) {
         // append puts Object after the Analyse panel in the shared Analyse slot.
         mobileSheet.slot('analyse').append(el);
-      } else if (classLegendPanel.element.parentElement === leftPanels) {
-        leftPanels.insertBefore(el, classLegendPanel.element);
       } else {
-        leftPanels.append(el);
+        workspace.mountInMode('analyse', el);
       }
     };
     // The lazy Measurements panel inserts itself here once its chunk resolves.
@@ -3933,8 +3934,8 @@ void viewerLoaded.then(() => {
           slot.append(el);
         }
       } else {
-        // Front of the left column — measure sits above annotations/analyse.
-        leftPanels.insertBefore(el, leftPanels.firstChild);
+        // Work mode — measure sits with annotations and clip.
+        workspace.mountInMode('work', el);
       }
     });
     // If either panel already mounted before this wiring ran (possible only if a
