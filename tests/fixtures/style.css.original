@@ -6106,7 +6106,15 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: var(--radius-sm);
 }
-.olv-di-title { margin-bottom: var(--space-sm); }
+.olv-di-title { margin-bottom: var(--space-sm); display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-sm); }
+/* A quiet inline route to the Dataset Story modal, sitting in the card header. */
+.olv-di-story-link {
+  background: none; border: 0; padding: 0;
+  color: var(--accent); font: inherit; font-size: var(--text-2xs);
+  cursor: pointer; text-decoration: underline; white-space: nowrap;
+}
+.olv-di-story-link:hover { color: var(--accent-strong, var(--accent)); }
+.olv-di-story-link:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); border-radius: var(--radius-sm); }
 .olv-di-body { display: flex; flex-direction: column; gap: var(--space-xs); }
 /* v0.3.10 a11y patch #375 — the rows + details body are now
  * `<dl>` lists with `<dt>/<dd>` pairs (allowed inside a wrapping

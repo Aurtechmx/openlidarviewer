@@ -184,6 +184,8 @@ export interface InspectorCallbacks {
    * the Viewer's setters and re-syncs.
    */
   onTerrainWorkflowPreset: (id: TerrainWorkflowPresetId) => void;
+  /** Open the Dataset Story modal (reuses the command-palette `story.dataset` action). */
+  onOpenDatasetStory?: () => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -1325,7 +1327,7 @@ export class Inspector {
     // Foundation outputs. Lives directly under the Scan Intelligence
     // title and above the Visuals Studio preset rail. Empty-state by
     // default so the panel never lies on first paint.
-    this._datasetIntelligence = new DatasetIntelligenceCard();
+    this._datasetIntelligence = new DatasetIntelligenceCard(this._cb.onOpenDatasetStory);
     // Empty slot; the card class loads on first data (never lies on first
     // paint — it simply is not there yet).
     this._layerHealthSlot = el('div');

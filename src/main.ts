@@ -1459,6 +1459,7 @@ const inspector = new Inspector({
   // Workflow presets (v0.4.5) — fan one pure bundle out through the
   // EXISTING setters, then re-sync every Inspector surface the bundle
   // touched. No new rendering machinery: the preset module is a table.
+  onOpenDatasetStory: () => ACTION_REGISTRY.find((a) => a.id === 'story.dataset')?.run(),
   onTerrainWorkflowPreset: (id) => {
     const p = getTerrainWorkflowPreset(id);
     viewer.setEdlPreset(p.edlPresetId);
