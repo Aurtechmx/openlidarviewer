@@ -681,9 +681,20 @@ function buildEdlOutputNode(
  * `adaptivePointSize` in `pointStyle.ts`. `positionView` is the point's
  * instance centre in view space, so `-z` is its eye-space distance.
  */
-function buildAdaptiveSizeNode(base: TslNode, attnRef: TslNode): TslNode {
+function buildAdaptiveSizeNode(
+  base: TslNode,
+  attnRef: TslNode,
+  orthoDist: TslNode,
+  orthoFlag: TslNode,
+): TslNode {
+  // Perspective: divide by each point's own eye distance so far points shrink.
+  // Orthographic: there is no perspective divide, so every point takes the
+  // SAME size — divide by the camera's distance to the target (a uniform)
+  // instead, which makes points scale with zoom but not with depth. `orthoFlag`
+  // is exactly 0 or 1, so `mix` selects one divisor with no blending.
   const eyeDist: TslNode = max((positionView as TslNode).z.negate(), float(1e-4));
-  const attenuated: TslNode = base.mul(attnRef).div(eyeDist);
+  const divisor: TslNode = mix(eyeDist, orthoDist, orthoFlag);
+  const attenuated: TslNode = base.mul(attnRef).div(divisor);
   const maxSize: TslNode = base.mul(POINT_STYLE_DEFAULTS.maxSizeFactor);
   return attenuated.clamp(float(POINT_STYLE_DEFAULTS.minSizePx), maxSize);
 }
@@ -945,10 +956,20 @@ export class Viewer {
    */
   private readonly _gaussianOpacityFactor = uniform(0);
   private readonly _attnRef = uniform(100);
+  /** 1 while the orthographic projection is active, 0 otherwise — flips the
+   *  point-size node between per-point perspective attenuation and a uniform,
+   *  depth-independent ortho size. */
+  private readonly _orthoSizeFlag = uniform(0);
+  /** The perspective camera's distance to the orbit target — the divisor the
+   *  ortho point-size uses so every point renders one size that scales with
+   *  zoom (a shorter distance = larger points), never with per-point depth. */
+  private readonly _orthoSizeDist = uniform(1);
   /** The shared adaptive size node, assigned to every cloud's material. */
   private readonly _adaptiveSizeNode = buildAdaptiveSizeNode(
     this._pointSizeUniform,
     this._attnRef,
+    this._orthoSizeDist,
+    this._orthoSizeFlag,
   );
 
   // ── Class visibility (GPU mask) ───────────────────────────────────────────
@@ -4384,10 +4405,16 @@ export class Viewer {
    *  and point the scene pass at the active camera. Called before every render
    *  and pick; cheap, idempotent, and a no-op while perspective is active. */
   private _syncActiveCamera(): void {
+    this._orthoSizeFlag.value = this._orthographic ? 1 : 0;
     if (this._orthographic) {
       followPerspective(
         this._orthoCamera, this._camera, this._controls.target,
         this._camera.fov, this._camera.aspect, this._camera.near, this._camera.far,
+      );
+      // The point-size divisor for the ortho path: the camera-to-target distance,
+      // so every point renders one size that scales with zoom, not with depth.
+      this._orthoSizeDist.value = Math.max(
+        this._camera.position.distanceTo(this._controls.target), 1e-4,
       );
     }
     (this._scenePass as unknown as { camera: THREE.Camera }).camera = this._activeCamera();
