@@ -162,7 +162,10 @@ export function createCompassController(opts: CompassControllerOptions): Compass
       visHandler = (): void => (platform.isHidden() ? pause() : resume());
       platform.onVisibilityChange(visHandler);
       resume();
-    });
+    })
+      // Additive HUD: a chunk-load failure must not surface as an unhandled
+      // rejection (the caller is synchronous and can't catch this promise).
+      .catch((err) => console.warn('[compass] view-cube chunk failed to load', err));
   }
 
   function stop(): void {

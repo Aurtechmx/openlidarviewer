@@ -1512,7 +1512,10 @@ export class Inspector {
       const pending = this._layerHealthPending;
       this._layerHealthPending = null;
       if (pending && pending[0].length > 0) this._layerHealth.update(pending[0], pending[1]);
-    });
+    })
+      // Additive surface: a chunk-load failure must not become an unhandled
+      // rejection (the caller is synchronous and can't catch this promise).
+      .catch((err) => console.warn('[inspector] layer-health card chunk failed to load', err));
   }
 
   setLayerCrsFlags(

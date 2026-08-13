@@ -319,7 +319,10 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
           const file = input.files?.[0];
           input.remove();
           if (!file) return;
-          void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
+          void loadReportVerifier()
+            .then(({ verifyAndShow }) => verifyAndShow(file))
+            // A chunk-load failure must not surface as an unhandled rejection.
+            .catch((err) => console.warn('[verify] report-verifier chunk failed to load', err));
         });
         document.body.append(input);
         input.click();
