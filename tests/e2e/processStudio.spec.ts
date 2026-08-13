@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Process Studio (v0.6.5) — a display-only readiness view over the pure
@@ -23,6 +23,8 @@ test('reveals in the left rail and populates from live scan facts on load', asyn
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  // Process Studio lives in the Analyse workspace mode.
+  await showWorkspaceMode(page, 'analyse');
 
   const panel = page.locator('.olv-process-studio');
   await expect(panel).toBeVisible({ timeout: 20_000 });

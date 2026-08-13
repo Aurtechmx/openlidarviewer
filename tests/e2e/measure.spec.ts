@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropTinyPly, dropDenseGridPly } from './helpers';
+import { dropTinyPly, dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Measurement toolkit coverage — the toolbar, kind picker, and units toggle
@@ -144,15 +144,17 @@ test(
 
     // Force the object-scan route via the "Treat scan as" control. A direct DOM
     // click drives its change handler without depending on the control's
-    // scroll/expand state — the tall Object panel then shares the left column
-    // with the Measurements panel, the layout that used to collapse it.
+    // scroll/expand state.
     await page
       .locator('.olv-scan-type-opt', { hasText: /^Object$/ })
       .evaluate((el: HTMLElement) => el.click());
-    await expect(page.locator('.olv-object-panel')).toBeVisible();
 
-    // The panel must refuse to be flex-shrunk by the column so it keeps its
-    // natural height (the pre-fix bug collapsed it to its ~25px header).
+    // In the v0.6.5 workspace the Object panel lives in the Analyse mode while
+    // Measurements lives in Work, so they no longer share one column. The
+    // enduring guard is that the Measurements panel refuses to be flex-shrunk
+    // within its own (Work) column, keeping its natural height rather than
+    // collapsing to its ~25px header.
+    await showWorkspaceMode(page, 'work');
     const flexShrink = await page
       .locator('.olv-measure-panel')
       .evaluate((el) => getComputedStyle(el).flexShrink);
