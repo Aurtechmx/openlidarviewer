@@ -393,6 +393,9 @@ export class MeasureController {
   private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
   private _drag: { id: string; vi: number } | null = null;
+  /** Overlay rect captured at drag start — fixed for the drag, so it isn't
+   *  re-read (a forced reflow) on every pointermove. */
+  private _dragRect: DOMRect | null = null;
   private _dragNdcX = 0;
   private _dragNdcY = 0;
   private _dragDirty = false;
@@ -1616,6 +1619,7 @@ export class MeasureController {
     if (mid === null || viAttr === null) return;
     e.preventDefault();
     this._drag = { id: mid, vi: Number(viAttr) };
+    this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
     window.addEventListener('pointermove', this._onDragMove);
     window.addEventListener('pointerup', this._onDragUp);
@@ -1624,7 +1628,9 @@ export class MeasureController {
   /** Track the drag pointer; the actual re-pick is coalesced into `render`. */
   private _handleDragMove(e: PointerEvent): void {
     if (!this._drag) return;
-    const rect = this._draw.element.getBoundingClientRect();
+    // Reuse the rect captured at drag start; re-reading per pointermove forces a
+    // synchronous reflow. Fall back if it was somehow not captured.
+    const rect = this._dragRect ?? this._draw.element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     this._dragNdcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this._dragNdcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1649,6 +1655,7 @@ export class MeasureController {
     if (!this._drag) return;
     const draggedId = this._drag.id;
     this._drag = null;
+    this._dragRect = null;
     this._dragDirty = false;
     window.removeEventListener('pointermove', this._onDragMove);
     window.removeEventListener('pointerup', this._onDragUp);

@@ -137,8 +137,15 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
 
   opts.host.appendChild(root);
 
+  let lastRoseDeg = NaN;
   const update = (): void => {
-    rose.style.transform = `rotate(${roseRotationDeg(opts.getHeading())}deg)`;
+    // Skip the style write (and its recalc) on idle frames where the heading
+    // hasn't moved — this runs on an always-on rAF while a scan is open.
+    const deg = roseRotationDeg(opts.getHeading());
+    if (deg !== lastRoseDeg) {
+      rose.style.transform = `rotate(${deg}deg)`;
+      lastRoseDeg = deg;
+    }
     applyLabels(isGeographic()); // no-op unless the frame's geographic state flipped
   };
   update();
