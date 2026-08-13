@@ -1,7 +1,8 @@
 {
-  "total": 147,
+  "total": 148,
   "files": {
     "src/app/epochFramePrep.ts": 2,
+    "src/app/floorPlanPositions.ts": 4,
     "src/app/terrainAnalysisRunner.ts": 3,
     "src/io/copc/copcChunkDecode.ts": 1,
     "src/io/lasDecodeShared.ts": 3,
@@ -15,7 +16,7 @@
     "src/io/loadPtx.ts": 1,
     "src/io/loadXyz.ts": 1,
     "src/io/parseWorker.ts": 2,
-    "src/main.ts": 15,
+    "src/main.ts": 12,
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/InspectTool.ts": 1,

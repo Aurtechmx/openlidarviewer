@@ -4688,6 +4688,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
 }
 .olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
+/* The native <option> popup is drawn by the OS, not the panel: on Chrome for
+   Windows it inherits the select's light `color` but paints over the system's
+   white popup background, so the list reads white-on-white. Pin explicit,
+   legible colours on the options themselves. */
+.olv-reclass-select option { color: #17181c; background: #ffffff; }
 .olv-reclass-go { width: 100%; text-align: center; }
 /* Auto-classify: the panel's emphasised action. Only layout lives here. The
    accent emphasis is declared in the unified button block at the end of this
@@ -8732,13 +8737,54 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   display: flex; flex-direction: column; gap: 0.2rem;
 }
 .olv-ps-product, .olv-ps-check {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: var(--space-sm);
+  display: flex; flex-direction: column; gap: 0.2rem;
   padding: 0.3rem 0.5rem;
   border-radius: var(--radius-sm, 6px);
   background: var(--surface-sunken, rgba(0, 0, 0, 0.18));
   font-size: var(--text-xs);
 }
+/* Name and status badge share one line; the reason sits beneath, one
+ * disclosure away. */
+.olv-ps-line {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-sm);
+}
+/* Compact by default: the reason lives in a native <details>, so a dozen
+ * verdicts read as a clean badge list until a row is expanded. The summary is
+ * the name+badge line; keyboard toggles it (Enter/Space) and a screen reader
+ * announces the expanded reason — reachable without hover, unlike the old
+ * measure-bar-scoped data-tip. */
+.olv-ps-verdict > summary {
+  list-style: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.olv-ps-verdict > summary::-webkit-details-marker { display: none; }
+/* Collapse explicitly, not on the browser's native details hiding alone: only
+ * the summary shows until the row is opened. */
+.olv-ps-verdict:not([open]) > .olv-ps-reason { display: none; }
+.olv-ps-verdict > summary:hover { background: rgba(255, 255, 255, 0.03); }
+.olv-ps-verdict > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* A small chevron cues that the reason expands, and rotates open. */
+.olv-ps-verdict > summary .olv-ps-name::before {
+  content: '›'; margin-right: 0.35rem; color: var(--text-faint);
+  display: inline-block; transition: transform 120ms ease;
+}
+.olv-ps-verdict[open] > summary .olv-ps-name::before { transform: rotate(90deg); }
+/* The verdict's reason, revealed on demand — no hover, keyboard/AT reachable.
+ * Kept legible (not tertiary-tiny) because a blocker/review reason is the point
+ * of the row; a subtle severity rail ties it to its status without using colour
+ * alone (the badge text carries the state). */
+.olv-ps-reason {
+  margin: 0.1rem 0 0.05rem;
+  font-size: var(--text-xs);
+  line-height: 1.35;
+  color: var(--text-dim);
+  padding-left: 0.5rem;
+  border-left: 2px solid var(--hairline);
+}
+.olv-ps-review .olv-ps-reason { border-left-color: var(--warn, #e9d16b); }
+.olv-ps-blocked .olv-ps-reason, .olv-ps-block .olv-ps-reason { border-left-color: var(--bad, #f08a92); }
 .olv-ps-badge {
   font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: 0.04em;
   font-weight: 600; padding: 0.05rem 0.5rem; border-radius: 5px;

@@ -64,6 +64,13 @@ export interface CompassControllerOptions {
   loadCube?: () => Promise<(opts: ViewCubeOptions) => ViewCubeHandle>;
   /** Defaults to `window` / `document` / `localStorage`. */
   platform?: CompassPlatform;
+  /**
+   * Whether the active scan's orientation is geographically known (a projected
+   * or geographic CRS). Drives the rose labels: cardinals when true, truthful
+   * local B/R/F/L when false. Defaults to false — a scan whose frame is unknown
+   * must not be shown geographic cardinals it cannot substantiate.
+   */
+  cardinalsAreGeographic?: () => boolean;
 }
 
 export interface CompassController {
@@ -138,6 +145,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
       const cube = mountViewCube({
         host: opts.host(),
         getHeading: () => v.cameraHeadingDeg(),
+        isGeographic: opts.cardinalsAreGeographic ?? ((): boolean => false),
         onView: (view) => void v.setStandardView(view),
       });
       handle = cube;

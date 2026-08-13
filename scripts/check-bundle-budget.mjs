@@ -29,7 +29,7 @@ const ASSETS = join(ROOT, 'dist', 'assets');
 
 /** prefix (before the -hash.js) → hard ceiling in KiB. */
 const BUDGETS = [
-  { prefix: 'index', maxKiB: 720, warnKiB: 680 },   // live ~669 KiB after v0.6 P1 (AnalysePanel + ObjectPanel lazy-mounted on scan-load, was 792). Hard ceiling lowered 800→720 to lock in the win and fail a regression well before the old 800; warn at 680 flags creep early. The lazy panels ride their own AnalysePanel-*/ObjectPanel-* chunks — verified by the shell-leak fingerprint guard.
+  { prefix: 'index', maxKiB: 724, warnKiB: 700 },   // live ~722 KiB. Hard ceiling lowered 800→720 at v0.6 P1 to lock in the AnalysePanel/ObjectPanel lazy-mount win (was 792); raised 720→724 at v0.6.5 as a deliberate, committed step for the compass CRS-frame truthfulness gate and the scan-footprint export wiring (both correctness work — the compass HUD and the footprint/hull serialiser are lazy, only the eager composition wiring and the CRS-frame predicate grew the shell ~2 KiB over the prior tip). Warn 700 keeps flagging creep. The lazy panels ride their own AnalysePanel-*/ObjectPanel-* chunks — verified by the shell-leak fingerprint guard.
   { prefix: 'vendor-three-webgpu', maxKiB: 1100 },  // live ~978 KiB
   { prefix: 'vendor-pdf', maxKiB: 512 },            // live ~410 KiB
   // Heavy capability chunks, lazy-loaded on the feature that needs them. Each

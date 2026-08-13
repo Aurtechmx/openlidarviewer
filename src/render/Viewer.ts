@@ -812,8 +812,6 @@ export class Viewer {
    * to commit any newly-resident nodes). Reset to 0 on every actual
    * render so the next heartbeat window starts clean.
    */
-
-
   // ── Frame timing (debug overlay) ─────────────────────────────────────────
   /** Rolling buffer of recent frame times, in ms — feeds {@link frameStats}. */
   private readonly _frameTimes = new Float64Array(FRAME_SAMPLE_COUNT);
@@ -2037,21 +2035,6 @@ export class Viewer {
   }
 
   /**
-   * Mount a cloud at its project-frame offset (step 2 of the wiring plan in
-   * `docs/architecture/project-spatial-frame.md`).
-   *
-   * Every cloud's positions are recentred about its OWN origin at load, so two
-   * georeferenced scans a kilometre apart both sat at local zero and rendered
-   * overlaid. The offset is the layer's `sourceToProject` translation; applying
-   * it to the mesh places the layer at its true position in the shared
-   * project-local frame. The single-layer case is the identity (a lone layer
-   * anchors the frame at its own origin), so the existing single-scan path is
-   * unchanged by construction.
-   *
-   * The DATA never moves — only the mesh — so every CPU reader of
-   * `entry.cloud.positions` folds this offset at its own boundary.
-   */
-  /**
    * Set (or clear) a layer's Float64 placement in the shared project frame —
    * float64-transform.md steps 3-4. The DATA never moves: the transform is
    * held on the entry and folded at each consumer's boundary (bounds, pick),
@@ -2071,6 +2054,7 @@ export class Viewer {
     this._refreshMeasureDatum();
     this.requestFrame();
   }
+
 
   /**
    * Record what a layer has proven about the project frame. Combined

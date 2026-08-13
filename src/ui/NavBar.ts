@@ -407,8 +407,8 @@ export class NavBar {
     // as a mode, not another one-shot snap.
     const orthoToggle = el('button', {
       className: 'olv-cam-chip olv-ortho-toggle',
-      title: 'Orthographic (parallel) projection — removes perspective so measurements read true',
-      ariaLabel: 'Toggle orthographic projection',
+      title: 'Near-orthographic projection — flattens perspective with a very long lens so faces read close to parallel for visual inspection (measurements are unaffected: they use the 3D points, not the projection)',
+      ariaLabel: 'Toggle near-orthographic projection',
     });
     orthoToggle.setAttribute('aria-pressed', 'false');
     orthoToggle.append(el('span', { className: 'olv-cam-chip-label', text: 'Ortho' }));

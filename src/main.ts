@@ -11,6 +11,7 @@ import './styles';
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { chooseRenderBackend } from './render/renderBackendChoice';
+import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -707,7 +708,6 @@ function saveLassoVolumeIfPending(): void {
   }
 }
 
-
 // ── Lasso volume button in the measure dock ──────────────────────────────
 // Placed at the end of the measure-kind row, paired with Volume. The
 // button is a second input method for Volume — not a separate
@@ -851,12 +851,12 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // the app's left and right edges are full-height panel columns (left panels and
 // the Inspector), so a persistent gizmo has no free corner to occupy without
 // overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. The life cycle — preference, lazy mount, rAF loop,
-// tab-visibility pausing — lives in ui/compassController.ts; see that file for
-// why it is not four module-scope `let`s here.
+// on, `?viewcube=0` off. Life cycle lives in ui/compassController.ts.
 const compass = createCompassController({
   host: () => stage.overlay,
   urlParams,
+  // Cardinals only when georeferenced; local scans show truthful local axes.
+  cardinalsAreGeographic: () => crsIsKnown(crsService.current()),
 });
 void viewerLoaded.then((v) => compass.attachViewer(v));
 
@@ -2624,17 +2624,6 @@ const FLOORPLAN_OPTIONS = {
 } as const;
 
 /** Densest available positions for floor-plan extraction (fallback: ctx). */
-function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
-  try {
-    const dense = viewer.gatherTerrainPositions(FLOORPLAN_GATHER_POINTS);
-    if (dense && dense.positions.length > ctx.positions.length) return dense.positions;
-  } catch {
-    /* best-effort — the routing snapshot below is always valid */
-  }
-  return ctx.positions;
-}
-
-
 // --- Lazy Object/Space-panel mount (v0.6 P1, step 2) --------------------------
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
@@ -2689,7 +2678,7 @@ function newObjectPanel(
       const { extractFloorPlan } = await loadFloorPlan();
       // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
       // tracing (see FLOORPLAN_GATHER_POINTS).
-      floorPlan = extractFloorPlan(floorPlanPositions(ctx), {
+      floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
         unitToMetres: ctx.unitToMetres,
         maxSamples: FLOORPLAN_GATHER_POINTS,
@@ -2724,7 +2713,7 @@ function newObjectPanel(
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
-    const plan = extractFloorPlan(floorPlanPositions(ctx), {
+    const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
       unitToMetres: ctx.unitToMetres,
       maxSamples: FLOORPLAN_GATHER_POINTS,
@@ -2929,6 +2918,10 @@ const kmlDeps: KmlActionDeps = {
       basis: 'the declared header extent', upAxis: 'z',
     };
   },
+  // Resident points for the convex-hull outline: a Z-up static cloud only.
+  // Streaming and Y-up read null and keep the declared-extent rectangle.
+  scanHullPositions: () =>
+    ((c) => (c && isZUpFormat(c.sourceFormat) ? c.positions : null))(scans.activeCloud()),
   baseName: (name) => baseName(name),
   downloadText: (filename, text) => downloadText(filename, text),
   setError: (message) => dropZone.setError(message),
@@ -4512,7 +4505,6 @@ function generateReportPdf(templateId: string): Promise<void> {
   return runGenerateReportPdf(templateId, reportExportDeps);
 }
 
-
 /**
  * Push the Viewer's current render-quality state into the Inspector chips.
  * Used by callbacks that change a single chip's state but want every chip
@@ -4609,7 +4601,6 @@ function applyPrefs(): void {
 // `src/app/crsCoordinator.ts` (wired as `crsCoordinator`). Both are extracted
 // from main.ts unchanged; CRS state is owned by `crsService` (declared near the
 // imports) with the coordinator holding only the per-scan override-store key.
-
 
 /** Refresh the Annotations panel's contents and visibility. */
 function refreshAnnotationPanel(): void {
@@ -5172,7 +5163,6 @@ function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void> {
   return runHandleRemoteEpt(url, signal, openStreamingDeps);
 }
 
-
 /**
  * Open a remote COPC scan over HTTP range requests. The host must allow
  * cross-origin requests and serve byte ranges — `HttpRangeSource.probe()`
@@ -5252,9 +5242,6 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     loading = false;
   }
 }
-
-
-
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
@@ -5630,7 +5617,6 @@ function resetToEmptyState(): void {
  * thread, so it's deferred a frame to let the "working" line paint; large
  * clouds may take a moment.
  */
-
 
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();

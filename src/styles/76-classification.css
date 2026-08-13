@@ -27,6 +27,11 @@
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
 }
 .olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
+/* The native <option> popup is drawn by the OS, not the panel: on Chrome for
+   Windows it inherits the select's light `color` but paints over the system's
+   white popup background, so the list reads white-on-white. Pin explicit,
+   legible colours on the options themselves. */
+.olv-reclass-select option { color: #17181c; background: #ffffff; }
 .olv-reclass-go { width: 100%; text-align: center; }
 /* Auto-classify: the panel's emphasised action. Only layout lives here. The
    accent emphasis is declared in the unified button block at the end of this
