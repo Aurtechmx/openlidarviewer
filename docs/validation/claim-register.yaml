@@ -109,9 +109,9 @@ claims:
     algorithm: Euclidean distance between picked points (unit-aware)
     algorithmVersion: v0.5.x
     claim: "Straight-line distance between two user-picked points, in the scan's linear units converted to metres when the CRS unit is known."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts]
+    supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
     supportingDatasets: []
     units: [metres, source-units, feet]
     crsDatum: "Horizontal only; converts native→metres when linear unit is known; refuses metric distance in geographic degrees."
@@ -120,7 +120,7 @@ claims:
     exportAllowed: true
     userLabel: "Visual-inspection-grade measurement"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: none
     approvedClaim: "Geometric distance in the stated units; visual-inspection grade."
     prohibitedClaim: ["survey-grade distance", "certified accuracy"]
@@ -136,9 +136,9 @@ claims:
     algorithm: Polygon shoelace area (planimetric, unit-aware)
     algorithmVersion: v0.5.x
     claim: "Planimetric area of a user polygon in square metres when the horizontal unit is known."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts]
+    supportingTests: [tests/measure*.test.ts, tests/formatArea*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
     supportingDatasets: []
     units: [square-metres, source-units]
     crsDatum: "Refuses area on a geographic-degree grid."
@@ -147,7 +147,7 @@ claims:
     exportAllowed: true
     userLabel: "Visual-inspection-grade area"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: none
     approvedClaim: "Planimetric area in the stated units; visual-inspection grade."
     prohibitedClaim: ["survey-grade area", "geodetic area"]
@@ -163,9 +163,9 @@ claims:
     algorithm: Vertical delta (unit-aware, up-axis-aware)
     algorithmVersion: v0.5.x
     claim: "Vertical difference along the scan up-axis in metres when the vertical unit is known."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts]
+    supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
     supportingDatasets: []
     units: [metres, source-units]
     crsDatum: "Vertical unit applied when known; no vertical-datum transformation."
@@ -174,7 +174,7 @@ claims:
     exportAllowed: true
     userLabel: "Visual-inspection-grade height"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: none
     approvedClaim: "Vertical delta in the stated units; visual-inspection grade."
     prohibitedClaim: ["orthometric height", "datum-referenced elevation"]
@@ -190,9 +190,9 @@ claims:
     algorithm: Angle between two vectors
     algorithmVersion: v0.5.x
     claim: "Angle between two user-defined segments."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/measure*.test.ts]
+    supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
     supportingDatasets: []
     units: [degrees]
     crsDatum: "Frame-relative; not azimuth unless CRS-north is known."
@@ -201,7 +201,7 @@ claims:
     exportAllowed: true
     userLabel: "Visual-inspection-grade angle"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: none
     approvedClaim: "Geometric angle between picked segments."
     prohibitedClaim: ["true bearing / azimuth without CRS north"]
@@ -217,9 +217,9 @@ claims:
     algorithm: Sampled elevation along a section line
     algorithmVersion: v0.5.x
     claim: "Elevation profile sampled along a user section line."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts]
+    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
     supportingDatasets: []
     units: [metres, source-units]
     crsDatum: "Local frame; native→metres when known."
@@ -228,7 +228,7 @@ claims:
     exportAllowed: true
     userLabel: "Section profile (visual-inspection grade)"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: none
     approvedClaim: "Sampled elevation profile along the section."
     prohibitedClaim: ["survey-grade longitudinal section"]
@@ -245,9 +245,9 @@ claims:
     algorithm: Uniform-density point-sample estimator
     algorithmVersion: v0.5.x
     claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Refuses on geographic degrees; local metric only."
@@ -256,7 +256,7 @@ claims:
     exportAllowed: true
     userLabel: "Uniform-density point-sample preview"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
     approvedClaim: "Order-of-magnitude preview volume; not a survey quantity."
     prohibitedClaim: ["survey-grade volume", "area-weighted integration", "quantified uncertainty"]
@@ -272,9 +272,9 @@ claims:
     algorithm: Point-sample estimator over a fitted/explicit base (area-weighted integration pending — Phase 8)
     algorithmVersion: v0.5.x
     claim: "Stockpile volume above a reference base."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Local metric; refuses geographic degrees."
@@ -283,7 +283,7 @@ claims:
     exportAllowed: true
     userLabel: "Exploratory stockpile preview"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
     approvedClaim: "Exploratory volume preview; spatial correlation and base uncertainty unquantified."
     prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
@@ -540,18 +540,18 @@ claims:
     algorithm: Vector ruggedness measure / topographic position index
     algorithmVersion: v0.4.x
     claim: "Ruggedness / relative-position indices over a stated neighbourhood."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/*vrm*.test.ts, tests/*tpi*.test.ts]
+    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts]
     supportingDatasets: []
     units: [dimensionless]
     crsDatum: metric
     assumptions: ["neighbourhood radius documented (Phase 11)"]
     failureModes: ["scale sensitivity", "edge effects"]
     exportAllowed: true
-    userLabel: "Unit-verified terrain descriptor"
+    userLabel: "Synthetically-validated terrain descriptor"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
     approvedClaim: "Index per the documented convention + neighbourhood."
     prohibitedClaim: ["standardised / cross-validated ruggedness"]
