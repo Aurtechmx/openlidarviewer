@@ -1031,6 +1031,55 @@ body.olv-theme-light .olv-empty::before {
   bottom: 64px;
   max-height: calc(50vh - 84px);
 }
+
+/* ── Right context rail (v0.6.5) ─────────────────────────────────────────────
+   One coherent column hosting the Streaming card (when a COPC streams) above the
+   Inspector in normal vertical flow — replacing the two independent absolute
+   panels and their fixed 50vh split. The rail is the single scrolling,
+   collapsible surface; the panels flow inside it. */
+.olv-right-rail {
+  position: absolute;
+  top: 56px;
+  right: 14px;
+  width: var(--olv-right-rail-width);
+  max-height: calc(100% - 80px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  z-index: 15;
+}
+/* Panels flow inside the rail: drop their own absolute positioning and per-panel
+   scroll (the rail scrolls as one). Their surface styling — background, border,
+   padding — is kept. The streaming-mode 50vh split is nullified here too. */
+.olv-right-rail > .olv-inspector,
+.olv-right-rail > .olv-inspector.olv-inspector-streaming,
+.olv-right-rail > .olv-streaming-panel {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-height: none;
+}
+/* Desktop collapse — slide the whole rail past the right edge (GPU transform). */
+@media (min-width: 768px) {
+  .olv-right-rail {
+    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
+  }
+  .olv-right-rail.olv-right-collapsed {
+    transform: translateX(calc(100% + var(--space-lg, 16px)));
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+/* Mobile owns small screens through the bottom sheet — the Inspector re-parents
+   into it, so the desktop rail is hidden. */
+@media (max-width: 767px) {
+  .olv-right-rail {
+    display: none;
+  }
+}
 .olv-panel-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 /*
  * Inter-section spacing in the Inspector — proximity does the grouping,
@@ -3656,9 +3705,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
      floor is the widest panel's design need (Analyse, 285px) so making every
      panel fill the column never squeezes one narrower than it was built for. */
   --olv-rail-width: clamp(285px, 21vw, 312px);
-  /* Right column width (Inspector + Streaming card both sit at 232px). Single
-     source for the right grabber-tab offset so it can't drift from the panels. */
-  --olv-right-rail-width: 232px;
+  /* Right context rail width — the Streaming card + Inspector share one column.
+     Widened from the old 232px so CRS / provenance / reason text has room; a
+     restrained clamp keeps the viewport dominant at laptop widths. Single source
+     for the right grabber-tab offset so it can't drift from the rail. */
+  --olv-right-rail-width: clamp(288px, 23vw, 340px);
 }
 
 /* Even width + clear the REAL dock height. --olv-dock-clear is measured by

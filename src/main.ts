@@ -3728,9 +3728,14 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
     stage.overlay.append(viewer.annotateElements.hint);
-    stage.overlay.append(inspector.element);
-    stage.overlay.append(streamingPanel.element);
-    // The measurement and annotation panels share a stacked left-side column.
+    // Right context rail — one coherent column: the Streaming card (only while a
+    // COPC streams) above the Inspector, in normal vertical flow rather than a
+    // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
+    const rightRail = document.createElement('div');
+    rightRail.className = 'olv-right-rail';
+    rightRail.id = 'olv-right-rail';
+    rightRail.append(streamingPanel.element, inspector.element);
+    stage.overlay.append(rightRail);
     // Semantic workspace: one Data/Work/Analyse/Output mode visible at a time,
     // re-hosting the existing live panels. Root keeps `.olv-left-panels`#olv-left-panels
     // so the rail-collapse chrome, clearance vars and wheel containment target it
@@ -3757,8 +3762,7 @@ void viewerLoaded.then(() => {
     // preventDefault), so no ancestor handler can act on a panel scroll. The
     // canvas controller also gates on target (NavController `_handleWheel`).
     containPanelWheel(leftPanels);
-    containPanelWheel(inspector.element);
-    containPanelWheel(streamingPanel.element);
+    containPanelWheel(rightRail);
     // Push the column below the measure toolbar whenever it is visible —
     // see wireMeasureBarClearance for why this is measured, not static CSS.
     wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
@@ -3773,30 +3777,17 @@ void viewerLoaded.then(() => {
       storageKey: 'olv.leftRail.collapsed',
       ariaControls: 'olv-left-panels',
     }));
-    // Right column — each panel collapses on its own handle, centred on that
-    // panel. The Streaming card (top, only while a COPC streams) and the
-    // Inspector (bottom, or full-height when not streaming) are independent, so
-    // one can be hidden without the other. Both handles ride the same right
-    // edge; the empty-state hide keeps only the visible panel's handle on screen.
-    if (!inspector.element.id) inspector.element.id = 'olv-inspector';
-    if (!streamingPanel.element.id) streamingPanel.element.id = 'olv-streaming-panel';
+    // One grabber collapses the whole right context rail (Streaming + Inspector).
+    // Reuses the Inspector's persisted collapse key so a prior preference carries
+    // over; the obsolete per-streaming key is left unread.
     stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
-      panels: [streamingPanel.element],
-      tabClass: 'olv-right-rail-tab',
-      chevron: RAIL_CHEVRON_RIGHT,
-      collapsedClass: 'olv-right-collapsed',
-      storageKey: 'olv.rightRail.streaming.collapsed',
-      ariaControls: streamingPanel.element.id,
-    }));
-    stage.addTeardown(wireRailToggle({
-      overlay: stage.overlay,
-      panels: [inspector.element],
+      panels: [rightRail],
       tabClass: 'olv-right-rail-tab',
       chevron: RAIL_CHEVRON_RIGHT,
       collapsedClass: 'olv-right-collapsed',
       storageKey: 'olv.rightRail.inspector.collapsed',
-      ariaControls: inspector.element.id,
+      ariaControls: 'olv-right-rail',
     }));
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -3850,9 +3841,9 @@ void viewerLoaded.then(() => {
       exportPanel.element.classList.add('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
-      // Inspector returns to the overlay in its original slot; the left panels
-      // return to their workspace modes (lazy ones only once mounted).
-      stage.overlay.insertBefore(inspector.element, streamingPanel.element);
+      // Inspector returns to the right context rail (below the Streaming card);
+      // the left panels return to their workspace modes (lazy ones once mounted).
+      rightRail.append(inspector.element);
       workspace.layoutDesktop({
         ...workspacePanels,
         measure: measureMount.panel?.element,
