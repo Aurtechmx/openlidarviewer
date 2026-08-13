@@ -26,7 +26,7 @@
   color: var(--text); background: transparent; border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md); cursor: pointer;
 }
-.olv-reclass-select:focus-visible { outline: none; border-color: var(--accent); }
+.olv-reclass-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
 /* The native <option> popup is drawn by the OS, not the panel: on Chrome for
    Windows it inherits the select's light `color` but paints over the system's
    white popup background, so the list reads white-on-white. Pin explicit,
@@ -63,6 +63,10 @@
 }
 @keyframes olv-reclass-spin {
   to { transform: rotate(360deg); }
+}
+/* Respect reduced-motion: hold the spinner static rather than spin forever. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-reclass-auto-loading::before { animation: none; }
 }
 .olv-reclass-actions { display: flex; gap: var(--space-sm); }
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
@@ -113,7 +117,7 @@
   transition: color 130ms ease, border-color 130ms ease;
 }
 .olv-cl-solo:hover { color: var(--text); border-color: var(--accent); }
-.olv-cl-solo:focus-visible { outline: none; border-color: var(--accent); }
+.olv-cl-solo:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
 /* Solo as a glyph + label (isolate "stacked layers" mark before the word). */
 .olv-cl-solo-ico { display: inline-flex; align-items: center; gap: 4px; }
 .olv-cl-solo-ico svg { width: 12px; height: 12px; flex: none; display: block; }
