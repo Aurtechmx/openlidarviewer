@@ -7,6 +7,7 @@
  * coordinates, so the origin is the zero vector.
  */
 
+import './loaderConfig'; // disable loaders.gl CDN workers before any parse (lazy chunk)
 import { parse } from '@loaders.gl/core';
 import { GLTFLoader, postProcessGLTF } from '@loaders.gl/gltf';
 import { Matrix4, Quaternion, Vector3 } from 'three';

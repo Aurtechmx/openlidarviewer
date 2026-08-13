@@ -14,6 +14,7 @@
  * `double` properties are narrowed by the loader — a known limitation).
  */
 
+import './loaderConfig'; // disable loaders.gl CDN workers before any parse (lazy chunk)
 import { parse } from '@loaders.gl/core';
 import { PLYLoader } from '@loaders.gl/ply';
 import { PointCloud } from '../model/PointCloud';
