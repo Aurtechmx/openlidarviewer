@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "c6a324f8dd7138aabc27a330cbdefe6ec05d7523",
+  "commit": "13119fd8da9abb761c486b7f1f3dd74e80e0d0a4",
   "repository": null,
-  "generatedAt": "2026-08-13T12:05:55.866Z",
+  "generatedAt": "2026-08-13T18:51:14.989Z",
   "nodeVersion": "v26.0.0",
   "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "1f420b78b672e09b67f7fffba78a28d9baa3d37cf6818b2e5f20cf34f66f79c9",
+  "gateLogSha256": "9c34fd7cabbb17bc3bb7a05740cb0ddd1ca512e715d642b29ab296fdd2f2a1f9",
   "stages": {
     "staticGate": "passed",
     "mutation": "not-executed"
@@ -53,7 +53,7 @@
   },
   "buckets": {
     "unit": {
-      "passed": 5551,
+      "passed": 5561,
       "skipped": 21,
       "runs": 3
     },
@@ -79,7 +79,7 @@
     }
   },
   "total": {
-    "passed": 9190,
+    "passed": 9200,
     "skipped": 21
   },
   "bundle": {
@@ -95,13 +95,14 @@
     "components": 56
   },
   "science": {
-    "e4ClaimCount": 4,
+    "e4ClaimCount": 5,
     "e4Claims": [
+      "MEAS-AREA",
       "CONTOURS",
       "SLOPE-RASTER",
       "ASPECT-RASTER",
       "HILLSHADE"
     ],
-    "suppliedReferenceSlots": 4
+    "suppliedReferenceSlots": 5
   }
 }
