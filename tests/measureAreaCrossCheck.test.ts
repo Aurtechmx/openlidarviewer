@@ -76,15 +76,18 @@ describe('MEAS-AREA cross-implementation: polygonAreaPlanar vs GDAL/OGR OGR_GEOM
     });
   }
 
-  it('the worst candidate-vs-OGR disagreement is far inside the tolerance', () => {
+  it('the worst candidate-vs-OGR disagreement is non-zero float noise, far inside the tolerance', () => {
     let maxAbsDiff = 0;
     for (const f of fc.features) {
       const ours = polygonAreaPlanar(ringToVec3(f));
       const ogr = ogrById.get(f.properties.id) as number;
       maxAbsDiff = Math.max(maxAbsDiff, Math.abs(ours - ogr));
     }
-    // Sanity that the tolerance is not doing the work: the true agreement is
+    // The irrational-coordinate triangle makes the two implementations diverge at
+    // the ULP level, so the comparison exercises real double-precision agreement
+    // rather than a trivial 0 on exact coordinates — yet the divergence is still
     // orders of magnitude tighter than the registered gate.
+    expect(maxAbsDiff).toBeGreaterThan(0);
     expect(maxAbsDiff).toBeLessThan(TOLERANCE_ABS / 100);
   });
 });

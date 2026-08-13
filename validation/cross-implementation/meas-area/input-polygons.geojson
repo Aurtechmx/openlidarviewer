@@ -285,6 +285,72 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "offset-rect-50k",
+        "description": "1 x 1000 rectangle at a large fractional offset (54321.75, 33333.25) — float cancellation",
+        "analyticArea": 1000
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              54321.75,
+              33333.25
+            ],
+            [
+              54322.75,
+              33333.25
+            ],
+            [
+              54322.75,
+              34333.25
+            ],
+            [
+              54321.75,
+              34333.25
+            ],
+            [
+              54321.75,
+              33333.25
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "irrational-triangle",
+        "description": "triangle with irrational vertices (root-2, pi scaled) — inexact coordinates",
+        "analyticArea": 22168.477190791833
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              0,
+              0
+            ],
+            [
+              141.4213562373095,
+              7.5
+            ],
+            [
+              12.25,
+              314.1592653589793
+            ],
+            [
+              0,
+              0
+            ]
+          ]
+        ]
+      }
     }
   ]
 }

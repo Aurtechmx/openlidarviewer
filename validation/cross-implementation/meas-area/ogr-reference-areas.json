@@ -11,8 +11,16 @@
       "ogrArea": 5.25
     },
     {
+      "id": "irrational-triangle",
+      "ogrArea": 22168.4771907918
+    },
+    {
       "id": "l-shape",
       "ogrArea": 12
+    },
+    {
+      "id": "offset-rect-50k",
+      "ogrArea": 1000
     },
     {
       "id": "offset-unit-square",

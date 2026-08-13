@@ -26,9 +26,9 @@
   "datasets": [
     {
       "datasetId": "OLV-DS-030-AREA-POLYGONS",
-      "description": "Eight planar polygons with closed-form areas: unit square, 2x3 rectangle, 3-4 right triangle, non-convex L, 100x100 square, 45-degree rotated square, fractional rectangle, and a unit square translated to (1000,1000).",
+      "description": "Ten planar polygons with closed-form areas: unit square, 2x3 rectangle, 3-4 right triangle, non-convex L, 100x100 square, 45-degree rotated square, fractional rectangle, unit square at (1000,1000), a 1x1000 rectangle at a large fractional offset, and a triangle with irrational (root-2, pi) vertices that exercises double-precision divergence.",
       "path": "validation/cross-implementation/meas-area/input-polygons.geojson",
-      "sha256": "ca89772039c70a58dac9f8c97daf28444a35e1d38fbbf843e17751507edc35cb"
+      "sha256": "b333b4581c805d886a3dfec839a3c71468f7ae44027ce0b291508c4b6ea53dfb"
     }
   ],
   "parameterSets": [
@@ -53,23 +53,23 @@
     "requiredWithinToleranceFraction": 1
   },
   "status": "agree",
-  "statusReason": "All 8 fixture polygons compared and every candidate area is within 1e-6 m² of OGR_GEOM_AREA (worst 0), meeting the registered minimum of 6 comparable polygons and the required within-tolerance fraction 1.",
+  "statusReason": "All 10 fixture polygons compared and every candidate area is within 1e-6 m² of OGR_GEOM_AREA (worst 3.2741809263825417e-11, on the irrational-coordinate triangle), meeting the registered minimum of 6 comparable polygons and the required within-tolerance fraction 1.",
   "result": {
-    "comparableCells": 8,
+    "comparableCells": 10,
     "skippedCells": 0,
     "withinToleranceFraction": 1,
-    "maxAbsDiff": 0,
-    "meanDiff": 0
+    "maxAbsDiff": 3.2741809263825417e-11,
+    "meanDiff": 3.2741809263825417e-12
   },
   "rawArtifacts": [
     {
       "path": "validation/cross-implementation/meas-area/input-polygons.geojson",
-      "sha256": "ca89772039c70a58dac9f8c97daf28444a35e1d38fbbf843e17751507edc35cb",
+      "sha256": "b333b4581c805d886a3dfec839a3c71468f7ae44027ce0b291508c4b6ea53dfb",
       "role": "candidate-input"
     },
     {
       "path": "validation/cross-implementation/meas-area/ogr-area.txt",
-      "sha256": "2a4c82d46c24ff41475024687c0200d3dd68c2ea3ff60fb6950ba3965310a4b2",
+      "sha256": "2f8a7df3db09e1874ea1ece091a6c79261d6461d71a7964249230dc974bc93d9",
       "role": "reference-output"
     },
     {
@@ -86,11 +86,11 @@
   "derivedArtifacts": [
     {
       "path": "validation/cross-implementation/meas-area/ogr-reference-areas.json",
-      "sha256": "5df35490d253d92aff48939556e9081d3b112f77a7459fc57560713ce61a64f9",
+      "sha256": "17ec3226091666898ab99261dc1ac7c5c588f8cf0dbf67f6d4950bf1ce86083b",
       "derivedFrom": [
         "validation/cross-implementation/meas-area/ogr-area.txt"
       ],
-      "inputsDigest": "sha256:91363ce85664a82247a564eff4731e8e092a625004c5b722c23557376e2cd4e1"
+      "inputsDigest": "sha256:07b184aa273a262f130a1a497d7c0a4582bc55771a879b69eb1d9aa8bd540519"
     }
   ],
   "scope": {

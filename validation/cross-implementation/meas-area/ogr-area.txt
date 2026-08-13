@@ -40,3 +40,13 @@ OGRFeature(input-polygons):7
   area (Real) = 1
   POLYGON ((1000 1000,1001 1000,1001 1001,1000 1001,1000 1000))
 
+OGRFeature(input-polygons):8
+  id (String) = offset-rect-50k
+  area (Real) = 1000
+  POLYGON ((54321.75 33333.25,54322.75 33333.25,54322.75 34333.25,54321.75 34333.25,54321.75 33333.25))
+
+OGRFeature(input-polygons):9
+  id (String) = irrational-triangle
+  area (Real) = 22168.4771907918
+  POLYGON ((0 0,141.42135623731 7.5,12.25 314.159265358979,0 0))
+

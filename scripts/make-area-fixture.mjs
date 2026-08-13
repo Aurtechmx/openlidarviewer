@@ -28,7 +28,22 @@ const POLYGONS = [
   ['rotated-square', 'unit-diagonal square rotated 45 degrees', [[1, 0], [2, 1], [1, 2], [0, 1]], 2],
   ['fractional', 'fractional-coordinate rectangle 3 x 1.75', [[0.5, 0.5], [3.5, 0.5], [3.5, 2.25], [0.5, 2.25]], 5.25],
   ['offset-unit-square', 'unit square translated to (1000,1000) — offset invariance', [[1000, 1000], [1001, 1000], [1001, 1001], [1000, 1001]], 1],
+  // Float-divergence stress. Coordinates far from the origin and/or irrational
+  // make the shoelace products large and inexact, so the Newell (3-D) and OGR
+  // (2-D) accumulations no longer coincide bit-for-bit — the comparison then
+  // measures real double-precision agreement, not a trivial 0. The offset is
+  // kept at ~5e4 (not the ~1e6 of a Krovak grid) so the ABSOLUTE 1e-6 m^2 gate
+  // still holds: at 1e6 the cancellation error on a unit area exceeds it, which
+  // is a documented scale limit of an absolute area tolerance.
+  ['offset-rect-50k', '1 x 1000 rectangle at a large fractional offset (54321.75, 33333.25) — float cancellation', [[54321.75, 33333.25], [54322.75, 33333.25], [54322.75, 34333.25], [54321.75, 34333.25]], 1000],
+  ['irrational-triangle', 'triangle with irrational vertices (root-2, pi scaled) — inexact coordinates', [[0, 0], [100 * Math.SQRT2, 7.5], [12.25, 100 * Math.PI]], irrationalTriArea()],
 ];
+
+/** Exact shoelace area of the irrational triangle above (matches its ring). */
+function irrationalTriArea() {
+  const a = [0, 0], b = [100 * Math.SQRT2, 7.5], c = [12.25, 100 * Math.PI];
+  return Math.abs(a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1])) / 2;
+}
 
 function feature([id, description, ring, analyticArea]) {
   const closed = [...ring, ring[0]]; // GeoJSON rings are explicitly closed
