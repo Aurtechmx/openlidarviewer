@@ -40,6 +40,8 @@ const STATIC_DEFS: Record<number, string> = {
     '+proj=aea +lat_1=-18 +lat_2=-36 +lat_0=0 +lon_0=132 +x_0=0 +y_0=0 +ellps=GRS80 +towgs84=0,0,0 +units=m +no_defs', // GDA94 / Australian Albers
   5070:
     '+proj=aea +lat_1=29.5 +lat_2=45.5 +lat_0=23 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs', // NAD83 / CONUS Albers
+  5514:
+    '+proj=krovak +lat_0=49.5 +lon_0=24.8333333333333 +alpha=30.2881397527778 +k=0.9999 +x_0=0 +y_0=0 +ellps=bessel +towgs84=570.8,85.7,462.8,4.998,1.587,5.261,3.56 +units=m +no_defs', // S-JTSK / Krovák East-North (Czechia). East-North → negated axes → negative easting/northing. The 7-parameter Bursa-Wolf datum shift agrees with authoritative PROJ to ~5 cm on the surveyed reference points (Zenodo 15421291); the naive 3-parameter shift was off by ~10 m.
 };
 
 /** EPSG codes that are geographic (lon/lat) rather than projected. */
