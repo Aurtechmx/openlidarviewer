@@ -37,9 +37,13 @@ describe('adaptiveStages', () => {
     expect(stage(adaptiveStages({ scans: [scan(), scan()] }), 'align').relevant).toBe(true);
   });
 
-  it('skips Surface when no terrain product is possible (resident-only streaming)', () => {
+  it('shows Surface for resident-only streaming — an exploratory surface is possible', () => {
     const residentOnly = scan({ kind: 'streaming', coverage: 'resident-only' });
-    expect(stage(adaptiveStages({ scans: [residentOnly] }), 'surface').relevant).toBe(false);
+    expect(stage(adaptiveStages({ scans: [residentOnly] }), 'surface').relevant).toBe(true);
+  });
+  it('skips Surface when no terrain product is possible at all (empty scan)', () => {
+    const empty = scan({ pointCount: 0 });
+    expect(stage(adaptiveStages({ scans: [empty] }), 'surface').relevant).toBe(false);
   });
 
   it('relevantStages returns only the shown stages', () => {
