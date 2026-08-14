@@ -337,7 +337,7 @@ void makePanel;
 
 describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transaction consistency)', () => {
   async function runExport(opts: {
-    getResolvedSourceCrs?: () => { wkt?: string } | null;
+    getResolvedSourceCrs?: () => { wkt?: string; epsg?: number } | null;
     cloudWkt?: string;
   }): Promise<typeof rec> {
     rec.downloads.length = 0;

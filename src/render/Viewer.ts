@@ -5995,7 +5995,7 @@ export class Viewer {
         e.clientX,
         e.clientY,
         this.getCameraState(),
-        annotationGeorefFor(detailed),
+        annotationGeorefFor(detailed, detailed ? this._exportCrsResolver?.(detailed.cloud)?.name : undefined),
       );
     } else {
       this._annotate.pickMissed();

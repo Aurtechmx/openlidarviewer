@@ -1269,7 +1269,7 @@ const inspector = new Inspector({
     if (!cloud) return;
     // The exporter is a lazy chunk; fetched on first export of the session.
     void loadExporters().then(({ exportCloud }) => {
-      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
     });
   },
   onExportImage: (mode) => {
@@ -5038,9 +5038,9 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a dropped or sampled File: parse, render, and populate the Inspector. */
+/** Load a File: parse, render, populate the Inspector, land on the Data panel. */
 function handleFile(file: File): Promise<void> {
-  return openScan(file, openScanDeps);
+  return openScan(file, openScanDeps).then(() => showWorkspaceMode?.('data'));
 }
 
 /**
