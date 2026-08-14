@@ -27,7 +27,12 @@ export class DropZone {
    */
   private _hideTimer: number | null = null;
 
-  constructor(target: HTMLElement, onFile: (file: File) => void) {
+  /** Fired once, on the first drag over the drop target, to warm lazy loaders. */
+  private _onDragIntent?: () => void;
+  private _dragIntentFired = false;
+
+  constructor(target: HTMLElement, onFile: (file: File) => void, onDragIntent?: () => void) {
+    this._onDragIntent = onDragIntent;
     this._text = el('span', { className: 'olv-toast-text' });
 
     this._cancel = el('button', {
@@ -69,6 +74,13 @@ export class DropZone {
     target.addEventListener('dragover', (e) => {
       e.preventDefault();
       target.classList.add('olv-dragging');
+      // First drag over the page: warm the lazy decode/Viewer chunks now, so a
+      // user who drops immediately does not wait on the chunk fetch. Fires once;
+      // the prewarm itself is idempotent.
+      if (!this._dragIntentFired) {
+        this._dragIntentFired = true;
+        this._onDragIntent?.();
+      }
     });
     target.addEventListener('dragleave', (e) => {
       if (e.relatedTarget === null) target.classList.remove('olv-dragging');
