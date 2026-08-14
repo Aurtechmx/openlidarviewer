@@ -122,21 +122,12 @@ export const loadExporters = () => import('./io/exporters');
 export const loadExportStudio = () => import('./export');
 
 /**
- * Load the confidence-aware terrain analysis pipeline (ground
- * classification → DTM → validation → contours). Heavy and only reached
- * when the user runs the Analyse panel, so it rides its own lazy chunk.
- * MUST live here (not inlined in main.ts) so the live source-transform
- * doesn't scramble the import() literal. v0.4.0.
- */
-export const loadAnalyseContours = () => import('./terrain/contour/analyseContours');
-
-/**
  * Load the fingerprint-keyed terrain-core cache, which reuses the heavy,
  * interval-independent computation across contour-interval changes and
  * repeated Analyse runs on the same scan. It re-exports {@link
  * computeTerrainCore} / {@link contoursFromCore} through its own import of
  * the analysis module, so it rides the SAME lazy chunk as
- * {@link loadAnalyseContours} (no extra round-trip). Routed through here for
+ * the `analyseContours` module (no extra round-trip). Routed through here for
  * the same reason as every dynamic import — the live source-transform must
  * not see the literal.
  */

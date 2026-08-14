@@ -5,6 +5,9 @@ import {
   linkAbortSignals,
   handleRemoteEpt,
   openStreamingCopc,
+  shouldTidyFailedStreamingOpen,
+  shouldDropCandidateOnPostCommitCancel,
+  activateCommittedStreamingCloud,
   type OpenStreamingDeps,
 } from '../src/app/openStreaming';
 import type { Viewer } from '../src/render/Viewer';
@@ -213,6 +216,47 @@ function makeDeps(
   return { deps, calls };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Transactional streaming replacement — the ownership decisions (blocker #4).
+// The current valid scene must survive any failed or cancelled replacement.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('shouldTidyFailedStreamingOpen — a failed open never blanks a valid scene', () => {
+  it('keeps a committed candidate (it is now the valid scene)', () => {
+    expect(shouldTidyFailedStreamingOpen(true, false)).toBe(false);
+    expect(shouldTidyFailedStreamingOpen(true, true)).toBe(false);
+  });
+
+  it('keeps a prior streaming scene when the candidate failed before commit (blocker #4A)', () => {
+    // streaming A on screen, candidate B throws during build → A is intact
+    // (attach is transactional), so the failure handler must NOT close it.
+    expect(shouldTidyFailedStreamingOpen(false, true)).toBe(false);
+  });
+
+  it('tidies up only a first / static-replacing open that never committed', () => {
+    // No prior streaming scene and nothing committed: a half-built candidate is
+    // the only streaming residue, so closing it is correct and blanks nothing.
+    expect(shouldTidyFailedStreamingOpen(false, false)).toBe(true);
+  });
+});
+
+describe('shouldDropCandidateOnPostCommitCancel — a post-commit cancel never blanks the viewer', () => {
+  it('drops the fresh stream back to still-present static layers', () => {
+    expect(shouldDropCandidateOnPostCommitCancel(true, true)).toBe(true);
+  });
+
+  it('keeps a streaming→streaming candidate (the old scene is already gone)', () => {
+    // No static layers to fall back to: dropping the committed candidate would
+    // blank the viewer, so the late cancel keeps it.
+    expect(shouldDropCandidateOnPostCommitCancel(false, true)).toBe(false);
+  });
+
+  it('does nothing when there was no cancel', () => {
+    expect(shouldDropCandidateOnPostCommitCancel(true, false)).toBe(false);
+    expect(shouldDropCandidateOnPostCommitCancel(false, false)).toBe(false);
+  });
+});
+
 describe('handleRemoteEpt — the guarded remote-open decisions', () => {
   it('refuses a second open while one is in flight, without claiming the flag', async () => {
     const { deps, calls } = makeDeps({ loading: true });
@@ -326,7 +370,7 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
  * assert whether the exclusive-scene teardown (clear static layers + attach the
  * replacement) ran — and it must run ONLY once the candidate has opened.
  */
-function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boolean } = {}) {
+function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; priorStreamingCloud?: boolean; staticLayers?: number } = {}) {
   // A structurally-complete streaming cloud so the post-open panel/inspector
   // wiring runs without a stray undefined-access aborting the flow early.
   const cloud = {
@@ -345,10 +389,15 @@ function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boole
     if (over.openRejects) throw new Error('malformed COPC hierarchy');
     return cloud;
   });
-  const attachStreamingCloud = vi.fn(async () => {});
+  const attachStreamingCloud = vi.fn(async () => {
+    if (over.attachRejects) throw new Error('GPU mesh build failed');
+  });
   const viewer = {
     ready: Promise.resolve(),
     hasStreamingCloud: over.priorStreamingCloud ?? true,
+    // Static layers present before the open — drives `replacingStatic`. Default
+    // 0 so the streaming→streaming cases below exercise the no-fallback path.
+    clouds: () => Array.from({ length: over.staticLayers ?? 0 }, () => ({})),
     attachStreamingCloud,
     setMode: vi.fn(),
     frameAll: vi.fn(),
@@ -360,6 +409,10 @@ function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boole
     attachStreamingCloud,
     closeStreaming: vi.fn(),
     clearOpenStaticLayers: vi.fn(),
+    // Post-commit activation spies (blockers #2/#3): a failed open must never fire these.
+    hideEmptyState: vi.fn(),
+    refreshProvenance: vi.fn(),
+    refreshCrs: vi.fn(),
   };
 
   const stub = <K extends keyof OpenStreamingDeps>(): OpenStreamingDeps[K] =>
@@ -401,7 +454,7 @@ function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boole
       setCancelHandler: vi.fn(),
       setProgress: vi.fn(),
     },
-    stage: { hideEmptyState: vi.fn() },
+    stage: { hideEmptyState: calls.hideEmptyState },
     inspector: {
       element: { classList: { remove: vi.fn() } },
       setImageExportEnabled: vi.fn(),
@@ -423,11 +476,11 @@ function makeCopcDeps(over: { openRejects?: boolean; priorStreamingCloud?: boole
       getVisibility: () => ({ isFiltered: () => false }),
     } as unknown as OpenStreamingDeps['classLegendPanel'],
     inspectorCards: {
-      refreshProvenanceFromStreaming: vi.fn(),
+      refreshProvenanceFromStreaming: calls.refreshProvenance,
       refreshDatasetIntelligenceFromStreamingCloud: vi.fn(),
     } as unknown as OpenStreamingDeps['inspectorCards'],
     crsCoordinator: {
-      refreshCrsForStreamingCloud: vi.fn(),
+      refreshCrsForStreamingCloud: calls.refreshCrs,
     } as unknown as OpenStreamingDeps['crsCoordinator'],
     bookmarks: { clear: vi.fn() },
     isPhone: () => false,
@@ -474,5 +527,91 @@ describe('openStreamingCopc — transactional replacement (gate F4)', () => {
     expect(calls.openSpy).toHaveBeenCalledTimes(1);
     expect(calls.clearOpenStaticLayers).toHaveBeenCalledTimes(1);
     expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves the static scene when the ATTACH itself fails (pass-7 A)', async () => {
+    // The candidate opens, but attachStreamingCloud throws (e.g. GPU mesh build).
+    // Because the static-layer clear is deferred until AFTER a successful attach,
+    // a failed attach must leave the static scene intact — not a blank viewer.
+    const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/GPU mesh build failed/);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // The attach threw BEFORE the clear ran, so the static layers survive.
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+  });
+
+  it('hands the load-cancel signal to attachStreamingCloud so it can gate its own commit (#4C)', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
+    const signal = new AbortController().signal;
+    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', signal, deps);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    // The 6th positional argument is the AbortSignal — the seam the pre-commit
+    // gate reads to keep the previous scene on a streaming→streaming cancel.
+    expect((calls.attachStreamingCloud.mock.calls[0] as unknown[])[5]).toBe(signal);
+  });
+
+  it('a cancel before the candidate opens tears nothing down (early guard)', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true, staticLayers: 2 });
+    const ac = new AbortController();
+    ac.abort();
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', ac.signal, deps),
+    ).rejects.toThrow();
+    // Cancelled before the exclusive-scene teardown: no attach, no close, no clear.
+    expect(calls.attachStreamingCloud).not.toHaveBeenCalled();
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+    expect(calls.clearOpenStaticLayers).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Post-commit application-metadata activation (blockers #2 and #3). A candidate's
+// CRS / provenance / usage must become authoritative ONLY after the scene commits.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('activateCommittedStreamingCloud — the shared publish seam', () => {
+  it('publishes empty-state, provenance and CRS for a committed cloud', () => {
+    const { deps, calls } = makeCopcDeps();
+    activateCommittedStreamingCloud(
+      { kind: 'ept', name: 'site.ept', sourcePointCount: 9, crs: () => null },
+      deps,
+    );
+    expect(calls.hideEmptyState).toHaveBeenCalledTimes(1);
+    expect(calls.refreshProvenance).toHaveBeenCalledTimes(1);
+    // This is how EPT reaches CrsService at all (blocker #2).
+    expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('openStreamingCopc — metadata is published only AFTER commit (blocker #3)', () => {
+  it('a successful open publishes CRS + provenance exactly once', async () => {
+    const { deps, calls } = makeCopcDeps({ priorStreamingCloud: true });
+    await openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps);
+    expect(calls.attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
+    expect(calls.refreshProvenance).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ATTACH failure never publishes the candidate CRS or provenance', async () => {
+    // Streaming A active; candidate B fails to attach. B's CRS/provenance must NOT
+    // become authoritative — that was the silent visible-A / CRS-B corruption.
+    const { deps, calls } = makeCopcDeps({ attachRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/GPU mesh build failed/);
+    expect(calls.refreshCrs).not.toHaveBeenCalled();
+    expect(calls.refreshProvenance).not.toHaveBeenCalled();
+    expect(calls.hideEmptyState).not.toHaveBeenCalled();
+  });
+
+  it('an OPEN failure (before attach) never publishes candidate metadata', async () => {
+    const { deps, calls } = makeCopcDeps({ openRejects: true, priorStreamingCloud: true });
+    await expect(
+      openStreamingCopc({} as RangeSource, 'scan.copc.laz', new AbortController().signal, deps),
+    ).rejects.toThrow(/malformed COPC/i);
+    expect(calls.refreshCrs).not.toHaveBeenCalled();
+    expect(calls.refreshProvenance).not.toHaveBeenCalled();
   });
 });

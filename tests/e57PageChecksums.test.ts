@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { crc32c } from '../src/io/e57/crc32c';
-import { depage } from '../src/io/e57/depage';
+import { depage, physicalToLogical } from '../src/io/e57/depage';
 import { parseE57Header } from '../src/io/e57/header';
 import { parseE57 } from '../src/io/e57/parseE57';
 
@@ -290,5 +290,25 @@ describe('parseE57Header — declared field bounds', () => {
   it('accepts the committed fixture, whose declared length matches exactly', () => {
     const h = parseE57Header(bufferOf(syntheticBytes));
     expect(h.filePhysicalLength).toBe(syntheticBytes.length);
+  });
+});
+
+describe('physicalToLogical — checksum-offset alias (M7)', () => {
+  const PAGE = 1024; // payload = 1020
+
+  it('maps payload offsets to a unique logical byte', () => {
+    expect(physicalToLogical(0, PAGE)).toBe(0);
+    expect(physicalToLogical(1019, PAGE)).toBe(1019); // last payload byte of page 0
+    expect(physicalToLogical(1024, PAGE)).toBe(1020); // first payload byte of page 1
+  });
+
+  it('REFUSES an offset that points into a page checksum (the alias)', () => {
+    // physical 1020..1023 are page 0's CRC trailer; the old mapping aliased
+    // 1020 → logical 1020, colliding with physical 1024 (page 1 start).
+    for (const off of [1020, 1021, 1022, 1023]) {
+      expect(() => physicalToLogical(off, PAGE)).toThrow(/checksum/i);
+    }
+    // The genuine page-1 payload byte still resolves cleanly.
+    expect(physicalToLogical(1024, PAGE)).toBe(1020);
   });
 });

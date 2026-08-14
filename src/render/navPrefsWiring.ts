@@ -46,3 +46,42 @@ export function restoreNavPrefs(
   viewer.setNavigationPreferences(prefs);
   inspector.syncNavigationPrefs(prefs);
 }
+
+/**
+ * Flip one orbit-invert axis from an external control (command palette, the
+ * viewport nav control) and keep every surface in agreement: apply to the
+ * viewer, re-sync the Inspector chips, and persist. Only the toggled axis
+ * changes; `preset` is preserved because the flags are the source of truth (a
+ * hand-toggle keeps whatever preset label was showing). Returns the new prefs so
+ * a caller can reflect the resulting on/off state (e.g. a toast).
+ */
+export function toggleNavInvert(
+  axis: 'x' | 'y',
+  viewer: NavPrefsViewer,
+  inspector: NavPrefsInspector,
+  persist: () => void,
+): NavigationPreferences {
+  const next: NavigationPreferences = {
+    invertOrbitX: axis === 'x' ? !current.invertOrbitX : current.invertOrbitX,
+    invertOrbitY: axis === 'y' ? !current.invertOrbitY : current.invertOrbitY,
+    preset: current.preset,
+  };
+  current = next;
+  viewer.setNavigationPreferences(next);
+  inspector.syncNavigationPrefs(next);
+  persist();
+  return next;
+}
+
+/** Return orbit navigation to the shipped defaults from an external control. */
+export function resetNavPrefs(
+  viewer: NavPrefsViewer,
+  inspector: NavPrefsInspector,
+  persist: () => void,
+): NavigationPreferences {
+  current = { ...DEFAULT_NAVIGATION_PREFERENCES };
+  viewer.setNavigationPreferences(current);
+  inspector.syncNavigationPrefs(current);
+  persist();
+  return current;
+}

@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Three products are at E4: `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE`
+- Five products are at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
   and aspect, 1.0 level on the 0–255 scale for hillshade). This validates three

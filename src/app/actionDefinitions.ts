@@ -52,6 +52,10 @@ export interface ActionRegistryDeps {
   hasScan: () => boolean;
   saveCurrentView: () => void;
   applyView: (index: number) => void;
+  /** Flip one mouse-orbit invert axis (the "gyroscope" handedness). Persists. */
+  toggleOrbitInvert: (axis: 'x' | 'y') => void;
+  /** Return orbit navigation to the shipped defaults. */
+  resetNavigation: () => void;
 }
 
 export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
@@ -319,7 +323,10 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
           const file = input.files?.[0];
           input.remove();
           if (!file) return;
-          void loadReportVerifier().then(({ verifyAndShow }) => verifyAndShow(file));
+          void loadReportVerifier()
+            .then(({ verifyAndShow }) => verifyAndShow(file))
+            // A chunk-load failure must not surface as an unhandled rejection.
+            .catch((err) => console.warn('[verify] report-verifier chunk failed to load', err));
         });
         document.body.append(input);
         input.click();
@@ -334,6 +341,34 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       hint: 'Show or hide the on-canvas compass — north plus the standard-view snaps.',
       keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
       run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
+    },
+    // Mouse-orbit handedness ("gyroscope") from the palette — the same invert
+    // the Inspector's Navigation section owns, exposed here so it is reachable
+    // without opening a panel. Each toggles one axis and persists; the Inspector
+    // chips stay in sync.
+    {
+      id: 'nav.invert-vertical',
+      title: 'Invert vertical orbit',
+      section: 'View',
+      hint: 'Flip the up / down mouse-orbit direction — the common "feels inverted vs CAD" fix. Persists.',
+      keywords: ['invert', 'vertical', 'pitch', 'orbit', 'mouse', 'gyroscope', 'handedness', 'camera', 'navigation'],
+      run: () => deps.toggleOrbitInvert('y'),
+    },
+    {
+      id: 'nav.invert-horizontal',
+      title: 'Invert horizontal orbit',
+      section: 'View',
+      hint: 'Flip the left / right mouse-orbit direction. Persists.',
+      keywords: ['invert', 'horizontal', 'yaw', 'orbit', 'mouse', 'gyroscope', 'handedness', 'camera', 'navigation'],
+      run: () => deps.toggleOrbitInvert('x'),
+    },
+    {
+      id: 'nav.reset',
+      title: 'Reset navigation to defaults',
+      section: 'View',
+      hint: 'Return orbit handedness to the shipped defaults.',
+      keywords: ['reset', 'navigation', 'orbit', 'invert', 'defaults', 'handedness', 'gyroscope'],
+      run: () => deps.resetNavigation(),
     },
     // v7 sessions — named view states from the palette. Both handlers already
     // live in this shell (the same saveCurrentView/applyView the panels call),

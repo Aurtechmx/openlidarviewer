@@ -407,7 +407,7 @@ check('archive-self-verification', 'the archive’s own node-only verification s
     }
     // A tool that cannot start without an installed tree or a built bundle is
     // recorded as unrun, not as a pass. An unrunnable check is not a green one.
-    if (code !== 0 && /Cannot find package|ERR_MODULE_NOT_FOUND|node_modules not found/.test(out)) {
+    if (code !== 0 && /Cannot find package|ERR_MODULE_NOT_FOUND|node_modules not found|needs-install: the locked vitest/.test(out)) {
       ran.push({ name, status: 'needs-install' });
       continue;
     }

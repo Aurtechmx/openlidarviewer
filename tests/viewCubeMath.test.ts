@@ -4,6 +4,7 @@ import {
   nearestCardinal,
   roseRotationDeg,
   COMPASS_FACES,
+  compassFaceLabel,
 } from '../src/render/viewCubeMath';
 
 describe('compassHeadingDeg', () => {
@@ -53,12 +54,30 @@ describe('roseRotationDeg', () => {
 });
 
 describe('COMPASS_FACES', () => {
-  test('four cardinals mapped to opposite standard views', () => {
-    const byLabel = Object.fromEntries(COMPASS_FACES.map((f) => [f.label, f.view]));
+  test('cardinals map to opposite standard views (geographic labels)', () => {
+    const byGeo = Object.fromEntries(COMPASS_FACES.map((f) => [f.geo, f.view]));
     // Looking north (the rose N) frames the scan from the back.
-    expect(byLabel.N).toBe('back');
-    expect(byLabel.S).toBe('front');
-    expect(byLabel.E).toBe('right');
-    expect(byLabel.W).toBe('left');
+    expect(byGeo.N).toBe('back');
+    expect(byGeo.S).toBe('front');
+    expect(byGeo.E).toBe('right');
+    expect(byGeo.W).toBe('left');
+  });
+
+  test('each face sits at a distinct rose position', () => {
+    const positions = COMPASS_FACES.map((f) => f.position);
+    expect(new Set(positions).size).toBe(4);
+    expect(positions).toEqual(['top', 'right', 'bottom', 'left']);
+  });
+});
+
+describe('compassFaceLabel — geography only when the frame is known', () => {
+  test('geographic frame shows cardinals', () => {
+    expect(COMPASS_FACES.map((f) => compassFaceLabel(f, true))).toEqual(['N', 'E', 'S', 'W']);
+  });
+  test('local / unknown frame shows truthful local labels, never cardinals', () => {
+    const local = COMPASS_FACES.map((f) => compassFaceLabel(f, false));
+    expect(local).toEqual(['B', 'R', 'F', 'L']);
+    // The whole point: no geographic letter leaks into the local frame.
+    expect(local.some((l) => ['N', 'E', 'S', 'W'].includes(l))).toBe(false);
   });
 });

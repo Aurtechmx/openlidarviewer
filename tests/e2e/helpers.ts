@@ -28,6 +28,21 @@ import { fileURLToPath } from 'node:url';
  * dance. The key string mirrors `STORAGE_KEY` in src/ui/onboarding/
  * tourSteps.ts; if that changes, this string follows.
  */
+/**
+ * Activate a desktop-workspace left mode (Data / Work / Analyse / Output). The
+ * workspace shows ONE mode at a time (v0.6.5), so a panel that lives in a
+ * non-active mode is `display:none` until its tab is selected. A no-op on mobile
+ * or before a scan (the tab strip is absent), so callers can invoke it
+ * unconditionally after a scan loads.
+ */
+export async function showWorkspaceMode(
+  page: Page,
+  mode: 'data' | 'analyse' | 'output',
+): Promise<void> {
+  const tab = page.locator(`.olv-ws-tab[data-mode="${mode}"]`);
+  if (await tab.count()) await tab.click();
+}
+
 export async function suppressOnboardingTour(page: Page): Promise<void> {
   await page.addInitScript(() => {
     try {

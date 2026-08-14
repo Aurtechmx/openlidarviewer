@@ -110,6 +110,17 @@ function metresCubedBbox(
  */
 export function createInspectorCardRefreshers(
   inspector: Inspector,
+  /**
+   * The RESOLVED active CRS unit frame (`crsService.context()`), so the Dataset
+   * Intelligence density tier honours a user CRS/unit override instead of the
+   * file's declared `metadata.crs` / streaming `crs()`. Omitted by the pure
+   * factory tests, which fall back to the cloud's declared CRS — byte-identical
+   * for a same-unit no-override scan, and fail-closed for an unknown unit either
+   * way.
+   */
+  resolvedCrs?: () =>
+    | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }
+    | null,
 ): InspectorCardRefreshers {
   // The last summary pushed by the STREAMING refresher, remembered so a
   // finished terrain run can re-push it with the real analysed-point count
@@ -175,7 +186,7 @@ export function createInspectorCardRefreshers(
       // (feet³, degrees³) into the per-m³ bucketing and mis-tier the density.
       // When the unit is unconfirmed, `bboxVolume` is left undefined and
       // `classifyDensity` renders "—" rather than a wrong tier.
-      const bboxVolume = metresCubedBbox(dx, dy, dz, cloud.metadata?.crs);
+      const bboxVolume = metresCubedBbox(dx, dy, dz, resolvedCrs ? resolvedCrs() : cloud.metadata?.crs);
       // Density numerator is the file's declared total, back-scaled when the
       // loader strided for display — matching the Scan Report, not the smaller
       // in-memory sample that would under-report the tier.
@@ -236,7 +247,7 @@ export function createInspectorCardRefreshers(
         // on the unit exactly as the static path does — an unknown-unit CRS
         // leaves `bboxVolume` undefined rather than feeding raw feet³ / degrees³
         // into the per-m³ bucketing.
-        bboxVolume = metresCubedBbox(dx, dy, dz, cloud.crs?.() ?? null);
+        bboxVolume = metresCubedBbox(dx, dy, dz, resolvedCrs ? resolvedCrs() : (cloud.crs?.() ?? null));
       }
       const summary = {
         pointCount: sourcePoints,

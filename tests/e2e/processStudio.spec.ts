@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Process Studio (v0.6.5) — a display-only readiness view over the pure
@@ -23,6 +23,8 @@ test('reveals in the left rail and populates from live scan facts on load', asyn
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  // Process Studio lives in the Analyse workspace mode.
+  await showWorkspaceMode(page, 'analyse');
 
   const panel = page.locator('.olv-process-studio');
   await expect(panel).toBeVisible({ timeout: 20_000 });
@@ -42,6 +44,18 @@ test('reveals in the left rail and populates from live scan facts on load', asyn
   const dtmRow = panel.locator('.olv-ps-product', { hasText: 'DTM' });
   await expect(dtmRow).not.toHaveClass(/olv-ps-ready/);
   await expect(dtmRow).toHaveClass(/olv-ps-(review|blocked)/);
+
+  // v0.6.5 — the WHY is compact by default but reachable without hover. The
+  // reason is collapsed in a native <details>; a click/keypress on the summary
+  // reveals it as VISIBLE text (a keyboard user can read it), not a data-tip
+  // attribute the measure-bar-scoped CSS never renders here.
+  const dtmReason = dtmRow.locator('.olv-ps-reason');
+  await expect(dtmReason).toBeHidden(); // compact by default, no wall of text
+  await dtmRow.locator('summary').click(); // one disclosure
+  await expect(dtmReason).toBeVisible();
+  expect(((await dtmReason.textContent()) ?? '').trim().length).toBeGreaterThan(0);
+  // Regression guard against the old hidden-attribute pattern.
+  await expect(dtmRow).not.toHaveAttribute('data-tip', /.+/);
 
   // Independent QA checks render with their own statuses.
   expect(await panel.locator('.olv-ps-check').count()).toBeGreaterThan(0);

@@ -222,7 +222,7 @@ Format support varies with browser memory, GPU capacity, dataset size, preproces
 <details>
 <summary><b>System requirements</b></summary>
 
-OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari are supported (a WebGL fallback may apply).
+OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available. Firefox and Safari run OLV through the WebGL 2 fallback: a boot-and-render smoke on both engines is a **mandatory** check (`.github/workflows/browser-smoke.yml`), and the full deterministic end-to-end suite runs on both as an advisory cross-browser matrix.
 
 | Component | Minimum | Recommended |
 |---|---|---|
@@ -373,7 +373,7 @@ No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. The aim is not to replace full GIS or survey-grade processing, but to give people a fast, approachable way to open, inspect, navigate, measure, and present point clouds. See [`docs/research-notes.md`](docs/research-notes.md).
 
-The current release is **v0.6.4**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release highlights live in the [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/).
+The current release is **v0.6.5**. The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release highlights live in the [Releases section of the docs site](https://aurtechmx.github.io/openlidarviewer/releases/).
 
 ### Help test OpenLiDARViewer
 
@@ -386,15 +386,15 @@ The quick report takes five to ten minutes. A longer comparison against a refere
 For reviewers, and anyone who wants to check the claims above rather than take them on trust:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone in about two minutes.
-- [VALIDATION_REPORT_v0.6.4.md](docs/releases/VALIDATION_REPORT_v0.6.4.md): what this release validates and what it does not; the terrain and measurement algorithms are inherited from [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md), while the building ground-support gate carries new synthetic evidence.
-- [KNOWN_LIMITATIONS_v0.6.4.md](docs/releases/KNOWN_LIMITATIONS_v0.6.4.md): the documented limits of this release (building gate evaluated on synthetic scenes only, multi-layer mounting disabled, residual streaming flicker, no cross-CRS reprojection).
+- [VALIDATION_REPORT_v0.6.5.md](docs/releases/VALIDATION_REPORT_v0.6.5.md): what this release validates and what it does not; the terrain and measurement algorithms are inherited from [VALIDATION_REPORT_v0.5.9.md](docs/releases/VALIDATION_REPORT_v0.5.9.md), while the building ground-support gate carries new synthetic evidence.
+- [KNOWN_LIMITATIONS_v0.6.5.md](docs/releases/KNOWN_LIMITATIONS_v0.6.5.md): the documented limits of this release (building gate evaluated on synthetic scenes only, multi-layer mounting now enabled, residual streaming flicker, no cross-CRS reprojection).
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md): where the test fixtures and streamed sample datasets come from, and how they are licensed.
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [security policy](.github/SECURITY.md), and the [code of conduct](.github/CODE_OF_CONDUCT.md). The codebase is small, test-first (Vitest and Playwright), written in strict TypeScript, and modular.
+Contributions are welcome. See [CONTRIBUTING.md](.github/CONTRIBUTING.md), the [security policy](.github/SECURITY.md), and the [code of conduct](.github/CODE_OF_CONDUCT.md). The codebase is test-first (Vitest and Playwright), written in strict TypeScript, and organized around explicit module boundaries.
 
 ## Acknowledgements
 

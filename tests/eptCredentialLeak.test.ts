@@ -100,3 +100,71 @@ describe('EPT transport — signed URLs never leak into error messages', () => {
     expect(msg).not.toContain(TOKEN);
   });
 });
+
+// ── The manifest-timeout seam in openStreaming.handleRemoteEpt ────────────────
+import { vi } from 'vitest';
+import { handleRemoteEpt } from '../src/app/openStreaming';
+import type { OpenStreamingDeps } from '../src/app/openStreaming';
+
+/** A minimal fake of the lazy EPT module, enough to reach the manifest fetch. */
+function fakeEptModule() {
+  class EptTimeoutError extends Error {
+    readonly code = 'timeout';
+    constructor(message: string) {
+      super(message);
+      this.name = 'EptTimeoutError';
+    }
+  }
+  return {
+    validateRemoteEptUrl: (u: string) => ({ ok: true as const, url: u }),
+    EptTimeoutError,
+    describeRemoteEptError: (e: unknown) => (e instanceof Error ? e.message : String(e)),
+    parseEptMetadata: undefined,
+    EptStreamingPointCloud: undefined,
+    EptChunkDecoder: undefined,
+  } as unknown as Awaited<ReturnType<OpenStreamingDeps['loadEpt']>>;
+}
+
+describe('openStreaming manifest timeout — the signed URL never reaches the debug console', () => {
+  it('scrubs the token from the EptTimeoutError logged under ?debug=1', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const realFetch = globalThis.fetch;
+    // A fetch that fails as a manifest timeout would (AbortError), with the outer
+    // controller NOT aborted — the exact condition that mints the EptTimeoutError.
+    globalThis.fetch = (async () => {
+      throw new DOMException('Aborted', 'AbortError');
+    }) as unknown as typeof fetch;
+
+    const deps = {
+      isLoading: () => false,
+      setLoading: () => {},
+      prewarmForUrl: () => {},
+      loadEpt: async () => fakeEptModule(),
+      viewerReady: Promise.resolve(),
+      getViewer: () => ({}) as never,
+      debug: true,
+      showToast: () => {},
+      closeStreaming: () => {},
+      dropZone: {
+        setError: () => {},
+        setOpening: () => {},
+        setCancelHandler: () => {},
+        setProgress: () => {},
+      },
+    } as unknown as OpenStreamingDeps;
+
+    try {
+      await handleRemoteEpt(MANIFEST_URL, undefined, deps);
+    } catch {
+      /* the error path may rethrow after logging; the log is what we assert */
+    }
+
+    globalThis.fetch = realFetch;
+    // The debug path logged the remote-EPT error; its message must not carry the token.
+    const logged = errorSpy.mock.calls.flat().map((a) => (a instanceof Error ? a.message : String(a)));
+    expect(logged.join(' | ')).not.toContain(TOKEN);
+    // Sanity: the manifest-timeout error was actually reached (message present, scrubbed).
+    expect(logged.some((m) => /manifest request timed out/i.test(m))).toBe(true);
+    errorSpy.mockRestore();
+  });
+});

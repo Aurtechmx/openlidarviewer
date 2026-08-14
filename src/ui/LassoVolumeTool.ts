@@ -50,6 +50,12 @@ export class LassoVolumeTool {
   private _path: SVGPathElement | null = null;
   /** Current draw, in pointermove order. Cleared on commit/cancel. */
   private _points: LassoPoint[] = [];
+  /** Canvas rect captured at pointerdown — fixed for the drag, so it isn't
+   *  re-read (a forced reflow) on every pointermove. */
+  private _dragRect: DOMRect | null = null;
+  /** Accumulated `d` prefix (without the closing `Z`), grown one segment per
+   *  sample so the path isn't rebuilt from scratch each move (was O(n²)). */
+  private _pathD = '';
   /** True between pointerdown and pointerup. */
   private _drawing = false;
   /** Bound listeners so we can detach them on disable. */
@@ -143,6 +149,8 @@ export class LassoVolumeTool {
     e.preventDefault();
     this._svg.setPointerCapture(e.pointerId);
     this._drawing = true;
+    this._dragRect = this._canvas.getBoundingClientRect();
+    this._pathD = '';
     this._points = [this._toCanvasPoint(e)];
     this._renderPath();
   }
@@ -190,27 +198,31 @@ export class LassoVolumeTool {
 
   /** Convert a pointer event's client position to canvas-space CSS px. */
   private _toCanvasPoint(e: PointerEvent): LassoPoint {
-    const rect = this._canvas.getBoundingClientRect();
+    // Reuse the rect captured at pointerdown; it can't change mid-drag, so
+    // re-reading it per pointermove would force a synchronous reflow.
+    const rect = this._dragRect ?? this._canvas.getBoundingClientRect();
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     };
   }
 
-  /** Update the SVG path's `d` attribute to reflect `_points`. */
+  /** Append the newest sample to the SVG path's `d`. Incremental (one segment
+   *  per call) rather than rebuilding the whole string each move. */
   private _renderPath(): void {
     if (this._path === null || this._points.length === 0) return;
-    let d = `M ${this._points[0].x} ${this._points[0].y}`;
-    for (let i = 1; i < this._points.length; i++) {
-      d += ` L ${this._points[i].x} ${this._points[i].y}`;
-    }
-    // Close back to the first point if more than two samples — gives
-    // the user a hint of the final selection shape during the drag.
-    if (this._points.length > 2) d += ' Z';
-    this._path.setAttribute('d', d);
+    const p = this._points[this._points.length - 1];
+    this._pathD =
+      this._points.length === 1 ? `M ${p.x} ${p.y}` : `${this._pathD} L ${p.x} ${p.y}`;
+    // Close back to the first point once there are more than two samples — a
+    // hint of the final selection shape during the drag. The `Z` is not stored
+    // in `_pathD` so the growing prefix stays append-only.
+    this._path.setAttribute('d', this._points.length > 2 ? `${this._pathD} Z` : this._pathD);
   }
 
   private _clearPath(): void {
+    this._pathD = '';
+    this._dragRect = null;
     if (this._path) this._path.setAttribute('d', '');
   }
 }

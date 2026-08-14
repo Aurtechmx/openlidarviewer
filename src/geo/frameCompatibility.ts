@@ -302,3 +302,24 @@ export function epochFrameOptions(
     horizontalUnitToMetres: before.linearUnitKnown ? before.linearUnitToMetres : undefined,
   };
 }
+
+/**
+ * Whether two epochs' vertical scales are safe to difference directly.
+ *
+ * The change pipeline computes `(afterZ - beforeZ) * verticalUnitToMetres` with
+ * a SINGLE factor — valid only when both epochs share the vertical scale. If
+ * both declare a vertical unit and they differ (metres vs feet), subtracting
+ * the raw source-unit Z values before normalising is meaningless, so the caller
+ * must refuse rather than report a wrong elevation change. When either scale is
+ * unknown there is no evidence of a mismatch, so the shared-factor path stands.
+ */
+export function epochVerticalScalesComparable(
+  before: SpatialContext,
+  after: SpatialContext,
+): boolean {
+  if (!before.verticalScaleKnown || !after.verticalScaleKnown) return true;
+  const vb = before.verticalUnitToMetres;
+  const va = after.verticalUnitToMetres;
+  if (vb === undefined || va === undefined) return true;
+  return Math.abs(vb - va) <= 1e-9 * Math.max(vb, va);
+}

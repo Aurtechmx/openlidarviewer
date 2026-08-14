@@ -15,6 +15,8 @@ import { el } from './dom';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine } from '../lazyChunks';
 import { CONVERT_FORMATS, type ConvertFormat, type CrsMode, type ConvertOptions } from '../convert/types';
+import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import { gzipConvertedFile, gzipAvailable } from '../convert/gzip';
 import { buildExportSummary, type ExportSummaryInput } from '../export/exportSummary';
@@ -79,6 +81,14 @@ export interface ExportPanelCallbacks {
   summaryInfo?: () => ExportCloudSummary | null;
   /** Return the loaded (display-resolution) cloud, or null when none is active. */
   getCloud: () => PointCloud | null;
+  /**
+   * The active scan's RESOLVED source CRS (CRS authority, override applied), or
+   * null for a local / code-less scan. Passed to the converter as the
+   * authoritative source CRS so a user override wins over the file's declared
+   * `metadata.crs` — a rejected CRS can never reproject or tag the output
+   * (blocker #2D). Omitted → the converter falls back to the detected metadata.
+   */
+  getResolvedSourceCrs?: () => CrsInfo | ResolvedCrs | null;
   /** Whether a full-resolution re-decode of the source is possible (local file). */
   hasFullSource: () => boolean;
   /** Whether the loaded cloud is a reduced subset of the source. */
@@ -724,6 +734,14 @@ export class ExportPanel {
     // was never part of the request. `scanId` is the identity re-verified below.
     const clip = this._cb.getActiveClip?.() ?? null;
     const scanId = this._cb.getActiveScanId?.() ?? null;
+    // Snapshot the resolved source CRS with the other request inputs, so the
+    // whole export — the converted data, its metadata, and the ASCII `.prj`
+    // sidecar — describes ONE frame even if the user changes the CRS picker
+    // mid-decode. `resolvedCrsGetter === undefined` means no resolver is wired
+    // (legacy/pure caller → declared-metadata fallback); a wired getter returning
+    // `null` is an explicit Local/no-CRS resolution and must NOT fall back to A.
+    const resolvedCrsGetter = this._cb.getResolvedSourceCrs;
+    const resolvedSourceCrs = resolvedCrsGetter ? resolvedCrsGetter() : undefined;
 
     this._busy = true;
     this._exportBtn.disabled = true;
@@ -766,6 +784,13 @@ export class ExportPanel {
         crsMode: this._crsMode,
         targetEpsg: target,
         sourceEpsg: parseEpsg(this._sourceEpsg),
+        // Resolved source CRS (override applied) is authoritative — the file's
+        // declared metadata.crs is provenance only, so a rejected/local override
+        // never tags or reprojects the output (blocker #2D). undefined when the
+        // host wires no resolver, which keeps the detected-metadata fallback.
+        // The request-time snapshot (not a fresh call) keeps the whole export
+        // on one frame.
+        resolvedSourceCrs,
         omitClassification: !this._includeClass,
       };
       const { file, report } = convertCloud(cloud, options);
@@ -774,10 +799,16 @@ export class ExportPanel {
         const wantGzip = this._gzip && (this._format === 'las' || this._format === 'las14');
         const out = wantGzip ? await gzipConvertedFile(file, true) : file;
         downloadBytes(out.filename, out.bytes, out.mime);
-        // ASCII keep-mode: also emit a `.prj` sidecar with the source WKT.
-        const wkt = cloud.metadata?.crs?.wkt;
-        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && wkt) {
-          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(wkt), 'text/plain');
+        // ASCII keep-mode: also emit a `.prj` sidecar. It carries the RESOLVED
+        // WKT from the same request-time snapshot the converted data used, so the
+        // sidecar and the data can never name different frames. A wired resolver
+        // returning null (Local/no-CRS) yields no `.prj`, never the rejected
+        // source WKT; only an unwired resolver falls back to declared metadata.
+        const activeWkt = resolvedCrsGetter !== undefined
+          ? (resolvedSourceCrs?.wkt ?? null)
+          : (cloud.metadata?.crs?.wkt ?? null);
+        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && activeWkt) {
+          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }
         const warn = report.log.find((l) => l.level === 'warn');
         const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
