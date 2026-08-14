@@ -37,26 +37,33 @@ function crsKeyOf(resolved: ResolvedCrs): string {
     : `name:${resolved.name.trim().toLowerCase()}`;
 }
 
+/**
+ * The export CRS fields for one already-resolved CRS. A local / unknown /
+ * unresolved CRS yields every field null (no `.prj`, no false conflict, no CRS
+ * name/unit in the export report) — the C10/1C guard, so a rejected override's
+ * declared CRS never ships in any form. Shared by the per-cloud resolver and the
+ * active-scan accessor (the latter is how a STREAMING scan reaches the resolved
+ * authority, since its cloud is not a static `PointCloud` the resolver can key on).
+ */
+export function resolvedExportCrs(resolved: ResolvedCrs | null): ExportCloudCrs {
+  if (!resolved || !crsIsKnown(resolved)) {
+    return { wkt: null, key: null, name: null, unit: null, epsg: null };
+  }
+  return {
+    wkt: resolved.wkt ?? null,
+    key: crsKeyOf(resolved),
+    name: resolved.name,
+    unit: linearUnitLabel(resolved.linearUnit),
+    epsg: resolved.epsg ?? null,
+  };
+}
+
 /** Build the `resolveCloudCrs` accessor the export host wires into the adapter. */
 export function makeExportCrsResolver(
   deps: ExportCrsResolverDeps,
 ): (cloud: PointCloud) => ExportCloudCrs {
-  return (cloud) => {
-    const resolved =
-      cloud === deps.activeCloud() ? deps.current() : deps.resolveForCloud(cloud);
-    // A local / unknown / unresolved CRS must not georeference OR label: every
-    // field null (no .prj, no false conflict, no CRS name/unit in the export
-    // report). This is the C10/1C guard — a rejected override resolves to local
-    // here, so its declared CRS never ships in any form.
-    if (!resolved || !crsIsKnown(resolved)) {
-      return { wkt: null, key: null, name: null, unit: null, epsg: null };
-    }
-    return {
-      wkt: resolved.wkt ?? null,
-      key: crsKeyOf(resolved),
-      name: resolved.name,
-      unit: linearUnitLabel(resolved.linearUnit),
-      epsg: resolved.epsg ?? null,
-    };
-  };
+  return (cloud) =>
+    resolvedExportCrs(
+      cloud === deps.activeCloud() ? deps.current() : deps.resolveForCloud(cloud),
+    );
 }

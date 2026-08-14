@@ -4749,15 +4749,24 @@ export class Viewer {
    * behaviour the pure adapter tests exercise.
    */
   private _exportCrsResolver: ((cloud: PointCloud) => ExportCloudCrs) | null = null;
+  private _resolvedActiveCrs: (() => ExportCloudCrs) | null = null;
 
   setExportCrsResolver(fn: (cloud: PointCloud) => ExportCloudCrs): void {
     this._exportCrsResolver = fn;
   }
 
+  /** The resolved CRS for the active scan — lets the export adapter georeference a
+   * STREAMING scan through the same authority as static clouds. */
+  setResolvedActiveCrs(fn: () => ExportCloudCrs): void {
+    this._resolvedActiveCrs = fn;
+  }
+
   private _buildExportAdapter(): ExportSceneAdapter {
     const resolveCloudCrs = this._exportCrsResolver;
+    const resolvedActiveCrs = this._resolvedActiveCrs;
     return buildExportAdapter({
       ...(resolveCloudCrs ? { resolveCloudCrs } : {}),
+      ...(resolvedActiveCrs ? { resolvedActiveCrs } : {}),
       // Project each live entry into the adapter's slice, carrying the render
       // visibility (mesh.visible) and Float64 placement so the export answers
       // over the visible, placed scene (pass-7 #4/#5/#6). Rebuilt per call, so

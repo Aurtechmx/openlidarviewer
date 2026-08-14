@@ -218,17 +218,27 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   }
 
   // Build the MetadataInputs the composer + dataset-summary section need.
+  //
+  // CRS authority: the report's spatial context, unit gate and stamped CRS row
+  // all read the RESOLVED active CRS (the same `crsService.current()` every
+  // conversion, export and validation gate uses), never the file's declared
+  // metadata. A user CRS/unit override is thereby honoured in the PDF, and a
+  // scan resolved to Local / no-CRS states local/unknown honestly rather than
+  // resurrecting the rejected source CRS. `effectiveCrsName` keeps the stamped
+  // label to a frame that actually names coordinates (projected/geographic).
+  const activeCrs = deps.crsCurrent();
+  const activeCrsLabel = effectiveCrsName(activeCrs);
   let metadata: MetadataInputs;
   let exportFileStem: string;
   if (streamingCloud) {
     // `dataBounds` (tight data AABB), NOT `localBounds` (the octree cube): the
     // cube inflates height ~7× and, for a partial footprint, deflates density.
     const b = streamingCloud.dataBounds();
-    const crs = streamingCloud.crs();
-    // ONE spatial context for this report, built here at the export boundary:
-    // the footprint's unit gate, both scale factors, and the CRS row printed in
-    // the Methods appendix all read it, so the file cannot state one unit and
-    // measure in another.
+    // ONE spatial context for this report, built here at the export boundary
+    // from the RESOLVED active CRS: the footprint's unit gate, both scale
+    // factors, and the CRS row printed in the Methods appendix all read it, so
+    // the file cannot state one unit and measure in another — and an override is
+    // honoured rather than the streaming source declaration.
     //
     // Footprint + density in metres / pts·m⁻², not raw CRS units (see
     // reportFootprint): a foot-CRS scan would otherwise overstate the headline
@@ -237,7 +247,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // placeholder factor, so the context's `linearUnitKnown` gates whether the
     // report may claim metres at all — otherwise the extents are emitted in
     // source units with no density and a "units unconfirmed" warning row.
-    const ctx = spatialContextFrom(crs);
+    const ctx = spatialContextFrom(activeCrs);
     const fp = footprintMetres({
       extentX: b[3] - b[0], extentY: b[4] - b[1], extentZ: b[5] - b[2],
       pointCount: streamingCloud.sourcePointCount,
@@ -267,7 +277,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
         nodes: nodeCounts.resident,
         totalNodes: nodeCounts.known,
       },
-      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
       ...(deps.classScopeStamp() ? { classScopeNote: deps.classScopeStamp() } : {}),
@@ -280,13 +290,13 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // FILE — use the declared total (and the density that follows from it) when
     // striding reduced the in-memory count, matching the Scan Report panel.
     const fileN = reportPointCount(staticCloud.declaredPointCount, staticCloud.pointCount);
-    const crs = staticCloud.metadata?.crs;
-    // Same one-context rule as the streaming path above.
+    // Same one-context rule as the streaming path above — RESOLVED active CRS,
+    // not the file's declared metadata, so an override drives the report's units.
     // Footprint + density in metres / pts·m⁻² (see reportFootprint): a foot-CRS
     // scan would otherwise overstate area ~10.76× and be graded against the
     // wrong USGS Quality Level. FAIL CLOSED on an unconfirmed unit — see the
     // streaming path above.
-    const ctx = spatialContextFrom(crs);
+    const ctx = spatialContextFrom(activeCrs);
     const fp = footprintMetres({
       extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
       pointCount: fileN,
@@ -306,7 +316,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       hasRgb: !!staticCloud.colors,
       hasIntensity: !!staticCloud.intensity,
       hasClassification: !!staticCloud.classification,
-      ...(crs ? { crsName: crs.name, crsUnit: crs.linearUnit } : {}),
+      ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.
       ...(deps.classScopeStamp() ? { classScopeNote: deps.classScopeStamp() } : {}),

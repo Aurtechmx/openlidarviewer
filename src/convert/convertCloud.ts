@@ -300,7 +300,7 @@ export function convertCloud(
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo, datumNote })
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote })
         : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote);
     bytes = new TextEncoder().encode(text);
   }

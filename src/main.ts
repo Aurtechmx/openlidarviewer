@@ -131,7 +131,7 @@ import {
   siteKmlStatus,
   type KmlActionDeps,
 } from './app/kmlActions';
-import { makeExportCrsResolver } from './app/exportCrsResolver';
+import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { isRgbAppearancePresetId } from './render/rgbAppearance';
 import { isSkyPreset } from './render/skyPresets';
 import {
@@ -557,6 +557,10 @@ const viewerLoaded: Promise<Viewer> = (async () => {
       crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
+  // The active scan's resolved CRS, so a STREAMING (COPC/EPT) export georeferences
+  // through the same authority — its cloud isn't a static PointCloud the per-cloud
+  // resolver keys on (QW2). Streaming publishes its CRS to CrsService on commit.
+  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current()));
   return viewer;
 })();
 
@@ -2955,16 +2959,20 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
+    // The panel's CRS label reads the RESOLVED authority through the same
+    // `resolvedExportCrs` the writer-side resolver uses, so the summary and the
+    // written .prj/report can never disagree on name/WKT, and a rejected/Local
+    // override shows no CRS rather than the file's declared one (QW4).
+    const rc = resolvedExportCrs(crsService.current());
     if (scans.activeId != null) {
       const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
-      const crs = c.metadata?.crs ?? null;
       return {
         pointCount: c.pointCount,
         hasRgb: c.colors != null,
         hasGpsTime: c.gpsTime != null,
-        crsName: crs?.name ?? null,
-        hasWkt: crs?.wkt != null,
+        crsName: rc.name,
+        hasWkt: rc.wkt != null,
         classProvenance: c.classificationIsDerived
           ? 'derived'
           : c.classification != null ? 'source' : 'none',
@@ -2972,7 +2980,6 @@ const exportPanel = new ExportPanel({
     }
     const sc = viewer?.streamingCloud;
     if (!sc) return null;
-    const crs = sc.crs();
     return {
       // The frontier total, not the resident total: an export drops ancestor
       // nodes that have a resident descendant, so counting every resident point
@@ -2981,8 +2988,8 @@ const exportPanel = new ExportPanel({
       hasRgb: sc.availableColorModes().includes('rgb'),
       // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
       hasGpsTime: true,
-      crsName: crs?.name ?? null,
-      hasWkt: crs?.wkt != null,
+      crsName: rc.name,
+      hasWkt: rc.wkt != null,
       // Streaming classification is read straight from the source records — a
       // decode never derives it — so it is 'source' when the schema carries it.
       classProvenance: sc.availableColorModes().includes('classification') ? 'source' : 'none',

@@ -87,6 +87,15 @@ export interface ExportAdapterHost {
    * override from reaching the ortho `.prj` (pass-5 C10).
    */
   resolveCloudCrs?: (cloud: PointCloud) => ExportCloudCrs;
+  /**
+   * The RESOLVED CRS for the ACTIVE scan (override applied), independent of any
+   * static-cloud identity — this is how a STREAMING (COPC/EPT) scan reaches the
+   * resolved authority, since its cloud is not a static `PointCloud` the per-cloud
+   * `resolveCloudCrs` can key on. Omitted in the pure-adapter tests, where the
+   * streaming paths fall back to the cloud's declared `crs()`, matching the
+   * pre-wiring behaviour. Local/unknown resolves to all-null (no `.prj`, no label).
+   */
+  resolvedActiveCrs?: () => ExportCloudCrs;
   setColorMode(id: string, mode: ColorMode): void;
   setStreamingColorMode(mode: ColorMode): void;
   /** Toggle a static layer's render visibility (for the export scope). */
@@ -395,6 +404,15 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // EPT surface consistently. COPC pulls from the LAS VLRs the
       // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
       // Static clouds carry CRS through `CloudMetadata.crs`.
+      // Streaming: the RESOLVED active CRS (override applied) via the wired
+      // accessor, so a COPC/EPT scan's export report names the CRS the user chose
+      // rather than the file's declared one, and a Local/unknown resolution yields
+      // a null name (no CRS row) instead of the rejected declaration. Falls back to
+      // the source `crs()` only when no accessor is wired (pure-adapter tests).
+      if (host.streaming() && host.resolvedActiveCrs) {
+        const rc = host.resolvedActiveCrs();
+        return rc.name ? { name: rc.name, unit: rc.unit ?? 'units', epsg: rc.epsg ?? undefined } : null;
+      }
       const fromStreaming = host.streaming()?.cloud.crs();
       if (fromStreaming) {
         return {
@@ -487,9 +505,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       const streaming = host.streaming();
       if (streaming) {
         const origin = streaming.cloud.renderOrigin;
+        // The RESOLVED active WKT (override applied) drives the streaming `.prj` /
+        // world file, so a rejected/Local CRS never lands a false frame on the
+        // ortho (C10, now for streaming too). Falls back to the source WKT only
+        // when no resolver is wired (pure-adapter tests).
+        const wkt = host.resolvedActiveCrs
+          ? host.resolvedActiveCrs().wkt
+          : (streaming.cloud.crs()?.wkt ?? null);
         return {
           worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
-          wkt: streaming.cloud.crs()?.wkt ?? null,
+          wkt,
         };
       }
       // Static path: only assert a single, unambiguous frame. With several
