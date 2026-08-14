@@ -1,0 +1,107 @@
+/* 73-desktop-workspace.css — the desktop left-rail workspace.
+   A Data · Work · Analyse · Output segmented tab strip over four mode hosts,
+   one visible at a time (see src/ui/workspace/DesktopWorkspace.ts). Presentation
+   only: the rail-collapse chrome, the measured clearance vars, and the panel
+   wheel containment all still target `.olv-left-panels` unchanged
+   (72-panel-rails.css). This file reorganises what is INSIDE that host. */
+
+/* The rail is a column: a fixed tab strip above one scrolling mode body. The
+   inner body is the scroller now, so the rail itself must NOT reserve a
+   scrollbar gutter — that gutter made the rail's content narrower than
+   `--olv-rail-width` while the collapse grabber is positioned from that
+   variable, leaving a visible sliver between the panels and the handle. */
+.olv-left-panels {
+  display: flex;
+  flex-direction: column;
+  scrollbar-gutter: auto;
+}
+
+/* Tab strip — hidden until a scan loads (`olv-ws-ready`), so the empty rail
+   stays zero-height and its grabber stays hidden on the start screen. */
+.olv-ws-tabs {
+  display: none;
+}
+/* Before a scan the whole rail is empty: hide the tab strip AND the mode body so
+   `.olv-left-panels` collapses to zero height and its grabber stays hidden on the
+   start screen (the Data mode now hosts the Inspector's always-present Layers
+   section, which would otherwise give the empty rail height). */
+.olv-left-panels:not(.olv-ws-ready) .olv-ws-body {
+  display: none;
+}
+.olv-left-panels.olv-ws-ready .olv-ws-tabs {
+  display: flex;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  margin-bottom: var(--space-md);
+  background: var(--panel-raised);
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+
+/* One segment per mode — uppercase, mono-adjacent, low-noise until active. */
+.olv-ws-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font: 500 var(--text-xs) / 1 var(--font);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: var(--space-sm) var(--space-xs);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 160ms var(--ease-standard), background 160ms var(--ease-standard);
+}
+.olv-ws-tab:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* Active carries fill + text-colour (two channels, never colour alone) plus the
+   tablist's own aria-selected — legible under forced-colors. The inset highlight
+   matches OLV's raised-surface vocabulary so the segment reads as a pressed key. */
+.olv-ws-tab.is-active,
+.olv-ws-tab.is-active:hover {
+  color: var(--on-accent);
+  background: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 6px -1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.olv-ws-tab:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The mode body scrolls; the strip above it does not. */
+.olv-ws-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+/* One mode visible at a time. Hidden hosts keep their re-parented panels alive
+   as the exact same DOM nodes — a mode switch never recreates a panel. */
+.olv-ws-mode {
+  display: none;
+}
+.olv-ws-mode.is-active {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* The panels are now grandchildren of the rail, so re-apply the full-width
+   column alignment 72-panel-rails.css gives its direct children: every mode
+   panel fills the rail (and therefore the tab strip) width, so their right edges
+   line up with the tabs instead of stopping short at each panel's legacy design
+   width. The `.olv-left-panels` prefix gives this (0,2,0) so it beats those
+   per-panel widths; the Measure panel's user-drag inline width still wins. */
+@media (min-width: 768px) {
+  .olv-left-panels .olv-ws-mode > * {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

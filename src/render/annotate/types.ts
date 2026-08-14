@@ -35,6 +35,10 @@ export interface SavedCameraState {
   mode?: NavMode;
   /** Vertical field of view in degrees, when it differs from the default. */
   fov?: number;
+  /** Projection when the state was captured. Absent means perspective. A legacy
+   *  view saved before the true orthographic camera carries no `projection` but
+   *  a `fov` near 2 (the old near-ortho lens); it restores as orthographic. */
+  projection?: 'perspective' | 'orthographic';
 }
 
 /** A point of interest marked on the scan. */

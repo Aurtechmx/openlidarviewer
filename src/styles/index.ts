@@ -24,6 +24,7 @@ import './60-measure-inspect.css'; // Measure tool overlay and Inspect tool mark
 import './65-mobile-touch.css'; // Mobile and touch: safe-area insets, the file-picker button, phone layout.
 import './70-measurement-panels.css'; // Measurement toolkit and toolbar: annotation markers, inline editor, hint bar, kind picker, icon controls, tooltip, panel stack.
 import './72-panel-rails.css'; // Left and right panel rails: one-tap collapse, scroll hygiene, scrollbar styling.
+import './73-desktop-workspace.css'; // Desktop left-rail workspace: Data/Work/Analyse/Output mode tabs over one-at-a-time mode hosts.
 import './74-inspector-profile.css'; // Inspector active rail and profile deliverable: resize grip, profile chart, photometric witness, sampler, station table.
 import './76-classification.css'; // Classification legend and manual classification-edit panel.
 import './78-shortcuts-recorder-tour.css'; // Keyboard shortcut sheet, workflow-recorder settings popup, onboarding tour overlay.

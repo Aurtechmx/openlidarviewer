@@ -31,6 +31,8 @@ import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 
 import type { RangeSource } from '../io/range/RangeSource';
+import { sanitizeUrlForDisplay } from '../io/range/RangeSource';
+import { readAtMostBounded } from '../io/range/boundedRead';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { StreamingBenchmark } from '../render/streaming/streamingBenchmark';
 import type { CopcWorkerClient } from '../io/copc/worker/copcWorkerClient';
@@ -58,6 +60,16 @@ import type {
 // Pure decisions the extraction exposes — decidable without a Viewer, the
 // network or the DOM, so `tests/openStreaming.test.ts` pins each one directly.
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ceiling for the EPT manifest body (`ept.json`). The manifest is a small JSON
+ * document — schema, bounds, SRS, hierarchy type — while the hierarchy and tiles
+ * are separate files, so even a continent-scale dataset's ept.json is kilobytes.
+ * 8 MiB is ~1000× any realistic manifest yet far below a memory hazard, so it
+ * refuses a hostile or misconfigured oversized body without ever rejecting a
+ * legitimate one. Enforced while streaming (not via Content-Length alone).
+ */
+export const MAX_EPT_MANIFEST_BYTES = 8 * 1024 * 1024;
 
 /**
  * True when `url` is an EPT entry point (an `ept.json`), so the shell's URL
@@ -102,6 +114,93 @@ export function isAbortError(err: unknown): boolean {
   if (e.code === 'timeout') return false;
   if (e.name === 'AbortError') return true;
   return e.name === 'RangeReadError' && e.code === 'aborted';
+}
+
+/**
+ * Whether a FAILED streaming open should tidy up (call `closeStreaming`).
+ *
+ * The current valid scene must survive any failed replacement (release blocker
+ * #4A). Close ONLY when the attempt left nothing valid behind:
+ *  - `committed` true  → the candidate is now the sole valid scene; keep it.
+ *  - `hadStreamingScene` true → a prior streaming scene is still intact, because
+ *    `attachStreamingCloud` is transactional (it disposes the old session only
+ *    after building the new one, and its pre-commit gate aborts before that); a
+ *    candidate that failed before commit never touched it.
+ * So the only case that tidies up is a first-open (or a static-replacing open)
+ * that never committed — where a half-built candidate is the only streaming
+ * residue and no prior streaming scene exists to protect.
+ */
+export function shouldTidyFailedStreamingOpen(
+  committed: boolean,
+  hadStreamingScene: boolean,
+): boolean {
+  return !committed && !hadStreamingScene;
+}
+
+/**
+ * Whether a cancel observed in the tiny window AFTER the streaming commit should
+ * drop the freshly-attached candidate.
+ *
+ * Drop it ONLY when static layers are still present to fall back to
+ * (`replacingStatic`) — the static-layer clear has not run yet, so closing the
+ * new stream returns the user to the scene they had. A streaming→streaming
+ * replace has already disposed the old scene inside `attachStreamingCloud`, so
+ * the committed candidate is now the only valid scene; dropping it would blank
+ * the viewer, so a post-commit cancel keeps it (blocker #4).
+ */
+export function shouldDropCandidateOnPostCommitCancel(
+  replacingStatic: boolean,
+  aborted: boolean,
+): boolean {
+  return replacingStatic && aborted;
+}
+
+/**
+ * Publish a COMMITTED streaming cloud to global application state.
+ *
+ * Runs ONLY after `attachStreamingCloud` has committed the new scene, so a
+ * failed or cancelled candidate never makes its CRS, provenance, usage counter
+ * or empty-state authoritative over the scene the user still has (blocker #3:
+ * before this, COPC refreshed CrsService and the Inspector provenance BEFORE the
+ * attach, so a build failure left visible-scene-A beside resolved-CRS-B). COPC
+ * and EPT share this one seam so their post-commit behaviour cannot drift — and
+ * it is how an EPT cloud reaches CrsService at all (blocker #2: the EPT path
+ * previously never published its CRS, leaving the authority null or on the prior
+ * dataset). It publishes only; scene construction stays in the attach path.
+ */
+export function activateCommittedStreamingCloud(
+  cloud: {
+    readonly kind: 'copc' | 'ept';
+    readonly name: string;
+    readonly sourcePointCount?: number;
+    crs(): CrsInfo | null | undefined;
+  },
+  deps: OpenStreamingDeps,
+): void {
+  deps.stage.hideEmptyState();
+  // Local-first counter — categorical only ('copc' or 'ept'); never the URL. Only
+  // a COMMITTED open is counted now, not an attempt that failed to build.
+  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
+  // Provenance fingerprint. Wrapped: a malformed cloud shape must not break the
+  // rest of the activation (CRS, panels).
+  try {
+    deps.inspectorCards.refreshProvenanceFromStreaming(cloud);
+  } catch (err) {
+    if (deps.debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err);
+  }
+  // CRS for streaming clouds — same merge rule as the static path. The coordinator
+  // types crs() as `CrsInfo | undefined`; the streaming sources return
+  // `CrsInfo | null`, so the cast bridges that one nullish difference (as the
+  // former inline call did).
+  try {
+    deps.crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
+      readonly name: string;
+      readonly kind: 'copc' | 'ept';
+      crs(): CrsInfo | undefined;
+    });
+  } catch (err) {
+    if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
+  }
 }
 
 /**
@@ -322,41 +421,41 @@ export async function openStreamingCopc(
     ? (ms) => deps.getStreamingBenchmark()?.recordDecodeMs(ms)
     : undefined;
 
-  deps.stage.hideEmptyState();
-  // Local-first counter — categorical only ('copc' or 'ept'); never the URL.
-  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
-  // Provenance fingerprint for streaming clouds — fed with the cloud's
-  // declared point count + extent so the classifier has signal even though
-  // the resident set is small. Wrapped because a malformed cloud shape
-  // shouldn't break the rest of the streaming load (CRS, attach, color
-  // modes, navBar reveal).
-  try { deps.inspectorCards.refreshProvenanceFromStreaming(cloud); }
-  catch (err) { if (deps.debug) console.warn('[provenance] refreshProvenanceFromStreaming threw', err); }
-  // CRS for streaming clouds — same merge rule as the static path.
-  try {
-    deps.crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
-      readonly name: string;
-      readonly kind: 'copc' | 'ept';
-      crs(): CrsInfo | undefined;
-    });
-  } catch (err) {
-    if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
-  }
-  // A streaming scan is exclusive — clear open static layers at the last
-  // moment, after the source opened above and just before its replacement
-  // attaches, so a failed open left the current scene intact. The abort check
-  // at the open still guards this; nothing yields between it and here.
-  deps.clearOpenStaticLayers();
+  // A streaming scan is exclusive, but the replacement must be TRANSACTIONAL:
+  // attach the new cloud FIRST (attachStreamingCloud disposes any prior
+  // streaming session only after it has built the new one), and only then clear
+  // the open static layers. Clearing before the attach meant a throw from
+  // attachStreamingCloud left the valid static scene already destroyed with no
+  // replacement — a blank viewer (pass-7 A).
+  // Whether this replaces STATIC layers — captured before the attach commits so
+  // the post-attach cancel handling below knows which scene the user still has.
+  const replacingStatic = viewer.clouds().length > 0;
+  // attachStreamingCloud observes `signal` and aborts BEFORE its internal commit,
+  // so a cancel during the build keeps the previous scene (blocker #4). Passing it
+  // makes a streaming→streaming replace transactional.
   await viewer.attachStreamingCloud(
     cloud,
     copcDecoder,
     deps.getStreamingQuality(),
     deps.isPhone(),
     deps.getStreamingBenchmark(),
+    signal,
   );
-  // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-  // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
-  if (signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+  // A cancel that lands in the tiny window AFTER the commit: if this replaced
+  // STATIC layers they are still present (the clear below has not run), so drop
+  // the fresh stream and keep them. A streaming→streaming replace has already
+  // disposed the old scene inside attach, so the freshly committed one is now the
+  // valid scene — keep it rather than blanking the viewer.
+  if (shouldDropCandidateOnPostCommitCancel(replacingStatic, signal.aborted)) {
+    deps.closeStreaming();
+    throw new LoadCancelledError();
+  }
+  // The attach succeeded — now it is safe to retire the static layers.
+  deps.clearOpenStaticLayers();
+  // COMMIT APPLICATION METADATA: the scene is now the sole valid one, so publish
+  // its CRS / provenance / usage to global state (blocker #3 — never before the
+  // commit). Shared with the EPT path.
+  activateCommittedStreamingCloud(cloud, deps);
   viewer.setMode('orbit');
   viewer.frameAll();
 
@@ -467,6 +566,13 @@ export async function handleRemoteEpt(
   // classifier when the module loaded, and a plain classifier when the
   // chunk fetch itself was the failure.
   let eptUrlMod: Awaited<ReturnType<OpenStreamingDeps['loadEpt']>> | null = null;
+  // Ownership tracking for a transactional replacement (blocker #4A). `committed`
+  // turns true once the candidate B is the sole valid scene; `hadStreamingScene`
+  // records whether a valid streaming A existed before this attempt. The catch
+  // then closes streaming ONLY when this failed open left nothing valid behind —
+  // never tearing down a still-intact previous scene or a just-committed new one.
+  let committed = false;
+  let hadStreamingScene = false;
   try {
     // URL validation is pure — run it before awaiting the lazy Viewer so a
     // malformed URL always surfaces an error toast, even if the Viewer chunk
@@ -487,6 +593,9 @@ export async function handleRemoteEpt(
     // Viewer chunk is up.
     await deps.viewerReady;
     const viewer = deps.getViewer();
+    // The prior scene state, read before any teardown: if a valid streaming A is
+    // on screen, a failed candidate B must leave it intact (blocker #4A).
+    hadStreamingScene = viewer.hasStreamingCloud;
     // Blue blinking "Opening …" first, consistent with the COPC + device paths;
     // the manifest read + node streaming supersede it with staged progress.
     deps.dropZone.setOpening(`Opening ${remoteCopcName(url)}…`);
@@ -506,7 +615,11 @@ export async function handleRemoteEpt(
     controller.signal.addEventListener('abort', onOuterAbort, { once: true });
     let manifestResponse: Response;
     try {
-      manifestResponse = await fetch(safeUrl, { signal: manifestTimeout.signal });
+      // `redirect: 'error'`: the host was validated against the SSRF block-list,
+      // but a 3xx could send the fetch to a private address the validator never
+      // saw (it does not resolve DNS or follow hops). Refuse redirects so a
+      // validated public URL cannot be bounced somewhere internal.
+      manifestResponse = await fetch(safeUrl, { signal: manifestTimeout.signal, redirect: 'error' });
     } catch (err) {
       // manifestTimeout is aborted by the 20 s timer OR, composed, by the outer
       // load-cancel. Only the timer firing with no user cancel is a timeout:
@@ -514,8 +627,12 @@ export async function handleRemoteEpt(
       // does not read it as a cancel and describeRemoteEptError renders it as a
       // timeout rather than a silent stop. A real user cancel rethrows unchanged.
       if (isAbortError(err) && !controller.signal.aborted) {
+        // Sanitize the URL for the message: a signed EPT URL (?sig=…, SAS token)
+        // must not reach err.message, which the debug path logs to console.error.
+        // The hierarchy/tile/retry transport paths already do this; the manifest
+        // timeout was the one seam that still used the raw URL.
         throw new EptTimeoutError(
-          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${url}`,
+          `EPT manifest request timed out after ${MANIFEST_TIMEOUT_MS} ms for ${sanitizeUrlForDisplay(url)}`,
         );
       }
       throw err;
@@ -528,7 +645,23 @@ export async function handleRemoteEpt(
         `EPT manifest fetch failed (${manifestResponse.status} ${manifestResponse.statusText}).`,
       );
     }
-    const manifestText = await manifestResponse.text();
+    // Bound + cancel the manifest body. The header fetch above is timed and
+    // abortable, but the body read was an unbounded `response.text()`: a hostile
+    // or misconfigured host could stream an oversized ept.json, stall mid-body,
+    // or keep sending after the user cancelled, over-allocating on the main
+    // thread. Reuse the hardened bounded reader the hierarchy/tile transport
+    // uses — it refuses a declared oversize before the first byte, stops on the
+    // chunk that crosses MAX_EPT_MANIFEST_BYTES, honours an idle silence budget,
+    // and is wired to the outer load-cancel so an abort after headers stops
+    // promptly. BoundedReadError carries only the label 'EPT manifest', never
+    // the signed URL, so a ?sig=… token cannot leak through its message.
+    const manifestBytes = await readAtMostBounded(
+      manifestResponse,
+      MAX_EPT_MANIFEST_BYTES,
+      'EPT manifest',
+      { signal: controller.signal, idleTimeoutMs: MANIFEST_TIMEOUT_MS },
+    );
+    const manifestText = new TextDecoder().decode(manifestBytes);
     const detection = parseEptMetadata(manifestText);
     if (!detection.isEpt) {
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
@@ -570,8 +703,6 @@ export async function handleRemoteEpt(
     );
     if (controller.signal.aborted) throw new LoadCancelledError();
 
-    deps.stage.hideEmptyState();
-
     // Laszip tiles are CPU-heavy (laz-perf decompress + coordinate transform);
     // decode them off the main thread in a dedicated worker, created lazily and
     // reused for the session like the COPC decode worker. The binary path stays
@@ -584,22 +715,44 @@ export async function handleRemoteEpt(
       cloud,
       cloud.dataType === 'laszip' ? deps.getEptLaszipDecoder() : null,
     );
-    // A streaming scan is exclusive — replace any prior streaming/static scene
-    // at the last moment, after the EPT source opened and the decoder is ready,
-    // so a failed or cancelled step above left the current scene intact.
+    // A streaming scan is exclusive, but the replacement is TRANSACTIONAL.
+    // attachStreamingCloud disposes any prior STREAMING session only after it
+    // has built the new one, so there is no eager closeStreaming() here — that
+    // tore the previous scene (and its UI) down before the new cloud was proven
+    // attachable, leaving a blank viewer on any failure. Static layers are
+    // cleared only after the attach succeeds (pass-7 A).
     if (controller.signal.aborted) throw new LoadCancelledError();
-    if (viewer.hasStreamingCloud) deps.closeStreaming();
-    deps.clearOpenStaticLayers();
+    // Whether this replaces STATIC layers — captured before the commit so the
+    // post-attach cancel handling knows which scene the user still has.
+    const replacingStatic = viewer.clouds().length > 0;
+    // attachStreamingCloud observes the load-cancel signal and aborts BEFORE its
+    // internal commit, so a cancel during the build keeps the previous scene and a
+    // failed candidate B never disposes a valid streaming A (blocker #4).
     await viewer.attachStreamingCloud(
       cloud,
       decoder,
       deps.getStreamingQuality(),
       deps.isPhone(),
       null,
+      controller.signal,
     );
-    // attachStreamingCloud takes no signal; if the user cancelled while it ran,
-    // drop the fresh cloud so a cancel adds nothing rather than half-attaching.
-    if (controller.signal.aborted) { deps.closeStreaming(); throw new LoadCancelledError(); }
+    // A cancel in the tiny window AFTER the commit: if this replaced STATIC layers
+    // they are still present (the clear below has not run), so drop the fresh
+    // stream and keep them. A streaming→streaming replace already disposed the old
+    // scene inside attach, so the committed one is now the valid scene — keep it.
+    if (shouldDropCandidateOnPostCommitCancel(replacingStatic, controller.signal.aborted)) {
+      deps.closeStreaming();
+      throw new LoadCancelledError();
+    }
+    deps.clearOpenStaticLayers();
+    // The candidate is now the sole committed scene — a later-step throw must not
+    // tear it down in the catch (blocker #4A).
+    committed = true;
+    // COMMIT APPLICATION METADATA through the shared seam: the EPT path did not
+    // publish its CRS or provenance to global state at all before this, leaving
+    // the authority null or on the prior dataset (blocker #2). Now both paths
+    // publish here, only after the commit.
+    activateCommittedStreamingCloud(cloud, deps);
     viewer.setMode('orbit');
     viewer.frameAll();
 
@@ -688,7 +841,11 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(
         eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
       );
-      deps.closeStreaming();
+      // Only tidy up when this failed open left NOTHING valid behind (blocker #4A):
+      // a committed candidate is the current valid scene, and a prior streaming A
+      // survives a candidate that failed before commit (attach is transactional),
+      // so closing in either case would blank a scene the user still has.
+      if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();

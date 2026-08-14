@@ -4,6 +4,7 @@ import {
   ICON_SNAPSHOT,
   ICON_LINK,
   ICON_HELP,
+  ICON_COMMAND,
   ICON_MEASURE,
   ICON_INSPECT,
   ICON_PROBE,
@@ -39,6 +40,8 @@ export interface ToolDockCallbacks {
   onAnalyseToggle: () => void;
   /** Open the help overlay. */
   onHelp: () => void;
+  /** Open the command palette (also Cmd/Ctrl-K). */
+  onCommandPalette: () => void;
   /** Close the current scan and return to the empty state. */
   onClose: () => void;
 }
@@ -106,6 +109,18 @@ export class ToolDock {
       this._share.blur();
       callbacks.onShare();
       this._flashShare();
+    });
+
+    const command = this._tool(
+      'Commands',
+      'Open the command palette — search every action (also Cmd/Ctrl-K)',
+      false,
+      ICON_COMMAND,
+    );
+    command.classList.add('olv-tool-command');
+    command.addEventListener('click', () => {
+      command.blur();
+      callbacks.onCommandPalette();
     });
 
     const help = this._tool(
@@ -224,6 +239,7 @@ export class ToolDock {
       this._annotate,
       this._analyse,
       this._share,
+      command,
       help,
       this._more,
       this._close,

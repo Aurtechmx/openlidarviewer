@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "studyId": "MEAS-AREA-OGR-PLANAR",
+  "claimId": "MEAS-AREA",
+  "example": false,
+  "protocolDigest": "sha256:e6e6aa79a1c5dd4e0c9e46270a943e68b3228d228f57f1f0da270619ea7e3add",
+  "protocolRef": {
+    "protocolId": "PROTO-AREA-OGR-PLANAR",
+    "digest": "sha256:c162ffc5b65e994b35b757d562500f6858e79528e10afd62c275f0cf2c8a2a07"
+  },
+  "candidate": {
+    "revision": "6b70f18bfb446019f08ae9e8510ea55b3d8f4997",
+    "version": "0.6.5",
+    "algorithmVersion": "polygonAreaPlanar-newell-1"
+  },
+  "reference": {
+    "tool": "GDAL/OGR",
+    "version": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "Docker is not available on the host these studies are produced on; the reference is pinned by the GDAL version string, the absolute ogrinfo path and the exact command line instead.",
+    "executablePath": "/opt/homebrew/bin/ogrinfo",
+    "commandLine": "ogrinfo -q -dialect OGRSQL -sql \"SELECT id, OGR_GEOM_AREA AS area FROM \\\"input-polygons\\\"\" input-polygons.geojson",
+    "platform": "Darwin arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-030-AREA-POLYGONS",
+      "description": "Ten planar polygons with closed-form areas: unit square, 2x3 rectangle, 3-4 right triangle, non-convex L, 100x100 square, 45-degree rotated square, fractional rectangle, unit square at (1000,1000), a 1x1000 rectangle at a large fractional offset, and a triangle with irrational (root-2, pi) vertices that exercises double-precision divergence.",
+      "path": "validation/cross-implementation/meas-area/input-polygons.geojson",
+      "sha256": "b333b4581c805d886a3dfec839a3c71468f7ae44027ce0b291508c4b6ea53dfb"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-AREA-OGR-PLANAR",
+      "description": "Planar 2-D polygon area: OLV Newell/shoelace (half the Newell-normal magnitude) versus OGR_GEOM_AREA, with the z coordinate lifted to 0.",
+      "candidateParameters": {
+        "method": "polygonAreaPlanar",
+        "formula": "length(newellNormal)/2"
+      },
+      "referenceParameters": {
+        "field": "OGR_GEOM_AREA",
+        "dialect": "OGRSQL",
+        "tool": "ogrinfo"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.000001,
+    "toleranceUnit": "square-metre",
+    "minimumComparableCells": 6,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 10 fixture polygons compared and every candidate area is within 1e-6 m² of OGR_GEOM_AREA (worst 3.2741809263825417e-11, on the irrational-coordinate triangle), meeting the registered minimum of 6 comparable polygons and the required within-tolerance fraction 1.",
+  "result": {
+    "comparableCells": 10,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 3.2741809263825417e-11,
+    "meanDiff": 3.2741809263825417e-12
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/meas-area/input-polygons.geojson",
+      "sha256": "b333b4581c805d886a3dfec839a3c71468f7ae44027ce0b291508c4b6ea53dfb",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/meas-area/ogr-area.txt",
+      "sha256": "2f8a7df3db09e1874ea1ece091a6c79261d6461d71a7964249230dc974bc93d9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/meas-area/ogr-command.sh",
+      "sha256": "2150b59cd31204888f3bb1f039eb2ae7d1cc58398712197d1c8b1d669580283b",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/meas-area/ogr-environment.txt",
+      "sha256": "cae0c2ae3fa59a418de6e638ac4444e85dc00620d47c1983d3d8b4ff91c7c970",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [
+    {
+      "path": "validation/cross-implementation/meas-area/ogr-reference-areas.json",
+      "sha256": "17ec3226091666898ab99261dc1ac7c5c588f8cf0dbf67f6d4950bf1ce86083b",
+      "derivedFrom": [
+        "validation/cross-implementation/meas-area/ogr-area.txt"
+      ],
+      "inputsDigest": "sha256:07b184aa273a262f130a1a497d7c0a4582bc55771a879b69eb1d9aa8bd540519"
+    }
+  ],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-030-AREA-POLYGONS",
+        "parameterSetId": "PS-AREA-OGR-PLANAR"
+      }
+    ],
+    "unsupported": [
+      "Non-coplanar polygons: polygonAreaPlanar returns the Newell area of the 3-D polygon, which planar OGR_GEOM_AREA does not model.",
+      "Geographic (lon/lat) coordinates: OGR_GEOM_AREA is planar in the layer’s own units, so degree-space areas are out of scope.",
+      "Survey-grade area accuracy against a measured real-world scene — this is cross-implementation agreement on synthetic polygons only (E4, not E5).",
+      "Self-intersecting or degenerate rings, which the E3 analytical-fixtures test covers as refuse/degrade behaviour rather than agreement."
+    ]
+  },
+  "notes": [
+    "Coordinates are unitless on a local grid with no CRS; the fixture header declares none, so the area unit is coordinate units squared (recorded as square-metre for the local metric grid).",
+    "Both implementations are exact double-precision shoelace/Newell area, so agreement is expected to machine precision; the study witnesses that our formula matches an independent one, not that either is accurate against a measured area."
+  ]
+}

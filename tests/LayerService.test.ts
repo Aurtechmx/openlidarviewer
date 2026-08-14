@@ -10,6 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { createLayerService } from '../src/app/LayerService';
+import { resolvedFromCrsInfo, unknownCrs } from '../src/geo/CoordinateTypes';
 import { createAppContext } from '../src/app/appContext';
 import { createProjectFrameService } from '../src/app/projectFrame';
 import type { Viewer } from '../src/render/Viewer';
@@ -160,6 +161,8 @@ function setup(
     },
     projectFrame,
     multiLayerMount,
+    resolveCrs: (_name, detected) =>
+      resolvedFromCrsInfo(detected ?? undefined, 'las-vlr') ?? unknownCrs(),
   });
 
   return {

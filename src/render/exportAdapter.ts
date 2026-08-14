@@ -23,7 +23,9 @@
 import type { ColorMode } from './colorModes';
 import type { PointCloud } from '../model/PointCloud';
 import type { StreamingSource } from './streaming/StreamingSource';
-import type { ExportSceneAdapter, FigureViewContext } from '../export/types';
+import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
+import { placeAabb } from './layerPlacement';
+import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot } from '../export/types';
 import { linearUnitLabel } from '../io/crs';
 // Provenance classifier for `captureLabel` — surfaces capture-type + confidence
 // into every exported image's scan-report card. Same path the Inspector and the
@@ -35,10 +37,20 @@ import {
 } from '../diagnostics/provenanceSignals';
 import { classificationCoverage } from './class/deriveClassification';
 
-/** The per-cloud slice the adapter reads — a structural subset of the Viewer's entry. */
+/**
+ * The per-cloud slice the adapter reads — a structural subset of the Viewer's
+ * entry. `visible` and `placement` were added so the adapter can answer every
+ * scene question over the layers that actually render, where they render: the
+ * exported image is WYSIWYG, so a HIDDEN layer must not enable a colour mode,
+ * inflate a point count, or stretch the export bounds (pass-7 #4/#6), and a
+ * MOUNTED layer must be framed at its placed position, not its source-local one
+ * (#5). `placement` is null for an identity (unmounted) layer.
+ */
 export interface ExportAdapterCloud {
   readonly cloud: PointCloud;
   readonly mode: ColorMode;
+  readonly visible: boolean;
+  readonly placement: LayerSpatialTransform | null;
 }
 
 /** The streaming slice the adapter reads — a structural subset of the session. */
@@ -52,11 +64,42 @@ export interface ExportAdapterStreaming {
  * snapshots, so the adapter always reflects the CURRENT loaded clouds — the
  * property the previous inline construction had by being rebuilt per call.
  */
+/** A cloud's RESOLVED export CRS: the WKT to stamp into the `.prj` (null = do not
+ *  georeference), a stable equality key (null = no declared CRS, never a
+ *  conflict), and the display label / unit / epsg so the export report's CRS name
+ *  and scale-bar unit match the `.prj` rather than the rejected declared CRS
+ *  (1C). All null for a local / unknown resolution. */
+export interface ExportCloudCrs {
+  readonly wkt: string | null;
+  readonly key: string | null;
+  readonly name: string | null;
+  readonly unit: string | null;
+  readonly epsg: number | null;
+}
+
 export interface ExportAdapterHost {
   clouds(): ReadonlyMap<string, ExportAdapterCloud>;
   streaming(): ExportAdapterStreaming | null;
+  /**
+   * The RESOLVED CRS for a static cloud (CRS authority, override applied), or
+   * omitted when the host wires no resolver — then the adapter falls back to the
+   * cloud's declared metadata. Wiring this is what stops a rejected/local CRS
+   * override from reaching the ortho `.prj` (pass-5 C10).
+   */
+  resolveCloudCrs?: (cloud: PointCloud) => ExportCloudCrs;
+  /**
+   * The RESOLVED CRS for the ACTIVE scan (override applied), independent of any
+   * static-cloud identity — this is how a STREAMING (COPC/EPT) scan reaches the
+   * resolved authority, since its cloud is not a static `PointCloud` the per-cloud
+   * `resolveCloudCrs` can key on. Omitted in the pure-adapter tests, where the
+   * streaming paths fall back to the cloud's declared `crs()`, matching the
+   * pre-wiring behaviour. Local/unknown resolves to all-null (no `.prj`, no label).
+   */
+  resolvedActiveCrs?: () => ExportCloudCrs;
   setColorMode(id: string, mode: ColorMode): void;
   setStreamingColorMode(mode: ColorMode): void;
+  /** Toggle a static layer's render visibility (for the export scope). */
+  setVisible(id: string, visible: boolean): void;
   snapshot(options: {
     measurements: boolean;
     annotations: boolean;
@@ -81,8 +124,70 @@ export interface ExportAdapterHost {
   figureViewContext(): FigureViewContext;
 }
 
+/**
+ * Whether a static layer carries the channel `mode` draws from. Elevation (and
+ * any scalar derivable from XYZ) is always renderable; the channel modes need
+ * the matching per-point attribute. An unknown mode is treated as supported so
+ * a new mode never silently hides layers.
+ */
+function staticLayerSupportsMode(cloud: PointCloud, mode: ColorMode): boolean {
+  switch (mode) {
+    case 'rgb':
+      return !!cloud.colors;
+    case 'intensity':
+      return !!cloud.intensity;
+    case 'classification':
+      return !!cloud.classification;
+    case 'normal':
+      return !!cloud.normals;
+    default:
+      return true;
+  }
+}
+
+/**
+ * Conflict-detection key for a cloud that resolves to Local/unknown (null CRS
+ * key). Real keys are `epsg:…` / `name:…` (see `metadataCrsKeyWkt`), so this
+ * sentinel can never equal one: a local layer therefore matches other local
+ * layers but conflicts with any projected layer, forcing the georeference to be
+ * refused when the two are mixed.
+ */
+const LOCAL_CRS_SENTINEL = '\u0000local';
+
+/**
+ * The georeference CRS derived from a cloud's DECLARED metadata — the fallback
+ * when no resolver is wired. EPSG when declared, else the display name, mirroring
+ * `layerCompatibility.horizontalKey`; the WKT is the file's own. Source-declared
+ * provenance, so it does not honour a user override (that is what a wired
+ * `resolveCloudCrs` is for) — but it never resurrects a rejected CRS on its own,
+ * because with a resolver wired this helper is not consulted.
+ */
+function metadataCrsKeyWkt(cloud: PointCloud): ExportCloudCrs {
+  const detected = cloud.metadata?.crs;
+  const key =
+    detected?.epsg != null && Number.isFinite(detected.epsg)
+      ? `epsg:${detected.epsg}`
+      : detected?.name
+        ? `name:${detected.name.trim().toLowerCase()}`
+        : null;
+  return {
+    wkt: detected?.wkt ?? null,
+    key,
+    name: detected?.name ?? null,
+    unit: detected ? linearUnitLabel(detected.linearUnit) : null,
+    epsg: detected?.epsg ?? null,
+  };
+}
+
 /** Build the {@link ExportSceneAdapter} the Studio exporters drive. */
 export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter {
+  // The exported image is WYSIWYG — it shows the VISIBLE scene. So every scene
+  // question (capabilities, counts, bounds, provenance) is answered over the
+  // visible static clouds only, so a hidden layer cannot enable a colour mode,
+  // inflate a point count, stretch the bounds, or supply provenance for pixels
+  // it did not contribute (pass-7 #4/#6/#7).
+  const visibleEntries = (): ExportAdapterCloud[] =>
+    [...host.clouds().values()].filter((c) => c.visible);
   return {
     setExportColorMode(mode: ColorMode): void {
       // Apply to every loaded cloud + the streaming subsystem so every
@@ -114,8 +219,61 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // first static cloud's mode, otherwise the runtime default.
       const streaming = host.streaming();
       if (streaming) return streaming.renderer.colorMode;
-      const first = host.clouds().values().next().value;
+      const first = visibleEntries()[0];
       return first ? first.mode : 'rgb';
+    },
+    snapshotColorModes(): ExportColorModeSnapshot {
+      // Capture EVERY registered layer's mode (not just visible — a hidden
+      // layer's mode must be restored too), so restore is exact per-layer.
+      const staticModes = new Map<string, ColorMode>();
+      for (const [id, c] of host.clouds()) staticModes.set(id, c.mode);
+      const streaming = host.streaming();
+      return { staticModes, streamingMode: streaming ? streaming.renderer.colorMode : null };
+    },
+    restoreColorModes(snapshot: ExportColorModeSnapshot): void {
+      // Restore each layer to the mode it actually held. The single-scalar
+      // restore clobbered layers with distinct modes to the first layer's mode.
+      for (const [id, mode] of snapshot.staticModes) {
+        try {
+          host.setColorMode(id, mode);
+        } catch (err) {
+          console.warn(`[export] restoring cloud "${id}" to ${mode} skipped:`, err);
+        }
+      }
+      if (snapshot.streamingMode !== null) {
+        try {
+          host.setStreamingColorMode(snapshot.streamingMode);
+        } catch (err) {
+          console.warn(`[export] restoring streaming to ${snapshot.streamingMode} skipped:`, err);
+        }
+      }
+    },
+    excludeUnsupported(mode: ColorMode): readonly string[] {
+      // Streaming is a single source; its own availability gate decides whether
+      // the export runs at all. Only the multi-layer STATIC path can mix a
+      // supported layer with one that lacks the channel and would otherwise
+      // render in its stale colour under a scientific title (pass-7 #3).
+      if (host.streaming()) return [];
+      const hidden: string[] = [];
+      for (const [id, c] of host.clouds()) {
+        if (!c.visible || staticLayerSupportsMode(c.cloud, mode)) continue;
+        try {
+          host.setVisible(id, false);
+          hidden.push(id);
+        } catch (err) {
+          console.warn(`[export] hiding unsupported layer "${id}" for ${mode} skipped:`, err);
+        }
+      }
+      return hidden;
+    },
+    restoreVisibility(ids: readonly string[]): void {
+      for (const id of ids) {
+        try {
+          host.setVisible(id, true);
+        } catch (err) {
+          console.warn(`[export] restoring visibility of "${id}" skipped:`, err);
+        }
+      }
     },
     hasRgb(): boolean {
       const streaming = host.streaming();
@@ -126,15 +284,22 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         // Red/Green/Blue attrs).
         return streaming.cloud.availableColorModes().includes('rgb');
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.colors) return true;
       }
       return false;
     },
     hasIntensity(): boolean {
-      // Streaming COPC clouds always carry intensity (PDRF 6/7/8).
-      if (host.streaming()) return true;
-      for (const { cloud } of host.clouds().values()) {
+      // Dispatch on the abstract `availableColorModes()` for streaming, exactly
+      // as hasClassification does — COPC PDRF 6/7/8 carry intensity but an
+      // arbitrary EPT may have no Intensity dimension, and the EPT source
+      // already reports that. `return true` here lit the Intensity exporter for
+      // an intensity-less EPT, whose recolor then silently failed (E9).
+      const streaming = host.streaming();
+      if (streaming) {
+        return streaming.cloud.availableColorModes().includes('intensity');
+      }
+      for (const { cloud } of visibleEntries()) {
         if (cloud.intensity) return true;
       }
       return false;
@@ -147,7 +312,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) {
         return streaming.cloud.availableColorModes().includes('classification');
       }
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.classification) return true;
       }
       return false;
@@ -159,7 +324,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (host.streaming()) return null;
       let total = 0;
       let assigned = 0;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (!cloud.classification) continue;
         const { producer } = classificationCoverage(cloud.classification, cloud.pointCount);
         total += cloud.pointCount;
@@ -173,7 +338,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // emit Normal X/Y/Z attrs). Static loaders (PCD, PTX, GLTF)
       // sometimes do — check the field explicitly.
       if (host.streaming()) return false;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         if (cloud.normals) return true;
       }
       return false;
@@ -205,7 +370,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     sourceName(): string {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.name;
-      const first = host.clouds().values().next().value;
+      const first = visibleEntries()[0];
       return first?.cloud.name ?? 'scan';
     },
     sourcePointCount(): number {
@@ -216,7 +381,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // Summing the strided `pointCount` under-reported "Points" and inflated
       // the export card's density divisor disagreement with every other panel.
       let total = 0;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         total += cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount
           ? cloud.declaredPointCount
           : cloud.pointCount;
@@ -226,14 +391,28 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     residentPointCount(): number {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.residentPointCount;
-      // Static clouds: every loaded point is resident.
-      return this.sourcePointCount();
+      // The ACTUALLY-loaded points, not sourcePointCount() — that back-scales to
+      // the file's declared total, so a strided load (declared 100M, resident
+      // 5M) reported 100M resident (E8). Sum the real per-cloud pointCount,
+      // matching Viewer.residentPointTotal().
+      let total = 0;
+      for (const { cloud } of visibleEntries()) total += cloud.pointCount;
+      return total;
     },
     crsLabel(): { name: string; unit: string; epsg?: number } | null {
       // read off the abstract `cloud.crs()` so both COPC and
       // EPT surface consistently. COPC pulls from the LAS VLRs the
       // header parser walked; EPT pulls from `ept.json`'s `srs.wkt`.
       // Static clouds carry CRS through `CloudMetadata.crs`.
+      // Streaming: the RESOLVED active CRS (override applied) via the wired
+      // accessor, so a COPC/EPT scan's export report names the CRS the user chose
+      // rather than the file's declared one, and a Local/unknown resolution yields
+      // a null name (no CRS row) instead of the rejected declaration. Falls back to
+      // the source `crs()` only when no accessor is wired (pure-adapter tests).
+      if (host.streaming() && host.resolvedActiveCrs) {
+        const rc = host.resolvedActiveCrs();
+        return rc.name ? { name: rc.name, unit: rc.unit ?? 'units', epsg: rc.epsg ?? undefined } : null;
+      }
       const fromStreaming = host.streaming()?.cloud.crs();
       if (fromStreaming) {
         return {
@@ -242,14 +421,15 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           epsg: fromStreaming.epsg,
         };
       }
-      for (const { cloud } of host.clouds().values()) {
-        const crs = cloud.metadata?.crs;
-        if (crs) {
-          return {
-            name: crs.name,
-            unit: linearUnitLabel(crs.linearUnit),
-            epsg: crs.epsg,
-          };
+      // Static clouds: the RESOLVED CRS (override applied) via the wired resolver,
+      // so the export report's CRS name and scale-bar unit match the .prj rather
+      // than the rejected declared CRS (1C). A local resolution yields a null name
+      // and is skipped — a local scan reports no CRS, not the rejected one. Falls
+      // back to declared metadata only when no resolver is wired (pure tests).
+      for (const { cloud } of visibleEntries()) {
+        const rc = host.resolveCloudCrs ? host.resolveCloudCrs(cloud) : metadataCrsKeyWkt(cloud);
+        if (rc.name) {
+          return { name: rc.name, unit: rc.unit ?? 'units', epsg: rc.epsg ?? undefined };
         }
       }
       return null;
@@ -268,7 +448,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
           );
           return { label: f.label, confidence: f.confidence };
         }
-        const first = host.clouds().values().next().value;
+        const first = visibleEntries()[0];
         if (first) {
           const f = classifyProvenance(
             signalsForStaticCloud(first.cloud as never),
@@ -295,12 +475,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (streaming) {
         return streaming.cloud.localBounds();
       }
-      // Fold every static cloud's bounds into a combined AABB.
+      // Fold every VISIBLE static cloud's bounds into a combined AABB, each
+      // shifted by its Float64 placement so a mounted layer contributes the
+      // extent it actually RENDERS at (pass-7 #5). Reading raw cloud.bounds()
+      // framed the top-down export camera on the unplaced source-local box, so
+      // a layer mounted +1000 away was cropped out of its own export.
       let minX = Infinity, minY = Infinity, minZ = Infinity;
       let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
       let any = false;
-      for (const { cloud } of host.clouds().values()) {
-        const bb = cloud.bounds();
+      for (const { cloud, placement } of visibleEntries()) {
+        const bb = placeAabb(cloud.bounds(), placement);
         any = true;
         if (bb.min[0] < minX) minX = bb.min[0];
         if (bb.min[1] < minY) minY = bb.min[1];
@@ -321,19 +505,33 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       const streaming = host.streaming();
       if (streaming) {
         const origin = streaming.cloud.renderOrigin;
+        // The RESOLVED active WKT (override applied) drives the streaming `.prj` /
+        // world file, so a rejected/Local CRS never lands a false frame on the
+        // ortho (C10, now for streaming too). Falls back to the source WKT only
+        // when no resolver is wired (pure-adapter tests).
+        const wkt = host.resolvedActiveCrs
+          ? host.resolvedActiveCrs().wkt
+          : (streaming.cloud.crs()?.wkt ?? null);
         return {
           worldOrigin: origin ? { x: origin[0], y: origin[1] } : null,
-          wkt: streaming.cloud.crs()?.wkt ?? null,
+          wkt,
         };
       }
       // Static path: only assert a single, unambiguous frame. With several
       // clouds loaded the per-cloud origins can differ — a world file in
       // one cloud's frame would silently misplace the others, so we only
-      // georeference when every loaded cloud shares the SAME origin.
+      // georeference when every loaded cloud shares the SAME origin AND the
+      // SAME declared CRS. Sharing an origin is not sharing a coordinate
+      // system: two layers on the same local grid but declaring different
+      // EPSG codes would otherwise pass, and the ortho's .prj would stamp the
+      // first cloud's CRS over the whole combined raster (pass-5 C9). A stable
+      // key per cloud — EPSG when declared, else the display name — mirrors
+      // layerCompatibility.horizontalKey; a conflict refuses the georeference.
       let worldOrigin: { x: number; y: number } | null = null;
       let wkt: string | null = null;
+      let crsKey: string | null = null;
       let any = false;
-      for (const { cloud } of host.clouds().values()) {
+      for (const { cloud } of visibleEntries()) {
         any = true;
         const o = cloud.sourceOrigin;
         if (!o) return null;
@@ -342,7 +540,26 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
         } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
           return null; // conflicting frames — honestly not georeferenceable
         }
-        wkt ??= cloud.metadata?.crs?.wkt ?? null;
+        // The RESOLVED CRS (CRS authority, override applied) when the host wires
+        // a resolver — so a user who rejected the file's declared CRS (chose
+        // Local, or a different one) can never have the rejected CRS stamped into
+        // the .prj (pass-5 C10). A local resolution yields a null wkt AND a null
+        // key; it still PARTICIPATES in conflict detection under a sentinel key,
+        // because a visible local/unknown layer beside a projected one is a
+        // genuine conflict — the user declared its pixels are NOT in the projected
+        // frame, so stamping that frame's .prj over the combined raster would
+        // misgeoreference them (pass-6 C10). An all-local scene shares the
+        // sentinel with no wkt, so it still refuses to georeference rather than
+        // being falsely flagged as a conflict. When no resolver is wired (the
+        // pure-adapter tests) we fall back to the file's declared metadata — the
+        // same source-declared provenance as before.
+        const rc = host.resolveCloudCrs
+          ? host.resolveCloudCrs(cloud)
+          : metadataCrsKeyWkt(cloud);
+        const conflictKey = rc.key ?? LOCAL_CRS_SENTINEL;
+        if (crsKey === null) crsKey = conflictKey;
+        else if (crsKey !== conflictKey) return null; // conflicting CRS — not georeferenceable
+        wkt ??= rc.wkt;
       }
       return any ? { worldOrigin, wkt } : null;
     },

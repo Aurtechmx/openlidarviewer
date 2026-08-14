@@ -62,6 +62,20 @@ export function yUpOriginToCanonicalZUp(
 }
 
 /**
+ * The world origin in the frame the terrain exporters place — canonical Z-up
+ * when the source was Y-up (so a rotated surface is georeferenced correctly),
+ * unchanged for a Z-up source. `null` passes through.
+ */
+export function placedWorldOrigin(
+  origin: readonly [number, number, number] | null | undefined,
+  sourceUpAxis: 'z' | 'y' | undefined,
+): [number, number, number] | null {
+  if (!origin) return null;
+  const triple: [number, number, number] = [origin[0], origin[1], origin[2]];
+  return sourceUpAxis === 'y' ? yUpOriginToCanonicalZUp(triple) : triple;
+}
+
+/**
  * The exact inverse: express a canonical Z-up position in the Y-up scene frame,
  * `(x, y, z) → (x, z, −y)`.
  *

@@ -1,0 +1,5 @@
+# Reference environment for the MEAS-AREA cross-implementation study
+# tool: GDAL/OGR (ogrinfo), OGR_GEOM_AREA planar area
+GDAL 3.13.1 "Iowa City", released 2026/06/01
+platform: Darwin arm64
+executable: /opt/homebrew/bin/ogrinfo

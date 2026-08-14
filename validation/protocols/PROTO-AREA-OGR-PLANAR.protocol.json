@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-AREA-OGR-PLANAR",
+  "example": false,
+  "title": "Planar polygon area against GDAL/OGR OGR_GEOM_AREA over a committed polygon fixture",
+  "question": "On a committed set of planar polygons, does this project’s Newell/shoelace polygon area agree with GDAL/OGR’s OGR_GEOM_AREA within the preregistered 1e-6 m² tolerance?",
+  "recordWrittenOn": "2026-08-13",
+  "referenceTool": "GDAL",
+  "referenceVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+  "claims": [
+    {
+      "claimId": "MEAS-AREA",
+      "datasetIds": [
+        "OLV-DS-030-AREA-POLYGONS"
+      ],
+      "parameterSetIds": [
+        "PS-AREA-OGR-PLANAR"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.000001,
+        "toleranceUnit": "square-metre",
+        "minimumComparableCells": 6,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "1e-6 m² is coarse against the ~1e-9 m² the two double-precision implementations actually reach on these coordinates (kept at or below O(1e3) so an absolute area gate is faithful rather than a float-scale artefact), yet far tighter than any real area-formula error: a missing one-half, a dropped shoelace term, or an unsigned-winding mistake each move a polygon’s area by O(1) or more. The minimum of 6 comparable polygons is below the 8 the fixture supplies, so a couple of skips still leave a conclusion while a handful of coincidental matches cannot pass.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-13",
+        "witnessCommit": "6b70f18bfb446019f08ae9e8510ea55b3d8f4997",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at 6b70f18b reads { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'pending' } while MEAS-AREA is still at E3 in docs/validation/claim-register.yaml; the study manifest and the E4 promotion do not exist until the next commit. git show 6b70f18b:src/validation/crossCheck.ts shows the pending slot.",
+        "resultLandedOn": "2026-08-13"
+      }
+    }
+  ],
+  "decisionRule": "Compute this project’s polygonAreaPlanar (half the Newell-normal magnitude) on each fixture polygon lifted to z=0 and compare it to GDAL/OGR OGR_GEOM_AREA on the same polygon. Recorded as agree when the comparable-polygon count reaches minimumComparableCells and every one is within toleranceAbs; anything short is partial or disagree with the numbers behind it. The tolerance is not to be widened, the polygons are not to be curved or scaled up to inflate a float residual into a looser-looking number, and the two area sets are not to be reconciled onto each other. A closed-form area is carried per polygon so the comparison is a triangle — ours vs closed form, OGR vs closed form, ours vs OGR — and only the last is cross-implementation evidence.",
+  "notes": [
+    "Planar polygons are used deliberately: OGR_GEOM_AREA is a planar (2-D) area and polygonAreaPlanar reduces to the same shoelace sum on a coplanar z=0 ring, so the tolerance measures cross-implementation agreement and not a projection difference. A non-convex L polygon exercises the signed-area cancellation both implementations must get right.",
+    "Agreement with OGR on exact analytic polygons is not survey-grade area accuracy, and these polygons are not a measured scene. Everything this protocol establishes stops at the E4 boundary; E5 needs an independent field measurement of a real area.",
+    "This protocol governs the planar-polygon area comparison only; height, distance, angle and profile are out of its scope."
+  ],
+  "digest": "sha256:c162ffc5b65e994b35b757d562500f6858e79528e10afd62c275f0cf2c8a2a07"
+}

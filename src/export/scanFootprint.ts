@@ -72,6 +72,15 @@ export interface FootprintCrs {
 export type FootprintExtentBasis = 'the resident points' | 'the declared header extent';
 
 /**
+ * What the exported ring actually traces. A `bounding rectangle` is the extent's
+ * four corners; a `point-cloud outline` is the convex hull of the resident
+ * points, a tighter and truer boundary. The word travels into the file so a
+ * reader is never left to guess whether the polygon is the real edge of the
+ * scan or a box drawn around it.
+ */
+export type FootprintShape = 'bounding rectangle' | 'point-cloud outline';
+
+/**
  * Why this scan may NOT be published as a footprint, or null when it may.
  *
  * Fail-closed in three steps, each with its own reason so the user knows what
@@ -172,6 +181,140 @@ export function footprintRectangleRing(extent: FootprintExtent): FootprintRing {
     [minX, maxY],
     [minX, minY],
   ];
+}
+
+/**
+ * The convex hull of the scan's resident points on the horizontal plane, as a
+ * closed, counter-clockwise ring — the tighter outline the module header set
+ * aside in v1 because a rectangle needed no point scan.
+ *
+ * `positions` is the interleaved local `xyz` buffer the loader already holds; X
+ * and Y are the horizontal pair, so this is Z-up only and the caller gates the
+ * up-axis exactly as the rectangle path does (a Y-up hull would trace a vertical
+ * slice, the same wrong answer `footprintUpAxisRefusal` refuses). Z is ignored.
+ *
+ * A full sort of every point would be wasteful on a multi-million-point cloud
+ * whose hull is a handful of vertices, so the interior is pruned first
+ * (Akl-Toussaint): the eight axis- and diagonal-extreme points bound an octagon,
+ * every point strictly inside it cannot be on the hull and is dropped in one
+ * linear pass. Andrew's monotone chain then runs on the survivors alone.
+ *
+ * Refused, not collapsed, when the points span no area: fewer than three, all
+ * coincident, or all collinear give a line or a dot, and a line published as a
+ * polygon is the same false area claim `footprintRectangleRing` refuses a
+ * degenerate extent for.
+ */
+export function footprintConvexHullRing(positions: Float32Array): FootprintRing {
+  const n = Math.floor(positions.length / 3);
+  if (n < 3) {
+    throw new ScanFootprintError(
+      'The scan has fewer than three points, so it has no outline to trace.',
+    );
+  }
+  // Pass 1: the eight extreme points that bound the Akl-Toussaint octagon.
+  // minX, maxX, minY, maxY, and the four diagonal extremes of x±y.
+  let iMinX = 0, iMaxX = 0, iMinY = 0, iMaxY = 0;
+  let iMinSum = 0, iMaxSum = 0, iMinDiff = 0, iMaxDiff = 0;
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new ScanFootprintError(
+        'A scan point has a coordinate that is not a number, so no outline can be traced from it.',
+      );
+    }
+    if (x < positions[iMinX * 3]) iMinX = i;
+    if (x > positions[iMaxX * 3]) iMaxX = i;
+    if (y < positions[iMinY * 3 + 1]) iMinY = i;
+    if (y > positions[iMaxY * 3 + 1]) iMaxY = i;
+    const sum = x + y;
+    const diff = x - y;
+    if (sum < positions[iMinSum * 3] + positions[iMinSum * 3 + 1]) iMinSum = i;
+    if (sum > positions[iMaxSum * 3] + positions[iMaxSum * 3 + 1]) iMaxSum = i;
+    if (diff < positions[iMinDiff * 3] - positions[iMinDiff * 3 + 1]) iMinDiff = i;
+    if (diff > positions[iMaxDiff * 3] - positions[iMaxDiff * 3 + 1]) iMaxDiff = i;
+  }
+  // Counter-clockwise around the octagon by vertex angle: maxX (0°), maxSum
+  // (45°), maxY (90°), minDiff (135°), minX (180°), minSum (225°), minY (270°),
+  // maxDiff (315°). The order matters: `pointStrictlyInside` walks these as the
+  // edges of a convex polygon, so a scrambled order would test a self-crossing
+  // star and could prune a real hull vertex.
+  const octIdx = [iMaxX, iMaxSum, iMaxY, iMinDiff, iMinX, iMinSum, iMinY, iMaxDiff];
+  const oct: Point[] = octIdx.map((i) => [positions[i * 3], positions[i * 3 + 1]]);
+  // Pass 2: keep the octagon vertices and every point NOT strictly inside it
+  // (`pointStrictlyInside` returns false on the boundary, so edge points are
+  // kept). No dedup: duplicates are harmless — `monotoneChainRing`'s sort and
+  // its `cross <= 0` pop collapse coincident points — so a per-point string Set
+  // would only add allocation, which matters on ring-shaped clouds where almost
+  // every point survives the prune.
+  const survivors: Point[] = oct.slice();
+  for (let i = 0; i < n; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    if (!pointStrictlyInside(oct, x, y)) survivors.push([x, y]);
+  }
+  return monotoneChainRing(survivors);
+}
+
+/** A horizontal point, `[x, y]`, in the scan's local frame. */
+type Point = readonly [number, number];
+
+/** Cross product of OA×OB — >0 is a left turn (counter-clockwise). */
+function cross(o: Point, a: Point, b: Point): number {
+  return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+}
+
+/**
+ * Whether `(x, y)` is STRICTLY inside the convex polygon `poly` (given
+ * counter-clockwise). A point on the boundary returns false, so the pruning
+ * pass that calls this keeps boundary points as hull candidates.
+ */
+function pointStrictlyInside(poly: readonly Point[], x: number, y: number): boolean {
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i];
+    const b = poly[(i + 1) % poly.length];
+    // <=0 means the point is on or to the right of this CCW edge: not inside.
+    if ((b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]) <= 0) return false;
+  }
+  return true;
+}
+
+/**
+ * Andrew's monotone chain over a small candidate set, returned as a closed,
+ * counter-clockwise KML ring. Throws when the survivors span no area.
+ */
+function monotoneChainRing(points: Point[]): FootprintRing {
+  const pts = points.slice().sort((p, q) => (p[0] - q[0]) || (p[1] - q[1]));
+  if (pts.length < 3) {
+    throw new ScanFootprintError(
+      'The scan\'s points are coincident, so they enclose no area to outline.',
+    );
+  }
+  const lower: Point[] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+  const upper: Point[] = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  // Drop each chain's last point: it is the first point of the other chain.
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  if (hull.length < 3) {
+    throw new ScanFootprintError(
+      'The scan\'s points are collinear, so they enclose no area to outline.',
+    );
+  }
+  const ring = hull.map(([x, y]) => [x, y] as const);
+  ring.push(ring[0]); // close the ring: first vertex repeated as last
+  return ring;
 }
 
 /**

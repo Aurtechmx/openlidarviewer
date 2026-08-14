@@ -20,6 +20,7 @@ import {
   compareSpatialFrames,
   declaredFrameLabel,
   epochFrameOptions,
+  epochVerticalScalesComparable,
 } from '../src/geo/frameCompatibility';
 
 const US_SURVEY_FOOT = 1200 / 3937;
@@ -207,5 +208,33 @@ describe('epochFrameOptions', () => {
     const o = epochFrameOptions(footStatePlane(), metreUtm());
     expect(o.horizontalUnitToMetres).toBeCloseTo(US_SURVEY_FOOT, 12);
     expect(o.horizontalUnitKnown).toBe(true); // both units ARE known, they just differ
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Epoch vertical comparability (C6): refuse metre-vs-foot Z differencing
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('epochVerticalScalesComparable', () => {
+  const withVertical = (verticalUnitToMetres: number) =>
+    spatialContextFrom(
+      crs({ verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalUnitToMetres }),
+    );
+
+  it('permits two epochs with the SAME known vertical scale (metres)', () => {
+    expect(epochVerticalScalesComparable(withVertical(1), withVertical(1))).toBe(true);
+  });
+
+  it('REFUSES a metre epoch differenced against a foot epoch', () => {
+    expect(epochVerticalScalesComparable(withVertical(1), withVertical(0.3048))).toBe(false);
+    // order-independent
+    expect(epochVerticalScalesComparable(withVertical(0.3048), withVertical(1))).toBe(false);
+  });
+
+  it('permits when either vertical scale is unknown (no evidence of a mismatch)', () => {
+    // A plain UTM context carries no known vertical scale.
+    expect(epochVerticalScalesComparable(metreUtm(), withVertical(1))).toBe(true);
+    expect(epochVerticalScalesComparable(withVertical(0.3048), metreUtm())).toBe(true);
+    expect(epochVerticalScalesComparable(metreUtm(), metreUtm())).toBe(true);
   });
 });
