@@ -9,8 +9,13 @@
  * keeps only the wiring.
  */
 
+import proj4 from 'proj4';
+
 import { utmConverter } from '../geo/UtmConverter';
+import { epsgToProj4 } from '../convert/epsg';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+
+const WGS84_LONLAT = '+proj=longlat +datum=WGS84 +no_defs';
 
 /**
  * Raised when a point cannot be expressed in longitude/latitude. The KML
@@ -60,18 +65,54 @@ export function makeLocalToLonLat(
     return (p) => [p[0] + ox, p[1] + oy, p[2] + oz];
   }
   if (resolved.kind === 'projected') {
+    // Fast path: the vendored UTM converter handles USGS/international UTM zones
+    // without proj4's general machinery.
     const probe = utmConverter.toGeographic({ x: ox, y: oy, z: oz }, resolved);
-    if (!probe.ok) return null;
+    if (probe.ok) {
+      return (p) => {
+        const r = utmConverter.toGeographic(
+          { x: p[0] + ox, y: p[1] + oy, z: p[2] + oz },
+          resolved,
+        );
+        if (!r.ok) throw new LonLatConversionError(r.reason);
+        // Source Z, deliberately UNCONVERTED and deliberately not called an
+        // altitude. The converter's `elevation` is the same value passed back
+        // out, so preferring it only made the passthrough harder to see.
+        return [r.value.lon, r.value.lat, p[2] + oz];
+      };
+    }
+    // General path: any projected CRS with a proj4 definition (national grids
+    // like S-JTSK/Krovák, Lambert, Albers). It DECLINES — never approximates —
+    // when no definition exists, so the export stays gated rather than writing
+    // an easting into a KML <coordinates> element as if it were a longitude.
+    // The horizontal axes are reprojected; source Z passes through unconverted,
+    // the same contract as the UTM path above.
+    const def = resolved.epsg != null ? epsgToProj4(resolved.epsg) : null;
+    if (!def) return null;
+    const toWgs84 = proj4(def, WGS84_LONLAT);
+    let originOk = false;
+    try {
+      const o = toWgs84.forward([ox, oy]);
+      originOk = Number.isFinite(o[0]) && Number.isFinite(o[1]);
+    } catch {
+      originOk = false;
+    }
+    if (!originOk) return null;
     return (p) => {
-      const r = utmConverter.toGeographic(
-        { x: p[0] + ox, y: p[1] + oy, z: p[2] + oz },
-        resolved,
-      );
-      if (!r.ok) throw new LonLatConversionError(r.reason);
-      // Source Z, deliberately UNCONVERTED and deliberately not called an
-      // altitude. The converter's `elevation` is the same value passed back
-      // out, so preferring it only made the passthrough harder to see.
-      return [r.value.lon, r.value.lat, p[2] + oz];
+      let out: number[];
+      try {
+        out = toWgs84.forward([p[0] + ox, p[1] + oy]);
+      } catch (e) {
+        throw new LonLatConversionError(
+          `EPSG:${resolved.epsg} point could not be reprojected to lon/lat: ${(e as Error).message}`,
+        );
+      }
+      if (!Number.isFinite(out[0]) || !Number.isFinite(out[1])) {
+        throw new LonLatConversionError(
+          `EPSG:${resolved.epsg} reprojected to a non-finite lon/lat`,
+        );
+      }
+      return [out[0], out[1], p[2] + oz];
     };
   }
   return null;

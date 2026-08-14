@@ -49,6 +49,24 @@ describe('makeLocalToLonLat', () => {
     ).toBeNull();
   });
 
+  it('reprojects a non-UTM projected CRS (Krovák / EPSG:5514) via proj4 instead of declining', () => {
+    // The scanner-comparison scans (Zenodo 15421291) are EPSG:5514. The UTM probe
+    // fails, so the general proj4 path takes over and produces real Czech degrees
+    // rather than declining. Origin is a surveyed reference point; [0,0,0] maps to
+    // its WGS84 lon/lat (authoritative PROJ: 14.38782, 50.14594).
+    const krovak: ResolvedCrs = {
+      ...utm12,
+      name: 'S-JTSK / Krovák East-North',
+      epsg: 5514,
+    };
+    const map = makeLocalToLonLat(krovak, [-744290.00006112, -1036243.5094764, 307]);
+    expect(map).not.toBeNull();
+    const [lon, lat, z] = map!([0, 0, 0]);
+    expect(lon).toBeCloseTo(14.38782, 4);
+    expect(lat).toBeCloseTo(50.14594, 4);
+    expect(z).toBe(307); // source Z passes through unconverted
+  });
+
   it('passes a geographic frame through with the origin restored', () => {
     const map = makeLocalToLonLat(geographic, [-111, 40, 1500]);
     expect(map).not.toBeNull();
