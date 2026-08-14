@@ -734,6 +734,14 @@ export class ExportPanel {
     // was never part of the request. `scanId` is the identity re-verified below.
     const clip = this._cb.getActiveClip?.() ?? null;
     const scanId = this._cb.getActiveScanId?.() ?? null;
+    // Snapshot the resolved source CRS with the other request inputs, so the
+    // whole export — the converted data, its metadata, and the ASCII `.prj`
+    // sidecar — describes ONE frame even if the user changes the CRS picker
+    // mid-decode. `resolvedCrsGetter === undefined` means no resolver is wired
+    // (legacy/pure caller → declared-metadata fallback); a wired getter returning
+    // `null` is an explicit Local/no-CRS resolution and must NOT fall back to A.
+    const resolvedCrsGetter = this._cb.getResolvedSourceCrs;
+    const resolvedSourceCrs = resolvedCrsGetter ? resolvedCrsGetter() : undefined;
 
     this._busy = true;
     this._exportBtn.disabled = true;
@@ -780,7 +788,9 @@ export class ExportPanel {
         // declared metadata.crs is provenance only, so a rejected/local override
         // never tags or reprojects the output (blocker #2D). undefined when the
         // host wires no resolver, which keeps the detected-metadata fallback.
-        resolvedSourceCrs: this._cb.getResolvedSourceCrs?.(),
+        // The request-time snapshot (not a fresh call) keeps the whole export
+        // on one frame.
+        resolvedSourceCrs,
         omitClassification: !this._includeClass,
       };
       const { file, report } = convertCloud(cloud, options);
@@ -789,10 +799,17 @@ export class ExportPanel {
         const wantGzip = this._gzip && (this._format === 'las' || this._format === 'las14');
         const out = wantGzip ? await gzipConvertedFile(file, true) : file;
         downloadBytes(out.filename, out.bytes, out.mime);
-        // ASCII keep-mode: also emit a `.prj` sidecar with the source WKT.
-        const wkt = cloud.metadata?.crs?.wkt;
-        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && wkt) {
-          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(wkt), 'text/plain');
+        // ASCII keep-mode: also emit a `.prj` sidecar. It carries the RESOLVED
+        // WKT from the same request-time snapshot the converted data used, so the
+        // sidecar and the data can never name different frames. A wired resolver
+        // returning null (Local/no-CRS) yields no `.prj`, never the rejected
+        // source WKT; only an unwired resolver falls back to declared metadata.
+        const activeWkt =
+          resolvedCrsGetter !== undefined
+            ? (resolvedSourceCrs?.wkt ?? null)
+            : (cloud.metadata?.crs?.wkt ?? null);
+        if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && activeWkt) {
+          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }
         const warn = report.log.find((l) => l.level === 'warn');
         const reducedNote = !useFull && this._cb.isReduced() ? ' · reduced view' : '';
