@@ -116,7 +116,7 @@ export function createInspectorCardRefreshers(
    * file's declared `metadata.crs` / streaming `crs()`. Omitted by the pure
    * factory tests, which fall back to the cloud's declared CRS — byte-identical
    * for a same-unit no-override scan, and fail-closed for an unknown unit either
-   * way (QW7).
+   * way.
    */
   resolvedCrs?: () =>
     | { readonly linearUnit?: string; readonly linearUnitToMetres?: number; readonly verticalUnitToMetres?: number }

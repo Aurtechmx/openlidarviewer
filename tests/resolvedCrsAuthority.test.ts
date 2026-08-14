@@ -1,6 +1,6 @@
 /**
  * resolvedCrsAuthority.test.ts — semantic regression guard for the CRS-authority
- * boundary (QW10). Every ACTIVE computation/output surface must read the RESOLVED
+ * boundary. Every ACTIVE computation/output surface must read the RESOLVED
  * CRS, never the source-declared one; the source may appear only as labelled
  * provenance. `lint:spatial-context` proves a consumer ROUTES through a context,
  * but not that the context is the resolved one — these cases pin the resolved-
@@ -71,7 +71,7 @@ describe('resolvedExportCrs — the shared authority rule', () => {
   });
 });
 
-describe('streaming Visual Export adapter — resolved authority (QW2)', () => {
+describe('streaming Visual Export adapter — resolved authority', () => {
   it('Case A: label + .prj WKT come from the resolved override B, not the declared source A', () => {
     const a = buildExportAdapter(streamingHost(RESOLVED_B));
     expect(a.crsLabel!()).toEqual({ name: 'State Plane (B, override)', unit: expect.any(String), epsg: 2225 });
@@ -96,7 +96,7 @@ describe('streaming Visual Export adapter — resolved authority (QW2)', () => {
   });
 });
 
-describe('Scan Report unit basis — resolved context (QW7)', () => {
+describe('Scan Report unit basis — resolved context', () => {
   const clod = {
     pointCount: 1000,
     declaredPointCount: 1000,

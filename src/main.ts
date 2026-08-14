@@ -557,7 +557,7 @@ const viewerLoaded: Promise<Viewer> = (async () => {
       crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
-  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS (QW2)
+  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
   return viewer;
 })();
 
@@ -2956,7 +2956,7 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
-    const rc = resolvedExportCrs(crsService.current()); // panel==writer CRS label (QW4)
+    const rc = resolvedExportCrs(crsService.current()); // panel==writer CRS label
     if (scans.activeId != null) {
       const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
@@ -4193,7 +4193,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
  */
 function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override (QW7)
+  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override
   for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
 }

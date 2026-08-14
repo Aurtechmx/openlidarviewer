@@ -122,7 +122,7 @@ export async function runBatch(
       // mirroring convertCloud's source-CRS pick: a wired resolver is
       // authoritative — a Local / rejected override yields a null WKT and thus NO
       // sidecar, never the file's declared WKT. The pure path (resolvedSourceCrs
-      // undefined) keeps the source WKT, byte-identical to before (QW3).
+      // undefined) keeps the source WKT, byte-identical to before.
       const wkt =
         options.resolvedSourceCrs !== undefined
           ? (options.resolvedSourceCrs?.wkt ?? null)
