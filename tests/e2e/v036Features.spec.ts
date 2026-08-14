@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { dropTinyPly } from './helpers';
-import { isBenignBrowserError } from './pageErrorGuard';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * tests/e2e/v036Features.spec.ts
@@ -134,7 +134,7 @@ test('clicking the Reset button re-frames the camera', async ({ page }) => {
   // The click is a pure UI action with no toast. The contract under test
   // is that pressing it does NOT throw a page-level error.
   let pageError: Error | null = null;
-  page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) pageError = e; });
+  page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) pageError = e; });
   await reset.click();
   await page.waitForTimeout(300);
   expect(pageError).toBeNull();

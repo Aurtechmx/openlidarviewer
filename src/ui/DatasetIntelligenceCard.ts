@@ -21,7 +21,7 @@
  * `src/terrain/datasetIntelligence.ts`. The card just renders.
  */
 
-import { el } from './dom';
+import { el, formatCount } from './dom';
 import {
   summariseDataset,
   signalTier,
@@ -72,10 +72,10 @@ export class DatasetIntelligenceCard {
   /** The summary currently on display — see the `current` getter. */
   private _current: DatasetIntelligence | null = null;
 
-  constructor() {
+  constructor(onOpenStory?: () => void) {
     // v0.3.10 a11y patch #375 — the five card rows and the Details
-    // disclosure are semantic term/definition pairs ("Point Density"
-    // → "Dense", "Terrain Complexity" → "Moderate", etc.). Marking
+    // disclosure are semantic term/definition pairs ("Volumetric point
+    // density" → "Dense", "Terrain Complexity" → "Moderate", etc.). Marking
     // them up with `<dl>/<dt>/<dd>` lets screen readers announce them
     // as definition lists instead of unstructured spans of text.
     // The `<div class="olv-di-row">` wrapper between `<dl>` and the
@@ -114,11 +114,11 @@ export class DatasetIntelligenceCard {
     // visible clutter to the panel.
     this._rows = el('dl', { className: 'olv-di-rows' }, [
       this._row(
-        'Point Density',
+        'Volumetric point density',
         this._densityValue,
-        'Points per cubic metre, derived from the loader-declared point ' +
-          'count and the bounding-box volume. Bucket label: sparse / ' +
-          'moderate / dense / very dense.',
+        'Points per cubic metre (pts/m³), derived from the loader-declared point ' +
+          'count and the bounding-box volume — not areal pts/m². Bucket label: ' +
+          'sparse / moderate / dense / very dense.',
       ),
       this._row(
         'Terrain Complexity',
@@ -177,11 +177,25 @@ export class DatasetIntelligenceCard {
       this._details,
     ]);
 
+    const title = el('div', { className: 'olv-panel-title olv-di-title', text: 'Dataset Intelligence' });
+    // A visible route to the Dataset Story (otherwise only in the ⌘K palette /
+    // shortcut sheet). Reuses the existing modal via the injected opener — no
+    // second inference path.
+    if (onOpenStory) {
+      const storyBtn = el('button', {
+        className: 'olv-di-story-link',
+        text: 'Dataset overview',
+        ariaLabel: 'Open Dataset Story',
+      }) as HTMLButtonElement;
+      storyBtn.type = 'button';
+      storyBtn.addEventListener('click', () => onOpenStory());
+      title.append(storyBtn);
+    }
     this.element = el('section', {
       className: 'olv-section olv-di-card olv-hidden',
       ariaLabel: 'Dataset Intelligence',
     }, [
-      el('div', { className: 'olv-panel-title olv-di-title', text: 'Dataset Intelligence' }),
+      title,
       this._body,
       this._empty,
     ]);
@@ -296,7 +310,7 @@ export class DatasetIntelligenceCard {
   /** Re-render the Details disclosure block. */
   private _renderDetails(intel: DatasetIntelligence): void {
     const formatPoints = (n: number | null): string =>
-      n === null || !Number.isFinite(n) ? '—' : compactPointCount(n);
+      n === null || !Number.isFinite(n) ? '—' : formatCount(n);
     const rows = [
       this._detailRow('Coverage', intel.details.coverageMode),
       this._detailRow('Source Points', formatPoints(intel.details.sourcePointCount)),
@@ -327,9 +341,3 @@ export class DatasetIntelligenceCard {
   }
 }
 
-/** "1.2M" / "680K" / "342" formatting for point counts in Details. */
-function compactPointCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(Math.round(n));
-}

@@ -78,7 +78,18 @@ export function convertCloud(
 
   function run(): { file: ConvertedFile | null; report: ConvertReport } {
   const mode = opts.crsMode ?? 'keep';
-  const sourceEpsg = cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null;
+  // The RESOLVED source CRS (CrsService), when the caller supplies it, is the
+  // authority — it honours any user override, so `cloud.metadata.crs` stays
+  // source-declared PROVENANCE only. Given a resolved value we never consult
+  // metadata, so a rejected or local override can't resurrect the file's declared
+  // CRS into the output tag or a reprojection (blocker #2D). `undefined` means no
+  // resolver is in play (the pure module's own callers / tests), which falls back
+  // to the detected metadata exactly as before — a byte-identical no-override path.
+  const resolvedProvided = opts.resolvedSourceCrs !== undefined;
+  const sourceCrs = resolvedProvided ? opts.resolvedSourceCrs : (cloud.metadata?.crs ?? null);
+  const sourceEpsg = resolvedProvided
+    ? (opts.resolvedSourceCrs?.epsg ?? opts.sourceEpsg ?? null)
+    : (cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null);
   let g = cloudToGlobal(cloud);
   // Every output format here reads Z as elevation (LAS by spec; the ASCII
   // writers by the same convention), which is wrong for the Y-up mesh formats:
@@ -150,7 +161,7 @@ export function convertCloud(
     // TransformProvenance carries the realization-preserving datum name and the
     // source coordinate epoch. Hints affect only the metadata, never the
     // reprojected coordinates.
-    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs: cloud.metadata?.crs ?? null });
+    const r = reprojectGlobal(g, sourceEpsg, opts.targetEpsg, { sourceCrs });
     g = r.points;
     // Provenance is present on every reproject outcome (applied / approximate /
     // skipped) — keep it for the report instead of discarding it.
@@ -195,18 +206,20 @@ export function convertCloud(
 
   let bytes: Uint8Array;
   if (opts.format === 'las' || opts.format === 'las14') {
-    const srcCrs = cloud.metadata?.crs;
-    // ONE spatial context for the written file: the horizontal unit code, the
-    // vertical datum code and the vertical unit code below all come off it, so
-    // a LAS the reader trusts cannot be tagged with a unit the export did not
-    // use. `srcCrs` survives only for the raw WKT payload, which the context
-    // deliberately does not model.
-    const srcCtx = spatialContextFrom(srcCrs);
+    // ONE spatial context for the written file, from the RESOLVED source CRS
+    // (`sourceCrs`, override applied) — never the declared `cloud.metadata.crs`.
+    // The horizontal unit code, the vertical datum code and the vertical unit
+    // code below all come off it, so a LAS the reader trusts is tagged with the
+    // CRS the user resolved, not a resolved EPSG beside the declared units/WKT
+    // (blocker 2). A local resolution carries no unit facts, so the output is
+    // untagged rather than restoring the rejected CRS.
+    const srcCtx = spatialContextFrom(sourceCrs);
     // LAS 1.4 wants the CRS as OGC WKT for point formats 6+. A real WKT only
     // exists when the source carried one AND nothing changed (keep mode) —
     // after assign/reproject the source WKT would describe the wrong CRS,
-    // so those modes fall back to a GeoKey tag built from the EPSG.
-    const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (srcCrs?.wkt ?? null) : null;
+    // so those modes fall back to a GeoKey tag built from the EPSG. The WKT is
+    // the RESOLVED source CRS's, matching the EPSG the same object supplied.
+    const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (sourceCrs?.wkt ?? null) : null;
     // Falling back to a WKT derived from the OUTPUT code covers the modes the
     // source WKT cannot: after assign or reproject the source WKT describes
     // the wrong CRS, but a derived one describes outEpsg by construction. It
@@ -228,7 +241,7 @@ export function convertCloud(
     let linearUnitCode: number | null;
     if (mode === 'reproject' && reprojectApplied) {
       linearUnitCode = 9001;
-    } else if ((mode === 'keep' || mode === 'reproject') && srcCrs) {
+    } else if ((mode === 'keep' || mode === 'reproject') && sourceCrs) {
       linearUnitCode = unitToGeoTiff(srcCtx.linearUnit);
     } else {
       linearUnitCode = null;
@@ -238,7 +251,7 @@ export function convertCloud(
     // (the GeoTIFF convention that vertical tracks the model's units), never
     // the OUTPUT horizontal. Reprojecting a foot-height file to metre eastings
     // used to relabel its unchanged Z as metres.
-    const verticalUnitCode = srcCrs
+    const verticalUnitCode = sourceCrs
       ? unitToGeoTiff(srcCtx.verticalLinearUnit ?? srcCtx.linearUnit)
       : null;
     if (opts.format === 'las14') {
@@ -287,7 +300,7 @@ export function convertCloud(
   } else {
     const text =
       opts.format === 'asc'
-        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: cloud.metadata?.crs?.name ?? null, geographic: geo, datumNote })
+        ? writeAsc(g, { precision: opts.asciiPrecision, epsg: outEpsg, crsName: sourceCrs?.name ?? null, geographic: geo, datumNote })
         : writeXyz(g, opts.asciiPrecision ?? 3, geo, datumNote);
     bytes = new TextEncoder().encode(text);
   }

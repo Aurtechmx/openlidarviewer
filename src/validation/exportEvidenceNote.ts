@@ -54,6 +54,23 @@ export function isExploratoryExport(claimId: string): boolean {
  */
 export type EvidenceStatus = 'validated' | 'exploratory' | 'refused';
 
+/**
+ * A caveat for a measurement product whose linear scale is UNVERIFIED — a scan
+ * with no known CRS unit, where the render-space geometry is real but its metre
+ * labelling is a guess (the factor is an inert 1). Appended to the product's
+ * evidence note so a length in the file never silently asserts metres it can't
+ * back (pass-6 M1). Empty when the scale is known, so a georeferenced export is
+ * byte-identical to before.
+ */
+export function unverifiedUnitsCaveat(unitsVerified: boolean): string {
+  if (unitsVerified) return '';
+  return (
+    ' Units unverified: this scan has no known CRS scale, so lengths, areas and ' +
+    'volumes are in the source render units — treat the metre labels as nominal, ' +
+    'not confirmed metres.'
+  );
+}
+
 export function evidenceStatus(claimId: string): EvidenceStatus {
   const d = exportGate(claimId);
   if (d.exploratoryOnly) return 'exploratory';

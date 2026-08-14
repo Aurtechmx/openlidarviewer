@@ -66,7 +66,7 @@ beforeAll(async () => {
 /** The product row for a given label, if present. */
 function productRow(panel: InstanceType<typeof ProcessStudioPanel>, label: string): FakeEl | undefined {
   const root = panel.element as unknown as FakeEl;
-  return root.collect('olv-ps-product').find((li) => li.collect('olv-ps-product-name').some((s) => s.textContent === label));
+  return root.collect('olv-ps-product').find((li) => li.collect('olv-ps-name').some((s) => s.textContent === label));
 }
 function badgeText(row: FakeEl): string {
   return row.collect('olv-ps-badge')[0]?.textContent ?? '';

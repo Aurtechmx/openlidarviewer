@@ -15,13 +15,41 @@
 /** The six axis-aligned standard views the gizmo can snap to. */
 export type StandardView = 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right';
 
-/** Clickable compass faces, in render order around the rose (N at top). */
-export const COMPASS_FACES: readonly { readonly view: StandardView; readonly label: string }[] = [
-  { view: 'back', label: 'N' },
-  { view: 'right', label: 'E' },
-  { view: 'front', label: 'S' },
-  { view: 'left', label: 'W' },
+/** Where a face sits around the rose. */
+export type CompassFacePosition = 'top' | 'right' | 'bottom' | 'left';
+
+/**
+ * A clickable rose face. It carries TWO labels because the rose is only a true
+ * geographic compass when the scan's orientation is geographically known:
+ *
+ *   - `geo` (N/E/S/W) is shown ONLY when the active scan has a known geographic
+ *     frame (a projected or geographic CRS). Then the cardinals are meaningful.
+ *   - `local` (B/R/F/L) is the truthful fallback for a local / unknown-CRS scan.
+ *     The rose's directions are derived from the scan's own axes, not from any
+ *     coordinate system (`Viewer._horizontalAxis` is a synthetic worldUp-cross,
+ *     with no CRS input), so calling them North/East for a local scan would
+ *     assert geography the data does not carry. The faces still snap to the same
+ *     Back/Right/Front/Left standard views — that is what B/R/F/L name.
+ */
+export interface CompassFace {
+  readonly view: StandardView;
+  readonly position: CompassFacePosition;
+  readonly geo: string;
+  readonly local: string;
+}
+
+/** Clickable compass faces, in render order around the rose (top face first). */
+export const COMPASS_FACES: readonly CompassFace[] = [
+  { view: 'back', position: 'top', geo: 'N', local: 'B' },
+  { view: 'right', position: 'right', geo: 'E', local: 'R' },
+  { view: 'front', position: 'bottom', geo: 'S', local: 'F' },
+  { view: 'left', position: 'left', geo: 'W', local: 'L' },
 ];
+
+/** The label a face shows: geographic cardinal when known, else truthful local. */
+export function compassFaceLabel(face: CompassFace, geographic: boolean): string {
+  return geographic ? face.geo : face.local;
+}
 
 /**
  * Camera heading around the world up axis, in degrees [0, 360), from the

@@ -27,6 +27,8 @@ import {
 } from '../model/layerCompatibility';
 import { loadLayerHealth } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsInfo } from '../io/crs';
 import type { AppContext } from './appContext';
 import type { ProjectFrameService, ProjectFrameLayer } from './projectFrame';
 
@@ -41,6 +43,14 @@ export interface LayerServiceDeps {
   refreshCompass: () => void;
   /** The project's shared spatial frame, reseeded on every layer-set change. */
   projectFrame: ProjectFrameService;
+  /**
+   * Resolve a layer's authoritative CRS — the loader's detected CRS combined
+   * with any user override — so multi-layer compatibility / mount / project-frame
+   * decisions run on the SAME CRS the Inspector shows, not raw file metadata
+   * (C8). Wired to `crsService.resolveFor`; per-cloud and non-mutating, so every
+   * layer resolves independently regardless of which scan is active.
+   */
+  resolveCrs: (name: string, detected: CrsInfo | null | undefined) => ResolvedCrs;
   /**
    * Override {@link MULTI_LAYER_MOUNT_ENABLED}. Exists so both states stay
    * under test: the mount is disabled by default in v0.6.0, and its behaviour
@@ -76,24 +86,35 @@ export const REBASE_QUANTUM_BUDGET_M = 0.001;
 /**
  * Whether layers are physically rebased onto a shared project origin.
  *
- * DISABLED pending the multi-layer per-layer-frame fixes. The mount mechanism
- * is a Float64 placement transform (`Viewer.setLayerPlacement`), not a rewrite
- * of the position array: the source vertices never move, rendering places the
- * mesh by its transform, each layer's CPU work reads its own source-local frame
- * (per-cloud origin), and combined estimators run only across `verified`
- * layers. But a non-anchor mounted layer still corrupts data — lasso reclassify
- * edits the wrong points, and session and measurement export write the wrong
- * coordinates — because those paths do not yet read each layer's own frame.
- * Until that per-layer-frame model lands, mounting stays off, which keeps the
- * three v0.6.3 truth docs accurate and the corruption unreachable.
+ * ENABLED in v0.6.5. The mount mechanism is a Float64 placement transform
+ * (`Viewer.setLayerPlacement`), not a rewrite of the position array: the source
+ * vertices never move (`tests/sourceGeometryImmutable.test.ts`), rendering
+ * places the mesh by its transform, each layer's CPU work reads its own
+ * source-local frame (per-cloud origin), and combined estimators run only across
+ * `verified` layers. The per-layer-frame fixes that previously blocked the flag
+ * have landed: the world coordinate is recovered per boundary in the frame each
+ * one names — picking/inspection through `cloud.worldXYZ(index)` (not the placed
+ * point), reclassify and the project-frame estimators through the
+ * `layerPlacement` fold, and the exporters through each cloud's own
+ * `sourceOrigin` (`exportGeoContext`). The invariant that a mount never moves the
+ * world coordinate a boundary computes is pinned under a non-identity placement
+ * by `tests/frameWorldCoords.test.ts`, and the browser mount is exercised by
+ * `tests/e2e/twoScanMount.spec.ts` (real separation, source untouched,
+ * add/remove no-move).
  *
- * The precision gate above still refuses a placement it cannot represent, and
- * an unaligned or foreign-CRS layer carries no placement and stays in its own
+ * One item remains a precision refinement, not a correctness defect: for
+ * far-apart mounts the renderer's mesh position should fold `− renderOrigin` on
+ * the CPU per mesh to keep the Float32 GPU residual small. It is bounded and
+ * refused past 1 mm by the `mountPrecision` gate below (`PointCloud.rebaseQuantum`;
+ * geographic frames refused outright), so a placement that would lose a
+ * millimetre never mounts.
+ *
+ * An unaligned or foreign-CRS layer carries no placement and stays in its own
  * frame, so `mounted: false` still makes the combined estimators refuse rather
  * than average unlike frames. Single-layer work is unaffected: a lone layer's
  * placement is the identity.
  */
-export const MULTI_LAYER_MOUNT_ENABLED = false;
+export const MULTI_LAYER_MOUNT_ENABLED = true;
 
 /**
  * What a mount would cost this layer, expressed in metres — or null when that
@@ -156,20 +177,30 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     const viewer = getViewer();
     return viewer.clouds().map((id) => {
       const c = viewer.getCloud(id);
-      const crs = c?.metadata?.crs ?? null;
+      // Resolve through the service (detected + override), not raw metadata, so
+      // a CRS the user corrected in the Inspector drives layer compatibility /
+      // mount / project-frame decisions too (C8).
+      const crs = deps.resolveCrs(c?.name ?? id, c?.metadata?.crs);
+      // A genuinely-unknown resolved CRS (no detection, no override) must carry
+      // the same "nothing declared" shape a raw null used to — undefined name /
+      // unit / geographic — so the compatibility classifier still reads it as
+      // `unknown` and not a declared-but-incompatible frame. A real override
+      // lands as projected/geographic/local, so overrides still flow through.
+      const known = crs.kind !== 'unknown';
       return {
         id,
         name: c?.name ?? id,
         pointCount: c?.pointCount ?? 0,
         visible: layers.visible.get(id) ?? true,
         locked: viewer.isCloudLocked(id),
-        epsg: crs?.epsg,
-        crsName: crs?.name,
-        verticalDatum: crs?.verticalDatum,
-        verticalEpsg: crs?.verticalEpsg,
-        isGeographic: crs?.isGeographic,
-        linearUnitToMetres: crs?.linearUnitToMetres,
-        verticalUnitToMetres: crs?.verticalUnitToMetres,
+        epsg: crs.epsg,
+        crsName: known ? crs.name : undefined,
+        verticalDatum: crs.verticalDatum,
+        verticalEpsg: crs.verticalEpsg,
+        // ResolvedCrs carries `kind`, not the CrsInfo `isGeographic` flag.
+        isGeographic: known ? crs.kind === 'geographic' : undefined,
+        linearUnitToMetres: known ? crs.linearUnitToMetres : undefined,
+        verticalUnitToMetres: crs.verticalUnitToMetres,
       };
     });
   }
@@ -355,7 +386,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
       const frame2 = deps.projectFrame.frame;
       const healthLayers = infos.map((info) => {
         const c = viewer2.getCloud(info.id);
-        const crs = c?.metadata?.crs ?? null;
+        // Same resolved CRS the compatibility flags above used (C8) — the health
+        // card must not report the raw file CRS the user already overrode.
+        const crs = deps.resolveCrs(c?.name ?? info.id, c?.metadata?.crs);
         const inFrame =
           frame2 != null && !lastUnmounted.includes(info.id) &&
           !deps.projectFrame.unaligned.includes(info.id);

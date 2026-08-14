@@ -24,7 +24,7 @@ import {
 } from '../render/measure/reportManifest';
 import type { HashFn } from '../render/measure/auditLog';
 import { exportGate } from '../validation/evidenceRegistry';
-import { evidenceNote, evidenceStatus, type EvidenceStatus } from '../validation/exportEvidenceNote';
+import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat, type EvidenceStatus } from '../validation/exportEvidenceNote';
 
 /**
  * The claim the integrity report stands on (§19). REPORT-DIGEST is the tamper-
@@ -166,6 +166,12 @@ export function integrityReportFile(
   generatedAt: string,
   classificationEpoch: number,
   software?: string,
+  /**
+   * True when the scan's linear scale is KNOWN. False for a local / unknown-unit
+   * cloud, where the findings' `m` / `m²` labels are nominal — the evidence note
+   * then carries the units caveat (pass-6 M1). Defaults true (unchanged callers).
+   */
+  unitsVerified: boolean = true,
   claimId: string = INTEGRITY_REPORT_CLAIM,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
@@ -185,7 +191,7 @@ export function integrityReportFile(
   return {
     filename: `${datasetId}-report.json`,
     text: JSON.stringify(manifest, null, 2),
-    evidence: evidenceNote(claimId),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified),
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };

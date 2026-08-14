@@ -393,6 +393,9 @@ export class MeasureController {
   private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   /** The handle being dragged: a measurement id and vertex index. */
   private _drag: { id: string; vi: number } | null = null;
+  /** Overlay rect captured at drag start — fixed for the drag, so it isn't
+   *  re-read (a forced reflow) on every pointermove. */
+  private _dragRect: DOMRect | null = null;
   private _dragNdcX = 0;
   private _dragNdcY = 0;
   private _dragDirty = false;
@@ -815,7 +818,11 @@ export class MeasureController {
    * geographic refusal spares heights and angles.
    */
   private static readonly VERTICAL_MISMATCH_KINDS: ReadonlySet<MeasurementKind> =
-    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile']);
+    // `angle` is included: a 3D angle is invariant only under UNIFORM scaling,
+    // so when the height unit differs from the horizontal unit the raw-coordinate
+    // angle mixes the two axes and is physically wrong (pass-6 M3). Height, box
+    // and volume are exactly rescaled by the vertical factor and stay out.
+    new Set<MeasurementKind>(['distance', 'polyline', 'area', 'slope', 'profile', 'angle']);
 
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the
@@ -823,6 +830,16 @@ export class MeasureController {
    * is 1 for BOTH a metric CRS and a CRS-less cloud, so the factor alone can't
    * tell a georeferenced metre survey from an ungeoreferenced one.
    */
+  /**
+   * True when the scan's linear scale is KNOWN (a resolved CRS unit), so a
+   * measurement's `_m` value genuinely means metres. False for a local /
+   * unknown-unit cloud, where `unitToMetres` is an inert 1 — the export path
+   * reads this to caveat its metre labels (pass-6 M1).
+   */
+  get crsKnown(): boolean {
+    return this._crsKnown;
+  }
+
   setCrsKnown(known: boolean): void {
     if (known === this._crsKnown) return;
     this._crsKnown = known;
@@ -1562,11 +1579,13 @@ export class MeasureController {
       residentOnly: m.volumeResidentOnly === true || m.profileChartResidentOnly === true,
       // Geographic (degree) frame: the refusal applies to every kind whose
       // NUMBER mixes degree X/Y with linear Z — lengths, areas, grades,
-      // profiles, boxes, volumes. Pure-vertical heights (Δ along up, in the
-      // Z unit) and unit-free angles keep their ordinary grade; the panel's
-      // persistent caveat still covers them.
+      // profiles, boxes, volumes, AND angles. Only a pure-vertical height (Δ
+      // along up, in the Z unit) keeps its ordinary grade. A 3D angle is NOT
+      // unit-free unless the axes share a scale: it is invariant under UNIFORM
+      // scaling only, so an arm mixing degree horizontal with linear vertical
+      // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
       geographicCrs:
-        this._geographicCrs && m.kind !== 'height' && m.kind !== 'angle',
+        this._geographicCrs && m.kind !== 'height',
       // Compound CRS (height unit ≠ horizontal unit): refuse the kinds whose
       // number mixes the two axes. Heights, boxes and volumes are exactly
       // rescaled by the vertical factor, so they keep their ordinary grade.
@@ -1600,6 +1619,7 @@ export class MeasureController {
     if (mid === null || viAttr === null) return;
     e.preventDefault();
     this._drag = { id: mid, vi: Number(viAttr) };
+    this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
     window.addEventListener('pointermove', this._onDragMove);
     window.addEventListener('pointerup', this._onDragUp);
@@ -1608,7 +1628,9 @@ export class MeasureController {
   /** Track the drag pointer; the actual re-pick is coalesced into `render`. */
   private _handleDragMove(e: PointerEvent): void {
     if (!this._drag) return;
-    const rect = this._draw.element.getBoundingClientRect();
+    // Reuse the rect captured at drag start; re-reading per pointermove forces a
+    // synchronous reflow. Fall back if it was somehow not captured.
+    const rect = this._dragRect ?? this._draw.element.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
     this._dragNdcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     this._dragNdcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -1633,6 +1655,7 @@ export class MeasureController {
     if (!this._drag) return;
     const draggedId = this._drag.id;
     this._drag = null;
+    this._dragRect = null;
     this._dragDirty = false;
     window.removeEventListener('pointermove', this._onDragMove);
     window.removeEventListener('pointerup', this._onDragUp);

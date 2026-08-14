@@ -328,8 +328,9 @@ export async function importSession(
       } else if (staticCloud) {
         loadedFacts = scanFactsFromStatic(staticCloud);
       }
+      let match: ScanMatch | undefined;
       if (loadedFacts) {
-        const match = matchSessionToScan(session.scanSummary, loadedFacts);
+        match = matchSessionToScan(session.scanSummary, loadedFacts);
         if (match.verdict === 'conflict') {
           const why = match.reasons[0] ?? 'its scan fingerprint does not match';
           const want = session.scanSummary?.fileName;
@@ -370,13 +371,34 @@ export async function importSession(
         { upAxis: session.upAxis, epsg: session.crs?.epsg, linearUnit: session.crs?.linearUnit },
         declaredSpatial,
       );
+      // A persisted EXPLICIT user CRS override on a STRONGLY matched same scan is
+      // the one case where a source-vs-session CRS (and its horizontal unit)
+      // difference is EXPECTED, not corruption: the picker exists precisely so a
+      // user can correct a file's declared CRS, and exportSession stores that
+      // choice to round-trip it without re-prompting. Recognise it narrowly —
+      // strong identity, an explicit user-override the user confirmed, and a
+      // structurally usable override (local, or projected/geographic with a
+      // finite EPSG) — and let a crs/unit conflict through. An UP-AXIS conflict is
+      // a different, harder failure (a CRS picker never rotates geometry) and is
+      // NEVER waved through; every other case keeps the existing hard refusal.
+      const persistedOverride =
+        match?.verdict === 'strong' &&
+        !!session.crs &&
+        session.crs.userConfirmed === true &&
+        session.crs.source === 'user-override' &&
+        (session.crs.kind === 'local' ||
+          ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
+            Number.isFinite(session.crs.epsg)));
       if (spatial.hasConflict) {
-        const why = spatial.conflicts.map((c) => c.reason).join('; ');
-        deps.showToast(
-          `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
-            `The scan's own frame is kept; load the session on its own scan to restore it.`,
-        );
-        return;
+        const axisConflict = spatial.conflicts.some((c) => c.field === 'axis');
+        if (!(persistedOverride && !axisConflict)) {
+          const why = spatial.conflicts.map((c) => c.reason).join('; ');
+          deps.showToast(
+            `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
+              `The scan's own frame is kept; load the session on its own scan to restore it.`,
+          );
+          return;
+        }
       }
     }
     const geo = haveCloud
@@ -402,6 +424,39 @@ export async function importSession(
       deps.showToast('Session not applied — the active scan changed while it was importing.');
       return;
     }
+    // Commit the author's CRS override HERE — after every preflight and the
+    // active-scan guard, but BEFORE any state that derives physical units is
+    // hydrated — so measurements/reporting never render under source CRS A and
+    // then flip to B. The frame was already validated (or waved through as an
+    // explicit persisted override) in the preflight, so a divergent up-axis has
+    // already refused. A projected/geographic override needs its EPSG; a local
+    // override is epsg-less by definition (the old `epsg != null` gate dropped a
+    // saved "Local coordinates" choice, so it never round-tripped — C4); an
+    // unknown CRS still leaves the file's own. The override is restored through
+    // CrsService.setOverride() by KIND + EPSG only: the service canonicalises the
+    // resolved CRS, so a hand-edited session cannot install arbitrary serialized
+    // WKT/unit as trusted state. `detected` is the ACTIVE scan's own declared CRS
+    // — the streaming source's `crs()` when streaming, so compound/vertical
+    // metadata reconstruction is not lost to `undefined`.
+    if (
+      session.crs &&
+      (session.crs.kind === 'local' ||
+        ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
+          session.crs.epsg != null))
+    ) {
+      const activeStreaming = viewer.streamingCloud;
+      const activeStaticId = deps.getActiveScanId();
+      deps.setCrsOverride({
+        override: { epsg: session.crs.epsg ?? null, kind: session.crs.kind },
+        detected: activeStreaming
+          ? activeStreaming.crs() ?? undefined
+          : activeStaticId
+            ? viewer.getCloud(activeStaticId)?.metadata?.crs ?? undefined
+            : undefined,
+        source: 'user-override',
+      });
+    }
+
     // Import-side ownership resolution (#22). Work restored from a session must
     // carry the identity of the layer it belongs to among whatever is open now,
     // not the saved file's layer id. `matchSessionToScan` above already refused
@@ -459,24 +514,6 @@ export async function importSession(
       clip: geo.clip,
       camera: geo.camera,
     });
-    // Roadmap P1 #5 — the spatial FRAME was already validated in the preflight
-    // above (a divergent up-axis / unit / CRS refuses the whole restore before
-    // any state is attached), so reaching here means the session's frame agrees
-    // with the file's, or no cloud is loaded for it to disagree with. Restore the
-    // author's CRS override so an Evidence Capsule round-trips without
-    // re-prompting; a session that declared no usable CRS leaves the file's own.
-    if (
-      session.crs?.epsg != null &&
-      (session.crs.kind === 'projected' || session.crs.kind === 'geographic' || session.crs.kind === 'local')
-    ) {
-      deps.setCrsOverride({
-        override: { epsg: session.crs.epsg, kind: session.crs.kind },
-        detected: deps.getActiveScanId()
-          ? viewer.getCloud(deps.getActiveScanId()!)?.metadata?.crs ?? undefined
-          : undefined,
-        source: 'user-override',
-      });
-    }
 
     // Honest disclosure: the session carries the saved analysis, not the scan
     // itself (a point cloud can't travel in the file). If its scan isn't

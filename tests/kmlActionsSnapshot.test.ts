@@ -52,6 +52,7 @@ describe('exportSiteKml — one reading of the session, then the write', () => {
       worldUp: () => [0, 0, 1] as [number, number, number],
       unitToMetres: () => unitToMetres,
       scanExtent: () => null,
+      scanHullPositions: () => null,
       baseName: (n: string) => n.replace(/\.[^.]+$/, ''),
       downloadText: (filename: string) => { written.push(filename); },
       setError: () => { /* not expected here */ },

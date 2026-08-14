@@ -4,12 +4,6 @@ Reference images used in the README and documentation. The files live in
 `docs/screenshots/`. They are captured from the running app, then resized and
 saved as compressed JPEGs so they stay light in the repository.
 
-## openlidarviewer-promo.jpg
-
-The promotional banner at the top of the README — the project name, the
-one-line pitch, a viewer screenshot, and a side-by-side comparison against
-traditional desktop LiDAR tools. A designed graphic rather than a raw capture.
-
 ## openlidarviewer-main.jpg
 
 The main viewer: a 9.6M-point drone LiDAR survey, height-colored, with the

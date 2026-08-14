@@ -55,6 +55,10 @@ function stubAdapter(opts: {
   return {
     setExportColorMode: () => {},
     currentColorMode: () => 'rgb',
+    snapshotColorModes: () => ({ staticModes: new Map(), streamingMode: null }),
+    restoreColorModes: () => {},
+    excludeUnsupported: () => [],
+    restoreVisibility: () => {},
     hasRgb: () => opts.hasRgb ?? true,
     hasIntensity: () => opts.hasIntensity ?? false,
     hasClassification: () => opts.hasClassification ?? false,

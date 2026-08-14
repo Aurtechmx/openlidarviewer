@@ -1,16 +1,16 @@
 /**
- * pageErrorGuard.test.ts — the benign-browser-error allowlist stays tight.
+ * pageErrors.test.ts — the benign-browser-error allowlist stays tight.
  * A real app error must never be filtered; the known-benign ResizeObserver
  * notification must be.
  */
 
 import { describe, it, expect } from 'vitest';
-import { isBenignBrowserError } from './e2e/pageErrorGuard';
+import { isBenignPageError } from './e2e/pageErrors';
 
-describe('isBenignBrowserError', () => {
+describe('isBenignPageError', () => {
   it('filters the benign ResizeObserver notifications (both spellings)', () => {
-    expect(isBenignBrowserError('ResizeObserver loop completed with undelivered notifications.')).toBe(true);
-    expect(isBenignBrowserError('ResizeObserver loop limit exceeded')).toBe(true);
+    expect(isBenignPageError('ResizeObserver loop completed with undelivered notifications.')).toBe(true);
+    expect(isBenignPageError('ResizeObserver loop limit exceeded')).toBe(true);
   });
 
   it('never filters a real application error', () => {
@@ -21,7 +21,7 @@ describe('isBenignBrowserError', () => {
       'ReferenceError: viewer is not defined',
       '', // empty message is not benign
     ]) {
-      expect(isBenignBrowserError(real)).toBe(false);
+      expect(isBenignPageError(real)).toBe(false);
     }
   });
 });

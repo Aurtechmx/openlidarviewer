@@ -22,6 +22,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   footprintRectangleRing,
+  footprintConvexHullRing,
   footprintCrsRefusal,
   footprintLonLatRing,
   footprintAntimeridianRefusal,
@@ -166,6 +167,81 @@ describe('footprintRectangleRing', () => {
   it('refuses a non-finite extent', () => {
     expect(() => footprintRectangleRing({ minX: 0, minY: 0, maxX: NaN, maxY: 8 }))
       .toThrow(ScanFootprintError);
+  });
+});
+
+/** Build an interleaved local xyz buffer from `[x, y]` pairs (z is arbitrary). */
+function xyz(pairs: readonly (readonly [number, number])[]): Float32Array {
+  const out = new Float32Array(pairs.length * 3);
+  pairs.forEach(([x, y], i) => {
+    out[i * 3] = x; out[i * 3 + 1] = y; out[i * 3 + 2] = 42; // z ignored
+  });
+  return out;
+}
+
+/** Is `[x, y]` a vertex of `ring` (to float tolerance)? */
+function ringHas(ring: readonly (readonly [number, number])[], x: number, y: number): boolean {
+  return ring.some(([rx, ry]) => Math.abs(rx - x) < 1e-6 && Math.abs(ry - y) < 1e-6);
+}
+
+describe('footprintConvexHullRing', () => {
+  it('traces the hull, dropping interior points, and closes counter-clockwise', () => {
+    // A unit square with a point in the middle: the centre must not survive.
+    const ring = footprintConvexHullRing(xyz([[0, 0], [10, 0], [10, 10], [0, 10], [5, 5]]));
+    expect(ring[0]).toEqual(ring[ring.length - 1]); // closed
+    expect(signedArea2(ring)).toBeGreaterThan(0); // CCW
+    for (const [x, y] of [[0, 0], [10, 0], [10, 10], [0, 10]]) {
+      expect(ringHas(ring, x, y)).toBe(true);
+    }
+    expect(ringHas(ring, 5, 5)).toBe(false);
+  });
+
+  it('is a tighter outline than the bounding rectangle for a diagonal spread', () => {
+    // A diamond: its hull is the four tips; the bounding rectangle would add the
+    // four empty corners, so the hull encloses exactly half the rectangle's area.
+    const hull = footprintConvexHullRing(xyz([[5, 0], [10, 5], [5, 10], [0, 5]]));
+    const rect = footprintRectangleRing({ minX: 0, minY: 0, maxX: 10, maxY: 10 });
+    expect(signedArea2(hull)).toBeLessThan(signedArea2(rect));
+  });
+
+  it('refuses fewer than three points', () => {
+    expect(() => footprintConvexHullRing(xyz([[0, 0], [1, 1]]))).toThrow(ScanFootprintError);
+  });
+
+  it('refuses collinear points: a line is not an area', () => {
+    expect(() => footprintConvexHullRing(xyz([[0, 0], [1, 1], [2, 2], [3, 3]])))
+      .toThrow(ScanFootprintError);
+  });
+
+  it('refuses coincident points', () => {
+    expect(() => footprintConvexHullRing(xyz([[7, 7], [7, 7], [7, 7]])))
+      .toThrow(ScanFootprintError);
+  });
+
+  it('refuses a non-finite coordinate rather than tracing a bad hull', () => {
+    expect(() => footprintConvexHullRing(xyz([[0, 0], [10, 0], [NaN, 10], [0, 10]])))
+      .toThrow(ScanFootprintError);
+  });
+
+  it('keeps every hull vertex that is not an axis/diagonal extreme', () => {
+    // A regular 16-gon: its vertices at 22.5°, 67.5°, … are genuine hull corners
+    // but NOT among the eight extremes the Akl-Toussaint octagon captures, so
+    // they only survive if the pruning octagon is a real convex polygon (a
+    // scrambled vertex order would test a self-crossing star and drop some).
+    const verts: [number, number][] = [];
+    for (let k = 0; k < 16; k++) {
+      const a = (k * Math.PI) / 8;
+      verts.push([1000 + 1000 * Math.cos(a), 1000 + 1000 * Math.sin(a)]);
+    }
+    // Dense interior filler so pruning has real work and can misfire.
+    const filler: [number, number][] = [];
+    for (let gx = 700; gx <= 1300; gx += 100) {
+      for (let gy = 700; gy <= 1300; gy += 100) filler.push([gx, gy]);
+    }
+    const ring = footprintConvexHullRing(xyz([...verts, ...filler]));
+    const near = (x: number, y: number) =>
+      ring.some(([rx, ry]) => Math.abs(rx - x) < 1 && Math.abs(ry - y) < 1);
+    for (const [x, y] of verts) expect(near(x, y)).toBe(true);
   });
 });
 

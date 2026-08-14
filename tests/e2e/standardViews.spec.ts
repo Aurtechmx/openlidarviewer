@@ -1,10 +1,10 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { dropTinyPly } from './helpers';
-import { isBenignBrowserError } from './pageErrorGuard';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * v0.4.6 standard axis-aligned views (Top / Bottom / Front / Back / Left /
- * Right) and the near-orthographic ("parallel") projection toggle.
+ * Right) and the orthographic ("parallel") projection toggle.
  *
  * The view geometry is covered by cameraPresets.test.ts (standardViewPose +
  * STANDARD_VIEW_ORDER unit tests). This spec pins the DOM + handler wiring: the
@@ -50,9 +50,9 @@ test.describe('standard views — NavBar "Views" row', () => {
     page,
   }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
+    page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
+      if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);
@@ -69,9 +69,9 @@ test.describe('standard views — NavBar "Views" row', () => {
 test.describe('orthographic toggle', () => {
   test('the Ortho chip toggles aria-pressed and toasts both states', async ({ page }) => {
     const errors: string[] = [];
-    page.on('pageerror', (e) => { if (!isBenignBrowserError(e.message)) errors.push(e.message); });
+    page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(e.message); });
     page.on('console', (m) => {
-      if (m.type() === 'error' && !isBenignBrowserError(m.text())) errors.push(m.text());
+      if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
     });
 
     await loadSample(page);

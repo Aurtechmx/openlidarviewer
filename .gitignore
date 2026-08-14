@@ -157,3 +157,7 @@ __pycache__/
 
 # Brainstorming companion mockups — local only.
 .superpowers/
+
+# Coconino validation tile cache (multi-GB USGS LAZ, re-fetchable via the ingest script)
+_coconino_tiles/
+coconino-next-*-tiles.csv

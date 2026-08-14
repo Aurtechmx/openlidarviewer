@@ -138,7 +138,7 @@ describe('exportGeoContext — active-scan frame resolution', () => {
     expect(geo.name).toBe('site.las');
   });
 
-  it('falls back to the static cloud source metadata name when the resolved CRS is local', () => {
+  it('reports local/unknown honestly when resolved to local — never the rejected source name (1B)', () => {
     const geo = exportGeoContext(
       makeDeps({
         activeId: 'a',
@@ -146,8 +146,10 @@ describe('exportGeoContext — active-scan frame resolution', () => {
         resolvedCrs: crs('local', 'Local coordinates (no CRS)'),
       }),
     );
-    // effectiveCrsName is undefined for a local CRS, so the source metadata name shows.
-    expect(geo.crsName).toBe('declared-in-file');
+    // The user resolved the scan to Local, so the file's declared CRS is rejected.
+    // effectiveCrsName is undefined for a local CRS, and the report must NOT fall
+    // back to the source metadata name — that would resurrect the rejected CRS.
+    expect(geo.crsName).toBeUndefined();
   });
 
   it('resolves the STREAMING renderOrigin when no static cloud is active', () => {

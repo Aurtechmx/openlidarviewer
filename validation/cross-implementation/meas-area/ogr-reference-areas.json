@@ -1,0 +1,46 @@
+{
+  "tool": "GDAL/OGR ogrinfo OGR_GEOM_AREA",
+  "parsedFrom": "ogr-area.txt",
+  "areas": [
+    {
+      "id": "big-square-100",
+      "ogrArea": 10000
+    },
+    {
+      "id": "fractional",
+      "ogrArea": 5.25
+    },
+    {
+      "id": "irrational-triangle",
+      "ogrArea": 22168.4771907918
+    },
+    {
+      "id": "l-shape",
+      "ogrArea": 12
+    },
+    {
+      "id": "offset-rect-50k",
+      "ogrArea": 1000
+    },
+    {
+      "id": "offset-unit-square",
+      "ogrArea": 1
+    },
+    {
+      "id": "rect-2x3",
+      "ogrArea": 6
+    },
+    {
+      "id": "right-triangle-3-4",
+      "ogrArea": 6
+    },
+    {
+      "id": "rotated-square",
+      "ogrArea": 2
+    },
+    {
+      "id": "unit-square",
+      "ogrArea": 1
+    }
+  ]
+}

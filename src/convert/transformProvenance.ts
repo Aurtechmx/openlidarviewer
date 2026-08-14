@@ -70,10 +70,27 @@ export interface TransformProvenance {
   readonly coordinateEpoch?: number | null;
 }
 
-/** Source/target `CrsInfo`, when the caller has them, for realization + epoch. */
+/**
+ * The minimal resolved-CRS facts a transform's PROVENANCE needs: WKT-declared
+ * realization + coordinate epoch (from `wkt`) and the horizontal datum. A full
+ * `CrsInfo` satisfies this, and so does the CRS authority's `ResolvedCrs`, so a
+ * caller can hand over either. `epsg` rides along for callers (e.g. the
+ * converter) that pick the source CRS from the same object.
+ */
+export interface ResolvedSourceCrs {
+  readonly epsg?: number | null;
+  readonly wkt?: string;
+  readonly horizontalDatum?: string;
+}
+
+/** Source/target CRS facts, when the caller has them, for realization + epoch. */
 export interface TransformCrsHints {
-  /** The source CRS — supplies its WKT-declared realization and coordinate epoch. */
-  readonly sourceCrs?: CrsInfo | null;
+  /**
+   * The source CRS — supplies its WKT-declared realization and coordinate epoch.
+   * Widened to {@link ResolvedSourceCrs} so the resolved authority (which is not
+   * a `CrsInfo`) can be passed directly; only `wkt` / `horizontalDatum` are read.
+   */
+  readonly sourceCrs?: ResolvedSourceCrs | null;
   /** The target CRS — supplies its WKT-declared realization when one is known. */
   readonly targetCrs?: CrsInfo | null;
 }

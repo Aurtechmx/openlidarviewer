@@ -33,6 +33,8 @@ const WIDTHS: ReadonlyArray<{ name: string; width: number; height: number }> = [
   { name: 'w375', width: 375, height: 667 },
   { name: 'w767', width: 767, height: 1024 },
   { name: 'w768', width: 768, height: 1024 },
+  { name: 'w1024', width: 1024, height: 768 },
+  { name: 'w1366', width: 1366, height: 768 },
   { name: 'w1440', width: 1440, height: 900 },
 ];
 
