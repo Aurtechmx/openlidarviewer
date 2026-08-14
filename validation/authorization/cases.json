@@ -1,0 +1,129 @@
+{
+  "benchmarkVersion": 3,
+  "description": "Frozen scientific-output authorization adversarial benchmark (A01–A20).",
+  "caseCount": 20,
+  "controlCount": 2,
+  "unsupportedCount": 18,
+  "cases": [
+    {
+      "id": "A01",
+      "title": "forge an authorization object",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A02",
+      "title": "clone a valid authorization object",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A03",
+      "title": "downgrade READY→REVIEW after issuance (re-authorize on the mutated state)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A04",
+      "title": "remove the required ground evidence",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A05",
+      "title": "full coverage → resident-only coverage",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A06",
+      "title": "known units → unknown units (metric product)",
+      "kind": "adversarial",
+      "product": "building-footprints"
+    },
+    {
+      "id": "A07",
+      "title": "compatible vertical reference → missing/incompatible",
+      "kind": "adversarial",
+      "product": "cross-epoch-change"
+    },
+    {
+      "id": "A08",
+      "title": "producer classification provenance → derived/unknown",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A09",
+      "title": "precision authorized → insufficient (adapted: unconfirmed metric unit)",
+      "kind": "adversarial",
+      "product": "contours"
+    },
+    {
+      "id": "A10",
+      "title": "validated export through an unauthorized path",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A11",
+      "title": "use an authorization for the wrong product",
+      "kind": "adversarial",
+      "product": "dsm"
+    },
+    {
+      "id": "A12",
+      "title": "valid control — complete supported state",
+      "kind": "control",
+      "product": "dtm"
+    },
+    {
+      "id": "A13",
+      "title": "authentic token reused after a relevant state revision (classification)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A14",
+      "title": "authentic token reused for another dataset",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A15",
+      "title": "subject completeness full → partial (coverage)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A16",
+      "title": "support completeness complete → incomplete (unit / vertical reference)",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A17",
+      "title": "evidence scope narrowed after authorization (building class removed) — broader dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "building-footprints"
+    },
+    {
+      "id": "A18",
+      "title": "requested claim widened beyond evidence scope (sampled coverage, full-dataset DTM requested) — refused",
+      "kind": "adversarial",
+      "product": "dtm"
+    },
+    {
+      "id": "A19",
+      "title": "supporting evidence removed (one epoch collapses to resident-only) — stronger dependent claim withdrawn",
+      "kind": "adversarial",
+      "product": "cross-epoch-change"
+    },
+    {
+      "id": "A20",
+      "title": "valid state-bound control — token verified against its own unchanged state",
+      "kind": "control",
+      "product": "dtm"
+    }
+  ]
+}
