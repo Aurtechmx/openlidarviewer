@@ -185,7 +185,7 @@ import {
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { ModuleRegistry } from './analysis/ModuleApi';
-import type { AnalysisRow } from './analysis/ModuleApi';
+import type { AnalysisRow, RunOptions } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
 import {
@@ -1519,7 +1519,7 @@ crsService.subscribe((resolved) => {
 // extracted into `src/app/`. They read the lazy `viewer` and the `scans.activeId`
 // selection through getters so no top-level `viewer.*` dereference is
 // introduced here — `viewer` is null until its chunk resolves.
-const inspectorCards = createInspectorCardRefreshers(inspector);
+const inspectorCards = createInspectorCardRefreshers(inspector, () => crsService.context());
 const crsCoordinator = createCrsCoordinator({
   crsService,
   getViewer: () => viewer,
@@ -4200,7 +4200,9 @@ function streamingDebugSample(): StreamingDebugStats | null {
  */
 function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  const options = scope ? { scope } : undefined;
+  // Thread the RESOLVED active spatial context so a module's unit gate honours a
+  // CRS/unit override instead of re-deriving from cloud.metadata.crs (QW7).
+  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) };
   for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
 }

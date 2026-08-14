@@ -1,5 +1,6 @@
 import type { PointCloud } from '../model/PointCloud';
 import type { ClassScope } from '../render/class/classScope';
+import type { SpatialContext } from '../geo/SpatialContext';
 
 export type AnalysisStatus = 'pass' | 'warn' | 'fail' | 'info';
 
@@ -45,6 +46,15 @@ export interface RunOptions {
    * class scoping existed.
    */
   scope?: ClassScope;
+  /**
+   * The RESOLVED active spatial context (`crsService.context()`), threaded from
+   * the composition root so a module's unit gate and metric frame honour a user
+   * CRS/unit override rather than re-deriving them from `cloud.metadata.crs`.
+   * Absent only for pure-module callers/tests, which fall back to the cloud's
+   * declared CRS — byte-identical to before for a same-unit no-override scan.
+   * This changes the SOURCE of unit/frame truth, never a metric formula.
+   */
+  spatialContext?: SpatialContext;
 }
 
 export interface AnalysisModule {
