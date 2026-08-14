@@ -164,13 +164,19 @@ describe('map-sheet PDF — routed through the gate', () => {
     // not survey-grade — that claim stays prohibited in the register.
     expect(MAP_SHEET_CLAIM).toBe('CONTOURS');
     expect(mapSheetEvidenceNote()).toMatch(/validated/i);
-    expect(mapSheetEvidenceLine()).toMatch(/validated export/i);
+    // WI-6: the line names the property validated (contour geometry, cross-
+    // implementation) rather than a generic "validated export".
+    expect(mapSheetEvidenceLine()).toMatch(/geometry validated/i);
+    expect(mapSheetEvidenceLine()).not.toMatch(/validated export/i);
     expect(mapSheetEvidenceLine()).not.toMatch(/exploratory export/i);
   });
 
   it('the note is derived from the gate, not hardcoded (validated for a met claim)', () => {
     expect(mapSheetEvidenceNote('REPORT-DIGEST')).toMatch(/validated export/i);
-    expect(mapSheetEvidenceLine('REPORT-DIGEST')).toMatch(/validated export/i);
+    // A non-contour claim states it meets its required level, without claiming
+    // the contour-geometry cross-implementation property.
+    expect(mapSheetEvidenceLine('REPORT-DIGEST')).toMatch(/validated — meets its required/i);
+    expect(mapSheetEvidenceLine('REPORT-DIGEST')).not.toMatch(/geometry/i);
     // The note matches the central resolver verbatim.
     expect(mapSheetEvidenceNote('CONTOURS')).toBe(evidenceNote('CONTOURS'));
   });

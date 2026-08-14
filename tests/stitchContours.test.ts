@@ -15,6 +15,7 @@ const seg = (x1: number, y1: number, x2: number, y2: number, c = 90): ContourSeg
   y2,
   confidence: c,
   grade: gradeForConfidence(c),
+  provBits: 1,
 });
 
 describe('stitchLevel', () => {

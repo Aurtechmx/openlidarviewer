@@ -31,8 +31,9 @@
 import {
   gradeForConfidence,
   type DtmGrid,
-  type EvidenceGrade,
+  type ContourDisplayGrade,
 } from '../ground/cellConfidence';
+import { provBitsFromCoverage } from './contourSegmentEvidence';
 
 /** One contour segment, in world (CRS) coordinates. */
 export interface ContourSegment {
@@ -42,8 +43,18 @@ export interface ContourSegment {
   readonly y2: number;
   /** 0..100 — the minimum confidence of the cell that produced it. */
   readonly confidence: number;
-  /** Render class derived from `confidence` via the shared grammar. */
-  readonly grade: EvidenceGrade;
+  /**
+   * Contour DISPLAY grade derived from `confidence` (presentation, not
+   * provenance — see {@link ContourDisplayGrade}).
+   */
+  readonly grade: ContourDisplayGrade;
+  /**
+   * Source-provenance bitmask (WI-2): PROV_M=1, PROV_I=2, mixed=3, 0=unknown.
+   * The union of the producing cell's corner coverage states. Carried as a 2-bit
+   * integer so the hot path adds no per-vertex allocation; expanded to a typed
+   * {@link ContourSegmentEvidence} only at serialization. NOT the display grade.
+   */
+  readonly provBits: number;
 }
 
 /** All segments at one elevation level. */
@@ -354,6 +365,9 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
       const zc: [number, number, number, number] = [z[i0], z[i1], z[i2], z[i3]];
       const cellConf = Math.min(confidence[i0], confidence[i1], confidence[i2], confidence[i3]);
       const grade = gradeForConfidence(cellConf);
+      // Source provenance for every segment in this cell: the union of the four
+      // corners' coverage states (measured/interpolated), computed once per cell.
+      const provBits = provBitsFromCoverage(coverage[i0], coverage[i1], coverage[i2], coverage[i3]);
       const p = cornerXY(col, row);
 
       for (let li = 0; li < levelValues.length; li++) {
@@ -379,6 +393,7 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
             y2: b[1],
             confidence: cellConf,
             grade,
+            provBits,
           });
         }
       }

@@ -29,9 +29,10 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { EVIDENCE_THRESHOLDS } from '../ground/cellConfidence';
+import { EVIDENCE_THRESHOLDS, gradeForConfidence } from '../ground/cellConfidence';
 import { chaikinSmooth } from './smoothing';
 import type { ContourPolyline, ContourVertex } from './stitchContours';
+import { unionProvBits } from './contourSegmentEvidence';
 
 /** The contour shape presets the user can pick from. */
 export type ContourShapeStyle =
@@ -180,14 +181,52 @@ function protectedMask(vs: ReadonlyArray<ContourVertex>, floor: number, closed: 
  * Returns a new polyline; the input is not mutated. Polylines with fewer than 3
  * vertices, or a non-positive epsilon, are returned unchanged. Deterministic.
  */
+/** A simplified polyline plus the SOURCE indices it retained (WI-4). */
+export interface SimplifiedPolyline extends ContourPolyline {
+  /**
+   * The source-vertex indices kept, ascending; `retainedIndices.length ===
+   * vertices.length`. Consecutive entries `[a, b]` identify the complete source
+   * interval each output segment represents, so evidence can be derived from the
+   * whole interval rather than only its endpoints.
+   */
+  readonly retainedIndices: number[];
+}
+
+/**
+ * Fold the evidence of the REMOVED interior of a source interval `(prevIdx,
+ * curIdx)` into the retained vertex at `curIdx`: provenance is unioned over the
+ * whole interval and same-meaning support (confidence) takes the interval
+ * minimum, so a simplified segment's evidence describes the complete span it
+ * covers — a removed measured vertex between two interpolated ones still makes
+ * the output mixed, and a removed weak vertex still caps the support. Coordinates
+ * are untouched, so geometry is identical to the un-folded simplification.
+ */
+function foldInterval(
+  vs: readonly ContourVertex[],
+  cur: ContourVertex,
+  prevIdx: number,
+  curIdx: number,
+): ContourVertex {
+  let prov = cur.provBits;
+  let conf = cur.confidence;
+  for (let j = prevIdx + 1; j < curIdx; j++) {
+    prov = unionProvBits(prov, vs[j].provBits);
+    conf = Math.min(conf, vs[j].confidence);
+  }
+  if (prov === cur.provBits && conf === cur.confidence) return cur;
+  return { ...cur, provBits: prov, confidence: conf, grade: gradeForConfidence(conf) };
+}
+
 export function simplifyPolyline(
   poly: ContourPolyline,
   epsilon: number,
   floor: number = EVIDENCE_THRESHOLDS.solid,
-): ContourPolyline {
+): SimplifiedPolyline {
   const vs = poly.vertices;
   const n = vs.length;
-  if (n < 3 || !(epsilon > 0)) return clonePolyline(poly);
+  if (n < 3 || !(epsilon > 0)) {
+    return { ...clonePolyline(poly), retainedIndices: vs.map((_, i) => i) };
+  }
 
   const prot = protectedMask(vs, floor, poly.closed);
 
@@ -203,9 +242,13 @@ export function simplifyPolyline(
       keep[bounds[b + 1]] = true;
       dpMark((i) => vs[i], bounds[b], bounds[b + 1], epsilon, keep);
     }
-    const out: ContourVertex[] = [];
-    for (let i = 0; i < n; i++) if (keep[i]) out.push(vs[i]);
-    return { value: poly.value, vertices: out, closed: false };
+    const retainedIndices: number[] = [];
+    for (let i = 0; i < n; i++) if (keep[i]) retainedIndices.push(i);
+    // Each output segment derives evidence from its COMPLETE source interval.
+    const out: ContourVertex[] = retainedIndices.map((idx, k) =>
+      k === 0 ? vs[idx] : foldInterval(vs, vs[idx], retainedIndices[k - 1], idx),
+    );
+    return { value: poly.value, vertices: out, closed: false, retainedIndices };
   }
 
   // Closed: anchor at index 0, walk the ring 0..n (n is the duplicate of 0), so
@@ -222,9 +265,17 @@ export function simplifyPolyline(
     keep[bounds[b + 1]] = true;
     dpMark(get, bounds[b], bounds[b + 1], epsilon, keep);
   }
-  const out: ContourVertex[] = [];
-  for (let i = 0; i < n; i++) if (keep[i]) out.push(vs[i]); // drop the n duplicate
-  return { value: poly.value, vertices: out, closed: true };
+  const retainedIndices: number[] = [];
+  for (let i = 0; i < n; i++) if (keep[i]) retainedIndices.push(i); // drop the n duplicate
+  const out: ContourVertex[] = retainedIndices.map((idx, k) =>
+    k === 0 ? vs[idx] : foldInterval(vs, vs[idx], retainedIndices[k - 1], idx),
+  );
+  // The closing segment wraps from the last retained index to the anchor (n≡0):
+  // fold that cyclic interval into the anchor (the deterministic cut at index 0),
+  // so the ring's closing span contributes its evidence too.
+  const lastKept = retainedIndices[retainedIndices.length - 1];
+  out[0] = foldInterval(vs, out[0], lastKept, n);
+  return { value: poly.value, vertices: out, closed: true, retainedIndices };
 }
 
 /** Options for {@link applyContourShapeStyle}. */
