@@ -150,6 +150,24 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(obj.reasons.some((r) => /^Coordinate units are unverified/.test(r))).toBe(true);
   });
 
+  it('object metrics scale foot-unit positions into metres before measuring (unit invariance)', () => {
+    // The object route measures a scaled COPY of its positions when the source
+    // units are not metres. A dome stored in feet, declared unitToMetres=0.3048,
+    // must yield the same metric floor area as the metre-native dome. If the
+    // conversion did NOT run, the foot dome (coordinates ~3.28× larger) would
+    // report ~10.8× the area — so a near-1 ratio proves the scaling happened.
+    const domeM = dome();
+    const domeFt = new Float32Array(domeM.length);
+    for (let i = 0; i < domeM.length; i++) domeFt[i] = domeM[i] / 0.3048; // stored in feet
+    const inM = spaceMetrics(domeM, { upAxis: 'z', spaceKind: 'object', unitToMetres: 1 });
+    const inFt = spaceMetrics(domeFt, { upAxis: 'z', spaceKind: 'object', unitToMetres: 0.3048 });
+    expect(inM.floorAreaM2).toBeGreaterThan(0);
+    expect(inFt.floorAreaM2).toBeGreaterThan(0);
+    const ratio = inFt.floorAreaM2 / inM.floorAreaM2;
+    expect(ratio).toBeGreaterThan(0.7);
+    expect(ratio).toBeLessThan(1.3);
+  });
+
   it('unit conversions m↔ft are correct', () => {
     expect(metresToFeet(1)).toBeCloseTo(3.280839895, 6);
     expect(metresToFeet(3.048)).toBeCloseTo(10, 6);
