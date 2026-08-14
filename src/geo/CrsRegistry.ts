@@ -225,6 +225,14 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     note: 'French national projection used by IGN HD LiDAR.',
   },
   {
+    epsg: 5514,
+    label: 'S-JTSK / Krovák East-North (Czechia, Slovakia)',
+    kind: 'projected',
+    worldwide: false,
+    region: 'europe',
+    note: 'Czech/Slovak national grid (Krovák oblique conic; East-North axes give negative easting/northing).',
+  },
+  {
     epsg: 2169,
     label: 'Luxembourg 1930 / Gauss',
     kind: 'projected',
