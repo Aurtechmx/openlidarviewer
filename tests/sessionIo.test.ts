@@ -602,3 +602,87 @@ describe('importSession — whole-file byte ceiling (OOM hardening)', () => {
     expect(calls.setDropError).not.toHaveBeenCalled();
   });
 });
+
+describe('importSession — persisted user CRS override round-trip (FIX 2)', () => {
+  const baseCrs = (over: Partial<ResolvedCrs> = {}): ResolvedCrs => ({
+    kind: 'projected', name: 'NAD83 / UTM 13N', epsg: 32613,
+    linearUnit: 'metre', linearUnitToMetres: 1,
+    source: 'las-vlr', confidence: 'high', userConfirmed: true,
+    ...over,
+  });
+  const userOverride = (over: Partial<ResolvedCrs> = {}): ResolvedCrs =>
+    baseCrs({ source: 'user-override', userConfirmed: true, ...over });
+  // A loaded streaming scan whose extents match strongSummary() → STRONG identity.
+  const loaded = (crs?: { epsg?: number; linearUnit?: LinearUnit }): StreamingOpts => ({
+    name: 'loaded.laz', sourcePointCount: 1000, dataBounds: [0, 0, 0, 10, 10, 3], crs: crs ?? null,
+  });
+  const strongSummary = () => summary({ width: 10, depth: 10, height: 3, sourcePoints: 1000 });
+  const noConflict = (calls: { showToast: { mock: { calls: unknown[][] } } }) =>
+    calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string));
+
+  it('Test 1 — a confirmed user override on a strong same-scan match restores B over the file A', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614 }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 32613 }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: 32613, kind: 'projected' });
+    expect(calls.loadMeasurements).toHaveBeenCalled();
+    expect(noConflict(calls)).toBe(true);
+  });
+
+  it('Test 2 — a CRS difference without an explicit confirmed override keeps the hard refusal', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614 }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 32613, userConfirmed: false }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+    expect(noConflict(calls)).toBe(false);
+  });
+
+  it('Test 3 — a persisted override never bypasses scan identity (different scan refused)', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614 }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 32613 }), scanSummary: summary({ width: 500, depth: 500, height: 200, sourcePoints: 9_000_000 }) })), {}, deps);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+  });
+
+  it('Test 4 — a partial match with Apply anyway does not gain the strong-override exception', async () => {
+    const { deps, calls } = makeDeps({ streaming: { ...loaded({ epsg: 32614 }), sourcePointCount: 2000 } });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 32613 }), scanSummary: strongSummary() })), { skipScanConfirm: true }, deps);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+  });
+
+  it('Test 5 — an up-axis conflict still refuses even with a valid persisted override', async () => {
+    // A Y-up mesh format (glb); the session claims Z-up — a real axis conflict a
+    // CRS picker can never resolve. Streaming carries no declared axis, so this
+    // case needs a static, format-typed scan.
+    const { deps, calls } = makeDeps({
+      static: { name: 'loaded.glb', scanId: 'scan-1', pointCount: 1000, bounds: { min: [0, 0, 0], max: [10, 10, 3] }, sourceFormat: 'glb', crs: { epsg: 32614 } },
+    });
+    await importSession(asFile(sessionJson({ upAxis: 'z', crs: userOverride({ epsg: 32613 }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(noConflict(calls)).toBe(false);
+  });
+
+  it('Test 6 — a horizontal-unit difference that belongs to the override restores', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614, linearUnit: 'metre' }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 2225, linearUnit: 'us-survey-foot', name: 'State Plane (ft)' }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: 2225 });
+  });
+
+  it('Test 7 — a persisted Local override restores without resurrecting the source CRS', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614 }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ kind: 'local', epsg: undefined, linearUnit: 'unknown', name: 'Local coordinates (no CRS)' }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: null, kind: 'local' });
+  });
+
+  it('Test 8 — streaming restore supplies the source detected CRS to setCrsOverride, not undefined', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 32614 }) });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 32613 }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    const detected = calls.setCrsOverride.mock.calls[0][0].detected as { epsg?: number } | undefined;
+    expect(detected).toBeDefined();
+    expect(detected?.epsg).toBe(32614);
+  });
+});
