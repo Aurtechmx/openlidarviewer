@@ -6,8 +6,8 @@ import '@fontsource/manrope/latin-600.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
-// loaders.gl CDN-worker hardening (loaderConfig) now rides the lazy PLY/OBJ/glTF
-// loader chunks that actually use @loaders.gl, keeping it out of the eager shell.
+// Disable loaders.gl CDN workers before any parse (must run before any loader).
+import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { chooseRenderBackend } from './render/renderBackendChoice';
 import { floorPlanPositions } from './app/floorPlanPositions';

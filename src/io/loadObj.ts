@@ -14,7 +14,6 @@
  * values onto a ~0.25 m grid before recentring could save them.
  */
 
-import './loaderConfig'; // disable loaders.gl CDN workers before any parse (lazy chunk)
 import { parse } from '@loaders.gl/core';
 import { OBJLoader } from '@loaders.gl/obj';
 import { PointCloud } from '../model/PointCloud';
