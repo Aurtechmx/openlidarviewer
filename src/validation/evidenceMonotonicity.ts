@@ -1,7 +1,16 @@
 /**
- * evidenceMonotonicity.ts — the invariant that a derived terrain product may
- * never present as MORE authoritative than the input it was derived from
- * (validation-only; imported by studies and tests, not by the viewer).
+ * evidenceMonotonicity.ts — AUTHORITY-TIER monotonicity: the invariant that a
+ * derived terrain product may never present as MORE authoritative than the input
+ * it was derived from (validation-only; imported by studies and tests, not by
+ * the viewer).
+ *
+ * SCOPE. This operates on COARSE authority tiers — Ready/Preview/Blocked,
+ * good/caution/blocked, full/sampled/resident-only, validated/exploratory/refused
+ * — not on per-source contour evidence. A contour segment's source provenance
+ * (which cells were measured vs interpolated) is a finer, separate concern
+ * carried by `ContourSegmentEvidence`; do not conflate the two. This module
+ * answers "may this product tier out-rank its source tier?", nothing about an
+ * individual segment's support.
  *
  * A transformation — DTM → slope, DTM → contours, contours → smoothed contours —
  * can lose authority (a shakier surface makes shakier contours) or hold it, but
@@ -12,8 +21,8 @@
  * never moves UP one.
  *
  * Pure, deterministic, no I/O. Each ladder is stated most-authoritative first;
- * an unknown label is treated as its own floor (rank -1) so a typo fails closed
- * rather than silently passing.
+ * an unknown label on EITHER side is not a registered tier, so it fails closed
+ * (the transition is rejected) rather than silently passing.
  */
 
 /** Export-readiness tier (src/terrain/quality/readinessEngine.ts vocabulary). */
@@ -33,15 +42,18 @@ export function rankIn(ladder: readonly string[], label: string): number {
 
 /**
  * True when moving `from` → `to` does not gain authority within `ladder`.
- * Equal or lower authority is valid; strengthening is not. An unknown `to`
- * (rank -1) is always valid (it cannot be more authoritative than anything);
- * an unknown `from` is a floor, so only an unknown `to` can follow it — a typo
- * on the input side fails closed.
+ * Equal or lower authority is valid; strengthening is not.
+ *
+ * Fail closed on either side: an unknown/misspelled label is not a registered
+ * tier, so the transition is REJECTED rather than admitted. A typo on the target
+ * side previously passed (an unknown `to` "cannot out-rank anything"), which let
+ * a mislabelled state slip a monotonicity check; both an unknown `from` and an
+ * unknown `to` now return false. Register a tier in the ladder to make it valid.
  */
 export function isNonPromoting(ladder: readonly string[], from: string, to: string): boolean {
   const rf = rankIn(ladder, from);
   const rt = rankIn(ladder, to);
-  if (rt === -1) return true; // unknown target cannot out-rank anything
+  if (rt === -1) return false; // unknown/misspelled target is not a registered tier: fail closed
   if (rf === -1) return false; // known target under an unknown source: fail closed
   return rt >= rf; // higher index = less authoritative = allowed
 }

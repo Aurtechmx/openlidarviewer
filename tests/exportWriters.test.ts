@@ -50,8 +50,9 @@ function feat(
   value = 10,
   isIndex = false,
   closed = false,
+  provBits?: number,
 ): ContourFeature {
-  return { value, isIndex, grade, meanConfidence: grade === 'solid' ? 90 : 40, closed, coordinates };
+  return { value, isIndex, grade, meanConfidence: grade === 'solid' ? 90 : 40, closed, coordinates, provBits };
 }
 
 function model(features: ContourFeature[], crs: string | null = 'EPSG:32610'): ContourFeatureModel {
@@ -81,8 +82,8 @@ function model(features: ContourFeature[], crs: string | null = 'EPSG:32610'): C
 
 describe('toGeoJSON', () => {
   const m = model([
-    feat('solid', [[0, 0], [1, 1]], 10, true),
-    feat('dashed', [[1, 1], [2, 1]], 11),
+    feat('solid', [[0, 0], [1, 1]], 10, true, false, 1 /* PROV_M: measured */),
+    feat('dashed', [[1, 1], [2, 1]], 11, false, false, 2 /* PROV_I: interpolated */),
   ]);
 
   it('produces a valid FeatureCollection with per-run properties', () => {
@@ -97,11 +98,22 @@ describe('toGeoJSON', () => {
     expect(gj.features[0].properties.elevation).toBe(10);
     expect(gj.features[0].properties.index).toBe(true);
     expect(gj.features[1].properties.grade).toBe('dashed');
-    // v0.4.0 evidence metadata
-    expect(gj.features[0].properties.evidenceGrade).toBe('measuredBacked');
-    expect(gj.features[1].properties.evidenceGrade).toBe('interpolatedBacked');
+    // Source PROVENANCE comes from typed evidence (the DTM cell states carried
+    // through the pipeline), NOT from the display grade. The fabricated
+    // `evidenceGrade` field is gone.
+    expect(gj.features[0].properties.evidenceGrade).toBeUndefined();
+    expect(gj.features[0].properties.provenance).toBe('measured');
+    expect(gj.features[1].properties.provenance).toBe('interpolated');
     expect(gj.features[0].properties.interval).toBe(1);
     expect(gj.features[0].properties.coverageMode).toBe('full');
+  });
+
+  it('fails closed: a solid-grade feature carrying NO evidence serializes provenance as unavailable, not measured', () => {
+    // The defect was reading provenance off stroke style. A solid line with no
+    // typed evidence must NOT become "measured" — it is unavailable.
+    const gj = toGeoJSON(model([feat('solid', [[0, 0], [1, 1]], 10, true)])) as any;
+    expect(gj.features[0].properties.grade).toBe('solid');
+    expect(gj.features[0].properties.provenance).toBe('unavailable');
     expect(gj.metadata.coverageMode).toBe('full');
     expect(Array.isArray(gj.metadata.warnings)).toBe(true);
   });

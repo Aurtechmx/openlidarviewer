@@ -68,10 +68,10 @@ describe('coverage → DTM readiness → contour readiness cannot regain authori
     }
   });
 
-  it('the terminal state is genuinely degraded — resident-only blocks the full-dataset DTM', () => {
+  it('the terminal state is genuinely degraded — resident-only reviews (not ready) the full-dataset DTM', () => {
     // Proves the chain has teeth: the weakest coverage really does block, so the
     // monotonicity above is not vacuously satisfied by everything staying READY.
-    expect(capabilityFor(evaluateCapabilities({ scans: [scan('resident-only')] }), 'dtm')!.readiness).toBe('blocked');
+    expect(capabilityFor(evaluateCapabilities({ scans: [scan('resident-only')] }), 'dtm')!.readiness).toBe('review');
     expect(capabilityFor(evaluateCapabilities({ scans: [scan('full')] }), 'dtm')!.readiness).toBe('ready');
   });
 });

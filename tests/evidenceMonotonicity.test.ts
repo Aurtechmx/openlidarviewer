@@ -22,11 +22,18 @@ describe('evidence transitions', () => {
     expect(isValidEvidenceTransition(READINESS_LADDER, 'Blocked', 'Ready')).toBe(false);
     expect(isValidEvidenceTransition(READINESS_LADDER, 'Blocked', 'Preview')).toBe(false);
   });
-  it('fails closed on an unknown source, and never lets a known state out-rank it', () => {
-    // Unknown source with a KNOWN target → invalid (can't prove the target isn't a promotion).
+  it('fails closed on an unknown/misspelled tier on EITHER side', () => {
+    // Unknown source with a KNOWN target → rejected (can't prove the target isn't a promotion).
     expect(isValidEvidenceTransition(READINESS_LADDER, 'Mystery', 'Ready')).toBe(false);
-    // Unknown target cannot out-rank anything → allowed.
-    expect(isValidEvidenceTransition(READINESS_LADDER, 'Ready', 'Mystery')).toBe(true);
+    // Unknown/misspelled TARGET → rejected: it is not a registered tier, so a typo
+    // must not slip through as "cannot out-rank anything" (the former fail-open).
+    expect(isValidEvidenceTransition(READINESS_LADDER, 'Ready', 'Mystery')).toBe(false);
+    expect(isValidEvidenceTransition(READINESS_LADDER, 'Blocked', 'Mystery')).toBe(false);
+    // A misspelling of a real tier ('Readyy', 'preview') is unknown → rejected on both sides.
+    expect(isValidEvidenceTransition(READINESS_LADDER, 'Ready', 'Readyy')).toBe(false);
+    expect(isValidEvidenceTransition(READINESS_LADDER, 'preview', 'Blocked')).toBe(false);
+    // Both sides unknown → rejected.
+    expect(isValidEvidenceTransition(READINESS_LADDER, 'Foo', 'Bar')).toBe(false);
   });
 });
 

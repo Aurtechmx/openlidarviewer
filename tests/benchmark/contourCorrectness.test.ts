@@ -1107,6 +1107,7 @@ describe('contour correctness — negative controls', () => {
       y2,
       confidence: 100,
       grade: 'solid' as const,
+      provBits: 1,
     });
     // A closed triangle has no odd node; adding one spur creates exactly two.
     const closedLoop = [seg(0, 0, 1, 0), seg(1, 0, 1, 1), seg(1, 1, 0, 0)];

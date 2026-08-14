@@ -76,10 +76,14 @@ describe('interval copy', () => {
 });
 
 describe('grade meanings', () => {
-  it('explains every evidence grade', () => {
-    expect(GRADE_MEANING.solid).toBeTruthy();
-    expect(GRADE_MEANING.dashed).toMatch(/interpolated/i);
+  it('explains every display grade as a CONFIDENCE band, not as provenance', () => {
+    // The grade is presentation derived from confidence — it must not claim
+    // measured/interpolated provenance (that is carried separately as evidence).
+    expect(GRADE_MEANING.solid).toMatch(/confidence/i);
+    expect(GRADE_MEANING.dashed).toMatch(/confidence/i);
     expect(GRADE_MEANING.gap).toMatch(/no reliable data/i);
+    expect(GRADE_MEANING.solid).not.toMatch(/measured/i);
+    expect(GRADE_MEANING.dashed).not.toMatch(/interpolated/i);
   });
 });
 
