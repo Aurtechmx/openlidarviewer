@@ -20,7 +20,7 @@
  * Pure data: no DOM, no three.js, no I/O.
  */
 
-import { EVIDENCE_THRESHOLDS, type EvidenceGrade } from '../ground/cellConfidence';
+import { EVIDENCE_THRESHOLDS, type ContourDisplayGrade } from '../ground/cellConfidence';
 import type { IntervalOption, IntervalGateResult } from './intervalGate';
 
 /** Plain-language names for the Analyse features. */
@@ -85,10 +85,16 @@ export const METRIC_TOOLTIPS = {
     'not tied to a known zero.',
 } as const;
 
-/** What each evidence grade means, in plain words. */
-export const GRADE_MEANING: Record<EvidenceGrade, string> = {
-  solid: 'measured terrain',
-  dashed: 'interpolated — fewer points here',
+/**
+ * What each DISPLAY grade means, in plain words. The grade is a CONFIDENCE band
+ * (how firmly the line is drawn), not source provenance: a solid line is
+ * high-confidence terrain, not a claim that every point under it was measured.
+ * Source provenance (measured vs interpolated) is carried separately as typed
+ * evidence.
+ */
+export const GRADE_MEANING: Record<ContourDisplayGrade, string> = {
+  solid: 'high-confidence terrain (firm line)',
+  dashed: 'lower-confidence terrain (dashed)',
   gap: 'no reliable data — shown as a break',
 };
 

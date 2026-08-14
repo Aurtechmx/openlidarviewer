@@ -13,6 +13,7 @@ const v = (x: number, y: number, c = 90): ContourVertex => ({
   y,
   confidence: c,
   grade: gradeForConfidence(c),
+  provBits: 1,
 });
 
 // Straight line along +x from 0..100 with a vertex every 10.

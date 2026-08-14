@@ -20,9 +20,14 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
+import { gradeForConfidence, type ContourDisplayGrade } from '../ground/cellConfidence';
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { ContourPolyline, StitchedLevel } from './stitchContours';
+import {
+  unionProvBits,
+  provenanceSetFromBits,
+  type ContourSegmentEvidence,
+} from './contourSegmentEvidence';
 import type { StyledLevel } from './contourStyle';
 import { defaultContourShapeStyle, type ContourShapeStyle } from './contourShapeStyle';
 // The vertical-reference classifier the SpatialContext façade wraps. Called
@@ -33,13 +38,37 @@ import { verticalReferenceFromDatum, type VerticalReference } from '../../geo/he
 export interface ContourFeature {
   readonly value: number;
   readonly isIndex: boolean;
-  readonly grade: EvidenceGrade;
+  /** DISPLAY grade (presentation, not provenance — see {@link ContourDisplayGrade}). */
+  readonly grade: ContourDisplayGrade;
   /** Mean confidence (0..100) of the run's vertices. */
   readonly meanConfidence: number;
+  /**
+   * Source-provenance bitmask aggregated as a UNION over the run's vertices
+   * (PROV_M=1, PROV_I=2, mixed=3). This is the real source evidence — measured
+   * vs interpolated — carried through from the DTM cells, NOT reconstructed from
+   * the display grade. `buildFeatureModel` always sets it; OPTIONAL so a
+   * hand-assembled feature that carries no evidence serializes as `unavailable`
+   * (fail closed) rather than being forced to invent one. Read the typed shape
+   * via {@link featureEvidence}.
+   */
+  readonly provBits?: number;
   /** True only when this feature is a complete closed ring. */
   readonly closed: boolean;
   /** Vertices as [x, y] in CRS coordinates (elevation is `value`). */
   readonly coordinates: Array<[number, number]>;
+}
+
+/**
+ * The typed source evidence for a feature (WI-2). Provenance is the aggregated
+ * union; `presentation-confidence` is the run's mean confidence, carried as its
+ * OWN channel (never mixed with support). Provenance and display grade are kept
+ * separate on purpose.
+ */
+export function featureEvidence(f: ContourFeature): ContourSegmentEvidence {
+  return {
+    provenance: provenanceSetFromBits(f.provBits ?? 0),
+    support: { 'presentation-confidence': f.meanConfidence },
+  };
 }
 
 /** Bounding box of all feature coordinates. */
@@ -51,20 +80,26 @@ export interface ContourBBox {
 }
 
 /**
- * Per-contour evidence vocabulary surfaced in exports. Each single-grade
- * run maps cleanly: a confident (solid) run is backed by measured ground,
- * a dashed run by interpolation, and a gap run is too low-confidence to
- * trust. (`mixed` / `edgeClipped` are reserved for richer models; the
- * single-grade-run model emits only these three so the label never
- * overstates what one feature actually contains.)
+ * Legacy per-contour evidence vocabulary.
+ *
+ * @deprecated This vocabulary was DERIVED FROM THE DISPLAY GRADE, which conflates
+ * presentation with provenance: a solid line is not proof of measured ground.
+ * Do not serialize it. Use {@link featureEvidence} + `serializeProvenance` for
+ * real source provenance (measured/interpolated/mixed/unavailable). Kept only so
+ * an out-of-tree caller still compiles for one release.
  */
 export type ContourEvidence =
   | 'measuredBacked'
   | 'interpolatedBacked'
   | 'lowConfidence';
 
-/** Map an evidence grade to the exported contour-evidence vocabulary. */
-export function contourEvidence(grade: EvidenceGrade): ContourEvidence {
+/**
+ * @deprecated Maps DISPLAY grade to a provenance-sounding label — exactly the
+ * defect this release removes. It fabricates provenance from stroke style. Use
+ * {@link featureEvidence} instead; this remains only for one-release
+ * compatibility and must not be used in any export path.
+ */
+export function contourEvidence(grade: ContourDisplayGrade): ContourEvidence {
   if (grade === 'solid') return 'measuredBacked';
   if (grade === 'dashed') return 'interpolatedBacked';
   return 'lowConfidence';
@@ -213,24 +248,29 @@ function splitPolyline(poly: ContourPolyline, isIndex: boolean): ContourFeature[
   // For a closed ring, append the first vertex so the closing segment
   // participates in run-splitting.
   const path = poly.closed ? [...vs, vs[0]] : vs;
-  const segGrade = (i: number): EvidenceGrade =>
+  const segGrade = (i: number): ContourDisplayGrade =>
     gradeForConfidence(Math.min(path[i].confidence, path[i + 1].confidence));
 
   const out: ContourFeature[] = [];
-  const emit = (startV: number, endV: number, grade: EvidenceGrade, closed: boolean) => {
+  const emit = (startV: number, endV: number, grade: ContourDisplayGrade, closed: boolean) => {
     const slice = path.slice(startV, endV + 1);
     if (slice.length < 2) return;
     let confSum = 0;
+    // Provenance is aggregated as a UNION over the run's vertices — the feature's
+    // real source evidence (measured/interpolated/mixed), independent of `grade`.
+    let provBits = 0;
     const coords: Array<[number, number]> = [];
     for (const v of slice) {
       coords.push([v.x, v.y]);
       confSum += v.confidence;
+      provBits = unionProvBits(provBits, v.provBits);
     }
     out.push({
       value: poly.value,
       isIndex,
       grade,
       meanConfidence: confSum / slice.length,
+      provBits,
       closed,
       coordinates: coords,
     });

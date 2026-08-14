@@ -20,15 +20,23 @@
  * walked in input order; ties at junctions resolve by index).
  */
 
-import { gradeForConfidence, type EvidenceGrade } from '../ground/cellConfidence';
+import { gradeForConfidence, type ContourDisplayGrade } from '../ground/cellConfidence';
 import type { ContourSegment, ContourSet } from './contoursAt';
+import { unionProvBits } from './contourSegmentEvidence';
 
 /** A single point on a stitched contour, carrying its evidence. */
 export interface ContourVertex {
   readonly x: number;
   readonly y: number;
   readonly confidence: number;
-  readonly grade: EvidenceGrade;
+  readonly grade: ContourDisplayGrade;
+  /**
+   * Source-provenance bitmask (PROV_M=1, PROV_I=2, mixed=3). Provenance
+   * AGGREGATES AS A UNION — a vertex shared by two segments carries the union of
+   * both — in contrast to `confidence`, which takes the min. Kept an integer so
+   * stitching adds no allocation.
+   */
+  readonly provBits: number;
 }
 
 /** An ordered contour polyline at one elevation. */
@@ -111,8 +119,8 @@ export function stitchLevel(
     used[i] = 1;
     const s = segments[i];
     const vertices: ContourVertex[] = [
-      { x: s.x1, y: s.y1, confidence: s.confidence, grade: s.grade },
-      { x: s.x2, y: s.y2, confidence: s.confidence, grade: s.grade },
+      { x: s.x1, y: s.y1, confidence: s.confidence, grade: s.grade, provBits: s.provBits },
+      { x: s.x2, y: s.y2, confidence: s.confidence, grade: s.grade, provBits: s.provBits },
     ];
 
     // Extend the tail (growing from x2,y2).
@@ -134,8 +142,8 @@ export function stitchLevel(
         ny = sj.y1;
         tailKey = ka;
       }
-      mergeShared(vertices.at(-1)!, sj.confidence);
-      vertices.push({ x: nx, y: ny, confidence: sj.confidence, grade: sj.grade });
+      mergeShared(vertices.at(-1)!, sj.confidence, sj.provBits);
+      vertices.push({ x: nx, y: ny, confidence: sj.confidence, grade: sj.grade, provBits: sj.provBits });
     }
 
     // Extend the head (growing from x1,y1).
@@ -157,8 +165,8 @@ export function stitchLevel(
         ny = sj.y1;
         headKey = ka;
       }
-      mergeShared(vertices[0], sj.confidence);
-      vertices.unshift({ x: nx, y: ny, confidence: sj.confidence, grade: sj.grade });
+      mergeShared(vertices[0], sj.confidence, sj.provBits);
+      vertices.unshift({ x: nx, y: ny, confidence: sj.confidence, grade: sj.grade, provBits: sj.provBits });
     }
 
     const closed =
@@ -171,12 +179,19 @@ export function stitchLevel(
   return polylines;
 }
 
-/** Lower a vertex's confidence to the min of itself and an incoming segment. */
-function mergeShared(v: ContourVertex, segConfidence: number): void {
+/**
+ * Merge an incoming segment into a shared vertex: confidence takes the MIN (the
+ * weaker evidence wins the display grade), while provenance takes the UNION (a
+ * vertex where a measured and an interpolated run meet is mixed ancestry, not
+ * one or the other).
+ */
+function mergeShared(v: ContourVertex, segConfidence: number, segProvBits: number): void {
   const mc = Math.min(v.confidence, segConfidence);
   // ContourVertex is readonly to consumers, but we own it during build.
-  (v as { confidence: number; grade: EvidenceGrade }).confidence = mc;
-  (v as { confidence: number; grade: EvidenceGrade }).grade = gradeForConfidence(mc);
+  const w = v as { confidence: number; grade: ContourDisplayGrade; provBits: number };
+  w.confidence = mc;
+  w.grade = gradeForConfidence(mc);
+  w.provBits = unionProvBits(v.provBits, segProvBits);
 }
 
 /**

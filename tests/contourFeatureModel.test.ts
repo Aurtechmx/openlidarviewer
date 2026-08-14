@@ -14,6 +14,7 @@ const v = (x: number, y: number, c: number): ContourVertex => ({
   y,
   confidence: c,
   grade: gradeForConfidence(c),
+  provBits: 1,
 });
 
 const styled = (value: number, isIndex: boolean): StyledLevel => ({

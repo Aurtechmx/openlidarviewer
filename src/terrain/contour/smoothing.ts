@@ -19,6 +19,7 @@
 
 import { EVIDENCE_THRESHOLDS, gradeForConfidence } from '../ground/cellConfidence';
 import type { ContourPolyline, ContourVertex } from './stitchContours';
+import { unionProvBits } from './contourSegmentEvidence';
 
 /** Options for {@link chaikinSmooth}. */
 export interface SmoothParams {
@@ -39,6 +40,8 @@ function lerpVertex(a: ContourVertex, b: ContourVertex, t: number): ContourVerte
     y: a.y + (b.y - a.y) * t,
     confidence: conf,
     grade: gradeForConfidence(conf),
+    // A smoothed point between two source vertices inherits both ancestries.
+    provBits: unionProvBits(a.provBits, b.provBits),
   };
 }
 
