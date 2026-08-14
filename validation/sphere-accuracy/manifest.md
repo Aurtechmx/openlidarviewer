@@ -1,7 +1,7 @@
 # Sphere absolute-accuracy study (SP2)
 
 Real-data validation of OLV's distance measurement against a surveyed reference
-network, per instrument. Design: `docs/superpowers/specs/2026-08-14-sphere-accuracy-study-design.md`.
+network, per instrument.
 
 ## Source data
 
