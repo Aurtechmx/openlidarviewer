@@ -3619,7 +3619,7 @@ void viewerLoaded.then(() => {
   });
 });
 
-const dropZone = new DropZone(document.body, (file) => void handleFile(file));
+const dropZone = new DropZone(document.body, (file) => void handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
 // v0.3.10 trust-pass — install the Playwright seam under `?test=1`.
@@ -4453,44 +4453,34 @@ function _isDataSaver(): boolean {
 }
 
 let _loadersPrewarmed = false;
+/** Warm the lazy chunks the first scan-open needs; idempotent, safe from both the idle scheduler and drag-intent. */
+function prewarmLoaders(): void {
+  if (_loadersPrewarmed) return;
+  _loadersPrewarmed = true;
+  void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
+  // COPC decode worker + its laz-perf WASM (~150-400 ms worker boot), off the first open's critical path.
+  void loadCopcWorkerClient()
+    .then(({ CopcWorkerClient }) => {
+      if (!copcDecoder) copcDecoder = new CopcWorkerClient();
+    })
+    .catch(() => { /* swallow — actual COPC open retries */ });
+  // Static LAS/LAZ loader (the "drop a non-COPC LAZ" path).
+  void loadLasLoader().catch(() => { /* swallow */ });
+  // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — warm it too, skipping under Save-Data / 2G-3G.
+  if (!_isDataSaver()) {
+    void loadViewer().catch(() => { /* swallow — open() retries */ });
+  }
+}
+
+/** Schedule {@link prewarmLoaders} for the next idle window; drag-intent calls it directly for immediacy. */
 function schedulePrewarm(): void {
   if (_loadersPrewarmed) return;
-  const fire = (): void => {
-    if (_loadersPrewarmed) return;
-    _loadersPrewarmed = true;
-    void loadStreamingPointCloud().catch(() => { _loadersPrewarmed = false; });
-    // Instantiate the COPC decode worker singleton during idle time.
-    // The constructor spawns a Web Worker and waits for its WASM
-    // (`laz-perf`) module to initialise — about 150-250 ms on a warm
-    // network and ~400 ms on a cold one. Doing it here moves the cost
-    // off the first scan-open's critical path so the toast-to-first-
-    // node time is dominated by the actual range fetch, not by worker
-    // boot. Subsequent opens already hit the cached singleton; this
-    // change benefits only the cold-start path, which is the most
-    // painful one to debug or demo against.
-    void loadCopcWorkerClient()
-      .then(({ CopcWorkerClient }) => {
-        if (!copcDecoder) copcDecoder = new CopcWorkerClient();
-      })
-      .catch(() => { /* swallow — actual COPC open retries */ });
-    // Static LAS/LAZ loader sits in its own chunk too — pre-warm it for
-    // the "drop a non-COPC LAZ file" path which is the other common case.
-    void loadLasLoader().catch(() => { /* swallow */ });
-    // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — the single
-    // biggest first-open cost. Warm it during idle too so the first scan
-    // opens without that download on the critical path. Gated on data
-    // charge: skip it under Save-Data or a 2G/3G connection so we never
-    // spend a phone's cellular budget on a scan the user hasn't opened yet.
-    if (!_isDataSaver()) {
-      void loadViewer().catch(() => { /* swallow — open() retries */ });
-    }
-  };
   type RIC = (cb: () => void, opts?: { timeout?: number }) => number;
   const rIC = (window as unknown as { requestIdleCallback?: RIC }).requestIdleCallback;
   if (typeof rIC === 'function') {
-    rIC(fire, { timeout: 2000 });
+    rIC(prewarmLoaders, { timeout: 2000 });
   } else {
-    setTimeout(fire, 1500);
+    setTimeout(prewarmLoaders, 1500);
   }
 }
 
