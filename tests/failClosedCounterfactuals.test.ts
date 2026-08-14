@@ -38,23 +38,38 @@ function verdict(scans: ScanFacts[], product: ProductId, frame?: boolean): Readi
 }
 
 describe('unit trust — metric products fail closed on a missing or unknown unit', () => {
-  it('contours: unknown unit blocks, a known unit is ready (guard is load-bearing)', () => {
-    expect(verdict([scan({ crs: crs({ linearUnit: 'unknown' }) })], 'contours')).toBe('blocked');
-    expect(verdict([scan()], 'contours')).toBe('ready'); // counterfactual: only the unit changed
+  it('building-footprints: unknown unit blocks, a known unit is ready (guard is load-bearing)', () => {
+    // Footprints have no inspection path — a metric AREA product without a unit
+    // must fail closed, never guess metres.
+    expect(verdict([scan({ hasBuildingClass: true, crs: crs({ linearUnit: 'unknown' }) })], 'building-footprints')).toBe('blocked');
+    expect(verdict([scan({ hasBuildingClass: true })], 'building-footprints')).toBe('ready'); // counterfactual: only the unit changed
+  });
+
+  it('contours degrade to review (exploratory) on an unknown unit — the validated interval is withheld, never silently metred', () => {
+    // Contours DO have an inspection path (the Contour Studio launcher), so an
+    // unknown unit caps them to exploratory rather than a hard block; the danger
+    // (claiming metres) is still refused because the VALIDATED deliverable is withheld.
+    expect(verdict([scan({ groundClassified: true, crs: crs({ linearUnit: 'unknown' }) })], 'contours')).toBe('review');
   });
 
   it('a MISSING CRS reads as unknown, not as an assumed metre (fail closed, not open)', () => {
     // The dangerous bug would be a null CRS defaulting to metre and passing the
-    // metric gate. It must land on the SAME closed verdict as an explicit unknown.
-    expect(verdict([scan({ crs: null })], 'contours')).toBe('blocked');
+    // metric gate. A metric AREA product must land closed; contours stay
+    // exploratory (never an assumed metre).
+    expect(verdict([scan({ crs: null })], 'contours')).toBe('review');
     expect(verdict([scan({ crs: null })], 'building-footprints')).toBe('blocked');
   });
 });
 
-describe('coverage — full-dataset products fail closed on resident-only streaming', () => {
-  it('dtm: resident-only blocks, full coverage is ready (guard is load-bearing)', () => {
-    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm')).toBe('blocked');
+describe('coverage — surfaces degrade to review on resident-only streaming', () => {
+  it('dtm: resident-only degrades to review, full coverage is ready (guard is load-bearing)', () => {
+    // A resident-only surface is exploratory (whole-dataset export withheld), not a
+    // hard block — matching the module contract and the Contour Studio launcher.
+    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm')).toBe('review');
     expect(verdict([scan({ kind: 'streaming', coverage: 'full' })], 'dtm')).toBe('ready'); // only coverage changed
+  });
+  it('building-footprints still fail closed on resident-only — missing returns would drop buildings', () => {
+    expect(verdict([scan({ kind: 'streaming', coverage: 'resident-only', hasBuildingClass: true })], 'building-footprints')).toBe('blocked');
   });
 });
 

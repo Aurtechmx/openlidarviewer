@@ -46,7 +46,7 @@ const MATRIX: Row[] = [
     product: 'contours',
     normal: () => verdict([scan()], 'contours'),
     degraded: () => verdict([scan({ crs: crs({ linearUnit: 'unknown' }) })], 'contours'),
-    expectNormal: 'ready', expectDegraded: 'blocked', degradedReason: 'UNIT_UNKNOWN',
+    expectNormal: 'ready', expectDegraded: 'review', degradedReason: 'UNIT_UNKNOWN',
   },
   {
     condition: 'linear unit: known → CRS missing (fail closed)',
@@ -60,7 +60,7 @@ const MATRIX: Row[] = [
     product: 'dtm',
     normal: () => verdict([scan({ kind: 'streaming', coverage: 'full' })], 'dtm'),
     degraded: () => verdict([scan({ kind: 'streaming', coverage: 'resident-only' })], 'dtm'),
-    expectNormal: 'ready', expectDegraded: 'blocked', degradedReason: 'RESIDENT_ONLY',
+    expectNormal: 'ready', expectDegraded: 'review', degradedReason: 'RESIDENT_ONLY',
   },
   {
     condition: 'ground: producer → derived',
