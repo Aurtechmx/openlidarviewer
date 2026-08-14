@@ -557,10 +557,7 @@ const viewerLoaded: Promise<Viewer> = (async () => {
       crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
-  // The active scan's resolved CRS, so a STREAMING (COPC/EPT) export georeferences
-  // through the same authority — its cloud isn't a static PointCloud the per-cloud
-  // resolver keys on (QW2). Streaming publishes its CRS to CrsService on commit.
-  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current()));
+  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS (QW2)
   return viewer;
 })();
 
@@ -2959,11 +2956,7 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
-    // The panel's CRS label reads the RESOLVED authority through the same
-    // `resolvedExportCrs` the writer-side resolver uses, so the summary and the
-    // written .prj/report can never disagree on name/WKT, and a rejected/Local
-    // override shows no CRS rather than the file's declared one (QW4).
-    const rc = resolvedExportCrs(crsService.current());
+    const rc = resolvedExportCrs(crsService.current()); // panel==writer CRS label (QW4)
     if (scans.activeId != null) {
       const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
@@ -4200,9 +4193,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
  */
 function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  // Thread the RESOLVED active spatial context so a module's unit gate honours a
-  // CRS/unit override instead of re-deriving from cloud.metadata.crs (QW7).
-  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) };
+  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override (QW7)
   for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
 }

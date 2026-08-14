@@ -4741,32 +4741,23 @@ export class Viewer {
    * to drive the live Viewer. Held inline (not as a stored field) so the
    * adapter always reflects the current loaded clouds without bookkeeping.
    */
-  /**
-   * The app wires the CRS authority in here so the export adapter's georeference
-   * reads the RESOLVED CRS (override applied), not the file's declared metadata —
-   * a rejected/local override then can't reach the ortho `.prj` (C10). Null until
-   * wired; the adapter falls back to declared metadata, matching the pre-wiring
-   * behaviour the pure adapter tests exercise.
-   */
+  // App wires the CRS authority here so the export adapter georeferences off the
+  // RESOLVED CRS, never declared metadata (C10). `_resolvedActiveCrs` is the
+  // active-scan form STREAMING uses. Null → falls back to declared (pure tests).
   private _exportCrsResolver: ((cloud: PointCloud) => ExportCloudCrs) | null = null;
   private _resolvedActiveCrs: (() => ExportCloudCrs) | null = null;
-
   setExportCrsResolver(fn: (cloud: PointCloud) => ExportCloudCrs): void {
     this._exportCrsResolver = fn;
   }
-
-  /** The resolved CRS for the active scan — lets the export adapter georeference a
-   * STREAMING scan through the same authority as static clouds. */
   setResolvedActiveCrs(fn: () => ExportCloudCrs): void {
     this._resolvedActiveCrs = fn;
   }
 
   private _buildExportAdapter(): ExportSceneAdapter {
     const resolveCloudCrs = this._exportCrsResolver;
-    const resolvedActiveCrs = this._resolvedActiveCrs;
     return buildExportAdapter({
       ...(resolveCloudCrs ? { resolveCloudCrs } : {}),
-      ...(resolvedActiveCrs ? { resolvedActiveCrs } : {}),
+      ...(this._resolvedActiveCrs ? { resolvedActiveCrs: this._resolvedActiveCrs } : {}),
       // Project each live entry into the adapter's slice, carrying the render
       // visibility (mesh.visible) and Float64 placement so the export answers
       // over the visible, placed scene (pass-7 #4/#5/#6). Rebuilt per call, so
