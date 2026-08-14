@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Products lane → "Integrity report" — places a measurement via the test seam,
@@ -32,6 +32,8 @@ test('the Products lane exports an integrity report after a measurement is place
     api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
   });
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  // Measuring reveals Work mode; the Export panel lives in Output mode.
+  await showWorkspaceMode(page, 'output');
 
   const panel = page.locator('.olv-export-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });

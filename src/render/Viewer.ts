@@ -65,6 +65,8 @@ import {
 
 import type { PointCloud } from '../model/PointCloud';
 import { buildExportAdapter } from './exportAdapter';
+import type { ExportAdapterCloud, ExportCloudCrs } from './exportAdapter';
+import { imageExportModeAvailability, type ExportModeAvailability } from './exportModeAvailability';
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
@@ -129,6 +131,8 @@ import {
   type CameraPresetName,
   type StandardView,
 } from './camera/cameraPresets';
+import { makeOrthoCamera, followPerspective } from './camera/orthoCamera';
+import { projectionFromLegacyFov } from './camera/orthoProjection';
 export type { CameraPresetName } from './camera/cameraPresets';
 export type { StandardView } from './camera/cameraPresets';
 import { compassHeadingDeg } from './viewCubeMath';
@@ -521,14 +525,6 @@ const PHASE_CENTER_PROXY_MS = 250;
 
 /** Default vertical field of view, in degrees — the camera's construction value. */
 const DEFAULT_FOV = 60;
-/**
- * Near-orthographic FOV. A very long "lens" — the camera pulls far back and
- * the frustum becomes almost parallel, so walls/floors read flat for accurate
- * measuring with no perspective skew. This keeps the existing perspective
- * camera (and the whole WebGPU render graph, culling, LOD and picking tools)
- * untouched, rather than swapping in a separate OrthographicCamera.
- */
-const ORTHO_FOV = 2;
 
 /**
  * Absolute GPU-upload point ceiling. The device-aware load budget already
@@ -686,9 +682,20 @@ function buildEdlOutputNode(
  * `adaptivePointSize` in `pointStyle.ts`. `positionView` is the point's
  * instance centre in view space, so `-z` is its eye-space distance.
  */
-function buildAdaptiveSizeNode(base: TslNode, attnRef: TslNode): TslNode {
+function buildAdaptiveSizeNode(
+  base: TslNode,
+  attnRef: TslNode,
+  orthoDist: TslNode,
+  orthoFlag: TslNode,
+): TslNode {
+  // Perspective: divide by each point's own eye distance so far points shrink.
+  // Orthographic: there is no perspective divide, so every point takes the
+  // SAME size — divide by the camera's distance to the target (a uniform)
+  // instead, which makes points scale with zoom but not with depth. `orthoFlag`
+  // is exactly 0 or 1, so `mix` selects one divisor with no blending.
   const eyeDist: TslNode = max((positionView as TslNode).z.negate(), float(1e-4));
-  const attenuated: TslNode = base.mul(attnRef).div(eyeDist);
+  const divisor: TslNode = mix(eyeDist, orthoDist, orthoFlag);
+  const attenuated: TslNode = base.mul(attnRef).div(divisor);
   const maxSize: TslNode = base.mul(POINT_STYLE_DEFAULTS.maxSizeFactor);
   return attenuated.clamp(float(POINT_STYLE_DEFAULTS.minSizePx), maxSize);
 }
@@ -772,6 +779,10 @@ export class Viewer {
   private readonly _renderer: THREE.WebGPURenderer;
   private readonly _scene: THREE.Scene;
   private readonly _camera: THREE.PerspectiveCamera;
+  /** The true-orthographic camera. A per-frame follower of `_camera` (the sole
+   *  control master): same pose, frustum sized to what the perspective camera
+   *  spans at the orbit target, so one set of OrbitControls drives both. */
+  private readonly _orthoCamera: THREE.OrthographicCamera;
   private readonly _controls: OrbitControls;
   private readonly _nav: NavController;
   // Three.js `Clock` was deprecated in r170 in favour of `Timer`, which has
@@ -810,8 +821,6 @@ export class Viewer {
    * to commit any newly-resident nodes). Reset to 0 on every actual
    * render so the next heartbeat window starts clean.
    */
-
-
   // ── Frame timing (debug overlay) ─────────────────────────────────────────
   /** Rolling buffer of recent frame times, in ms — feeds {@link frameStats}. */
   private readonly _frameTimes = new Float64Array(FRAME_SAMPLE_COUNT);
@@ -948,10 +957,20 @@ export class Viewer {
    */
   private readonly _gaussianOpacityFactor = uniform(0);
   private readonly _attnRef = uniform(100);
+  /** 1 while the orthographic projection is active, 0 otherwise — flips the
+   *  point-size node between per-point perspective attenuation and a uniform,
+   *  depth-independent ortho size. */
+  private readonly _orthoSizeFlag = uniform(0);
+  /** The perspective camera's distance to the orbit target — the divisor the
+   *  ortho point-size uses so every point renders one size that scales with
+   *  zoom (a shorter distance = larger points), never with per-point depth. */
+  private readonly _orthoSizeDist = uniform(1);
   /** The shared adaptive size node, assigned to every cloud's material. */
   private readonly _adaptiveSizeNode = buildAdaptiveSizeNode(
     this._pointSizeUniform,
     this._attnRef,
+    this._orthoSizeDist,
+    this._orthoSizeFlag,
   );
 
   // ── Class visibility (GPU mask) ───────────────────────────────────────────
@@ -1036,10 +1055,8 @@ export class Viewer {
   /** The cloud's vertical axis — Z for LAS/LAZ surveys, Y for phone scans. */
   private readonly _worldUp = new THREE.Vector3(0, 1, 0);
 
-  /** Near-orthographic (parallel) projection toggle — see ORTHO_FOV. */
+  /** True orthographic (parallel) projection toggle — drives `_activeCamera`. */
   private _orthographic = false;
-  /** The last axis-aligned standard view applied, so toggling ortho re-frames it. */
-  private _lastStandardView: StandardView | null = null;
   private _navListeners: NavListeners = {};
   private readonly _raycaster = new THREE.Raycaster();
   /**
@@ -1216,6 +1233,7 @@ export class Viewer {
     const aspect = (canvas.clientWidth || 800) / (canvas.clientHeight || 600);
     this._camera = new THREE.PerspectiveCamera(DEFAULT_FOV, aspect, 0.1, 5_000_000);
     this._camera.position.set(0, 0, 100);
+    this._orthoCamera = makeOrthoCamera(this._camera.near, this._camera.far);
 
     // ── Post-processing pipeline (Eye Dome Lighting) ──────────────────────
     // The scene renders into a pass; the EDL node shades it from the pass's
@@ -1939,6 +1957,7 @@ export class Viewer {
     quality: StreamingQuality,
     isMobile: boolean,
     benchmark?: StreamingBenchmark | null,
+    signal?: AbortSignal,
   ): Promise<void> {
     // Fresh scan ⇒ fresh GPU-error slate (see addCloud).
     this._resetGpuErrorHistory();
@@ -1950,6 +1969,17 @@ export class Viewer {
       isMobile,
       benchmark ?? null,
     );
+    // Pre-commit cancellation gate (release blocker #4). The candidate session
+    // is fully built, but the previous scene is still live and `detach` below is
+    // the atomic COMMIT. If the load was cancelled while we were building, dispose
+    // the CANDIDATE and leave the committed scene exactly as it was — never
+    // detach-old, then discover-cancel, then close-new, which blanks the viewer on
+    // a streaming→streaming replace. Checked here, immediately before the swap, so
+    // the window between the check and the commit is a synchronous line.
+    if (signal?.aborted) {
+      disposeStreamingSession(session);
+      throw new DOMException('Streaming attach cancelled before commit', 'AbortError');
+    }
     // Detach the prior streaming cloud only now that the replacement renderer
     // and scheduler are built. A throw in the lazy load or the constructors
     // above then leaves the current scan on screen instead of a blank scene.
@@ -2023,21 +2053,6 @@ export class Viewer {
   }
 
   /**
-   * Mount a cloud at its project-frame offset (step 2 of the wiring plan in
-   * `docs/architecture/project-spatial-frame.md`).
-   *
-   * Every cloud's positions are recentred about its OWN origin at load, so two
-   * georeferenced scans a kilometre apart both sat at local zero and rendered
-   * overlaid. The offset is the layer's `sourceToProject` translation; applying
-   * it to the mesh places the layer at its true position in the shared
-   * project-local frame. The single-layer case is the identity (a lone layer
-   * anchors the frame at its own origin), so the existing single-scan path is
-   * unchanged by construction.
-   *
-   * The DATA never moves — only the mesh — so every CPU reader of
-   * `entry.cloud.positions` folds this offset at its own boundary.
-   */
-  /**
    * Set (or clear) a layer's Float64 placement in the shared project frame —
    * float64-transform.md steps 3-4. The DATA never moves: the transform is
    * held on the entry and folded at each consumer's boundary (bounds, pick),
@@ -2057,6 +2072,7 @@ export class Viewer {
     this._refreshMeasureDatum();
     this.requestFrame();
   }
+
 
   /**
    * Record what a layer has proven about the project frame. Combined
@@ -3137,8 +3153,8 @@ export class Viewer {
     const h = canvas.clientHeight;
     if (w === 0 || h === 0) return { changedCount: 0, pointCount: 0 };
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._camera.projectionMatrix;
-    const viewMatrix = this._camera.matrixWorldInverse;
+    const projMatrix = this._activeCamera().projectionMatrix;
+    const viewMatrix = this._activeCamera().matrixWorldInverse;
     const off = accumulatorOffset(entry.placement);
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number): { x: number; y: number } | null => {
@@ -3766,25 +3782,32 @@ export class Viewer {
       mode: this._nav.mode,
     };
     if (this._camera.fov !== DEFAULT_FOV) state.fov = this._camera.fov;
+    if (this._orthographic) state.projection = 'orthographic';
     return state;
   }
 
   /**
    * Restore a camera state captured by {@link getCameraState}. The mode is
-   * applied first so the pose tween runs under the right navigation model;
-   * the fov, if present, is set before the tween starts.
+   * applied first so the pose tween runs under the right navigation model; the
+   * projection is set last. A legacy view has no `projection` field but a
+   * `fov ≈ 2` (the old near-ortho lens), which restores as orthographic; a real
+   * perspective fov is clamped and applied to the perspective camera.
    */
   applyCameraState(state: SavedCameraState): void {
     if (state.mode && state.mode !== this._nav.mode) this._nav.setMode(state.mode);
-    // Clamp imported FOV to a sane perspective range — a share/session file
-    // could carry a non-finite or extreme value that breaks the projection.
-    const rawFov = state.fov ?? DEFAULT_FOV;
-    const fov = Math.min(120, Math.max(10, Number.isFinite(rawFov) ? rawFov : DEFAULT_FOV));
-    if (this._camera.fov !== fov) {
-      this._camera.fov = fov;
-      this._camera.updateProjectionMatrix();
+    const ortho = state.projection === 'orthographic'
+      || projectionFromLegacyFov(state.fov, 2) === 'orthographic';
+    // A non-ortho saved fov is a genuine perspective lens. Clamp it to a sane
+    // range — a share/session file could carry a non-finite or extreme value.
+    if (!ortho && state.fov != null) {
+      const fov = Math.min(120, Math.max(10, Number.isFinite(state.fov) ? state.fov : DEFAULT_FOV));
+      if (this._camera.fov !== fov) {
+        this._camera.fov = fov;
+        this._camera.updateProjectionMatrix();
+      }
     }
     this._nav.applyPose({ position: state.position, target: state.target });
+    this.setOrthographic(ortho);
   }
 
   /** Look up a loaded cloud by id — used by the app to export it. */
@@ -3865,8 +3888,8 @@ export class Viewer {
     // walk that needs three.js, which is why it stays here and the rest moved
     // to a module that can be tested without a WebGL context.
     this._camera.updateMatrixWorld(true);
-    const projMatrix = this._camera.projectionMatrix;
-    const viewMatrix = this._camera.matrixWorldInverse;
+    const projMatrix = this._activeCamera().projectionMatrix;
+    const viewMatrix = this._activeCamera().matrixWorldInverse;
     const tmp = new THREE.Vector3();
     const project = (x: number, y: number, z: number) => {
       tmp.set(x, y, z).applyMatrix4(viewMatrix).applyMatrix4(projMatrix);
@@ -4332,7 +4355,7 @@ export class Viewer {
     return true;
   }
 
-  /** Whether the near-orthographic (parallel) projection is active. */
+  /** Whether the true orthographic (parallel) projection is active. */
   get orthographic(): boolean {
     return this._orthographic;
   }
@@ -4341,7 +4364,7 @@ export class Viewer {
    * Snap to one of the six standard axis-aligned views (Top / Bottom / Front /
    * Back / Left / Right) — the Polycam-style "look straight at a face" framing
    * that makes a wall or floor read flat for measuring. Honours the current
-   * projection (perspective or near-orthographic). Returns false when no scan
+   * projection (perspective or orthographic). Returns false when no scan
    * is loaded.
    */
   /**
@@ -4360,7 +4383,6 @@ export class Viewer {
   setStandardView(view: StandardView): boolean {
     const sphere = this._visibleBoundingSphere();
     if (!sphere) return false;
-    this._lastStandardView = view;
     // A standard view is an orbit pose — make sure we're in orbit mode so the
     // controls own the camera (walk/fly would fight the snap).
     this._nav.setMode('orbit');
@@ -4381,37 +4403,44 @@ export class Viewer {
     return true;
   }
 
+  /** The camera the renderer, picker and overlays draw through: the true
+   *  orthographic follower when ortho is on, else the perspective master. */
+  private _activeCamera(): THREE.Camera {
+    return this._orthographic ? this._orthoCamera : this._camera;
+  }
+
+  /** Refresh the orthographic follower to the perspective master's current view
+   *  and point the scene pass at the active camera. Called before every render
+   *  and pick; cheap, idempotent, and a no-op while perspective is active. */
+  private _syncActiveCamera(): void {
+    this._orthoSizeFlag.value = this._orthographic ? 1 : 0;
+    if (this._orthographic) {
+      followPerspective(
+        this._orthoCamera, this._camera, this._controls.target,
+        this._camera.fov, this._camera.aspect, this._camera.near, this._camera.far,
+      );
+      // The point-size divisor for the ortho path: the camera-to-target distance,
+      // so every point renders one size that scales with zoom, not with depth.
+      this._orthoSizeDist.value = Math.max(
+        this._camera.position.distanceTo(this._controls.target), 1e-4,
+      );
+    }
+    (this._scenePass as unknown as { camera: THREE.Camera }).camera = this._activeCamera();
+  }
+
   /**
-   * Toggle the near-orthographic projection. Implemented as a very long lens
-   * (ORTHO_FOV) rather than a separate OrthographicCamera, so the WebGPU
-   * render graph, frustum culling, LOD streaming and the picking tools all
-   * keep working unchanged — only the FOV + framing distance change. Re-frames
-   * the current view so the scan stays the same apparent size.
+   * Switch to a true orthographic projection, or back to perspective. The
+   * orthographic camera is a per-frame follower of the perspective master (same
+   * pose, frustum matched to what perspective spans at the orbit target), so a
+   * switch only flips the mode and re-points the render pass — no reframe, the
+   * follower already frames exactly what is on screen. OrbitControls keep
+   * driving the perspective camera, which drives the follower's zoom.
    */
   setOrthographic(on: boolean): boolean {
+    if (this._orthographic === on) return true;
     this._orthographic = on;
-    this._camera.fov = on ? ORTHO_FOV : DEFAULT_FOV;
-    this._camera.updateProjectionMatrix();
-
-    const sphere = this._visibleBoundingSphere();
-    if (!sphere) return false;
-
-    const fovRad = THREE.MathUtils.degToRad(this._camera.fov);
-    const fitDist = (Math.max(sphere.radius, 1e-3) / Math.sin(fovRad / 2)) * 1.2;
-    this._applyProjectionRanges(sphere.radius, fitDist);
-
-    // Re-frame so the cloud keeps its apparent size at the new lens. If a
-    // standard view is active, re-apply it; otherwise pull along the current
-    // view direction to the new fit distance.
-    if (this._lastStandardView) {
-      this.setStandardView(this._lastStandardView);
-    } else {
-      const target = this._controls.target.clone();
-      const dir = this._camera.position.clone().sub(target);
-      if (dir.lengthSq() < 1e-9) dir.copy(this._horizontalAxis());
-      dir.normalize();
-      this._nav.tweenTo(target.clone().addScaledVector(dir, fitDist), target, 0.6);
-    }
+    this._syncActiveCamera();
+    this.requestFrame();
     return true;
   }
 
@@ -4606,17 +4635,18 @@ export class Viewer {
     return {
       ready: () => this.ready,
       renderFrame: () => {
+        this._syncActiveCamera();
         if (this._edlEnabled) this._post.render();
-        else this._renderer.render(this._scene, this._camera);
+        else this._renderer.render(this._scene, this._activeCamera());
       },
       glCanvas: () => this._renderer.domElement as HTMLCanvasElement,
       activeColorbar: () => this.activeColorbar(),
       measurementsOverlaySVG: () => {
-        this._measure.render(this._camera, this._canvas);
+        this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas);
         return this._measure.overlaySVG();
       },
       annotationsOverlaySVG: () => {
-        this._annotate.render(this._camera, this._canvas);
+        this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas);
         return this._annotate.markerSVG();
       },
       inspectorOverlaySVG: () => {
@@ -4692,74 +4722,18 @@ export class Viewer {
    * `unavailableReason`. The contract is one-way: a mode missing from this
    * map renders as disabled.
    */
-  availableImageExportModes(): ReadonlyMap<
-    ExportMode,
-    { readonly available: boolean; readonly reason?: string }
-  > {
+  availableImageExportModes(): ReadonlyMap<ExportMode, ExportModeAvailability> {
+    // Compute the scene facts from the live export adapter; the pure module turns
+    // them into the per-mode availability + reasons (extracted for the monolith).
     const adapter = this._buildExportAdapter();
     const aabb = adapter.localBoundsAabb();
-    const hasAabb = aabb !== null;
-    const zRange = aabb ? aabb[5] - aabb[2] : 0;
-    const hasIntensity = adapter.hasIntensity();
-    const hasClassification = adapter.hasClassification();
-    const hasNormals = adapter.hasNormals();
-
-    const out = new Map<
-      ExportMode,
-      { readonly available: boolean; readonly reason?: string }
-    >();
-
-    // orthographic-rgb — always available (current-mode passthrough).
-    out.set('orthographic-rgb', { available: true });
-
-    // height-map — needs an AABB with a non-degenerate Z extent.
-    if (!hasAabb) {
-      out.set('height-map', { available: false, reason: 'No cloud is loaded.' });
-    } else if (zRange <= 1e-4) {
-      out.set('height-map', {
-        available: false,
-        reason: 'Cloud has no measurable height range.',
-      });
-    } else {
-      out.set('height-map', { available: true });
-    }
-
-    // intensity — needs an AABB + the channel.
-    if (!hasAabb) {
-      out.set('intensity', { available: false, reason: 'No cloud is loaded.' });
-    } else if (!hasIntensity) {
-      out.set('intensity', {
-        available: false,
-        reason: 'This cloud has no per-point intensity channel.',
-      });
-    } else {
-      out.set('intensity', { available: true });
-    }
-
-    // classification — needs an AABB + the channel.
-    if (!hasAabb) {
-      out.set('classification', { available: false, reason: 'No cloud is loaded.' });
-    } else if (!hasClassification) {
-      out.set('classification', {
-        available: false,
-        reason: 'This cloud has no per-point classification channel.',
-      });
-    } else {
-      out.set('classification', { available: true });
-    }
-
-    // normal — needs the channel. LiDAR captures rarely include normals.
-    if (!hasNormals) {
-      out.set('normal', {
-        available: false,
-        reason:
-          'This cloud has no per-point normals. LiDAR captures rarely include them; PCD / PTX / GLTF scans with normals are supported.',
-      });
-    } else {
-      out.set('normal', { available: true });
-    }
-
-    return out;
+    return imageExportModeAvailability({
+      hasAabb: aabb !== null,
+      zRange: aabb ? aabb[5] - aabb[2] : 0,
+      hasIntensity: adapter.hasIntensity(),
+      hasClassification: adapter.hasClassification(),
+      hasNormals: adapter.hasNormals(),
+    });
   }
 
   /**
@@ -4767,12 +4741,38 @@ export class Viewer {
    * to drive the live Viewer. Held inline (not as a stored field) so the
    * adapter always reflects the current loaded clouds without bookkeeping.
    */
+  // App wires the CRS authority here so the export adapter georeferences off the
+  // RESOLVED CRS, never declared metadata (C10). `_resolvedActiveCrs` is the
+  // active-scan form STREAMING uses. Null → falls back to declared (pure tests).
+  private _exportCrsResolver: ((cloud: PointCloud) => ExportCloudCrs) | null = null;
+  private _resolvedActiveCrs: (() => ExportCloudCrs) | null = null;
+  setExportCrsResolver(fn: (cloud: PointCloud) => ExportCloudCrs): void {
+    this._exportCrsResolver = fn;
+  }
+  setResolvedActiveCrs(fn: () => ExportCloudCrs): void {
+    this._resolvedActiveCrs = fn;
+  }
+
   private _buildExportAdapter(): ExportSceneAdapter {
+    const resolveCloudCrs = this._exportCrsResolver;
     return buildExportAdapter({
-      clouds: () => this._clouds,
+      ...(resolveCloudCrs ? { resolveCloudCrs } : {}),
+      ...(this._resolvedActiveCrs ? { resolvedActiveCrs: this._resolvedActiveCrs } : {}),
+      // Project each live entry into the adapter's slice, carrying the render
+      // visibility (mesh.visible) and Float64 placement so the export answers
+      // over the visible, placed scene (pass-7 #4/#5/#6). Rebuilt per call, so
+      // it always reflects the current layer set + their current visibility.
+      clouds: () => {
+        const out = new Map<string, ExportAdapterCloud>();
+        for (const [id, e] of this._clouds) {
+          out.set(id, { cloud: e.cloud, mode: e.mode, visible: e.mesh.visible, placement: e.placement ?? null });
+        }
+        return out;
+      },
       streaming: () => this._streaming,
       setColorMode: (id, mode) => this.setColorMode(id, mode),
       setStreamingColorMode: (mode) => this.setStreamingColorMode(mode),
+      setVisible: (id, visible) => this.setCloudVisible(id, visible),
       snapshot: (options) => this.snapshot(options),
       renderFramedTopDown: (aabb, widthPx) => this._renderFramedTopDown(aabb, widthPx),
       renderFigure: (options) => this.renderFigure(options),
@@ -5771,7 +5771,8 @@ export class Viewer {
   } | null {
     if (this._streamingPickData.size === 0) return null;
     this._pickNdc.set(ndcX, ndcY);
-    this._raycaster.setFromCamera(this._pickNdc, this._camera);
+    this._syncActiveCamera();
+    this._raycaster.setFromCamera(this._pickNdc, this._activeCamera());
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
     // Resident-only pick invariant — pick from resident meshes only. Prune any orphan
@@ -5896,7 +5897,8 @@ export class Viewer {
     ndcY: number,
   ): { cloud: PointCloud; index: number; point: THREE.Vector3 } | null {
     this._pickNdc.set(ndcX, ndcY);
-    this._raycaster.setFromCamera(this._pickNdc, this._camera);
+    this._syncActiveCamera();
+    this._raycaster.setFromCamera(this._pickNdc, this._activeCamera());
     const o = this._raycaster.ray.origin;
     const d = this._raycaster.ray.direction;
 
@@ -5993,7 +5995,7 @@ export class Viewer {
         e.clientX,
         e.clientY,
         this.getCameraState(),
-        annotationGeorefFor(detailed),
+        annotationGeorefFor(detailed, detailed ? this._exportCrsResolver?.(detailed.cloud)?.name : undefined),
       );
     } else {
       this._annotate.pickMissed();
@@ -6105,8 +6107,8 @@ export class Viewer {
     if (!this._streaming) return;
     this._camera.updateMatrixWorld();
     this._streamingViewProj.multiplyMatrices(
-      this._camera.projectionMatrix,
-      this._camera.matrixWorldInverse,
+      this._activeCamera().projectionMatrix,
+      this._activeCamera().matrixWorldInverse,
     );
     this._streamingCamPos[0] = this._camera.position.x;
     this._streamingCamPos[1] = this._camera.position.y;
@@ -6278,8 +6280,8 @@ export class Viewer {
         this._applyAdaptiveDpr(moving, delta, nowMs, rendered),
       noteRendered: () => this._renderGate.noteRendered(),
       noteSkipped: () => this._renderGate.noteSkipped(),
-      renderEdl: () => this._post.render(),
-      renderScene: () => this._renderer.render(this._scene, this._camera),
+      renderEdl: () => { this._syncActiveCamera(); this._post.render(); },
+      renderScene: () => { this._syncActiveCamera(); this._renderer.render(this._scene, this._activeCamera()); },
       edlPaintedAtRest: () => this._edlPaintedAtRest,
       setEdlPaintedAtRest: (value) => {
         this._edlPaintedAtRest = value;
@@ -6311,9 +6313,9 @@ export class Viewer {
         return hit ? this._infoForStreamingHit(hit) : null;
       },
       updateProbe: (info, clientX, clientY) => this._probe.update(info, clientX, clientY),
-      renderMeasureOverlay: () => this._measure.render(this._camera, this._canvas),
+      renderMeasureOverlay: () => this._measure.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
       renderInspectOverlay: () => this._inspect.render(),
-      renderAnnotateOverlay: () => this._annotate.render(this._camera, this._canvas),
+      renderAnnotateOverlay: () => this._annotate.render(this._activeCamera() as THREE.PerspectiveCamera, this._canvas),
     };
   }
 

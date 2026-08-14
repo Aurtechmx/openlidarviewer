@@ -327,6 +327,36 @@ function dropWorker(worker: Worker): void {
   if (sharedWorker === worker) sharedWorker = undefined;
 }
 
+/** Chunk size for the abort-aware whole-file read (64 MiB). */
+const READ_CHUNK_BYTES = 64 * 1024 * 1024;
+
+/**
+ * Read the whole file into one ArrayBuffer in slices, checking `signal` between
+ * chunks. `File.arrayBuffer()` is not wired to an abort signal, so on a 3–5 GB
+ * static file a cancel could not stop the read until the entire file had been
+ * materialised — the exact phase where cancellation matters. Reading by slice
+ * makes the cancel window one chunk, not the whole file. A file at or below one
+ * chunk takes the single-read path (the cancel window is already tiny and
+ * slicing would only add copies).
+ */
+export async function readWholeFileAbortable(
+  file: File,
+  signal: AbortSignal | undefined,
+): Promise<ArrayBuffer> {
+  const total = file.size;
+  if (signal?.aborted) throw new LoadCancelledError();
+  if (total <= READ_CHUNK_BYTES) return file.arrayBuffer();
+  const dest = new Uint8Array(total);
+  let offset = 0;
+  while (offset < total) {
+    if (signal?.aborted) throw new LoadCancelledError();
+    const end = Math.min(offset + READ_CHUNK_BYTES, total);
+    dest.set(new Uint8Array(await file.slice(offset, end).arrayBuffer()), offset);
+    offset = end;
+  }
+  return dest.buffer;
+}
+
 /**
  * Load a dropped File into a PointCloud.
  *
@@ -364,7 +394,9 @@ export async function loadFile(
   // --- Now read the whole file — only once the format is known. ---
   onProgress?.({ stage: 'reading-file' });
   const readStartedAt = performance.now();
-  const buffer = await file.arrayBuffer();
+  // Abort-aware: a cancel during a multi-gigabyte read stops within one chunk
+  // instead of after the whole file has been materialised.
+  const buffer = await readWholeFileAbortable(file, signal);
   const fileReadMs = performance.now() - readStartedAt;
   throwIfCancelled();
 

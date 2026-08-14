@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 8,
-  "countedStudies": 7,
+  "studiesRead": 9,
+  "countedStudies": 8,
   "byStatus": {
-    "agree": 6,
+    "agree": 7,
     "partial": 1
   },
   "byClaim": {
@@ -108,6 +108,18 @@
         "PS-HORN-HILLSHADE-AZ315-ALT45"
       ]
     },
+    "MEAS-AREA": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-030-AREA-POLYGONS"
+      ],
+      "parameterSetIds": [
+        "PS-AREA-OGR-PLANAR"
+      ]
+    },
     "SLOPE-RASTER": {
       "studies": 1,
       "byStatus": {
@@ -123,10 +135,10 @@
     }
   },
   "agreement": {
-    "denominator": 7,
+    "denominator": 8,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 6,
-    "fraction": 0.8571428571428571
+    "agree": 7,
+    "fraction": 0.875
   },
   "excludedFromCounts": [
     {

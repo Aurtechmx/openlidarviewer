@@ -82,6 +82,27 @@ function pickRenderOriginFromCube(cube: Box6): [number, number, number] {
   return [Math.floor(cx), Math.floor(cy), Math.floor(cz)];
 }
 
+/**
+ * Fan two abort signals into one: the returned signal aborts when EITHER input
+ * aborts, carrying the tripping signal's reason. `a` is the optional per-load
+ * signal; `b` is the always-present session lifetime. Kept local so this module
+ * stays free of the app layer's `linkAbortSignals`. If neither ever aborts the
+ * two `once` listeners live as long as the session — bounded to one instance.
+ */
+function composeAbort(a: AbortSignal | undefined, b: AbortSignal): AbortSignal {
+  if (!a) return b;
+  const child = new AbortController();
+  const tripA = (): void => child.abort(a.reason);
+  const tripB = (): void => child.abort(b.reason);
+  if (a.aborted) child.abort(a.reason);
+  else if (b.aborted) child.abort(b.reason);
+  else {
+    a.addEventListener('abort', tripA, { once: true });
+    b.addEventListener('abort', tripB, { once: true });
+  }
+  return child.signal;
+}
+
 export class EptStreamingPointCloud implements StreamingSource {
   /** Stable shell id for this streaming session; see {@link nextStreamingScanId}. */
   readonly id: string = nextStreamingScanId();
@@ -100,6 +121,15 @@ export class EptStreamingPointCloud implements StreamingSource {
    */
   private readonly _search: string;
   private readonly _transport: EptTransport;
+  /**
+   * Session-lifetime abort. Its signal composes into the background hierarchy
+   * deepening so {@link close} — which `disposeStreamingSession` calls when the
+   * scan is replaced or dismissed — stops the deepening. Without it the
+   * fire-and-forget `continueHierarchy` kept fetching thousands of hierarchy
+   * files for a scan the user had already navigated away from, on the per-load
+   * controller that is never aborted once the load succeeds.
+   */
+  private readonly _lifetime = new AbortController();
   /** Dataset-level RGB bit-depth, captured from the first decoded RGB tile;
    *  see {@link noteDecodedRgbDepth}. Undefined until the first colour tile
    *  lands. */
@@ -153,7 +183,10 @@ export class EptStreamingPointCloud implements StreamingSource {
     if (!octree.fullyLoaded) {
       // Fire-and-forget: the coarse cloud already renders, so a failed or
       // aborted deepening just leaves the scheduler fewer deep nodes to choose.
-      void octree.continueHierarchy(signal).catch(() => {});
+      // Compose the load signal with the cloud's lifetime signal so the
+      // deepening stops on EITHER a load cancel OR close() — otherwise it runs
+      // to completion for a scan the user has already closed or replaced.
+      void octree.continueHierarchy(composeAbort(signal, cloud._lifetime.signal)).catch(() => {});
     }
     return cloud;
   }
@@ -267,6 +300,19 @@ export class EptStreamingPointCloud implements StreamingSource {
     }
     const url = eptTileUrl(this.baseUrl, key, this.metadata.dataType, this._search);
     return this._transport.fetchBytes(url, signal);
+  }
+
+  /**
+   * Release the session. Aborts the background hierarchy deepening so a closed
+   * or replaced scan stops fetching hierarchy files it will never render. There
+   * is no file handle or range reader to release (unlike the COPC source), so
+   * the octree + tile buffers are reclaimed by GC with the instance. Idempotent:
+   * a second call on an already-aborted controller is a no-op. `disposeStreaming
+   * Session` invokes this via the optional `StreamingSource.close` contract.
+   */
+  close(): Promise<void> {
+    this._lifetime.abort();
+    return Promise.resolve();
   }
 
   /**

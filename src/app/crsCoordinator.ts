@@ -61,7 +61,7 @@ export interface CrsCoordinator {
   /** Handle a user CRS override picked from the Inspector. */
   handleCrsOverride(override: {
     epsg: number | null;
-    kind: 'projected' | 'geographic' | 'local';
+    kind: 'projected' | 'geographic' | 'local' | 'detected';
   }): void;
   /**
    * Forget the dataset key currently in scope. Called from the reset-to-empty
@@ -151,7 +151,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
 
   function handleCrsOverride(override: {
     epsg: number | null;
-    kind: 'projected' | 'geographic' | 'local';
+    kind: 'projected' | 'geographic' | 'local' | 'detected';
   }): void {
     if (!currentCrsDatasetKey) return;
     // ONE writer: the override goes through `crsService.setOverride`, which
@@ -181,7 +181,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       source = 'copc-meta';
     }
     crsService.setOverride({ override, detected, source });
-    if (!(override.epsg === null && override.kind === 'local')) {
+    // Count a real override (projected / geographic / local); the 'detected'
+    // command just clears, so it is not a chosen CRS to record.
+    if (override.kind !== 'detected') {
       recordUsage('scan-open', `crs-override:${override.epsg ?? 'local'}`);
     }
     // Re-run resolution and refresh — uses whichever cloud is currently active.

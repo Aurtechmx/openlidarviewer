@@ -55,12 +55,12 @@ has re-opened the divergence this closes.
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
 | 1 | Point inspection | migrated | `src/render/pointInfo.ts` | `linearUnit`, `verticalReference`, `verticalUnitToMetres` |
-| 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts` | `linearUnitKnown`, `linearUnitToMetres` |
+| 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres` |
 | 3 | Space / object report | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown` |
 | 4 | Stockpile and cut/fill volume | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `verticalMetresPerUnit` |
 | 5 | Density and fitness grades | migrated | `src/render/streaming/runFullCloudGradeAction.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
 | 6 | Terrain analysis | migrated | `src/app/terrainAnalysisRunner.ts` | `isGeographic`, `linearUnitToMetres`, `epsg`, `verticalEpsg`, `verticalDatum`, `crsName`, `kind`, `verticalMetresPerUnit` |
-| 7 | Epoch comparison | migrated | `src/geo/frameCompatibility.ts`, `src/main.ts` | `isGeographic`, `linearUnitKnown`, `linearUnitToMetres`, `verticalReference`, `verticalUnitToMetres`, `verticalScaleKnown` |
+| 7 | Epoch comparison | migrated | `src/app/epochFramePrep.ts`, `src/geo/frameCompatibility.ts`, `src/main.ts` | `isGeographic`, `linearUnitKnown`, `linearUnitToMetres`, `verticalReference`, `verticalUnitToMetres`, `verticalScaleKnown` |
 | 8 | Contours | carrier | `src/terrain/contour/geojsonContours.ts` | `verticalReference`, carried on `ContourFeatureModel` |
 | 9 | PDF reports | migrated | `src/app/reportExport.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalUnitToMetres` |
 | 10 | LAS export | migrated | `src/convert/convertCloud.ts` | `linearUnit`, `verticalLinearUnit`, `verticalEpsg` |

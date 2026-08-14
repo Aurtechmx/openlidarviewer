@@ -354,6 +354,10 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
   animation: olv-spin 800ms linear infinite;
 }
 @keyframes olv-spin { to { transform: rotate(360deg); } }
+/* Respect reduced-motion: hold the load spinner static rather than spin forever. */
+@media (prefers-reduced-motion: reduce) {
+  .olv-url-btn-loading::before { animation: none; }
+}
 
 /* 3. Format <details> collapsible. */
 .olv-empty-formats[open] .olv-empty-formats-summary::after { content: ' ▴'; opacity: 0.6; }

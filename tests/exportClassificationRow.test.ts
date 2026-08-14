@@ -20,6 +20,10 @@ function adapterWith(
   return {
     setExportColorMode: () => {},
     currentColorMode: () => 'rgb',
+    snapshotColorModes: () => ({ staticModes: new Map(), streamingMode: null }),
+    restoreColorModes: () => {},
+    excludeUnsupported: () => [],
+    restoreVisibility: () => {},
     hasRgb: () => true,
     hasIntensity: () => true,
     hasClassification: () => true,

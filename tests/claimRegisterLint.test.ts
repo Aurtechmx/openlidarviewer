@@ -57,15 +57,21 @@ function registry(...ids: string[]): string {
  * add, drop or bend exactly the field it is about.
  */
 function claim(id: string, level: string, extra: string): string {
-  return [
+  // A well-formed E4+ claim carries a measured externalValidationStatus (C5).
+  // `extra` is appended AFTER, so a case can override it (the parser keeps the
+  // last value) — e.g. the C5 negative control sets `pending`.
+  const isE4Plus = /^E[4-6]_/.test(level);
+  const lines = [
     `  - claimId: ${id}`,
     `    product: ${id} product`,
     `    algorithm: an algorithm`,
     `    currentEvidence: ${level}`,
     `    requiredEvidence: ${level}`,
     `    exportAllowed: true`,
-    extra,
-  ].join('\n');
+  ];
+  if (isE4Plus) lines.push(`    externalValidationStatus: partial`);
+  lines.push(extra);
+  return lines.join('\n');
 }
 
 const SCOPED = [
@@ -225,6 +231,22 @@ describe('the claim-register lint rejects', () => {
     const r = lint({ registerText: text, ids: ['HILLSHADE'], studies: [AGREEING_STUDY] });
     expect(r.ruleIds).toEqual(['C2-E4-STUDY']);
     expect(r.problems[0].message).toContain('is a comparison for SLOPE-RASTER');
+  });
+
+  it('C5. an E4 claim whose externalValidationStatus is still pending (the CONTOURS drift)', () => {
+    // The study agrees (C2 passes), but the claim's own status field still reads
+    // pending — the exact contradiction that shipped: E4 currentEvidence with a
+    // pending status. C5 refuses it.
+    const text = register(
+      claim('SLOPE-RASTER', 'E4_CROSS_IMPLEMENTATION_VALIDATED', [
+        '    supportingStudies: [OLV-XS-001-TEST]',
+        '    externalValidationStatus: pending', // overrides the helper's `partial`
+        SCOPED,
+      ].join('\n')),
+    );
+    const r = lint({ registerText: text, studies: [AGREEING_STUDY] });
+    expect(r.ruleIds).toEqual(['C5-E4-STATUS']);
+    expect(r.problems[0].message).toContain('pending');
   });
 
   it('C3. an E5 claim with no external record', () => {

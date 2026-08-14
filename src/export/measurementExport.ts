@@ -19,13 +19,14 @@
 
 import type { Measurement, Vec3 } from '../render/measure/types';
 import { isComplete } from '../render/measure/types';
-import { evidenceNote, evidenceStatus } from '../validation/exportEvidenceNote';
+import { evidenceNote, evidenceStatus, unverifiedUnitsCaveat } from '../validation/exportEvidenceNote';
 import { crsUrn } from './crsIdentifier';
 import {
   distance,
   polylineLength,
   profileMetrics,
   polygonAreaHorizontal,
+  polygonAreaPlanar,
   polygonPerimeter,
   angleAtVertex,
   slopeBetween,
@@ -53,6 +54,14 @@ export interface MeasurementExportContext {
   readonly crsName?: string;
   /** True when `toOutput` yields geographic WGS84 lon/lat (RFC 7946 default frame). */
   readonly geographic?: boolean;
+  /**
+   * True when the scan's linear scale is KNOWN (a resolved CRS unit), so the
+   * `_m` / `_m2` / `_m3` columns genuinely mean metres. False for a local /
+   * unknown-unit scan, where the factor is an inert 1 and the export must not
+   * claim metres — the evidence note then carries an explicit units caveat
+   * (pass-6 M1). Defaults to true so every georeferenced caller is unchanged.
+   */
+  readonly unitsVerified?: boolean;
 }
 
 /** A finite number rounded to `d` decimals, or null when not finite. */
@@ -60,6 +69,25 @@ function num(v: number, d = 3): number | null {
   if (!Number.isFinite(v)) return null;
   const f = 10 ** d;
   return Math.round(v * f) / f;
+}
+
+/**
+ * Express a source-frame point in an isotropic METRE frame: scale the component
+ * along the (unit) up-axis by the vertical factor and the perpendicular
+ * (horizontal) part by the horizontal factor. Computing 3D geometry on these
+ * points is then physically correct even for a COMPOUND CRS (metre eastings over
+ * foot heights) — where scaling a 3D distance or a slope grade by one factor
+ * mixed the two axes and produced a self-contradictory export: grade 100 % beside
+ * rise 0.3048 m / run 1 m (pass-6 M2). For a single-unit CRS both factors are
+ * equal, so this is a uniform scale and every metric is byte-identical to before.
+ */
+function toMetricFrame(p: Vec3, up: Vec3, h: number, v: number): Vec3 {
+  const along = p[0] * up[0] + p[1] * up[1] + p[2] * up[2]; // dot(p, up)
+  return [
+    (p[0] - along * up[0]) * h + along * up[0] * v,
+    (p[1] - along * up[1]) * h + along * up[1] * v,
+    (p[2] - along * up[2]) * h + along * up[2] * v,
+  ];
 }
 
 /**
@@ -72,76 +100,93 @@ export function measurementMetrics(
   up: Vec3,
   unitToMetres: number,
   verticalToMetres: number = unitToMetres,
+  decimals = 3,
 ): Record<string, number> {
   const out: Record<string, number> = {};
+  // Round at the surface's chosen precision. The tabular exports (CSV / GeoJSON /
+  // KML / integrity) keep the default 3 decimals — millimetre columns, byte-
+  // identical to before. The PDF report and any display path pass a higher
+  // `decimals` so a value like 0.9144 m survives to feed formatLinear's adaptive
+  // sub-centimetre precision and agree with the live panel to the digit (M6);
+  // `num` still drops a non-finite value to null (omitted, never zero-filled).
   const set = (k: string, v: number | null): void => {
-    if (v !== null) out[k] = v;
+    const r = v === null ? null : num(v, decimals);
+    if (r !== null) out[k] = r;
   };
   const pts = m.points;
   const L = unitToMetres;
-  const A = unitToMetres * unitToMetres;
-  // Vertical (up-axis) factor for heights/drops, and the volume factor
-  // linear²·vertical — matching the panel headline (_fmtVertical / _fmtCutFill).
-  // Defaults to L, so a single-unit CRS is byte-identical; a compound CRS
-  // (metre eastings over foot heights) no longer scales height by the
-  // horizontal factor and disagreeing with the on-screen value.
+  // Vertical (up-axis) factor; defaults to L so a single-unit CRS is uniform.
   const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : L;
-  const Vol = A * Vv;
+  // Volume factor for STORED cut/fill (not point-derived): linear²·vertical.
+  const Vol = L * L * Vv;
   if (!isComplete(m)) return out;
+
+  // Every point-derived metric is computed in the isotropic METRE frame, so the
+  // result is already in metres and no per-axis factor is juggled onto a 3D
+  // quantity — the compound-CRS self-contradiction (M2). Single-unit CRSs make
+  // this a uniform scale, so the numbers are byte-identical to before.
+  const mp = pts.map((p) => toMetricFrame(p, up, L, Vv));
 
   switch (m.kind) {
     case 'distance':
-      set('length_m', num(distance(pts[0], pts[1]) * L));
+      set('length_m', distance(mp[0], mp[1]));
       break;
     case 'polyline':
-      set('length_m', num(polylineLength(pts).total * L));
+      set('length_m', polylineLength(mp).total);
       break;
     case 'height': {
-      const v = verticalDelta(pts[0], pts[1], up);
-      set('vertical_m', num(v.vertical * Vv));
-      set('horizontal_m', num(v.horizontal * L));
+      const v = verticalDelta(mp[0], mp[1], up);
+      set('vertical_m', v.vertical);
+      set('horizontal_m', v.horizontal);
       break;
     }
     case 'angle':
-      set('angle_deg', num(angleAtVertex(pts[0], pts[1], pts[2])));
+      // Physically correct now — the arms are in the metric frame, so a mix of
+      // horizontal and vertical units no longer skews the angle (M3's compute).
+      set('angle_deg', angleAtVertex(mp[0], mp[1], mp[2]));
       break;
     case 'slope': {
-      const s = slopeBetween(pts[0], pts[1], up);
-      set('grade_pct', num(s.gradePercent));
-      set('angle_deg', num(s.angleDeg));
-      set('rise_m', num(s.rise * Vv));
-      set('run_m', num(s.run * L));
+      const s = slopeBetween(mp[0], mp[1], up);
+      set('grade_pct', s.gradePercent);
+      set('angle_deg', s.angleDeg);
+      set('rise_m', s.rise);
+      set('run_m', s.run);
       break;
     }
     case 'profile': {
-      const p = profileMetrics(pts[0], pts[1], up);
-      set('length_m', num(p.length3d * L));
-      set('horizontal_m', num(p.lengthHorizontal * L));
-      set('vertical_m', num(p.verticalDrop * Vv));
-      set('grade_pct', num(p.gradePercent));
+      const p = profileMetrics(mp[0], mp[1], up);
+      set('length_m', p.length3d);
+      set('horizontal_m', p.lengthHorizontal);
+      set('vertical_m', p.verticalDrop);
+      set('grade_pct', p.gradePercent);
       break;
     }
     case 'area':
-      set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
-      set('perimeter_m', num(polygonPerimeter(pts) * L));
+      // `area_m2` is the PRIMARY Area measurement — the true tilted-plane area
+      // the live headline and the aggregate chain both report (polygonAreaPlanar).
+      // Exporting the horizontal projection here made a vertical 1 m×1 m wall
+      // read ~1 m² on screen but 0 m² in the file (pass-6 M4). The map footprint
+      // is still exported alongside as `horizontal_area_m2` for GIS use.
+      set('area_m2', polygonAreaPlanar(mp));
+      set('horizontal_area_m2', polygonAreaHorizontal(mp, up));
+      set('perimeter_m', polygonPerimeter(mp));
       break;
     case 'box': {
-      const mb = boxMetrics(boxFromCorners(pts[0], pts[1]), up);
-      set('width_m', num(mb.width * L));
-      set('depth_m', num(mb.depth * L));
-      set('height_m', num(mb.height * Vv));
-      set('volume_m3', num(mb.volume * Vol));
+      const mb = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
+      set('width_m', mb.width);
+      set('depth_m', mb.depth);
+      set('height_m', mb.height);
+      set('volume_m3', mb.volume);
       break;
     }
     case 'volume':
-      set('area_m2', num(polygonAreaHorizontal(pts, up) * A));
+      // A volume's base is a horizontal footprint (the map area under it).
+      set('area_m2', polygonAreaHorizontal(mp, up));
       if (m.volume) {
-        // cut/fill/net are stored in the cloud's native (render) linear units.
-        // Convert to cubic metres with linear²·vertical (the box-volume factor
-        // and the panel's _fmtCutFill). Single-unit CRS collapses to L³.
-        set('cut_m3', num(m.volume.cut * Vol));
-        set('fill_m3', num(m.volume.fill * Vol));
-        set('net_m3', num(m.volume.net * Vol));
+        // cut/fill/net are stored volumes in native units, not point-derived.
+        set('cut_m3', m.volume.cut * Vol);
+        set('fill_m3', m.volume.fill * Vol);
+        set('net_m3', m.volume.net * Vol);
       }
       break;
   }
@@ -220,7 +265,7 @@ export function measurementsToGeoJSON(
   // their required evidence level, so the file carries the exploratory verdict
   // rather than leaving with no gate stamp at all. RFC 7946 permits foreign
   // members on a FeatureCollection, so a reader that ignores it is unaffected.
-  fc.evidence = evidenceNote('MEAS-DISTANCE');
+  fc.evidence = evidenceNote('MEAS-DISTANCE') + unverifiedUnitsCaveat(ctx.unitsVerified ?? true);
   return JSON.stringify(fc, null, 2);
 }
 
@@ -236,7 +281,7 @@ export function measurementsToGeoJSON(
 const CSV_COLUMNS = [
   'id', 'name', 'kind', 'vertices',
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
-  'grade_pct', 'angle_deg', 'area_m2', 'perimeter_m',
+  'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
   'evidence',
 ] as const;
@@ -266,7 +311,12 @@ export function measurementsToCsv(
   // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
   // measurements sit below their required evidence level, so every row carries
   // the exploratory verdict rather than leaving with no gate stamp at all.
-  const evidence = evidenceStatus('MEAS-DISTANCE');
+  // The gate token, plus a units-unverified marker when the scan has no known
+  // scale so a spreadsheet reader sees the same caveat the GeoJSON note carries
+  // — the `_m` columns then read as nominal, not confirmed metres (M1).
+  const evidence = (ctx.unitsVerified ?? true)
+    ? evidenceStatus('MEAS-DISTANCE')
+    : `${evidenceStatus('MEAS-DISTANCE')}; units-unverified (source render units, not metres)`;
   for (const m of measurements) {
     const metrics = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     const base: Record<string, string | number> = {

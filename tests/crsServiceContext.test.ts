@@ -81,13 +81,16 @@ describe('CrsService.context()', () => {
     svc.resolveForScan({ name: 'scan.laz', detected: utm12, source: 'las-vlr' });
     const before = svc.context();
     svc.setOverride({
+      // A genuine local override now yields a LOCAL frame (post-C3); it used to
+      // collide with the clear sentinel and fall back to the detected/unknown
+      // frame. Either way the context REBUILDS and permits no metric claim.
       override: { epsg: null, kind: 'local' },
       detected: undefined,
       source: 'user-override',
     });
     const after = svc.context();
     expect(after).not.toBe(before);
-    expect(after.kind).toBe('unknown');
+    expect(after.kind).toBe('local');
     expect(after.metricClaimsPermitted).toBe(false);
   });
 
