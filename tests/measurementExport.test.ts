@@ -75,6 +75,29 @@ describe('measurementMetrics', () => {
     expect(m.perimeter_m).toBe(40);
   });
 
+  it('compound CRS: slope/distance computed in a physical metric frame (M2)', () => {
+    // metre horizontal (unitToMetres=1) over foot vertical (verticalToMetres=0.3048).
+    // A 1-unit run with a 1-unit (= 1 ft) rise.
+    const slope = measurementMetrics(mk('slope', [[0, 0, 0], [1, 0, 1]]), UP, 1, 0.3048);
+    // Physical grade 0.3048 m / 1 m = 30.48 %, NOT the raw-coordinate 100 %.
+    expect(slope.grade_pct).toBeCloseTo(30.48, 1);
+    expect(slope.rise_m).toBeCloseTo(0.3048, 3);
+    expect(slope.run_m).toBeCloseTo(1, 3);
+    // And the 3D distance scales each axis by its own factor.
+    const dist = measurementMetrics(mk('distance', [[0, 0, 0], [1, 0, 1]]), UP, 1, 0.3048);
+    expect(dist.length_m).toBeCloseTo(Math.hypot(1, 0.3048), 3); // 1.0453, not 1.4142
+  });
+
+  it('area_m2 is the PLANAR (live) area, with the map footprint alongside (M4)', () => {
+    // A vertical 10×10 wall in the XZ plane: its true tilted-plane area is 100
+    // (what the live headline shows), but its horizontal projection is ~0. The
+    // export used to write the projection as `area_m2`, contradicting the screen.
+    const wall = mk('area', [[0, 0, 0], [10, 0, 0], [10, 0, 10], [0, 0, 10]], { closed: true });
+    const m = measurementMetrics(wall, UP, 1);
+    expect(m.area_m2).toBeCloseTo(100, 6);
+    expect(m.horizontal_area_m2).toBeCloseTo(0, 6);
+  });
+
   it('box → width / depth / height / volume', () => {
     expect(measurementMetrics(BOX, UP, 1)).toMatchObject({
       width_m: 2, depth_m: 3, height_m: 4, volume_m3: 24,
@@ -238,5 +261,32 @@ describe('measurementsToGeoJSON — a resolvable CRS identifier', () => {
   it('still omits the crs member for geographic output', () => {
     const fc = JSON.parse(measurementsToGeoJSON(m, { ...ctx('EPSG:4326'), geographic: true } as never));
     expect(fc.crs).toBeUndefined();
+  });
+});
+
+// ── M1: unknown scale must not silently claim metres ─────────────────────────
+// A local / unknown-unit scan has an inert unitToMetres of 1, so the `_m`
+// columns are nominal render units, not confirmed metres. The evidence note on
+// each surface must say so; a georeferenced export (unitsVerified true / unset)
+// is byte-identical to before.
+describe('unverified units caveat (M1)', () => {
+  it('GeoJSON evidence carries the caveat only when the scale is unverified', () => {
+    const verified = JSON.parse(measurementsToGeoJSON([DISTANCE], CTX));
+    expect(verified.evidence).not.toMatch(/units unverified/i);
+
+    const unverified = JSON.parse(
+      measurementsToGeoJSON([DISTANCE], { ...CTX, unitsVerified: false }),
+    );
+    expect(unverified.evidence).toMatch(/units unverified/i);
+    // The value is still emitted — the geometry is real, only the unit label is nominal.
+    expect(unverified.features[0].properties.length_m).toBe(5);
+  });
+
+  it('CSV evidence column carries the caveat only when the scale is unverified', () => {
+    const verified = measurementsToCsv([DISTANCE], CTX);
+    expect(verified).not.toMatch(/units-unverified/);
+
+    const unverified = measurementsToCsv([DISTANCE], { ...CTX, unitsVerified: false });
+    expect(unverified).toMatch(/units-unverified/);
   });
 });

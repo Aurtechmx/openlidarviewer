@@ -21,8 +21,9 @@
 import { ProcessStudioPanel } from '../ui/ProcessStudioPanel';
 import { deriveScanFacts } from '../process/scanFacts';
 import type { RawScanSignals } from '../process/scanFacts';
-import type { ScanFacts } from '../process/ProcessPlan';
+import type { ScanFacts, ProductId } from '../process/ProcessPlan';
 import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /** LAS standard classification codes the panel keys ground/building on. */
 const CLASS_GROUND = 2;
@@ -38,8 +39,8 @@ export interface LiveScanAccessors {
   getStreamingPointCount(): number | null | undefined;
   /** Point count of the active static cloud; null/undefined when none is loaded. */
   getActivePointCount(): number | null | undefined;
-  /** The resolved CRS, or null when unknown — never assumed. */
-  getResolvedCrs(): CrsInfo | null | undefined;
+  /** The resolved CRS (override applied), or null when unknown — never assumed. */
+  getResolvedCrs(): CrsInfo | ResolvedCrs | null | undefined;
   /** Classification codes currently present on the active scan (empty when none). */
   getPresentClassCodes(): readonly number[];
   /** True when the present classification was DERIVED by OLV (heuristic), not
@@ -101,6 +102,10 @@ export interface MountedProcessStudio {
   readonly panel: ProcessStudioPanel;
   /** Re-read live signals and repaint. Safe to call on every scan change. */
   refresh(): void;
+  /** Mark products as generated (e.g. DTM + contours after an analysis run). */
+  markProduced(ids: readonly ProductId[]): void;
+  /** Clear the produced set (e.g. on scan change) so a new scan starts un-produced. */
+  clearProduced(): void;
 }
 
 /** Create the panel and return it plus a `refresh()` bound to `deps`. */
@@ -114,6 +119,12 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
     panel,
     refresh() {
       panel.update(resolveActiveScanFacts(deps));
+    },
+    markProduced(ids) {
+      panel.setProduced(ids);
+    },
+    clearProduced() {
+      panel.setProduced([]);
     },
   };
 }

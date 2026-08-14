@@ -14,13 +14,14 @@
  */
 
 import type { CrsInfo } from '../io/crs';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { ScanFacts, Coverage, ClassPresence, ClassificationProvenance } from './ProcessPlan';
 
 /** Loose, possibly-incomplete signals from the shell. Every field is optional. */
 export interface RawScanSignals {
   readonly kind?: 'static' | 'streaming';
   readonly coverage?: Coverage;
-  readonly crs?: CrsInfo | null;
+  readonly crs?: CrsInfo | ResolvedCrs | null;
   readonly pointCount?: number;
   readonly hasRgb?: boolean;
   readonly hasIntensity?: boolean;

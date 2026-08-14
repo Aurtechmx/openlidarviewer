@@ -76,7 +76,17 @@ export function crsLabelFor(crs: { name?: string } | null | undefined): string |
  */
 export function annotationGeorefFor(
   pick: { cloud: AnnotationPickCloud; index: number } | null | undefined,
+  resolvedCrsLabel?: string | null,
 ): AnnotationGeoref | undefined {
   if (!pick) return undefined;
-  return georefFromPick(pick.cloud, pick.index, crsLabelFor(pick.cloud.metadata?.crs));
+  // Prefer the RESOLVED per-cloud CRS label the caller supplies: an annotation
+  // created after a user override to CRS B must not store the file's declared CRS
+  // A, which the report would then read as the annotation's frame. A wired caller
+  // passing `null` means the pick's cloud resolved to Local / no-CRS and stores no
+  // label. Only a pure caller (none supplied) falls back to the declared CRS.
+  const label =
+    resolvedCrsLabel !== undefined
+      ? (resolvedCrsLabel ?? undefined)
+      : crsLabelFor(pick.cloud.metadata?.crs);
+  return georefFromPick(pick.cloud, pick.index, label);
 }

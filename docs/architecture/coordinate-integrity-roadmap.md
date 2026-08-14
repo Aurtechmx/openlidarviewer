@@ -153,9 +153,9 @@ effective reference for coordinates, labels and embedded metadata.
 
 ## P1 — before a stable v0.6 research release
 
-1. **Activate the project frame in the scene: multi-scan mount held OFF.**
-   `MULTI_LAYER_MOUNT_ENABLED` is false. The placement path is built and gated
-   behind the flag: two georeferenced tiles that declare the same projected CRS
+1. **Activate the project frame in the scene: multi-scan mount ENABLED (v0.6.5).**
+   `MULTI_LAYER_MOUNT_ENABLED` is true. The placement path is built and now on:
+   two georeferenced tiles that declare the same projected CRS
    mount into one shared frame at their real separation, non-destructively (the
    placement moves the mesh, never the `.positions`).
    The lone-layer identity keeps the single-scan path byte-identical.

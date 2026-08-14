@@ -110,5 +110,15 @@ export function depage(buffer: ArrayBuffer, pageSize: number): Depaged {
  */
 export function physicalToLogical(physical: number, pageSize: number): number {
   const payload = pageSize - 4;
-  return Math.floor(physical / pageSize) * payload + (physical % pageSize);
+  // A physical offset that lands in a page's last 4 bytes points at the CRC-32C
+  // trailer, not payload — and the mapping below would alias it onto the next
+  // page's first logical byte (e.g. physical 1020 and 1024 both → logical 1020
+  // for pageSize 1024). Two file positions collapsing to one logical byte lets
+  // a corrupt section offset inside a checksum be read as adjacent-page data, so
+  // reject it here rather than resolve the ambiguity silently (M7).
+  const withinPage = physical % pageSize;
+  if (withinPage >= payload) {
+    throw new Error(`E57: physical offset ${physical} points into a page checksum, not payload.`);
+  }
+  return Math.floor(physical / pageSize) * payload + withinPage;
 }

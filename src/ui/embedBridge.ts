@@ -24,13 +24,16 @@ const SOURCE = 'openlidarviewer';
 
 /**
  * Byte ceiling on an embed `load-file` buffer. The host pushes the whole file in
- * one `postMessage`, which structured-clones (copies) the ArrayBuffer into this
- * frame before the loader ever sees it, so an unbounded `byteLength` is a claim
- * this frame is made to allocate. 2 GiB is past any practical postMessage
- * transfer while rejecting an absurd allocation up front rather than in the
- * decoder. An over-limit buffer is dropped exactly like a malformed one.
+ * one `postMessage`. NOTE the ceiling can only bound the DECODE allocation, not
+ * the message delivery: a structured CLONE copies the ArrayBuffer into this
+ * frame before `interpretEmbedMessage` runs, so the copy happens regardless of
+ * this limit. A host that wants to avoid that copy should TRANSFER the buffer
+ * (`postMessage(msg, [buffer])`), which moves ownership with no clone; the
+ * ceiling then rejects an over-large decode after a cheap, non-copying delivery.
+ * Kept deliberately modest for an iframe embed (512 MiB) — a viewer meant to be
+ * embedded should not be handed multi-gigabyte payloads over postMessage.
  */
-export const MAX_EMBED_FILE_BYTES = 2 * 1024 * 1024 * 1024;
+export const MAX_EMBED_FILE_BYTES = 512 * 1024 * 1024;
 
 /** A validated inbound command — the discriminated result of one message. */
 export type EmbedCommand =
@@ -210,6 +213,20 @@ export function startEmbedBridge(
     if (!command) return;
     switch (command.kind) {
       case 'load-file':
+        // `load-file` is the one PRIVILEGED command: it hands the viewer an
+        // arbitrary buffer to allocate and decode. Require an explicitly
+        // configured trusted origin for it, even though the side-effect-free
+        // local commands below stay origin-agnostic for back-compat. Without an
+        // allow-list that names this origin, drop it (a cross-origin embed that
+        // wants to push files must opt in via `embedOrigins` / `allowedOrigins`).
+        if (!allow || allow.length === 0 || !allow.includes(event.origin)) {
+          if (import.meta.env?.DEV) {
+            console.warn(
+              '[embed] load-file refused: configure allowedOrigins to permit this origin to push files.',
+            );
+          }
+          return;
+        }
         handlers.onLoadFile(command.buffer, command.name);
         return;
       case 'jump-camera':

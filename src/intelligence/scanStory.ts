@@ -262,7 +262,7 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   if (i.density && i.density !== 'unknown') {
     const label = i.density.replace('-', ' ');
     rows.push({
-      label: 'Point density',
+      label: 'Volumetric point density',
       value: label.charAt(0).toUpperCase() + label.slice(1),
       tier: i.density === 'sparse' ? 'caution' : 'good',
     });

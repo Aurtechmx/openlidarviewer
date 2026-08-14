@@ -4,23 +4,22 @@ import { suppressOnboardingTour, dropTinyPly } from './helpers';
 /**
  * tests/e2e/rightRail.spec.ts
  *
- * Integration coverage for the right-column collapse. Each right panel has its
- * OWN grabber, centred on that panel, so the Streaming card (top, only while a
- * COPC streams) and the Inspector (bottom, or full-height otherwise) collapse
- * independently. A plain scan (tiny PLY) shows only the Inspector, so this spec
- * targets the Inspector's handle by its `aria-controls` and asserts the state
- * machine and the layout invariant:
+ * Integration coverage for the right context rail collapse (v0.6.5). The
+ * Streaming card (when a COPC streams) and the Inspector now share ONE coherent
+ * rail (`.olv-right-rail`) that collapses on a single grabber. This spec targets
+ * that rail's handle by its `aria-controls` and asserts the state machine and
+ * the layout invariant:
  *
- *   - the Inspector handle is hidden in the empty state (no scan);
+ *   - the rail handle is hidden in the empty state (no scan);
  *   - after a scan it mounts, is visible, and starts expanded;
  *   - it sits against the column, not adrift at the viewport centre;
- *   - clicking it toggles `.olv-right-collapsed` on the Inspector and flips
+ *   - clicking it toggles `.olv-right-collapsed` on the rail and flips
  *     `aria-expanded`;
  *   - the choice persists across a reload (localStorage key below).
  */
 
-const INSPECTOR = '.olv-inspector';
-const TAB = '.olv-right-rail-tab[aria-controls="olv-inspector"]';
+const INSPECTOR = '.olv-right-rail';
+const TAB = '.olv-right-rail-tab[aria-controls="olv-right-rail"]';
 const KEY = 'olv.rightRail.inspector.collapsed';
 
 async function loadSample(page: Page, url = '/'): Promise<void> {

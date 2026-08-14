@@ -107,10 +107,25 @@ export interface E57DocumentSchema {
   warnings: string[];
 }
 
-/** Number of bits needed to pack integers in the range `[0, max - min]`. */
+/**
+ * Number of bits needed to pack integers in the range `[0, max - min]`.
+ *
+ * The range must be a finite, safe integer. A malformed schema whose bounds
+ * individually pass `Number.isFinite` can still make `max - min` overflow to
+ * `Infinity` (e.g. `min = -1e308, max = 1e308`), and `2 ** bits <= Infinity`
+ * stays true forever — an unbounded loop that would hang the main thread on a
+ * hostile file. Reject a non-finite / beyond-2^53 range HERE (the loud-failure
+ * convention {@link readRecordCount} already uses) so the loop can only ever
+ * run the ≤ 53 iterations a safe-integer range allows.
+ */
 function bitWidthFor(min: number, max: number): number {
   const range = max - min;
-  if (range <= 0) return 0;
+  if (!Number.isFinite(range) || range <= 0) return 0;
+  if (!Number.isSafeInteger(range)) {
+    throw new Error(
+      `E57: integer field range ${range} exceeds the safe-integer limit — unsupported.`,
+    );
+  }
   let bits = 0;
   while (2 ** bits <= range) bits++;
   return bits;
@@ -131,6 +146,50 @@ function attrNum(node: XmlNode, attr: string, fallback: number): number {
   return Number.isFinite(v) ? v : fallback;
 }
 
+/**
+ * A geometry / schema-bearing attribute: absent → `absentDefault` (a legitimate
+ * spec default), but a value that is PRESENT yet non-finite is a corrupt file
+ * and throws rather than silently collapsing to a fallback. The silent fallback
+ * of {@link attrNum} is right for descriptive metadata; it is wrong for numbers
+ * that size a field or place/scale the scan, where a coerced `0`/`1` decodes
+ * into a plausible but wrong coordinate instead of a visible error.
+ */
+function attrFloatStrict(node: XmlNode, attr: string, absentDefault: number): number {
+  const raw = node.attrs[attr];
+  if (raw === undefined || raw === '') return absentDefault;
+  const v = Number(raw);
+  if (!Number.isFinite(v)) {
+    throw new Error(`E57: field "${node.name}" has a non-finite ${attr} "${raw}".`);
+  }
+  return v;
+}
+
+/** {@link attrFloatStrict} for integer-valued schema bounds (minimum / maximum). */
+function attrIntStrict(node: XmlNode, attr: string, absentDefault: number): number {
+  const v = attrFloatStrict(node, attr, absentDefault);
+  if (!Number.isSafeInteger(v)) {
+    throw new Error(
+      `E57: field "${node.name}" has a non-integer ${attr} "${node.attrs[attr]}".`,
+    );
+  }
+  return v;
+}
+
+/**
+ * A required pose-translation component: absent → `fallback`, but a present
+ * non-finite value throws. A silently-zeroed translation misplaces the whole
+ * scan with no warning — exactly the failure {@link readRecordCount} guards
+ * against for counts.
+ */
+function numTextStrict(node: XmlNode | undefined, label: string, fallback = 0): number {
+  if (!node || node.text === '') return fallback;
+  const v = Number(node.text);
+  if (!Number.isFinite(v)) {
+    throw new Error(`E57: pose ${label} is non-finite ("${node.text}").`);
+  }
+  return v;
+}
+
 /** Interpret one prototype field node. */
 function readField(node: XmlNode): E57Field {
   const type = node.attrs.type;
@@ -142,23 +201,23 @@ function readField(node: XmlNode): E57Field {
     };
   }
   if (type === 'Integer') {
-    const min = attrNum(node, 'minimum', 0);
+    const min = attrIntStrict(node, 'minimum', 0);
     return {
       name: node.name,
       type: 'integer',
       minimum: min,
-      bitWidth: bitWidthFor(min, attrNum(node, 'maximum', 0)),
+      bitWidth: bitWidthFor(min, attrIntStrict(node, 'maximum', 0)),
     };
   }
   if (type === 'ScaledInteger') {
-    const min = attrNum(node, 'minimum', 0);
+    const min = attrIntStrict(node, 'minimum', 0);
     return {
       name: node.name,
       type: 'scaledInteger',
       minimum: min,
-      bitWidth: bitWidthFor(min, attrNum(node, 'maximum', 0)),
-      scale: attrNum(node, 'scale', 1),
-      offset: attrNum(node, 'offset', 0),
+      bitWidth: bitWidthFor(min, attrIntStrict(node, 'maximum', 0)),
+      scale: attrFloatStrict(node, 'scale', 1),
+      offset: attrFloatStrict(node, 'offset', 0),
     };
   }
   throw new Error(
@@ -222,9 +281,9 @@ function readPose(scan: XmlNode, scanName: string, warnings: string[]): E57Pose 
   return {
     rotation,
     translation: [
-      tr ? numText(child(tr, 'x')) : 0,
-      tr ? numText(child(tr, 'y')) : 0,
-      tr ? numText(child(tr, 'z')) : 0,
+      numTextStrict(tr ? child(tr, 'x') : undefined, 'translation.x'),
+      numTextStrict(tr ? child(tr, 'y') : undefined, 'translation.y'),
+      numTextStrict(tr ? child(tr, 'z') : undefined, 'translation.z'),
     ],
   };
 }

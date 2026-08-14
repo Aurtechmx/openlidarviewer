@@ -27,7 +27,12 @@ import { isComplete } from '../render/measure/types';
 import { measurementMetrics } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
-import { ScanFootprintError, type FootprintRing, type FootprintExtentBasis } from './scanFootprint';
+import {
+  ScanFootprintError,
+  type FootprintRing,
+  type FootprintExtentBasis,
+  type FootprintShape,
+} from './scanFootprint';
 
 /**
  * A saved camera viewpoint to serialise as a KML <LookAt> placemark.
@@ -458,6 +463,12 @@ export interface KmlFootprintInput {
   readonly crsName: string | null;
   /** Which points the extent was read from, stated in the description. */
   readonly extentBasis: FootprintExtentBasis;
+  /**
+   * What the ring traces — a bounding rectangle or a point-cloud outline. Drives
+   * the placemark label and the opening description line so the file names what
+   * it contains. Defaults to `bounding rectangle`, the v1 shape.
+   */
+  readonly shape?: FootprintShape;
   /** The "not survey-grade" caveat, the same one every other product carries. */
   readonly notSurveyGradeNote: string;
 }
@@ -494,10 +505,12 @@ export function buildFootprintKml(input: KmlFootprintInput): string {
   }
   const crs = input.crsName ?? 'unknown CRS';
   const coords = ring.map(([lon, lat]) => coord([lon, lat, 0], false)).join(' ');
+  const shape: FootprintShape = input.shape ?? 'bounding rectangle';
+  const shapeCap = shape[0].toUpperCase() + shape.slice(1);
   const label = `${input.name} scan area`;
-  const rectLabel = `${label} (bounding rectangle)`;
+  const rectLabel = `${label} (${shape})`;
   const lines = [
-    'Bounding rectangle of the scanned area, reprojected to WGS84 longitude/latitude.',
+    `${shapeCap} of the scanned area, reprojected to WGS84 longitude/latitude.`,
     `Source CRS: ${crs}. Extent read from ${input.extentBasis}.`,
     'Heights are clamped to ground: an outline states where the scan is, not how high it is.',
     input.notSurveyGradeNote,

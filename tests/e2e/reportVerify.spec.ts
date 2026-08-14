@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * v0.5.2 — the "Verify integrity report" command-palette tool. Round-trips the
@@ -34,6 +34,8 @@ async function exportReport(page: Page): Promise<string> {
     api.placeMeasurementPoint({ x: 1, y: 0, z: 0 });
   });
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  // Measuring reveals Work mode; the Export panel (Products lane) is in Output.
+  await showWorkspaceMode(page, 'output');
 
   const panel = page.locator('.olv-export-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });

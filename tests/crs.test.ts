@@ -226,6 +226,18 @@ test('parseCrsFromVlrs — finds an OGC WKT VLR and extracts EPSG', () => {
   expect(crs?.linearUnit).toBe('metre');
 });
 
+test('parseCrsFromVlrs — an empty OGC WKT VLR (iPhone COPC) resolves to null, not a crash or a wrong CRS', () => {
+  // iPhone 14 Pro COPC exports (e.g. Zenodo 15421291) set the global-encoding WKT
+  // bit and include a record-id 2112 VLR, but its payload is empty. The parser
+  // must fall through to "unknown" — an empty declared CRS is not a resolved one —
+  // rather than throw or invent a frame. Confirmed against the real file's headers.
+  const { buffer, vlrStart, count } = buildVlrBuffer(
+    [{ userId: 'LASF_Projection', recordId: 2112, payload: new Uint8Array(0) }],
+    100,
+  );
+  expect(parseCrsFromVlrs(buffer, vlrStart, count)).toBeNull();
+});
+
 test('parseCrsFromVlrs — ignores non-LASF_Projection VLRs', () => {
   const { buffer, vlrStart, count } = buildVlrBuffer(
     [{ userId: 'OTHER_VENDOR', recordId: 2112, payload: new Uint8Array([0]) }],

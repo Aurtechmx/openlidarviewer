@@ -33,7 +33,7 @@ export interface NavBarCallbacks {
    * Front / Back / Left / Right) — Viewer.setStandardView().
    */
   onStandardView: (view: StandardView) => void;
-  /** The user toggled the near-orthographic (parallel) projection. */
+  /** The user toggled the orthographic (parallel) projection. */
   onOrthographic: (on: boolean) => void;
 }
 
@@ -381,7 +381,7 @@ export class NavBar {
     // and the same toggle still listens to the H key (and the Help
     // button in the dock surfaces the shortcut).
     // Six standard axis-aligned views (Top / Bottom / Front / Back / Left /
-    // Right) + a near-orthographic toggle — the Polycam-style "look straight
+    // Right) + a orthographic toggle — the Polycam-style "look straight
     // at a face to measure it flat" controls. Sits under the angled Camera
     // presets (Gestalt proximity: both are "ways to aim the camera"), but in
     // its own labelled row so the two intents stay distinct.
@@ -407,7 +407,7 @@ export class NavBar {
     // as a mode, not another one-shot snap.
     const orthoToggle = el('button', {
       className: 'olv-cam-chip olv-ortho-toggle',
-      title: 'Orthographic (parallel) projection — removes perspective so measurements read true',
+      title: 'Orthographic (parallel) projection — removes perspective so walls and floors read flat for visual inspection (measurements are unaffected: they use the 3D points, not the projection)',
       ariaLabel: 'Toggle orthographic projection',
     });
     orthoToggle.setAttribute('aria-pressed', 'false');

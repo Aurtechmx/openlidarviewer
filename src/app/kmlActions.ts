@@ -28,6 +28,7 @@
 import { makeLocalToLonLat, LonLatConversionError } from '../export/lonLatMapper';
 import {
   footprintCrsRefusal,
+  footprintConvexHullRing,
   footprintLonLatRing,
   footprintRectangleRing,
   footprintUpAxisRefusal,
@@ -86,6 +87,15 @@ export interface KmlActionDeps {
   readonly unitToMetres: () => number;
   /** The active scan's horizontal extent in LOCAL space, or null when none. */
   readonly scanExtent: () => ScanExtentReading | null;
+  /**
+   * The active scan's resident points as an interleaved local `xyz` buffer, for
+   * the tighter convex-hull outline — or null when it must fall back to the
+   * bounding rectangle. Null for a streaming scan (its resident set is a subset
+   * of the declared extent, so its hull would understate the area) and for any
+   * non-Z-up frame (already refused upstream). Read at click time only, never
+   * during the status check that renders the button.
+   */
+  readonly scanHullPositions: () => Float32Array | null;
   /** A file name without its extension (the shell's `baseName`). */
   readonly baseName: (name: string) => string;
   /** Write a text file to the user's downloads. */
@@ -252,16 +262,24 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
     return;
   }
   const { buildFootprintKml, KmlCoordinateError } = await deps.loadKmlExport();
+  // Prefer the true outline (convex hull of the resident points) when the scan
+  // can back one; fall back to the extent's bounding rectangle otherwise. A
+  // degenerate hull (too few points, collinear) throws ScanFootprintError, which
+  // the shared catch below turns into a refusal — it does NOT silently drop to
+  // the rectangle, because a scan whose points enclose no area has no honest
+  // outline of either shape.
+  const hullPositions = deps.scanHullPositions();
   let text: string;
   try {
+    const localRing = hullPositions
+      ? footprintConvexHullRing(hullPositions)
+      : footprintRectangleRing(reading.extent);
     text = buildFootprintKml({
       name: stem,
-      ring: footprintLonLatRing(
-        footprintRectangleRing(reading.extent),
-        makeLocalToLonLat(crs, geo.origin),
-      ),
+      ring: footprintLonLatRing(localRing, makeLocalToLonLat(crs, geo.origin)),
       crsName: geo.crsName ?? crs?.name ?? null,
       extentBasis: reading.basis,
+      shape: hullPositions ? 'point-cloud outline' : 'bounding rectangle',
       notSurveyGradeNote: NOT_SURVEY_GRADE,
     });
   } catch (err) {

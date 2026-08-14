@@ -191,7 +191,7 @@ describe('buildExportHealth — rows', () => {
       'Classification',
       'Coordinate system',
       'Vertical datum',
-      'Point density',
+      'Volumetric point density',
       'Terrain products',
     ]);
   });
@@ -206,7 +206,7 @@ describe('buildExportHealth — rows', () => {
 
   it('omits the density row when density is unknown', () => {
     const h = buildExportHealth({ ...GOOD, density: 'unknown' });
-    expect(h.rows.some((r) => r.label === 'Point density')).toBe(false);
+    expect(h.rows.some((r) => r.label === 'Volumetric point density')).toBe(false);
   });
 
   it('Good terrain products read Export-ready; undefined reads Not analysed', () => {

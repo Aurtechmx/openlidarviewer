@@ -6,11 +6,11 @@ import '@fontsource/manrope/latin-600.css';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
-// Local-first hardening: disable loaders.gl CDN workers before any parse runs,
-// so OBJ/PLY/glTF never fetch executable code from a third-party CDN.
+// Disable loaders.gl CDN workers before any parse (must run before any loader).
 import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { chooseRenderBackend } from './render/renderBackendChoice';
+import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, MOBILE_LAYOUT_QUERY } from './ui/isMobileDevice';
 import { Stage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
@@ -108,6 +108,7 @@ import { classificationLabel } from './render/pointInfo';
 // above) inside `ensureObjectPanel()`.
 import type { ObjectPanel } from './ui/ObjectPanel';
 import { MobileSheet } from './ui/MobileSheet';
+import { DesktopWorkspace, type WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import { classifyScanShape } from './terrain/scanShape';
 import type { SpaceKind } from './terrain/scanShape';
 import {
@@ -120,7 +121,6 @@ import { objectMetrics, type ObjectMetrics } from './terrain/objectMetrics';
 import { spaceMetrics, type SpaceMetrics } from './terrain/spaceMetrics';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel } from './ui/ExportPanel';
-import type { MeasurementExportContext } from './export/measurementExport';
 import { makeLocalToLonLat } from './export/lonLatMapper';
 import { writeScanScopedExport, SESSION_EXPORT_SCAN_CHANGED_REFUSAL } from './export/exportScanIdentity';
 import {
@@ -131,6 +131,14 @@ import {
   siteKmlStatus,
   type KmlActionDeps,
 } from './app/kmlActions';
+import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
+import { isRgbAppearancePresetId } from './render/rgbAppearance';
+import { isSkyPreset } from './render/skyPresets';
+import {
+  exportMeasurementsFile,
+  exportMeasurementIntegrityReport,
+  type MeasurementExportActionDeps,
+} from './app/measurementExportActions';
 import { ClipPanel } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
@@ -176,8 +184,9 @@ import {
 } from './io/viewState';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
+import { makeNavPaletteActions } from './app/navPaletteActions';
 import { ModuleRegistry } from './analysis/ModuleApi';
-import type { AnalysisRow } from './analysis/ModuleApi';
+import type { AnalysisRow, RunOptions } from './analysis/ModuleApi';
 import { healthCheck } from './analysis/modules/healthCheck';
 import { scanReport } from './analysis/modules/scanReport';
 import {
@@ -265,8 +274,8 @@ import { CatalogPanel } from './ui/CatalogPanel';
 import type { CrsLinearUnit } from './io/crs';
 import { streamingExtentRows } from './analysis/streamingExtentRows';
 import { CrsService } from './geo/CrsService';
-import { spatialContextFrom, verticalMetresPerUnit } from './geo/SpatialContext';
-import { epochFrameFacts, epochFrameOptions } from './geo/frameCompatibility';
+import { verticalMetresPerUnit } from './geo/SpatialContext';
+import { prepareEpochFrames, epochUnitMismatchLines } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
@@ -277,6 +286,7 @@ import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNamin
 import { deriveVolumeRecord, horizontalSpanXY } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
+import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
@@ -540,6 +550,15 @@ const viewerLoaded: Promise<Viewer> = (async () => {
   // the renderer picks WebGL 2 instead of throwing on the first scan open.
   const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
   viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackend(gpu)) === 'webgl2');
+  // Feed the export adapter the RESOLVED CRS per cloud, so a rejected/local
+  // override never reaches the ortho .prj (C10). Rule lives in the app module.
+  viewer.setExportCrsResolver(makeExportCrsResolver({
+    current: () => crsService.current(),
+    resolveForCloud: (cloud) =>
+      crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr' }),
+    activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
+  }));
+  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
   return viewer;
 })();
 
@@ -691,7 +710,6 @@ function saveLassoVolumeIfPending(): void {
   }
 }
 
-
 // ── Lasso volume button in the measure dock ──────────────────────────────
 // Placed at the end of the measure-kind row, paired with Volume. The
 // button is a second input method for Volume — not a separate
@@ -835,12 +853,12 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // the app's left and right edges are full-height panel columns (left panels and
 // the Inspector), so a persistent gizmo has no free corner to occupy without
 // overlapping them; the user opts in when they want it. `?viewcube=1` forces it
-// on, `?viewcube=0` off. The life cycle — preference, lazy mount, rAF loop,
-// tab-visibility pausing — lives in ui/compassController.ts; see that file for
-// why it is not four module-scope `let`s here.
+// on, `?viewcube=0` off. Life cycle lives in ui/compassController.ts.
 const compass = createCompassController({
   host: () => stage.overlay,
   urlParams,
+  // Cardinals only when georeferenced; local scans show truthful local axes.
+  cardinalsAreGeographic: () => crsIsKnown(crsService.current()),
 });
 void viewerLoaded.then((v) => compass.attachViewer(v));
 
@@ -1209,6 +1227,7 @@ const layerService = createLayerService({
   context: runtime.context,
   refreshCompass: () => compass.refresh(),
   projectFrame,
+  resolveCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
 });
 
 const inspector = new Inspector({
@@ -1251,7 +1270,7 @@ const inspector = new Inspector({
     if (!cloud) return;
     // The exporter is a lazy chunk; fetched on first export of the session.
     void loadExporters().then(({ exportCloud }) => {
-      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format));
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
     });
   },
   onExportImage: (mode) => {
@@ -1404,7 +1423,7 @@ const inspector = new Inspector({
     persistPrefs();
   },
   onSkyPreset: (id) => {
-    if (isSkyPresetId(id)) {
+    if (isSkyPreset(id)) {
       viewer.setSky(id);
       syncInspectorVisuals();
       persistPrefs();
@@ -1442,6 +1461,7 @@ const inspector = new Inspector({
   // Workflow presets (v0.4.5) — fan one pure bundle out through the
   // EXISTING setters, then re-sync every Inspector surface the bundle
   // touched. No new rendering machinery: the preset module is a table.
+  onOpenDatasetStory: () => ACTION_REGISTRY.find((a) => a.id === 'story.dataset')?.run(),
   onTerrainWorkflowPreset: (id) => {
     const p = getTerrainWorkflowPreset(id);
     viewer.setEdlPreset(p.edlPresetId);
@@ -1497,7 +1517,7 @@ crsService.subscribe((resolved) => {
 // extracted into `src/app/`. They read the lazy `viewer` and the `scans.activeId`
 // selection through getters so no top-level `viewer.*` dereference is
 // introduced here — `viewer` is null until its chunk resolves.
-const inspectorCards = createInspectorCardRefreshers(inspector);
+const inspectorCards = createInspectorCardRefreshers(inspector, () => crsService.context());
 const crsCoordinator = createCrsCoordinator({
   crsService,
   getViewer: () => viewer,
@@ -1737,6 +1757,7 @@ async function runDeriveClassification(): Promise<void> {
       warnings: result.warnings,
     });
     classLegendPanel.show();
+    processStudio.refresh(); // new classes change what's producible — re-evaluate the plan
     void showReclassifyUi();
     // Honest one-line breakdown of the top classes derived.
     const total = cloud.pointCount || 1;
@@ -1815,6 +1836,7 @@ async function runFillUnclassified(): Promise<void> {
     const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
     classLegendPanel.setDerivedProvenance(true, { confidencePct: confPct, warnings: result.warnings });
     classLegendPanel.show();
+    processStudio.refresh(); // filled classes can enable ground/building products
     void showReclassifyUi();
     const confText = confPct !== null ? ` Confidence ${confPct}%.` : '';
     showLassoToast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
@@ -1917,6 +1939,7 @@ const ACTION_REGISTRY = buildActionRegistry({
   hasScan,
   saveCurrentView,
   applyView,
+  ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
@@ -1992,36 +2015,6 @@ if (WORKFLOW_RECORDER_ENABLED) {
 }
 
 /** Helper: type-guard a string before passing to the typed Viewer setter. */
-function isRgbAppearancePresetId(
-  id: string,
-): id is import('./render/rgbAppearance').RgbAppearancePresetId {
-  return (
-    id === 'natural' ||
-    id === 'survey' ||
-    id === 'rgb-inspection' ||
-    id === 'high-contrast' ||
-    id === 'drone-rgb' ||
-    id === 'mobile-lidar' ||
-    id === 'infrastructure' ||
-    id === 'photoreal-rgb'
-  );
-}
-function isSkyPresetId(
-  id: string,
-): id is import('./render/inspectionPresets').SkyPreset {
-  return (
-    id === 'deep' ||
-    id === 'survey-blue' ||
-    id === 'terrain-sand' ||
-    id === 'foliage-teal' ||
-    id === 'qa-cool' ||
-    id === 'studio-dark' ||
-    id === 'blueprint' ||
-    id === 'survey-light' ||
-    id === 'terrain' ||
-    id === 'black'
-  );
-}
 
 /**
  * Visuals Studio — push the Viewer's Visuals Studio state into the
@@ -2061,10 +2054,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => viewer.setMeasureMode(!viewer.measureMode),
+  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('data'); },
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => viewer.setAnnotateMode(!viewer.annotateMode),
+  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('data'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
@@ -2077,6 +2070,7 @@ const dock = new ToolDock({
     routing.pin();
     analyseDesiredVisible = show;
     if (show) {
+      showWorkspaceMode?.('analyse');
       // Opening: ensure the panel is mounted, then show it.
       void ensureAnalysePanel().then((p) => p.setVisible(true));
       // Opening Analyse demotes the Object panel — track the intent (so a still-
@@ -2090,6 +2084,7 @@ const dock = new ToolDock({
     dock.setAnalyseActive(show);
   },
   onHelp: () => helpOverlay.open(),
+  onCommandPalette: () => void openCommandPalette(),
   onClose: () => closeScan(),
 });
 // Start the dock hidden — the empty state shows no scan-dependent tools.
@@ -2332,15 +2327,20 @@ function newAnalysePanel(
       // (the lon/lat converter) and for `linearUnit`, where "no scan yet" and
       // "unknown CRS" differ and the context collapses them.
       const ctx = crsService.context();
+      // Canonicalise the origin for a Y-up scan so exporters place the rotated DTM right (#5).
+      const upAxis = terrainRunner.getLastSourceUpAxis();
+      const placedOrigin = placedWorldOrigin(origin, upAxis);
       return {
         // All three axes: contour serialization shifts elevations by `z` so
         // exported contour levels read in real-world (e.g. orthometric) height
         // rather than the recentred local frame.
-        worldOrigin: origin ? { x: origin[0], y: origin[1], z: origin[2] } : null,
+        worldOrigin: placedOrigin
+          ? { x: placedOrigin[0], y: placedOrigin[1], z: placedOrigin[2] }
+          : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        isGeographic: ctx.isGeographic, sceneUpAxis: terrainRunner.getLastSourceUpAxis(),
-        wkt: cloud?.metadata?.crs?.wkt ?? streaming?.crs()?.wkt ?? null,
+        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
+        wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
         // scale note says ft — and a local/unresolved frame stamps an honest
@@ -2432,7 +2432,8 @@ const classLegendPanel = new ClassLegendPanel();
 const processStudio = createProcessStudioFromLive({
   getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
   getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
-  getResolvedCrs: () => scans.activeCloud()?.metadata?.crs ?? null,
+  // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
+  getResolvedCrs: () => crsService.current(),
   getPresentClassCodes: () => classLegendPanel.presentCodes(),
   getClassificationDerived: () => classLegendPanel.classificationIsDerived(),
 });
@@ -2631,17 +2632,6 @@ const FLOORPLAN_OPTIONS = {
 } as const;
 
 /** Densest available positions for floor-plan extraction (fallback: ctx). */
-function floorPlanPositions(ctx: SpaceExportContext): Float32Array {
-  try {
-    const dense = viewer.gatherTerrainPositions(FLOORPLAN_GATHER_POINTS);
-    if (dense && dense.positions.length > ctx.positions.length) return dense.positions;
-  } catch {
-    /* best-effort — the routing snapshot below is always valid */
-  }
-  return ctx.positions;
-}
-
-
 // --- Lazy Object/Space-panel mount (v0.6 P1, step 2) --------------------------
 // Object-scan panel — shown instead of terrain analysis for compact 3-D scans
 // (phone scans of objects / rooms). "Run anyway" reveals + runs the terrain
@@ -2696,7 +2686,7 @@ function newObjectPanel(
       const { extractFloorPlan } = await loadFloorPlan();
       // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
       // tracing (see FLOORPLAN_GATHER_POINTS).
-      floorPlan = extractFloorPlan(floorPlanPositions(ctx), {
+      floorPlan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
         upAxis: ctx.upAxis,
         unitToMetres: ctx.unitToMetres,
         maxSamples: FLOORPLAN_GATHER_POINTS,
@@ -2731,7 +2721,7 @@ function newObjectPanel(
     const { extractFloorPlan, floorPlanSvg } = await loadFloorPlan();
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
-    const plan = extractFloorPlan(floorPlanPositions(ctx), {
+    const plan = extractFloorPlan(floorPlanPositions(viewer, ctx, FLOORPLAN_GATHER_POINTS), {
       upAxis: ctx.upAxis,
       unitToMetres: ctx.unitToMetres,
       maxSamples: FLOORPLAN_GATHER_POINTS,
@@ -2823,14 +2813,14 @@ const terrainRunner = createTerrainAnalysisRunner({
       originH2: d.originH2,
     });
     inspector.setCoverageAvailable(true);
+    processStudio.markProduced(['dtm', 'contours']); // run generated the DTM + contours — show them produced
     // Fold the run's real analysed-point count into the Dataset Intelligence
     // card — the same `dtm.analyzedPointCount` the terrain report's
     // "Analysed points" row prints, so card and PDF agree. The streaming
     // attach-time summary necessarily wrote `analyzedPointCount: 0` (nothing
     // analysed yet); without this the Details row reads "Analyzed Points 0"
-    // forever on streamed scans. The refresher only acts when the last
-    // summary came from the streaming path, and the runner's stale-result
-    // guard means this never fires for a closed/replaced scan.
+    // forever on streamed scans. The refresher only acts when the last summary
+    // came from streaming, and the stale-result guard skips closed/replaced scans.
     inspectorCards.noteAnalyzedPointCount(result.dtm.analyzedPointCount);
     // Fold the run's ENGINE-DERIVED terrain complexity (the VRM/TPI summary
     // computed alongside the core, off the interactive path) into the card:
@@ -2936,11 +2926,29 @@ const kmlDeps: KmlActionDeps = {
       basis: 'the declared header extent', upAxis: 'z',
     };
   },
+  // Resident points for the convex-hull outline: a Z-up static cloud only.
+  // Streaming and Y-up read null and keep the declared-extent rectangle.
+  scanHullPositions: () =>
+    ((c) => (c && isZUpFormat(c.sourceFormat) ? c.positions : null))(scans.activeCloud()),
   baseName: (name) => baseName(name),
   downloadText: (filename, text) => downloadText(filename, text),
   setError: (message) => dropZone.setError(message),
   loadKmlExport,
 };
+
+// Bind the measurement-export orchestration to the live measure state, the
+// resolved export frame, and the lazy serializers (see measurementExportActions).
+const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => ({
+  measure: v.measure,
+  geo: exportGeoContext,
+  baseName,
+  downloadText,
+  loadMeasurementExport,
+  loadMeasurementReport,
+  activeClassificationEpoch: () => (scans.activeId ? v.classificationEpoch(scans.activeId) : 0),
+  appVersion: __APP_VERSION__,
+  now: () => new Date().toISOString(),
+});
 
 const exportPanel = new ExportPanel({
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
@@ -2953,16 +2961,16 @@ const exportPanel = new ExportPanel({
     // Optional-chain both derefs, exactly like isReduced / streamingExportCloud;
     // an explicit `viewer == null` check would trip TS2367 (viewer is typed
     // non-null via a cast). No viewer ⇒ nothing exportable yet.
+    const rc = resolvedExportCrs(crsService.current()); // panel==writer CRS label
     if (scans.activeId != null) {
       const c = viewer?.getCloud(scans.activeId);
       if (!c) return null;
-      const crs = c.metadata?.crs ?? null;
       return {
         pointCount: c.pointCount,
         hasRgb: c.colors != null,
         hasGpsTime: c.gpsTime != null,
-        crsName: crs?.name ?? null,
-        hasWkt: crs?.wkt != null,
+        crsName: rc.name,
+        hasWkt: rc.wkt != null,
         classProvenance: c.classificationIsDerived
           ? 'derived'
           : c.classification != null ? 'source' : 'none',
@@ -2970,7 +2978,6 @@ const exportPanel = new ExportPanel({
     }
     const sc = viewer?.streamingCloud;
     if (!sc) return null;
-    const crs = sc.crs();
     return {
       // The frontier total, not the resident total: an export drops ancestor
       // nodes that have a resident descendant, so counting every resident point
@@ -2979,14 +2986,18 @@ const exportPanel = new ExportPanel({
       hasRgb: sc.availableColorModes().includes('rgb'),
       // COPC/EPT point records (PDRF 6/7/8) carry GPS time.
       hasGpsTime: true,
-      crsName: crs?.name ?? null,
-      hasWkt: crs?.wkt != null,
+      crsName: rc.name,
+      hasWkt: rc.wkt != null,
       // Streaming classification is read straight from the source records — a
       // decode never derives it — so it is 'source' when the schema carries it.
       classProvenance: sc.availableColorModes().includes('classification') ? 'source' : 'none',
     };
   },
   getCloud: () => (scans.activeId ? viewer.getCloud(scans.activeId) ?? null : streamingExportCloud()),
+  // Resolved source CRS (override applied), so a convert/export uses the CRS the
+  // user chose, not the file's rejected declared one (blocker #2D). Same authority
+  // the Inspector and Studio read (C7).
+  getResolvedSourceCrs: () => crsService.current(),
   // Pending = a streaming cloud is attached but its export frontier is still
   // empty. Read the allocation-free frontier count rather than materialising a
   // snapshot just to test it for null.
@@ -3023,51 +3034,14 @@ const exportPanel = new ExportPanel({
   // happens before the lazy `viewer` chunk resolves, so it must tolerate a null
   // viewer (return 0) instead of dereferencing it and crashing app init.
   measurementCount: () => (viewer ? viewer.measure.getMeasurements().length : 0),
+  // Measurement deliverables — orchestration lives in measurementExportActions.
   exportMeasurements: async (format) => {
     if (!viewer) return;
-    const measurements = viewer.measure.getMeasurements();
-    if (measurements.length === 0) return;
-    // Measurement points are LOCAL (recentered); add the origin back to land them
-    // in the source projected/local frame. `exportGeoContext` resolves the
-    // origin for streaming scans too (renderOrigin) — a plain static-only read
-    // would export at render-frame coordinates. Geographic reprojection
-    // (→ lon/lat) is a later option — for now we emit in the scan's own frame.
-    // Resolved BEFORE the import below (as exportIntegrityReport already does),
-    // so the frame and the measurements come from one instant, not two.
-    const geo = exportGeoContext();
-    const ctx: MeasurementExportContext = {
-      toOutput: (p) => [p[0] + geo.origin[0], p[1] + geo.origin[1], p[2] + geo.origin[2]],
-      up: viewer.measure.worldUp,
-      unitToMetres: viewer.measure.unitToMetres,
-      verticalUnitToMetres: viewer.measure.verticalUnitToMetres,
-      crsName: geo.crsName,
-      geographic: false,
-    };
-    const { measurementsToGeoJSON, measurementsToCsv } = await loadMeasurementExport();
-    const text = format === 'geojson'
-      ? measurementsToGeoJSON(measurements, ctx)
-      : measurementsToCsv(measurements, ctx);
-    const stem = geo.name ? baseName(geo.name) : 'measurements';
-    downloadText(`${stem}-measurements.${format === 'geojson' ? 'geojson' : 'csv'}`, text);
+    await exportMeasurementsFile(format, measurementExportActionDeps(viewer));
   },
   exportIntegrityReport: async () => {
     if (!viewer) return;
-    const ms = viewer.measure.getMeasurements();
-    if (ms.length === 0) return;
-    const geo = exportGeoContext();
-    const { integrityReportFile } = await loadMeasurementReport();
-    const f = integrityReportFile(
-      ms,
-      viewer.measure.worldUp,
-      viewer.measure.unitToMetres,
-      viewer.measure.verticalUnitToMetres,
-      geo.name ? baseName(geo.name) : 'scan',
-      geo.crsName,
-      new Date().toISOString(),
-      scans.activeId ? viewer.classificationEpoch(scans.activeId) : 0,
-      __APP_VERSION__,
-    );
-    downloadText(f.filename, f.text);
+    await exportMeasurementIntegrityReport(measurementExportActionDeps(viewer));
   },
   exportKml: () => void exportSiteKml(kmlDeps),
   kmlStatus: () => siteKmlStatus(kmlDeps),
@@ -3082,7 +3056,7 @@ const exportPanel = new ExportPanel({
 // once here to seed the initial (no-scan ⇒ collapsed) state.
 crsService.subscribe((resolved) => {
   exportPanel.setCrsKnown(crsIsKnown(resolved));
-  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else processStudio.panel.hide(); // reveal on scan load (static/streaming), hide on close
+  if (resolved) { processStudio.refresh(); processStudio.panel.show(); } else { processStudio.clearProduced(); processStudio.panel.hide(); } // reveal on scan load, hide + reset produced on close
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
@@ -3419,6 +3393,10 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
 // lifecycle (reveal / reset) re-evaluate whether the phone sheet should show,
 // without main.ts holding a direct reference to the sheet instance.
 let syncMobileSheet: (() => void) | null = null;
+// Presentation-only bridge: a tool activation (Measure/Annotate/Analyse) reveals
+// its workspace mode. Set once the lazy workspace exists; the tool callbacks stay
+// authoritative — this only changes which mode is shown, never tool behaviour.
+let showWorkspaceMode: ((mode: WorkspaceMode) => void) | null = null;
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
 // only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
@@ -3759,23 +3737,43 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
     stage.overlay.append(viewer.annotateElements.hint);
-    stage.overlay.append(inspector.element);
-    stage.overlay.append(streamingPanel.element);
-    // The measurement and annotation panels share a stacked left-side column.
-    const leftPanels = document.createElement('div');
-    leftPanels.className = 'olv-left-panels';
-    leftPanels.id = 'olv-left-panels'; // P11 — aria-controls target for the rail toggle
-    // NOTE: analysePanel / objectPanel / measurePanel lazy-mount on first scan load
-    // via `mount{Object,Analyse,Measure}PanelElement` below. Process Studio starts hidden.
-    leftPanels.append(annotationPanel.element, classLegendPanel.element, processStudio.panel.element, exportPanel.element, clipPanel.element);
+    // Right context rail — one coherent column: the Streaming card (only while a
+    // COPC streams) above the Inspector, in normal vertical flow rather than a
+    // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
+    const rightRail = document.createElement('div');
+    rightRail.className = 'olv-right-rail';
+    rightRail.id = 'olv-right-rail';
+    rightRail.append(streamingPanel.element, inspector.element);
+    stage.overlay.append(rightRail);
+    // Semantic workspace: one Data/Work/Analyse/Output mode visible at a time,
+    // re-hosting the existing live panels. Root keeps `.olv-left-panels`#olv-left-panels
+    // so the rail-collapse chrome, clearance vars and wheel containment target it
+    // unchanged. measure/analyse/object lazy-mount into their modes below.
+    const workspace = new DesktopWorkspace();
+    showWorkspaceMode = (m) => workspace.setMode(m);
+    const leftPanels = workspace.element;
+    // Data mode = the live layer browser (re-parented out of the Inspector, which
+    // keeps updating the same nodes) + the class legend. Reused on mobile return.
+    const dataEls = inspector.workspaceDataElements();
+    const workspacePanels = {
+      dataLayers: dataEls.layers,
+      dataLayerHealth: dataEls.layerHealth,
+      classLegend: classLegendPanel.element,
+      annotation: annotationPanel.element,
+      clip: clipPanel.element,
+      processStudio: processStudio.panel.element,
+      export: exportPanel.element,
+    };
+    workspace.layoutDesktop(workspacePanels);
+    exportPanel.element.classList.remove('olv-collapsed'); // ditto, at first build
     stage.overlay.append(leftPanels);
+    stage.addTeardown(() => workspace.dispose());
     // P9 — wheel ownership: a wheel over a panel scrolls the panel and must never
     // reach the camera. Stop it here (passive — this is plain scrolling, never a
     // preventDefault), so no ancestor handler can act on a panel scroll. The
     // canvas controller also gates on target (NavController `_handleWheel`).
     containPanelWheel(leftPanels);
-    containPanelWheel(inspector.element);
-    containPanelWheel(streamingPanel.element);
+    containPanelWheel(rightRail);
     // Push the column below the measure toolbar whenever it is visible —
     // see wireMeasureBarClearance for why this is measured, not static CSS.
     wireMeasureBarClearance(viewer.measureElements.hint, leftPanels);
@@ -3790,30 +3788,17 @@ void viewerLoaded.then(() => {
       storageKey: 'olv.leftRail.collapsed',
       ariaControls: 'olv-left-panels',
     }));
-    // Right column — each panel collapses on its own handle, centred on that
-    // panel. The Streaming card (top, only while a COPC streams) and the
-    // Inspector (bottom, or full-height when not streaming) are independent, so
-    // one can be hidden without the other. Both handles ride the same right
-    // edge; the empty-state hide keeps only the visible panel's handle on screen.
-    if (!inspector.element.id) inspector.element.id = 'olv-inspector';
-    if (!streamingPanel.element.id) streamingPanel.element.id = 'olv-streaming-panel';
+    // One grabber collapses the whole right context rail (Streaming + Inspector).
+    // Reuses the Inspector's persisted collapse key so a prior preference carries
+    // over; the obsolete per-streaming key is left unread.
     stage.addTeardown(wireRailToggle({
       overlay: stage.overlay,
-      panels: [streamingPanel.element],
-      tabClass: 'olv-right-rail-tab',
-      chevron: RAIL_CHEVRON_RIGHT,
-      collapsedClass: 'olv-right-collapsed',
-      storageKey: 'olv.rightRail.streaming.collapsed',
-      ariaControls: streamingPanel.element.id,
-    }));
-    stage.addTeardown(wireRailToggle({
-      overlay: stage.overlay,
-      panels: [inspector.element],
+      panels: [rightRail],
       tabClass: 'olv-right-rail-tab',
       chevron: RAIL_CHEVRON_RIGHT,
       collapsedClass: 'olv-right-collapsed',
       storageKey: 'olv.rightRail.inspector.collapsed',
-      ariaControls: inspector.element.id,
+      ariaControls: 'olv-right-rail',
     }));
     stage.overlay.append(dock.dock);
     stage.overlay.append(dock.backend);
@@ -3824,10 +3809,8 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.annotateElements.editor);
     // The live-probe readout follows the cursor above the panels.
     stage.overlay.append(viewer.probeElements.readout);
-    // The phone-only "Scan Info" launcher for the Inspector bottom sheet.
-    // On phones it is superseded by the unified bottom sheet below (CSS hides
-    // it under that breakpoint); on desktop it is unused (the Inspector is a
-    // normal panel there). Kept appended so the desktop/no-sheet path is intact.
+    // Phone-only "Scan Info" launcher — superseded by the bottom sheet on phones
+    // (CSS-hidden), unused on desktop; kept so the no-sheet path stays intact.
     stage.overlay.append(inspector.sheetToggle);
 
     // ── Phone bottom-sheet (design audit 1.3 follow-up) ───────────────────
@@ -3842,17 +3825,12 @@ void viewerLoaded.then(() => {
 
     const toMobileLayout = (): void => {
       mobileSheet.slot('view').append(inspector.element);
-      // Both the Analyse and Object panels are lazy-mounted, so re-parent each
-      // only once it exists (analyse first, then object). A mobile empty-state
-      // boot BEFORE any scan runs this with BOTH still null — the slot stays
-      // empty, and each panel slots itself in via `mountAnalysePanelElement` /
-      // `mountObjectPanelElement` when it later mounts.
+      // Lazy panels (analyse, object, measure) are re-parented only once they
+      // exist; before that each slots itself in via its mount closure on mount.
       if (analysePanel) mobileSheet.slot('analyse').append(analysePanel.element);
       if (objectPanel) mobileSheet.slot('analyse').append(objectPanel.element);
-      // The Measurements panel is lazy-mounted; include it (between the class
-      // legend and annotations, its canonical order) only once it exists. A
-      // mobile empty-state boot runs this with it still null — it slots itself in
-      // via `mountMeasurePanelElement` when it later mounts.
+      // The layer browser leads the mobile Layers tab (it lives in desktop Data).
+      mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
       const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
       if (measureMount.panel) layersPanels.push(measureMount.panel.element);
       layersPanels.push(annotationPanel.element, exportPanel.element);
@@ -3870,26 +3848,20 @@ void viewerLoaded.then(() => {
       // Restore the desktop default collapsed state we dropped for the mobile
       // sheet, so a device that crosses the breakpoint (rotate / resize) gets the
       // compact desktop panels back rather than fully-expanded ones.
-      analysePanel?.element.classList.add('olv-collapsed');
-      exportPanel.element.classList.add('olv-collapsed');
+      // One mode at a time: a collapsed lone panel would hide its main action.
+      analysePanel?.element.classList.remove('olv-collapsed');
+      exportPanel.element.classList.remove('olv-collapsed');
       leftPanels.classList.remove('olv-hidden');
       inspector.sheetToggle.classList.remove('olv-hidden');
-      // Inspector returns to the overlay in its original slot (just before the
-      // streaming panel); the left column is rebuilt in its original order. The
-      // Object and Analyse panels are included only once each has lazily mounted
-      // (Object before the class-legend panel, Analyse between the class-legend
-      // and export panels — via mountObjectPanelElement / mountAnalysePanelElement).
-      stage.overlay.insertBefore(inspector.element, streamingPanel.element);
-      // Measurements panel is lazy-mounted — front of the column when it exists,
-      // else it inserts itself there via `mountMeasurePanelElement` on mount.
-      const desktopPanels: HTMLElement[] = [];
-      if (measureMount.panel) desktopPanels.push(measureMount.panel.element);
-      desktopPanels.push(annotationPanel.element);
-      if (objectPanel) desktopPanels.push(objectPanel.element);
-      desktopPanels.push(classLegendPanel.element, processStudio.panel.element);
-      if (analysePanel) desktopPanels.push(analysePanel.element);
-      desktopPanels.push(exportPanel.element);
-      leftPanels.append(...desktopPanels);
+      // Inspector returns to the right context rail (below the Streaming card);
+      // the left panels return to their workspace modes (lazy ones once mounted).
+      rightRail.append(inspector.element);
+      workspace.layoutDesktop({
+        ...workspacePanels,
+        measure: measureMount.panel?.element,
+        analyse: analysePanel?.element,
+        object: objectPanel?.element,
+      });
     };
 
     // Layout swap stays keyed to the shared mobile-layout condition (orientation-
@@ -3909,28 +3881,26 @@ void viewerLoaded.then(() => {
       // The sheet only shows on a phone WITH a scan loaded; otherwise the empty
       // slots would float a chrome bar over the empty state.
       mobileSheet.setVisible(isMobile && hasScan());
+      // The desktop workspace tab strip appears only once a scan is loaded, so
+      // an empty left rail stays zero-height and its grabber stays hidden.
+      workspace.setAvailable(hasScan());
     };
     // Expose to the scan lifecycle so reveal / reset re-evaluate visibility.
     syncMobileSheet = applyMobileSheet;
     mobileMql?.addEventListener('change', applyMobileSheet);
     applyMobileSheet();
 
-    // The lazy Analyse panel inserts itself here once its chunk resolves. When
-    // the mobile sheet is active it goes into the Analyse slot ahead of the
-    // object panel; otherwise between the class-legend and export panels in the
-    // left column. Robust to either target panel not being where we expect
-    // (falls back to append) so a mid-flip mount can never throw.
+    // The lazy Analyse panel inserts itself here once its chunk resolves: ahead
+    // of the object panel in the mobile Analyse slot, else the Analyse mode.
     mountAnalysePanelElement = (el: HTMLElement): void => {
+      el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
       if (mobileApplied) {
         const slot = mobileSheet.slot('analyse');
         // insertBefore(firstChild) puts Analyse first (object panel follows);
         // acts as append when the slot is empty.
         slot.insertBefore(el, slot.firstChild);
-        el.classList.remove('olv-collapsed');
-      } else if (exportPanel.element.parentElement === leftPanels) {
-        leftPanels.insertBefore(el, exportPanel.element);
       } else {
-        leftPanels.append(el);
+        workspace.mountInMode('analyse', el);
       }
     };
     // The lazy Object panel inserts itself here once its chunk resolves. When
@@ -3942,10 +3912,8 @@ void viewerLoaded.then(() => {
       if (mobileApplied) {
         // append puts Object after the Analyse panel in the shared Analyse slot.
         mobileSheet.slot('analyse').append(el);
-      } else if (classLegendPanel.element.parentElement === leftPanels) {
-        leftPanels.insertBefore(el, classLegendPanel.element);
       } else {
-        leftPanels.append(el);
+        workspace.mountInMode('analyse', el);
       }
     };
     // The lazy Measurements panel inserts itself here once its chunk resolves.
@@ -3965,8 +3933,8 @@ void viewerLoaded.then(() => {
           slot.append(el);
         }
       } else {
-        // Front of the left column — measure sits above annotations/analyse.
-        leftPanels.insertBefore(el, leftPanels.firstChild);
+        // Data mode — measure sits under the class legend with annotations, clip.
+        workspace.mountInMode('data', el);
       }
     });
     // If either panel already mounted before this wiring ran (possible only if a
@@ -4230,7 +4198,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
  */
 function runModules(cloud: PointCloud, scope?: ClassScope): AnalysisRow[] {
   const rows: AnalysisRow[] = [];
-  const options = scope ? { scope } : undefined;
+  const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override
   for (const module of registry.list()) rows.push(...module.run(cloud, undefined, options).rows);
   return rows;
 }
@@ -4538,7 +4506,6 @@ function generateReportPdf(templateId: string): Promise<void> {
   return runGenerateReportPdf(templateId, reportExportDeps);
 }
 
-
 /**
  * Push the Viewer's current render-quality state into the Inspector chips.
  * Used by callbacks that change a single chip's state but want every chip
@@ -4635,7 +4602,6 @@ function applyPrefs(): void {
 // `src/app/crsCoordinator.ts` (wired as `crsCoordinator`). Both are extracted
 // from main.ts unchanged; CRS state is owned by `crsService` (declared near the
 // imports) with the coordinator holding only the per-scan override-store key.
-
 
 /** Refresh the Annotations panel's contents and visibility. */
 function refreshAnnotationPanel(): void {
@@ -4983,6 +4949,11 @@ async function exportSession(): Promise<void> {
         // serializer omits it when undefined so no-analysis sessions keep their
         // byte-shape.
         processingManifest,
+        // The active scan's RESOLVED CRS (detection + any user override), so the
+        // choice round-trips and a re-open does not silently re-prompt or revert
+        // to the file's declared CRS (C4). The v4 schema already carries this
+        // field; the exporter simply never populated it.
+        crs: crsService.current() ?? undefined,
       });
     },
   });
@@ -4999,6 +4970,7 @@ const sessionIoDeps: SessionIoDeps = {
   loadSession,
   appVersion: __APP_VERSION__,
   getActiveScanId: () => scans.activeId,
+  getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
   exportOrigin: () => exportGeoContext().origin,
   bookmarks,
@@ -5072,9 +5044,9 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a dropped or sampled File: parse, render, and populate the Inspector. */
+/** Load a File: parse, render, populate the Inspector, land on the Data panel. */
 function handleFile(file: File): Promise<void> {
-  return openScan(file, openScanDeps);
+  return openScan(file, openScanDeps).then(() => showWorkspaceMode?.('data'));
 }
 
 /**
@@ -5193,7 +5165,6 @@ function handleRemoteEpt(url: string, signal?: AbortSignal): Promise<void> {
   return runHandleRemoteEpt(url, signal, openStreamingDeps);
 }
 
-
 /**
  * Open a remote COPC scan over HTTP range requests. The host must allow
  * cross-origin requests and serve byte ranges — `HttpRangeSource.probe()`
@@ -5273,9 +5244,6 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     loading = false;
   }
 }
-
-
-
 
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
@@ -5652,7 +5620,6 @@ function resetToEmptyState(): void {
  * clouds may take a moment.
  */
 
-
 function compareLoadedLayers(): void {
   const ids = viewer.clouds();
   if (ids.length !== 2) return;
@@ -5674,22 +5641,14 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     try {
-      // Pass each cloud's origin: the two are recentred by their own origins, so
-      // the comparison must align them in a common world frame, not raw local.
-      // Unit info rides along so the shared grid's ~0.25 m cell floor is
-      // expressed in SOURCE units (degrees/feet), not raw source-unit 0.25 —
-      // and it now comes from ONE context per epoch, built at this boundary, so
-      // alignment, difference and exported raster cannot disagree about the
-      // metre scale (`epochFrameOptions`) or the declared frame
-      // (`declaredFrameLabel` keeps two UNDECLARED scans off the "same frame"
-      // branch instead of matching them on the display placeholder).
-      const ctxA = spatialContextFrom(a.metadata?.crs);
-      const ctxB = spatialContextFrom(b.metadata?.crs);
-      const frames = epochFrameOptions(ctxA, ctxB);
-      // `sourceOrigin`, not the live project origin: this is the epoch world
-      // comparison. The frame facts come from each epoch's context.
-      const beforeCloud = { positions: a.positions, origin: a.sourceOrigin, ...epochFrameFacts(ctxA) };
-      const afterCloud = { positions: b.positions, origin: b.sourceOrigin, ...epochFrameFacts(ctxB) };
+      const { ctxA, comparable, frames, beforeCloud, afterCloud } = prepareEpochFrames(crsService, a, b);
+      if (!comparable) {
+        inspector.setCompareResult(
+          epochUnitMismatchLines(`${baseName(a.name)} (before) → ${baseName(b.name)} (after)`),
+        );
+        inspector.setDifferenceAvailable(false);
+        return;
+      }
       // Coarse-register the after cloud onto the before cloud first (yaw + x/y
       // only — a real vertical change is the signal, so z is preserved), so a
       // small horizontal misregistration between epochs is not read as movement.

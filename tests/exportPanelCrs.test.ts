@@ -8,7 +8,31 @@
  * unaffected either way. Runs in the node environment via a recording DOM stub.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
+
+// Recorded downloads + captured convert options, so the export-action cases below
+// can assert what the `.prj` sidecar carried and what CRS the converter received.
+const rec = vi.hoisted(() => ({
+  downloads: [] as Array<{ name: string; text: string; mime: string }>,
+  convertResolvedCrs: [] as Array<unknown>,
+}));
+vi.mock('../src/io/download', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  downloadBytes: (name: string, bytes: Uint8Array, mime: string) =>
+    rec.downloads.push({ name, text: new TextDecoder().decode(bytes), mime }),
+}));
+vi.mock('../src/lazyChunks', async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  loadConvertEngine: async () => ({
+    convertCloud: (_cloud: unknown, options: { resolvedSourceCrs?: unknown }) => {
+      rec.convertResolvedCrs.push(options.resolvedSourceCrs);
+      return {
+        file: { filename: 'scan.xyz', mime: 'text/plain', bytes: new Uint8Array([1]) },
+        report: { source: 'scan', ok: true, pointCount: 1, crsNote: '—', log: [] },
+      };
+    },
+  }),
+}));
 
 /** A fake element exposing the surface ExportPanel + `el()` touch. */
 class FakeEl {
@@ -310,3 +334,71 @@ describe('ExportPanel: scan-area export is independent of the measure surface', 
 
 // silence "unused" for the shared helper while keeping it available for edits.
 void makePanel;
+
+describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transaction consistency)', () => {
+  async function runExport(opts: {
+    getResolvedSourceCrs?: () => { wkt?: string; epsg?: number } | null;
+    cloudWkt?: string;
+  }): Promise<typeof rec> {
+    rec.downloads.length = 0;
+    rec.convertResolvedCrs.length = 0;
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const cloud = { name: 'scan', pointCount: 1, metadata: opts.cloudWkt ? { crs: { wkt: opts.cloudWkt } } : undefined };
+    const panel = new ExportPanel({
+      getCloud: () => cloud as never,
+      hasFullSource: () => false,
+      isReduced: () => false,
+      getFullCloud: async () => null,
+      ...(opts.getResolvedSourceCrs !== undefined
+        ? { getResolvedSourceCrs: opts.getResolvedSourceCrs as never }
+        : {}),
+    });
+    const p = panel as unknown as { _format: string; _crsMode: string; _export(): Promise<void> };
+    p._format = 'xyz';
+    p._crsMode = 'keep';
+    await p._export();
+    return rec;
+  }
+  const prj = (r: typeof rec) => r.downloads.find((d) => d.name.endsWith('.prj'));
+
+  it('Case A — override: converter and .prj both get WKT-B, never WKT-A', async () => {
+    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ wkt: 'WKT-B' }) });
+    expect((r.convertResolvedCrs[0] as { wkt?: string })?.wkt).toBe('WKT-B');
+    expect(prj(r)?.text).toBe('WKT-B');
+    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
+  });
+
+  it('Case B — Local/no CRS: converter gets null, no .prj, WKT-A never resurrected', async () => {
+    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => null });
+    expect(r.convertResolvedCrs[0]).toBeNull();
+    expect(prj(r)).toBeUndefined();
+    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
+  });
+
+  it('Case C — no resolver wired: legacy declared-metadata fallback stays intact', async () => {
+    const r = await runExport({ cloudWkt: 'WKT-A' });
+    expect(r.convertResolvedCrs[0]).toBeUndefined();
+    expect(prj(r)?.text).toBe('WKT-A');
+  });
+
+  it('Case D — CRS changes mid-export: the request-time snapshot (B) wins over a later C', async () => {
+    let n = 0;
+    const r = await runExport({
+      cloudWkt: 'WKT-A',
+      getResolvedSourceCrs: () => (n++ === 0 ? { wkt: 'WKT-B' } : { wkt: 'WKT-C' }),
+    });
+    expect((r.convertResolvedCrs[0] as { wkt?: string })?.wkt).toBe('WKT-B');
+    expect(prj(r)?.text).toBe('WKT-B');
+    expect(r.downloads.some((d) => d.text.includes('WKT-C'))).toBe(false);
+  });
+
+  it('Case E — override to a known EPSG with no WKT writes no .prj (never resurrects source A)', async () => {
+    // CrsService drops the declared WKT on an override to a different EPSG, so
+    // resolvedSourceCrs carries an epsg but no wkt. The safe behaviour is to write
+    // no .prj rather than the rejected source WKT; the binary formats still carry
+    // the resolved EPSG. (ASCII keep + EPSG-only override → no sidecar; documented.)
+    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ epsg: 32613 }) });
+    expect(prj(r)).toBeUndefined();
+    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
+  });
+});

@@ -140,8 +140,14 @@ function subsetLine(cloud: PointCloud): string | null {
  * equator, matching the survey convention for degree output. Z stays 3 dp
  * in both cases (heights are linear units even in a geographic CRS).
  */
-function horizontalCoordFormatter(cloud: PointCloud): (v: number) => string {
-  return cloud.metadata?.crs?.isGeographic === true ? (v) => v.toFixed(7) : coord;
+function horizontalCoordFormatter(cloud: PointCloud, resolvedIsGeographic?: boolean): (v: number) => string {
+  // The RESOLVED active CRS decides lat/lon precision when the caller supplies it
+  // (a user override to a geographic CRS must write 7 dp, not the projected 3 dp),
+  // falling back to the file's declared CRS only for a pure caller that wires none.
+  // `??` keeps an explicit `false` (resolved to projected/local) from resurrecting
+  // a declared `isGeographic: true`.
+  const geographic = resolvedIsGeographic ?? cloud.metadata?.crs?.isGeographic === true;
+  return geographic ? (v) => v.toFixed(7) : coord;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,7 +240,7 @@ function droppedChannelLines(
  * long-standing XYZ convention. A CSV never gets comment lines: naive CSV
  * parsers must always see the header row first.
  */
-export function toXyz(cloud: PointCloud, delimiter = ' '): string {
+export function toXyz(cloud: PointCloud, delimiter = ' ', resolvedIsGeographic?: boolean): string {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -245,7 +251,7 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
   const omitted = n - finitePointCount(positions, n);
   const lines: string[] = [];
   const csv = delimiter === ',';
-  const hcoord = horizontalCoordFormatter(cloud);
+  const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
   // Length guards: a malformed cloud with a misaligned channel drops the
   // column rather than writing values from the wrong points.
   const intensity =
@@ -298,12 +304,12 @@ export function toXyz(cloud: PointCloud, delimiter = ' '): string {
 }
 
 /** Serialise to CSV — comma-delimited XYZ with a header row. */
-export function toCsv(cloud: PointCloud): string {
-  return toXyz(cloud, ',');
+export function toCsv(cloud: PointCloud, resolvedIsGeographic?: boolean): string {
+  return toXyz(cloud, ',', resolvedIsGeographic);
 }
 
 /** Serialise to ASCII PLY, with `uchar` RGB when the cloud carries colour. */
-export function toPly(cloud: PointCloud): string {
+export function toPly(cloud: PointCloud, resolvedIsGeographic?: boolean): string {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -313,7 +319,7 @@ export function toPly(cloud: PointCloud): string {
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
-  const hcoord = horizontalCoordFormatter(cloud);
+  const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
 
   // `double` x/y/z: the values are global survey coordinates written at
   // millimetre precision, and a `float` declaration instructs conforming
@@ -360,7 +366,7 @@ export function toPly(cloud: PointCloud): string {
  * OBJ has no standard slot for intensity or classification, so those
  * channels are disclosed as omitted rather than dropped silently.
  */
-export function toObj(cloud: PointCloud): string {
+export function toObj(cloud: PointCloud, resolvedIsGeographic?: boolean): string {
   // World coordinates come from the SOURCE origin, which is fixed for the
   // cloud's life. `origin` moves when a layer mounts into a project frame;
   // sourceOrigin does not, so an export stays in the file's real-world frame
@@ -370,7 +376,7 @@ export function toObj(cloud: PointCloud): string {
   const n = cloud.pointCount;
   const finite = finitePointCount(positions, n);
   const omitted = n - finite;
-  const hcoord = horizontalCoordFormatter(cloud);
+  const hcoord = horizontalCoordFormatter(cloud, resolvedIsGeographic);
 
   const lines: string[] = [
     '# OpenLiDARViewer point-cloud export',
@@ -400,12 +406,16 @@ export function toObj(cloud: PointCloud): string {
 }
 
 /** Serialise `cloud` to `format`. */
-export function exportCloud(cloud: PointCloud, format: ExportFormat): string {
+export function exportCloud(
+  cloud: PointCloud,
+  format: ExportFormat,
+  resolvedIsGeographic?: boolean,
+): string {
   switch (format) {
-    case 'xyz': return toXyz(cloud);
-    case 'csv': return toCsv(cloud);
-    case 'ply': return toPly(cloud);
-    case 'obj': return toObj(cloud);
+    case 'xyz': return toXyz(cloud, ' ', resolvedIsGeographic);
+    case 'csv': return toCsv(cloud, resolvedIsGeographic);
+    case 'ply': return toPly(cloud, resolvedIsGeographic);
+    case 'obj': return toObj(cloud, resolvedIsGeographic);
     default: {
       const exhaustive: never = format;
       throw new Error(`Unknown export format: ${String(exhaustive)}`);
