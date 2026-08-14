@@ -1,0 +1,1024 @@
+{
+  "study": "Coconino B1 2019 external DTM validation \u2014 required-tile manifest",
+  "derivedFrom": {
+    "checkpointTable": "validation/terrain-field/references/coconino-b19-2019__checkpoints.json",
+    "checkpointCount": 121,
+    "tileRule": "w{ceil(-albersE/1000)}n{floor(albersN/1000)} in EPSG:6350 (USGS 1 km Albers)",
+    "note": "The required tiles are a pure function of the frozen checkpoint table and the tile rule. No tile is chosen; the checkpoints choose the tiles."
+  },
+  "totals": {
+    "requiredTiles": 109,
+    "checkpoints": 121,
+    "nva": 70,
+    "vva": 51
+  },
+  "coverageNow": {
+    "downloadedTilesWithCheckpoints": 7,
+    "checkpointsCovered": 13,
+    "nvaCovered": 6,
+    "vvaCovered": 7
+  },
+  "f7Gate": {
+    "minTotal": 40,
+    "minPerStratum": 12,
+    "totalMet": false,
+    "perStratumMet": false,
+    "tilesStillNeededForMinTotal": 27,
+    "note": "One checkpoint per ~1 km tile, so total N and tile downloads (~70 MB each) rise together; closing F7 is a deterministic download, not a choice."
+  },
+  "tiles": [
+    {
+      "tileId": "w1383n1413",
+      "checkpointIds": [
+        "BE17"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1383n1467",
+      "checkpointIds": [
+        "OT18"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1383n1469",
+      "checkpointIds": [
+        "OT02"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1384n1413",
+      "checkpointIds": [
+        "BR09"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1384n1483",
+      "checkpointIds": [
+        "HG17",
+        "XNVA102"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1385n1467",
+      "checkpointIds": [
+        "BR13"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1386n1425",
+      "checkpointIds": [
+        "BE14"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1386n1432",
+      "checkpointIds": [
+        "BE16"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1387n1406",
+      "checkpointIds": [
+        "BR16"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1387n1423",
+      "checkpointIds": [
+        "BR08"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1389n1441",
+      "checkpointIds": [
+        "BR05"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1389n1450",
+      "checkpointIds": [
+        "OT05"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1390n1453",
+      "checkpointIds": [
+        "BE13"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1390n1462",
+      "checkpointIds": [
+        "UR06"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1391n1473",
+      "checkpointIds": [
+        "BR12"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1391n1481",
+      "checkpointIds": [
+        "OT17"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1391n1489",
+      "checkpointIds": [
+        "OT15"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1392n1399",
+      "checkpointIds": [
+        "UR18"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1392n1408",
+      "checkpointIds": [
+        "UR17"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1392n1457",
+      "checkpointIds": [
+        "BE06"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1392n1480",
+      "checkpointIds": [
+        "BE09"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1393n1439",
+      "checkpointIds": [
+        "UR09"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1393n1441",
+      "checkpointIds": [
+        "HG10"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1393n1446",
+      "checkpointIds": [
+        "HG09"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1394n1411",
+      "checkpointIds": [
+        "HG15"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1394n1428",
+      "checkpointIds": [
+        "HG13"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1394n1462",
+      "checkpointIds": [
+        "BR17"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1395n1412",
+      "checkpointIds": [
+        "TR06"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1395n1420",
+      "checkpointIds": [
+        "UR16"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1395n1460",
+      "checkpointIds": [
+        "TR12",
+        "XNVA101"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1395n1476",
+      "checkpointIds": [
+        "UR03"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1395n1484",
+      "checkpointIds": [
+        "OT16"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1416",
+      "checkpointIds": [
+        "HG14",
+        "XNVA501"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1396n1430",
+      "checkpointIds": [
+        "UR10"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1437",
+      "checkpointIds": [
+        "HG11"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1465",
+      "checkpointIds": [
+        "UR05"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1471",
+      "checkpointIds": [
+        "UR04"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1473",
+      "checkpointIds": [
+        "BE08"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1478",
+      "checkpointIds": [
+        "OT13"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1482",
+      "checkpointIds": [
+        "BR07"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1396n1483",
+      "checkpointIds": [
+        "UR01"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1397n1432",
+      "checkpointIds": [
+        "HG12"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1397n1434",
+      "checkpointIds": [
+        "OT04"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1397n1480",
+      "checkpointIds": [
+        "UR02"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1397n1486",
+      "checkpointIds": [
+        "OT14"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1398n1449",
+      "checkpointIds": [
+        "TR07",
+        "XNVA105"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1398n1455",
+      "checkpointIds": [
+        "OT11"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1398n1468",
+      "checkpointIds": [
+        "OT09"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1398n1475",
+      "checkpointIds": [
+        "BE04"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1399n1427",
+      "checkpointIds": [
+        "BR02"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1400n1473",
+      "checkpointIds": [
+        "BE15"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1400n1483",
+      "checkpointIds": [
+        "TR02"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1401n1430",
+      "checkpointIds": [
+        "BE02"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1401n1450",
+      "checkpointIds": [
+        "BE19",
+        "TR10"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1402n1466",
+      "checkpointIds": [
+        "UR07"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1402n1490",
+      "checkpointIds": [
+        "OT12"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1403n1396",
+      "checkpointIds": [
+        "BE07"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1403n1408",
+      "checkpointIds": [
+        "BE10"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1403n1454",
+      "checkpointIds": [
+        "HG08"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1403n1467",
+      "checkpointIds": [
+        "BR14"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1404n1455",
+      "checkpointIds": [
+        "HG04",
+        "XNVA703"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1404n1493",
+      "checkpointIds": [
+        "OT07"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1405n1469",
+      "checkpointIds": [
+        "TR16"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1405n1487",
+      "checkpointIds": [
+        "BR06"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1406n1416",
+      "checkpointIds": [
+        "TR09",
+        "XNVA502"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1406n1464",
+      "checkpointIds": [
+        "UR08"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1406n1494",
+      "checkpointIds": [
+        "TR14"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1407n1486",
+      "checkpointIds": [
+        "TR03"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1408n1470",
+      "checkpointIds": [
+        "OT08"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1409n1388",
+      "checkpointIds": [
+        "UR19"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1409n1425",
+      "checkpointIds": [
+        "TR05"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1409n1460",
+      "checkpointIds": [
+        "HG01"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1409n1462",
+      "checkpointIds": [
+        "UR13"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1409n1490",
+      "checkpointIds": [
+        "OT10"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1410n1389",
+      "checkpointIds": [
+        "HG16",
+        "XNVA503"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1410n1420",
+      "checkpointIds": [
+        "UR15"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1410n1460",
+      "checkpointIds": [
+        "UR20"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1410n1480",
+      "checkpointIds": [
+        "BR11"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1411n1455",
+      "checkpointIds": [
+        "TR17"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1411n1473",
+      "checkpointIds": [
+        "BE03"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1411n1494",
+      "checkpointIds": [
+        "OT01"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1412n1429",
+      "checkpointIds": [
+        "UR14"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1412n1433",
+      "checkpointIds": [
+        "TR01"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1412n1436",
+      "checkpointIds": [
+        "UR11"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1412n1453",
+      "checkpointIds": [
+        "HG07",
+        "XNVA702"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1412n1464",
+      "checkpointIds": [
+        "HG06"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1466",
+      "checkpointIds": [
+        "HG05"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1468",
+      "checkpointIds": [
+        "OT19"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1489",
+      "checkpointIds": [
+        "BR04"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1492",
+      "checkpointIds": [
+        "TR15"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1494",
+      "checkpointIds": [
+        "OT03"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1413n1501",
+      "checkpointIds": [
+        "BE12"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1414n1475",
+      "checkpointIds": [
+        "BR10"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1414n1496",
+      "checkpointIds": [
+        "BR01"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1415n1455",
+      "checkpointIds": [
+        "HG02"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1415n1472",
+      "checkpointIds": [
+        "BR15"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1415n1483",
+      "checkpointIds": [
+        "TR04",
+        "XNVA104"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1416n1461",
+      "checkpointIds": [
+        "OT20"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1416n1476",
+      "checkpointIds": [
+        "OT06"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1416n1485",
+      "checkpointIds": [
+        "BE20"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1416n1489",
+      "checkpointIds": [
+        "TR08"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1416n1499",
+      "checkpointIds": [
+        "TR13",
+        "XNVA103"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1417n1494",
+      "checkpointIds": [
+        "BE18"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1418n1501",
+      "checkpointIds": [
+        "TR11"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1418n1503",
+      "checkpointIds": [
+        "BE01"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1419n1429",
+      "checkpointIds": [
+        "BE05"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1422n1452",
+      "checkpointIds": [
+        "HG03",
+        "XNVA701"
+      ],
+      "nva": 1,
+      "vva": 1,
+      "downloaded": true
+    },
+    {
+      "tileId": "w1424n1456",
+      "checkpointIds": [
+        "BR03"
+      ],
+      "nva": 0,
+      "vva": 1,
+      "downloaded": false
+    },
+    {
+      "tileId": "w1425n1423",
+      "checkpointIds": [
+        "UR12"
+      ],
+      "nva": 1,
+      "vva": 0,
+      "downloaded": false
+    }
+  ]
+}
