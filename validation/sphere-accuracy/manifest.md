@@ -18,10 +18,27 @@ in an origin-subtracted Float32 local frame that mirrors the renderer. This conf
 OLV measures the large-magnitude negative Krovák coordinates without precision loss,
 matching the surveyed network to sub-millimetre. Reproducible, no cloud processing.
 
-## Layer B — instrument fidelity (PENDING)
+## Layer B — instrument fidelity (feasibility characterised; blocked on detection method)
 
-Per scanner (iPhone, LA03, then ZEB, TLS): RANSAC sphere-centre detection from the
-actual points (reference tool — PDAL/Python), OLV-measured inter-sphere distances
-between detected centres, compared to the surveyed network → a per-instrument
-accuracy table. Detection commands, tool versions, detected centres + residuals,
-and md5s will be recorded here. Staged small-cloud-first.
+Goal: RANSAC sphere-centre detection per scanner, then OLV-measured inter-sphere
+distances vs the surveyed network → a per-instrument accuracy table.
+
+**Feasibility findings (laspy + scipy, on the real clouds):**
+
+- The "Koule" targets are physical spheres of radius **≈217 mm** (from clean fits),
+  present in the dense clouds but **occlusion-limited** — only ~5 of 12 spheres have
+  usable returns in the LA03 mobile scan; the rest are occluded (0 points).
+- **iPhone (2.2M pts) cannot recover the spheres** — near the surveyed centres it has
+  only sparse, flat ground-like points (e.g. Koule08: 25 pts spanning 3 cm in Z,
+  nearest 10 cm away). Recorded as a detection failure, not forced.
+- **The forest confounds a fixed-radius fit:** tree trunks have ~the same radius as
+  the spheres, so a robust fixed-R sphere fit locks onto nearby trunks. On LA03 this
+  gave centre offsets of 5–21 cm from surveyed and a 36 mm-RMSE distance network —
+  contaminated by trunk mis-detections, NOT a valid instrument-accuracy result. It is
+  deliberately not reported as one.
+
+**What a rigorous Layer B needs (next):** sphere-vs-cylinder discrimination (full 3D
+curvature, not radius alone), and the survey-grade TLS cloud (345M pts, 4.5 GB) where
+the sphere surface is dense enough to separate a ball from a trunk. That is a real
+detection-method effort on a multi-GB cloud, staged as its own task. Until then Layer B
+is characterised but not graded — no E-level claim is made from a confounded fit.
