@@ -737,11 +737,12 @@ export class ExportPanel {
     // Snapshot the resolved source CRS with the other request inputs, so the
     // whole export — the converted data, its metadata, and the ASCII `.prj`
     // sidecar — describes ONE frame even if the user changes the CRS picker
-    // mid-decode. `resolvedCrsGetter === undefined` means no resolver is wired
+    // mid-decode. `resolverWired === false` means no resolver is wired
     // (legacy/pure caller → declared-metadata fallback); a wired getter returning
     // `null` is an explicit Local/no-CRS resolution and must NOT fall back to A.
-    const resolvedCrsGetter = this._cb.getResolvedSourceCrs;
-    const resolvedSourceCrs = resolvedCrsGetter ? resolvedCrsGetter() : undefined;
+    // Call through `this._cb` so a receiver-bound resolver still works.
+    const resolverWired = this._cb.getResolvedSourceCrs !== undefined;
+    const resolvedSourceCrs = this._cb.getResolvedSourceCrs?.();
 
     this._busy = true;
     this._exportBtn.disabled = true;
@@ -804,10 +805,19 @@ export class ExportPanel {
         // sidecar and the data can never name different frames. A wired resolver
         // returning null (Local/no-CRS) yields no `.prj`, never the rejected
         // source WKT; only an unwired resolver falls back to declared metadata.
-        const activeWkt =
-          resolvedCrsGetter !== undefined
-            ? (resolvedSourceCrs?.wkt ?? null)
-            : (cloud.metadata?.crs?.wkt ?? null);
+        let activeWkt = resolverWired
+          ? (resolvedSourceCrs?.wkt ?? null)
+          : (cloud.metadata?.crs?.wkt ?? null);
+        // When the resolver landed on a known EPSG but carries no WKT — an override
+        // to a DIFFERENT EPSG drops the now-wrong declared WKT (CrsService C1) —
+        // synthesize one from the EPSG so an ASCII keep export still describes the
+        // resolved frame instead of losing georeferencing. A Local/no-CRS resolution
+        // has no EPSG, so it still writes no `.prj` and never resurrects source A.
+        // The EPSG→WKT table loads lazily, staying out of the eager shell bundle.
+        if (!activeWkt && resolverWired && resolvedSourceCrs?.epsg != null) {
+          const { wktForEpsg } = await import('../io/epsgWkt');
+          activeWkt = wktForEpsg(resolvedSourceCrs.epsg);
+        }
         if ((this._format === 'xyz' || this._format === 'asc') && this._crsMode === 'keep' && activeWkt) {
           downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
         }

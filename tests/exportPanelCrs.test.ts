@@ -391,4 +391,14 @@ describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transact
     expect(prj(r)?.text).toBe('WKT-B');
     expect(r.downloads.some((d) => d.text.includes('WKT-C'))).toBe(false);
   });
+
+  it('Case E — override to a known EPSG with no WKT synthesizes the .prj from the EPSG (no georeference loss)', async () => {
+    // CrsService drops the declared WKT on an override to a different EPSG, so
+    // resolvedSourceCrs carries an epsg but no wkt. The .prj must still describe
+    // the resolved frame (synthesized), never fall back to the source A.
+    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ epsg: 32613 }) });
+    expect(prj(r)?.text).toBeTruthy();
+    expect(prj(r)!.text).toMatch(/PROJCS|GEOGCS|32613/i);
+    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
+  });
 });
