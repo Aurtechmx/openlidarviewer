@@ -271,7 +271,9 @@ describe('CrsService.setOverride', () => {
       source: 'las-vlr',
     });
     const next = svc.setOverride({
-      override: { epsg: null, kind: 'local' },
+      // 'detected' is the clear/use-detected command (C3) — 'local' now PERSISTS
+      // a genuine local override instead of clearing.
+      override: { epsg: null, kind: 'detected' },
       detected: NAD83_UTM_18N,
       source: 'las-vlr',
     });
@@ -559,5 +561,133 @@ describe('CrsService — horizontal datum (single source of truth)', () => {
       source: 'copc-meta',
     });
     expect(r?.horizontalDatum).toBe('WGS 84');
+  });
+});
+
+// ── C1/C2: override CRS integrity (WKT + vertical fields) ────────────
+
+/** A compound CRS: NAD83/UTM 18N horizontal + NAVD88 height, with a WKT. */
+const COMPOUND_26918_NAVD88: CrsInfo = {
+  source: 'wkt',
+  name: 'NAD83 / UTM zone 18N + NAVD88 height',
+  epsg: 26918,
+  linearUnit: 'metre',
+  linearUnitToMetres: 1,
+  isGeographic: false,
+  wkt: 'COMPD_CS["NAD83 / UTM zone 18N + NAVD88 height", PROJCS["NAD83 / UTM zone 18N", ...], VERT_CS["NAVD88 height", ...]]',
+  verticalEpsg: 5703,
+  verticalDatum: 'NAVD88',
+  verticalUnitToMetres: 1,
+};
+
+describe('CrsService — override does not carry a stale WKT (C1)', () => {
+  it('drops the detected WKT when the override chooses a DIFFERENT epsg', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'site.laz', detected: COMPOUND_26918_NAVD88, source: 'las-vlr' });
+    // User rejects 26918 → chooses 32612 (WGS84 / UTM 12N).
+    const r = svc.setOverride({
+      override: { epsg: 32612, kind: 'projected' },
+      detected: COMPOUND_26918_NAVD88,
+      source: 'las-vlr',
+    });
+    expect(r?.epsg).toBe(32612);
+    // The old WKT described 26918 — it must not travel with the new EPSG.
+    expect(r?.wkt).toBeUndefined();
+  });
+
+  it('keeps the detected WKT when the override CONFIRMS the detected epsg', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'site.laz', detected: COMPOUND_26918_NAVD88, source: 'las-vlr' });
+    const r = svc.setOverride({
+      override: { epsg: 26918, kind: 'projected' },
+      detected: COMPOUND_26918_NAVD88,
+      source: 'las-vlr',
+    });
+    expect(r?.epsg).toBe(26918);
+    expect(r?.wkt).toBe(COMPOUND_26918_NAVD88.wkt);
+  });
+});
+
+describe('CrsService — override preserves vertical metadata (C2)', () => {
+  it('a same-epsg confirmation keeps verticalEpsg/datum/unit', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'site.laz', detected: COMPOUND_26918_NAVD88, source: 'las-vlr' });
+    const r = svc.setOverride({
+      override: { epsg: 26918, kind: 'projected' },
+      detected: COMPOUND_26918_NAVD88,
+      source: 'las-vlr',
+    });
+    expect(r?.verticalEpsg).toBe(5703);
+    expect(r?.verticalDatum).toBe('NAVD88');
+    expect(r?.verticalUnitToMetres).toBe(1);
+  });
+
+  it('a horizontal-only override to a different epsg still preserves the vertical component', () => {
+    const svc = new CrsService(makePort());
+    svc.resolveForScan({ name: 'site.laz', detected: COMPOUND_26918_NAVD88, source: 'las-vlr' });
+    const r = svc.setOverride({
+      override: { epsg: 32612, kind: 'projected' },
+      detected: COMPOUND_26918_NAVD88,
+      source: 'las-vlr',
+    });
+    expect(r?.verticalEpsg).toBe(5703);
+    expect(r?.verticalDatum).toBe('NAVD88');
+  });
+});
+
+describe('CrsService — resolveFor resolves any cloud without mutating state', () => {
+  it('applies a persisted override for a non-active dataset and leaves current() untouched', () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    // Active scan is dataset A.
+    svc.resolveForScan({ name: 'a.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    // A persisted override exists for a DIFFERENT dataset B.
+    port.set('b.laz', { epsg: 32612, kind: 'projected', detectedEpsg: 26918 });
+    const before = svc.current();
+    const resolvedB = svc.resolveFor({ name: 'b.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    // B resolves to its override…
+    expect(resolvedB.epsg).toBe(32612);
+    // …without disturbing the active scan (A) or its dataset key.
+    expect(svc.current()).toBe(before);
+    expect(svc.currentDatasetKey()).toBe('a.laz');
+  });
+
+  it('falls back to the detected CRS when no override applies', () => {
+    const svc = new CrsService(makePort());
+    const r = svc.resolveFor({ name: 'x.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(r.epsg).toBe(26918);
+    expect(r.userConfirmed).toBe(false);
+  });
+});
+
+// ── C3: "use detected" and "local" are distinct commands ────────────
+
+describe('CrsService — detected vs local are distinct (C3)', () => {
+  it("'detected' clears the override and falls back to the detected CRS", () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    // First pin a projected override, so there is something to clear.
+    svc.setOverride({ override: { epsg: 32612, kind: 'projected' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(svc.current()?.epsg).toBe(32612);
+    // 'detected' clears it → back to the detected 26918.
+    const r = svc.setOverride({ override: { epsg: null, kind: 'detected' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(r?.epsg).toBe(26918);
+    expect(r?.userConfirmed).toBe(false);
+    expect(port.store.has('s.laz')).toBe(false); // cleared
+  });
+
+  it("'local' PERSISTS a genuine local-coordinates override (does not revert to detected)", () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    const r = svc.setOverride({ override: { epsg: null, kind: 'local' }, detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(r?.kind).toBe('local');
+    // The override is stored (not cleared)…
+    expect(port.store.get('s.laz')?.kind).toBe('local');
+    // …and survives a re-resolve of the same scan — it does NOT fall back to
+    // the detected 26918 the way the old collided sentinel did.
+    const reresolved = svc.resolveForScan({ name: 's.laz', detected: NAD83_UTM_18N, source: 'las-vlr' });
+    expect(reresolved.kind).toBe('local');
   });
 });

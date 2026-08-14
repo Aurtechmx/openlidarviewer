@@ -184,6 +184,8 @@ export interface InspectorCallbacks {
    * the Viewer's setters and re-syncs.
    */
   onTerrainWorkflowPreset: (id: TerrainWorkflowPresetId) => void;
+  /** Open the Dataset Story modal (reuses the command-palette `story.dataset` action). */
+  onOpenDatasetStory?: () => void;
 }
 
 const MODE_LABELS: Record<ColorMode, string> = {
@@ -694,7 +696,7 @@ export class Inspector {
   /** The whole Coordinate-system collapsible — hidden for local-frame profiles. */
   private readonly _crsSection: HTMLElement | null = null;
   /** Caller registers this to react to user CRS overrides. */
-  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void) | null = null;
+  private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
   /** Lazily-created one-line CRS-mismatch note under the layer list. */
   private _layerNote: HTMLElement | null = null;
@@ -1325,7 +1327,7 @@ export class Inspector {
     // Foundation outputs. Lives directly under the Scan Intelligence
     // title and above the Visuals Studio preset rail. Empty-state by
     // default so the panel never lies on first paint.
-    this._datasetIntelligence = new DatasetIntelligenceCard();
+    this._datasetIntelligence = new DatasetIntelligenceCard(this._cb.onOpenDatasetStory);
     // Empty slot; the card class loads on first data (never lies on first
     // paint — it simply is not there yet).
     this._layerHealthSlot = el('div');
@@ -1510,7 +1512,10 @@ export class Inspector {
       const pending = this._layerHealthPending;
       this._layerHealthPending = null;
       if (pending && pending[0].length > 0) this._layerHealth.update(pending[0], pending[1]);
-    });
+    })
+      // Additive surface: a chunk-load failure must not become an unhandled
+      // rejection (the caller is synchronous and can't catch this promise).
+      .catch((err) => console.warn('[inspector] layer-health card chunk failed to load', err));
   }
 
   setLayerCrsFlags(
@@ -1640,6 +1645,18 @@ export class Inspector {
     // none has a StreamingPanel equivalent, so hiding the section removed
     // point-thickness control on a streaming COPC.
     this.element.classList.toggle('olv-inspector-streaming', streaming);
+  }
+
+  /**
+   * The live Data-workspace elements — the Layers section (heading + rows) and
+   * the layer-health slot — for the desktop workspace to re-parent into its Data
+   * mode. Only these two nodes are exposed; the Inspector keeps updating them in
+   * place (addLayer, setLayerHealth, setStreamingMode all target the same live
+   * nodes), so ownership of layer state stays with the Inspector — the workspace
+   * only hosts them.
+   */
+  workspaceDataElements(): { layers: HTMLElement; layerHealth: HTMLElement } {
+    return { layers: this._layersSection, layerHealth: this._layerHealthSlot };
   }
 
   /**
@@ -2189,7 +2206,7 @@ export class Inspector {
    * effective CRS, then feeding the result back through `setCrs`.
    */
   setOnCrsOverride(
-    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' }) => void,
+    cb: (override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void,
   ): void {
     this._onCrsOverride = cb;
   }
@@ -2318,11 +2335,15 @@ export class Inspector {
       if (!this._onCrsOverride) return;
       const v = select.value;
       if (v === '__detected__') {
-        // Caller restores the detected CRS by re-running detection.
-        this._onCrsOverride({ epsg: null, kind: 'local' /* tag value, caller ignores */ });
+        // "Use detected" — clear any override and re-run detection. Distinct
+        // from "Local coordinates" below: both used to send the same
+        // { epsg: null, kind: 'local' }, so choosing local silently reverted to
+        // the detected CRS and a genuine local override could never persist (C3).
+        this._onCrsOverride({ epsg: null, kind: 'detected' });
         return;
       }
       if (v === '__local__') {
+        // Pin genuine local coordinates (no CRS) — persisted, not cleared.
         this._onCrsOverride({ epsg: null, kind: 'local' });
         return;
       }

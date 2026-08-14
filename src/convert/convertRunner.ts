@@ -118,7 +118,15 @@ export async function runBatch(
       // to keep the projection alongside a text point list.
       let sidecar: ConvertedFile | undefined;
       const isAscii = options.format === 'xyz' || options.format === 'asc';
-      const wkt = cloud.metadata?.crs?.wkt;
+      // The RESOLVED WKT (override applied) for the keep-mode ASCII .prj sidecar,
+      // mirroring convertCloud's source-CRS pick: a wired resolver is
+      // authoritative — a Local / rejected override yields a null WKT and thus NO
+      // sidecar, never the file's declared WKT. The pure path (resolvedSourceCrs
+      // undefined) keeps the source WKT, byte-identical to before.
+      const wkt =
+        options.resolvedSourceCrs !== undefined
+          ? (options.resolvedSourceCrs?.wkt ?? null)
+          : (cloud.metadata?.crs?.wkt ?? null);
       if (finalFile && isAscii && (options.crsMode ?? 'keep') === 'keep' && wkt) {
         const prjName = dedupeName(finalFile.filename.replace(/\.[^.]+$/, '.prj'), seen);
         sidecar = { filename: prjName, mime: 'text/plain', bytes: new TextEncoder().encode(wkt) };

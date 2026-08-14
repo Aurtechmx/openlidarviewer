@@ -170,10 +170,12 @@ export const scanReport: AnalysisModule = {
     // would report non-metre data — feet, or even degrees for a geographic CRS —
     // as metres. When unconfirmed, the factor stays 1, the raw source span is
     // shown, and the "m" / "pts/m²" claim is withheld (matches #218/#220).
-    // Build the one SpatialContext for this report and hand it down, rather than
-    // letting the extent block and the vertical-reference row each re-read the
-    // CRS: both the unit gate and the datum classification now come from `ctx`.
-    const ctx = spatialContextFrom(cloud.metadata?.crs);
+    // The one SpatialContext for this report: the RESOLVED active context when
+    // the shell threads it (so a user CRS/unit override drives the unit gate and
+    // the datum row), falling back to the cloud's declared CRS for pure-module
+    // callers/tests — byte-identical for a same-unit no-override scan. Both the
+    // unit gate and the datum classification read this single `ctx`.
+    const ctx = options?.spatialContext ?? spatialContextFrom(cloud.metadata?.crs);
     const basis = scanReportUnitBasis(ctx);
     const { mpu, vmpu } = basis;
     // Footprint and height are axis-aware. LAS-family (and COPC/EPT) are Z-up

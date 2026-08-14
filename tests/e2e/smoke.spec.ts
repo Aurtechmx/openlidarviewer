@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { isBenignBrowserError } from './pageErrorGuard';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * Startup smoke tests — the blocking gate.
@@ -20,10 +20,10 @@ test.describe('startup smoke', () => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error' && !isBenignBrowserError(msg.text())) consoleErrors.push(msg.text());
+      if (msg.type() === 'error' && !isBenignPageError(msg.text())) consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => {
-      if (!isBenignBrowserError(err.message)) pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
+      if (!isBenignPageError(err.message)) pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
     });
 
     await page.goto('/');
@@ -50,10 +50,10 @@ test.describe('startup smoke', () => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error' && !isBenignBrowserError(msg.text())) consoleErrors.push(msg.text());
+      if (msg.type() === 'error' && !isBenignPageError(msg.text())) consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => {
-      if (!isBenignBrowserError(err.message)) pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
+      if (!isBenignPageError(err.message)) pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
     });
 
     await page.goto('/?debug=1');

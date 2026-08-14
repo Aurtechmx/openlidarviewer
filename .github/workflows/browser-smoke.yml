@@ -1,0 +1,84 @@
+name: Cross-browser smoke (blocking)
+
+# The MINIMAL mandatory cross-browser suite. The full deterministic set on
+# Firefox/WebKit is advisory (see browsers.yml) because a headless-GL hiccup
+# there should not block an unrelated PR. But "Firefox and Safari are supported"
+# in the README needs at least one leg that actually blocks, so this runs the
+# boot / empty-state / no-console-error smoke on both engines and DOES fail the
+# workflow. Keep it small on purpose — a defensible floor, not a full matrix.
+#
+# To gate merges on it, add `firefox-smoke` and `webkit-smoke` to the branch
+# protection required checks (they are intentionally NOT folded into ci-green so
+# a maintainer opts in deliberately).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  webkit-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Playwright WebKit
+        run: ./node_modules/.bin/playwright install --with-deps webkit
+      - name: Boot smoke on WebKit
+        run: ./node_modules/.bin/playwright test --project=webkit tests/e2e/smoke.spec.ts
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-smoke-webkit
+          path: playwright-report/
+          retention-days: 7
+
+  firefox-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Install Playwright Firefox
+        run: ./node_modules/.bin/playwright install --with-deps firefox
+      # Firefox produces a WebGL 2 context on Linux only headful, and only with a
+      # software OpenGL stack present. Same setup the advisory full job uses (see
+      # browsers.yml) so the smoke runs against a real GL context, not a timeout.
+      - name: Round out the software OpenGL stack for Firefox
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dri libglx-mesa0 libegl-mesa0 libegl1 libgles2
+      - name: Verify the runner has a software OpenGL renderer
+        run: |
+          set -o pipefail
+          sudo apt-get install -y --no-install-recommends mesa-utils
+          xvfb-run -a glxinfo -B | tee /tmp/glxinfo.txt
+          if ! grep -Eiq "llvmpipe|softpipe|software rasterizer" /tmp/glxinfo.txt; then
+            echo "::error::No Mesa software renderer on this runner; the smoke would fail as a timeout."
+            exit 1
+          fi
+      - name: Verify Firefox gets a WebGL 2 context
+        run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox-preflight
+      - name: Boot smoke on Firefox
+        run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox tests/e2e/smoke.spec.ts
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-smoke-firefox
+          path: playwright-report/
+          retention-days: 7

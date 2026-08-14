@@ -54,6 +54,7 @@ export interface ReclassifyUi {
 export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   const select = document.createElement('select');
   select.className = 'olv-reclass-select';
+  select.setAttribute('aria-label', 'Target classification');
   select.setAttribute('data-testid', 'reclass-class');
   for (const [code, label] of CLASSES) {
     const option = document.createElement('option');

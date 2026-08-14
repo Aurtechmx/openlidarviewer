@@ -89,6 +89,12 @@ docs/architecture/stabilization-release-plan.md export-ignore
 # is deliberately kept: this release inherits its terrain/measurement validation.
 RELEASE_NOTES_v0.4.*.md export-ignore
 RELEASE_NOTES_v0.5.*.md export-ignore
+# The ROOT-level v0.6.4 note predates the docs/releases/ convention and is a
+# larger, superseded root duplicate. Kept in git history, but the scholarly
+# archive carries exactly one release surface per version under docs/releases/.
+# The leading slash targets the root file only — docs/releases/RELEASE_NOTES_v0.6.4.md
+# (the canonical copy) is deliberately untouched.
+/RELEASE_NOTES_v0.6.4.md export-ignore
 # Their docs-site wrapper pages go with them. Each wrapper is nothing but an
 # `@include` of the notes file, so shipping the page without the notes leaves a
 # dangling include in the archive — the same shape as the alpha pages above.
@@ -101,3 +107,12 @@ docs/project/RELEASE_CHECKLIST.md export-ignore
 # Internal coordinate-integrity roadmap (findings + repair order), not a
 # reviewer-facing document. Kept out of the deposit like the other plans.
 docs/architecture/coordinate-integrity-roadmap.md export-ignore
+
+# Internal working notes and draft design specs, not reviewer-facing
+# documentation. Kept in git history; excluded from the scholarly deposit.
+docs/superpowers/ export-ignore
+
+# Keep TypeScript/source as text so a stray byte never flips a diff to binary
+*.ts text
+*.tsx text
+*.mjs text

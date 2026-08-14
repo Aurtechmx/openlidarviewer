@@ -1,13 +1,13 @@
 {
   "schemaVersion": 3,
   "project": "openlidarviewer",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "9d15cdaefaeb7f08930322a258705d5abf04679a",
+  "commit": "0a29340a2bb28f932005bcbfaecd25bf3a05ddf9",
   "repository": null,
-  "generatedAt": "2026-08-05T07:26:37.163Z",
+  "generatedAt": "2026-08-14T09:17:34.654Z",
   "nodeVersion": "v26.0.0",
   "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
@@ -17,8 +17,9 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "3310ad5905dc81cb135015cd81732434a551380f445b14cf21c2b345ba2504de",
+  "gateLogSha256": "8aa4182873f5abb90744b14be0d2ae27b0cf79688b45578ec59442ce1ea0bab8",
   "stages": {
+    "staticGate": "passed",
     "mutation": "not-executed"
   },
   "mutation": {
@@ -52,54 +53,56 @@
   },
   "buckets": {
     "unit": {
-      "passed": 4726,
+      "passed": 5582,
       "skipped": 21,
       "runs": 3
     },
     "export": {
-      "passed": 683,
+      "passed": 816,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 1373,
+      "passed": 1521,
       "skipped": 0,
       "runs": 2
     },
     "ui": {
-      "passed": 535,
+      "passed": 566,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 599,
+      "passed": 751,
       "skipped": 0,
       "runs": 2
     }
   },
   "total": {
-    "passed": 7916,
+    "passed": 9236,
     "skipped": 21
   },
   "bundle": {
-    "liveEntryKiB": 707,
-    "ceilingKiB": 720
+    "liveEntryKiB": 730,
+    "ceilingKiB": 731
   },
-  "packageLockSha256": "ee02a682a0edf29e5d3e689328bbc95d47bde26afa2cb7c9a72d2085b90929c2",
+  "packageLockSha256": "4ba9bb9e43a215e4a0a2ce26268cb11a1afcfaf18ded8e7e72dcf16dbda872b4",
   "sbom": {
-    "sha256": "f71f903dd11480ed2f4d39ec15faa47a96538859a389ea2384a42429bdbe1771",
+    "sha256": "a7fea2f8836f932b0341a7e1ba147b1d5750e7fb25703d608c013192661bcc60",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.6.4",
-    "bomRef": "openlidarviewer@0.6.4",
-    "components": 59
+    "rootVersion": "0.6.5",
+    "bomRef": "openlidarviewer@0.6.5",
+    "components": 56
   },
   "science": {
-    "e4ClaimCount": 3,
+    "e4ClaimCount": 5,
     "e4Claims": [
+      "MEAS-AREA",
+      "CONTOURS",
       "SLOPE-RASTER",
       "ASPECT-RASTER",
       "HILLSHADE"
     ],
-    "suppliedReferenceSlots": 3
+    "suppliedReferenceSlots": 5
   }
 }

@@ -109,6 +109,7 @@ describe('integrityReportFile — routed through the gate', () => {
       '2026-06-27T00:00:00Z',
       1,
       '0.5.9',
+      true,
       claimId,
     );
 

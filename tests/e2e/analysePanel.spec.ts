@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * Analyse panel (v0.4.0) — the conservative surface for terrain readiness
@@ -18,6 +18,8 @@ import { dropDenseGridPly } from './helpers';
  */
 
 async function openAnalyse(page: Page): Promise<void> {
+  // The Analyse panel lives in the Analyse workspace mode; select it first.
+  await showWorkspaceMode(page, 'analyse');
   // The panel is revealed (collapsed) once a scan loads; expand it via its head.
   const panel = page.locator('.olv-analyse-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });

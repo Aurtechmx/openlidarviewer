@@ -8,9 +8,11 @@
      floor is the widest panel's design need (Analyse, 285px) so making every
      panel fill the column never squeezes one narrower than it was built for. */
   --olv-rail-width: clamp(285px, 21vw, 312px);
-  /* Right column width (Inspector + Streaming card both sit at 232px). Single
-     source for the right grabber-tab offset so it can't drift from the panels. */
-  --olv-right-rail-width: 232px;
+  /* Right context rail width — the Streaming card + Inspector share one column.
+     Widened from the old 232px so CRS / provenance / reason text has room; a
+     restrained clamp keeps the viewport dominant at laptop widths. Single source
+     for the right grabber-tab offset so it can't drift from the rail. */
+  --olv-right-rail-width: clamp(288px, 23vw, 340px);
 }
 
 /* Even width + clear the REAL dock height. --olv-dock-clear is measured by

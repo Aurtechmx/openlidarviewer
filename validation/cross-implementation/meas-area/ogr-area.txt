@@ -1,0 +1,52 @@
+
+Layer name: input-polygons
+OGRFeature(input-polygons):0
+  id (String) = unit-square
+  area (Real) = 1
+  POLYGON ((0 0,1 0,1 1,0 1,0 0))
+
+OGRFeature(input-polygons):1
+  id (String) = rect-2x3
+  area (Real) = 6
+  POLYGON ((0 0,2 0,2 3,0 3,0 0))
+
+OGRFeature(input-polygons):2
+  id (String) = right-triangle-3-4
+  area (Real) = 6
+  POLYGON ((0 0,4 0,0 3,0 0))
+
+OGRFeature(input-polygons):3
+  id (String) = l-shape
+  area (Real) = 12
+  POLYGON ((0 0,4 0,4 2,2 2,2 4,0 4,0 0))
+
+OGRFeature(input-polygons):4
+  id (String) = big-square-100
+  area (Real) = 10000
+  POLYGON ((0 0,100 0,100 100,0 100,0 0))
+
+OGRFeature(input-polygons):5
+  id (String) = rotated-square
+  area (Real) = 2
+  POLYGON ((1 0,2 1,1 2,0 1,1 0))
+
+OGRFeature(input-polygons):6
+  id (String) = fractional
+  area (Real) = 5.25
+  POLYGON ((0.5 0.5,3.5 0.5,3.5 2.25,0.5 2.25,0.5 0.5))
+
+OGRFeature(input-polygons):7
+  id (String) = offset-unit-square
+  area (Real) = 1
+  POLYGON ((1000 1000,1001 1000,1001 1001,1000 1001,1000 1000))
+
+OGRFeature(input-polygons):8
+  id (String) = offset-rect-50k
+  area (Real) = 1000
+  POLYGON ((54321.75 33333.25,54322.75 33333.25,54322.75 34333.25,54321.75 34333.25,54321.75 33333.25))
+
+OGRFeature(input-polygons):9
+  id (String) = irrational-triangle
+  area (Real) = 22168.4771907918
+  POLYGON ((0 0,141.42135623731 7.5,12.25 314.159265358979,0 0))
+

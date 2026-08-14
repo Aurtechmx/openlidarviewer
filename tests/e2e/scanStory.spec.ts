@@ -36,6 +36,19 @@ test('Dataset Story action opens a card with headline, limiter and next step', a
   await expect(card.locator('.olv-story-next')).toContainText('→');
 });
 
+test('the Dataset overview link in the Inspector opens the same Dataset Story card', async ({ page }) => {
+  await page.goto('/');
+  await dropTinyPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+
+  // A visible, on-screen route (not only the ⌘K palette) to the existing modal.
+  await page.locator('.olv-di-story-link').click();
+
+  const card = page.locator('.olv-story-card');
+  await expect(card).toBeVisible();
+  await expect(card.locator('.olv-story-title')).toHaveText('Dataset Story');
+});
+
 test('Export health check action opens a verdict + per-axis rows', async ({ page }) => {
   await page.goto('/');
   await dropTinyPly(page);

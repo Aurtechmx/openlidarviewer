@@ -196,10 +196,11 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     dispose();
   });
 
-  it('accepts a within-limit load-file from the genuine parent', () => {
+  it('accepts a within-limit load-file from a genuine parent on an ALLOW-LISTED origin', () => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers);
+    // load-file is privileged: it requires an explicitly trusted origin.
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
     const buffer = new ArrayBuffer(8);
     env.dispatch({
       source: env.parent,
@@ -207,6 +208,32 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
       data: { type: 'load-file', name: 'x.las', buffer },
     });
     expect(calls.onLoadFile).toHaveBeenCalledWith(buffer, 'x.las');
+    dispose();
+  });
+
+  it('REFUSES load-file when no origin allow-list is configured (privileged command)', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers); // no allowedOrigins
+    env.dispatch({
+      source: env.parent,
+      origin: 'https://host.example',
+      data: { type: 'load-file', name: 'x.las', buffer: new ArrayBuffer(8) },
+    });
+    expect(calls.onLoadFile).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('still runs the side-effect-free commands without an allow-list (back-compat)', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers); // no allowedOrigins
+    env.dispatch({
+      source: env.parent,
+      origin: 'https://host.example',
+      data: { type: 'jump-camera', camera: { position: [1, 2, 3], target: [0, 0, 0] } },
+    });
+    expect(calls.onJumpCamera).toHaveBeenCalled();
     dispose();
   });
 });

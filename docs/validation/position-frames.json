@@ -8,6 +8,20 @@
   },
   "entries": [
     {
+      "file": "src/app/epochFramePrep.ts",
+      "symbol": "prepareEpochFrames",
+      "frame": "world",
+      "reads": 2,
+      "why": "Each epoch's buffer is paired with its own sourceOrigin so the two are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations. Extracted from compareLoadedLayers."
+    },
+    {
+      "file": "src/app/floorPlanPositions.ts",
+      "symbol": "floorPlanPositions",
+      "frame": "project-local",
+      "reads": 4,
+      "why": "Both branches are gather output: the denser re-gather, or the space-export context that was itself copied from a gather. Extracted verbatim from main.ts; the carrier is passed in so both reads stay here."
+    },
+    {
       "file": "src/app/terrainAnalysisRunner.ts",
       "symbol": "createTerrainAnalysisRunner.buildResultForExport",
       "frame": "project-local",
@@ -116,15 +130,8 @@
       "file": "src/main.ts",
       "symbol": "compareLoadedLayers",
       "frame": "world",
-      "reads": 3,
-      "why": "Each buffer is paired with its own sourceOrigin so the two epochs are gridded in one common world frame; differencing raw local coordinates would compare mismatched locations."
-    },
-    {
-      "file": "src/main.ts",
-      "symbol": "floorPlanPositions",
-      "frame": "project-local",
-      "reads": 4,
-      "why": "Both branches are gather output: the denser re-gather, or the space-export context that was itself copied from a gather."
+      "reads": 1,
+      "why": "The before epoch's buffer paired with its sourceOrigin measures the horizontal span for the ICP residual gate, in the common world frame the two epochs are gridded in."
     },
     {
       "file": "src/main.ts",
@@ -146,6 +153,13 @@
       "frame": "source-local",
       "reads": 1,
       "why": "Same single-layer classifier input as the derive path."
+    },
+    {
+      "file": "src/main.ts",
+      "symbol": "scanHullPositions",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY — the same frame the bounding-rectangle extent is read in."
     },
     {
       "file": "src/main.ts",

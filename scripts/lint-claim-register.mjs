@@ -134,6 +134,7 @@ export function parseRegister(yamlText) {
         exportAllowed: null,
         supportingStudies: null,
         externalValidationRecords: null,
+        externalValidationStatus: null,
         scope: null,
         line: i + 1,
       };
@@ -148,6 +149,8 @@ export function parseRegister(yamlText) {
     else if ((m = line.match(/^supportingStudies:\s*(\[.*\])\s*$/))) cur.supportingStudies = inlineList(m[1]);
     else if ((m = line.match(/^externalValidationRecords:\s*(\[.*\])\s*$/))) {
       cur.externalValidationRecords = inlineList(m[1]);
+    } else if ((m = line.match(/^externalValidationStatus:\s*(\S+)/))) {
+      cur.externalValidationStatus = stripComment(m[1]);
     } else if ((m = line.match(/^(product|algorithm):\s*(.+)$/))) {
       cur.descriptors = cur.descriptors ?? [];
       cur.descriptors.push({ field: m[1], text: stripComment(m[2]) });
@@ -278,6 +281,27 @@ export function collectRegisterProblems(ctx) {
       if (!SUPPORTING_STATUSES.has(study.status)) {
         add('C2-E4-STUDY', `Claim ${c.id} cites study "${studyId}", whose status is "${study.status}". Only ${[...SUPPORTING_STATUSES].join(' or ')} asserts a measured outcome that supports a claim; a pending or not-executed study measured nothing, and a disagreement is not support.`);
       }
+    }
+  }
+
+  // ── C5. An E4+ claim's externalValidationStatus must reflect a measured
+  //    cross-implementation outcome ─────────────────────────────────────────
+  // C2 proves the study exists and agreed; this proves the claim's own status
+  // field records that. A claim at E4+ with status `pending`/`not-executed`
+  // contradicts its own evidence level — the exact drift where CONTOURS reached
+  // E4 but its status still read `pending`. Slope/aspect/hillshade already read
+  // `partial`; this makes the register refuse the inconsistency rather than ship
+  // it (and a truth-doc then reading "pending" cannot trace back to a clean YAML).
+  const LEVELS = [...VALID_LEVELS];
+  const E4_RANK = LEVELS.indexOf('E4_CROSS_IMPLEMENTATION_VALIDATED');
+  const VALIDATED_STATUSES = new Set(['partial', 'complete']);
+  for (const c of claims) {
+    const rank = LEVELS.indexOf(c.current);
+    if (rank !== -1 && rank >= E4_RANK && !VALIDATED_STATUSES.has(c.externalValidationStatus)) {
+      add(
+        'C5-E4-STATUS',
+        `Claim ${c.id} is at ${c.current} but its externalValidationStatus is "${c.externalValidationStatus ?? '(unset)'}". A claim at E4 or above rests on a cross-implementation comparison that ran and agreed, so its status must be one of ${[...VALIDATED_STATUSES].join(' or ')} — not pending/not-executed.`,
+      );
     }
   }
 

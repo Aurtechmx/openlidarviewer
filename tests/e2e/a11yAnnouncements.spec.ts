@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { isBenignPageError } from './pageErrors';
 import { dropTinyPly } from './helpers';
-import { isBenignBrowserError } from './pageErrorGuard';
 
 /**
  * v0.4.4 a11y announcement pins + the I-key collision canary.
@@ -65,10 +65,11 @@ test.describe('a11y announcements', () => {
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     page.on('console', (msg) => {
-      if (msg.type() === 'error' && !isBenignBrowserError(msg.text())) consoleErrors.push(msg.text());
+      if (msg.type() === 'error' && !isBenignPageError(msg.text())) consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => {
-      if (!isBenignBrowserError(err.message)) pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
+      if (isBenignPageError(err.message)) return;
+      pageErrors.push(`${err.message}\n${err.stack ?? ''}`);
     });
 
     await page.goto('/');

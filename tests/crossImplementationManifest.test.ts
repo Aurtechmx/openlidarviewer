@@ -888,7 +888,7 @@ describe('the status vocabulary', () => {
 });
 
 describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
-  it('still lists every claim slot, with four references supplied', () => {
+  it('still lists every claim slot, with five references supplied', () => {
     expect(REFERENCE_SLOTS.map((s) => s.claimId)).toEqual([
       'DTM',
       'DSM',
@@ -898,9 +898,10 @@ describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
       'HILLSHADE',
       'CONTOURS',
       'GROUND-FILTER',
+      'MEAS-AREA',
     ]);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
-    expect(supplied).toEqual(['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS']);
+    expect(supplied).toEqual(['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA']);
   });
 
   it('allReferencesPending keeps its behaviour', () => {

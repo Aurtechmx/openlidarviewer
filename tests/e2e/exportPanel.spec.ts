@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly } from './helpers';
+import { dropDenseGridPly, showWorkspaceMode } from './helpers';
 
 /**
  * In-project Export / Convert panel — converts the open cloud to another
@@ -10,6 +10,8 @@ test('after a scan loads, the Export panel offers formats and exports a file', a
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  // The Export panel lives in the Output workspace mode.
+  await showWorkspaceMode(page, 'output');
 
   const panel = page.locator('.olv-export-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });

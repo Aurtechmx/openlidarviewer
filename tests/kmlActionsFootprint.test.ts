@@ -58,6 +58,7 @@ function recorder(
   reading: ScanExtentReading | null,
   crs: ResolvedCrs | null = utm12,
   origin: readonly [number, number, number] = [500_000, 4_400_000, 0],
+  hullPositions: Float32Array | null = null,
 ): Recorder {
   const files: { name: string; text: string }[] = [];
   const errors: string[] = [];
@@ -71,6 +72,7 @@ function recorder(
     worldUp: () => [0, 0, 1],
     unitToMetres: () => 1,
     scanExtent: () => reading,
+    scanHullPositions: () => hullPositions,
     baseName: (name) => name.replace(/\.[^.]+$/, ''),
     downloadText: (name, text) => void files.push({ name, text }),
     setError: (message) => void errors.push(message),
@@ -97,6 +99,40 @@ describe('scan-area export — a Z-up georeferenced scan still exports', () => {
     expect(r.files[0].text).toContain('<styleUrl>#olv-area</styleUrl>');
     expect(r.files[0].text).toContain('<PolyStyle>');
     expect(r.files[0].text).not.toContain('ffffffff');
+  });
+});
+
+describe('scan-area export — resident points back the true outline', () => {
+  // A diamond inside the 1 km extent: its hull is the four tips, tighter than the
+  // bounding rectangle, and one interior point that must not reach the file.
+  const diamond = new Float32Array([
+    500, 0, 0, 1000, 400, 0, 500, 800, 0, 0, 400, 0, 500, 400, 0,
+  ]);
+
+  it('labels the file a point-cloud outline, not a bounding rectangle', async () => {
+    const r = recorder(zUpReading, utm12, [500_000, 4_400_000, 0], diamond);
+    await exportScanFootprintKml(r.deps);
+    expect(r.errors).toEqual([]);
+    expect(r.files).toHaveLength(1);
+    expect(r.files[0].text).toContain('point-cloud outline');
+    expect(r.files[0].text).not.toContain('bounding rectangle');
+  });
+
+  it('falls back to the bounding rectangle when no resident points are offered', async () => {
+    const r = recorder(zUpReading, utm12, [500_000, 4_400_000, 0], null);
+    await exportScanFootprintKml(r.deps);
+    expect(r.files[0].text).toContain('bounding rectangle');
+  });
+
+  it('refuses rather than dropping to a rectangle when the hull is degenerate', async () => {
+    // Collinear resident points enclose no area: the export stops, it does not
+    // silently substitute the rectangle for a scan that has no honest outline.
+    const line = new Float32Array([0, 0, 0, 10, 10, 0, 20, 20, 0]);
+    const r = recorder(zUpReading, utm12, [500_000, 4_400_000, 0], line);
+    await exportScanFootprintKml(r.deps);
+    expect(r.files).toEqual([]);
+    expect(r.errors).toHaveLength(1);
+    expect(r.errors[0]).toContain('Scan area export stopped.');
   });
 });
 

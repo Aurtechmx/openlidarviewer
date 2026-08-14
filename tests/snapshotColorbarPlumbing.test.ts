@@ -45,9 +45,13 @@ interface RecordedSnapshotOpts {
 
 function recordingAdapter(sink: { opts?: RecordedSnapshotOpts }): ExportSceneAdapter {
   return {
-    // withColorMode swaps then restores around the capture.
+    // withColorMode snapshots/excludes/swaps then restores around the capture.
     setExportColorMode: () => {},
     currentColorMode: () => 'rgb',
+    snapshotColorModes: () => ({ staticModes: new Map(), streamingMode: null }),
+    restoreColorModes: () => {},
+    excludeUnsupported: () => [],
+    restoreVisibility: () => {},
     hasRgb: () => false,
     hasIntensity: () => true,
     hasClassification: () => false,

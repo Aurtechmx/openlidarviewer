@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,851 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,820 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -49,10 +49,11 @@ mutation:
 Supporting services in the same layer: `crsCoordinator`, `terrainAnalysisRunner`,
 `inspectorCardRefreshers`, `staleChunkReload`.
 
-No module-level mutable application state remains in `main.ts`. That is what makes
-the next step possible: a block of orchestration can now move into its own module
-and close over services, instead of closing over file-scope `let`s that pin it in
-place.
+Shared domain/application state is owned by services (`AppContext`, `CrsService`,
+the layer/scan services); `main.ts` retains explicitly bounded shell-local
+composition and lifecycle state. Moving domain state out is what makes the next
+step possible: a block of orchestration can now move into its own module and close
+over services, instead of closing over file-scope `let`s that pin it in place.
 
 ## The two monoliths, and the target shape
 
@@ -98,7 +99,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,851)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,820)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -165,7 +166,7 @@ no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
 `buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
 four thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,368)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,370)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph

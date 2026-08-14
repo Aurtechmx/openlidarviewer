@@ -485,3 +485,23 @@ describe('non-finite points are omitted and the omission is disclosed', () => {
     expect(text.split('\n').filter((l) => l.startsWith('v '))).toHaveLength(1);
   });
 });
+
+describe('exportCloud — resolved CRS drives lat/lon precision (audit blocker)', () => {
+  // A file that DECLARES projected while the user resolved it to geographic: the
+  // coordinates are lat/lon and must print at 7 dp, not the projected 3 dp.
+  const declaredProjectedLatLon = () =>
+    makeRichCloud({ positions: [0.5, 0.5, 0.25], origin: [12.3456789, -34.1456789, 100], geographic: false });
+
+  test('a resolved geographic flag overrides a projected declaration → 7 dp', () => {
+    expect(exportCloud(declaredProjectedLatLon(), 'xyz', true).trim()).toBe('12.8456789 -33.6456789 100.250');
+  });
+
+  test('a resolved projected flag (false) does not resurrect a declared geographic → 3 dp', () => {
+    const declaredGeographic = makeRichCloud({ positions: [0.5, 0.5, 0.25], origin: [500000, 4100000, 100], geographic: true });
+    expect(exportCloud(declaredGeographic, 'xyz', false).trim()).toBe('500000.500 4100000.500 100.250');
+  });
+
+  test('no resolved flag falls back to the declared CRS (projected → 3 dp)', () => {
+    expect(exportCloud(declaredProjectedLatLon(), 'xyz').trim()).toBe('12.846 -33.646 100.250');
+  });
+});

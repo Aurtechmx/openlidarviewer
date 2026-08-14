@@ -17,10 +17,15 @@ test('with ?viewcube=1 the compass mounts and exposes the view snaps', async ({ 
 
   const cube = page.locator('.olv-viewcube');
   await expect(cube).toBeVisible({ timeout: 20_000 });
-  await expect(cube.locator('[data-testid="viewcube-n"]')).toBeVisible();
+  // Test ids key off the standard VIEW, not the mutable label. The dense grid is
+  // a local (no-CRS) scan, so the back face must read the truthful local "B",
+  // never the fabricated cardinal "N".
+  const back = cube.locator('[data-testid="viewcube-back"]');
+  await expect(back).toBeVisible();
+  await expect(back).toHaveText('B');
   await expect(cube.locator('[data-testid="viewcube-top"]')).toBeVisible();
   // Snapping to a standard view must not raise a page error.
-  await cube.locator('[data-testid="viewcube-n"]').click();
+  await back.click();
 });
 
 test('the compass is hidden by default (opt-in)', async ({ page }) => {
