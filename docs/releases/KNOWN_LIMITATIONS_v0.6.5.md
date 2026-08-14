@@ -30,6 +30,10 @@ Each layer carries what it has established about the project frame: `verified` (
 
 Four report and UI surfaces now refuse to present a length when the CRS linear unit cannot be resolved, rather than showing a number in an unstated unit. This is deliberate: a figure whose unit is unknown is withheld with the reason, not rendered as if it were metres. A scan whose unit does resolve is unaffected.
 
+## Derived-ground terrain is review-grade: its vertical thresholds are not yet unit-normalized
+
+Trusted ASPRS class-2 ground is used as declared and bypasses the ground filter entirely, so a file that already carries a ground classification is unaffected by this limit. When ground is instead derived in-session by the SMRF-core filter, some default vertical thresholds remain numerically in the scan's source Z units rather than in metres, so two physically equivalent scans that differ only in vertical unit (the same terrain in metres and in US survey feet) can yield different derived-ground masks and therefore different bare-earth surfaces. Derived-ground terrain is review-grade for that reason: a working surface to inspect, not a metric deliverable. The physical normalization that expresses every ground-filter threshold in metres regardless of source unit is scheduled for v0.6.6; this release documents the behaviour and does not change the filter, and no evidence grade rests on the fix.
+
 ## Contour GeoJSON ships in two frames
 
 `<name>.geojson` is RFC 7946: WGS 84 longitude/latitude, no `crs` member, with the source CRS recorded in `metadata` as provenance. `<name>-native-EPSG<code>.geojson` carries the scan's own projected coordinates and the pre-RFC `crs` member for GIS that wants the survey grid, and its filename says so. When the source CRS cannot be converted to lon/lat, the RFC file is refused rather than written with projected numbers in degree fields, and only the native file is produced. Antimeridian-crossing geometry is emitted whole: RFC 7946 §3.1.9 says a LineString crossing 180 degrees longitude should be split at the antimeridian, which is a SHOULD rather than a MUST, and only a scan footprint straddling 180 degrees reaches it.
