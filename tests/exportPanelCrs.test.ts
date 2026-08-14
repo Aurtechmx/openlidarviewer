@@ -392,13 +392,13 @@ describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transact
     expect(r.downloads.some((d) => d.text.includes('WKT-C'))).toBe(false);
   });
 
-  it('Case E — override to a known EPSG with no WKT synthesizes the .prj from the EPSG (no georeference loss)', async () => {
+  it('Case E — override to a known EPSG with no WKT writes no .prj (never resurrects source A)', async () => {
     // CrsService drops the declared WKT on an override to a different EPSG, so
-    // resolvedSourceCrs carries an epsg but no wkt. The .prj must still describe
-    // the resolved frame (synthesized), never fall back to the source A.
+    // resolvedSourceCrs carries an epsg but no wkt. The safe behaviour is to write
+    // no .prj rather than the rejected source WKT; the binary formats still carry
+    // the resolved EPSG. (ASCII keep + EPSG-only override → no sidecar; documented.)
     const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ epsg: 32613 }) });
-    expect(prj(r)?.text).toBeTruthy();
-    expect(prj(r)!.text).toMatch(/PROJCS|GEOGCS|32613/i);
+    expect(prj(r)).toBeUndefined();
     expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
   });
 });
