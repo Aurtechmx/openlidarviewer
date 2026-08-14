@@ -18,6 +18,7 @@ const seg = (len: number, grade: ContourSegment['grade']): ContourSegment => ({
   y2: 0,
   confidence: grade === 'solid' ? 90 : grade === 'dashed' ? 50 : 10,
   grade,
+  provBits: 1,
 });
 
 describe('tallySegments', () => {

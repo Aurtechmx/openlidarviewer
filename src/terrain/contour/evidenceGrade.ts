@@ -16,7 +16,7 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import type { EvidenceGrade } from '../ground/cellConfidence';
+import type { ContourDisplayGrade } from '../ground/cellConfidence';
 import type { ContourSegment, ContourSet } from './contoursAt';
 
 /** Per-grade length + count tally. */
@@ -39,7 +39,7 @@ function segLength(s: ContourSegment): number {
 
 /** Tally a flat list of segments by grade, length-weighted. */
 export function tallySegments(segments: ReadonlyArray<ContourSegment>): GradeTally {
-  const acc: Record<EvidenceGrade, { count: number; length: number }> = {
+  const acc: Record<ContourDisplayGrade, { count: number; length: number }> = {
     solid: { count: 0, length: 0 },
     dashed: { count: 0, length: 0 },
     gap: { count: 0, length: 0 },

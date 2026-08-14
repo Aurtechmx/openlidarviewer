@@ -16,7 +16,7 @@
  */
 
 import type { ContourFeatureModel } from './contourFeatureModel';
-import type { EvidenceGrade } from '../ground/cellConfidence';
+import type { ContourDisplayGrade } from '../ground/cellConfidence';
 
 /**
  * Which scene axis is vertical (where the elevation goes).
@@ -31,7 +31,7 @@ import type { EvidenceGrade } from '../ground/cellConfidence';
  */
 export type OverlayVerticalAxis = 'z' | 'y';
 
-const GRADE_CODE: Record<EvidenceGrade, number> = { solid: 0, dashed: 1, gap: 2 };
+const GRADE_CODE: Record<ContourDisplayGrade, number> = { solid: 0, dashed: 1, gap: 2 };
 
 /** Render-ready buffers for a `THREE.LineSegments`. */
 export interface ContourOverlayBuffers {

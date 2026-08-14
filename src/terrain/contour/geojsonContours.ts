@@ -27,10 +27,11 @@
  */
 
 import {
-  contourEvidence,
+  featureEvidence,
   modelVerticalReference,
   type ContourFeatureModel,
 } from './contourFeatureModel';
+import { serializeProvenance } from './contourSegmentEvidence';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceJson, type ExportProvenance } from '../export/exportProvenance';
 import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
@@ -68,8 +69,13 @@ export function toGeoJSON(
     properties: {
       interval: model.intervalM,
       elevation: f.value,
+      // `grade` is the DISPLAY grade (presentation), retained for compatibility.
       grade: f.grade,
-      evidenceGrade: contourEvidence(f.grade),
+      // `provenance` is the REAL source evidence (measured/interpolated/mixed),
+      // or 'unavailable' — never reconstructed from the display grade. It
+      // replaces the former `evidenceGrade`, which fabricated provenance from
+      // stroke style.
+      provenance: serializeProvenance(featureEvidence(f)),
       index: f.isIndex,
       meanConfidence: Math.round(f.meanConfidence),
       coverageMode: model.coverageMode,
