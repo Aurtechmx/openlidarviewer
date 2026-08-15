@@ -64,12 +64,19 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   expect(afterEdit).toBe(6);
   await expect(undoBtn).toBeEnabled();
 
-  // Click the REAL Undo button → class reverts, redo enables.
+  // Click the REAL Undo button → class reverts, redo enables. POLL classAt rather
+  // than reading it once: the undo re-applies classification through the engine,
+  // which is not synchronous with the click on a slow software renderer (CI
+  // llvmpipe), so a single immediate read can still see the pre-undo value.
   await undoBtn.click({ force: true });
-  expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0))).toBe(1);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 10_000 })
+    .toBe(1);
   await expect(redoBtn).toBeEnabled();
 
-  // Click the REAL Redo button → class re-applied.
+  // Click the REAL Redo button → class re-applied (same polling rationale).
   await redoBtn.click({ force: true });
-  expect(await page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0))).toBe(6);
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 10_000 })
+    .toBe(6);
 });

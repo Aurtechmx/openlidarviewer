@@ -47,6 +47,11 @@ test('the Inspector handle mounts, is visible, and starts expanded', async ({ pa
 
 test('the Inspector handle sits against the column, not the viewport centre', async ({ page }) => {
   await loadSample(page);
+  // Wait for the rail to be laid out before measuring: on a slow software renderer
+  // (CI llvmpipe) the Inspector column and its handle can still be settling, and a
+  // bounding-box read taken too early sees an intermediate geometry.
+  await expect(page.locator(INSPECTOR)).toBeVisible();
+  await expect(page.locator(TAB)).toBeVisible();
   const inspBox = await page.locator(INSPECTOR).boundingBox();
   const tabBox = await page.locator(TAB).boundingBox();
   expect(inspBox).not.toBeNull();
