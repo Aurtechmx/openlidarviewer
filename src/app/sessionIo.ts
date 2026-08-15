@@ -25,6 +25,7 @@ import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
 import { summarizeMeasurementTrust } from '../render/measure/measurementTrust';
+import { verifySessionManifest, sessionManifestNote } from '../science/verifySessionManifest';
 import { isZUpFormat } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsLinearUnit } from '../io/crs';
@@ -537,15 +538,20 @@ export async function importSession(
     // just a count.
     const evidence = summarizeMeasurementTrust(session.measurements.map((m) => m.trust));
     const lead = evidence.total > 0 ? `Evidence restored — ${evidence.line}.` : null;
+    // Verify the embedded processing manifest and disclose one integrity line.
+    // This never rejects the session (an absent, legacy, or tampered manifest
+    // still restores every measurement) — it only appends to the disclosure.
+    const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
+    const manifestSuffix = manifestNote ? ` ${manifestNote}` : '';
     if (wantFile && !haveCloud) {
-      deps.showToast(lead ?? `Session restored — drop “${wantFile}” to view its scan.`,
+      deps.showToast((lead ?? `Session restored — drop “${wantFile}” to view its scan.`) + manifestSuffix,
         lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      deps.showToast(`${lead}${frameNote}${appliedNote}`);
+      deps.showToast(`${lead}${frameNote}${appliedNote}${manifestSuffix}`);
     } else {
       deps.showToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${appliedNote}`,
+          `(measurements, annotations, views).${frameNote}${appliedNote}${manifestSuffix}`,
       );
     }
   } catch (err) {
