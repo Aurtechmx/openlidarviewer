@@ -429,3 +429,26 @@
   .olv-export-panel, .olv-object-panel { transition: none; }
 }
 
+
+/* The v0.6.5 desktop workspace scroll body (.olv-ws-body, 73-desktop-workspace.css)
+   was added after the scrollbar-styling lists above and was missed by them. On
+   Firefox it therefore fell back to the wide platform-default scrollbar, which
+   overlapped the rightmost layer-row control (the Remove ×) and intercepted its
+   click — the twoScanMount:192 failure (#401). Overlay-scrollbar engines
+   (Chromium, WebKit, macOS) never showed it. Give this scroller the same thin
+   themed bar its sibling panels use, so the reserved gutter clears the row
+   controls on every engine. */
+@supports (-moz-appearance: none) {
+  .olv-ws-body {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--accent) 44%, var(--panel)) transparent;
+  }
+}
+.olv-ws-body::-webkit-scrollbar { width: 9px; height: 9px; }
+.olv-ws-body::-webkit-scrollbar-track { background: transparent; }
+.olv-ws-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 44%, var(--panel));
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
