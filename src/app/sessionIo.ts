@@ -25,7 +25,6 @@ import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
 import { summarizeMeasurementTrust } from '../render/measure/measurementTrust';
-import { verifySessionManifest, sessionManifestNote } from '../science/verifySessionManifest';
 import { isZUpFormat } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsLinearUnit } from '../io/crs';
@@ -541,6 +540,11 @@ export async function importSession(
     // Verify the embedded processing manifest and disclose one integrity line.
     // This never rejects the session (an absent, legacy, or tampered manifest
     // still restores every measurement) — it only appends to the disclosure.
+    // Lazily loaded so the hash-chain verifier (canonicalize + sha256) stays
+    // out of the eager boot shell — session import is already an async action.
+    const { verifySessionManifest, sessionManifestNote } = await import(
+      '../science/verifySessionManifest'
+    );
     const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
     const manifestSuffix = manifestNote ? ` ${manifestNote}` : '';
     if (wantFile && !haveCloud) {
