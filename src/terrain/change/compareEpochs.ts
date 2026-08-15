@@ -166,12 +166,17 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
     : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
       ? cloud.linearUnitToMetres
       : 1;
+  // The 0.5 m / 2.5 m SMRF tolerances are physical; convert to source vertical
+  // units so a foot frame keeps its physical ground tolerance (a geographic
+  // frame's z is already metric, so zPerMetre is 1 there).
+  const zPerMetre = 1 / vertToMetres;
   const gf = classifyGroundSmrf(points, {
     cellSizeM: grid.cellSizeM,
     cellSizeZUnits: grid.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: 8,
     slope: 0.2,
-    elevationThresholdM: 0.5,
+    elevationThresholdM: 0.5 * zPerMetre,
+    maxElevationThresholdM: 2.5 * zPerMetre,
     floorPercentile: 5,
     verticalAxis: 'z',
   });

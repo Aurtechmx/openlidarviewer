@@ -165,10 +165,13 @@ describe('dtmOnGrid — geographic ground-filter unit parity', () => {
   // is wrongly rejected. The change path must reach the same ground coverage as
   // the metre frame — mirroring groundFilterUnitFrame for the two-epoch runner.
   function ridge(scale: number): Float32Array {
+    // 48×48 samples at 0.4 m spacing: a ~2.4 m ridge period (wider than the
+    // 8-cell SMRF window) over a small enough extent to grid quickly.
     const pts: number[] = [];
-    for (let i = 0; i <= 60; i++) {
-      for (let j = 0; j <= 60; j++) {
-        pts.push(i * scale, j * scale, 1.5 * Math.sin((i * Math.PI) / 3) * Math.cos((j * Math.PI) / 3));
+    for (let i = 0; i <= 48; i++) {
+      for (let j = 0; j <= 48; j++) {
+        const s = 0.4 * scale;
+        pts.push(i * s, j * s, 1.5 * Math.sin((i * Math.PI) / 3) * Math.cos((j * Math.PI) / 3));
       }
     }
     return new Float32Array(pts);
@@ -193,8 +196,8 @@ describe('dtmOnGrid — geographic ground-filter unit parity', () => {
     const geoFrac = measuredFraction(geo!.before.counts);
     expect(metreFrac).toBeGreaterThan(0.01);
     // The degree frame sees the identical surface, so it retains the same ground
-    // (parity ≈ 1.2× here). A starved growth term rejects ridge ground and drops
-    // this to ~0.45× — well under the 0.6× floor.
+    // (parity ≈ 1.0× here). A starved growth term rejects ridge ground and drops
+    // this to ~0.40× — well under the 0.6× floor.
     expect(geoFrac).toBeGreaterThan(metreFrac * 0.6);
   });
 });
