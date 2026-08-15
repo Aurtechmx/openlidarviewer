@@ -5034,9 +5034,9 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a File: parse, render, populate the Inspector, land on the Data panel. */
+/** Load a File: land on Data up front (visibility only, not gated on the render promise), then parse/render/populate. */
 function handleFile(file: File): Promise<void> {
-  return openScan(file, openScanDeps).then(() => showWorkspaceMode?.('data'));
+  showWorkspaceMode?.('data'); return openScan(file, openScanDeps);
 }
 
 /**
