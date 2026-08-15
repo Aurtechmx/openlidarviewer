@@ -219,15 +219,17 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
     `A offset after B added was "${aWithBoth!.offsetToProject}"`,
   ).toBe(true);
 
-  // Remove B from the scene. Scroll the control into view and let its box settle
-  // first: on a slow software renderer (CI llvmpipe) the layer list's layout can
-  // still be settling, so a bare click resolves to the workspace body behind it
-  // ("olv-ws-body intercepts pointer events") and times out. This is correct
-  // hygiene regardless of the renderer.
+  // Remove B from the scene. On a slow software renderer (CI llvmpipe) the
+  // DesktopWorkspace body sits over the layer control mid-transition, so a normal
+  // click resolves to `.olv-ws-body` and times out ("intercepts pointer events") —
+  // scroll-into-view alone does not clear it because the button is covered, not
+  // off-screen. Dispatch the click to the button directly with `force`, the same
+  // way the reclassify panel drives its real buttons through this overlay. The
+  // scroll + visibility wait still guard that the right element is present first.
   const removeB = page.getByRole('button', { name: 'Remove utm33-b.las' });
   await removeB.scrollIntoViewIfNeeded();
   await expect(removeB).toBeVisible();
-  await removeB.click();
+  await removeB.click({ force: true });
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
   await page.waitForTimeout(300);
 
