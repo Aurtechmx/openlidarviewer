@@ -64,19 +64,22 @@ test('the reclassify panel mounts and its undo/redo buttons drive class edits', 
   expect(afterEdit).toBe(6);
   await expect(undoBtn).toBeEnabled();
 
-  // Click the REAL Undo button → class reverts, redo enables. POLL classAt rather
-  // than reading it once: the undo re-applies classification through the engine,
-  // which is not synchronous with the click on a slow software renderer (CI
-  // llvmpipe), so a single immediate read can still see the pre-undo value.
+  // Click the REAL Undo button → class reverts, redo enables. Gate on the BUTTON
+  // STATE first (redo enabling is the UI's own confirmation that the undo landed
+  // in the history), THEN poll classAt. The engine re-classification is not
+  // synchronous with the click on a slow software renderer (CI llvmpipe), so
+  // reading the data before the UI has confirmed the op could see the pre-undo
+  // value. Generous timeouts give llvmpipe room.
   await undoBtn.click({ force: true });
+  await expect(redoBtn).toBeEnabled({ timeout: 15_000 });
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 10_000 })
+    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 15_000 })
     .toBe(1);
-  await expect(redoBtn).toBeEnabled();
 
-  // Click the REAL Redo button → class re-applied (same polling rationale).
+  // Click the REAL Redo button → class re-applied (same UI-first rationale).
   await redoBtn.click({ force: true });
+  await expect(undoBtn).toBeEnabled({ timeout: 15_000 });
   await expect
-    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 10_000 })
+    .poll(() => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { classAt: (i: number) => number } }).__OLV_TEST_API__.classAt(0)), { timeout: 15_000 })
     .toBe(6);
 });
