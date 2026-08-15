@@ -111,6 +111,10 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // a row said 10 m, the sum said 0 (pass-6 M5).
           viewer.measure.worldUp,
           viewer.measure.unitToMetres,
+          // The vertical axis keeps its OWN unit factor: a compound CRS (metre
+          // grid + US-foot heights) must scale a height sum and volume by feet,
+          // not by the horizontal metre factor (audit #8).
+          viewer.measure.verticalUnitToMetres,
         );
       },
       // v0.3.10 Profile-as-Deliverable — expose the controller's unit
