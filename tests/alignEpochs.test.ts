@@ -39,6 +39,8 @@ describe('alignEpochClouds', () => {
     const { after, alignment } = alignEpochClouds(a, b);
     expect(alignment.attempted).toBe(true);
     expect(alignment.applied).toBe(true);
+    // Identical geometry registers fully, so the overlap is surfaced and high (#2).
+    expect(alignment.overlapFraction).toBeGreaterThan(0.9);
     expect(alignment.rmsResidualM).toBeLessThan(1e-3);
     expect(Math.abs(alignment.yawDeg)).toBeLessThan(0.1);
     expect(Math.hypot(alignment.translation[0], alignment.translation[1])).toBeLessThan(1e-2);
