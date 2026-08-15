@@ -100,8 +100,8 @@ jobs:
       - name: Deterministic end-to-end tests on Firefox (advisory)
         if: steps.glcheck.outputs.renderer == 'present'
         run: xvfb-run -a ./node_modules/.bin/playwright test --project=firefox
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-firefox
@@ -124,8 +124,8 @@ jobs:
         run: ./node_modules/.bin/playwright install --with-deps webkit
       - name: Deterministic end-to-end tests on WebKit (advisory)
         run: ./node_modules/.bin/playwright test --project=webkit
-      - name: Upload Playwright report on failure
-        if: failure()
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-report-webkit
