@@ -88,6 +88,48 @@ test('crsFromWkt — international foot detection', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// WKT2 (ISO 19162) — modern GDAL/PDAL spell the linear unit LENGTHUNIT, not
+// UNIT. Reading only UNIT silently defaulted a declared foot to metre, so every
+// distance came out 3.28x too small. Both the projected (horizontal) and the
+// compound vertical unit must resolve from LENGTHUNIT.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WKT2_SP_FTUS =
+  'PROJCRS["NAD83 / California zone 5 (ftUS)",' +
+  'BASEGEOGCRS["NAD83",DATUM["North American Datum 1983",' +
+  'ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]]],' +
+  'PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]]],' +
+  'CONVERSION["SPCS83 CA zone 5",METHOD["Lambert Conic Conformal (2SP)"]],' +
+  'CS[Cartesian,2],AXIS["easting (X)",east,ORDER[1]],AXIS["northing (Y)",north,ORDER[2]],' +
+  'LENGTHUNIT["US survey foot",0.304800609601219],ID["EPSG",2229]]';
+
+test('crsFromWkt — WKT2 LENGTHUNIT US survey foot (not defaulted to metre)', () => {
+  const crs = crsFromWkt(WKT2_SP_FTUS);
+  expect(crs.epsg).toBe(2229);
+  expect(crs.linearUnit).toBe('us-survey-foot');
+  expect(crs.linearUnitToMetres).toBeCloseTo(1200 / 3937, 9);
+  // The whole point: a 100 US-survey-ft span must resolve to ~30.48 m, not 100 m.
+  expect(toMetres(100, crs)).toBeCloseTo(30.48, 2);
+});
+
+const WKT2_COMPOUND_M_FTUS =
+  'COMPOUNDCRS["NAD83 + NAVD88 height (ftUS)",' +
+  'PROJCRS["NAD83 / UTM zone 12N",BASEGEOGCRS["NAD83",' +
+  'DATUM["North American Datum 1983",ELLIPSOID["GRS 1980",6378137,298.257222101,LENGTHUNIT["metre",1]]]],' +
+  'CONVERSION["UTM zone 12N",METHOD["Transverse Mercator"]],' +
+  'CS[Cartesian,2],AXIS["(E)",east],AXIS["(N)",north],LENGTHUNIT["metre",1]],' +
+  'VERTCRS["NAVD88 height (ftUS)",VDATUM["North American Vertical Datum 1988"],' +
+  'CS[vertical,1],AXIS["gravity-related height (H)",up],' +
+  'LENGTHUNIT["US survey foot",0.304800609601219]]]';
+
+test('crsFromWkt — WKT2 compound: metre horizontal + US-foot vertical', () => {
+  const crs = crsFromWkt(WKT2_COMPOUND_M_FTUS);
+  expect(crs.linearUnit).toBe('metre');
+  expect(crs.linearUnitToMetres).toBe(1);
+  expect(crs.verticalUnitToMetres).toBeCloseTo(1200 / 3937, 9);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // WKT — compound (horizontal + vertical) — the unit must come from the
 // HORIZONTAL slice. The vertical block almost always carries UNIT["metre",1],
 // and v0.4.3 scanned the full text so that metre clause won over the
