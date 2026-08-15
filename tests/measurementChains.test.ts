@@ -326,6 +326,20 @@ describe('aggregate through the CRS unit factor (v0.4.5, B2)', () => {
     expect(r.value).toBeCloseTo(0.679604318208, 12);
   });
 
+  it('compound CRS — a height chain scales by the VERTICAL factor, not the horizontal (#8)', () => {
+    // metre grid (f_h = 1) + US-survey-foot heights (f_v = 0.3048): a 10 ft
+    // height must sum to 3.048 m, not 10 (the horizontal factor is metre).
+    const r = aggregate([heightM(10)], 'sum', 'height', [0, 0, 1], 1, 0.3048);
+    expect(r.value).toBeCloseTo(3.048, 6);
+  });
+
+  it('compound CRS — a box volume scales by f_h²·f_v (#8)', () => {
+    const box: Measurement = { id: 'b2', kind: 'box', name: 'b', points: [[0, 0, 0], [2, 3, 4]] };
+    // footprint 2×3 in metres, height 4 in feet: 2·3·(4·0.3048) = 24·0.3048 m³.
+    const r = aggregate([box], 'sum', 'volume-fill', [0, 0, 1], 1, 0.3048);
+    expect(r.value).toBeCloseTo(24 * 0.3048, 9);
+  });
+
   it('dimensionless dimensions ignore the factor entirely', () => {
     const angle: Measurement = {
       id: 'a1',
