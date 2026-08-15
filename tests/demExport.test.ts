@@ -340,6 +340,7 @@ describe('buildDemPackage', () => {
     expect(sums).not.toBeNull();
     for (const line of new TextDecoder().decode(sums!).trimEnd().split('\n')) {
       const [hex, name] = line.split('  ');
+      expect(name).not.toBe('SHA256SUMS'); // the manifest never lists itself
       const bytes = extractEntry(zip, name);
       expect(bytes, `async deliverable manifest lists missing ${name}`).not.toBeNull();
       expect(sha256Hex(bytes!)).toBe(hex);

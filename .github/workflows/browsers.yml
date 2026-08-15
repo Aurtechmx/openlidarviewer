@@ -79,9 +79,13 @@ jobs:
       - name: Verify the runner has a software OpenGL renderer
         id: glcheck
         run: |
-          set -o pipefail
-          sudo apt-get install -y --no-install-recommends mesa-utils
-          xvfb-run -a glxinfo -B | tee /tmp/glxinfo.txt
+          # `|| true` on both probes is load-bearing: GitHub runs `run:` steps with
+          # `bash -eo pipefail`, so a failing apt-get or a glxinfo that cannot make a
+          # GL context (the exact absent-renderer case this detection exists for)
+          # would ABORT the step and paint the job red before the branch below runs.
+          # Suppress those exits so the grep is always what decides present/absent.
+          sudo apt-get install -y --no-install-recommends mesa-utils || true
+          xvfb-run -a glxinfo -B > /tmp/glxinfo.txt 2>&1 || true
           if grep -Eiq "llvmpipe|softpipe|software rasterizer" /tmp/glxinfo.txt; then
             echo "renderer=present" >> "$GITHUB_OUTPUT"
           else
