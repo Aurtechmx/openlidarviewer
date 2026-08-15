@@ -94,13 +94,15 @@ describe('#9 rigidSolve refuses ill-posed correspondence sets', () => {
   });
 });
 
-describe('#10 planar-icp is recommended but not authorized (no solver)', () => {
-  it('withholds airborne-epoch registration rather than run 6-DOF', () => {
+describe('#10 planar-icp is selected and authorised (solver exists), never 6-DOF', () => {
+  it('registers airborne epochs with the planar solver rather than full 6-DOF', () => {
     const d = selectRegistrationModel({
       crsCompatible: false, originsKnown: false, capture: 'airborne', sameAreaEpochs: true,
     } as Parameters<typeof selectRegistrationModel>[0]);
     expect(d.model).toBe('planar-icp');
-    expect(d.allowed).toBe(false);
-    expect(d.reasonCode).toBe('PLANAR_ICP_NOT_IMPLEMENTED');
+    expect(d.allowed).toBe(true);
+    expect(d.reasonCode).toBe('PLANAR_ICP_AVAILABLE');
+    // The change-detection guard still holds: never full 6-DOF for airborne epochs.
+    expect(d.model).not.toBe('full-6dof');
   });
 });

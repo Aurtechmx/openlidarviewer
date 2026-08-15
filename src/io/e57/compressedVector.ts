@@ -37,13 +37,24 @@ function safeUint64(view: DataView, offset: number, what: string): number {
   return Number(raw);
 }
 
-/** Decode a scan's CompressedVector into per-field columns. */
+/**
+ * Decode a scan's CompressedVector into per-field columns.
+ *
+ * `keepField`, when given, decodes only the prototype fields it accepts (by
+ * name). The bytestream walk still visits every field — the per-packet stream
+ * lengths that position each column are interleaved — but a rejected field is
+ * never concatenated or expanded into a Float64Array. The loader passes this to
+ * skip prototype columns it does not consume (a structured scan's row/column
+ * index, say), which on a tens-of-millions-of-points file is hundreds of MB of
+ * allocation and per-value conversion avoided. Omitted → every field decodes.
+ */
 export function decodeCompressedVector(
   logical: Uint8Array,
   fileOffset: number,
   recordCount: number,
   prototype: E57Field[],
   pageSize: number,
+  keepField?: (name: string) => boolean,
 ): DecodedColumns {
   const view = new DataView(logical.buffer, logical.byteOffset, logical.byteLength);
 
@@ -135,6 +146,7 @@ export function decodeCompressedVector(
 
   const columns: DecodedColumns = {};
   prototype.forEach((field, f) => {
+    if (keepField && !keepField(field.name)) return; // unconsumed column — skip decode
     columns[field.name] = decodeField(concat(chunks[f]), field, count);
   });
   return columns;
