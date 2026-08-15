@@ -118,7 +118,10 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.olv-layers { display: flex; flex-direction: column; gap: var(--space-sm); }
+/* End-clearance so the rightmost row control (the Remove ×) never sits under the
+ * workspace scroll gutter/scrollbar, which otherwise intercepts its click on
+ * browsers with classic space-consuming scrollbars (Firefox). See #401. */
+.olv-layers { display: flex; flex-direction: column; gap: var(--space-sm); padding-inline-end: var(--space-xs); }
 .olv-layer { display: flex; align-items: center; gap: var(--space-md); }
 .olv-layer input { accent-color: var(--accent); }
 .olv-layer-name {
@@ -140,7 +143,7 @@
 }
 .olv-layer-solo:hover, .olv-layer-lock:hover { color: var(--text); }
 .olv-layer-solo.is-active, .olv-layer-lock.is-active { color: var(--accent); }
-.olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: var(--text-lg); line-height: 1; }
+.olv-layer-x { background: none; border: none; color: var(--text-faint); font-size: var(--text-lg); line-height: 1; cursor: pointer; padding: 0 var(--space-xs); }
 .olv-layer-x:hover { color: var(--text); }
 /* A layer whose CRS differs from the others — flag the row + badge. */
 .olv-layer-crs-mismatch .olv-layer-crs { color: var(--warn, #e0a030); }
