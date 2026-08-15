@@ -226,10 +226,13 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
   // off-screen. Dispatch the click to the button directly with `force`, the same
   // way the reclassify panel drives its real buttons through this overlay. The
   // scroll + visibility wait still guard that the right element is present first.
-  const removeB = page.getByRole('button', { name: 'Remove utm33-b.las' });
-  await removeB.scrollIntoViewIfNeeded();
-  await expect(removeB).toBeVisible();
-  await removeB.click({ force: true });
+  // The layer list is rendered in more than one workspace-mode container, so the
+  // remove control matches twice in the DOM on a slow renderer (only one is the
+  // visible, active copy). Target the VISIBLE one to avoid a strict-mode 2-match,
+  // then force the click through the transient DesktopWorkspace overlay.
+  const removeB = page.getByRole('button', { name: 'Remove utm33-b.las' }).filter({ visible: true });
+  await removeB.first().scrollIntoViewIfNeeded();
+  await removeB.first().click({ force: true });
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
   await page.waitForTimeout(300);
 
