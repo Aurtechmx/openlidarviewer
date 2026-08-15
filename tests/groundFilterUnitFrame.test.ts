@@ -36,15 +36,22 @@ function slopeScene(scale: number): TerrainPoint[] {
   return points;
 }
 
+interface Frame {
+  readonly isGeographic?: boolean;
+  readonly horizontalUnitToMetres?: number;
+  readonly verticalUnitToMetres?: number;
+}
+
 /** Fraction of returns the pipeline-default SMRF pass calls ground. */
-function groundFraction(points: TerrainPoint[], cellSizeM: number, isGeographic: boolean): number {
+function groundFraction(points: TerrainPoint[], cellSizeM: number, frame: Frame): number {
+  const isGeographic = frame.isGeographic ?? false;
   const params = resolveGroundFilterParams(
     {
       cellSizeM,
       isGeographic,
       latitudeDeg: isGeographic ? 0 : null,
-      verticalUnitToMetres: 1,
-      horizontalUnitToMetres: 1,
+      verticalUnitToMetres: frame.verticalUnitToMetres ?? 1,
+      horizontalUnitToMetres: frame.horizontalUnitToMetres ?? 1,
     },
     'z',
   );
@@ -52,17 +59,62 @@ function groundFraction(points: TerrainPoint[], cellSizeM: number, isGeographic:
   return gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
 }
 
+/**
+ * A flat ground plane with deterministic vertical roughness of ±~0.35 m. Flat
+ * (slope 0) so the SMRF tolerance is the plain base term with no slope-growth: a
+ * return is ground when it sits within `elevationThresholdM` (0.5 m physical) of
+ * the opened surface. The roughness straddles the boundary between a correct
+ * 0.5 m tolerance and a mis-scaled 0.15 m one (0.5 read as source feet), so the
+ * two produce visibly different ground fractions.
+ */
+function roughFlatScene(scale: number, vScale: number): TerrainPoint[] {
+  const points: TerrainPoint[] = [];
+  for (let i = 0; i < 60; i++) {
+    for (let j = 0; j < 60; j++) {
+      const xM = i + 0.5;
+      const yM = j + 0.5;
+      const zM = 10 + 0.35 * Math.sin(i * 0.7) * Math.cos(j * 0.5);
+      points.push({ x: xM * scale, y: yM * scale, z: zM * vScale });
+    }
+  }
+  return points;
+}
+
+const FOOT = 0.3048;
+
 describe('classifyGroundSmrf — geographic (degree) frame parity', () => {
   it('classifies a metric-z planar slope identically in metre and degree frames', () => {
     // Same surface twice: projected metres, and EPSG:4326-style degrees
     // (x,y ÷ metres-per-degree) with z still in metres. One grid cell per
     // ground metre in both frames.
-    const metreFrac = groundFraction(slopeScene(1), 1, false);
-    const degreeFrac = groundFraction(slopeScene(1 / METRES_PER_DEGREE), 1 / METRES_PER_DEGREE, true);
+    const metreFrac = groundFraction(slopeScene(1), 1, { isGeographic: false });
+    const degreeFrac = groundFraction(slopeScene(1 / METRES_PER_DEGREE), 1 / METRES_PER_DEGREE, {
+      isGeographic: true,
+    });
 
     // A bare planar slope is all ground; the metre frame must say so.
     expect(metreFrac).toBeGreaterThan(0.99);
     // The degree frame sees the identical surface, so it must agree.
     expect(Math.abs(metreFrac - degreeFrac)).toBeLessThan(0.02);
+  });
+});
+
+describe('classifyGroundSmrf — vertical unit (foot) frame parity', () => {
+  it('classifies the same physical surface identically in metre and foot frames', () => {
+    // Identical physical terrain, expressed once in metres and once in
+    // international feet (x, y, z all ÷ 0.3048). The 0.5 m base tolerance must
+    // convert to 1.64 ft so the foot frame keeps the same rough ground the metre
+    // frame does; left unconverted it would be 0.5 ft (0.15 m) and reject the
+    // +0.35 m bumps.
+    const metreFrac = groundFraction(roughFlatScene(1, 1), 1, { verticalUnitToMetres: 1 });
+    const footFrac = groundFraction(roughFlatScene(1 / FOOT, 1 / FOOT), 1 / FOOT, {
+      horizontalUnitToMetres: FOOT,
+      verticalUnitToMetres: FOOT,
+    });
+
+    // The rough flat plane is essentially all ground under a 0.5 m tolerance.
+    expect(metreFrac).toBeGreaterThan(0.95);
+    // The foot frame sees the identical surface, so it must agree.
+    expect(Math.abs(metreFrac - footFrac)).toBeLessThan(0.02);
   });
 });

@@ -149,11 +149,34 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
 /** Build one cloud's DTM on the shared world grid, matching the live analysis surface. */
 function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid): DtmGrid {
   const points = boxPoints(cloud.positions, cloud.origin ?? ZERO);
+  // Match the analysis runner's unit-aware slope-growth run (deriveCoreParams):
+  // the SMRF threshold multiplies a rise/run slope by a horizontal run, so that
+  // run must share z's unit. A geographic frame's degree-valued cell would
+  // otherwise starve the growth term by ~1/111,320, pinning the threshold at
+  // its base and rejecting legitimate slope ground. cellSizeZUnits rescales the
+  // horizontal cell into z's unit; for a projected frame whose axes share one
+  // linear unit the ratio is 1 and the filter sees the plain cell size.
+  const horizToMetres = cloud.isGeographic
+    ? METRES_PER_DEGREE
+    : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+      ? cloud.linearUnitToMetres
+      : 1;
+  const vertToMetres = cloud.isGeographic
+    ? 1
+    : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
+      ? cloud.linearUnitToMetres
+      : 1;
+  // The 0.5 m / 2.5 m SMRF tolerances are physical; convert to source vertical
+  // units so a foot frame keeps its physical ground tolerance (a geographic
+  // frame's z is already metric, so zPerMetre is 1 there).
+  const zPerMetre = 1 / vertToMetres;
   const gf = classifyGroundSmrf(points, {
     cellSizeM: grid.cellSizeM,
+    cellSizeZUnits: grid.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: 8,
     slope: 0.2,
-    elevationThresholdM: 0.5,
+    elevationThresholdM: 0.5 * zPerMetre,
+    maxElevationThresholdM: 2.5 * zPerMetre,
     floorPercentile: 5,
     verticalAxis: 'z',
   });
