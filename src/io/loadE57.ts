@@ -126,7 +126,30 @@ function e57Metadata(
  * points are dropped; positions are recentred about a floored-min origin.
  */
 export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<PointCloud> {
-  const parsed = parseE57(buffer);
+  // A field's LOCAL name, after any extension `prefix:` (so `nor:normalX` →
+  // `normalX`). Used both to resolve namespaced normals and to decide which
+  // columns are worth decoding at all.
+  const localName = (key: string): string => key.slice(key.indexOf(':') + 1);
+  // Decode only the columns this loader consumes. Anything else a file declares
+  // — a structured scan's rowIndex / columnIndex, spherical coordinates this
+  // loader does not project — would otherwise be expanded into a full Float64
+  // column and then immediately dropped: hundreds of MB of allocation and
+  // per-value conversion on a tens-of-millions-of-points scan.
+  const consumed = new Set([
+    'cartesianX',
+    'cartesianY',
+    'cartesianZ',
+    'cartesianInvalidState',
+    'colorRed',
+    'colorGreen',
+    'colorBlue',
+    'intensity',
+    'classification',
+    'normalX',
+    'normalY',
+    'normalZ',
+  ]);
+  const parsed = parseE57(buffer, { keepField: (n) => consumed.has(localName(n)) });
 
   // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
   // for example) contributes no points, so it must contribute nothing to the
@@ -156,11 +179,10 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
   const has = (field: string): boolean => scans.every((s) => s.columns[field] !== undefined);
   // Surface normals ride the E57 `nor:` surface-normals extension, so the
   // decoded column is keyed `nor:normalX` — not the bare `normalX` the core
-  // Cartesian/colour fields use. Resolve by the field's LOCAL name (after any
-  // `prefix:`) so real scanner files that carry normals aren't decoded and then
-  // silently dropped, which also left the Viewer's normal-shading mode dark for
-  // exactly the files that provide the data it needs.
-  const localName = (key: string): string => key.slice(key.indexOf(':') + 1);
+  // Cartesian/colour fields use. Resolve by LOCAL name (via `localName` above)
+  // so real scanner files that carry normals aren't decoded and then silently
+  // dropped, which also left the Viewer's normal-shading mode dark for exactly
+  // the files that provide the data it needs.
   const normalKey = (cols: E57ScanData['columns'], axis: 'X' | 'Y' | 'Z'): string | undefined => {
     const bare = `normal${axis}`;
     if (cols[bare]) return bare;
