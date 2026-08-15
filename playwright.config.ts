@@ -10,7 +10,11 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: 'list',
+  // `list` for readable console output; in CI also emit an `html` report so the
+  // on-first-retry trace + failure screenshot are bundled into playwright-report/
+  // and uploadable (the advisory browser jobs are continue-on-error, so their
+  // failures are only diagnosable from an uploaded trace).
+  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'on-first-retry',
