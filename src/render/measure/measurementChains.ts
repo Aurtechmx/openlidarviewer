@@ -133,15 +133,18 @@ const DIMENSION_UNIT: Readonly<Record<ChainDimension, string>> = {
  * dimensionless angle/grade. Single table so a future dimension can't
  * forget its unit behaviour (B2).
  */
-const DIMENSION_UNIT_POWER: Readonly<Record<ChainDimension, number>> = {
-  length: 1,
-  area: 2,
-  'volume-fill': 3,
-  'volume-cut': 3,
-  'volume-net': 3,
-  height: 1,
-  angle: 0,
-  grade: 0,
+// A dimension's unit scale is split into its HORIZONTAL and VERTICAL powers,
+// because a compound CRS can carry a different unit on each axis (metre grid +
+// US-survey-foot heights). area is h², height is v¹, a volume is h²·v¹. Applying
+// one horizontal factor `f^power` scaled heights and volumes by the wrong axis's
+// unit, so a chain sum disagreed with the single-measurement readout and the
+// export. When the two factors are equal (a single-unit CRS) k reduces to the
+// old f^(h+v) exactly, so single-unit behaviour is unchanged.
+const DIMENSION_H_POWER: Readonly<Record<ChainDimension, number>> = {
+  length: 1, area: 2, 'volume-fill': 2, 'volume-cut': 2, 'volume-net': 2, height: 0, angle: 0, grade: 0,
+};
+const DIMENSION_V_POWER: Readonly<Record<ChainDimension, number>> = {
+  length: 0, area: 0, 'volume-fill': 1, 'volume-cut': 1, 'volume-net': 1, height: 1, angle: 0, grade: 0,
 };
 
 /**
@@ -238,17 +241,19 @@ export function aggregate(
   dimension: ChainDimension,
   worldUp: Vec3 = [0, 0, 1],
   unitToMetres = 1,
+  verticalUnitToMetres = unitToMetres,
 ): ChainResult {
   const totalCount = measurements.length;
   // B2 — geometry values arrive in render (source) units; convert into the
   // dimension's canonical metre-based unit ONCE, here, so min/max/mean all
   // operate on already-true values. Invalid factors fall back to 1 (the
   // pre-B2 "assume metres" behaviour — never multiply by garbage).
-  const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
-  // `?? 0` guards a dimension string this build doesn't know (a forward-
-  // compat session / embed caller): power 0 means "no scaling", and the
-  // unknown dimension contributes nothing below — never a NaN aggregate.
-  const k = Math.pow(f, DIMENSION_UNIT_POWER[dimension] ?? 0);
+  const fH = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
+  const fV = Number.isFinite(verticalUnitToMetres) && verticalUnitToMetres > 0 ? verticalUnitToMetres : fH;
+  // Scale each axis by its OWN unit factor. `?? 0` guards a dimension string this
+  // build doesn't know (a forward-compat session/embed caller): power 0 means
+  // "no scaling", never a NaN aggregate.
+  const k = Math.pow(fH, DIMENSION_H_POWER[dimension] ?? 0) * Math.pow(fV, DIMENSION_V_POWER[dimension] ?? 0);
   const values: number[] = [];
   for (const m of measurements) {
     const v = valueForDimension(m, dimension, worldUp);
