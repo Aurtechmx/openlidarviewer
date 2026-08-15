@@ -56,8 +56,12 @@ function surveyedDistance(a: Sphere, b: Sphere): number {
 describe('SP2 Layer A — OLV measurement reproduces the surveyed sphere network', () => {
   const spheres = loadSpheres();
 
-  it('loads the 13 surveyed reference points', () => {
+  it('loads the surveyed reference network: 12 Koule spheres + 1 control point', () => {
     expect(spheres.length).toBe(13);
+    // The study is over the 12 physical "Koule" spheres; the 13th ("Auto") is a
+    // surveyed control point, valid in the distance network but not a sphere.
+    expect(spheres.filter((s) => s.name.startsWith('Koule')).length).toBe(12);
+    expect(spheres.some((s) => s.name === 'Auto')).toBe(true);
     expect(spheres.every((s) => s.x < 0 && s.y < 0)).toBe(true); // Krovák East-North negatives
   });
 
