@@ -155,3 +155,46 @@ describe('compareEpochClouds', () => {
     expect(cmp!.coregistrationNotes.join(' ')).toContain('CRS differs');
   });
 });
+
+describe('dtmOnGrid — geographic ground-filter unit parity', () => {
+  // Rolling ridge terrain the morphological opening cannot reproduce exactly,
+  // so the SMRF slope-growth term actually bites (a bare plane opens to itself
+  // and hides the bug). In a geographic frame the horizontal cell is degrees
+  // while z is metric; without rescaling the run into z's unit the growth term
+  // is starved by ~1/111,320, the threshold stays at its base, and ridge ground
+  // is wrongly rejected. The change path must reach the same ground coverage as
+  // the metre frame — mirroring groundFilterUnitFrame for the two-epoch runner.
+  function ridge(scale: number): Float32Array {
+    const pts: number[] = [];
+    for (let i = 0; i <= 60; i++) {
+      for (let j = 0; j <= 60; j++) {
+        pts.push(i * scale, j * scale, 1.5 * Math.sin((i * Math.PI) / 3) * Math.cos((j * Math.PI) / 3));
+      }
+    }
+    return new Float32Array(pts);
+  }
+  /** Fraction of DTM cells that hold a measured ground return. */
+  function measuredFraction(counts: Uint32Array): number {
+    let m = 0;
+    for (const c of counts) if (c > 0) m++;
+    return m / counts.length;
+  }
+
+  it('retains as much ridge ground in a degree frame as in a metre frame', () => {
+    const metre = buildSharedEpochDtms({ positions: ridge(1) }, { positions: ridge(1) });
+    const K = METRES_PER_DEGREE;
+    const geo = buildSharedEpochDtms(
+      { positions: ridge(1 / K), isGeographic: true },
+      { positions: ridge(1 / K), isGeographic: true },
+    );
+    expect(metre).not.toBeNull();
+    expect(geo).not.toBeNull();
+    const metreFrac = measuredFraction(metre!.before.counts);
+    const geoFrac = measuredFraction(geo!.before.counts);
+    expect(metreFrac).toBeGreaterThan(0.01);
+    // The degree frame sees the identical surface, so it retains the same ground
+    // (parity ≈ 1.2× here). A starved growth term rejects ridge ground and drops
+    // this to ~0.45× — well under the 0.6× floor.
+    expect(geoFrac).toBeGreaterThan(metreFrac * 0.6);
+  });
+});
