@@ -1356,7 +1356,6 @@ export class Viewer {
         // be computed over classified ground (vegetation / buildings dropped).
         const buffers: ProfileSourceBuffer[] = [];
         let total = 0;
-        let staticPoints = 0;
         let streamingPoints = 0;
         let anyClass = false;
         const aligned = (
@@ -1371,7 +1370,6 @@ export class Viewer {
             if (cls) anyClass = true;
             buffers.push({ pos: cloud.positions, cls, placement });
             total += cloud.positions.length;
-            staticPoints += cloud.positions.length;
           }
         }
         // A stream joins the estimate only on the terms a static cloud would
@@ -1415,11 +1413,11 @@ export class Viewer {
           groundPercentile,
           classification,
         });
-        // The chart is "resident-only" whenever any streaming bytes are
-        // in the walk and there is no fully-loaded static cloud beside
-        // it — that's exactly the case where additional nodes may
-        // refine the profile as they stream in.
-        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        // "Resident-only" whenever any streaming bytes are in the walk: those
+        // nodes may still refine the profile as they stream in, and a fully-
+        // loaded static cloud beside them does not complete the streaming part
+        // (audit #8: gating on `staticPoints === 0` hid the caveat in mixed scenes).
+        const residentOnly = streamingPoints > 0;
         return {
           samples,
           residentOnly,
@@ -1437,7 +1435,6 @@ export class Viewer {
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
         const buffers: PlacedVolumeBuffer[] = [];
         let total = 0;
-        let staticPoints = 0;
         let streamingPoints = 0;
         // Match the picker: only visible, unlocked clouds feed the cut/fill, so
         // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
@@ -1445,7 +1442,6 @@ export class Viewer {
           if (cloud.positions && cloud.positions.length > 0) {
             buffers.push({ pos: cloud.positions, placement });
             total += cloud.positions.length;
-            staticPoints += cloud.positions.length;
           }
         }
         const streamOk = this._streamingMayCombine(buffers.length);
@@ -1477,10 +1473,10 @@ export class Viewer {
         if (result.pointsInPolygon >= 1000) confidence = 'high';
         else if (result.pointsInPolygon >= 100) confidence = 'medium';
         else confidence = 'low';
-        // Volume readout is "resident-only" whenever any streaming bytes
-        // were in the walk and no fully-loaded static cloud sat beside
-        // them — same rationale as the profile sampler.
-        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        // Volume readout is "resident-only" whenever any streaming bytes were in
+        // the walk — those may still refine as they stream in, regardless of a
+        // fully-loaded static cloud beside them (audit #8, same as the profile).
+        const residentOnly = streamingPoints > 0;
         const record: VolumeRecord = {
           fill: result.fill,
           cut: result.cut,
@@ -2447,7 +2443,11 @@ export class Viewer {
     // sample is spatially complete and the analysis reports full coverage. A
     // stride is still applied (`sampled`), but that's a representative subsample
     // of the WHOLE extent, not a partial one.
-    let residentOnly = streamingPoints > 0 && staticPoints === 0;
+    // A partial stream reports resident-only whether or not a static cloud sits
+    // beside it: the static half being complete does not complete the streaming
+    // half (audit #8). It clears only once every known octree node is resident,
+    // i.e. the working set spans the whole cloud.
+    let residentOnly = streamingPoints > 0;
     if (residentOnly && this._streaming) {
       const totalNodes = this._streaming.cloud.octree.nodes().length;
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
