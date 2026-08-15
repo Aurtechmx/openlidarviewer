@@ -11,7 +11,8 @@
  *    constrained to the horizontal plane (x, y, yaw) so it CANNOT absorb real
  *    elevation change — subsidence, uplift, erosion — into a vertical shift. A
  *    full 6-DOF fit would minimise residual by eating the very signal being
- *    measured.
+ *    measured. The solver lives at `./planarIcp` (a re-export of the tested
+ *    `terrain/change` planar `icpRegister`), so this case is allowed, not withheld.
  *  - FULL 6-DOF. Terrestrial or object scans with no shared frame — solve all
  *    six degrees of freedom.
  *
@@ -64,11 +65,11 @@ export function selectRegistrationModel(inp: RegistrationInputs): RegistrationDe
 
   // Airborne change-detection epochs WANT planar ICP (yaw + horizontal
   // translation, Z locked) so vertical change is preserved rather than absorbed
-  // into a Z shift. That solver is not implemented — no planar-constrained ICP
-  // exists under src/registration — so the model is named but registration is
-  // WITHHELD rather than run as full 6-DOF, which would defeat the purpose.
+  // into a Z shift. That solver exists — `src/registration/planarIcp` re-exports
+  // the tested planar `icpRegister` already wired to the epoch-compare pipeline —
+  // so the planar model is now selected and allowed rather than withheld.
   if (inp.capture === 'airborne' && inp.sameAreaEpochs) {
-    return { model: 'planar-icp', allowed: false, reasonCode: 'PLANAR_ICP_NOT_IMPLEMENTED', reason: 'Two airborne epochs of the same area need a planar-constrained ICP (yaw + XY, Z locked) to preserve vertical change; that solver is not yet implemented, so registration is withheld rather than run as full 6-DOF (which would absorb real elevation change into a Z shift).' };
+    return { model: 'planar-icp', allowed: true, reasonCode: 'PLANAR_ICP_AVAILABLE', reason: 'Two airborne epochs of the same area register with a planar-constrained ICP (yaw + XY, Z locked) so vertical change is preserved rather than absorbed into a Z shift.' };
   }
 
   // Terrestrial / object → full 6-DOF.
