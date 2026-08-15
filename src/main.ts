@@ -5665,7 +5665,7 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
+      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
       // The .asc grid geometry (cellsize + corners) is in the source LINEAR
