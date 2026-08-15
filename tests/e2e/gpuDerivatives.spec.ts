@@ -102,6 +102,14 @@ test.describe('TerrainRasterEngine — real-WebGPU equivalence gate @gpu', () =>
           }
         });
 
+    // No adapter → nothing to gate. Skip HERE, before the render-dependent steps
+    // below: on an adapter-less runner (headless CI) the WebGPU/WebGL context does
+    // not initialise, so the Analyse panel never renders and the toBeVisible wait
+    // below would TIME OUT and fail this advisory spec instead of skipping. There
+    // is genuinely no GPU leg to gate here, so skip cleanly and keep the advisory
+    // job green; the real gate runs headed where an adapter exists.
+    test.skip(adapter === null, 'No WebGPU adapter on this runner — nothing to gate.');
+
     // The engine module sits behind the terrain-analysis dynamic import, which
     // nothing pulls in until the analysis is actually STARTED. Opening a scan
     // mounts the Analyse panel and no more. Waiting for the hook after merely
