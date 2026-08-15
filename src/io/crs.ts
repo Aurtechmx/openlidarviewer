@@ -484,7 +484,11 @@ function firstNumericArg(node: WktNode): number | undefined {
 function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
   let result: { name: string; scale: number } | undefined;
   for (const n of candidates) {
-    if (n.keyword !== 'UNIT') continue;
+    // WKT1 spells the unit `UNIT[...]`; WKT2 (ISO 19162, emitted by modern
+    // GDAL/PDAL) spells the linear unit `LENGTHUNIT[...]`. Accept both — reading
+    // only `UNIT` silently dropped a declared foot unit and defaulted to metre,
+    // reporting every distance 3.28x too small on a WKT2 foot-CRS file.
+    if (n.keyword !== 'UNIT' && n.keyword !== 'LENGTHUNIT') continue;
     const name = wktNodeName(n);
     if (name === undefined) continue;
     const scale = wktFirstNumber(n);

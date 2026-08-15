@@ -125,7 +125,21 @@ export interface EpochAlignment {
    * and keeps only the unit-free parts (yaw, sample count) plus the diagnosis.
    */
   readonly horizontalUnitUnknown?: boolean;
+  /**
+   * Inlier fraction of the fit (0..1) — how much of the sampled overlap the
+   * transform actually explains. A small residual over a small overlap is the
+   * classic "locked onto a subset" failure that RMS alone hides, so this is
+   * surfaced and gated: below {@link LOW_OVERLAP_FRACTION} the transform is NOT
+   * applied (the clouds are compared as-is), because a minority-of-points fit
+   * would smear real vertical change across slopes and corrupt the cut/fill.
+   */
+  readonly overlapFraction: number;
+  /** The fit ran but its overlap was too low to trust, so it was withheld. */
+  readonly lowOverlap?: boolean;
 }
+
+/** Below this inlier fraction the fit is untrustworthy and is not applied. */
+export const LOW_OVERLAP_FRACTION = 0.5;
 
 const NO_ALIGNMENT: EpochAlignment = {
   attempted: false,
@@ -136,6 +150,7 @@ const NO_ALIGNMENT: EpochAlignment = {
   yawDeg: 0,
   translation: ZERO,
   sampleCount: 0,
+  overlapFraction: 0,
 };
 
 /** The geographic-frame refusal: nothing attempted, clouds untouched. */
@@ -318,6 +333,32 @@ export function alignEpochClouds(
         yawDeg,
         translation: toMetres(fit.translation),
         sampleCount,
+        overlapFraction: fit.inlierFraction,
+        frameUnverified,
+        horizontalUnitUnknown,
+      },
+    };
+  }
+
+  // Low overlap: the fit converged with a small residual, but only a minority
+  // of points registered — the classic subset lock. Applying it would inject a
+  // horizontal shift/yaw from a fraction of the scene and smear real vertical
+  // change across slopes. Withhold the transform (compare as-is) rather than
+  // report a partial fit as a trustworthy alignment.
+  if (fit.inlierFraction < LOW_OVERLAP_FRACTION) {
+    return {
+      after,
+      alignment: {
+        attempted: true,
+        applied: false,
+        refused: false,
+        degenerate: false,
+        rmsResidualM,
+        yawDeg,
+        translation: toMetres(fit.translation),
+        sampleCount,
+        overlapFraction: fit.inlierFraction,
+        lowOverlap: true,
         frameUnverified,
         horizontalUnitUnknown,
       },
@@ -357,6 +398,7 @@ export function alignEpochClouds(
       // actually moved the points.
       translation: toMetres(applied.translation),
       sampleCount,
+      overlapFraction: fit.inlierFraction,
       frameUnverified,
       horizontalUnitUnknown,
     },
@@ -393,8 +435,11 @@ export function summarizeAlignment(a: EpochAlignment): string {
   if (a.refused) {
     return `Alignment: refused — residual ${a.rmsResidualM.toFixed(2)} m exceeds the limit; comparing as-is.`;
   }
+  if (a.lowOverlap) {
+    return `Alignment: withheld — only ${(a.overlapFraction * 100).toFixed(0)}% of the sampled points registered (below ${(LOW_OVERLAP_FRACTION * 100).toFixed(0)}%), so the fit locked onto a subset; comparing as-is rather than shifting on a partial overlap.`;
+  }
   const shift = Math.hypot(a.translation[0], a.translation[1]);
-  const base = `Aligned the after cloud horizontally (${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw, ${a.rmsResidualM.toFixed(2)} m residual over ${a.sampleCount} sampled points); vertical change preserved.`;
+  const base = `Aligned the after cloud horizontally (${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw, ${a.rmsResidualM.toFixed(2)} m residual, ${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points); vertical change preserved.`;
   // The figures above describe the FIT. Without a declared frame on both sides
   // they say nothing about the relationship between the epochs, and a residual
   // quoted in metres reads as evidence of georeferenced agreement.

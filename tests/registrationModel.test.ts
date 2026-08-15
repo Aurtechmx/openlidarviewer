@@ -16,14 +16,14 @@ describe('selectRegistrationModel', () => {
     expect(d.reasonCode).toBe('PROVEN_FRAME_MOUNT');
   });
 
-  it('airborne same-area epochs → PLANAR ICP recommended but WITHHELD (solver not implemented)', () => {
+  it('airborne same-area epochs → PLANAR ICP selected and allowed (solver exists)', () => {
     const d = selectRegistrationModel({ ...base, capture: 'airborne', sameAreaEpochs: true });
-    // The model is named (planar ICP is the right method) but not authorized,
-    // because no planar-constrained solver exists — running full 6-DOF instead
-    // would absorb vertical change, so registration is withheld.
+    // The planar (yaw + XY, Z-locked) solver exists at src/registration/planarIcp
+    // (a re-export of the tested terrain/change icpRegister already wired to the
+    // epoch-compare pipeline), so the planar model is selected AND authorised.
     expect(d.model).toBe('planar-icp');
-    expect(d.allowed).toBe(false);
-    expect(d.reasonCode).toBe('PLANAR_ICP_NOT_IMPLEMENTED');
+    expect(d.allowed).toBe(true);
+    expect(d.reasonCode).toBe('PLANAR_ICP_AVAILABLE');
   });
 
   it('a full 6-DOF fit is NOT chosen for airborne epochs — the key change-detection guard', () => {

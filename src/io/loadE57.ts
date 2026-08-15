@@ -126,7 +126,30 @@ function e57Metadata(
  * points are dropped; positions are recentred about a floored-min origin.
  */
 export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<PointCloud> {
-  const parsed = parseE57(buffer);
+  // A field's LOCAL name, after any extension `prefix:` (so `nor:normalX` →
+  // `normalX`). Used both to resolve namespaced normals and to decide which
+  // columns are worth decoding at all.
+  const localName = (key: string): string => key.slice(key.indexOf(':') + 1);
+  // Decode only the columns this loader consumes. Anything else a file declares
+  // — a structured scan's rowIndex / columnIndex, spherical coordinates this
+  // loader does not project — would otherwise be expanded into a full Float64
+  // column and then immediately dropped: hundreds of MB of allocation and
+  // per-value conversion on a tens-of-millions-of-points scan.
+  const consumed = new Set([
+    'cartesianX',
+    'cartesianY',
+    'cartesianZ',
+    'cartesianInvalidState',
+    'colorRed',
+    'colorGreen',
+    'colorBlue',
+    'intensity',
+    'classification',
+    'normalX',
+    'normalY',
+    'normalZ',
+  ]);
+  const parsed = parseE57(buffer, { keepField: (n) => consumed.has(localName(n)) });
 
   // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
   // for example) contributes no points, so it must contribute nothing to the
@@ -154,10 +177,23 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
   // An attribute is merged only when every MERGED scan provides it — a skipped
   // scan must not veto colour/intensity the merged scans all carry.
   const has = (field: string): boolean => scans.every((s) => s.columns[field] !== undefined);
+  // Surface normals ride the E57 `nor:` surface-normals extension, so the
+  // decoded column is keyed `nor:normalX` — not the bare `normalX` the core
+  // Cartesian/colour fields use. Resolve by LOCAL name (via `localName` above)
+  // so real scanner files that carry normals aren't decoded and then silently
+  // dropped, which also left the Viewer's normal-shading mode dark for exactly
+  // the files that provide the data it needs.
+  const normalKey = (cols: E57ScanData['columns'], axis: 'X' | 'Y' | 'Z'): string | undefined => {
+    const bare = `normal${axis}`;
+    if (cols[bare]) return bare;
+    return Object.keys(cols).find((k) => localName(k) === bare);
+  };
   const hasColor = has('colorRed') && has('colorGreen') && has('colorBlue');
   const hasIntensity = has('intensity');
   const hasClassification = has('classification');
-  const hasNormals = has('normalX') && has('normalY') && has('normalZ');
+  const hasNormals = scans.every(
+    (s) => normalKey(s.columns, 'X') && normalKey(s.columns, 'Y') && normalKey(s.columns, 'Z'),
+  );
 
   let total = 0;
   for (const scan of scans) total += countValid(scan);
@@ -180,6 +216,11 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     const pose: E57Pose | null = scan.pose;
     const colorScale = scan.colorMax && scan.colorMax > 0 ? 255 / scan.colorMax : 1;
     const intensityScale = intensity ? intensityScaleFor(scan) : 1;
+    // Resolve the (possibly namespaced) normal columns once per scan, not per
+    // point. `hasNormals` guarantees all three keys resolve on every merged scan.
+    const nX = normals ? col[normalKey(col, 'X')!] : undefined;
+    const nY = normals ? col[normalKey(col, 'Y')!] : undefined;
+    const nZ = normals ? col[normalKey(col, 'Z')!] : undefined;
 
     for (let i = 0; i < scan.recordCount; i++) {
       if (invalid && invalid[i] !== 0) continue;
@@ -206,10 +247,10 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
       if (classification && col.classification) {
         classification[w] = clampByte(col.classification[i]);
       }
-      if (normals && col.normalX && col.normalY && col.normalZ) {
-        let nx = col.normalX[i];
-        let ny = col.normalY[i];
-        let nz = col.normalZ[i];
+      if (normals && nX && nY && nZ) {
+        let nx = nX[i];
+        let ny = nY[i];
+        let nz = nZ[i];
         // Normals are DIRECTIONS: they transform by the pose ROTATION only,
         // never the translation. Copying them verbatim (the pre-v0.5.4
         // behaviour) left every rotated scan's normals pointing where the
