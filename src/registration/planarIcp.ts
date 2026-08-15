@@ -18,16 +18,9 @@
  * than two implementations.
  */
 
-import { icpRegister, applyIcp } from '../terrain/change/icpRegister';
-import type { IcpOptions, IcpResult, Vec3 } from '../terrain/change/icpRegister';
-
-export { icpRegister, applyIcp };
-export type { IcpOptions, IcpResult, Vec3 };
-
-/**
- * The planar-constrained (yaw + XY translation) ICP the registration model
- * selects for airborne same-area epochs. A registration-layer alias for
- * `icpRegister`; callers lock Z by zeroing the solved `translation[2]` so
- * genuine elevation change is not absorbed into the fit.
- */
-export const planarIcpRegister = icpRegister;
+// Direct `export … from` re-exports (no intermediate import) so this seam adds
+// no wrapper to maintain. `icpRegister as planarIcpRegister` is the registration
+// layer's alias for the same solver: callers lock Z by zeroing the solved
+// `translation[2]` so genuine elevation change is not absorbed into the fit.
+export { icpRegister, applyIcp, icpRegister as planarIcpRegister } from '../terrain/change/icpRegister';
+export type { IcpOptions, IcpResult, Vec3 } from '../terrain/change/icpRegister';
