@@ -5034,9 +5034,15 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a File: parse, render, populate the Inspector, land on the Data panel. */
+/** Load a File: land on the Data panel, then parse, render, populate the Inspector. */
 function handleFile(file: File): Promise<void> {
-  return openScan(file, openScanDeps).then(() => showWorkspaceMode?.('data'));
+  // Switch to Data up front rather than after openScan settles. Mode activation
+  // is pure visibility and needs no rendered frame, but on a slow (software)
+  // renderer the openScan promise resolves late; gating the switch behind it
+  // left the layer list in a hidden mode-host — its controls present in the DOM
+  // but unclickable — until render caught up.
+  showWorkspaceMode?.('data');
+  return openScan(file, openScanDeps);
 }
 
 /**
