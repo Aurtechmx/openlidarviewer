@@ -423,6 +423,15 @@ export class StreamingScheduler {
 
   /** Hysteresis state — node id → wall-clock deadline (ms) past which it may evict. */
   private readonly _deferredEvictAt = new Map<string, number>();
+  /**
+   * The same hysteresis for IN-FLIGHT decodes (fetching/decoding, not yet
+   * resident). `_deferredEvictAt` only ever holds residents, so without this an
+   * in-flight node that leaves the wanted set for a single tick was aborted
+   * immediately and re-fetched from scratch — the budget-boundary thrash. Kept
+   * separate from `_deferredEvictAt` so the resident eviction walk never sees a
+   * non-resident id.
+   */
+  private readonly _inFlightGraceAt = new Map<string, number>();
   private readonly _evictDeferMs: number;
   private readonly _memoryPressureRatio: number;
   /** Resolved thresholds handed to the pure eviction policy each pressure run. */
@@ -1030,7 +1039,7 @@ export class StreamingScheduler {
     // level below is arriving ranks first, which is the case the split existed
     // to approximate.
     if (
-      store.residentPointCount >
+      store.residentPointCount + store.decodedPendingPointCount >
       this._pointBudget * this._memoryPressureRatio
     ) {
       // The one input that costs a walk of the wanted set. Built here rather
@@ -1075,12 +1084,23 @@ export class StreamingScheduler {
       }
     }
 
-    // Cancel in-flight decodes for nodes that left the working set — but
-    // keep them in-flight if they are still within the hysteresis window
-    // (a quick camera flick can want them back before they finish).
+    // Cancel in-flight decodes for nodes that left the working set — but keep
+    // them fetching through the SAME hysteresis window residents get (a quick
+    // camera flick, or one tick of score noise at the budget boundary, can want
+    // them back before they finish). Aborting on the first unwanted tick threw
+    // the in-progress chunk away and re-fetched from scratch next tick — the
+    // boundary thrash. Grant a grace window, and only abort once it lapses.
     for (const [id, controller] of this._inFlight) {
-      if (!wanted.has(id) && !this._deferredEvictAt.has(id)) {
+      if (wanted.has(id)) {
+        this._inFlightGraceAt.delete(id);
+        continue;
+      }
+      const deadline = this._inFlightGraceAt.get(id);
+      if (deadline === undefined) {
+        this._inFlightGraceAt.set(id, nowTs + this._evictDeferMs);
+      } else if (nowTs >= deadline) {
         controller.abort();
+        this._inFlightGraceAt.delete(id);
       }
     }
 
@@ -1284,7 +1304,7 @@ export class StreamingScheduler {
       // yet — only then can a single oversized node truly block forward
       // progress.
       const projected =
-        store.residentPointCount + inFlightEstimate + node.record.pointCount;
+        store.residentPointCount + store.decodedPendingPointCount + inFlightEstimate + node.record.pointCount;
       if (projected > pressureCap && store.residentPointCount > 0) {
         // Put it back at the head of the queue — same state, same priority.
         this._queue.unshift(node);
@@ -1310,6 +1330,7 @@ export class StreamingScheduler {
       })
       .then((decoded) => {
         this._inFlight.delete(id);
+        this._inFlightGraceAt.delete(id);
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {
@@ -1328,6 +1349,7 @@ export class StreamingScheduler {
       })
       .catch((err: unknown) => {
         this._inFlight.delete(id);
+        this._inFlightGraceAt.delete(id);
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {
