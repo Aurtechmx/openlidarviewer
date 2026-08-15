@@ -135,6 +135,13 @@ test.describe('backend equivalence: the GPU leg @gpu', () => {
       }
     });
 
+    // No adapter → there is no GPU leg to record, and the render-dependent steps
+    // below cannot run on an adapter-less runner (headless CI): the context never
+    // initialises, the Analyse panel never renders, and the toBeVisible wait would
+    // TIME OUT and fail this advisory spec. Skip cleanly so the advisory job stays
+    // green; the real GPU leg is recorded headed, where an adapter exists.
+    test.skip(adapter === null, 'No WebGPU adapter on this runner — no GPU leg to record.');
+
     // The engine module sits behind the terrain-analysis dynamic import, which
     // nothing pulls in until the analysis is actually started. Opening a scan
     // mounts the Analyse panel and no more, so the run has to be triggered for

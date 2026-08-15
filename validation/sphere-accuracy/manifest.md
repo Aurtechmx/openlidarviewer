@@ -42,3 +42,8 @@ curvature, not radius alone), and the survey-grade TLS cloud (345M pts, 4.5 GB) 
 the sphere surface is dense enough to separate a ball from a trunk. That is a real
 detection-method effort on a multi-GB cloud, staged as its own task. Until then Layer B
 is characterised but not graded — no E-level claim is made from a confounded fit.
+
+## Source integrity
+
+- `spheres-epsg5514.csv` md5: `a32ec806f135ebf205af8fd28f3b0414` (12 Koule spheres + 1 control point, extracted from the dataset GroundTruth).
+- The raw point clouds and GroundTruth workbook are the Zenodo deposit (DOI above); their integrity is the deposit's own md5 manifest, not reproduced here.
