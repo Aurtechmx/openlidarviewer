@@ -4,7 +4,11 @@ import { writeGeoTiff, verticalUnitGeoKeyCode } from '../src/terrain/export/demG
 import { buildDemPackage, parseEpsg } from '../src/terrain/export/demPackage';
 import { buildDtmGrid } from '../src/terrain/ground/cellConfidence';
 import { sha256Hex } from '../src/terrain/export/sha256';
-import { buildContourDeliverableFromResult, deliverableGridLabel } from '../src/terrain/export/contourDeliverableBuild';
+import {
+  buildContourDeliverableFromResult,
+  buildContourDeliverableFromResultAsync,
+  deliverableGridLabel,
+} from '../src/terrain/export/contourDeliverableBuild';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
@@ -310,6 +314,36 @@ describe('buildDemPackage', () => {
     // The provenance JSON parses and carries the software identity.
     const prov = JSON.parse(new TextDecoder().decode(extractEntry(zip, 'site_Provenance.json')!));
     expect(prov.software).toBe('OpenLiDARViewer');
+  });
+
+  it('the async builder produces a complete deliverable from a real analysed result', async () => {
+    // buildContourDeliverableFromResultAsync is the streamed path the Contour
+    // Studio UI uses; unlike the DEM-only fixture it reads the full ValidationReport
+    // and renders the studio PDF, so drive it with a REAL analysed result from the
+    // pipeline. The bundle must carry the DTM, provenance, README and a verifying
+    // SHA256SUMS, exactly like the sync path.
+    const core = computeTerrainCore(hillPoints(), { cellSizeM: 1, crs: 'EPSG:32610' });
+    const result = contoursFromCore(core, { intervalM: 1, shapeStyle: 'generalized', generalizeToleranceCells: 1.0 });
+    const zip = await buildContourDeliverableFromResultAsync(result, {
+      decision: { status: 'validated', badge: 'Internal validation', caveats: [] },
+      basename: 'site',
+      worldOrigin: { x: 600000, y: 4000000 },
+      isGeographic: false,
+      softwareVersion: '0.5.9',
+      metricVersion: 'v0.4.1',
+      generatedAt: new Date('2026-07-12T00:00:00.000Z'),
+      exportPermit: null,
+    });
+    expect(extractEntry(zip, 'site_DTM.tif')).not.toBeNull();
+    expect(extractEntry(zip, 'site_Provenance.json')).not.toBeNull();
+    const sums = extractEntry(zip, 'SHA256SUMS');
+    expect(sums).not.toBeNull();
+    for (const line of new TextDecoder().decode(sums!).trimEnd().split('\n')) {
+      const [hex, name] = line.split('  ');
+      const bytes = extractEntry(zip, name);
+      expect(bytes, `async deliverable manifest lists missing ${name}`).not.toBeNull();
+      expect(sha256Hex(bytes!)).toBe(hex);
+    }
   });
 
   it('never copies the horizontal unit onto the vertical — an undeclared elevation unit reads "unknown"', () => {
