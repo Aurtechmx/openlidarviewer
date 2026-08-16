@@ -35,7 +35,7 @@ import {
   signalsForStaticCloud,
   signalsForStreamingCloud,
 } from '../diagnostics/provenanceSignals';
-import { classificationCoverage } from './class/deriveClassification';
+import { classificationCoverage } from './class/classificationCoverage';
 
 /**
  * The per-cloud slice the adapter reads — a structural subset of the Viewer's

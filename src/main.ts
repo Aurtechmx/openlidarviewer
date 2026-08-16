@@ -95,10 +95,8 @@ import { countClasses } from './render/class/classHistogram';
 import { toClassBuffer } from './render/class/classBuffer';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
 import { classifierCues } from './render/class/classifierCues';
-import {
-  classificationCoverage,
-  type DeriveClassificationOptions,
-} from './render/class/deriveClassification';
+import { classificationCoverage } from './render/class/classificationCoverage';
+import type { DeriveClassificationOptions } from './render/class/deriveClassification';
 import { footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
