@@ -5450,7 +5450,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
   const rec = recommendCameraPreset({
     hasRgb: cloud.colors !== undefined,
     hasClassification: cloud.classification !== undefined,
-    flatness: flatnessFromBounds(b.min, b.max),
+    flatness: flatnessFromBounds(b.min, b.max, c.upAxis),
   });
   recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset));
 }
