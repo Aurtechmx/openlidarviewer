@@ -41,6 +41,7 @@ interface HostState {
   elevationUnitLabel: string | null;
   worldUpIsZ?: boolean;
   residentIntensityBuffers?: readonly ArrayLike<number>[];
+  projectSharedElevationRange?: { min: number; max: number } | null;
 }
 
 function host(state: HostState): ColorLegendHost {
@@ -49,6 +50,7 @@ function host(state: HostState): ColorLegendHost {
     firstStaticCloud: () => state.cloud,
     streaming: () => state.streaming,
     heightPercentileTrim: () => state.heightPercentileTrim,
+    projectSharedElevationRange: () => state.projectSharedElevationRange ?? null,
     elevationUnitLabel: () => state.elevationUnitLabel,
     worldUpIsZ: () => state.worldUpIsZ ?? true,
     residentIntensityBuffers: () => state.residentIntensityBuffers ?? [],
@@ -136,6 +138,24 @@ describe('colorLegend.activeColorbar — static path', () => {
     expect(bar!.spec.palette).toBe('turbo');
     // trim 0 ⇒ true extremes, no window note.
     expect(bar!.note).toBeUndefined();
+  });
+
+  it('elevation reports the project-shared world window when it is set', () => {
+    const state = staticCloud('elevation');
+    // Shared world range differs from this one cloud's 1000..1030 extent, so
+    // the legend must describe the project window, not the per-cloud one.
+    state.projectSharedElevationRange = { min: 990, max: 1050 };
+    const bar = activeColorbar(state);
+    expect(bar!.spec.min).toBe(990);
+    expect(bar!.spec.max).toBe(1050);
+  });
+
+  it('elevation ignores a null shared window (falls back to per-cloud world range)', () => {
+    const state = staticCloud('elevation');
+    state.projectSharedElevationRange = null;
+    const bar = activeColorbar(state);
+    expect(bar!.spec.min).toBe(1000);
+    expect(bar!.spec.max).toBe(1030);
   });
 
   it('elevation discloses the p5–p95 window when the trim slider is active', () => {

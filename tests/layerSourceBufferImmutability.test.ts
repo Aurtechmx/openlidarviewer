@@ -63,12 +63,16 @@ function mountHarness(clouds: Record<string, PointCloud>, multiLayerMount: boole
     setCloudMounted: (id: string, m: boolean) => {
       mounted.set(id, m);
     },
+    refreshProjectSharedElevation: () => {},
+    projectSharedElevationRange: () => null,
+    projectSharedElevation: false,
   } as unknown as Viewer;
   const inspector = {
     setLayerSolo: () => {},
     setLayerCrsFlags: () => {},
     setLayerHealth: () => {},
     setLayerCompareAvailable: () => {},
+    setProjectSharedElevationAvailable: () => {},
   } as unknown as Inspector;
   const service = createLayerService({
     getViewer: () => viewer,

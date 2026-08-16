@@ -1246,6 +1246,10 @@ const inspector = new Inspector({
     viewer.setHeightPercentileTrim(trim);
     syncInspectorVisuals();
   },
+  onProjectSharedElevation: (on) => {
+    viewer.setProjectSharedElevation(on);
+    syncProjectElevationScale();
+  },
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
     activeElevFilter = range;
@@ -4518,6 +4522,18 @@ function syncColorModeForActive(): void {
   inspector.setColorModes(availableModes(cloud), currentColorMode);
 }
 
+/**
+ * Surface the project-shared elevation toggle only when ≥2 layers share the
+ * project frame, and mirror its current on/off state. Called after the cloud
+ * set changes so opening or closing a second scan updates the control.
+ */
+function syncProjectElevationScale(): void {
+  inspector.setProjectSharedElevationAvailable(
+    viewer.projectSharedElevationRange() != null,
+    viewer.projectSharedElevation,
+  );
+}
+
 function syncInspectorRendering(): void {
   inspector.syncRendering({
     pointSize: viewer.pointSize,
@@ -5724,6 +5740,7 @@ function removeCloud(id: string): void {
     layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent());
     inspector.setIntensityExtent(viewer.intensityExtent());
+    syncProjectElevationScale();
   }
 }
 
