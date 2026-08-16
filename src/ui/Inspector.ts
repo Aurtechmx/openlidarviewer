@@ -667,7 +667,7 @@ export class Inspector {
    */
   private _projectScaleAvailable = false;
   private readonly _projectScaleRow = el('label', {
-    className: 'olv-height-trim-row olv-hidden',
+    className: 'olv-project-scale-row olv-hidden',
     title:
       'Colour every layer that shares the project frame against one shared ' +
       'height window, so the same world height reads the same colour across ' +
