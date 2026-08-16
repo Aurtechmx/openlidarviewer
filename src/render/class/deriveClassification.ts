@@ -47,6 +47,8 @@
 
 import { canonicalize, sha256 } from '../measure/auditLog';
 import type { ProcessingOpInput } from '../../science/processingManifest';
+import { SpatialHash3d } from '../../classification/spatialHash3d';
+import { structureForNeighborhood, DEFAULT_VERTICALITY_CUE } from '../../classification/verticalityCue';
 
 /** ASPRS codes this heuristic can emit. */
 export const DERIVED_GROUND = 2;
@@ -56,30 +58,10 @@ export const DERIVED_HIGH_VEG = 5;
 export const DERIVED_BUILDING = 6;
 export const DERIVED_UNCLASSIFIED = 1;
 
-/**
- * How "classifiable" an existing classification is: how many points are still
- * unclassified (ASPRS 0 Created / 1 Unclassified) vs already carry a producer
- * class. Drives the Classify gate — a cloud with NO unclassified points has
- * nothing to derive; an all-unclassified cloud (or no classification at all) is
- * fully derivable; a partial one is a "classify the gaps" candidate. Pure.
- */
-export function classificationCoverage(
-  classification: ArrayLike<number> | null | undefined,
-  count: number,
-): { readonly unclassified: number; readonly producer: number } {
-  if (!classification) return { unclassified: count, producer: 0 };
-  const n = Math.min(count, classification.length);
-  let unclassified = 0;
-  let producer = 0;
-  for (let i = 0; i < n; i++) {
-    const c = classification[i];
-    if (c === 0 || c === 1) unclassified++;
-    else producer++;
-  }
-  // Points past the (shorter) classification array are unclassified by default.
-  unclassified += Math.max(0, count - n);
-  return { unclassified, producer };
-}
+// The Classify gate's coverage read lives in its own light module so the eager
+// shell can import it without pulling this classifier core (and its descriptor
+// deps) into the index bundle. Re-exported here for existing importers.
+export { classificationCoverage } from './classificationCoverage';
 
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
@@ -265,7 +247,7 @@ export const CLASSIFIER_METHOD_ID = 'olv.class.derived-heuristic';
  * `tests/classifierFreeze.test.ts` fails when the two disagree or when a
  * default moves without a bump.
  */
-export const CLASSIFIER_VERSION = 2;
+export const CLASSIFIER_VERSION = 3;
 
 /** The numeric parameters a run is fully determined by, defaults included. */
 export interface ClassifierParams {
@@ -282,6 +264,23 @@ export interface ClassifierParams {
   readonly buildingMinHagM: number;
   readonly maxGridDim: number;
   readonly despikeNeighbourFactor: number;
+  /**
+   * v3 structural rescue: the neighbourhood radius (linear units) the eigen
+   * descriptors are computed over when a tall point the roughness rule sent to
+   * vegetation is re-examined. A planar-VERTICAL neighbourhood is a wall face,
+   * not foliage — the frozen corpus's walls-roofs weakness. `0` disables the
+   * rescue and restores v2 behaviour. The verticality thresholds themselves are
+   * `DEFAULT_VERTICALITY_CUE` (frozen in verticalityCue.ts).
+   */
+  readonly structuralNeighborRadiusM: number;
+  /**
+   * v3 structural rescue: minimum verticality (0..1, where 1 is a vertical
+   * surface normal) for a planar neighbourhood to be reclassified as a wall.
+   * Stricter than `DEFAULT_VERTICALITY_CUE.verticalityHigh` so a steep NATURAL
+   * slope (tilted-planar, moderately vertical) is not mistaken for a building
+   * face. Default 0.85.
+   */
+  readonly structuralVerticalityMin: number;
 }
 
 /**
@@ -310,7 +309,9 @@ export interface ClassifierPreset {
  * preset table holds for {@link CLASSIFIER_VERSION}, so the published record and
  * the running defaults are the same object and cannot drift.
  */
-const CURRENT_PARAMS = Object.freeze({
+// v2's frozen numeric params (13 fields). Held verbatim by preset 2 so its
+// digest never moves; v3 extends this rather than mutating it.
+const V2_PARAMS = Object.freeze({
   vegGreennessMin: 0.06,
   minGroundSupport: 0.5,
   buildingMinSupport: 0.66,
@@ -324,9 +325,14 @@ const CURRENT_PARAMS = Object.freeze({
   buildingMinHagM: 2.5,
   maxGridDim: 768,
   despikeNeighbourFactor: 1,
-  // `satisfies` rather than an annotation: the check that every parameter is
-  // present and numeric still runs, and the inferred literal type keeps the
-  // implicit index signature the preset table needs.
+});
+
+// v3 = v2 + the structural-verticality rescue's one spatial parameter. The
+// `satisfies` check still runs, so a missing/typo'd parameter is a compile error.
+const CURRENT_PARAMS = Object.freeze({
+  ...V2_PARAMS,
+  structuralNeighborRadiusM: 1.0,
+  structuralVerticalityMin: 0.85,
 }) satisfies ClassifierParams;
 
 /**
@@ -366,8 +372,20 @@ export const CLASSIFIER_PRESETS: Readonly<Record<number, ClassifierPreset>> = Ob
   2: Object.freeze({
     id: 'derived-heuristic-v2',
     version: 2,
-    params: CURRENT_PARAMS,
+    params: V2_PARAMS,
     digest: 'sha256:a4270700486436d01a1c5a2d0a8987faca2a92d6f3a0059e542bd3f256c6e35f',
+  }),
+  // v3 adds the structural-verticality rescue: a tall point the per-cell
+  // roughness rule sends to vegetation is re-examined with eigen descriptors over
+  // a `structuralNeighborRadiusM` neighbourhood, and a planar-VERTICAL one is
+  // reclassified as a building (a wall face). Targets the frozen corpus's
+  // walls-roofs weakness (macro-F1 ≈ 0.33); no other rule or default moved. See
+  // docs/validation/classifier-corpus-eval.md for the measured before/after.
+  3: Object.freeze({
+    id: 'derived-heuristic-v3',
+    version: 3,
+    params: CURRENT_PARAMS,
+    digest: 'sha256:5e83f48e13fafe8fd30771fa75cc370102ee75d78ad33de446bfbfd83fcb21b3',
   }),
 });
 
@@ -401,6 +419,9 @@ const DEFAULTS: ClassifierParams = CURRENT_PARAMS;
 const CUE_RGB = 'rgb-greenness';
 const CUE_RETURNS = 'multi-return';
 const CUE_PRESERVED = 'producer-classes-preserved';
+const CUE_STRUCTURAL = 'structural-verticality';
+/** Minimum neighbourhood size for the v3 structural wall rescue (see isWall). */
+const STRUCT_MIN_NEIGHBORS = 12;
 
 /**
  * The identity of the classifier that produced a result: which method at which
@@ -922,6 +943,33 @@ export function deriveClassification(
   );
   const vegByReturn = (i: number): boolean => retCount![i] > 1;
 
+  // v3 structural-verticality rescue. A tall point the per-cell roughness rule
+  // sends to vegetation is re-examined with eigen descriptors over a
+  // `structuralNeighborRadiusM` neighbourhood: a planar-VERTICAL one is a wall
+  // face (a building), not foliage — the frozen corpus's walls-roofs weakness. The
+  // 3D hash is built lazily on the first candidate, so a scan with none pays
+  // nothing; `structuralNeighborRadiusM = 0` restores v2 behaviour exactly.
+  const structRadius = o.structuralNeighborRadiusM;
+  let structHash: SpatialHash3d | null = null;
+  let usedStructural = false;
+  const isWall = (x: number, y: number, z: number): boolean => {
+    if (!(structRadius > 0) || count < 3) return false;
+    if (!structHash) structHash = new SpatialHash3d(positions, structRadius);
+    const ids = structHash.queryRadius(x, y, z, structRadius);
+    // A real wall face carries many points on one planar surface; a stray
+    // vertical patch on natural terrain has few. Require a substantial
+    // neighbourhood before trusting the descriptor (cf. MIN_PLANAR_POINTS).
+    if (ids.length < STRUCT_MIN_NEIGHBORS) return false;
+    // Stricter verticality than the default cue so a steep natural slope is not
+    // read as a wall (see structuralVerticalityMin).
+    const cueParams = { ...DEFAULT_VERTICALITY_CUE, verticalityHigh: o.structuralVerticalityMin };
+    if (structureForNeighborhood(positions, ids, cueParams) === 'planar-vertical') {
+      usedStructural = true;
+      return true;
+    }
+    return false;
+  };
+
   // 6. Rule classification + per-point ground support.
   phase('Classifying');
   const codes = new Uint8Array(count);
@@ -973,6 +1021,18 @@ export function deriveClassification(
             code = DERIVED_UNCLASSIFIED;
             voidDowngraded++;
           }
+        } else if (
+          // v3 structural rescue: not planar by roughness (a wall's per-cell HAG
+          // is rough), but tall, well-supported, not-green, not-multi-return — and
+          // its eigen neighbourhood is a planar VERTICAL face. That is a wall, not
+          // vegetation. Same firm-ground gate a roughness building demands.
+          h >= o.buildingMinHagM &&
+          !green &&
+          !vegReturn &&
+          s >= o.buildingMinSupport &&
+          isWall(x, y, positions[i * 3 + 2])
+        ) {
+          code = DERIVED_BUILDING;
         } else if (h < o.lowVegBandM) {
           code = DERIVED_LOW_VEG;
         } else if (h < o.medVegBandM) {
@@ -1066,12 +1126,14 @@ export function deriveClassification(
   const modeNotes: string[] = [];
   if (useGreen) modeNotes.push('RGB vegetation index');
   if (useReturns) modeNotes.push('multi-return vegetation cue');
+  if (usedStructural) modeNotes.push('structural-verticality wall rescue');
   if (preserved) modeNotes.push('producer classes preserved (gaps only)');
   const modeSuffix = modeNotes.length > 0 ? ` (${modeNotes.join('; ')})` : '';
 
   const cues: string[] = [];
   if (useGreen) cues.push(CUE_RGB);
   if (useReturns) cues.push(CUE_RETURNS);
+  if (usedStructural) cues.push(CUE_STRUCTURAL);
   if (preserved) cues.push(CUE_PRESERVED);
 
   const classifier: ClassifierProvenance = {

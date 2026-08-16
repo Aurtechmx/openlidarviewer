@@ -66,17 +66,19 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.class.derived-heuristic': {
     id: 'olv.class.derived-heuristic',
-    version: 2,
+    version: 3,
     name: 'Derived point classification (heuristic)',
     summary:
       'Unsupervised ASPRS-aligned point classification for clouds with no producer ' +
       'classification: grid-minimum surface, progressive morphological opening, ' +
       'height above ground, then per-cell roughness with optional RGB-greenness and ' +
-      'multi-return cues. Coarse and heuristic, not a producer classification.',
+      'multi-return cues. v3 adds a structural-verticality rescue: a tall vegetation ' +
+      'candidate whose eigen neighbourhood is a planar vertical face is reclassified ' +
+      'as a building wall. Coarse and heuristic, not a producer classification.',
     citation:
       'Zhang et al. (2003), doi:10.1109/TGRS.2003.810682 (progressive morphological ' +
-      'filter); Amolins et al. (2008) roughness separation; internal composition of ' +
-      'the cues.',
+      'filter); Amolins et al. (2008) roughness separation; Weinmann et al. (2015) ' +
+      'eigenvalue shape features; internal composition of the cues.',
     category: 'classification',
   },
   'olv.terrain.slope-horn': {
