@@ -5,15 +5,15 @@ Corpus: `src/validation/classifierCorpus.ts` v1, digest
 `sha256:2a0c0165…73b1db`.
 Record: `validation/classifier-corpus/results-classifier-corpus.json`.
 
-**v3 — structural-verticality wall rescue.** A tall point the per-cell roughness
-rule sends to vegetation is re-examined with eigen descriptors
+v3 adds a structural-verticality wall rescue. A tall point the per-cell
+roughness rule sends to vegetation is re-examined with eigen descriptors
 (`classification/geometryDescriptors` + `verticalityCue`) over a 1.0-unit
-neighbourhood: a planar surface with verticality ≥ 0.85 and ≥ 12 neighbours is a
-wall face, reclassified as building. It moved exactly one scene — `walls-roofs`
-macro-F1 **0.325 → 0.398** (building F1 0.423 → 0.638) — and no other: the
-verticality and neighbour-count gates keep it from firing on natural steep or
-rolling terrain, which stay byte-identical to v2. The tables below are the v3
-record; the per-scene figures for every non-wall scene are unchanged from v2.
+neighbourhood. A planar surface with verticality at or above 0.85 and 12 or more
+neighbours is a wall face, so it is reclassified as building. It moved one scene
+and no other. `walls-roofs` macro-F1 rose from 0.325 to 0.398 (building F1 0.423
+to 0.638); the verticality and neighbour-count gates keep the rescue from firing
+on natural steep or rolling terrain, which stay byte-identical to v2. The tables
+below are the v3 record. Every non-wall scene reads the same as v2.
 
 ## What this evidence is
 
@@ -284,10 +284,10 @@ by-product and not a fix for mechanism 2.
   Height above ground is clamped at zero, so a return below the surface lands in
   the ground band, and the classifier has no low-noise class to put it in. v2
   stops a blunder from dragging the surface; it does not label the blunder.
-- **Walls.** `walls-roofs` was 0.325 macro-F1 in v2 — wall returns read as rough
+- **Walls.** `walls-roofs` was 0.325 macro-F1 in v2. Wall returns read as rough
   and split across the vegetation bands. v3's structural-verticality rescue
-  reclassifies planar-vertical neighbourhoods as building walls, lifting it to
-  0.398 (building F1 0.423 → 0.638).
+  reclassifies planar-vertical neighbourhoods as building walls, which lifts it
+  to 0.398 (building F1 0.423 to 0.638).
 - **One blunder per cell.** The rejection is a single pass and falls back to the
   second-lowest return, so a cell holding two blunders stays low.
 
