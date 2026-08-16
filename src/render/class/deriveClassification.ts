@@ -98,6 +98,11 @@ export interface DeriveClassificationOptions {
    * smooth low mounds aren't promoted to structures.
    */
   readonly buildingMinHagM?: number;
+  /**
+   * v3 wall rescue: neighbourhood radius (source units) for the eigen-descriptor
+   * re-examination of a tall vegetation-classified point. See ClassifierParams.
+   */
+  readonly structuralNeighborRadiusM?: number;
   /** Hard cap on either grid dimension; cellSize grows to respect it. */
   readonly maxGridDim?: number;
   /**
@@ -195,6 +200,14 @@ export interface DeriveClassificationOptions {
    * gets vegetation / building filled in around it. Absent ⇒ derive every point.
    */
   readonly existingClassification?: Uint8Array;
+  /**
+   * Metres per source horizontal unit. Only the AUTO cell-size path uses it: the
+   * fallback grid clamp (0.5..5 m) is physical, so on a foot cloud it becomes
+   * 0.5..5 m worth of feet rather than 0.5..5 ft, keeping the derived grid the
+   * same physical size a metre cloud gets. An explicit `cellSizeM` bypasses this.
+   * Default 1 (metres, unchanged).
+   */
+  readonly linearUnitToMetres?: number;
 }
 
 /** Per-class counts plus the run's honest provenance. */
@@ -478,6 +491,51 @@ export function classifierProcessingOp(result: DeriveClassificationResult): Proc
   };
 }
 
+/** The source-unit frame a cloud's coordinates live in. */
+export interface ClassifierFrame {
+  /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
+  readonly linearUnitToMetres?: number | null;
+  /** Metres per source vertical unit. Default = the horizontal factor. */
+  readonly verticalUnitToMetres?: number | null;
+}
+
+/**
+ * Restate the classifier's physical (metre) parameters in the cloud's SOURCE
+ * units, so the same physical terrain classifies the same whether its
+ * coordinates arrive in metres, feet, or a mix. Horizontal lengths
+ * (`maxObjectSizeM`, `structuralNeighborRadiusM`) divide by the horizontal
+ * factor; vertical lengths (`elevThresholdM`, the HAG bands, roughness,
+ * `buildingMinHagM`) divide by the vertical factor; `slope` is a rise/run ratio,
+ * so it scales by their quotient (1 when both axes share a unit). Dimensionless
+ * parameters (support fractions, greenness, grid-cell cap, despike multiple)
+ * pass through untouched. `cellSizeM` is NOT here: the classifier derives it
+ * from the point spacing, already in source units.
+ *
+ * The production classify path MUST apply this before {@link deriveClassification};
+ * the corpus does the per-scene equivalent (`scaleLengthParams`). A frame of all
+ * 1s returns the metre defaults unchanged.
+ */
+export function classifierParamsForFrame(frame: ClassifierFrame): Partial<DeriveClassificationOptions> {
+  const lin =
+    frame.linearUnitToMetres && frame.linearUnitToMetres > 0 ? frame.linearUnitToMetres : 1;
+  const vert =
+    frame.verticalUnitToMetres && frame.verticalUnitToMetres > 0 ? frame.verticalUnitToMetres : lin;
+  const p = CURRENT_PARAMS;
+  return {
+    // Carried so the auto cell-size clamp stays physical (see chooseCellSize).
+    linearUnitToMetres: lin,
+    maxObjectSizeM: p.maxObjectSizeM / lin,
+    structuralNeighborRadiusM: p.structuralNeighborRadiusM / lin,
+    elevThresholdM: p.elevThresholdM / vert,
+    groundBandM: p.groundBandM / vert,
+    lowVegBandM: p.lowVegBandM / vert,
+    medVegBandM: p.medVegBandM / vert,
+    buildingRoughnessMaxM: p.buildingRoughnessMaxM / vert,
+    buildingMinHagM: p.buildingMinHagM / vert,
+    slope: p.slope * (lin / vert),
+  };
+}
+
 /** Clamp to [0, 1]. */
 const clamp01 = (v: number): number => {
   if (v < 0) return 0;
@@ -517,7 +575,11 @@ function chooseCellSize(b: Bounds, count: number, opt: DeriveClassificationOptio
   let cell = opt.cellSizeM;
   if (cell === undefined || !Number.isFinite(cell) || cell <= 0) {
     const spacing = area > 0 && count > 0 ? Math.sqrt(area / count) : 1;
-    cell = Math.min(5, Math.max(0.5, spacing * 2.5));
+    // The 0.5..5 m clamp is physical, so restate it in source units — otherwise a
+    // foot cloud clamps at 0.5..5 ft and derives a different-size grid than the
+    // equivalent metre cloud, changing the classification.
+    const lin = opt.linearUnitToMetres && opt.linearUnitToMetres > 0 ? opt.linearUnitToMetres : 1;
+    cell = Math.min(5 / lin, Math.max(0.5 / lin, spacing * 2.5));
   }
   // Grow the cell until both grid dimensions fit the cap.
   const fits = (c: number): boolean =>
