@@ -63,6 +63,16 @@ describe('classify-gaps', () => {
   it('blocked with no points', () => {
     expect(verdict([scan({ pointCount: 0 })], 'classify-gaps').readiness).toBe('blocked');
   });
+  it('review when the linear unit is unknown (physical thresholds cannot be normalized)', () => {
+    const v = verdict([scan({ crs: crs({ linearUnit: 'unknown' }) })], 'classify-gaps');
+    expect(v.readiness).toBe('review');
+    expect(v.reasonCode).toBe('UNIT_UNKNOWN');
+  });
+  it('review when the CRS is missing entirely (fail closed, not assumed metre)', () => {
+    const v = verdict([scan({ crs: null })], 'classify-gaps');
+    expect(v.readiness).toBe('review');
+    expect(v.reasonCode).toBe('UNIT_UNKNOWN');
+  });
 });
 
 describe('dtm — fail closed on unit and coverage', () => {
