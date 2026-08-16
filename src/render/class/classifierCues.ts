@@ -10,7 +10,7 @@
  */
 
 import type { DeriveClassificationOptions } from './deriveClassification';
-import { classifierParamsForFrame } from './deriveClassification';
+import { classifierParamsForFrame } from './classifierFrame';
 import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
 
 /** The cloud attributes the classifier can optionally consume. */

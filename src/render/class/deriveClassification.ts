@@ -62,6 +62,9 @@ export const DERIVED_UNCLASSIFIED = 1;
 // shell can import it without pulling this classifier core (and its descriptor
 // deps) into the index bundle. Re-exported here for existing importers.
 export { classificationCoverage } from './classificationCoverage';
+import { V2_PARAMS, CURRENT_PARAMS } from './classifierFrame';
+export { classifierParamsForFrame } from './classifierFrame';
+export type { ClassifierFrame } from './classifierFrame';
 
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
@@ -322,32 +325,6 @@ export interface ClassifierPreset {
  * preset table holds for {@link CLASSIFIER_VERSION}, so the published record and
  * the running defaults are the same object and cannot drift.
  */
-// v2's frozen numeric params (13 fields). Held verbatim by preset 2 so its
-// digest never moves; v3 extends this rather than mutating it.
-const V2_PARAMS = Object.freeze({
-  vegGreennessMin: 0.06,
-  minGroundSupport: 0.5,
-  buildingMinSupport: 0.66,
-  maxObjectSizeM: 20,
-  elevThresholdM: 0.3,
-  slope: 0.15,
-  groundBandM: 0.5,
-  lowVegBandM: 2,
-  medVegBandM: 5,
-  buildingRoughnessMaxM: 1.5,
-  buildingMinHagM: 2.5,
-  maxGridDim: 768,
-  despikeNeighbourFactor: 1,
-});
-
-// v3 = v2 + the structural-verticality rescue's one spatial parameter. The
-// `satisfies` check still runs, so a missing/typo'd parameter is a compile error.
-const CURRENT_PARAMS = Object.freeze({
-  ...V2_PARAMS,
-  structuralNeighborRadiusM: 1.0,
-  structuralVerticalityMin: 0.85,
-}) satisfies ClassifierParams;
-
 /**
  * Every published preset, by version. Entries are APPEND-ONLY: an existing one
  * is a record of what shipped, and editing it in place is the move the freeze
@@ -491,50 +468,6 @@ export function classifierProcessingOp(result: DeriveClassificationResult): Proc
   };
 }
 
-/** The source-unit frame a cloud's coordinates live in. */
-export interface ClassifierFrame {
-  /** Metres per source horizontal unit (~0.3048 for feet). Default 1. */
-  readonly linearUnitToMetres?: number | null;
-  /** Metres per source vertical unit. Default = the horizontal factor. */
-  readonly verticalUnitToMetres?: number | null;
-}
-
-/**
- * Restate the classifier's physical (metre) parameters in the cloud's SOURCE
- * units, so the same physical terrain classifies the same whether its
- * coordinates arrive in metres, feet, or a mix. Horizontal lengths
- * (`maxObjectSizeM`, `structuralNeighborRadiusM`) divide by the horizontal
- * factor; vertical lengths (`elevThresholdM`, the HAG bands, roughness,
- * `buildingMinHagM`) divide by the vertical factor; `slope` is a rise/run ratio,
- * so it scales by their quotient (1 when both axes share a unit). Dimensionless
- * parameters (support fractions, greenness, grid-cell cap, despike multiple)
- * pass through untouched. `cellSizeM` is NOT here: the classifier derives it
- * from the point spacing, already in source units.
- *
- * The production classify path MUST apply this before {@link deriveClassification};
- * the corpus does the per-scene equivalent (`scaleLengthParams`). A frame of all
- * 1s returns the metre defaults unchanged.
- */
-export function classifierParamsForFrame(frame: ClassifierFrame): Partial<DeriveClassificationOptions> {
-  const lin =
-    frame.linearUnitToMetres && frame.linearUnitToMetres > 0 ? frame.linearUnitToMetres : 1;
-  const vert =
-    frame.verticalUnitToMetres && frame.verticalUnitToMetres > 0 ? frame.verticalUnitToMetres : lin;
-  const p = CURRENT_PARAMS;
-  return {
-    // Carried so the auto cell-size clamp stays physical (see chooseCellSize).
-    linearUnitToMetres: lin,
-    maxObjectSizeM: p.maxObjectSizeM / lin,
-    structuralNeighborRadiusM: p.structuralNeighborRadiusM / lin,
-    elevThresholdM: p.elevThresholdM / vert,
-    groundBandM: p.groundBandM / vert,
-    lowVegBandM: p.lowVegBandM / vert,
-    medVegBandM: p.medVegBandM / vert,
-    buildingRoughnessMaxM: p.buildingRoughnessMaxM / vert,
-    buildingMinHagM: p.buildingMinHagM / vert,
-    slope: p.slope * (lin / vert),
-  };
-}
 
 /** Clamp to [0, 1]. */
 const clamp01 = (v: number): number => {
