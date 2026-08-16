@@ -62,6 +62,9 @@ export const DERIVED_UNCLASSIFIED = 1;
 // shell can import it without pulling this classifier core (and its descriptor
 // deps) into the index bundle. Re-exported here for existing importers.
 export { classificationCoverage } from './classificationCoverage';
+import { V2_PARAMS, CURRENT_PARAMS } from './classifierFrame';
+export { classifierParamsForFrame } from './classifierFrame';
+export type { ClassifierFrame } from './classifierFrame';
 
 /** Tunable parameters; every field has a literature-anchored default. */
 export interface DeriveClassificationOptions {
@@ -98,6 +101,11 @@ export interface DeriveClassificationOptions {
    * smooth low mounds aren't promoted to structures.
    */
   readonly buildingMinHagM?: number;
+  /**
+   * v3 wall rescue: neighbourhood radius (source units) for the eigen-descriptor
+   * re-examination of a tall vegetation-classified point. See ClassifierParams.
+   */
+  readonly structuralNeighborRadiusM?: number;
   /** Hard cap on either grid dimension; cellSize grows to respect it. */
   readonly maxGridDim?: number;
   /**
@@ -195,6 +203,14 @@ export interface DeriveClassificationOptions {
    * gets vegetation / building filled in around it. Absent ⇒ derive every point.
    */
   readonly existingClassification?: Uint8Array;
+  /**
+   * Metres per source horizontal unit. Only the AUTO cell-size path uses it: the
+   * fallback grid clamp (0.5..5 m) is physical, so on a foot cloud it becomes
+   * 0.5..5 m worth of feet rather than 0.5..5 ft, keeping the derived grid the
+   * same physical size a metre cloud gets. An explicit `cellSizeM` bypasses this.
+   * Default 1 (metres, unchanged).
+   */
+  readonly linearUnitToMetres?: number;
 }
 
 /** Per-class counts plus the run's honest provenance. */
@@ -309,32 +325,6 @@ export interface ClassifierPreset {
  * preset table holds for {@link CLASSIFIER_VERSION}, so the published record and
  * the running defaults are the same object and cannot drift.
  */
-// v2's frozen numeric params (13 fields). Held verbatim by preset 2 so its
-// digest never moves; v3 extends this rather than mutating it.
-const V2_PARAMS = Object.freeze({
-  vegGreennessMin: 0.06,
-  minGroundSupport: 0.5,
-  buildingMinSupport: 0.66,
-  maxObjectSizeM: 20,
-  elevThresholdM: 0.3,
-  slope: 0.15,
-  groundBandM: 0.5,
-  lowVegBandM: 2,
-  medVegBandM: 5,
-  buildingRoughnessMaxM: 1.5,
-  buildingMinHagM: 2.5,
-  maxGridDim: 768,
-  despikeNeighbourFactor: 1,
-});
-
-// v3 = v2 + the structural-verticality rescue's one spatial parameter. The
-// `satisfies` check still runs, so a missing/typo'd parameter is a compile error.
-const CURRENT_PARAMS = Object.freeze({
-  ...V2_PARAMS,
-  structuralNeighborRadiusM: 1.0,
-  structuralVerticalityMin: 0.85,
-}) satisfies ClassifierParams;
-
 /**
  * Every published preset, by version. Entries are APPEND-ONLY: an existing one
  * is a record of what shipped, and editing it in place is the move the freeze
@@ -478,6 +468,7 @@ export function classifierProcessingOp(result: DeriveClassificationResult): Proc
   };
 }
 
+
 /** Clamp to [0, 1]. */
 const clamp01 = (v: number): number => {
   if (v < 0) return 0;
@@ -517,7 +508,11 @@ function chooseCellSize(b: Bounds, count: number, opt: DeriveClassificationOptio
   let cell = opt.cellSizeM;
   if (cell === undefined || !Number.isFinite(cell) || cell <= 0) {
     const spacing = area > 0 && count > 0 ? Math.sqrt(area / count) : 1;
-    cell = Math.min(5, Math.max(0.5, spacing * 2.5));
+    // The 0.5..5 m clamp is physical, so restate it in source units — otherwise a
+    // foot cloud clamps at 0.5..5 ft and derives a different-size grid than the
+    // equivalent metre cloud, changing the classification.
+    const lin = opt.linearUnitToMetres && opt.linearUnitToMetres > 0 ? opt.linearUnitToMetres : 1;
+    cell = Math.min(5 / lin, Math.max(0.5 / lin, spacing * 2.5));
   }
   // Grow the cell until both grid dimensions fit the cap.
   const fits = (c: number): boolean =>

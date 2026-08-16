@@ -478,6 +478,9 @@ export const LENGTH_PARAM_KEYS: readonly string[] = Object.freeze([
   'medVegBandM',
   'buildingRoughnessMaxM',
   'buildingMinHagM',
+  // v3: the structural wall-rescue radius is a length, so a foot scene must scale
+  // it like the rest, or the metre/foot equivalence would not cover the rescue.
+  'structuralNeighborRadiusM',
 ]);
 
 /**

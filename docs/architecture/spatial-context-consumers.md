@@ -50,7 +50,7 @@ has re-opened the divergence this closes.
   `carrier` path must be free of the deprecated predicates listed below.
 - **Reads** — the context fields it now uses.
 
-## Inventory (13 consumers)
+## Inventory (14 consumers)
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
@@ -67,6 +67,7 @@ has re-opened the divergence this closes.
 | 11 | GeoJSON / KML / DXF export | migrated | `src/main.ts`, `src/app/kmlActions.ts`, `src/export/scanFootprint.ts` | `isGeographic`, `verticalDatum`, `verticalMetresPerUnit`, `upAxis` |
 | 12 | Measurement labels | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
 | 13 | Elevation colorbars | migrated | `src/main.ts`, `src/app/terrainAnalysisRunner.ts` | `verticalMetresPerUnit`, `kind` |
+| 14 | Classification | migrated | `src/render/class/classifierCues.ts` | `linearUnitToMetres`, `verticalMetresPerUnit` |
 
 ## Deprecated predicates
 
