@@ -8,10 +8,14 @@ export interface ProjectInfo {
   shownCount: number;
   /** Points decoded from the file (before downsampling). */
   totalCount: number;
-  /** Bounding-box extents in metres. */
+  /** Bounding-box extents in {@link sizeUnit}, ordered width, depth, height. */
   width: number;
   depth: number;
   height: number;
+  /** 'm' when the CRS resolves a linear unit, else 'source units'. */
+  sizeUnit: 'm' | 'source units';
+  /** Largest extent in physical metres, or null when the scale is unresolved. */
+  maxPhysicalDimM: number | null;
   hasRgb: boolean;
   hasIntensity: boolean;
   hasClassification: boolean;
@@ -20,11 +24,15 @@ export interface ProjectInfo {
 /** How long the card lingers before fading out on its own. */
 const DISMISS_MS = 7000;
 
-/** A suggested navigation mode, derived from the scan's physical size. */
-function suggestMode(info: ProjectInfo): string {
-  const maxDim = Math.max(info.width, info.depth, info.height);
-  if (maxDim > 150) return 'Fly — large outdoor scan';
-  if (maxDim > 15) return 'Walk — building / interior scale';
+/**
+ * A suggested navigation mode from the scan's PHYSICAL size (metres). Only shown
+ * when the size is physical: an unknown-unit scan cannot be mapped onto these
+ * metre thresholds without risking a wrong recommendation, so the caller omits
+ * the row in that case.
+ */
+function suggestMode(maxDimM: number): string {
+  if (maxDimM > 150) return 'Fly — large outdoor scan';
+  if (maxDimM > 15) return 'Walk — building / interior scale';
   return 'Orbit — object scale';
 }
 
@@ -84,9 +92,9 @@ export class ProjectCard {
       el('div', { className: 'olv-pc-grid' }, [
         row('Format', info.format.toUpperCase()),
         row('Points', points),
-        row('Size', `${info.width.toFixed(1)} × ${info.depth.toFixed(1)} × ${info.height.toFixed(1)} m`),
+        row('Size', `${info.width.toFixed(1)} × ${info.depth.toFixed(1)} × ${info.height.toFixed(1)} ${info.sizeUnit}`),
         row('Attributes', attrs.length ? attrs.join(', ') : 'positions only'),
-        row('Suggested', suggestMode(info)),
+        ...(info.maxPhysicalDimM != null ? [row('Suggested', suggestMode(info.maxPhysicalDimM))] : []),
         row('Performance', performance(info.totalCount)),
       ]),
       el('div', { className: 'olv-pc-countdown' }),

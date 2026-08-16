@@ -61,7 +61,7 @@ import {
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
-import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
+import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
@@ -5434,14 +5434,13 @@ function stopStreamingStatusPolling(): void {
 /** Reveal the "Project ready" summary card for a freshly opened scan. */
 function showProjectCard(cloud: PointCloud, totalCount: number): void {
   const b = cloud.bounds();
+  const c = crsService.context();
   projectCard.show({
     name: cloud.name,
     format: cloud.sourceFormat,
     shownCount: cloud.pointCount,
     totalCount,
-    width: b.max[0] - b.min[0],
-    depth: b.max[1] - b.min[1],
-    height: b.max[2] - b.min[2],
+    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
