@@ -3835,7 +3835,7 @@ void viewerLoaded.then(() => {
       mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
       const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
       if (measureMount.panel) layersPanels.push(measureMount.panel.element);
-      layersPanels.push(annotationPanel.element, exportPanel.element);
+      layersPanels.push(clipPanel.element, annotationPanel.element, exportPanel.element);
       mobileSheet.slot('layers').append(...layersPanels);
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
