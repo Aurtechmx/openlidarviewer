@@ -53,7 +53,7 @@ test('StreamingNodeStore.counts and setError report lifecycle state', () => {
   store.setState(a, 'queued');
   store.setError(b, 'decode failed');
   const counts = store.counts();
-  expect(counts).toEqual({ known: 2, queued: 1, loading: 0, resident: 0, error: 1 });
+  expect(counts).toEqual({ known: 2, queued: 1, loading: 0, resident: 0, error: 1, decoded: 0 });
   expect(b.error).toBe('decode failed');
 });
 

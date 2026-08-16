@@ -5335,7 +5335,7 @@ function startStreamingStatusPolling(): void {
     });
     if (counts.resident === 0) {
       streamingPanel.setPhase('Streaming coarse geometry…');
-    } else if (counts.loading > 0 || counts.queued > 0) {
+    } else if (counts.loading > 0 || counts.queued > 0 || counts.decoded > 0) {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');

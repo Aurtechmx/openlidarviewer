@@ -20,6 +20,13 @@ export interface NodeCounts {
   loading: number;
   resident: number;
   error: number;
+  /**
+   * Nodes decoded but NOT yet committed to the renderer (awaiting a metered GPU
+   * upload). Non-zero means work is still landing, so a "ready" verdict that
+   * checks only queued/loading would fire too early. Not folded into resident:
+   * resident means drawn, decoded means decoded-and-waiting.
+   */
+  decoded: number;
 }
 
 /** Owns every known node and keeps resident-point accounting exact. */
@@ -222,6 +229,7 @@ export class StreamingNodeStore {
       loading: this._loadingCount,
       resident: this._resident.size,
       error: this._errorCount,
+      decoded: this._decoded.size,
     };
   }
 }
