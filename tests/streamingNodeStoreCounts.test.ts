@@ -25,14 +25,15 @@ function rec(id: string): StreamingNodeRecord {
 
 /** Ground-truth walk — what the old O(n) implementation returned. */
 function walk(store: StreamingNodeStore) {
-  let queued = 0, loading = 0, resident = 0, error = 0;
+  let queued = 0, loading = 0, resident = 0, error = 0, decoded = 0;
   for (const n of store.all()) {
     if (n.state === 'queued') queued++;
     else if (n.state === 'loading') loading++;
     else if (n.state === 'resident') resident++;
     else if (n.state === 'error') error++;
+    else if (n.state === 'decoded') decoded++;
   }
-  return { known: store.size, queued, loading, resident, error };
+  return { known: store.size, queued, loading, resident, error, decoded };
 }
 
 describe('StreamingNodeStore.counts() — O(1) counters track a ground-truth walk', () => {
@@ -79,8 +80,21 @@ describe('StreamingNodeStore.counts() — O(1) counters track a ground-truth wal
     expect(store.counts().known).toBe(3);
   });
 
+  it('counts decoded-pending nodes and clears them on commit', () => {
+    const store = new StreamingNodeStore();
+    const a = store.add(rec('a'));
+    store.setState(a, 'loading');
+    store.setState(a, 'decoded', 100);
+    expect(store.counts()).toEqual(walk(store));
+    // decoded-pending is its own bucket: not loading, not yet resident.
+    expect(store.counts()).toMatchObject({ decoded: 1, loading: 0, resident: 0 });
+    // Committing to the renderer moves it to resident and clears decoded.
+    store.setState(a, 'resident', 100);
+    expect(store.counts()).toMatchObject({ decoded: 0, resident: 1 });
+  });
+
   it('starts at all-zero for a fresh store', () => {
     const store = new StreamingNodeStore();
-    expect(store.counts()).toEqual({ known: 0, queued: 0, loading: 0, resident: 0, error: 0 });
+    expect(store.counts()).toEqual({ known: 0, queued: 0, loading: 0, resident: 0, error: 0, decoded: 0 });
   });
 });
