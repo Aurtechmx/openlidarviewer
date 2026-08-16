@@ -342,7 +342,8 @@
 .olv-wb-auto { margin-top: var(--space-2xs); }
 /* v0.3.7 final-polish — height percentile-trim slider.
  * Sits beneath the Color By chips when "Height" is the active mode. */
-.olv-height-trim-row {
+.olv-height-trim-row,
+.olv-project-scale-row {
   display: flex;
   align-items: center;
   gap: var(--space-md);

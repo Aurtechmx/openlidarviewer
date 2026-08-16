@@ -426,6 +426,14 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     }
     // The two-epoch compare needs exactly two loaded layers.
     inspector.setLayerCompareAvailable(getViewer().clouds().length === 2);
+    // Mount changes move which layers share the project frame — re-run the
+    // shared elevation recolor and re-gate the Inspector toggle.
+    const v = getViewer();
+    v.refreshProjectSharedElevation();
+    inspector.setProjectSharedElevationAvailable(
+      v.projectSharedElevationRange() != null,
+      v.projectSharedElevation,
+    );
     // Show the compass once a scan is open; hide it again when the last layer goes.
     refreshCompass();
   }

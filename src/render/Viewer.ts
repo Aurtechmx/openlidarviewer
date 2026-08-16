@@ -93,7 +93,8 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
-import type { ColorMode, CoverageColorGrid } from './colorModes';
+import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
+import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
 import { runRenderFrame, type RenderLoopHost } from './renderLoop';
@@ -1088,6 +1089,8 @@ export class Viewer {
     firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
     streaming: () => this._streaming,
     heightPercentileTrim: () => this._heightPercentileTrim,
+    projectSharedElevationRange: () =>
+      this._projectSharedElevation ? this.projectSharedElevationRange() : null,
     elevationUnitLabel: () => this._elevationUnitLabel,
     worldUpIsZ: () => this._worldUp.z === 1,
     residentIntensityBuffers: () => {
@@ -1752,6 +1755,8 @@ export class Viewer {
     this._scene.add(mesh);
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
+    // A new frame-sharing cloud changes the shared elevation window when on.
+    this.refreshProjectSharedElevation();
     this._configureForClouds(cloud);
     // A first cloud can arrive already in a scalar default mode (elevation
     // on a colourless scan) without any setColorMode call — the legend must
@@ -2319,6 +2324,8 @@ export class Viewer {
     // REMAINING clouds agree on.
     this._refreshMeasureDatum();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // A removed layer shrinks the shared elevation window when on.
+    this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
     this._notifyColorContextChanged();
   }
@@ -2643,34 +2650,52 @@ export class Viewer {
   }
 
   /**
-   * Set the symmetric percentile trim used by the elevation colour
-   * mode and reseed every cloud currently rendering in elevation
-   * mode. The streaming renderer reads the trim through the same
+   * Set the symmetric percentile trim for the elevation colour mode and reseed
+   * every elevation-mode cloud. Streaming reads the trim through the same
    * `colorForMode` seam, so subsequent streaming nodes pick it up.
    */
   setHeightPercentileTrim(trim: number): void {
     const next = Math.max(0, Math.min(25, Math.round(trim)));
     if (next === this._heightPercentileTrim) return;
     this._heightPercentileTrim = next;
-    for (const [id, entry] of this._clouds) {
-      if (entry.mode !== 'elevation') continue;
-      const raw = colorForMode('elevation', entry.cloud, {
-        heightPercentileTrim: next,
-        upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
-      });
-      const arr = entry.colorAttr.array as Float32Array;
-      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
-      writeFloatColorsInto(arr, raw);
-      entry.colorAttr.needsUpdate = true;
-      void id; // silence the unused-binding lint
-    }
-    // A trim change moves the elevation ramp window — the legend must follow.
-    this._notifyColorContextChanged();
+    this._recolorElevation();
   }
 
   /** Read the current percentile-trim setting. */
   get heightPercentileTrim(): number {
     return this._heightPercentileTrim;
+  }
+
+  // ── Project-shared elevation scale (math in projectElevationScale.ts) ──────
+  // Off (default) = per-cloud percentile windows; on = every frame-sharing layer
+  // colours elevation against one world-Z window.
+  private _projectSharedElevation = false;
+
+  get projectSharedElevation(): boolean {
+    return this._projectSharedElevation;
+  }
+
+  /** World-Z union of the frame-sharing elevation clouds; null when < 2 share. */
+  projectSharedElevationRange(): { min: number; max: number } | null {
+    return computeSharedElevationRange(this._clouds.values(), this._heightPercentileTrim);
+  }
+
+  setProjectSharedElevation(on: boolean): void {
+    if (on === this._projectSharedElevation) return;
+    this._projectSharedElevation = on;
+    this._recolorElevation();
+  }
+
+  /** Re-apply the shared window after the cloud set changes while on. */
+  refreshProjectSharedElevation(): void {
+    if (this._projectSharedElevation) this._recolorElevation();
+  }
+
+  /** Recolour every elevation-mode cloud; shared window folded in when on. */
+  private _recolorElevation(): void {
+    const shared = this._projectSharedElevation ? this.projectSharedElevationRange() : null;
+    applyElevationColors(this._clouds.values(), shared, this._heightPercentileTrim);
+    this._notifyColorContextChanged();
   }
 
   // ── Visuals Studio — Visuals Studio state ─────────────────────────────
@@ -2982,11 +3007,11 @@ export class Viewer {
     if (!entry) return;
     if (entry.mode === mode) return;
 
-    const raw = colorForMode(mode, entry.cloud, {
-      heightPercentileTrim: this._heightPercentileTrim,
-      coverageGrid: this._coverageGrid ?? undefined,
-      upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
-    });
+    const opts: ColorForModeOptions =
+      mode === 'elevation'
+        ? elevationOptsFor(entry, this._projectSharedElevation ? this.projectSharedElevationRange() : null, this._heightPercentileTrim)
+        : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1 };
+    const raw = colorForMode(mode, entry.cloud, opts);
     const arr = entry.colorAttr.array as Float32Array;
     // sRGB → linear via the shared EOTF seam — keeps a mode switch
     // byte-identical to what the initial `toFloatColors` upload produced.

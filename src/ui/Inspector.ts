@@ -97,6 +97,12 @@ export interface InspectorCallbacks {
    */
   onHeightPercentileTrim: (trim: number) => void;
   /**
+   * Project-shared elevation scale: `true` colours every frame-sharing layer
+   * against one world-Z window (identical heights read identically), `false`
+   * restores per-cloud windows. Only surfaced with ≥2 frame-sharing clouds.
+   */
+  onProjectSharedElevation?: (on: boolean) => void;
+  /**
    * Elevation filter (v0.5.6): a world-space `[min, max]` height window, or
    * `null` to clear. Points outside the window are hidden.
    */
@@ -655,6 +661,21 @@ export class Inspector {
     className: 'olv-height-trim-label',
     text: '5%',
   });
+  /**
+   * Project-shared elevation toggle. Hidden unless colouring BY elevation AND
+   * ≥2 layers share the project frame (`_projectScaleAvailable`).
+   */
+  private _projectScaleAvailable = false;
+  private readonly _projectScaleRow = el('label', {
+    className: 'olv-project-scale-row olv-hidden',
+    title:
+      'Colour every layer that shares the project frame against one shared ' +
+      'height window, so the same world height reads the same colour across ' +
+      'layers. Off colours each layer against its own range.',
+  });
+  private readonly _projectScaleCheckbox = el('input', {
+    type: 'checkbox',
+  }) as HTMLInputElement;
   // Range filters (v0.5.6) — an elevation (world-unit height) filter and an
   // intensity (raw-unit) filter, both built from the shared `buildRangeFilter`
   // so the DOM, the active-state cue, and the seed/reset logic live once.
@@ -1128,10 +1149,19 @@ export class Inspector {
       this._heightTrimLabel.textContent = `${safe}%`;
       this._cb.onHeightPercentileTrim(safe);
     });
+    this._projectScaleCheckbox.setAttribute('aria-label', 'Project-shared elevation scale');
+    this._projectScaleRow.replaceChildren(
+      this._projectScaleCheckbox,
+      el('span', { className: 'olv-height-trim-name', text: 'Project elevation scale' }),
+    );
+    this._projectScaleCheckbox.addEventListener('change', () => {
+      this._cb.onProjectSharedElevation?.(this._projectScaleCheckbox.checked);
+    });
     const colorByBody = el('div', { className: 'olv-color-by-body' }, [
       this._chips,
       this._chipsNote,
       this._heightTrimRow,
+      this._projectScaleRow,
     ]);
     this._colorBySection = section('Color by', colorByBody);
 
@@ -1792,6 +1822,7 @@ export class Inspector {
         // picks Height. Other modes don't honour the slider so hiding
         // it removes the cognitive overhead.
         this._heightTrimRow.classList.toggle('olv-hidden', mode !== 'elevation');
+        this._syncProjectScaleRow();
       });
       this._chips.append(chip);
     }
@@ -1803,6 +1834,24 @@ export class Inspector {
     this._chipsNote.classList.toggle('olv-hidden', !anyGatedDisabled);
     // Initial visibility for the trim row — track the active mode.
     this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
+    this._syncProjectScaleRow();
+  }
+
+  /**
+   * Report whether the project-shared elevation scale is applicable — ≥2 layers
+   * colouring elevation in the shared frame — and reflect its current on/off
+   * state. Called by main.ts after the cloud set or the flag changes.
+   */
+  setProjectSharedElevationAvailable(available: boolean, on: boolean): void {
+    this._projectScaleAvailable = available;
+    this._projectScaleCheckbox.checked = on;
+    this._syncProjectScaleRow();
+  }
+
+  /** Show the toggle only while colouring by elevation with ≥2 in-frame layers. */
+  private _syncProjectScaleRow(): void {
+    const show = this._projectScaleAvailable && this._activeMode === 'elevation';
+    this._projectScaleRow.classList.toggle('olv-hidden', !show);
   }
 
   /**
