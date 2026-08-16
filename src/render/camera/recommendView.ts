@@ -68,3 +68,49 @@ export function flatnessFromBounds(
   if (height <= 0) return FLAT_RATIO; // flat-as-a-sheet → plan view
   return horizontal / height;
 }
+
+/** A scan's extents for the Project card. */
+export interface ProjectSize {
+  /** Extents in {@link sizeUnit}, ordered width, depth, height. */
+  readonly width: number;
+  readonly depth: number;
+  readonly height: number;
+  readonly sizeUnit: 'm' | 'source units';
+  /** Largest extent in physical metres, or null when the linear scale is unresolved. */
+  readonly maxPhysicalDimM: number | null;
+}
+
+/**
+ * The scan's extents for the Project card, in physical metres when the CRS
+ * resolves a linear unit and in raw source units otherwise (labelled as such, so
+ * a foot cloud is never shown as metres). The up-axis picks which extent is
+ * height, so a Y-up scan reports its vertical extent as height rather than a
+ * horizontal axis. `maxPhysicalDimM` is null when the scale is unknown, so a
+ * caller does not map an unknown-unit size onto metre navigation thresholds.
+ */
+export function describeProjectSize(
+  min: readonly [number, number, number],
+  max: readonly [number, number, number],
+  frame: {
+    readonly upAxis: 'z' | 'y' | 'unknown';
+    readonly linearUnitKnown: boolean;
+    readonly linearUnitToMetres: number;
+    readonly verticalUnitToMetres?: number;
+  },
+): ProjectSize {
+  const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
+  const upIdx = frame.upAxis === 'y' ? 1 : 2; // 'z' | 'unknown' -> Z
+  const [hA, hB] = [0, 1, 2].filter((i) => i !== upIdx);
+  const rawW = ext[hA];
+  const rawD = ext[hB];
+  const rawH = ext[upIdx];
+  if (!frame.linearUnitKnown || !(frame.linearUnitToMetres > 0)) {
+    return { width: rawW, depth: rawD, height: rawH, sizeUnit: 'source units', maxPhysicalDimM: null };
+  }
+  const hz = frame.linearUnitToMetres;
+  const vt = frame.verticalUnitToMetres && frame.verticalUnitToMetres > 0 ? frame.verticalUnitToMetres : hz;
+  const width = rawW * hz;
+  const depth = rawD * hz;
+  const height = rawH * vt;
+  return { width, depth, height, sizeUnit: 'm', maxPhysicalDimM: Math.max(width, depth, height) };
+}
