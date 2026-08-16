@@ -59,11 +59,15 @@ export function recommendCameraPreset(input: ViewRecommendationInput): ViewRecom
 export function flatnessFromBounds(
   min: readonly [number, number, number],
   max: readonly [number, number, number],
+  upAxis: 'z' | 'y' | 'unknown' = 'z',
 ): number {
-  const width = Math.abs(max[0] - min[0]);
-  const depth = Math.abs(max[1] - min[1]);
-  const height = Math.abs(max[2] - min[2]);
-  const horizontal = Math.max(width, depth);
+  // The height axis is the up axis; the other two are horizontal. A Y-up scan
+  // whose height was read off Z would get an inverted ratio and the wrong
+  // recommended view.
+  const upIdx = upAxis === 'y' ? 1 : 2; // 'z' | 'unknown' -> Z
+  const [hA, hB] = [0, 1, 2].filter((i) => i !== upIdx);
+  const horizontal = Math.max(Math.abs(max[hA] - min[hA]), Math.abs(max[hB] - min[hB]));
+  const height = Math.abs(max[upIdx] - min[upIdx]);
   if (horizontal <= 0) return 1;
   if (height <= 0) return FLAT_RATIO; // flat-as-a-sheet → plan view
   return horizontal / height;
