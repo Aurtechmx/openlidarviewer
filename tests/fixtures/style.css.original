@@ -6895,7 +6895,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
-.olv-analyse-reco { font-size: var(--text-xs); color: var(--text); font-family: var(--mono); }
+.olv-analyse-reco { font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 /* Quality gate reasons. */
 .olv-analyse-quality { display: flex; flex-direction: column; gap: var(--space-xs); margin: var(--space-xs) 0; }
 /* v0.4.6: quality-gate reason rides the shared caveat primitive (tinted
