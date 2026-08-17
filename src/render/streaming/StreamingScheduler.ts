@@ -32,6 +32,7 @@ import {
   selectLapsedEvictions,
 } from './evictionPolicy';
 import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
+import type { SchedulerReadinessFacts } from './refinementReadiness';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -637,6 +638,46 @@ export class StreamingScheduler {
       pressureDepthReduction: this._pressureDepthReduction,
       fpsBudgetFactor: this._fpsBudgetFactor,
       fullRescoreCount: this._fullRescoreCount,
+    };
+  }
+
+  /**
+   * Node-state counts over the LAST rescore's wanted set — the facts
+   * {@link evaluateRefinementReadiness} turns into a readiness verdict. Measured
+   * over the wanted set, not globally, so a node held resident by eviction
+   * hysteresis after leaving the view cannot vote readiness for the view. Before
+   * the first cull the wanted set is null and every count is 0, which the
+   * evaluator reads as `'unknown'` (its refusal rule), never `'settled'`.
+   */
+  readinessFacts(): SchedulerReadinessFacts {
+    const store = this._cloud.octree.store;
+    const wanted = this._lastWanted;
+    let residentCount = 0;
+    let inFlightCount = 0;
+    let queuedCount = 0;
+    let decodedPendingCount = 0;
+    let failedCount = 0;
+    if (wanted) {
+      for (const id of wanted) {
+        const node = store.get(id);
+        if (!node) continue;
+        switch (node.state) {
+          case 'resident': residentCount++; break;
+          case 'loading': inFlightCount++; break;
+          case 'queued': queuedCount++; break;
+          case 'decoded': decodedPendingCount++; break;
+          case 'error': failedCount++; break;
+          default: break; // 'unloaded' — not yet requested, counts against the denominator
+        }
+      }
+    }
+    return {
+      wantedCount: wanted ? wanted.size : 0,
+      residentCount,
+      inFlightCount,
+      queuedCount,
+      decodedPendingCount,
+      failedCount,
     };
   }
 

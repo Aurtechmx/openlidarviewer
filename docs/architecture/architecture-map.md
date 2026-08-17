@@ -166,7 +166,7 @@ no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
 `buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
 four thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,395)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
 methods dominate:
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
