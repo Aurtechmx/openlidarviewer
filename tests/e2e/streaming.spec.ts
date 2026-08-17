@@ -107,10 +107,13 @@ test('opens a real COPC file and streams it progressively', async ({ page }) => 
   await expect(panel).toContainText('COPC LAZ');
   await expect(panel).toContainText(/PDRF [678]/);
 
-  // Saving a camera view adds it to the streaming panel's list.
-  await expect(panel).toContainText('No saved views yet');
-  await panel.locator('.olv-streaming-btn', { hasText: 'Save view' }).click();
-  await expect(panel.locator('.olv-streaming-view-name')).toHaveText('View 1');
+  // Saving a camera view adds it to the Inspector's Saved views. The streaming
+  // panel no longer carries its own list — saved views (with rename + delete)
+  // live in the Inspector for both static and streaming scans.
+  const inspector = page.locator('.olv-inspector');
+  await inspector.locator('summary', { hasText: 'Saved views' }).click();
+  await inspector.locator('.olv-view-save').click();
+  await expect(inspector.locator('.olv-view-name').first()).toHaveValue('View 1');
 });
 
 test('inspects a per-point readout on a streaming COPC node', async ({ page }) => {

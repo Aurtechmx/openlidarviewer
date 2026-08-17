@@ -90,10 +90,9 @@
 /*
  * Save (primary action) — aligned with the rest of the app's primary
  * vocabulary: cyan text on accent-soft fill, NOT solid-cyan. This is
- * the same treatment used by .olv-measure-done, .olv-inspect-copy and
- * .olv-streaming-view-save, so a user who learned "this is the primary
- * action" anywhere in the app reads it the same way here (Gestalt
- * similarity).
+ * the same treatment used by .olv-measure-done and .olv-inspect-copy, so a
+ * user who learned "this is the primary action" anywhere in the app reads it
+ * the same way here (Gestalt similarity).
  */
 .olv-anno-editor-save {
   font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
