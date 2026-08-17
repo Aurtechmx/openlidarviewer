@@ -88,7 +88,7 @@
 .olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-crs-epsg {
   font-size: var(--text-xs); color: var(--text-faint);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 .olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: var(--space-2xs); }
 .olv-crs-meta-row { font-size: var(--text-xs); color: var(--text-dim); }
@@ -312,7 +312,7 @@
 }
 .olv-pc-dismiss:hover { color: var(--text); }
 .olv-pc-name {
-  font-size: var(--text-sm); font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--text-dim);
   margin: var(--space-md) 0 var(--space-lg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -320,7 +320,7 @@
 .olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xl); }
 .olv-pc-label { font-size: var(--text-xs); color: var(--text-faint); flex-shrink: 0; }
 .olv-pc-value {
-  font-size: var(--text-xs); color: var(--text); font-family: var(--mono);
+  font-size: var(--text-xs); color: var(--text); font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .olv-pc-countdown {

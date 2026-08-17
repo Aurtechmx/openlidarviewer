@@ -57,7 +57,7 @@
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg);
 }
 .olv-backend-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
+.olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 /* Developer performance overlay (?debug=1) */
 .olv-debug {

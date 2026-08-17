@@ -32,7 +32,7 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
-.olv-workflow-badge-label { font-family: var(--mono); font-size: var(--text-xs); }
+.olv-workflow-badge-label { font-variant-numeric: tabular-nums; font-size: var(--text-xs); }
 .olv-workflow-badge-stop {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);

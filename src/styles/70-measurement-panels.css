@@ -264,7 +264,7 @@
   background: rgba(8, 13, 26, 0.94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
-  color: var(--text); font-size: var(--text-2xs); font-family: var(--mono);
+  color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
   opacity: 0; pointer-events: none; z-index: 60;

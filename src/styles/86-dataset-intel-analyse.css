@@ -227,7 +227,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   background: rgba(8, 14, 28, 0.95);
   display: grid;
   place-items: center;
-  font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
