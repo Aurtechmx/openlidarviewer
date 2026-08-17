@@ -1,5 +1,5 @@
 {
-  "total": 148,
+  "total": 146,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/floorPlanPositions.ts": 4,
@@ -20,7 +20,7 @@
     "src/model/PointCloud.ts": 17,
     "src/model/pointFrames.ts": 2,
     "src/render/InspectTool.ts": 1,
-    "src/render/Viewer.ts": 48,
+    "src/render/Viewer.ts": 46,
     "src/render/densityColors.ts": 1,
     "src/render/elevationRange.ts": 2,
     "src/render/hillshadeColors.ts": 1,
