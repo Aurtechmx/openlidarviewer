@@ -32,7 +32,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Truth documents that describe the evidence state and must not contradict it. */
 const TRUTH_DOCS = [
-  'docs/releases/KNOWN_LIMITATIONS_v0.6.5.md',
+  'docs/releases/KNOWN_LIMITATIONS_v0.6.6.md',
   'docs/project/CLAIMS_AND_LIMITATIONS.md',
   'docs/validation/THREATS_TO_VALIDITY.md',
   'docs/validation/cross-implementation.md',

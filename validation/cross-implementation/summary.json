@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 9,
-  "countedStudies": 8,
+  "studiesRead": 10,
+  "countedStudies": 9,
   "byStatus": {
-    "agree": 7,
+    "agree": 8,
     "partial": 1
   },
   "byClaim": {
@@ -37,6 +37,20 @@
       ],
       "parameterSetIds": [
         "PS-HORN-COMPASS-METRE-NOEDGES"
+      ]
+    },
+    "CHM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "OLV-DS-017-PC-RIDGE-STRUCTURES"
+      ],
+      "parameterSetIds": [
+        "PS-CHM-DIFF-CELL1-R045"
       ]
     },
     "CONTOURS": {
@@ -135,10 +149,10 @@
     }
   },
   "agreement": {
-    "denominator": 8,
+    "denominator": 9,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 7,
-    "fraction": 0.875
+    "agree": 8,
+    "fraction": 0.8888888888888888
   },
   "excludedFromCounts": [
     {

@@ -233,9 +233,9 @@ export interface ReferenceSlot {
  * `status` to `supplied` and register its study manifest.
  */
 export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
-  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
-  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
-  { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' },
+  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
+  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
+  { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'supplied' },
   { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   // Aspect is a BEARING, so its tolerance is read as a circular separation
   // (0..180), never a plain subtraction — see tests/aspectCrossCheck.test.ts.

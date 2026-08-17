@@ -2,6 +2,13 @@
 
 The format is based on Keep a Changelog and the project follows Semantic Versioning.
 
+## [0.6.6] - 2026-08-17
+
+### Changed
+
+- The DSM, DTM and CHM surface products reach `E4_CROSS_IMPLEMENTATION_VALIDATED`. The DSM and DTM grids were each recomputed and compared against a committed PDAL 2.10.2 `writers.gdal` reference over three seeded synthetic clouds, agreeing over 7,500 cells to a maximum difference under 4×10⁻⁶ m within a 0.05 m registered tolerance (studies `DSM-PDAL-WRITERS-GDAL-CELL-CENTRED` and `DTM-PDAL-WRITERS-GDAL-CELL-CENTRED`); the CHM (clamped DSM minus DTM) agreed with the PDAL max grid minus the PDAL min grid over 7,500 cells to under 8×10⁻⁶ m within a 0.1 m registered tolerance (study `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`). Eight products are now at E4. The check covers the cell gridding: the reference radius is below half a cell, so it does not exercise ground classification (`GROUND-FILTER` stays partial) or real-terrain void interpolation, and the DTM's required bar remains E5.
+- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.
+
 ## [0.6.5] - 2026-08-14
 
 ### Added
