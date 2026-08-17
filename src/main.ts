@@ -2028,9 +2028,6 @@ const streamingPanel = new StreamingPanel({
     else viewer.resumeStreaming();
   },
   onClearCache: () => viewer.clearStreamingCache(),
-  onSaveView: () => saveCurrentView(),
-  onApplyView: (index) => applyView(index),
-  onDeleteView: (index) => deleteView(index),
   onGradeFullCloud: () => void runFullCloudGradeAction(),
   onCancelGrade: () => cancelFullCloudGrade(),
 });
@@ -4763,8 +4760,10 @@ function saveCurrentView(): void {
 /** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
   const names = bookmarks.names();
-  if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
-  else inspector.setViews(names);
+  // Saved views live in the Inspector for both static and streaming scans — the
+  // Inspector's Saved-views section stays visible in streaming mode, so there is
+  // one list (with rename + delete) rather than a second copy in the stream panel.
+  inspector.setViews(names);
 }
 
 /** Glide the camera to a saved view — and (v7) restore its display state. */
@@ -4781,12 +4780,6 @@ function applyView(index: number): void {
   // Full restore through the one apply path; the pose rides as the bundle's
   // camera so the orchestrator applies it LAST.
   applyViewState({ ...view.state, camera: view.pose });
-}
-
-/** Delete a saved view and refresh the list. */
-function deleteView(index: number): void {
-  bookmarks.remove(index);
-  refreshViewsUI();
 }
 
 /**

@@ -74,8 +74,7 @@ beforeAll(() => {
 function noopCallbacks() {
   return {
     onColorMode() {}, onQuality() {}, onPauseToggle() {}, onClearCache() {},
-    onSaveView() {}, onApplyView() {}, onDeleteView() {}, onGradeFullCloud() {},
-    onCancelGrade() {},
+    onGradeFullCloud() {}, onCancelGrade() {},
   };
 }
 

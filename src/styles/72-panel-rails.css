@@ -114,32 +114,11 @@
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-rail-tab { display: none; } }
 
 /* ── Right rail — one-tap collapse for the right column ──────────────────────
-   Mirror of the left rail. A single grabber slides BOTH right panels (the
-   Streaming/COPC card and the Inspector) out to the screen's right edge. The
-   two panels are separate absolutely-positioned elements, so the collapse
-   transform is applied to each; the grabber is a handle growing out of the
-   column's left (canvas-facing) edge. Desktop only — the mobile sheet owns
-   small screens. Motion/opacity are scoped to desktop so the mobile bottom
-   sheet's own transforms are never touched. */
-@media (min-width: 768px) {
-  .olv-inspector,
-  .olv-streaming-panel {
-    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
-  }
-  /* Collapsed — slide the panel fully past the right edge (its own width plus
-     the 14px inset and a small margin), GPU transform only, no reflow.
-     `animation: none` releases the `olv-rise-in` entrance animation's hold: it
-     runs with fill-mode `both`, so its held end-state would otherwise pin the
-     Inspector's transform/opacity and override this rule (the Streaming card has
-     no such animation, which is why only it collapsed before). */
-  .olv-inspector.olv-right-collapsed,
-  .olv-streaming-panel.olv-right-collapsed {
-    animation: none;
-    transform: translateX(calc(100% + var(--space-lg, 16px)));
-    opacity: 0;
-    pointer-events: none;
-  }
-}
+   A single grabber slides the whole right rail out to the screen's right edge.
+   The rail collapse lives on the `.olv-right-rail` wrapper (both the Streaming
+   card and the Inspector move together inside it) in `40-inspector.css`; the
+   grabber styling below is a handle growing out of the column's left
+   (canvas-facing) edge. Desktop only — the mobile sheet owns small screens. */
 /* The grabber — a handle growing out of the right column's LEFT edge: flush to
    the edge, right corners squared, right border merged into the column (−1px
    overlap hides the shared hairline), only the outer (left) corners rounded.
@@ -191,12 +170,6 @@
 .olv-right-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
 .olv-right-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
-  .olv-inspector, .olv-streaming-panel { transition: none; }
-  /* No slide under reduced motion, but still release the entrance animation so
-     the collapse's opacity:0 / pointer-events:none actually take (the panel
-     fades out in place instead of staying a dead, visible layer). */
-  .olv-inspector.olv-right-collapsed,
-  .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-right-rail-tab { display: none; } }

@@ -182,22 +182,6 @@
   color: var(--text-dim); font-family: var(--mono);
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-streaming-views { display: flex; flex-direction: column; gap: var(--space-xs); }
-.olv-streaming-empty { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-streaming-view { display: flex; gap: var(--space-xs); }
-.olv-streaming-view-name {
-  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.olv-streaming-view-name:hover { color: var(--text); border-color: var(--accent); }
-.olv-streaming-view-del {
-  flex: none; width: 26px; font-size: var(--text-md); color: var(--text-faint);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
-}
-.olv-streaming-view-del:hover { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.55); }
 /*
  * StreamingPanel section eyebrow — matches .olv-section-label so
  * Inspector and Streaming, sharing the same 232 px right column,
@@ -210,10 +194,9 @@
 .olv-streaming-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .olv-streaming-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-xl); }
 /*
- * The destructive actions row (Clear cache) gets extra top margin so
- * it visually segregates from the constructive Save view + Pause
- * pair above it (Gestalt common region — destructive deserves its
- * own region, not just a colour cue).
+ * The destructive actions row (Clear cache) gets extra top margin so it
+ * visually segregates from the Pause control above it (Gestalt common
+ * region — destructive deserves its own region, not just a colour cue).
  */
 .olv-streaming-actions + .olv-streaming-actions { margin-top: var(--space-2xl); }
 .olv-streaming-btn {
