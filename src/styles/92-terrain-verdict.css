@@ -363,7 +363,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
 .olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-score-num { font-size: var(--text-3xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-num.is-good { color: var(--rating-good); }
 .olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
