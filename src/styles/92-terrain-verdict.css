@@ -28,7 +28,7 @@
 }
 .olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .olv-analyse-assess-label {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 /* The hero word — large, the unmistakable focal point of the panel. */
@@ -92,7 +92,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border-top: 0.5px solid var(--hairline);
 }
 .olv-analyse-assess-export-label {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
@@ -111,7 +111,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 .olv-analyse-derived-label {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-derived-label::-webkit-details-marker { display: none; }
@@ -242,7 +242,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
 .olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
 .olv-analyse-product-status {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 600;
+  font-size: var(--text-2xs); font-weight: 600;
   letter-spacing: 0.04em; justify-self: start;
 }
 /* Line two: the engine-selected reason, IN FULL — it wraps, never ellipsizes,
@@ -307,7 +307,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-workflow-details { margin-top: var(--space-xs); }
 .olv-analyse-workflow-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   letter-spacing: 0.04em; color: var(--text-faint);
 }
 .olv-analyse-workflow-details-summary::-webkit-details-marker { display: none; }
@@ -324,7 +324,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-why { margin-top: var(--space-sm); }
 .olv-analyse-why-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   letter-spacing: 0.04em; color: var(--rating-moderate);
 }
 .olv-analyse-why-summary::-webkit-details-marker { display: none; }
@@ -347,7 +347,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
   padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
   border-bottom: 0.5px solid var(--hairline);
@@ -389,7 +389,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* A labelled preview tile — heading, raster, optional legend, caption, export. */
 .olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-sublabel {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-caption { font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
@@ -398,7 +398,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-legend-bar { height: 6px; border-radius: var(--radius-xs); border: 0.5px solid var(--hairline); }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
-  font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+  font-size: 9px; color: var(--text-faint);
 }
 /* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
 .olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
@@ -426,19 +426,19 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-relief-toggle input { accent-color: var(--accent); cursor: pointer; }
 .olv-analyse-relief-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-relief-tag {
-  font-family: var(--mono); font-size: var(--text-2xs); text-transform: uppercase;
+  font-size: var(--text-2xs); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
 }
 .olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
 .olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
 .olv-analyse-relief-val {
-  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-size: var(--text-2xs); color: var(--text-dim);
   width: 34px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
 }
 /* Click-to-sample readout under a raster tile. */
 .olv-analyse-raster.is-samplable { cursor: crosshair; }
 .olv-analyse-sample {
-  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-size: var(--text-2xs); color: var(--text-dim);
   font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
   border-top: 0.5px dashed var(--hairline);
 }
@@ -497,7 +497,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 
 /* Stratified RMSE breakdown (by slope band / surface zone). */
-.olv-analyse-strata { font-size: var(--text-2xs); color: var(--text-faint); margin-top: var(--space-2xs); }
+.olv-analyse-strata { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 
 /* USGS 3DEP Quality Level badge in the Analyse panel validation section. */
 .olv-analyse-ql {
