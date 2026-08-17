@@ -409,12 +409,12 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-ready-side { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-lg); }
 .olv-analyse-ready-figure { display: flex; align-items: baseline; gap: var(--space-2xs); }
 .olv-analyse-ready-value {
-  font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1;
+  font-size: 22px; font-weight: 600; line-height: 1;
   color: var(--text); font-variant-numeric: tabular-nums;
 }
 .olv-analyse-ready-figure.is-text .olv-analyse-ready-value { font-size: var(--text-lg); }
 .olv-analyse-ready-unit {
-  font-family: var(--mono); font-size: var(--text-xs); color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
 }
 /* Rating pill — capitalised word on a tinted ground keyed to the rating. */
 .olv-analyse-ready-rating {
@@ -481,7 +481,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 
 .olv-analyse-validation { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-sm); }
-.olv-analyse-rmse { font-family: var(--mono); }
+.olv-analyse-rmse { font-variant-numeric: tabular-nums; }
 .olv-analyse-caption { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-md); overflow-wrap: anywhere; }
 
 /* Export buttons. */
