@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Eight products are at E4. Five are algorithm checks against GDAL:
+Ten products are at E4. Five are algorithm checks against GDAL:
 **`SLOPE-RASTER`**, **`ASPECT-RASTER`**, **`HILLSHADE`**, **`CONTOURS`** and
 **`MEAS-AREA`** (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision — see
@@ -19,7 +19,14 @@ noise). The other three are surface-gridding checks against PDAL: **`DSM`** (max
 return) and **`DTM`** (min return) were compared against PDAL 2.10.2
 `writers.gdal` on three seeded synthetic clouds each, agreeing over 7500 cells,
 and **`CHM`** (clamped DSM minus DTM) was compared against the PDAL max grid
-minus the PDAL min grid on the same clouds.
+minus the PDAL min grid on the same clouds. The last two are terrain descriptors,
+each checked three ways against an independent tool AND the closed form on a
+controlled analytic fixture: **`TPI`** against gdaldem 3.13.1 TPI on a
+low-amplitude quadratic (chosen so the reference's float32 mean accumulation
+stays below the tolerance), and **`VRM`** against SAGA 7.8.2's Vector Ruggedness
+Measure on a smooth tilted quadratic (chosen so Horn's normal and SAGA's
+estimator converge), with OLV reproducing the closed-form Sappington VRM to under
+1×10⁻⁹.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -30,8 +37,10 @@ minus the PDAL min grid on the same clouds.
 | `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
 | `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
 | `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
+| `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
+| `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
 
-All seven tolerances were registered in `REFERENCE_SLOTS` before the references
+All nine tolerances were registered in `REFERENCE_SLOTS` before the references
 were generated. Each reference output, the exact command, the tool version and the
 checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a

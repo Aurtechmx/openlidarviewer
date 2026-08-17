@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "6689fcb5213f1d5e4aa8d86fd691d0a03a8d7ea5",
+  "commit": "736da7f606b652010d2808b1b799f6d6d76a1547",
   "repository": null,
-  "generatedAt": "2026-08-17T17:40:16.103Z",
+  "generatedAt": "2026-08-17T20:50:21.613Z",
   "nodeVersion": "v26.0.0",
   "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "2f9bf418c87108ebd367e84df3355f037baa98cf752f3eeeedd48bb59f87a51d",
+  "gateLogSha256": "37c33aef92bf3a43dc020bd32651ee75c099db00e767aae86a89a12374b448b2",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,7 +52,7 @@
   },
   "buckets": {
     "unit": {
-      "passed": 5753,
+      "passed": 5761,
       "skipped": 21,
       "runs": 3
     },
@@ -78,7 +78,7 @@
     }
   },
   "total": {
-    "passed": 9427,
+    "passed": 9435,
     "skipped": 21
   },
   "bundle": {
@@ -94,7 +94,7 @@
     "components": 56
   },
   "science": {
-    "e4ClaimCount": 8,
+    "e4ClaimCount": 10,
     "e4Claims": [
       "MEAS-AREA",
       "DTM",
@@ -103,8 +103,10 @@
       "CONTOURS",
       "SLOPE-RASTER",
       "ASPECT-RASTER",
-      "HILLSHADE"
+      "HILLSHADE",
+      "TPI",
+      "VRM"
     ],
-    "suppliedReferenceSlots": 8
+    "suppliedReferenceSlots": 10
   }
 }

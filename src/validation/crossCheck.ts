@@ -254,8 +254,8 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // committed polygon fixture. 1e-6 m² is coarse against the ~1e-9 the two
   // implementations reach, yet far tighter than any real area-formula error.
   { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'supplied' },
-  { claimId: 'TPI', referenceTool: 'GDAL', toleranceAbs: 1e-5, unit: 'index', status: 'pending' },
-  { claimId: 'VRM', referenceTool: 'SAGA', toleranceAbs: 1e-4, unit: 'index', status: 'pending' },
+  { claimId: 'TPI', referenceTool: 'GDAL', toleranceAbs: 1e-5, unit: 'index', status: 'supplied' },
+  { claimId: 'VRM', referenceTool: 'SAGA', toleranceAbs: 1e-4, unit: 'index', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

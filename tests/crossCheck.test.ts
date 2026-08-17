@@ -112,7 +112,7 @@ describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', ()
 });
 
 describe('reference manifest honesty', () => {
-  it('supplies DTM, DSM, CHM, SLOPE-RASTER, ASPECT-RASTER, HILLSHADE, CONTOURS and MEAS-AREA, and ships every other slot as pending', () => {
+  it('supplies DTM, DSM, CHM, SLOPE-RASTER, ASPECT-RASTER, HILLSHADE, CONTOURS, MEAS-AREA, TPI and VRM, and ships every other slot as pending', () => {
     // Each of those reached E4 once an independent reference was committed beside
     // the fixture; every cross-check agreed with the reference and with the
     // closed-form truth inside the preregistered tolerance. No other slot has a
@@ -124,8 +124,10 @@ describe('reference manifest honesty', () => {
     // DTM and DSM are recomputed and compared against their committed PDAL
     // writers.gdal references in groundFilterPdalAgreement.test.ts; CHM is the
     // clamped DSM − DTM difference against the same PDAL grids in
-    // chmCrossCheck.test.ts.
-    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA'];
+    // chmCrossCheck.test.ts. TPI (gdaldem) and VRM (SAGA) are three-way checks
+    // against an independent tool and the closed form on controlled analytic
+    // fixtures (tpiCrossCheck.test.ts, vrmCrossCheck.test.ts).
+    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

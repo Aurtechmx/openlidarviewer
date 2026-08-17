@@ -5,7 +5,9 @@
  *   VRM — computeVRM, src/terrain/complexity/vectorRuggedness.ts
  *   TPI — computeTPI, src/terrain/complexity/terrainPositionIndex.ts
  *
- * Claim under test: VRM-TPI.
+ * Claims under test: TPI and VRM (split from the former combined VRM-TPI claim
+ * when both reached E4 via three-way cross-implementation; see
+ * tests/tpiCrossCheck.test.ts and tests/vrmCrossCheck.test.ts).
  *
  * RELATIONSHIP TO tests/terrainComplexity.test.ts. That file establishes the
  * definitions on small hand-computed grids (flat, planar slope, single ridge,

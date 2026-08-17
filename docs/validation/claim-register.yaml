@@ -4,7 +4,7 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Eight claims
+#   - currentEvidence must reflect evidence that EXISTS today. Ten claims
 #     currently reach E4. Five are algorithm cross-implementations against
 #     GDAL 3.13.1 on a frozen analytic fixture: SLOPE-RASTER, ASPECT-RASTER,
 #     HILLSHADE and CONTOURS (0.5 degree for slope and aspect, 1.0 8-bit level
@@ -14,7 +14,13 @@
 #     writers.gdal on seeded synthetic clouds: DSM (max return) and DTM (min
 #     return), each agreeing over 7500 cells within a 0.05 m registered
 #     tolerance, and CHM (clamped max minus min) agreeing over 7500 cells within
-#     a 0.1 m registered tolerance. The slope, hillshade and contour tolerances were registered
+#     a 0.1 m registered tolerance. Two are terrain descriptors compared three
+#     ways (an independent tool AND the closed form) on a controlled analytic
+#     fixture: TPI against gdaldem 3.13.1 within 1e-5 on a low-amplitude
+#     quadratic (chosen so the reference's float32 mean accumulation stays below
+#     the tolerance), and VRM against SAGA 7.8.2 within 1e-4 on a smooth tilted
+#     quadratic (chosen so Horn and SAGA normals converge), with OLV reproducing
+#     the closed-form Sappington VRM to under 1e-9. The slope, hillshade and contour tolerances were registered
 #     before the reference was generated: all three were fixed in the harness
 #     commit a78b0f9 on 2026-07-05, weeks ahead of their results. ASPECT-RASTER
 #     was NOT. Its slot, its tolerance, its flat-ground exclusion and its
@@ -29,9 +35,9 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Eight independent reference slots are supplied (five GDAL,
-#     three PDAL); all remaining independent-reference slots are pending. Never
-#     infer it from density / format / metadata.
+#     and unavailable. Ten independent reference slots are supplied (six GDAL,
+#     three PDAL, one SAGA); all remaining independent-reference slots are
+#     pending. Never infer it from density / format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #   - scope states, in the shape the study manifests use, what the evidence
 #     covers (scope.supported, dataset + parameter-set pairs) and what it does
@@ -587,33 +593,67 @@ claims:
         - "Accuracy of any kind. Hillshade is a shading index, not a physical quantity, and carries no elevation-accuracy meaning."
     scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is still not a registered study: OLV-XS-001 through 003 are registered under frozen protocols, and each one's scope is the single analytic DEM this claim already cites, so registering them changed the paperwork and not the breadth, and its extra sun positions and multidirectional legs were compared under its own tolerances rather than this claim's one-level gate. Its multidirectional finding is a divergence of up to 50 of 255 levels, which is recorded above as unsupported. The level did not move."
 
-  - claimId: VRM-TPI
-    product: VRM / TPI terrain descriptors
-    algorithm: Vector ruggedness measure / topographic position index
+  - claimId: TPI
+    product: TPI terrain descriptor
+    algorithm: Topographic position index (centre minus mean of the 8 Moore neighbours)
     algorithmVersion: v0.4.x
-    claim: "Ruggedness / relative-position indices over a stated neighbourhood."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    claim: "Relative-position index over a 3x3 Moore neighbourhood."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts, tests/tpiCrossCheck.test.ts]
+    supportingDatasets: [low-amplitude analytic quadratic with gdaldem TPI reference]
+    supportingStudies: [TPI-GDALDEM-ANALYTIC]
     units: [dimensionless]
     crsDatum: metric
-    assumptions: ["neighbourhood radius documented (Phase 11)"]
+    assumptions: ["3x3 Moore neighbourhood (discrete radius root 2)"]
     failureModes: ["scale sensitivity", "edge effects"]
     exportAllowed: true
-    userLabel: "Synthetically-validated terrain descriptor"
+    userLabel: "Cross-implementation validated TPI"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "Index per the documented convention + neighbourhood."
-    prohibitedClaim: ["standardised / cross-validated ruggedness"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "TPI agreed with gdaldem 3.13.1 TPI and with the closed-form quadratic curvature on a low-amplitude analytic fixture, over 3364 interior cells within a preregistered 1e-5, with the largest difference under 9e-7."
+    prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated terrain position", "TPI on real terrain of arbitrary elevation without accounting for the reference's float32 accumulation"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-021-ANALYTIC-TPI-QUADRATIC
+          parameterSetId: PS-TPI-MOORE-QUADRATIC
       unsupported:
-        - "A cross-implementation grade. Both indices were compared against a second implementation (see scopeNote), and neither comparison is a clean agreement that raises the level: the TPI comparison is limited by the reference's float32 precision, and the VRM comparison is sensitive to the slope/aspect estimator with no convention-independent arbiter."
-        - "Neighbourhood radii other than the documented one, since both indices are scale-sensitive."
-        - "Cells near the grid edge."
-    scopeNote: "Both descriptors have been compared against an independent implementation, and the comparison characterises rather than validates, so the level stays E3. TPI (centre minus mean of 8) was compared against gdaldem 3.13.1 on the analytic raster-matrix fixtures: OLV agrees with the closed-form quadratic curvature to under 3e-5 and is provably correct, but the plain ours-vs-gdaldem comparison diverges up to 1.3e-4 on high-relief curved terrain because gdaldem accumulates the neighbourhood mean in float32 while OLV uses double (OLV is the more precise side); the tight-tolerance comparison therefore records a divergence rather than an agreement. VRM (Sappington et al. 2007) was compared against SAGA 7.8.2's Vector Ruggedness Measure over a 3x3 window on the same fixtures: the two agree to about 1e-5 across smooth interiors but diverge up to about 1e-2 at the sharpest curvature cells, because OLV estimates the surface normal with Horn's method and SAGA with its own, and VRM has no closed form independent of that choice; the agreement region is where the estimators converge, so restricting to it would report agreement by construction. Both comparisons are recorded here as evidence that a second implementation was run and what it showed, not as grounds to promote."
+        - "The one-cell border, where the documented gdaldem command omits -compute_edges."
+        - "High absolute elevations. gdaldem accumulates the neighbourhood mean in float32, whose spacing scales with |z|; the fixture is re-centred so |z| stays small and that float32 error is far below the tolerance. On a high-elevation grid the reference, not OLV, loses precision (OLV is the more precise side)."
+        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive."
+        - "Agreement with gdaldem is not accuracy against ground truth."
+
+  - claimId: VRM
+    product: VRM terrain descriptor
+    algorithm: Vector ruggedness measure (Sappington et al. 2007), 3x3 mean-resultant of unit normals
+    algorithmVersion: v0.4.x
+    claim: "Vector ruggedness over a 3x3 neighbourhood."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts, tests/vrmCrossCheck.test.ts]
+    supportingDatasets: [smooth tilted analytic quadratic with SAGA VRM reference]
+    supportingStudies: [VRM-SAGA-ANALYTIC]
+    units: [dimensionless]
+    crsDatum: metric
+    assumptions: ["3x3 neighbourhood", "surface well resolved by the grid"]
+    failureModes: ["scale sensitivity", "slope/aspect estimator sensitivity at under-resolved sharp features", "edge effects"]
+    exportAllowed: true
+    userLabel: "Cross-implementation validated VRM"
+    softwareStatus: shipping
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "VRM agreed with SAGA 7.8.2 Vector Ruggedness Measure and with the closed-form Sappington VRM on a smooth tilted analytic fixture, over 3136 interior cells within a preregistered 1e-4 (largest difference under 2e-5 against SAGA), and reproduced the closed form to under 1e-9."
+    prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated ruggedness", "VRM at under-resolved sharp features, where discrete slope/aspect estimators differ"]
+    scope:
+      supported:
+        - datasetId: OLV-DS-022-ANALYTIC-VRM-TILTED
+          parameterSetId: PS-VRM-3X3-TILTED
+      unsupported:
+        - "The two-cell border. Horn's slope halves on the outer ring (edge clamp) and the 3x3 VRM window carries that ring one cell inward, so the affected zone is two cells deep."
+        - "Under-resolved sharp features (ridge crests, pit bottoms undersampled by the grid). There the discrete slope/aspect estimators diverge and OLV (Horn) and SAGA differ by up to about 1e-2; the fixture is smooth and well resolved so both converge to the analytic normal, and the claim covers that regime. This is a property of the discrete estimate, and it is why the closed-form leg carries the correctness and the SAGA leg the independence."
+        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive."
+        - "Agreement with SAGA is not accuracy against ground truth."
 
   # ── Accuracy statistics ─────────────────────────────────────────────────────
   - claimId: HOLDOUT-RMSE

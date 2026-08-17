@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 10,
-  "countedStudies": 9,
+  "studiesRead": 12,
+  "countedStudies": 11,
   "byStatus": {
-    "agree": 8,
+    "agree": 10,
     "partial": 1
   },
   "byClaim": {
@@ -146,13 +146,37 @@
       "parameterSetIds": [
         "PS-HORN-DEG-METRE-NOEDGES"
       ]
+    },
+    "TPI": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-021-ANALYTIC-TPI-QUADRATIC"
+      ],
+      "parameterSetIds": [
+        "PS-TPI-MOORE-QUADRATIC"
+      ]
+    },
+    "VRM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-022-ANALYTIC-VRM-TILTED"
+      ],
+      "parameterSetIds": [
+        "PS-VRM-3X3-TILTED"
+      ]
     }
   },
   "agreement": {
-    "denominator": 9,
+    "denominator": 11,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 8,
-    "fraction": 0.8888888888888888
+    "agree": 10,
+    "fraction": 0.9090909090909091
   },
   "excludedFromCounts": [
     {

@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Eight products are at E4. Five are algorithm checks against GDAL:
+- Ten products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -87,6 +87,15 @@ discrete properties a test pins (byte-identity, exact inverses).
   clouds where the reference radius is below half a cell. They do not validate
   ground classification (`GROUND-FILTER` stays partial) or real-terrain void
   interpolation, so the DTM's own required bar remains E5.
+- The terrain descriptors are the remaining E4 products, each checked three ways
+  against an independent tool and the closed form on a controlled analytic
+  fixture: `TPI` agrees with gdaldem 3.13.1 and the closed-form quadratic
+  curvature to under 9×10⁻⁷ within a 1×10⁻⁵ tolerance, on a
+  low-amplitude quadratic chosen so the reference's float32 accumulation stays
+  below tolerance; `VRM` agrees with SAGA 7.8.2 within 1×10⁻⁴ and reproduces the
+  closed-form Sappington VRM to under 1×10⁻⁹, on a smooth tilted quadratic
+  chosen so Horn and SAGA normals converge. They do not cover under-resolved
+  sharp features (VRM) or high absolute elevations (TPI).
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

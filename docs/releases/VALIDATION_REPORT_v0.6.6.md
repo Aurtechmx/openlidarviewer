@@ -16,7 +16,7 @@ Both recomputes run on every gate through `tests/groundFilterPdalAgreement.test.
 
 **CHM (canopy height).** CHM is DSM minus DTM per cell, clamped at zero. With both parents at E4, OLV's `heightAboveGround` was compared against the PDAL max grid minus the PDAL min grid on the same three structure clouds, where every cell carries a ground return so the minimum is the ground and the maximum is the top surface. The two agree over 7,500 cells to a maximum difference under 8×10⁻⁶ m, within a 0.1 m tolerance registered before the difference was run. Recorded in the study manifest `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`, checked on every gate by `tests/chmCrossCheck.test.ts`, which also breaks under a row flip.
 
-Eight products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, and `DSM`, `DTM` and `CHM` against PDAL.
+Ten products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, and the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture.
 
 ## The boundary of the DSM and DTM evidence
 

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-TPI-GDALDEM-ANALYTIC",
+  "example": false,
+  "title": "TPI against gdaldem TPI, and the closed form, on a low-amplitude analytic quadratic",
+  "question": "Does this project's computeTPI over the 3x3 Moore neighbourhood agree with gdaldem 3.13.1 TPI and with the closed-form quadratic curvature, on a re-centred low-amplitude quadratic where the reference's float32 mean accumulation is below the tolerance?",
+  "recordWrittenOn": "2026-08-17",
+  "referenceTool": "GDAL",
+  "referenceVersion": "3.13.1",
+  "claims": [
+    {
+      "claimId": "TPI",
+      "datasetIds": [
+        "OLV-DS-021-ANALYTIC-TPI-QUADRATIC"
+      ],
+      "parameterSetIds": [
+        "PS-TPI-MOORE-QUADRATIC"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.00001,
+        "toleranceUnit": "dimensionless",
+        "minimumComparableCells": 3000,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "TPI is the centre minus the mean of the eight Moore neighbours, an exact linear combination of nine elevations. computeTPI accumulates the mean in double; gdaldem accumulates it in float32, whose spacing is |z|·2^-23. The fixture is a re-centred quadratic with |z| under about 12 m, so the reference's float32 spacing is under ~1.5e-6, and the six-decimal ASCII transcode adds under 1e-6. 1e-5 sits an order of magnitude above that and far below any TPI a reader interprets, so it separates the arithmetic from a real difference. Every interior cell must pass. The closed-form interior TPI of z=c·(x²+y²) is −c·mean(Δx²+Δy²), a constant, which anchors correctness independently of gdaldem.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-17",
+        "witnessCommit": "85d3cf96734b86424491bcf16faae5be368c07e4",
+        "witness": "The commit that registered this reference slot at pending in src/validation/crossCheck.ts, with its tolerance frozen from first principles, before the comparison was run. The study manifest and the E4 promotion land in the next commit.",
+        "resultLandedOn": "2026-08-17"
+      }
+    }
+  ],
+  "decisionRule": "The study reports agree only when every interior cell is within the tolerance over at least the minimum comparable cells, against BOTH gdaldem and the closed form. The tolerance is never widened to reach agreement; a result under it is the finding.",
+  "notes": [
+    "The one-cell border is excluded because the documented gdaldem command omits -compute_edges.",
+    "computeTPI's neighbourhood is the discrete circle of radius root 2 cells, which is the eight-cell Moore window gdaldem averages over; radius 1 would be the four axial neighbours and a different index."
+  ],
+  "digest": "sha256:9489d2d372c5a9109b9e1da8d2fba23219bd98e5cb082b80f049ce3ccb961a56"
+}
