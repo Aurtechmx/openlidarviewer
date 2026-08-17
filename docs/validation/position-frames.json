@@ -332,7 +332,7 @@
         "source-local",
         "render-local"
       ],
-      "reads": 27,
+      "reads": 25,
       "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
     },
     {
