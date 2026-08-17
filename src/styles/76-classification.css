@@ -72,7 +72,7 @@
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
-  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
+  font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid var(--hairline);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
@@ -105,7 +105,7 @@
 }
 /* Tabular figures so counts line up column-right as they refine while streaming. */
 .olv-cl-count {
-  flex-shrink: 0; font-size: 11px; font-family: var(--mono);
+  flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
   font-variant-numeric: tabular-nums;
 }
