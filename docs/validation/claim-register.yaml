@@ -270,6 +270,7 @@ claims:
         - "Vertical fidelity between samples. The profile is what the sampling density can see."
         - "Sections crossing gaps, where the line is interpolated rather than measured."
         - "Any survey-grade longitudinal section."
+    scopeNote: "The required level is E4 (cross-implementation), and unlike the raster descriptors it has no reachable second implementation to compare against. The profile samples the raw cloud along a corridor perpendicular to the section line and reduces each bin to a type-7 percentile of the heights inside it (src/render/measure/profileSampler.ts). GDAL, PDAL, WhiteboxTools and SAGA all operate on rasters or offer per-cell statistics, and none exposes this corridor-percentile-of-a-point-cloud operation, so there is no independent tool to run the same definition. Writing one in this project would compare the code to itself. The claim therefore stays at E3 (synthetic known-truth against this project's own implementation) until an independent implementation of the same sampling exists, and this note records that the gap is the absence of a reference, not an untested algorithm."
 
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
