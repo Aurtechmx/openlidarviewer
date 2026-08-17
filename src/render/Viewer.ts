@@ -113,6 +113,8 @@ import {
   phaseDprScale,
   type RefinementPhase,
 } from './refinementPhase';
+import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
+import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
@@ -2159,6 +2161,16 @@ export class Viewer {
   /** The streaming scheduler, or null — for the streaming panel and diagnostics. */
   get streamingScheduler(): StreamingScheduler | null {
     return this._streaming?.scheduler ?? null;
+  }
+
+  /**
+   * Wanted-set refinement readiness for the active streaming session, or null
+   * when nothing is streaming. Drives the DPR phase machine and lets the panel
+   * read the same verdict the renderer acts on, not a divergent guess.
+   */
+  refinementReadiness(): RefinementReadiness | null {
+    const scheduler = this._streaming?.scheduler;
+    return scheduler ? evaluateRefinementReadiness(scheduler.readinessFacts()) : null;
   }
 
   /**
@@ -6240,18 +6252,30 @@ export class Viewer {
 
     let target: number;
     if (this._refinementPhasesEnabled) {
-      // P6 — track settle time and step DPR by discrete refinement phase. The
-      // coverage / central-refinement readiness are time proxies here until the
-      // P4 scheduler emits real signals; the phase machine itself is exact.
+      // P6 — step DPR by discrete refinement phase. With a streaming scheduler
+      // active the coverage / central-refine signals come from the WANTED-SET
+      // readiness verdict, so full resolution is reached only when the requested
+      // nodes are resident, not after a fixed time over a half-loaded cloud.
+      // Without a verdict (static cloud, or before the first cull) the
+      // elapsed-time proxy stands in; there is nothing to wait on there.
       if (moving) this._settledAtMs = 0;
       else if (this._settledAtMs === 0) this._settledAtMs = nowMs;
       const msSinceSettle = moving ? 0 : nowMs - this._settledAtMs;
+      const readiness = this.refinementReadiness();
+      const coverageComplete =
+        readiness && readiness.phase !== 'unknown'
+          ? readiness.phase === 'settling' || readiness.phase === 'settled'
+          : msSinceSettle >= SETTLE_MS;
+      const centralRefined =
+        readiness && readiness.phase !== 'unknown'
+          ? readiness.phase === 'settled'
+          : msSinceSettle >= PHASE_CENTER_PROXY_MS;
       this._phase = nextRefinementPhase(this._phase, {
         moving,
         msSinceSettle,
         settleMs: SETTLE_MS,
-        coverageComplete: msSinceSettle >= SETTLE_MS,
-        centralRefined: msSinceSettle >= PHASE_CENTER_PROXY_MS,
+        coverageComplete,
+        centralRefined,
       });
       target = Math.max(floor, maxDpr * phaseDprScale(this._phase));
       if (this._phase === 'moving' && angularSpeed > 0) {

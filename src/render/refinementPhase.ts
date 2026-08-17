@@ -58,18 +58,14 @@ export interface PhaseInput {
  * cannot skip coverage. Monotonic while parked: it never steps backward without
  * motion.
  *
- * What this function does NOT guarantee, despite an earlier version of this
- * comment saying it does: that phases advance on anything other than elapsed
- * time. This is a pure function of its inputs, and `coverageComplete` and
- * `centralRefined` are declared above as accepting a proxy. The only production
- * caller supplies both as exactly that — `Viewer.ts` passes
- * `msSinceSettle >= SETTLE_MS` and `msSinceSettle >= PHASE_CENTER_PROXY_MS` —
- * so as shipped the machine is driven by a clock and by nothing else.
- *
- * The claim was not wrong about the contract, it was wrong about the system: a
- * signal-shaped parameter fed a timer. `refinementReadiness.ts` derives the two
- * signals from scheduler state and is what makes the original sentence true.
- * Until its output reaches this call site, read the phases as timing.
+ * This is a pure function of its inputs; `coverageComplete` and `centralRefined`
+ * are readiness signals the caller supplies. With a streaming scheduler active,
+ * `Viewer.ts` derives both from the wanted-set verdict in
+ * `refinementReadiness.ts` (`settling`/`settled` → coverage/central), so the
+ * machine advances on data that is actually resident. Only when no verdict
+ * exists — a static cloud with nothing to stream, or before the first cull —
+ * does the Viewer fall back to `msSinceSettle` proxies, where there is no
+ * outstanding data for a signal to describe.
  */
 export function nextRefinementPhase(current: RefinementPhase, input: PhaseInput): RefinementPhase {
   if (input.moving) return 'moving';

@@ -36,11 +36,13 @@
  * Pure and deterministic: no timers, no DOM, no three.js, no scheduler import.
  * The same facts always produce the same verdict, so it is unit-tested in Node.
  *
- * STATUS: the pure half only. Nothing constructs `SchedulerReadinessFacts` from
- * a live `StreamingScheduler` yet, and the Viewer still feeds the phase machine
- * its time proxies. A tested leaf module with no production caller is not a
- * shipped behaviour change — this file is explicitly the former until the
- * scheduler emits these counts and the Viewer reads them.
+ * WIRING: `StreamingScheduler.readinessFacts()` builds `SchedulerReadinessFacts`
+ * from the live wanted set, and `Viewer.refinementReadiness()` evaluates it. The
+ * Viewer's DPR phase machine reads that verdict — `settling`/`settled` drive
+ * coverage and central-refine — so full resolution is reached only when the
+ * requested nodes are resident, not after a fixed elapsed time. The time proxy
+ * remains only as the fallback for a static cloud or the pre-first-cull window,
+ * where there is no wanted set to be ready about.
  */
 
 /**
