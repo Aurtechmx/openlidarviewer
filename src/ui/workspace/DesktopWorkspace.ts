@@ -31,16 +31,22 @@
 import { el } from '../dom';
 
 /** The semantic workspace modes, in display order. */
-export type WorkspaceMode = 'data' | 'analyse' | 'output';
+export type WorkspaceMode = 'data' | 'work' | 'analyse' | 'output';
 
 interface ModeDef {
   readonly id: WorkspaceMode;
   readonly label: string;
 }
 
-/** The tab order — Data (layers, classes, scene-work tools) → Analyse → Output. */
+/**
+ * The tab order — Data (layers, classes) → Work (the scene-work tools:
+ * measurement, annotation, clip) → Analyse → Output. Splitting Work out of Data
+ * keeps Data about what the scan IS and Work about what you DO to it, so neither
+ * tab carries the other's clutter.
+ */
 const MODES: readonly ModeDef[] = [
   { id: 'data', label: 'Data' },
+  { id: 'work', label: 'Work' },
   { id: 'analyse', label: 'Analyse' },
   { id: 'output', label: 'Output' },
 ];
@@ -182,12 +188,11 @@ export class DesktopWorkspace {
   layoutDesktop(p: WorkspacePanels): void {
     this.mountInMode('data', p.dataLayers);
     this.mountInMode('data', p.dataLayerHealth);
-    // Data also carries the classification panel and, beneath it, the scene-work
-    // tools (measurements, annotations, clip).
     this.mountInMode('data', p.classLegend);
-    if (p.measure) this.mountInMode('data', p.measure);
-    this.mountInMode('data', p.annotation);
-    this.mountInMode('data', p.clip);
+    // Work carries the scene-work tools: measurement, annotation, clip.
+    if (p.measure) this.mountInMode('work', p.measure);
+    this.mountInMode('work', p.annotation);
+    this.mountInMode('work', p.clip);
     this.mountInMode('analyse', p.processStudio);
     if (p.analyse) this.mountInMode('analyse', p.analyse);
     if (p.object) this.mountInMode('analyse', p.object);
