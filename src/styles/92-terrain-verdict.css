@@ -398,7 +398,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-legend-bar { height: 6px; border-radius: var(--radius-xs); border: 0.5px solid var(--hairline); }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
-  font-size: 9px; color: var(--text-faint);
+  font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
 /* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
 .olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
