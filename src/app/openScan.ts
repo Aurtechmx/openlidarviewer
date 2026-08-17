@@ -38,6 +38,7 @@ import type { ClassScope } from '../render/class/classScope';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import type { Viewer } from '../render/Viewer';
 import type { Inspector } from '../ui/Inspector';
+import type { ExportPanel } from '../ui/ExportPanel';
 import type { ToolDock } from '../ui/toolDock';
 import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
@@ -133,6 +134,8 @@ export interface OpenScanDeps {
   layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired'>;
   /** The Inspector panel. */
   inspector: Inspector;
+  /** The Output panel — owns the image-export / report gating. */
+  exportPanel: Pick<ExportPanel, 'setImageExportEnabled' | 'setImageExportAvailability'>;
   /** Provenance / dataset-intelligence card refreshers. */
   inspectorCards: Pick<
     InspectorCardRefreshers,
@@ -436,11 +439,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // instead of waiting on the ~7 KB gzip fetch + parse. Pure fire-and-
     // forget; we don't await the result.
     try {
-      deps.inspector.setImageExportEnabled(true);
+      deps.exportPanel.setImageExportEnabled(true);
       // Per-mode gating — disable buttons whose mode the loaded cloud can't
       // satisfy (Normal map on a LAZ, etc.) so the user sees the constraint
       // before clicking rather than as a post-click error toast.
-      deps.inspector.setImageExportAvailability(viewer.availableImageExportModes());
+      deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
     } catch (err) {
       if (deps.debug) console.warn('[inspector] setImageExportEnabled threw', err);
     }

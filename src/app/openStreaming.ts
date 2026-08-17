@@ -41,6 +41,7 @@ import type { CrsInfo, CrsLinearUnit } from '../io/crs';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import type { Viewer } from '../render/Viewer';
 import type { Inspector } from '../ui/Inspector';
+import type { ExportPanel } from '../ui/ExportPanel';
 import type { Stage } from '../ui/Stage';
 import type { DropZone } from '../ui/DropZone';
 import type { StreamingPanel } from '../ui/StreamingPanel';
@@ -307,6 +308,7 @@ export interface OpenStreamingDeps {
   // ── View collaborators ──
   stage: Pick<Stage, 'hideEmptyState'>;
   inspector: Inspector;
+  exportPanel: Pick<ExportPanel, 'setImageExportEnabled' | 'setImageExportAvailability' | 'setStreamingMode'>;
   streamingPanel: Pick<StreamingPanel, 'setPhase' | 'show' | 'setColorModes' | 'setQuality' | 'setSummary'>;
   classLegendPanel: Pick<ClassLegendPanel, 'setClasses' | 'hide' | 'getVisibility'>;
   inspectorCards: Pick<
@@ -479,15 +481,16 @@ export async function openStreamingCopc(
   // the image-export buttons in the Inspector can light up. The streaming
   // path doesn't go through `inspector.addCloud`, so the gate has to flip
   // here too. Pre-warm the Studio chunk for the same reason as above.
-  deps.inspector.setImageExportEnabled(true);
+  deps.exportPanel.setImageExportEnabled(true);
   // Per-mode gating — streaming COPC / EPT rarely carry normals or
   // classification; disable the corresponding buttons at the source.
-  deps.inspector.setImageExportAvailability(viewer.availableImageExportModes());
+  deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
   // Switch the Inspector into streaming layout — hides Layers / Color by
   // / Point size / Rendering / Export (their streaming-equivalents are
   // in the StreamingPanel) and pins the panel to the lower-right so
   // both panels coexist on desktop.
   deps.inspector.setStreamingMode(true);
+  deps.exportPanel.setStreamingMode(true);
   try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
   catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
   deps.setLastStreamingReportCloud(cloud);
@@ -764,12 +767,13 @@ export async function handleRemoteEpt(
     );
     deps.streamingPanel.setQuality(deps.getStreamingQuality());
     deps.streamingPanel.setPhase('Streaming coarse geometry…');
-    deps.inspector.setImageExportEnabled(true);
+    deps.exportPanel.setImageExportEnabled(true);
     // Per-mode gating — EPT streams almost never carry normals.
-    deps.inspector.setImageExportAvailability(viewer.availableImageExportModes());
+    deps.exportPanel.setImageExportAvailability(viewer.availableImageExportModes());
     // Same streaming-mode layout the COPC path uses — hide Inspector's
     // static-cloud sections and populate the streaming Scan Report.
     deps.inspector.setStreamingMode(true);
+    deps.exportPanel.setStreamingMode(true);
     try { deps.inspector.setDetail(cloud.sourcePointCount, cloud.sourcePointCount); }
     catch (err) { if (deps.debug) console.warn('[inspector] setDetail (streaming) threw', err); }
     try {

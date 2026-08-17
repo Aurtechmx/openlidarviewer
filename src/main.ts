@@ -1267,113 +1267,6 @@ const inspector = new Inspector({
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
-  onExport: (format) => {
-    const cloud = scans.activeCloud() ?? undefined;
-    if (!cloud) return;
-    // The exporter is a lazy chunk; fetched on first export of the session.
-    void loadExporters().then(({ exportCloud }) => {
-      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
-    });
-  },
-  onExportImage: (mode) => {
-    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
-    // pulled in by viewer.exportImage on the first invocation. The download
-    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
-    // surfaces as a visible alert.
-    const sourceName = scans.activeId
-      ? viewer.getCloud(scans.activeId)?.name
-      : viewer.streamingCloud?.name;
-    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
-    // surface a precise per-mode progress string while the lazy
-    // Studio chunk loads and the export renders.
-    const modeLabel: Record<string, string> = {
-      'orthographic-rgb': 'orthographic RGB',
-      'height-map': 'height map',
-      intensity: 'intensity map',
-      classification: 'classification map',
-      depth: 'depth map',
-      normal: 'normal map',
-      contour: 'contour map',
-    };
-    const label = modeLabel[mode] ?? mode;
-    dropZone.setProgress(`Exporting ${label}…`);
-    viewer
-      // Thread the active class-scope stamp so a filtered export carries the
-      // "showing N of M classes" banner; empty when nothing is hidden.
-      .exportImage(mode, {}, currentClassScopeStamp())
-      .then(async (result) => {
-        // Georeferenced ortho path (v0.4.5, workplan C4): when the exporter
-        // returned world-file data (true top-down ortho frame + known world
-        // origin + CRS WKT), the download is one ZIP — PNG + `.pgw` + `.prj`
-        // — that QGIS/ArcGIS place directly. Every other export keeps the
-        // existing bare-PNG download and filename. Packaging failures fall
-        // back to the bare PNG rather than sinking an export that already
-        // rendered fine.
-        if (result.worldFile) {
-          try {
-            const { buildStudioPngPackage } = await loadPngWorldFile();
-            const wf = result.worldFile;
-            const pkg = buildStudioPngPackage({
-              basename: `${base}-${mode}`,
-              png: new Uint8Array(await result.blob.arrayBuffer()),
-              extent: wf.extent,
-              widthPx: wf.widthPx,
-              heightPx: wf.heightPx,
-              worldOrigin: wf.worldOrigin,
-              wkt: wf.wkt,
-            });
-            if (pkg) {
-              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
-              recordUsage('export', mode);
-              dropZone.setProgress(null);
-              return;
-            }
-          } catch (err) {
-            console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
-          }
-        }
-        triggerDownload(result.blob, `${base}-${mode}.png`);
-        recordUsage('export', mode);
-        dropZone.setProgress(null);
-      })
-      .catch((err: unknown) => {
-        recordUsage('error', 'export');
-        dropZone.setProgress(null);
-        // The orchestrator's explicit reason ("Classification export is
-        // unavailable — this cloud has no classification channel.") is the
-        // most actionable thing we can show, so it goes both to the console
-        // (for debugging) and to a non-blocking alert (so the user knows
-        // something happened and why). Replaces the alert with a
-        // Surface the failure through the shared toast UI rather than a
-        // modal alert — blocking the page on a generation failure is a UX
-        // regression we no longer accept.
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[image-export]', err);
-        dropZone.setError(`Image export failed: ${msg}`);
-      });
-  },
-  onExportReport: (templateId) => {
-    // Generate a PDF report from the live scan state + annotations +
-    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
-    // lives behind `loadReportEngine()`; first click downloads both. The
-    // report covers what the scan-report card already does on PNG
-    // exports, but as a multi-page PDF with the full Inspector context.
-    // The progress toast surfaces while the lazy module loads and the PDF
-    // renders; failures route through the same toast UI as every other
-    // export.
-    dropZone.setProgress('Generating report…');
-    generateReportPdf(templateId)
-      .then(() => {
-        recordUsage('report', templateId);
-        dropZone.setProgress(null);
-      })
-      .catch((err: unknown) => {
-        recordUsage('error', 'report');
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[report]', err);
-        dropZone.setError(`Report generation failed: ${msg}`);
-      });
-  },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -2953,6 +2846,113 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 });
 
 const exportPanel = new ExportPanel({
+  onExport: (format) => {
+    const cloud = scans.activeCloud() ?? undefined;
+    if (!cloud) return;
+    // The exporter is a lazy chunk; fetched on first export of the session.
+    void loadExporters().then(({ exportCloud }) => {
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
+    });
+  },
+  onExportImage: (mode) => {
+    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
+    // pulled in by viewer.exportImage on the first invocation. The download
+    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
+    // surfaces as a visible alert.
+    const sourceName = scans.activeId
+      ? viewer.getCloud(scans.activeId)?.name
+      : viewer.streamingCloud?.name;
+    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
+    // surface a precise per-mode progress string while the lazy
+    // Studio chunk loads and the export renders.
+    const modeLabel: Record<string, string> = {
+      'orthographic-rgb': 'orthographic RGB',
+      'height-map': 'height map',
+      intensity: 'intensity map',
+      classification: 'classification map',
+      depth: 'depth map',
+      normal: 'normal map',
+      contour: 'contour map',
+    };
+    const label = modeLabel[mode] ?? mode;
+    dropZone.setProgress(`Exporting ${label}…`);
+    viewer
+      // Thread the active class-scope stamp so a filtered export carries the
+      // "showing N of M classes" banner; empty when nothing is hidden.
+      .exportImage(mode, {}, currentClassScopeStamp())
+      .then(async (result) => {
+        // Georeferenced ortho path (v0.4.5, workplan C4): when the exporter
+        // returned world-file data (true top-down ortho frame + known world
+        // origin + CRS WKT), the download is one ZIP — PNG + `.pgw` + `.prj`
+        // — that QGIS/ArcGIS place directly. Every other export keeps the
+        // existing bare-PNG download and filename. Packaging failures fall
+        // back to the bare PNG rather than sinking an export that already
+        // rendered fine.
+        if (result.worldFile) {
+          try {
+            const { buildStudioPngPackage } = await loadPngWorldFile();
+            const wf = result.worldFile;
+            const pkg = buildStudioPngPackage({
+              basename: `${base}-${mode}`,
+              png: new Uint8Array(await result.blob.arrayBuffer()),
+              extent: wf.extent,
+              widthPx: wf.widthPx,
+              heightPx: wf.heightPx,
+              worldOrigin: wf.worldOrigin,
+              wkt: wf.wkt,
+            });
+            if (pkg) {
+              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
+              recordUsage('export', mode);
+              dropZone.setProgress(null);
+              return;
+            }
+          } catch (err) {
+            console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
+          }
+        }
+        triggerDownload(result.blob, `${base}-${mode}.png`);
+        recordUsage('export', mode);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'export');
+        dropZone.setProgress(null);
+        // The orchestrator's explicit reason ("Classification export is
+        // unavailable — this cloud has no classification channel.") is the
+        // most actionable thing we can show, so it goes both to the console
+        // (for debugging) and to a non-blocking alert (so the user knows
+        // something happened and why). Replaces the alert with a
+        // Surface the failure through the shared toast UI rather than a
+        // modal alert — blocking the page on a generation failure is a UX
+        // regression we no longer accept.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[image-export]', err);
+        dropZone.setError(`Image export failed: ${msg}`);
+      });
+  },
+  onExportReport: (templateId) => {
+    // Generate a PDF report from the live scan state + annotations +
+    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
+    // lives behind `loadReportEngine()`; first click downloads both. The
+    // report covers what the scan-report card already does on PNG
+    // exports, but as a multi-page PDF with the full Inspector context.
+    // The progress toast surfaces while the lazy module loads and the PDF
+    // renders; failures route through the same toast UI as every other
+    // export.
+    dropZone.setProgress('Generating report…');
+    generateReportPdf(templateId)
+      .then(() => {
+        recordUsage('report', templateId);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'report');
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[report]', err);
+        dropZone.setError(`Report generation failed: ${msg}`);
+      });
+  },
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
   // via getCloud below). Reads only scalar facts: resident count + colour/CRS
@@ -5020,6 +5020,7 @@ const openScanDeps: OpenScanDeps = {
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
+  exportPanel,
   inspectorCards,
   crsCoordinator,
   dock,
@@ -5087,6 +5088,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   dropZone,
   stage,
   inspector,
+  exportPanel,
   streamingPanel,
   classLegendPanel,
   inspectorCards,
@@ -5285,6 +5287,8 @@ function closeStreaming(): void {
   // and clear the streaming-mode positioning class.
   try { inspector.setStreamingMode(false); }
   catch (err) { if (debug) console.warn('[inspector] setStreamingMode(false) threw', err); }
+  try { exportPanel.setStreamingMode(false); }
+  catch (err) { if (debug) console.warn('[exportPanel] setStreamingMode(false) threw', err); }
   try { inspector.clearDatasetIntelligence(); }
   catch (err) { if (debug) console.warn('[inspector] clearDatasetIntelligence threw', err); }
   inspector.element.classList.remove('olv-hidden');
@@ -5591,7 +5595,7 @@ function resetToEmptyState(): void {
   // Visual Export Studio — no scan loaded, no source to render. The
   // buttons go back to disabled with their "load a scan first" hint so the
   // user can't fire an export against nothing.
-  inspector.setImageExportEnabled(false);
+  exportPanel.setImageExportEnabled(false);
   stage.showEmptyState();
   navBar.element.classList.add('olv-hidden');
   // Reset the NavBar mode to 'orbit'. The "Click the scan to look around"
