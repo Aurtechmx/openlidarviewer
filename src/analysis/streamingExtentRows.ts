@@ -1,5 +1,5 @@
-import type { CrsLinearUnit } from '../io/crs';
-import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import type { SpatialContext } from '../geo/SpatialContext';
+import { verticalMetresPerUnit } from '../geo/SpatialContext';
 
 /** One extent/density/spacing row the streaming Scan-report emits. */
 export interface ExtentRowSpec {
@@ -23,12 +23,6 @@ export interface StreamingExtentResult {
   readonly rows: readonly ExtentRowSpec[];
 }
 
-type ExtentCrs = {
-  readonly linearUnit?: CrsLinearUnit;
-  readonly linearUnitToMetres?: number;
-  readonly verticalUnitToMetres?: number;
-} | null;
-
 /**
  * Build the Width / Depth / Height / Density / Spacing rows for the streaming
  * Scan-report, FAILING CLOSED on an unconfirmed linear unit.
@@ -37,26 +31,30 @@ type ExtentCrs = {
  * and a CRS-less cloud resolves the same way. Multiplying a source span by
  * that factor and stamping "m" silently reports non-metre data as metres — a
  * state-plane-FEET COPC would over-report extent ~3.28× mislabelled as metres.
- * So metres are only claimed when the CRS declares a real linear unit
- * (`crsInfo != null && crsInfo.linearUnit !== 'unknown'`), the same gate the
- * measure tool (`setCrsKnown`) and the lasso (`densityUnitKnown`) already
- * apply. When the unit is unconfirmed the metre factor is dropped, the raw
- * source span is shown, and the "m" / "pts/m²" claim is withheld.
+ * So metres are only claimed when the frame declares a real linear unit
+ * (`ctx.linearUnitKnown`), the same gate the measure tool (`setCrsKnown`) and
+ * the lasso (`densityUnitKnown`) already apply. When the unit is unconfirmed
+ * the metre factor is dropped, the raw source span is shown, and the "m" /
+ * "pts/m²" claim is withheld. The frame comes in as a {@link SpatialContext}
+ * rather than a raw CRS subset, so the unit gate and the metre factors are read
+ * from the one resolved model instead of a hand-rolled predicate.
  *
  * COPC/EPT are Z-up by spec, so the horizontal footprint is X·Y and height is
- * Z; the vertical span uses the vertical unit when the CRS declares one.
+ * Z; the vertical span uses the vertical unit when the frame declares one,
+ * falling back to the horizontal factor (the GeoTIFF `'horizontal'` policy,
+ * matching the prior `verticalUnitToMetres ?? mpu`).
  */
 export function streamingExtentRows(
   header: { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] },
-  crsInfo: ExtentCrs,
+  ctx: SpatialContext,
   sourcePointCount: number,
 ): StreamingExtentResult {
-  const unitConfirmed = isLinearUnitKnown(crsInfo);
+  const unitConfirmed = ctx.linearUnitKnown;
 
   // Apply the metre factor ONLY when the unit is real. Otherwise the span stays
   // in raw source units (factor 1) and is not labelled "m".
-  const mpu = unitConfirmed ? (crsInfo?.linearUnitToMetres ?? 1) : 1;
-  const vmpu = unitConfirmed ? (crsInfo?.verticalUnitToMetres ?? mpu) : 1;
+  const mpu = unitConfirmed ? ctx.linearUnitToMetres : 1;
+  const vmpu = unitConfirmed ? (verticalMetresPerUnit(ctx, 'horizontal') ?? mpu) : 1;
 
   const w = (header.max[0] - header.min[0]) * mpu;
   const d = (header.max[1] - header.min[1]) * mpu;
