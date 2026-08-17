@@ -2,11 +2,21 @@
  * ProcessService.ts — the single source of product eligibility (Phase 1).
  *
  * The capability maths already live in `processCapabilities.evaluateCapabilities`
- * (pure). This is the thin, stateless surface the shell and the exporters both
- * read, so eligibility is decided in exactly one place: no button re-derives
- * "can I export a DTM?" on its own. It composes the fail-closed scan-facts
- * normaliser with the evaluator and exposes per-product lookups plus a readiness
- * roll-up. No live objects, no side effects.
+ * (pure). This is the thin, stateless surface the shell and the Process Studio
+ * panel read for a product's coarse readiness (ready / review / blocked). It
+ * composes the fail-closed scan-facts normaliser with the evaluator and exposes
+ * per-product lookups plus a readiness roll-up. No live objects, no side effects.
+ *
+ * SCOPE. This is the readiness MODEL, not the export enforcement point. The file
+ * exporters enforce `src/export/contourExportPermit.ts` — a finer, independent
+ * decision that also reads launch state, evidence grade, and the precision
+ * permit, and that intentionally allows a `cartographic-only` exploratory export
+ * where this service reports `review`. The unforgeable {@link ProcessService.authorize}
+ * / {@link ProcessService.runIfAuthorized} seam models a strict "produce only
+ * when ready" policy; no product uses it in production yet, because every OLV
+ * product supports a legitimate exploratory / review path that a hard ready-only
+ * gate would wrongly block. Making one authorization backbone for both the
+ * readiness model and the export permit is deferred design work.
  */
 
 import type { ProcessPlan, ProductCapability, ProductId, Readiness, ScanFacts } from './ProcessPlan';

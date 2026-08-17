@@ -5,8 +5,19 @@
  * stages that apply, each product's eligibility (ready / review / blocked with a
  * reason), and the independent QA checks (pass / review / block). It reads the
  * pure Phase-1/2 services — `ProcessService`, `processStages`, `qaChecks` — and
- * renders them; it decides nothing itself, so the panel and the exporters can
- * never disagree about what is eligible.
+ * renders them; it decides nothing itself.
+ *
+ * It shows `ProcessService`'s coarse readiness (ready / review / blocked). That
+ * is NOT the same gate the file exporters enforce: a contour or DEM export is
+ * permitted by `src/export/contourExportPermit.ts`, a finer decision that also
+ * reads launch state, the evidence grade, and the in-memory precision permit,
+ * and that deliberately allows a `cartographic-only` exploratory export where
+ * `ProcessService` reports `review`. So the panel and an exporter CAN show
+ * different verdicts for the same product, and that is by design — the panel
+ * describes whether a metric-grade product is READY, the permit decides whether
+ * a specific file (graded or exploratory) may be written. They are not yet a
+ * single authorization backbone; unifying them is deferred work, not a claim
+ * this panel makes.
  *
  * DISPLAY ONLY, in the same vocabulary as ClassLegendPanel / MeasurePanel: a
  * `readonly element`, `el(...)`-built DOM, and `mount()/show()/hide()/update()`.
