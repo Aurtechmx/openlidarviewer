@@ -1,4 +1,5 @@
 import { el, formatCount } from './dom';
+import { collapsibleSection } from './collapsibleSection';
 import {
   compatibilityNote,
   type LayerCompatibility,
@@ -31,8 +32,6 @@ import {
 import { EDL_DEFAULTS, EDL_STRENGTH_RANGE } from '../render/edl';
 import type { EdlPresetId } from '../render/edlPresets';
 import type { SplatMode } from '../render/splatShader';
-import type { ExportFormat } from '../io/exporters';
-import type { ExportMode } from '../export/types';
 import {
   snapshot as snapshotUsage,
   reset as resetUsage,
@@ -42,18 +41,6 @@ import {
 import type { ProvenanceFingerprint, CaptureType } from '../diagnostics/provenance';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { listCrsEntriesByRegion, getCrsEntry } from '../geo/CrsRegistry';
-// Direct subpath imports — NOT the `'../report'` barrel. The barrel
-// re-exports `generateReport` / `renderReportPdf`, which transitively
-// pull pdf-lib (~150 KB) into the static import graph and break the
-// lazy-chunk split for the entire report engine. `ReportTemplates.ts`
-// is a pure-data module with no pdf-lib dependency, so it's safe to
-// hold a static reference to.
-import {
-  REPORT_TEMPLATES,
-  DEFAULT_TEMPLATE_ID,
-  getReportTemplate,
-} from '../report/ReportTemplates';
-import type { ReportTemplateId } from '../report/types';
 // Workflow presets (v0.4.5) — pure table; the rail renders it, main.ts
 // applies it through the Viewer's existing setters.
 import {
@@ -123,21 +110,6 @@ export interface InspectorCallbacks {
   onCompareLayers?: () => void;
   /** Download the most recent comparison's signed difference as a georeferenced raster. */
   onExportDifference?: () => void;
-  /** Export the active cloud to a file format. */
-  onExport: (format: ExportFormat) => void;
-  /**
-   * Visual Export Studio — render the live scan in one of the four
-   * Studio modes (orthographic-rgb / height-map / intensity / classification)
-   * and download the result as a PNG. The Inspector surfaces a button per
-   * mode; main.ts owns the lazy import and the download wiring.
-   */
-  onExportImage: (mode: ExportMode) => void;
-  /**
-   * generate a PDF report from the live scan + annotations
-   * + measurements using the named template. main.ts lazy-loads the
-   * report engine + pdf-lib on first click.
-   */
-  onExportReport: (templateId: string) => void;
   /** Save the current camera viewpoint. */
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */
@@ -226,73 +198,6 @@ const MODE_TITLES: Record<ColorMode, string> = {
     '(extrapolated/gap). Same buckets as Coverage. Approximate.',
 };
 
-const EXPORT_FORMATS: ExportFormat[] = ['ply', 'obj', 'xyz', 'csv'];
-
-/**
- * Visual Export Studio — the four PNG export modes the Inspector
- * exposes in the new "Image export" section. Each entry is `[mode, label,
- * title]` — the title doubles as the hover-hint for the disabled button when
- * the mode is unavailable on the loaded cloud.
- */
-// Honest button labels — user-reported confusion: "all reports show the
-// same export". Root cause was the misnamed "Ortho RGB" which captures
-// the CURRENT colour mode (not specifically RGB), so on a survey LAZ
-// being viewed in elevation mode it produced the same image as "Height
-// Map". Renamed to "View capture" so users know what they're getting:
-// a PNG of whatever they currently see. Tooltip is honest that it
-// preserves the active colour mode and isn't redundant with Height Map
-// only when the user is actively choosing RGB / intensity / class
-// before clicking.
-// Order matters — the specific colour-mode buttons come FIRST because
-// they reliably produce distinct images, then the generic "View capture"
-// comes LAST. The reordering is the design-audit "reduction filter"
-// applied: a user who clicks View capture without changing Color by
-// first will get the same image as Height map (current default for
-// survey LAZ). Placing the specific buttons first signals "to
-// differentiate, pick one of these" before falling through to the
-// generic capture.
-const IMAGE_EXPORT_BUTTONS: ReadonlyArray<{
-  readonly mode: ExportMode;
-  readonly label: string;
-  readonly title: string;
-}> = [
-  {
-    mode: 'height-map',
-    label: 'Height map',
-    title: 'Forces elevation colouring. Always distinct from view-capture-in-other-modes.',
-  },
-  {
-    mode: 'intensity',
-    label: 'Intensity',
-    title: 'Forces LiDAR-intensity colouring. Disabled on clouds without an intensity channel.',
-  },
-  {
-    mode: 'classification',
-    label: 'Class map',
-    title: 'Forces ASPRS-classification colouring. Disabled on clouds without a classification channel.',
-  },
-  {
-    mode: 'normal',
-    label: 'Normal map',
-    title:
-      'RGB-encodes per-point surface normals. Disabled on clouds without normals ' +
-      '(PCD / PTX / GLTF carry them; raw LiDAR rarely does).',
-  },
-  {
-    mode: 'orthographic-rgb',
-    label: 'View capture',
-    title:
-      'Captures the current on-screen view in whatever colour mode is active. ' +
-      'To get a distinct image, switch the Color by chip before clicking — ' +
-      'otherwise this matches Height Map when you are viewing in elevation. ' +
-      'Georeferenced scans (known CRS + world origin) instead download a ' +
-      'top-down ortho ZIP with .pgw/.prj sidecars that GIS tools place directly.',
-  },
-  // Depth Map + Contour Map intentionally absent — their previous
-  // implementations produced an elevation raster (same as Height Map)
-  // rather than true camera-relative depth or marching-squares contour
-  // lines. They will return once the proper implementations land.
-];
 
 /**
  * Visuals Studio — Visuals Studio state the Inspector keeps in sync
@@ -532,31 +437,6 @@ function buildRangeFilter(opts: {
   };
 }
 
-/**
- * A collapsible section using native `<details>` / `<summary>`. The
- * summary is styled to match the static `olv-section-label` so the
- * panel reads as a uniform list of sections — the only visual
- * difference is the disclosure caret. Default-closed for sections
- * the user opens occasionally (Detail, Provenance, Coordinate
- * system, Scan report, Saved views, every export group), which
- * reduces first-paint density by ~60% on the 232 px panel.
- */
-function collapsibleSection(
-  label: string,
-  body: HTMLElement,
-  opts: { readonly open?: boolean } = {},
-): HTMLDetailsElement {
-  const details = el('details', {
-    className: 'olv-section olv-section-collapsible',
-  }) as HTMLDetailsElement;
-  if (opts.open) details.open = true;
-  const summary = el('summary', {
-    className: 'olv-section-label olv-section-summary',
-    text: label,
-  });
-  details.append(summary, body);
-  return details;
-}
 
 /** A small on/off chip button; the active class reflects the on state. */
 function toggleChip(
@@ -576,8 +456,8 @@ function toggleChip(
 
 /**
  * The floating Inspector panel: the cloud layer list, the color-by chips, a
- * point-size slider, the Detail readout, the Scan Report, saved camera views,
- * and the export buttons.
+ * point-size slider, the Detail readout, the Scan Report, and saved camera
+ * views. The exports live in the Output panel.
  */
 export class Inspector {
   readonly element: HTMLElement;
@@ -689,7 +569,6 @@ export class Inspector {
   private readonly _layersSection!: HTMLElement;
   private readonly _colorBySection!: HTMLElement;
   private readonly _renderingSection!: HTMLElement;
-  private readonly _exportSection!: HTMLElement;
   private readonly _viewList = el('div', { className: 'olv-views' });
   /** Session-stats body — rebuilt lazily when the details section opens. */
   private readonly _sessionStatsBody: HTMLElement;
@@ -725,18 +604,6 @@ export class Inspector {
   private _compareBtn: HTMLButtonElement | null = null;
   private _compareResult: HTMLElement | null = null;
   private _diffBtn: HTMLButtonElement | null = null;
-  /**
-   * Visual Export Studio — the per-mode image-export buttons, kept
-   * by mode so {@link setImageExportEnabled} can disable them as a group
-   * when no cloud is loaded (preventing the "click → console error" gap)
-   * and per-mode when a specific channel is missing.
-   */
-  private readonly _imageExportButtons = new Map<ExportMode, HTMLButtonElement>();
-  /** The original tooltip for each image-export button — restored on enable. */
-  private readonly _imageExportTitles = new Map<ExportMode, string>();
-  /** the Report PDF button, gated like the image-export ones. */
-  private readonly _reportButton: HTMLButtonElement | null = null;
-  private readonly _reportSelect: HTMLSelectElement | null = null;
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _pointSizeValue: HTMLElement;
@@ -947,96 +814,6 @@ export class Inspector {
     });
     const views = el('div', {}, [saveView, this._viewList]);
 
-    // Export: one button per supported output format.
-    const exportButtons = EXPORT_FORMATS.map((format) => {
-      const button = el('button', {
-        className: 'olv-export-btn',
-        text: format.toUpperCase(),
-        title: `Export the cloud as ${format.toUpperCase()}`,
-      });
-      button.addEventListener('click', () => {
-        button.blur();
-        this._cb.onExport(format);
-      });
-      return button;
-    });
-    const exporter = el('div', { className: 'olv-export' }, exportButtons);
-
-    // Visual Export Studio — one button per export mode. The class
-    // matches the existing exporter row above so the CSS layout is shared.
-    // Buttons start disabled — `setImageExportEnabled()` flips them on once
-    // a scan is loaded so users can't fire an export with nothing to draw.
-    const imageExportButtons = IMAGE_EXPORT_BUTTONS.map(({ mode, label, title }) => {
-      const button = el('button', {
-        className: 'olv-export-btn',
-        text: label,
-        title,
-      });
-      button.disabled = true;
-      button.title = `${title} (load a scan first)`;
-      button.addEventListener('click', () => {
-        button.blur();
-        this._cb.onExportImage(mode);
-      });
-      this._imageExportButtons.set(mode, button);
-      this._imageExportTitles.set(mode, title);
-      return button;
-    });
-    // The image-export row carries 7 buttons — too many to fit in a single
-    // flex row inside the 232 px Inspector panel. The 2-column grid layout
-    // wraps cleanly into 4 rows (last row holds the seventh button).
-    const imageExporter = el('div', { className: 'olv-export-grid' }, imageExportButtons);
-
-    // PDF Report controls. A native <select> lets the user pick from the
-    // full template catalogue (`REPORT_TEMPLATES`) — the picker reads the
-    // current id off the select on click. The button stays single so the
-    // 232 px panel doesn't acquire a per-template button row.
-    const reportSelect = el('select', {
-      className: 'olv-report-select',
-      ariaLabel: 'PDF report template',
-    }) as HTMLSelectElement;
-    for (const t of REPORT_TEMPLATES) {
-      const option = el('option', { text: t.label, title: t.description });
-      option.value = t.id;
-      if (t.id === DEFAULT_TEMPLATE_ID) option.selected = true;
-      reportSelect.append(option);
-    }
-    // Mirror the button's empty-state disabled gate so the select and the
-    // button enable together once a scan loads.
-    reportSelect.disabled = true;
-    const reportButton = el('button', {
-      className: 'olv-export-btn',
-      text: 'Report PDF',
-      title: 'Generate a multi-page PDF report from the selected template.',
-    });
-    reportButton.disabled = true;
-    reportButton.title = `${reportButton.title} (load a scan first)`;
-    reportButton.addEventListener('click', () => {
-      reportButton.blur();
-      const templateId = reportSelect.value as ReportTemplateId;
-      // Defence-in-depth: the select is populated from REPORT_TEMPLATES, but
-      // a devtools-injected <option value="…"> or a future template rename
-      // could surface an unknown id. Surface a visible button-state flash
-      // so the click is observably acknowledged — silently bailing left the
-      // user wondering whether the click registered.
-      if (!getReportTemplate(templateId)) {
-        const original = reportButton.textContent;
-        reportButton.textContent = 'Unknown template';
-        reportButton.disabled = true;
-        window.setTimeout(() => {
-          reportButton.textContent = original;
-          reportButton.disabled = false;
-        }, 1500);
-        return;
-      }
-      this._cb.onExportReport(templateId);
-    });
-    this._reportButton = reportButton;
-    this._reportSelect = reportSelect;
-    const reportExporter = el('div', { className: 'olv-report-row' }, [
-      reportSelect,
-      reportButton,
-    ]);
 
     // The header carries the panel title and — on phones, where the panel is
     // a bottom sheet — a close control. The close handler stops propagation
@@ -1116,16 +893,15 @@ export class Inspector {
     // stay statically expanded because they're the user's per-frame
     // touch points. Everything below is collapsed by default — Detail
     // is informational, Provenance / Coordinate system / Scan report
-    // are loaded once and re-read on demand, Saved views starts empty,
-    // and the three export groups are each one-click destinations
-    // users go looking for. First-paint cognitive load drops by ~60%
-    // without removing any feature.
+    // are loaded once and re-read on demand, and Saved views starts
+    // empty. First-paint cognitive load drops by ~60% without removing
+    // any feature.
     // Per-section refs — captured so `setStreamingMode` can hide the
     // static-cloud-only sections during streaming (the StreamingPanel
     // owns the streaming-equivalents: streaming color modes, quality
     // control, saved views are mirrored there). The kept sections —
-    // Detail, Provenance, Coordinate system, Scan report, Image export,
-    // Report PDF — work uniformly against either source type.
+    // Detail, Provenance, Coordinate system, Scan report — work
+    // uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
     // Height percentile-trim row, mounted inside "Color by" beneath the chip
     // rail and shown only while colouring BY elevation. It clips the top/bottom
@@ -1351,7 +1127,6 @@ export class Inspector {
     // "Rendering" section; it stays visible during streaming so point
     // thickness remains adjustable on a streaming COPC / EPT.
     this._renderingSection = collapsibleSection('Rendering', renderingBody);
-    this._exportSection = collapsibleSection('Export', exporter);
 
     // Dataset Intelligence — informational summary of the Terrain
     // Foundation outputs. Lives directly under the Scan Intelligence
@@ -1388,9 +1163,6 @@ export class Inspector {
       this._crsSection,
       collapsibleSection('Scan report', this._report),
       collapsibleSection('Saved views', views),
-      this._exportSection,
-      collapsibleSection('Image export', imageExporter),
-      collapsibleSection('Report PDF', reportExporter),
       sessionStats,
     ]);
     this._showReportPlaceholder();
@@ -1638,23 +1410,13 @@ export class Inspector {
   }
 
   /**
-   * Visual Export Studio — toggle the image-export buttons as a
-   * group. The Studio modes all require a loaded cloud (the height-map,
-   * intensity, and classification exporters' `isAvailable` gates on the
-   * cloud AABB), so the failure mode is hidden at the UI layer by disabling
-   * the buttons until `enabled === true`. Per-mode capability gating
-   * (intensity disabled on a PLY, classification disabled on PCD without
-   * a label channel) is handled inside each exporter's `isAvailable`.
-   */
-  /**
    * Streaming-mode toggle.
    *
-   * When `true`, hides the four static-cloud-only sections (Layers, Color by,
-   * Point size, Rendering) and the "Export" download section. Their
+   * When `true`, hides the static-cloud-only sections (Layers, Color by). Their
    * streaming-equivalents — color modes, quality control, resident-points
    * stats — live in the StreamingPanel; the Inspector retains Detail,
-   * Provenance, Coordinate system, Scan report, Saved views, Image export
-   * and Report PDF, which all work uniformly against a streaming source.
+   * Provenance, Coordinate system, Scan report and Saved views, which all work
+   * uniformly against a streaming source.
    *
    * When `false` (default), all sections are visible — the static load path
    * uses the full Inspector.
@@ -1667,7 +1429,6 @@ export class Inspector {
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;
     this._colorBySection.style.display = hidden;
-    this._exportSection.style.display = hidden;
     // The Render-quality section (point size, point-size mode, EDL,
     // antialiasing) stays visible while streaming. Each control applies to the
     // resident streaming node materials and every newly-decoded node inherits
@@ -1703,59 +1464,6 @@ export class Inspector {
     this.sheetToggle.classList.toggle('olv-hidden', empty);
   }
 
-  setImageExportEnabled(enabled: boolean): void {
-    for (const [mode, button] of this._imageExportButtons) {
-      button.disabled = !enabled;
-      const baseTitle = this._imageExportTitles.get(mode) ?? '';
-      button.title = enabled ? baseTitle : `${baseTitle} (load a scan first)`;
-    }
-    // The Report PDF button + template picker share the same gate
-    // (a report against no cloud has nothing to summarise).
-    if (this._reportButton) {
-      this._reportButton.disabled = !enabled;
-      const base = 'Generate a multi-page PDF report from the selected template.';
-      this._reportButton.title = enabled ? base : `${base} (load a scan first)`;
-    }
-    if (this._reportSelect) {
-      this._reportSelect.disabled = !enabled;
-    }
-  }
-
-  /**
-   * Per-mode availability override for the Visual Export Studio buttons.
-   *
-   * Called by main after each load to disable buttons whose mode is not
-   * supported by the loaded cloud — Normal map on a LAZ, Intensity on a
-   * raw PLY, Class map on a PCD without a label channel. The button stays
-   * visible (so the user knows the feature exists) but is disabled with
-   * the unavailability reason in its tooltip. Without this, clicking
-   * Normal map on a LAZ produced an error toast at render time — a poor
-   * substitute for visibly-disabled affordance.
-   *
-   * Pre-conditions: a scan must already be loaded. Callers gate on
-   * {@link setImageExportEnabled}(true) first; this method then narrows
-   * the set of enabled buttons. A mode missing from the map is treated as
-   * enabled (forward-compatible: a new exporter without per-mode flags
-   * still works through `setImageExportEnabled(true)`).
-   */
-  setImageExportAvailability(
-    availability: ReadonlyMap<ExportMode, { readonly available: boolean; readonly reason?: string }>,
-  ): void {
-    for (const [mode, button] of this._imageExportButtons) {
-      const entry = availability.get(mode);
-      if (!entry) continue; // unknown mode → leave as-is
-      const baseTitle = this._imageExportTitles.get(mode) ?? '';
-      if (entry.available) {
-        button.disabled = false;
-        button.title = baseTitle;
-      } else {
-        button.disabled = true;
-        button.title = entry.reason
-          ? `${baseTitle} — ${entry.reason}`
-          : `${baseTitle} (unavailable on this cloud)`;
-      }
-    }
-  }
 
   /** Remove a cloud's layer row. */
   removeCloud(id: string): void {

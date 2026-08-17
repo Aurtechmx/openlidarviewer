@@ -194,6 +194,7 @@ function makeDeps(
     },
     stage: { hideEmptyState: vi.fn() },
     inspector: {} as unknown as OpenStreamingDeps['inspector'],
+    exportPanel: { setImageExportEnabled: () => {}, setImageExportAvailability: () => {}, setStreamingMode: () => {} } as unknown as OpenStreamingDeps['exportPanel'],
     streamingPanel: {} as unknown as OpenStreamingDeps['streamingPanel'],
     classLegendPanel: {} as unknown as OpenStreamingDeps['classLegendPanel'],
     inspectorCards: {} as unknown as OpenStreamingDeps['inspectorCards'],
@@ -457,12 +458,15 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     stage: { hideEmptyState: calls.hideEmptyState },
     inspector: {
       element: { classList: { remove: vi.fn() } },
-      setImageExportEnabled: vi.fn(),
-      setImageExportAvailability: vi.fn(),
       setStreamingMode: vi.fn(),
       setDetail: vi.fn(),
       setReport: vi.fn(),
     } as unknown as OpenStreamingDeps['inspector'],
+    exportPanel: {
+      setImageExportEnabled: vi.fn(),
+      setImageExportAvailability: vi.fn(),
+      setStreamingMode: vi.fn(),
+    } as unknown as OpenStreamingDeps['exportPanel'],
     streamingPanel: {
       setPhase: vi.fn(),
       show: vi.fn(),

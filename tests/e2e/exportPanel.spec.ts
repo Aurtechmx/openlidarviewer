@@ -34,7 +34,9 @@ test('after a scan loads, the Export panel offers formats and exports a file', a
   // Pick XYZ (small text output) and export → a download fires.
   await panel.locator('.olv-bc-pill', { hasText: 'XYZ' }).click();
   const downloadPromise = page.waitForEvent('download');
-  await panel.locator('.olv-export-btn').click();
+  // The converter's own Export button (the deliverables moved here from the
+  // Inspector also carry `.olv-export-btn`, so target the converter class).
+  await panel.locator('.olv-bc-convert').click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/\.xyz$/);
 
