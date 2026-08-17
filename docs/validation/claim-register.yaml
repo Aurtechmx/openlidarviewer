@@ -610,9 +610,10 @@ claims:
     scope:
       supported: []
       unsupported:
-        - "Any cross-implementation or standardised ruggedness figure; no second implementation has been compared."
+        - "A cross-implementation grade. Both indices were compared against a second implementation (see scopeNote), and neither comparison is a clean agreement that raises the level: the TPI comparison is limited by the reference's float32 precision, and the VRM comparison is sensitive to the slope/aspect estimator with no convention-independent arbiter."
         - "Neighbourhood radii other than the documented one, since both indices are scale-sensitive."
         - "Cells near the grid edge."
+    scopeNote: "Both descriptors have been compared against an independent implementation, and the comparison characterises rather than validates, so the level stays E3. TPI (centre minus mean of 8) was compared against gdaldem 3.13.1 on the analytic raster-matrix fixtures: OLV agrees with the closed-form quadratic curvature to under 3e-5 and is provably correct, but the plain ours-vs-gdaldem comparison diverges up to 1.3e-4 on high-relief curved terrain because gdaldem accumulates the neighbourhood mean in float32 while OLV uses double (OLV is the more precise side); the tight-tolerance comparison therefore records a divergence rather than an agreement. VRM (Sappington et al. 2007) was compared against SAGA 7.8.2's Vector Ruggedness Measure over a 3x3 window on the same fixtures: the two agree to about 1e-5 across smooth interiors but diverge up to about 1e-2 at the sharpest curvature cells, because OLV estimates the surface normal with Horn's method and SAGA with its own, and VRM has no closed form independent of that choice; the agreement region is where the estimators converge, so restricting to it would report agreement by construction. Both comparisons are recorded here as evidence that a second implementation was run and what it showed, not as grounds to promote."
 
   # ── Accuracy statistics ─────────────────────────────────────────────────────
   - claimId: HOLDOUT-RMSE
