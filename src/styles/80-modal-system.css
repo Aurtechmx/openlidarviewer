@@ -144,7 +144,7 @@
 }
 .olv-rf-stat-value {
   margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-md);
-  color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  color: var(--text); overflow-wrap: anywhere;
 }
 /* Station table — reuses the in-panel scroll wrap + sticky header, with room to
    read more rows at once than the 220px dock cap allows. */
