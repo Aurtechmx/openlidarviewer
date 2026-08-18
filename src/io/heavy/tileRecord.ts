@@ -90,6 +90,70 @@ export interface TilePoint {
   readonly rgb: [number, number, number] | null;
 }
 
+/**
+ * A whole tile decoded into parallel typed arrays — the render-ready shape, with
+ * no per-point object allocated. GPS time is always present (zero-filled when the
+ * schema has none) so a consumer needs no branch; `rgb` is null without colour.
+ */
+export interface DecodedTile {
+  readonly pointCount: number;
+  readonly positions: Float32Array;
+  readonly intensity: Uint16Array;
+  readonly classification: Uint8Array;
+  readonly returnNumber: Uint8Array;
+  readonly returnCount: Uint8Array;
+  readonly gpsTime: Float64Array;
+  readonly pointSourceId: Uint16Array;
+  readonly rgb: Uint8Array | null;
+}
+
+/**
+ * Decode a tile's records straight into typed arrays. Fields are read inline
+ * from the byte view — no {@link TilePoint} per point — so a full leaf decodes
+ * without a million short-lived objects. `maxPoints` caps the count for a
+ * truncated tile; otherwise every whole record present is decoded.
+ */
+export function decodeTile(
+  bytes: Uint8Array,
+  schema: TileSchema,
+  recordBytes: number,
+  maxPoints: number = Number.POSITIVE_INFINITY,
+): DecodedTile {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const available = recordBytes > 0 ? Math.floor(bytes.byteLength / recordBytes) : 0;
+  const n = Math.max(0, Math.min(available, Math.floor(maxPoints)));
+  const positions = new Float32Array(n * 3);
+  const intensity = new Uint16Array(n);
+  const classification = new Uint8Array(n);
+  const returnNumber = new Uint8Array(n);
+  const returnCount = new Uint8Array(n);
+  const gpsTime = new Float64Array(n);
+  const pointSourceId = new Uint16Array(n);
+  const rgb = schema.hasRgb ? new Uint8Array(n * 3) : null;
+  for (let i = 0; i < n; i++) {
+    const o = i * recordBytes;
+    positions[i * 3] = view.getFloat32(o + OFF_X, true);
+    positions[i * 3 + 1] = view.getFloat32(o + OFF_Y, true);
+    positions[i * 3 + 2] = view.getFloat32(o + OFF_Z, true);
+    intensity[i] = view.getUint16(o + OFF_INTENSITY, true);
+    classification[i] = view.getUint8(o + OFF_CLASS);
+    returnNumber[i] = view.getUint8(o + OFF_RETURN_NUMBER);
+    returnCount[i] = view.getUint8(o + OFF_RETURN_COUNT);
+    pointSourceId[i] = view.getUint16(o + OFF_POINT_SOURCE, true);
+    let p = o + BASE_BYTES;
+    if (schema.hasGps) {
+      gpsTime[i] = view.getFloat64(p, true);
+      p += GPS_BYTES;
+    }
+    if (rgb) {
+      rgb[i * 3] = view.getUint8(p);
+      rgb[i * 3 + 1] = view.getUint8(p + 1);
+      rgb[i * 3 + 2] = view.getUint8(p + 2);
+    }
+  }
+  return { pointCount: n, positions, intensity, classification, returnNumber, returnCount, gpsTime, pointSourceId, rgb };
+}
+
 /** Read one record at `offset` back into a point. */
 export function readTileRecord(view: DataView, offset: number, schema: TileSchema): TilePoint {
   const position: [number, number, number] = [
