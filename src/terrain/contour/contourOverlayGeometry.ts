@@ -53,6 +53,17 @@ export interface OverlayGeometryParams {
   readonly zScale?: number;
   /** Include gap-grade segments (drawn as faint breaks). Default false. */
   readonly includeGap?: boolean;
+  /**
+   * Negate the northing as it is placed. Default false.
+   *
+   * This is what completes the Y-up placement into a ROTATION. With
+   * `verticalAxis: 'y'` alone a canonical Z-up point `(x, north, elev)` lands as
+   * `(x, elev, north)` — a reflection, which mirrors the scan. The exact inverse
+   * (`canonicalZUpToYUp`, `(x, y, z) → (x, z, −y)`) needs `(x, elev, −north)`,
+   * so a Y-up scene sets this. Meaningless for `verticalAxis: 'z'`, where the
+   * northing already sits on its own axis unchanged.
+   */
+  readonly negateNorthing?: boolean;
 }
 
 /**
@@ -67,6 +78,7 @@ export function buildContourOverlayBuffers(
   const vertical = params.verticalAxis ?? 'z';
   const zScale = Number.isFinite(params.zScale) ? (params.zScale as number) : 1;
   const includeGap = params.includeGap ?? false;
+  const northSign = params.negateNorthing ? -1 : 1;
 
   // Count segments first so we can allocate exact typed arrays.
   let segCount = 0;
@@ -83,13 +95,14 @@ export function buildContourOverlayBuffers(
   let s = 0;
   const place = (x: number, y: number, elev: number) => {
     const e = elev * zScale;
+    const n = y * northSign;
     if (vertical === 'y') {
       positions[p++] = x;
       positions[p++] = e;
-      positions[p++] = y;
+      positions[p++] = n;
     } else {
       positions[p++] = x;
-      positions[p++] = y;
+      positions[p++] = n;
       positions[p++] = e;
     }
   };
