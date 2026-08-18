@@ -72,7 +72,6 @@
 }
 .olv-layerhealth-row-value.is-mono {
   font-variant-numeric: tabular-nums;
-  font-variant-numeric: tabular-nums;
 }
 /* Quiet status dot before the value: ok = established (green),
  * warn = doubt gating something (amber), info = neutral fact (grey). */

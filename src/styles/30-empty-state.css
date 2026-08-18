@@ -157,7 +157,6 @@ body.olv-theme-light .olv-empty::before {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 .olv-rail-label { font-size: var(--text-xs); }
 .olv-rail-step-active { color: var(--text-dim); }
