@@ -11,16 +11,33 @@
  * declares a real linear unit, matching the measure tool and lasso.
  */
 import { streamingExtentRows } from '../src/analysis/streamingExtentRows';
+import { spatialContextFrom } from '../src/geo/SpatialContext';
+import type { CrsInfo } from '../src/io/crs';
 
 const header = {
   min: [0, 0, 0] as const,
   max: [1000, 1000, 100] as const,
 };
 
+/**
+ * Build a resolved SpatialContext from a minimal CRS override — the function
+ * now takes the resolved frame, not a raw CRS subset, so the unit gate is read
+ * from `ctx.linearUnitKnown` rather than a hand-rolled predicate.
+ */
+function ctx(o: Partial<CrsInfo>) {
+  return spatialContextFrom({
+    source: 'epsg',
+    name: 'EPSG:32610',
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    ...o,
+  } as CrsInfo);
+}
+
 test('metre CRS: converts and labels "m" / "pts/m²" (byte-identical to before)', () => {
   const { unitConfirmed, rows } = streamingExtentRows(
     header,
-    { linearUnit: 'metre', linearUnitToMetres: 1 },
+    ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }),
     1_000_000,
   );
   expect(unitConfirmed).toBe(true);
@@ -35,7 +52,7 @@ test('metre CRS: converts and labels "m" / "pts/m²" (byte-identical to before)'
 test('foot CRS: applies the 0.3048 factor before stamping metres', () => {
   const { unitConfirmed, rows } = streamingExtentRows(
     header,
-    { linearUnit: 'foot', linearUnitToMetres: 0.3048, verticalUnitToMetres: 0.3048 },
+    ctx({ linearUnit: 'foot', linearUnitToMetres: 0.3048, verticalUnitToMetres: 0.3048 }),
     1_000_000,
   );
   expect(unitConfirmed).toBe(true);
@@ -49,7 +66,7 @@ test('unknown-unit CRS: does NOT claim metres despite the placeholder factor', (
   const { unitConfirmed, rows } = streamingExtentRows(
     header,
     // The leak shape: unknown unit, inert factor 1.
-    { linearUnit: 'unknown', linearUnitToMetres: 1 },
+    ctx({ linearUnit: 'unknown', linearUnitToMetres: 1, name: 'local' }),
     1_000_000,
   );
   expect(unitConfirmed).toBe(false);
@@ -65,7 +82,7 @@ test('unknown-unit CRS: does NOT claim metres despite the placeholder factor', (
 });
 
 test('no CRS resolved (null): fails closed exactly like unknown', () => {
-  const { unitConfirmed, rows } = streamingExtentRows(header, null, 1_000_000);
+  const { unitConfirmed, rows } = streamingExtentRows(header, spatialContextFrom(null), 1_000_000);
   expect(unitConfirmed).toBe(false);
   const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.value]));
   expect(byLabel.Width).toBe('1000.0 (source units)');
@@ -73,13 +90,13 @@ test('no CRS resolved (null): fails closed exactly like unknown', () => {
 });
 
 test('density & spacing rows carry the class-scope flag; extents do not', () => {
-  const { rows } = streamingExtentRows(header, { linearUnit: 'metre', linearUnitToMetres: 1 }, 1_000_000);
+  const { rows } = streamingExtentRows(header, ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }), 1_000_000);
   const scoped = new Set(rows.filter((r) => r.scoped).map((r) => r.label));
   expect(scoped).toEqual(new Set(['Density', 'Spacing']));
 });
 
 test('degenerate footprint: emits extents only, no density/spacing', () => {
   const flat = { min: [0, 0, 0] as const, max: [0, 100, 100] as const };
-  const { rows } = streamingExtentRows(flat, { linearUnit: 'metre', linearUnitToMetres: 1 }, 1000);
+  const { rows } = streamingExtentRows(flat, ctx({ linearUnit: 'metre', linearUnitToMetres: 1 }), 1000);
   expect(rows.map((r) => r.label)).toEqual(['Width', 'Depth', 'Height']);
 });
