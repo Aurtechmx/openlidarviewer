@@ -30,6 +30,7 @@
 
 import { extractBuildingFootprints, type BuildingPoint, type FootprintGrid } from './buildingFootprints';
 import { fitConductor, type Vec3 } from './conductors';
+import type { Pt2 } from './footprintTrace';
 import {
   sourceUnits,
   toMetresIfKnown,
@@ -54,6 +55,12 @@ export interface BuildingCandidate extends CandidateBase {
   /** The same area in m², or null when the source unit is not known. */
   readonly areaM2: number | null;
   readonly cellCount: number;
+  /**
+   * The traced outer boundary, in the source frame the points arrived in (first
+   * vertex not repeated). This is what a reviewer SEES and what a GeoJSON export
+   * writes — a bounding box would be a rectangle, not a building.
+   */
+  readonly ring: readonly Pt2[];
   /** Source-unit centroid + bounds, in the frame the points arrived in. */
   readonly centroid: readonly [number, number];
   readonly bounds: readonly [number, number, number, number];
@@ -122,6 +129,7 @@ export function extractBuildingCandidates(
       // once would under-report by the unit factor.
       areaM2: unit.known ? areaSource * unit.metresPerUnit * unit.metresPerUnit : null,
       cellCount: f.cellCount,
+      ring: f.ring,
       centroid: [f.centroidX, f.centroidY],
       bounds: [f.minX, f.minY, f.maxX, f.maxY],
     };

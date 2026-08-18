@@ -19,6 +19,7 @@ import {
 import type { BuildingPoint } from '../src/features/buildingFootprints';
 import type { Vec3 } from '../src/features/conductors';
 import { knownUnit, unknownUnit } from '../src/units/units';
+import { footprintsToGeoJson } from '../src/features/footprintGeoJson';
 
 const METRE = knownUnit(1);
 const FOOT = knownUnit(0.3048);
@@ -138,5 +139,53 @@ describe('FeatureExtractionService — stable identity', () => {
     const a = extractConductorCandidate(span(), METRE)!;
     const b = extractConductorCandidate(span(), METRE)!;
     expect(b.id).toBe(a.id);
+  });
+});
+
+describe('FeatureExtractionService — the traced ring', () => {
+  it('carries a real outline, not a bounding box', () => {
+    // An L-shaped block: a rectangle would have 4 corners and cover the notch,
+    // so a ring that is genuinely traced must have more vertices than that.
+    const pts: BuildingPoint[] = [];
+    for (let x = 0; x < 10; x++) for (let y = 0; y < 4; y++) pts.push({ x, y });
+    for (let x = 0; x < 4; x++) for (let y = 4; y < 10; y++) pts.push({ x, y });
+    const [b] = extractBuildingCandidates(pts, GRID, METRE);
+    expect(b.ring.length).toBeGreaterThan(4);
+  });
+
+  it('the ring closes, stays inside the bounds, and is not repeated at the end', () => {
+    const [b] = extractBuildingCandidates(block(), GRID, METRE);
+    expect(b.ring.length).toBeGreaterThanOrEqual(3);
+    const [minX, minY, maxX, maxY] = b.bounds;
+    for (const p of b.ring) {
+      expect(p.x).toBeGreaterThanOrEqual(minX);
+      expect(p.x).toBeLessThanOrEqual(maxX);
+      expect(p.y).toBeGreaterThanOrEqual(minY);
+      expect(p.y).toBeLessThanOrEqual(maxY);
+    }
+    // First vertex is NOT repeated as the last (the documented convention).
+    const first = b.ring[0];
+    const last = b.ring[b.ring.length - 1];
+    expect(first.x === last.x && first.y === last.y).toBe(false);
+  });
+
+  it('feeds the GeoJSON writer, which previously had no ring to consume', () => {
+    const cands = extractBuildingCandidates(block(), GRID, METRE);
+    const fc = footprintsToGeoJson(
+      cands.map((c) => ({
+        ring: c.ring,
+        areaM2: c.areaM2 ?? c.areaSource,
+        centroidX: c.centroid[0],
+        centroidY: c.centroid[1],
+        id: c.id,
+      })),
+      { crs: 'EPSG:32610' },
+    );
+    expect(fc.features).toHaveLength(1);
+    const geom = fc.features[0].geometry as { type: string; coordinates: number[][][] };
+    expect(geom.type).toBe('Polygon');
+    // RFC 7946: the writer closes the ring on output.
+    const out = geom.coordinates[0];
+    expect(out[0]).toEqual(out[out.length - 1]);
   });
 });
