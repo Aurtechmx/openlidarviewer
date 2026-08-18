@@ -64,12 +64,12 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Five products are at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
+- Ten products are at E4. Five are algorithm checks against GDAL:
+  `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
-  and aspect, 1.0 level on the 0–255 scale for hillshade). This validates three
-  algorithms on one fixture; it does not validate the point-cloud-to-DTM
-  pipeline. Aspect is compared as a circular quantity, and only where the
+  and aspect, 1.0 level on the 0–255 scale for hillshade). This validates those
+  algorithms on one fixture. Aspect is compared as a circular quantity, and only where the
   surface is steeper than 2° — a level cell has no aspect to compare. The
   hillshade tolerance is weaker than it looks: GDAL encodes the shared
   intensity as `1 + 254·h` where we write `255·h`, and that fixed offset
@@ -77,6 +77,25 @@ discrete properties a test pins (byte-identity, exact inverses).
   rests on the closed-form agreement (6×10⁻⁵ of a level) and on our intensity
   reproducing GDAL's raster exactly under GDAL's own encoding, rather than on
   the tolerance test alone.
+- The remaining E4 products are the surface grids, checked against PDAL: `DSM`
+  (max return) and `DTM` (min return) each agree with PDAL 2.10.2
+  `writers.gdal` over 7500 cells on three seeded synthetic clouds, to a maximum
+  difference under 4×10⁻⁶ m, under a 0.05 m tolerance registered before the
+  references were generated. `CHM` (clamped DSM minus DTM) agrees with the PDAL
+  max grid minus the PDAL min grid on the same clouds over 7500 cells to under
+  8×10⁻⁶ m, under a 0.1 m registered tolerance. These cover the cell gridding on
+  clouds where the reference radius is below half a cell. They do not validate
+  ground classification (`GROUND-FILTER` stays partial) or real-terrain void
+  interpolation, so the DTM's own required bar remains E5.
+- The terrain descriptors are the remaining E4 products, each checked three ways
+  against an independent tool and the closed form on a controlled analytic
+  fixture: `TPI` agrees with gdaldem 3.13.1 and the closed-form quadratic
+  curvature to under 9×10⁻⁷ within a 1×10⁻⁵ tolerance, on a
+  low-amplitude quadratic chosen so the reference's float32 accumulation stays
+  below tolerance; `VRM` agrees with SAGA 7.8.2 within 1×10⁻⁴ and reproduces the
+  closed-form Sappington VRM to under 1×10⁻⁹, on a smooth tilted quadratic
+  chosen so Horn and SAGA normals converge. They do not cover under-resolved
+  sharp features (VRM) or high absolute elevations (TPI).
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

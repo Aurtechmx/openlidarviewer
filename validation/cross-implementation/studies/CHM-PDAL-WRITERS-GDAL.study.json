@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "studyId": "CHM-PDAL-WRITERS-GDAL-DIFFERENCE",
+  "claimId": "CHM",
+  "example": false,
+  "notes": [
+    "The tolerance below was registered at pending in an earlier commit, before anything ran, and is unchanged. The protocol PROTO-PDAL-CHM-CANOPY-HEIGHT names that commit (f0f51d4f) as the freeze witness.",
+    "This record promotes nothing on its own. The E4 flip in docs/validation/claim-register.yaml and REFERENCE_SLOTS in src/validation/crossCheck.ts is a separate, deliberate edit.",
+    "CHM is DSM minus DTM per cell, clamped at zero. Both parents are E4 against PDAL writers.gdal (max and min). This study differences the two committed PDAL grids and compares that against OLV's heightAboveGround, so it tests the differencing arithmetic on top of the two already-validated grids, not a neighbourhood search: the reference radius is 0.45 m, below half a cell, so each cell holds the returns placed at its centre."
+  ],
+  "protocolDigest": "sha256:d1e2d23f49dcb6c5c81608e0132c7c6ba2135e7740deefedc10b19f0e6c57447",
+  "protocolRef": {
+    "protocolId": "PROTO-PDAL-CHM-CANOPY-HEIGHT",
+    "digest": "sha256:c5e4a8a95c978f965e817d2092b9cee8acd1ac532fc3677594ae8230bc1e258e"
+  },
+  "candidate": {
+    "revision": "f0f51d4fe1ea908555a41ef6980d57fd534b1aa1",
+    "version": "0.6.6",
+    "algorithmVersion": "v0.4.4"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host these references were produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version PDAL reports and the exact command line stand in for it, and this field says plainly that the stronger pin was not executed.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/<fixture>__dsm-max.json and <fixture>__dtm-min.json, each transcoded gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6; the CHM reference is the max grid minus the min grid, clamped at zero.",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "description": "Cell-centred cloud on a 5.4 % plane, one ground return per 1 m cell plus stacked roof, facade and canopy returns above a subset of cells. 50 by 50 cells; the maximum sits above the ground on the structured cells and equals it elsewhere, so the canopy height is positive there and zero elsewhere.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+      "sha256": "2149eddfde164d97dd9e519c04bee90fdf2447661ae2c944e3abe87511928371"
+    },
+    {
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "description": "The same structured cell-centred layout over a rolling surface with two incommensurate wavelengths, so no translation of the grid maps the surface onto itself and a row flip cannot pass.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+      "sha256": "3c3919f1c51b179bd00196996f3d221b57d2f86125fcea4775d5f2c0a989bebb"
+    },
+    {
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "description": "The same structured cell-centred layout over a 30 % V ridge, where a half-cell offset costs 15 cm and is well clear of the tolerance.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+      "sha256": "96f474b7e40d7a87baf73cf6519ddd1adb7aecf90c350a8338de114c9976ce2d"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-CHM-DIFF-CELL1-R045",
+      "description": "Canopy height = highest return per cell minus lowest return per cell, clamped at zero, 1 m cells, grid pinned to origin (0, 0) and 50 by 50 cells. The reference radius of 0.45 m is below half a cell, so each cell disc holds exactly the returns placed at that cell centre and the radius estimator and the cell estimator compute the same maximum and minimum.",
+      "candidateParameters": {
+        "function": "heightAboveGround(buildDsm, rasterizeDtm aggregation min)",
+        "aggregation": "max-minus-min-clamped",
+        "gridOriginH1": 0,
+        "gridOriginH2": 0,
+        "cols": 50,
+        "rows": 50,
+        "cellSizeM": 1,
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "stage": "writers.gdal (max) minus writers.gdal (min)",
+        "output_type": "max and min",
+        "resolution": 1,
+        "radius": 0.45,
+        "origin_x": 0,
+        "origin_y": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "data_type": "double",
+        "gdaldriver": "GTiff",
+        "transcode": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.1,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 7500,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 7500 cells across the three scenes are within the registered 0.1 m, and the largest single difference is 7.20e-6 m, about the sum of two float32 steps at these elevations. Nothing was widened: the largest observed difference is more than four orders of magnitude inside the tolerance registered at pending.",
+  "result": {
+    "comparableCells": 7500,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.0000072,
+    "rmse": 0.00000124,
+    "meanDiff": -4.31e-8
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-09-plane-structures.csv",
+      "sha256": "2149eddfde164d97dd9e519c04bee90fdf2447661ae2c944e3abe87511928371",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-10-rolling-structures.csv",
+      "sha256": "3c3919f1c51b179bd00196996f3d221b57d2f86125fcea4775d5f2c0a989bebb",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-11-ridge-structures.csv",
+      "sha256": "96f474b7e40d7a87baf73cf6519ddd1adb7aecf90c350a8338de114c9976ce2d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dsm-max.asc",
+      "sha256": "aaee26058bf7361c1fffcacd63c1298ef5b03dd81360ecd3b8aa14dfbdbcf126",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dsm-max.asc",
+      "sha256": "9f2d22cc1cc6efe3717ff92e520328b4eabdf0d98d475a27fcafc018eccbc805",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dsm-max.asc",
+      "sha256": "32c8b08abf33704e6a9c4913af4288e48eddc8f05fc094ae574344d8ce58cf1a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.asc",
+      "sha256": "0da399e0c050001576a2b57b2747862b7c375179120570f35b7c215200785512",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.asc",
+      "sha256": "e80a44425b51be4d98beb2bfb9cbee558484c66bb1555b7f68e634c4a4ce5fc9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.asc",
+      "sha256": "d276951a5f30a6a420cb3ac9b7940c8b959dccca73e6d52cdf6c271430fbf37c",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/reference-runs-chm.json",
+      "sha256": "6f6a255d05c5d0a7d67d73191885b5610cee2cb628b02a8709f35dfa6e3eae30",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "parameterSetId": "PS-CHM-DIFF-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "parameterSetId": "PS-CHM-DIFF-CELL1-R045"
+      },
+      {
+        "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+        "parameterSetId": "PS-CHM-DIFF-CELL1-R045"
+      }
+    ],
+    "unsupported": [
+      "Ground classification. The canopy height rests on the per-cell minimum being the ground, which it is by construction here; on a real cloud the ground comes from the SMRF filter (GROUND-FILTER), which is still partial.",
+      "Aggregation over a scattered cloud. Every return is at a cell centre so the disc and the square coincide; a scattered cloud would compare a disc against a square and is out of scope here, as it is for the DSM and DTM studies.",
+      "Real canopy. The heights are by-construction roof, facade and vegetation returns on synthetic scenes, not measured vegetation.",
+      "Agreement with PDAL is not accuracy against ground truth."
+    ]
+  }
+}
