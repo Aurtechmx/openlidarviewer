@@ -83,16 +83,22 @@ is the `-1` sentinel (an interrupted writer) do the same.
 ## Performance target
 
 The load-speed goal for chunked LAZ on a multi-core device is to decode faster
-than any available loader for the same file, measured, never asserted.
-`tests/benchmark/loaderComparison.test.ts` (gated on `LOADER_COMPARE_BENCH=1`)
-times OLV's `loadLas` against loaders.gl's LASLoader; `lazDecodeBaseline.test.ts`
-times OLV's own single-thread decode. What they report on an M-series machine:
+than any available loader for the same file, measured, never asserted. The
+canonical apparatus is the `loaderComparison` suite (`npm run benchmark:loaders`,
+`benchmarks/runner/loaderComparison.ts`), which lands a hashed, host-stamped,
+`benchmark:verify`-checked result tree next to the reproducibility and scaling
+suites; it times OLV's `loadLas` against loaders.gl's LASLoader on identical,
+in-repo-generated LAS files. `lazDecodeBaseline.test.ts` times OLV's own
+single-thread decode, and `tests/benchmark/loaderComparison.test.ts`
+(`LOADER_COMPARE_BENCH=1`) adds the compressed `.laz` and larger-size legs the
+in-repo suite leaves to PDAL. What they report on an M-series machine:
 
 - On the common ground both loaders accept (LAS <= 1.3, point formats 0-5) OLV
-  runs at parity: 1.1x to 1.3x loaders.gl across 1M and 5M points, `.las` and
-  `.laz`. OLV decodes full-precision local coordinates plus intensity,
-  classification, returns, GPS time and RGB in that time; loaders.gl returns a
-  float32 global position. A tie on wall-clock is OLV moving more data per point.
+  runs at parity: 1.1x to 1.4x loaders.gl across 1M and 5M points, `.las` and
+  `.laz` (1.41x on the suite's attribute-rich 1M point-format-3 file). OLV
+  decodes full-precision local coordinates plus intensity, classification,
+  returns, GPS time and RGB in that time; loaders.gl returns a float32 global
+  position. A tie on wall-clock is OLV moving more data per point.
 - loaders.gl cannot read LAS 1.4 / point formats 6-8 at all ("Only file versions
   <= 1.3 are supported"). That is the format modern airborne LiDAR and COPC ship
   in, and the format chunk-parallel decode targets, so there is no web-loader

@@ -54,6 +54,7 @@
     "benchmark:repro": "BENCHMARK_SUITES=reproducibility vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:scaling": "BENCHMARK_SUITES=scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:quick": "BENCHMARK_SUITES=reproducibility,scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
+    "benchmark:loaders": "BENCHMARK_SUITES=loaderComparison vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
     "benchmark:scaling:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:scaling",
     "benchmark:quick:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:quick",
     "benchmark:units": "vitest run tests/benchmark/unitIntegrity.test.ts",

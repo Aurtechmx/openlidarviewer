@@ -27,6 +27,11 @@ export const SERIES_PIPELINE_TOTAL_MS = 'pipelineTotalMs';
 export const SERIES_POINTS_PER_SECOND = 'pointsPerSecond';
 export const SERIES_PEAK_RSS_BYTES = 'peakRssBytes';
 
+/** The three series the loader-comparison suite records per run. */
+export const SERIES_OLV_LOAD_MS = 'olvLoadMs';
+export const SERIES_COMPETITOR_LOAD_MS = 'competitorLoadMs';
+export const SERIES_LOADER_SPEEDUP = 'loaderSpeedup';
+
 /** The series key for one stage's duration. */
 export function stageSeriesKey(stage: string): string {
   return `stage.${stage}.durationMs`;
@@ -49,6 +54,12 @@ export function describeSeries(key: string): string {
       return 'points divided by the analysis duration';
     case SERIES_PEAK_RSS_BYTES:
       return 'largest stage-boundary RSS reading of the run; not a true mid-stage high-water mark';
+    case SERIES_OLV_LOAD_MS:
+      return "OLV's loadLas wall-clock for the whole file, single-threaded";
+    case SERIES_COMPETITOR_LOAD_MS:
+      return "the competitor loader's wall-clock for the same file";
+    case SERIES_LOADER_SPEEDUP:
+      return 'competitor duration divided by OLV duration; greater than 1 means OLV was faster';
     default:
       break;
   }

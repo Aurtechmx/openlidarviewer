@@ -20,15 +20,75 @@
  * takes them and hands them to the writer.
  */
 import { describe, test, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
+  LOADER_COMPARISON_CONFIG,
   REPRODUCIBILITY_CONFIG,
   SCALING_CONFIG,
+  parseLoaderComparisonConfig,
   parseReproducibilityConfig,
   parseScalingConfig,
 } from '../../benchmarks/runner/config';
 import { runReproducibilitySuite } from '../../benchmarks/runner/reproducibility';
 import { runScalingSuiteForConfig } from '../../benchmarks/runner/scalingIsolated';
+import {
+  runLoaderComparisonSuite,
+  type CompetitorProbe,
+} from '../../benchmarks/runner/loaderComparison';
 import { writeResults } from '../../benchmarks/runner/writer';
+
+/**
+ * The competitor decoder, built HERE rather than inside the suite.
+ *
+ * Everything under `benchmarks/` may import only `node:` builtins and relative
+ * paths (a source guard enforces it so the tree bundles in a browser), so the
+ * bare `@loaders.gl/las` import cannot live there. This entry point is outside
+ * the guarded tree — it already takes the wall clock the writer needs — so it is
+ * where the competitor is loaded and injected. Absent the dependency the loader
+ * suite still measures OLV and reports the competitor column unavailable, never
+ * a fabricated number.
+ */
+/** The installed competitor version, read from its package.json for provenance. */
+function competitorVersion(): string {
+  try {
+    // Two levels up from tests/benchmark/ is the repo root. The package's
+    // `exports` map blocks importing its package.json, so it is read from disk;
+    // the version is provenance the manifest records, not something to guess.
+    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const pkg = JSON.parse(
+      readFileSync(join(repoRoot, 'node_modules', '@loaders.gl', 'las', 'package.json'), 'utf8'),
+    ) as { version?: string };
+    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+async function buildCompetitorProbe(): Promise<CompetitorProbe | undefined> {
+  try {
+    const core = (await import('@loaders.gl/core')) as {
+      load: (buffer: ArrayBuffer, loader: unknown) => Promise<unknown>;
+    };
+    const las = (await import('@loaders.gl/las')) as { LASLoader: unknown };
+    const version = competitorVersion();
+    return {
+      name: LOADER_COMPARISON_CONFIG.competitor.name,
+      version,
+      async decode(buffer: ArrayBuffer): Promise<number> {
+        const data = (await core.load(buffer, las.LASLoader)) as {
+          attributes?: { POSITION?: { value?: { length: number } } };
+        };
+        return Math.trunc((data?.attributes?.POSITION?.value?.length ?? 0) / 3);
+      },
+    };
+  } catch {
+    // The devDependency is absent (a production `--omit dev` install), so no
+    // competitor can be timed. The suite records that, not a guess.
+    return undefined;
+  }
+}
 
 /** Comma-separated suite ids, e.g. `reproducibility,scaling`. */
 const requested = (process.env.BENCHMARK_SUITES ?? '')
@@ -58,11 +118,12 @@ describe('benchmark suites', () => {
   test('the shipped configurations are valid', () => {
     expect(parseReproducibilityConfig(REPRODUCIBILITY_CONFIG)).toEqual(REPRODUCIBILITY_CONFIG);
     expect(parseScalingConfig(SCALING_CONFIG)).toEqual(SCALING_CONFIG);
+    expect(parseLoaderComparisonConfig(LOADER_COMPARISON_CONFIG)).toEqual(LOADER_COMPARISON_CONFIG);
   });
 
   test.runIf(requested.length > 0)(
     'run the requested suites and write the result tree',
-    () => {
+    async () => {
       const startedAtUtc = new Date().toISOString();
 
       const reproducibility = wants('reproducibility')
@@ -74,6 +135,14 @@ describe('benchmark suites', () => {
       const scaling = wants('scaling')
         ? runScalingSuiteForConfig(parseScalingConfig(SCALING_CONFIG))
         : null;
+      // Async: both loaders decode asynchronously, and the competitor is loaded
+      // out here (see buildCompetitorProbe) and injected, so the guarded suite
+      // never names the competitor package.
+      const loaderComparison = wants('loaderComparison')
+        ? await runLoaderComparisonSuite(parseLoaderComparisonConfig(LOADER_COMPARISON_CONFIG), {
+            competitor: await buildCompetitorProbe(),
+          })
+        : null;
 
       const completedAtUtc = new Date().toISOString();
       const outcome = writeResults({
@@ -82,6 +151,7 @@ describe('benchmark suites', () => {
         completedAtUtc,
         reproducibility,
         scaling,
+        loaderComparison,
         notRun: NOT_RUN,
       });
 
@@ -94,6 +164,7 @@ describe('benchmark suites', () => {
       // non-zero without a second wrapper deciding what counts as failure.
       expect(reproducibility?.summary.failures ?? []).toEqual([]);
       expect(scaling?.summary.failures ?? []).toEqual([]);
+      expect(loaderComparison?.summary.failures ?? []).toEqual([]);
     },
     // Generous: the 1M tier alone is seconds of real terrain work per run, and a
     // timeout here would destroy a measurement rather than report one.
