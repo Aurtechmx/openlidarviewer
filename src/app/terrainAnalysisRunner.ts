@@ -317,6 +317,22 @@ export function createTerrainAnalysisRunner(
           makeOverlay: (host) => new ContourOverlay(host),
         });
       }
+      // The digest identifies the RUN reproducibly: the record's fingerprint
+      // covers the scientific content only — not build, not time — so two runs
+      // over the same data agree even though their timestamps differ. The
+      // timestamp below is therefore a display field of the receipt, not an
+      // input to its identity. A receipt failure must not cost the user their
+      // layer, so it degrades to no digest rather than throwing.
+      let receiptDigest: string | null = null;
+      try {
+        const { buildDerivedLayerReceipt } = await import('../science/derivedLayerReceipt');
+        receiptDigest = buildDerivedLayerReceipt({
+          result,
+          generatedAt: new Date(),
+        }).digest;
+      } catch (err) {
+        console.warn('OpenLiDARViewer: contour layer receipt not built.', err);
+      }
       contourLayers.show({
         scanId,
         model: result.model,
@@ -331,6 +347,12 @@ export function createTerrainAnalysisRunner(
         // Coverage honesty travels with the layer: a resident-only gather is a
         // partial view, and the record must say so rather than imply the whole scan.
         coverage: result.dtm.coverageMode === 'full' ? 'full' : 'sampled',
+        // The layer carries the receipt digest for the analysis that produced
+        // it, so "what made this, and was it allowed to claim it" travels with
+        // the layer rather than only with an export. Built through the same
+        // provenance path the exported files use, so a layer and a file can
+        // never disagree about the same run.
+        provenanceDigest: receiptDigest,
       });
       // Hand the panel a live view of the layer. Every handler returns what the
       // service ACTUALLY applied, so a control re-reads the record rather than
