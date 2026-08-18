@@ -17,7 +17,8 @@ import { resolve } from 'node:path';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { computeOrigin } from '../src/io/coordinateBridge';
 import { decodeLaz } from '../src/io/lazDecode';
-import { decodeLazChunkedSequential } from '../src/io/heavy/decodeLazChunked';
+import { decodeLazChunkedSequential, decodeLazParallel, decodeLazChunkLocal } from '../src/io/heavy/decodeLazChunked';
+import { getLazPerf } from '../src/io/lazDecode';
 import { readLazChunkTable } from '../src/io/heavy/lazChunkTable';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 
@@ -45,6 +46,25 @@ describe('chunked LAZ decode', () => {
     expect(chunked!.positions).toEqual(seq.positions);
     if (seq.gpsTime) expect(chunked!.gpsTime).toEqual(seq.gpsTime);
     if (seq.colors) expect(chunked!.colors).toEqual(seq.colors);
+  });
+
+  it('the parallel orchestrator assembles identically to the sequential decoder', async () => {
+    // A synchronous in-process chunk decoder stands in for the worker pool: this
+    // proves the fan-out/assembly and the single whole-file colour narrowing are
+    // correct, independent of whether the chunks ran on one core or many.
+    const buf = loadFixture('multichunk.laz');
+    const header = parseLasHeader(buf);
+    const origin = computeOrigin([500000, 4100000, 190]);
+    const seq = await decodeLaz(buf, header, origin, 1);
+    const lazPerf = await getLazPerf();
+
+    const parallel = await decodeLazParallel(buf, header, origin, async (job) =>
+      decodeLazChunkLocal(lazPerf, job),
+    );
+    expect(parallel).not.toBeNull();
+    expect(parallel!.positions).toEqual(seq.positions);
+    if (seq.gpsTime) expect(parallel!.gpsTime).toEqual(seq.gpsTime);
+    if (seq.colors) expect(parallel!.colors).toEqual(seq.colors);
   });
 
   it('fails closed (returns null) on a non-chunked input rather than guessing', async () => {

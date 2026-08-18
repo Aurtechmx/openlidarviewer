@@ -16,21 +16,114 @@
  * chunk table cannot describe (pointwise-compressed LAZ, an interrupted writer,
  * an unsupported record format), never a partial or a guess.
  */
-import { readLazChunkTable } from './lazChunkTable';
+import { readLazChunkTable, type LazChunkRange } from './lazChunkTable';
 import { ArrayBufferRangeSource } from '../range/ArrayBufferRangeSource';
 import { decompressChunk } from '../copc/copcChunkDecompress';
-import { getLazPerf } from '../lazDecode';
+import { getLazPerf, type LazPerfModule } from '../lazDecode';
 import {
   decodeContext,
   decodeRecord,
   allocRawPoints,
   finalizeRawColors,
+  type DecodeContext,
   type RawPoints,
 } from '../lasDecodeShared';
 import type { LasHeader } from '../lasHeader';
 
 /** Record formats the per-chunk laz-perf decoder is exercised for (COPC's set). */
 const CHUNK_DECODE_FORMATS = new Set([6, 7, 8]);
+
+/**
+ * Everything one chunk needs to decode into a chunk-LOCAL `RawPoints`, with no
+ * reference to the whole file: the compressed bytes plus the small scalars the
+ * record decoder reads. This is the unit a worker receives; `chunk` is the only
+ * transferable and the rest are copied into the message.
+ */
+export interface LazChunkJob {
+  readonly chunk: ArrayBuffer;
+  readonly pointCount: number;
+  readonly firstPointIndex: number;
+  readonly pointDataRecordFormat: number;
+  readonly pointRecordLength: number;
+  readonly scale: [number, number, number];
+  readonly offset: [number, number, number];
+  readonly ctx: DecodeContext;
+}
+
+/**
+ * Decode ONE chunk into a chunk-local `RawPoints`, indices 0..pointCount-1.
+ * Colours are left STAGED (16-bit, not narrowed): the whole-file narrowing is a
+ * per-file decision the caller applies once after every chunk is assembled, so
+ * two chunks can never disagree on colour depth. Shared by the sequential
+ * decoder, the parallel orchestrator, and the worker, so all three extract the
+ * SAME way the legacy path does.
+ */
+export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): RawPoints {
+  const records = decompressChunk(lazPerf, job.chunk, {
+    pointDataRecordFormat: job.pointDataRecordFormat,
+    pointRecordLength: job.pointRecordLength,
+    pointCount: job.pointCount,
+    scale: job.scale,
+    offset: job.offset,
+    renderOrigin: job.ctx.origin,
+  });
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
+  const local = allocRawPoints(job.pointCount, job.ctx.gpsTimeOffset !== null, job.ctx.rgbOffset !== null);
+  for (let j = 0; j < job.pointCount; j++) {
+    decodeRecord(view, j * job.pointRecordLength, j, job.ctx, local);
+  }
+  return local;
+}
+
+/** Copy a chunk-local `RawPoints` into the whole-file `out` at `firstPointIndex`. */
+function placeChunk(out: RawPoints, local: RawPoints, firstPointIndex: number): void {
+  const p = firstPointIndex;
+  out.positions.set(local.positions, p * 3);
+  out.intensity.set(local.intensity, p);
+  out.classification.set(local.classification, p);
+  out.returnNumber.set(local.returnNumber, p);
+  out.returnCount.set(local.returnCount, p);
+  out.pointSourceId.set(local.pointSourceId, p);
+  if (out.gpsTime && local.gpsTime) out.gpsTime.set(local.gpsTime, p);
+  if (out.colors16 && local.colors16) out.colors16.set(local.colors16, p * 3);
+}
+
+/** Build the per-chunk job for chunk `c`, slicing its bytes out of the file. */
+function jobFor(buffer: ArrayBuffer, header: LasHeader, ctx: DecodeContext, c: LazChunkRange): LazChunkJob {
+  return {
+    chunk: buffer.slice(c.byteOffset, c.byteOffset + c.byteLength),
+    pointCount: c.pointCount,
+    firstPointIndex: c.firstPointIndex,
+    pointDataRecordFormat: header.pointFormat,
+    pointRecordLength: header.pointDataRecordLength,
+    scale: header.scale,
+    offset: header.offset,
+    ctx,
+  };
+}
+
+/**
+ * Parse the chunk table and decide whether this file can take the chunked path.
+ * Returns the chunk jobs and a fresh whole-file `out`, or `null` to fall back to
+ * the legacy decoder (unsupported table, record format, or a count mismatch).
+ */
+async function planChunked(
+  buffer: ArrayBuffer,
+  header: LasHeader,
+  origin: [number, number, number],
+  signal?: AbortSignal,
+): Promise<{ jobs: LazChunkJob[]; out: RawPoints; ctx: DecodeContext } | null> {
+  const table = await readLazChunkTable(new ArrayBufferRangeSource(buffer), signal);
+  if (!table.supported) return null;
+  if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) return null;
+  const tableTotal = table.chunks.reduce((a, c) => a + c.pointCount, 0);
+  if (tableTotal !== header.pointCount) return null;
+
+  const ctx = decodeContext(header, origin);
+  const out = allocRawPoints(header.pointCount, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
+  const jobs = table.chunks.map((c) => jobFor(buffer, header, ctx, c));
+  return { jobs, out, ctx };
+}
 
 /**
  * Decode a whole LAZ buffer chunk by chunk, sequentially. Returns `null` when
@@ -43,39 +136,47 @@ export async function decodeLazChunkedSequential(
   origin: [number, number, number],
   signal?: AbortSignal,
 ): Promise<RawPoints | null> {
-  const table = await readLazChunkTable(new ArrayBufferRangeSource(buffer), signal);
-  if (!table.supported) return null;
-  if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) return null;
-
-  // Sum the chunk table's own counts rather than trusting the header: a table
-  // whose counts do not reach the declared total is a mismatch, and decoding a
-  // short table into a full-size buffer would leave the tail as fabricated zero
-  // points. Fail closed to the legacy path instead.
-  const tableTotal = table.chunks.reduce((a, c) => a + c.pointCount, 0);
-  if (tableTotal !== header.pointCount) return null;
-
-  const ctx = decodeContext(header, origin);
-  const out = allocRawPoints(header.pointCount, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null);
+  const plan = await planChunked(buffer, header, origin, signal);
+  if (plan === null) return null;
   const lazPerf = await getLazPerf();
-  const recordLength = header.pointDataRecordLength;
-
-  for (const chunk of table.chunks) {
+  for (const job of plan.jobs) {
     signal?.throwIfAborted();
-    const chunkBytes = buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-    const records = decompressChunk(lazPerf, chunkBytes, {
-      pointDataRecordFormat: header.pointFormat,
-      pointRecordLength: recordLength,
-      pointCount: chunk.pointCount,
-      scale: header.scale,
-      offset: header.offset,
-      renderOrigin: origin,
-    });
-    const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
-    for (let j = 0; j < chunk.pointCount; j++) {
-      decodeRecord(view, j * recordLength, chunk.firstPointIndex + j, ctx, out);
-    }
+    placeChunk(plan.out, decodeLazChunkLocal(lazPerf, job), job.firstPointIndex);
   }
+  finalizeRawColors(plan.out);
+  return plan.out;
+}
 
-  finalizeRawColors(out);
-  return out;
+/**
+ * A decoder for one chunk. The production implementation submits the job to a
+ * worker pool and resolves with the worker's chunk-local `RawPoints`; a test
+ * implementation runs {@link decodeLazChunkLocal} synchronously. The orchestrator
+ * below is identical for both — it only assembles.
+ */
+export type LazChunkDecoder = (job: LazChunkJob, signal?: AbortSignal) => Promise<RawPoints>;
+
+/**
+ * Decode a whole LAZ by submitting every chunk to `decodeChunk` at once and
+ * assembling the results. When `decodeChunk` is backed by a worker pool the
+ * chunks decode concurrently, one per core; the assembly and the single
+ * whole-file colour narrowing are identical to the sequential path, so the
+ * output is the same `RawPoints`. Returns `null` for a file the chunked path
+ * does not support, exactly like the sequential decoder.
+ */
+export async function decodeLazParallel(
+  buffer: ArrayBuffer,
+  header: LasHeader,
+  origin: [number, number, number],
+  decodeChunk: LazChunkDecoder,
+  signal?: AbortSignal,
+): Promise<RawPoints | null> {
+  const plan = await planChunked(buffer, header, origin, signal);
+  if (plan === null) return null;
+
+  const locals = await Promise.all(plan.jobs.map((job) => decodeChunk(job, signal)));
+  for (let i = 0; i < plan.jobs.length; i++) {
+    placeChunk(plan.out, locals[i], plan.jobs[i].firstPointIndex);
+  }
+  finalizeRawColors(plan.out);
+  return plan.out;
 }
