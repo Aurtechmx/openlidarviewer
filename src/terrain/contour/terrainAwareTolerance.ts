@@ -18,6 +18,14 @@
  * in force regardless of the value returned.
  */
 
+/**
+ * How the 'generalized' style distributes its simplification strength across
+ * features: 'uniform' (the same epsilon everywhere) or 'terrain-aware' (scaled
+ * DOWN per feature from what it is). The single named type both the geometry
+ * styler and the Contour Studio state/provenance share.
+ */
+export type ContourGeneralizeMode = 'uniform' | 'terrain-aware';
+
 /** The per-feature signals the terrain-aware tolerance policy reads. */
 export interface TerrainAwareFeatureShape {
   /** Evidence grade of the feature as a whole (its weakest span wins). */

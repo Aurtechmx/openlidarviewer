@@ -36,6 +36,7 @@ import { unionProvBits } from './contourSegmentEvidence';
 import {
   terrainAwareToleranceFactor,
   type TerrainAwareFeatureShape,
+  type ContourGeneralizeMode,
 } from './terrainAwareTolerance';
 
 /** The contour shape presets the user can pick from. */
@@ -310,7 +311,7 @@ export interface ContourShapeStyleOptions {
    * line and the honesty-gated `simplifyPolyline` still protects gap and
    * low-confidence vertices. Only the 'generalized' style reads it.
    */
-  readonly generalizeMode?: 'uniform' | 'terrain-aware';
+  readonly generalizeMode?: ContourGeneralizeMode;
 }
 
 // Simplify epsilons as a fraction of the cell size. 'generalized' keeps the
