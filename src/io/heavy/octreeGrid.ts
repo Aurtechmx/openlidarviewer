@@ -64,11 +64,21 @@ export function octreeGridFor(
 ): OctreeGrid {
   const extent = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2]);
   const size = Number.isFinite(extent) && extent > 0 ? extent : 1;
-  const rootMin: [number, number, number] = [min[0], min[1], min[2]];
-
   const ratio = pointsPerLeaf > 0 ? pointCount / pointsPerLeaf : 0;
   const depth = Math.max(0, Math.min(Math.floor(maxDepth), depthForRatio(ratio)));
-  const cellsPerAxis = 2 ** depth;
+  return octreeGridOf({ min: [min[0], min[1], min[2]], size }, depth);
+}
+
+/**
+ * Build a grid from an explicit root cube and depth, no point count involved.
+ * The reader uses this to rebuild the exact grid a manifest records, so a stored
+ * store maps points to the same leaves the build did.
+ */
+export function octreeGridOf(root: Cube, depth: number): OctreeGrid {
+  const rootMin: [number, number, number] = [root.min[0], root.min[1], root.min[2]];
+  const size = root.size;
+  const d = Math.max(0, Math.floor(depth));
+  const cellsPerAxis = 2 ** d;
 
   function axisIndex(value: number, axis: number): number {
     const t = (value - rootMin[axis]) / size;
@@ -77,12 +87,12 @@ export function octreeGridFor(
   }
 
   function leafKeyFor(x: number, y: number, z: number): string {
-    if (depth === 0) return '';
+    if (d === 0) return '';
     const ix = axisIndex(x, 0);
     const iy = axisIndex(y, 1);
     const iz = axisIndex(z, 2);
     let key = '';
-    for (let level = depth - 1; level >= 0; level--) {
+    for (let level = d - 1; level >= 0; level--) {
       const digit = ((ix >> level) & 1) | (((iy >> level) & 1) << 1) | (((iz >> level) & 1) << 2);
       key += String(digit);
     }
@@ -104,5 +114,5 @@ export function octreeGridFor(
     return { min: [cx, cy, cz], size: s };
   }
 
-  return { root: { min: rootMin, size }, depth, cellsPerAxis, leafKeyFor, cubeFor };
+  return { root: { min: rootMin, size }, depth: d, cellsPerAxis, leafKeyFor, cubeFor };
 }
