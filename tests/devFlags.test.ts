@@ -31,6 +31,7 @@ describe('parseDevFlags — defaults', () => {
       streamingCommitMode: 'immediate',
       decodePool: false,
       decodeWorkers: null,
+      residentStickiness: false,
     });
   });
 
@@ -81,7 +82,17 @@ describe('parseDevFlags — the program §P0 flag set', () => {
       streamingCommitMode: 'immediate',
       decodePool: false,
       decodeWorkers: null,
+      residentStickiness: false,
     });
+  });
+
+  it('?stickiness=on opts into resident stickiness; every other input leaves it off', () => {
+    expect(parseDevFlags('?stickiness=on').residentStickiness).toBe(true);
+    expect(parseDevFlags('?stickiness=1').residentStickiness).toBe(true);
+    // Opt-in only: absence, garbage and an explicit "off" all keep the default.
+    expect(parseDevFlags('').residentStickiness).toBe(false);
+    expect(parseDevFlags('?stickiness=off').residentStickiness).toBe(false);
+    expect(parseDevFlags('?stickiness=maybe').residentStickiness).toBe(false);
   });
 
   it('?decodePool=on opts into pooled decoding; every other input leaves it off', () => {
