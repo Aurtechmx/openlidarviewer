@@ -61,7 +61,8 @@ export const COMPETITOR_VERSION_UNAVAILABLE = 'unavailable';
  *
  * `decode` resolves with the point count it read, or THROWS when it cannot read
  * the file — which is exactly the signal a capability-gap case is checking for.
- * The buffer is the caller's to consume; the suite hands each call its own copy.
+ * The buffer is shared across runs and must be read, not mutated or transferred;
+ * a decoder that detaches it fails its next call rather than corrupting a run.
  */
 export interface CompetitorProbe {
   readonly name: string;
@@ -158,9 +159,18 @@ export interface LoaderComparisonResult {
   readonly summary: LoaderComparisonSummary;
 }
 
-/** A fresh, exact-size ArrayBuffer copy — one loader detaching it cannot affect the next run. */
-function freshBuffer(fixture: Uint8Array): ArrayBuffer {
-  return fixture.slice().buffer;
+/**
+ * The fixture's backing ArrayBuffer, shared across every run and both loaders.
+ *
+ * Neither `loadLas` (which reads through a DataView) nor loaders.gl's LASLoader
+ * detaches its input, so one buffer serves every decode with no per-run copy —
+ * the fixture at 1M points is tens of megabytes, and copying it per run per
+ * loader was pure allocator churn. A future loader that DID transfer the buffer
+ * would fail its next decode visibly (a thrown "detached ArrayBuffer"), which
+ * the case records as an error rather than a silently corrupted run.
+ */
+function bufferOf(fixture: Uint8Array): ArrayBuffer {
+  return fixture.buffer as ArrayBuffer;
 }
 
 /** Deterministic classification codes cycled across the cloud (ASPRS 2/3/4/5/6). */
@@ -234,7 +244,7 @@ async function timeMs(nowNs: () => bigint | null, decode: () => Promise<void>): 
 }
 
 async function decodeOlv(fixture: Uint8Array): Promise<number> {
-  const cloud = await loadLas(freshBuffer(fixture), 'las', 'benchmark.las');
+  const cloud = await loadLas(bufferOf(fixture), 'las', 'benchmark.las');
   return cloud.decodedPointCount ?? cloud.pointCount;
 }
 
@@ -257,7 +267,7 @@ async function recordRun(
   if (probe && c.competitorReadable) {
     try {
       competitorLoadMs = await timeMs(nowNs, async () => {
-        competitorPointCount = await probe.decode(freshBuffer(fixture));
+        competitorPointCount = await probe.decode(bufferOf(fixture));
       });
     } catch (err) {
       competitorError = err instanceof Error ? err.message : String(err);
@@ -310,7 +320,7 @@ async function runCase(
     await decodeOlv(fixture);
     if (probe && c.competitorReadable) {
       try {
-        await probe.decode(freshBuffer(fixture));
+        await probe.decode(bufferOf(fixture));
       } catch {
         /* a warm-up throw is judged from the recorded runs, not here */
       }
@@ -355,7 +365,7 @@ async function runCase(
     // A capability-gap case: the competitor MUST refuse this file. A single
     // decode attempt outside the timed loop settles it.
     try {
-      await probe.decode(freshBuffer(fixture));
+      await probe.decode(bufferOf(fixture));
       competitorStatus = 'unexpectedly-read';
       reasons.push(`the competitor read a LAS ${c.lasVersion} file it is expected to refuse`);
     } catch (err) {

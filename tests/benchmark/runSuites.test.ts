@@ -21,8 +21,8 @@
  */
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   LOADER_COMPARISON_CONFIG,
   REPRODUCIBILITY_CONFIG,
@@ -53,14 +53,27 @@ import { writeResults } from '../../benchmarks/runner/writer';
 /** The installed competitor version, read from its package.json for provenance. */
 function competitorVersion(): string {
   try {
-    // Two levels up from tests/benchmark/ is the repo root. The package's
-    // `exports` map blocks importing its package.json, so it is read from disk;
-    // the version is provenance the manifest records, not something to guess.
-    const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-    const pkg = JSON.parse(
-      readFileSync(join(repoRoot, 'node_modules', '@loaders.gl', 'las', 'package.json'), 'utf8'),
-    ) as { version?: string };
-    return typeof pkg.version === 'string' ? pkg.version : 'unknown';
+    // Resolve the package's real entry (honouring hoisting), then walk up to the
+    // `package.json` that names it — the `exports` map blocks importing that file
+    // directly, so it is read from disk. The version is provenance the manifest
+    // records, not something to guess, so any failure lands on 'unknown'.
+    const require = createRequire(import.meta.url);
+    let dir = dirname(require.resolve('@loaders.gl/las'));
+    for (let hops = 0; hops < 8; hops++) {
+      try {
+        const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as {
+          name?: string;
+          version?: string;
+        };
+        if (pkg.name === '@loaders.gl/las' && typeof pkg.version === 'string') return pkg.version;
+      } catch {
+        /* not this directory's package.json — keep walking up */
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    return 'unknown';
   } catch {
     return 'unknown';
   }

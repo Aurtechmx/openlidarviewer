@@ -84,30 +84,31 @@ is the `-1` sentinel (an interrupted writer) do the same.
 
 The load-speed goal for chunked LAZ on a multi-core device is to decode faster
 than any available loader for the same file, measured, never asserted. The
-canonical apparatus is the `loaderComparison` suite (`npm run benchmark:loaders`,
+apparatus is the `loaderComparison` suite (`npm run benchmark:loaders`,
 `benchmarks/runner/loaderComparison.ts`), which lands a hashed, host-stamped,
 `benchmark:verify`-checked result tree next to the reproducibility and scaling
 suites; it times OLV's `loadLas` against loaders.gl's LASLoader on identical,
-in-repo-generated LAS files. `lazDecodeBaseline.test.ts` times OLV's own
-single-thread decode, and `tests/benchmark/loaderComparison.test.ts`
-(`LOADER_COMPARE_BENCH=1`) adds the compressed `.laz` and larger-size legs the
-in-repo suite leaves to PDAL. What they report on an M-series machine:
+in-repo-generated LAS files, and `lazDecodeBaseline.test.ts` times OLV's own
+single-thread decode. What they report on an M-series machine:
 
 - On the common ground both loaders accept (LAS <= 1.3, point formats 0-5) OLV
-  runs at parity: 1.1x to 1.4x loaders.gl across 1M and 5M points, `.las` and
-  `.laz` (1.41x on the suite's attribute-rich 1M point-format-3 file). OLV
-  decodes full-precision local coordinates plus intensity, classification,
-  returns, GPS time and RGB in that time; loaders.gl returns a float32 global
-  position. A tie on wall-clock is OLV moving more data per point.
+  is a touch faster: 1.41x loaders.gl on the suite's attribute-rich 1M
+  point-format-3 file. OLV decodes full-precision local coordinates plus
+  intensity, classification, returns, GPS time and RGB in that time, where
+  loaders.gl returns a float32 global position, so the ratio understates the
+  difference in work done; a near-tie would still be OLV moving more per point.
 - loaders.gl cannot read LAS 1.4 / point formats 6-8 at all ("Only file versions
   <= 1.3 are supported"). That is the format modern airborne LiDAR and COPC ship
   in, and the format chunk-parallel decode targets, so there is no web-loader
   head-to-head to run on it.
 
 The multiplier therefore lives against OLV's own single-thread baseline, the only
-decoder that reads those files: chunk-parallel decode of an 8M-point LAS 1.4 file
-runs 3.2x that baseline on four workers (2780 ms to 864 ms), near the Amdahl
-ceiling for a 92%-parallel decode. Chunk-parallel decode scales with cores; a
+decoder that reads those files. Chunk-parallel decode of an 8M-point LAS 1.4 file
+ran 3.2x that baseline on four workers (2780 ms to 864 ms), near the Amdahl
+ceiling for a 92%-parallel decode. That figure is a browser measurement: the
+decode pool builds real module workers, which the Node benchmark harness cannot
+host, so it is reproducible from the drop path rather than archived with the
+loader suite's per-run statistics. Chunk-parallel decode scales with cores; a
 single laz-perf reader does not, and sliced reads let decode start before I/O
 finishes.
 
