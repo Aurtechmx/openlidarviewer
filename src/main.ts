@@ -4322,8 +4322,8 @@ function runStreamingModules(cloud: {
     // metres. `streamingExtentRows` FAILS CLOSED on an unconfirmed unit
     // (placeholder `linearUnitToMetres: 1`): it drops the "m"/"pts/m²" claim
     // rather than stamping metres onto non-metre data — as measure/lasso do.
-    const crsInfo = cloud.crs?.() ?? null;
-    const ext = streamingExtentRows(header, crsInfo, cloud.sourcePointCount);
+    // Reads the active scan's resolved frame (`crsService.context()`).
+    const ext = streamingExtentRows(header, crsService.context(), cloud.sourcePointCount);
     if (!ext.unitConfirmed) {
       rows.push({
         label: 'Units',
