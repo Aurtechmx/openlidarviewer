@@ -237,3 +237,75 @@ describe('simplifyPolyline', () => {
     expect(simplifyPolyline(poly, 0).vertices).toHaveLength(3);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Terrain-aware generalization: the 'generalized' style may scale its per-feature
+// epsilon DOWN (never up), so a weak / interpolated / small-closed line keeps more
+// of its shape while every honesty guarantee of the uniform pass stays in force.
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A zig-zag whose peaks deviate 0.8 in y. The two endpoints are dashed
+ * (conf 40) so the FEATURE grades 'dashed', but every interior peak is solid
+ * (conf 90) and thus freely simplifiable — the clean case where the per-feature
+ * factor changes the outcome without touching a protected vertex.
+ */
+function dashedGradedZigzag(): ContourPolyline {
+  const verts: ContourVertex[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const y = i % 2 === 0 ? 0 : 0.8;
+    const conf = i === 0 || i === 10 ? 40 : 90;
+    verts.push(v(i, y, conf));
+  }
+  return line(verts);
+}
+
+describe('applyContourShapeStyle — terrain-aware generalization', () => {
+  const OPTS = { cellSizeM: 1, generalizeToleranceCells: 1 } as const;
+
+  it("uniform is the default: omitting generalizeMode equals mode 'uniform', byte-identical", () => {
+    const p = dashedGradedZigzag();
+    const def = applyContourShapeStyle([p], 'generalized', OPTS);
+    const uni = applyContourShapeStyle([p], 'generalized', { ...OPTS, generalizeMode: 'uniform' });
+    expect(uni).toEqual(def);
+  });
+
+  it('terrain-aware keeps a weak (dashed-graded) feature more faithfully than uniform', () => {
+    const p = dashedGradedZigzag();
+    const [uni] = applyContourShapeStyle([p], 'generalized', OPTS);
+    const [ta] = applyContourShapeStyle([p], 'generalized', {
+      ...OPTS,
+      generalizeMode: 'terrain-aware',
+    });
+    // Uniform (eps 1.0) drops the 0.8-high peaks; terrain-aware (dashed → ×0.6 →
+    // eps 0.6) keeps them, so it retains strictly more vertices.
+    expect(ta.vertices.length).toBeGreaterThan(uni.vertices.length);
+  });
+
+  it('terrain-aware is never LESS faithful than uniform (epsilon only ever shrinks)', () => {
+    const cases: ContourPolyline[] = [
+      wavyLine(),
+      dashedGradedZigzag(),
+      line([v(0, 0), v(1, 1), v(2, 0), v(3, 2)], true),
+    ];
+    for (const p of cases) {
+      const [uni] = applyContourShapeStyle([p], 'generalized', OPTS);
+      const [ta] = applyContourShapeStyle([p], 'generalized', {
+        ...OPTS,
+        generalizeMode: 'terrain-aware',
+      });
+      expect(ta.vertices.length).toBeGreaterThanOrEqual(uni.vertices.length);
+    }
+  });
+
+  it('terrain-aware keeps the honesty gate: a collinear gap vertex survives at its exact coordinate', () => {
+    // (2,0) is collinear and would be dropped by DP, but its conf 10 → gap grade
+    // makes it protected. It must remain under terrain-aware too.
+    const p = line([v(0, 0, 90), v(1, 0, 90), v(2, 0, 10), v(3, 0, 90), v(4, 0, 90)]);
+    const [ta] = applyContourShapeStyle([p], 'generalized', {
+      ...OPTS,
+      generalizeMode: 'terrain-aware',
+    });
+    expect(ta.vertices.some((w) => w.x === 2 && w.y === 0 && w.confidence === 10)).toBe(true);
+  });
+});

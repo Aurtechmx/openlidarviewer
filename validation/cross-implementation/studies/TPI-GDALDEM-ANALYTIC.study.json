@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "studyId": "TPI-GDALDEM-ANALYTIC",
+  "claimId": "TPI",
+  "example": false,
+  "notes": [
+    "The tolerance was registered at pending in the commit named by the protocol's freeze witness, before the comparison was run. This record promotes nothing on its own.",
+    "Three-way: OLV computeTPI (Moore radius root 2) against gdaldem 3.13.1 TPI AND against the closed-form quadratic curvature. The fixture is re-centred to keep |z| small so gdaldem's float32 mean accumulation stays below the tolerance; on a high-elevation grid the reference, not OLV, loses precision."
+  ],
+  "protocolDigest": "sha256:2bfc343e91a417becfb065970fbb4db77d5b43665db76d5660ab1bde2031b650",
+  "protocolRef": {
+    "protocolId": "PROTO-TPI-GDALDEM-ANALYTIC",
+    "digest": "sha256:9489d2d372c5a9109b9e1da8d2fba23219bd98e5cb082b80f049ce3ccb961a56"
+  },
+  "candidate": {
+    "revision": "f0f51d4fe1ea908555a41ef6980d57fd534b1aa1",
+    "version": "0.6.6",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "GDAL",
+    "version": "3.13.1",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host this reference was produced on, so no image was pulled and no digest exists to record; the resolved executable path, the version gdaldem reports and the exact command line stand in for it.",
+    "executablePath": "/opt/homebrew/bin/gdaldem",
+    "commandLine": "gdaldem TPI validation/cross-implementation/descriptor/tpi-quadratic.asc validation/cross-implementation/descriptor/tpi-quadratic__tpi.asc -of AAIGrid",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-021-ANALYTIC-TPI-QUADRATIC",
+      "description": "Re-centred low-amplitude quadratic z=c·(x²+y²), 60 by 60 cells at 1 m, |z| under about 12 m so the reference's float32 mean accumulation stays below the tolerance.",
+      "path": "validation/cross-implementation/descriptor/tpi-quadratic.asc",
+      "sha256": "c6610ae195c3ac3064ab40e92c7ac3f3eb43ae8112a9398c2e1e948a872565db"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-TPI-MOORE-QUADRATIC",
+      "description": "TPI as centre minus the mean of the eight Moore neighbours (computeTPI with the discrete-circle radius root 2), interior cells only, compared against gdaldem TPI and against the closed-form −c·mean(Δx²+Δy²).",
+      "candidateParameters": {
+        "function": "computeTPI",
+        "radiusCells": 1.4142135623730951,
+        "neighbourhood": "3x3 Moore",
+        "accumulation": "double"
+      },
+      "referenceParameters": {
+        "stage": "gdaldem TPI",
+        "gdaldriver": "AAIGrid",
+        "computeEdges": false
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.00001,
+    "toleranceUnit": "dimensionless",
+    "minimumComparableCells": 3000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 3364 interior cells are within the registered 1e-5, against BOTH gdaldem TPI (largest difference 8.94e-7) and the closed-form quadratic curvature (largest difference 5.82e-7). Nothing was widened.",
+  "result": {
+    "comparableCells": 3364,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 8.94e-7,
+    "rmse": 1.72e-7,
+    "meanDiff": 2.45e-9
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/descriptor/tpi-quadratic.asc",
+      "sha256": "c6610ae195c3ac3064ab40e92c7ac3f3eb43ae8112a9398c2e1e948a872565db",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/descriptor/tpi-quadratic__tpi.asc",
+      "sha256": "df3fb1b262cfe8e992e548e3823ff77c2a622bee85e82ffa81706974f410f579",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/descriptor/reference-runs-descriptor.json",
+      "sha256": "33dc9dce3c006543c10e19ec1f3d4524897ff00d29006dc961449a07de71c496",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-021-ANALYTIC-TPI-QUADRATIC",
+        "parameterSetId": "PS-TPI-MOORE-QUADRATIC"
+      }
+    ],
+    "unsupported": [
+      "The one-cell border, where the documented gdaldem command omits -compute_edges.",
+      "High absolute elevations, where gdaldem's float32 mean accumulation grows with |z|; OLV is the more precise side there.",
+      "Neighbourhood sizes other than 3x3.",
+      "Agreement with gdaldem is not accuracy against ground truth."
+    ]
+  }
+}

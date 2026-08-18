@@ -41,6 +41,7 @@ import type {
   TerrainCoreParams,
 } from '../terrain/contour/analyseContours';
 import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
@@ -450,6 +451,7 @@ export function createTerrainAnalysisRunner(
     intervalM: number;
     shapeStyle?: ContourShapeStyle;
     generalizeToleranceCells?: number;
+    generalizeMode?: ContourGeneralizeMode;
   }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
@@ -488,6 +490,7 @@ export function createTerrainAnalysisRunner(
       intervalM: opts.intervalM,
       shapeStyle: opts.shapeStyle,
       generalizeToleranceCells: opts.generalizeToleranceCells,
+      generalizeMode: opts.generalizeMode,
     });
   }
 

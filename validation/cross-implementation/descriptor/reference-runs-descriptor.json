@@ -1,0 +1,27 @@
+{
+  "generatedBy": "scripts/generate-descriptor-crosscheck.mjs",
+  "fixtures": {
+    "N": 60,
+    "CELL": 1,
+    "TPI_C": 0.01,
+    "VRM_A": 0.2,
+    "VRM_C": 0.004
+  },
+  "tpi": {
+    "reference": "gdaldem TPI",
+    "resolvedPath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdaldem",
+    "commandLine": "gdaldem TPI validation/cross-implementation/descriptor/tpi-quadratic.asc validation/cross-implementation/descriptor/tpi-quadratic__tpi.asc -of AAIGrid",
+    "exitCode": 0,
+    "stderr": null
+  },
+  "vrm": {
+    "reference": "SAGA 7.8.2 ta_morphometry 17 Vector Ruggedness Measure",
+    "resolvedPath": "/Applications/QGIS-LTR.app/Contents/MacOS/bin/saga_cmd",
+    "commandLine": "saga_cmd ta_morphometry 17 -DEM=<crs.tif> -VRM=<out.tif> -MODE=1 -RADIUS=1 -DW_WEIGHTING=0, then gdal_translate -of AAIGrid -co DECIMAL_PRECISION=9",
+    "exitCode": 0,
+    "stderr": null
+  },
+  "gdalTranslate": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdal_translate",
+  "platform": "darwin-arm64",
+  "node": "v26.0.0"
+}

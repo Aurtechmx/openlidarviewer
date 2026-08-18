@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-VRM-SAGA-ANALYTIC",
+  "example": false,
+  "title": "VRM against SAGA Vector Ruggedness Measure, and the closed form, on a smooth tilted analytic quadratic",
+  "question": "Does this project's computeVRM over a 3x3 window agree with SAGA 7.8.2's Vector Ruggedness Measure and with the closed-form Sappington VRM, on a smooth well-resolved tilted quadratic where Horn's normal and SAGA's estimator both converge to the analytic normal?",
+  "recordWrittenOn": "2026-08-17",
+  "referenceTool": "SAGA",
+  "referenceVersion": "7.8.2",
+  "claims": [
+    {
+      "claimId": "VRM",
+      "datasetIds": [
+        "OLV-DS-022-ANALYTIC-VRM-TILTED"
+      ],
+      "parameterSetIds": [
+        "PS-VRM-3X3-TILTED"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.0001,
+        "toleranceUnit": "dimensionless",
+        "minimumComparableCells": 3000,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "VRM is one minus the 3x3 mean-resultant length of unit surface normals. Its only implementation-dependent input is the surface normal, which each side derives from an estimated slope and aspect. On a smooth, well-resolved surface every reasonable estimator converges to the analytic normal, so the residual is the difference between Horn's estimator (OLV) and SAGA's on gentle curvature, observed under 2e-5 over the interior; the six-decimal ASCII transcode of the reference adds under 1e-6. 1e-4 sits above that residual and far below any VRM a reader interprets. Every interior cell must pass. The closed-form Sappington VRM, computed from the analytic gradient, anchors correctness independently of SAGA: OLV reproduces it to under 1e-9 over the interior, so the SAGA leg carries independence and the closed-form leg carries correctness.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-17",
+        "witnessCommit": "85d3cf96734b86424491bcf16faae5be368c07e4",
+        "witness": "The commit that registered this reference slot at pending in src/validation/crossCheck.ts, with its tolerance frozen from first principles, before the comparison was run. The study manifest and the E4 promotion land in the next commit.",
+        "resultLandedOn": "2026-08-17"
+      }
+    }
+  ],
+  "decisionRule": "The study reports agree only when every interior cell is within the tolerance over at least the minimum comparable cells, against BOTH SAGA and the closed form. The tolerance is never widened to reach agreement; a result under it is the finding.",
+  "notes": [
+    "The two-cell border is excluded: Horn's slope halves on the outer ring (edge clamp) and the 3x3 VRM window carries that ring one cell inward, so the affected zone is two cells deep.",
+    "SAGA is run with RADIUS 1, MODE 1 (square) and no distance weighting, the 3x3 uniform window that matches computeVRM's windowCells 3."
+  ],
+  "digest": "sha256:4a487382edbbb1c79385f3a3b5f223992d0a1a8a5697ea93dfd08f6e734c900c"
+}

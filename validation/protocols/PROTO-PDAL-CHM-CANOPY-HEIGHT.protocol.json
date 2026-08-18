@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-PDAL-CHM-CANOPY-HEIGHT",
+  "example": false,
+  "title": "CHM (canopy height) against PDAL writers.gdal, max minus min, on synthetic structure clouds",
+  "question": "Does this project's heightAboveGround (clamped DSM minus DTM) agree with PDAL writers.gdal output_type=max minus output_type=min on the same structure clouds with matched parameters?",
+  "recordWrittenOn": "2026-08-17",
+  "referenceTool": "PDAL",
+  "referenceVersion": "2.10.2",
+  "claims": [
+    {
+      "claimId": "CHM",
+      "datasetIds": [
+        "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "OLV-DS-017-PC-RIDGE-STRUCTURES"
+      ],
+      "parameterSetIds": [
+        "PS-CHM-DIFF-CELL1-R045"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.1,
+        "toleranceUnit": "metre",
+        "minimumComparableCells": 7500,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "CHM is DSM minus DTM per cell, clamped at zero. On the structure clouds every cell holds one ground return plus roof, facade and canopy returns above it, so the per-cell maximum is the top surface and the per-cell minimum is the ground and the difference is a real height above ground. Both sides difference the same two grids: buildDsm and rasterizeDtm each select one input Z per cell and agree with PDAL writers.gdal at float32 spacing (about 8e-6 m at these elevations, confirmed at 5e-5 m for each parent in the DSM and DTM studies), so their difference carries at most the sum of two float32 roundings, on the order of 1.6e-5 m. The 0.1 m tolerance sits far above that arithmetic noise and far below any canopy height the product is read at, so it separates an arithmetic difference from a real one. Every cell must pass, because a single cell outside it would mean the two are not computing the same thing.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-17",
+        "witnessCommit": "f0f51d4fe1ea908555a41ef6980d57fd534b1aa1",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at f0f51d4f reads { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' } while CHM is still at E3 in docs/validation/claim-register.yaml; the study manifest and the E4 promotion do not exist until a later commit. git show f0f51d4f:src/validation/crossCheck.ts shows the pending slot with the tolerance already frozen.",
+        "resultLandedOn": "2026-08-17"
+      }
+    }
+  ],
+  "decisionRule": "The study reports agree only when the measured fraction meets requiredWithinToleranceFraction over at least minimumComparableCells. Below that it reports partial or disagree and says where. The tolerance is never widened to reach agreement; a result under it is the finding.",
+  "notes": [
+    "Written to record the CHM comparison, whose tolerance was frozen at pending in the REFERENCE_SLOTS commit named under the claim, before the difference was run. It does not create that freeze.",
+    "Docker was not running on the host, so the reference tool was invoked from its installed path with the version, argv and exit code recorded rather than pinned to a container."
+  ],
+  "digest": "sha256:c5e4a8a95c978f965e817d2092b9cee8acd1ac532fc3677594ae8230bc1e258e"
+}
