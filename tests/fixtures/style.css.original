@@ -789,7 +789,6 @@ body.olv-theme-light .olv-empty::before {
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 .olv-rail-label { font-size: var(--text-xs); }
 .olv-rail-step-active { color: var(--text-dim); }
@@ -4371,7 +4370,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   inset: 2px 4px;
   pointer-events: none;
   font-variant-numeric: tabular-nums;
-  font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
 .olv-mp-axis {
@@ -4537,7 +4535,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-summary-value {
   margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums; color: var(--text-dim);
+  color: var(--text-dim);
   overflow-wrap: anywhere;
 }
 
@@ -4580,7 +4578,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   cursor: pointer;
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums;
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;
@@ -4618,7 +4615,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   width: 76px;
   font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums;
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
@@ -4669,7 +4665,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-stations-table {
   width: 100%; border-collapse: collapse;
   font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums; color: var(--text-dim);
+  color: var(--text-dim);
 }
 .olv-mp-stations-th {
   text-align: left; font-weight: 500; color: var(--text-faint);
@@ -4908,7 +4904,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-cl-count {
   flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .olv-cl-solo {
   flex-shrink: 0; font-size: 10px; color: var(--text-faint);
@@ -5679,7 +5674,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-rf-stat-value {
   margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-md);
-  color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  color: var(--text); overflow-wrap: anywhere;
 }
 /* Station table — reuses the in-panel scroll wrap + sticky header, with room to
    read more rows at once than the 220px dock cap allows. */
@@ -8817,7 +8812,6 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   color: var(--text); text-align: right; overflow-wrap: anywhere;
 }
 .olv-layerhealth-row-value.is-mono {
-  font-variant-numeric: tabular-nums;
   font-variant-numeric: tabular-nums;
 }
 /* Quiet status dot before the value: ok = established (green),
