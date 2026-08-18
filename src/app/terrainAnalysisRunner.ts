@@ -41,6 +41,7 @@ import type {
   TerrainCoreParams,
 } from '../terrain/contour/analyseContours';
 import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 // TYPE-ONLY: the service and the overlay it builds both load lazily, so
 // neither this import nor the runner widens the startup shell chunk.
 import type { ContourLayerService } from './contourLayerService';
@@ -524,6 +525,7 @@ export function createTerrainAnalysisRunner(
     intervalM: number;
     shapeStyle?: ContourShapeStyle;
     generalizeToleranceCells?: number;
+    generalizeMode?: ContourGeneralizeMode;
   }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
@@ -562,6 +564,7 @@ export function createTerrainAnalysisRunner(
       intervalM: opts.intervalM,
       shapeStyle: opts.shapeStyle,
       generalizeToleranceCells: opts.generalizeToleranceCells,
+      generalizeMode: opts.generalizeMode,
     });
   }
 

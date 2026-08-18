@@ -16,6 +16,7 @@
 
 import type { ContourStudioExportProduct, ContourExportIntent } from './contourStudioMount';
 import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   resolveContourExportPermit,
   type ContourPermitProduct,
@@ -35,12 +36,17 @@ export type ContourVectorFormat = Extract<ContourStudioExportProduct, 'geojson' 
  */
 export interface ContourExportHost {
   /**
-   * Adopt the intent's geometry style + generalization tolerance so the export
-   * regenerates at them. `generalizeToleranceCells` (cells) tunes the
-   * 'generalized' style per purpose; omitted/undefined leaves the host at its
-   * default tolerance.
+   * Adopt the intent's geometry style + generalization tolerance + mode so the
+   * export regenerates at them. `generalizeToleranceCells` (cells) tunes the
+   * 'generalized' style per purpose; `generalizeMode` selects uniform vs
+   * terrain-aware distribution of that tolerance. Omitted/undefined leaves the
+   * host at its defaults.
    */
-  setContourStyle(style: ContourShapeStyle, generalizeToleranceCells?: number): void;
+  setContourStyle(
+    style: ContourShapeStyle,
+    generalizeToleranceCells?: number,
+    generalizeMode?: ContourGeneralizeMode,
+  ): void;
   /** Serialize + download one vector format with its granted permit + provenance. */
   exportVector(
     fmt: ContourVectorFormat,
@@ -97,7 +103,11 @@ export class ContourExportAdapter {
   ): void {
     // Make the purpose real: two purposes regenerate different geometry, each at
     // its own bounded generalization tolerance.
-    this.host.setContourStyle(intent.shapeStyle, intent.generalizeToleranceCells);
+    this.host.setContourStyle(
+      intent.shapeStyle,
+      intent.generalizeToleranceCells,
+      intent.generalizeMode,
+    );
 
     // DEM raster package: routed through the SAME resolver (DTM claim). A hard
     // block (no usable surface) refuses; otherwise it exports stamped with the

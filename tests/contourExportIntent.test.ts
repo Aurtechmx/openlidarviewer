@@ -28,18 +28,38 @@ describe('contourExportIntentFromState', () => {
   it('Presentation Map exports generalized cartographic geometry with the HONEST generalize method', () => {
     const intent = forPurpose('presentation-map');
     expect(intent.shapeStyle).toBe('generalized');
-    // Honesty: the shipped pass is a UNIFORM-tolerance simplify, so the stamp is
-    // `olv.contour.generalize` — NEVER `terrain-adaptive` (an unwired module).
+    // Every purpose defaults to the UNIFORM-tolerance simplify, so the stamp is
+    // `olv.contour.generalize`; terrain-adaptive is opt-in via generalizeMode.
     expect(intent.methodId).toBe('olv.contour.generalize');
     expect(intent.methodTag).toBe('olv.contour.generalize@1');
+    expect(intent.generalizeMode).toBe('uniform');
     expect(intent.generalizeToleranceCells).toBe(1.0); // strongest preset
     expect(intent.labelsIndexOnly).toBe(true); // presentation maps label index lines only
   });
 
-  it('no purpose is ever stamped with the unwired terrain-adaptive method', () => {
+  it('no purpose DEFAULTS to the terrain-adaptive method (it is opt-in)', () => {
     for (const p of ['engineering-plan', 'survey-review', 'terrain-research', 'presentation-map', 'custom'] as const) {
       expect(forPurpose(p).methodId).not.toBe('olv.contour.generalize.terrain-adaptive');
     }
+  });
+
+  it('terrain-aware generalize mode stamps the terrain-adaptive method on the generalized path', () => {
+    const base = applyPurpose(baseContourStudioState(), 'presentation-map');
+    const state = { ...base, surface: { ...base.surface, generalizeMode: 'terrain-aware' as const } };
+    const intent = contourExportIntentFromState(state);
+    expect(intent.shapeStyle).toBe('generalized');
+    expect(intent.generalizeMode).toBe('terrain-aware');
+    expect(intent.methodId).toBe('olv.contour.generalize.terrain-adaptive');
+    expect(intent.methodTag).toBe('olv.contour.generalize.terrain-adaptive@1');
+  });
+
+  it('terrain-aware on the EXACT (survey) path still reports uniform — it generalizes nothing', () => {
+    const base = applyPurpose(baseContourStudioState(), 'survey-review');
+    const state = { ...base, surface: { ...base.surface, generalizeMode: 'terrain-aware' as const } };
+    const intent = contourExportIntentFromState(state);
+    expect(intent.shapeStyle).toBe('crisp');
+    expect(intent.generalizeMode).toBe('uniform'); // exact path forces uniform
+    expect(intent.methodId).toBe('olv.contour.analytical');
   });
 
   it('each cartographic purpose carries its own bounded generalization tolerance', () => {

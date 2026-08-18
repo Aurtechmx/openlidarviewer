@@ -109,6 +109,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
         surface: {
           cartographicSmoothing: true,
           generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['engineering-plan'],
+          generalizeMode: 'uniform',
         },
         contour: { analytical: true, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: false },
@@ -129,6 +130,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
           cartographicSmoothing: false,
           // 0 → exact: the export uses the crisp analytical style, no generalize.
           generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['survey-review'],
+          generalizeMode: 'uniform',
         },
         contour: { analytical: true, cartographic: false, indexEvery: 5 },
         labels: { enabled: true, indexOnly: true },
@@ -150,6 +152,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
         surface: {
           cartographicSmoothing: true,
           generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['terrain-research'],
+          generalizeMode: 'uniform',
         },
         contour: { analytical: true, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: false },
@@ -168,6 +171,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
         surface: {
           cartographicSmoothing: true,
           generalizeToleranceCells: PURPOSE_GENERALIZE_TOLERANCE_CELLS['presentation-map'],
+          generalizeMode: 'uniform',
         },
         contour: { analytical: false, cartographic: true, indexEvery: 5 },
         labels: { enabled: true, indexOnly: true },
@@ -199,6 +203,7 @@ export function purposeDefaults(purpose: ContourStudioPurpose): PurposeDefaults 
 const PURPOSE_OWNED_PATHS = [
   'surface.cartographicSmoothing',
   'surface.generalizeToleranceCells',
+  'surface.generalizeMode',
   'contour.analytical',
   'contour.cartographic',
   'contour.indexEvery',
@@ -248,15 +253,17 @@ export function applyPurpose(
 // ── tiny dotted-path get/set over the known settings groups ────────────────
 type SettingGroup = 'surface' | 'contour' | 'labels' | 'appearance' | 'validation' | 'deliverable';
 
-function getPath(state: ContourStudioState, path: string): boolean | number {
+type SettingValue = boolean | number | string;
+
+function getPath(state: ContourStudioState, path: string): SettingValue {
   const [group, key] = path.split('.') as [SettingGroup, string];
-  return (state[group] as unknown as Record<string, boolean | number>)[key];
+  return (state[group] as unknown as Record<string, SettingValue>)[key];
 }
 
 function setPath(
   state: ContourStudioState,
   path: string,
-  value: boolean | number,
+  value: SettingValue,
 ): ContourStudioState {
   const [group, key] = path.split('.') as [SettingGroup, string];
   return {
