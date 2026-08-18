@@ -20,10 +20,21 @@
  */
 import { octreeGridFor, type OctreeGrid } from './octreeGrid';
 
-/** One batch of interleaved xyz positions from a re-iterable source. */
+/**
+ * One batch from a re-iterable source: interleaved xyz positions used to KEY
+ * each point into a leaf, and optionally the fixed-length per-point records to
+ * SPILL. Without `records` the indexer stores the 12-byte xyz itself, which is
+ * all the geometry an octree needs; a source that also carries intensity,
+ * classification, colour and the rest hands them over as `records` so the tiles
+ * are renderable, not just spatially sorted.
+ */
 export interface PositionBatch {
   readonly positions: Float32Array;
   readonly count: number;
+  /** `count * recordBytes` bytes, the payload written to each point's leaf. */
+  readonly records?: Uint8Array;
+  /** Bytes per record in `records`. Required when `records` is present. */
+  readonly recordBytes?: number;
 }
 
 /**
@@ -56,6 +67,8 @@ export interface OocIndex {
   readonly pointCount: number;
   readonly bounds: { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] };
   readonly leaves: readonly OocLeaf[];
+  /** Bytes per point in every leaf tile. */
+  readonly recordBytes: number;
   /** High-water mark of buffered bytes during the bucketing pass. */
   readonly peakBufferedBytes: number;
 }
@@ -71,9 +84,8 @@ export interface IndexOptions {
 
 const DEFAULT_POINTS_PER_LEAF = 100_000;
 const DEFAULT_MEMORY_BUDGET = 64 * 1024 * 1024;
-/** Three float32 per point — the tile record the indexer writes. */
-const RECORD_FLOATS = 3;
-const RECORD_BYTES = RECORD_FLOATS * 4;
+/** The record when the source carries no attributes: three float32 xyz. */
+const POSITION_RECORD_BYTES = 12;
 
 /** Pass one: the axis-aligned bounds and the point count, nothing held per point. */
 async function scanBounds(
@@ -99,27 +111,28 @@ async function scanBounds(
 }
 
 /**
- * A growable per-leaf staging buffer of float32 positions. Points for one leaf
- * accumulate here and are flushed to the store as a contiguous byte run.
+ * A growable per-leaf staging buffer of raw record bytes. Points for one leaf
+ * accumulate here and are flushed to the store as a contiguous run.
  */
 class LeafBuffer {
-  private data = new Float32Array(RECORD_FLOATS * 256);
-  length = 0; // floats written
+  private data = new Uint8Array(4096);
+  length = 0; // bytes written
 
-  push(x: number, y: number, z: number): void {
-    if (this.length + RECORD_FLOATS > this.data.length) {
-      const grown = new Float32Array(this.data.length * 2);
-      grown.set(this.data);
+  append(src: Uint8Array): void {
+    if (this.length + src.length > this.data.length) {
+      let cap = this.data.length * 2;
+      while (cap < this.length + src.length) cap *= 2;
+      const grown = new Uint8Array(cap);
+      grown.set(this.data.subarray(0, this.length));
       this.data = grown;
     }
-    this.data[this.length++] = x;
-    this.data[this.length++] = y;
-    this.data[this.length++] = z;
+    this.data.set(src, this.length);
+    this.length += src.length;
   }
 
-  /** The written bytes as a view, for a zero-copy append. Valid until the next push. */
+  /** The written bytes as a view, for a zero-copy append. Valid until the next append. */
   bytes(): Uint8Array {
-    return new Uint8Array(this.data.buffer, 0, this.length * 4);
+    return this.data.subarray(0, this.length);
   }
 
   reset(): void {
@@ -134,7 +147,7 @@ export async function indexOutOfCore(
 ): Promise<OocIndex> {
   const signal = options.signal;
   const pointsPerLeaf = Math.max(1, options.pointsPerLeaf ?? DEFAULT_POINTS_PER_LEAF);
-  const budget = Math.max(RECORD_BYTES, options.memoryBudgetBytes ?? DEFAULT_MEMORY_BUDGET);
+  const budget = Math.max(POSITION_RECORD_BYTES, options.memoryBudgetBytes ?? DEFAULT_MEMORY_BUDGET);
 
   const { min, max, count } = await scanBounds(source, signal);
   const grid = octreeGridFor(min, max, count, pointsPerLeaf, options.maxDepth);
@@ -153,9 +166,20 @@ export async function indexOutOfCore(
     buffered = 0;
   }
 
+  // Scratch for the position-only path, so packing an xyz record allocates once
+  // rather than per point.
+  const scratch = new Float32Array(3);
+  const scratchBytes = new Uint8Array(scratch.buffer);
+  let recordBytes = -1; // set from the first batch; every batch must agree
+
   for await (const batch of source.batches(signal)) {
     signal?.throwIfAborted();
     const p = batch.positions;
+    const rb = batch.records ? batch.recordBytes ?? 0 : POSITION_RECORD_BYTES;
+    if (batch.records && rb <= 0) throw new Error('oocIndexer: a records batch must set a positive recordBytes');
+    if (recordBytes === -1) recordBytes = rb;
+    else if (rb !== recordBytes) throw new Error('oocIndexer: recordBytes changed between batches');
+
     for (let i = 0; i < batch.count; i++) {
       const x = p[i * 3];
       const y = p[i * 3 + 1];
@@ -166,9 +190,18 @@ export async function indexOutOfCore(
         buf = new LeafBuffer();
         buffers.set(key, buf);
       }
-      buf.push(x, y, z);
+      let record: Uint8Array;
+      if (batch.records) {
+        record = batch.records.subarray(i * rb, i * rb + rb);
+      } else {
+        scratch[0] = x;
+        scratch[1] = y;
+        scratch[2] = z;
+        record = scratchBytes;
+      }
+      buf.append(record);
       counts.set(key, (counts.get(key) ?? 0) + 1);
-      buffered += RECORD_BYTES;
+      buffered += rb;
       if (buffered > peakBufferedBytes) peakBufferedBytes = buffered;
       // Bound residency to the budget: spill everything once it is reached, so
       // the high-water mark is the budget plus at most the record that tipped it.
@@ -176,6 +209,7 @@ export async function indexOutOfCore(
     }
   }
   await flush();
+  if (recordBytes === -1) recordBytes = POSITION_RECORD_BYTES;
 
   const leaves: OocLeaf[] = [...counts.entries()]
     .map(([key, pointCount]) => ({ key, pointCount }))
@@ -187,6 +221,7 @@ export async function indexOutOfCore(
     pointCount: count,
     bounds: { min, max },
     leaves,
+    recordBytes,
     peakBufferedBytes,
   };
 }
