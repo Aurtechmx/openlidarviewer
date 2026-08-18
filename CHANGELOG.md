@@ -4,11 +4,15 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [0.6.6] - 2026-08-17
 
+### Added
+
+- An opt-in terrain-aware mode for cartographic contour generalization. Where the shipped pass applies one simplification tolerance to every line, terrain-aware scales that tolerance per feature from what the feature is: interpolated or low-confidence support, and small closed summits and depressions, keep more of their shape, while long strongly-measured lines generalize at the full tolerance. The per-feature factor is clamped so it can only ever make a line more faithful than the uniform pass, so the chosen tolerance remains the bound on every line, and the honesty-gated simplifier still refuses to drop a gap or low-confidence vertex under either mode. Exports record which pass ran, `olv.contour.generalize.terrain-adaptive@1` or `olv.contour.generalize@1`. Uniform stays the default, so contour geometry is unchanged for every existing purpose unless the mode is selected.
+
 ### Changed
 
 - The DSM, DTM and CHM surface products reach `E4_CROSS_IMPLEMENTATION_VALIDATED`. The DSM and DTM grids were each recomputed and compared against a committed PDAL 2.10.2 `writers.gdal` reference over three seeded synthetic clouds, agreeing over 7,500 cells to a maximum difference under 4×10⁻⁶ m within a 0.05 m registered tolerance (studies `DSM-PDAL-WRITERS-GDAL-CELL-CENTRED` and `DTM-PDAL-WRITERS-GDAL-CELL-CENTRED`); the CHM (clamped DSM minus DTM) agreed with the PDAL max grid minus the PDAL min grid over 7,500 cells to under 8×10⁻⁶ m within a 0.1 m registered tolerance (study `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`). The check covers the cell gridding: the reference radius is below half a cell, so it does not exercise ground classification (`GROUND-FILTER` stays partial) or real-terrain void interpolation, and the DTM's required bar remains E5.
 - The `TPI` and `VRM` terrain descriptors reach `E4_CROSS_IMPLEMENTATION_VALIDATED`, splitting the former combined `VRM-TPI` claim. Each is checked three ways against an independent tool AND the closed form on an analytic fixture designed to control the confound: `TPI` against gdaldem 3.13.1 over 3364 interior cells to under 9×10⁻⁷ within a 1×10⁻⁵ tolerance, on a low-amplitude quadratic (so the reference's float32 mean accumulation stays below tolerance); `VRM` (Sappington et al. 2007) against SAGA 7.8.2 over 3136 interior cells within a 1×10⁻⁴ tolerance, on a smooth tilted quadratic (so Horn's normal and SAGA's estimator converge), reproducing the closed-form Sappington VRM to under 1×10⁻⁹ (studies `TPI-GDALDEM-ANALYTIC` and `VRM-SAGA-ANALYTIC`). Ten products are now at E4.
-- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.
+- The terrain and measurement algorithms are inherited from v0.6.5 unchanged, apart from the opt-in contour generalization mode above, which is off by default.
 
 ## [0.6.5] - 2026-08-14
 
