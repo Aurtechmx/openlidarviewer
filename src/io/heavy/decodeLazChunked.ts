@@ -156,12 +156,30 @@ export async function decodeLazChunkedSequential(
 export type LazChunkDecoder = (job: LazChunkJob, signal?: AbortSignal) => Promise<RawPoints>;
 
 /**
- * Decode a whole LAZ by submitting every chunk to `decodeChunk` at once and
- * assembling the results. When `decodeChunk` is backed by a worker pool the
- * chunks decode concurrently, one per core; the assembly and the single
- * whole-file colour narrowing are identical to the sequential path, so the
- * output is the same `RawPoints`. Returns `null` for a file the chunked path
- * does not support, exactly like the sequential decoder.
+ * How many chunk decodes to keep in flight at once. A real cloud has many more
+ * chunks than a worker pool has workers (a laszip chunk defaults to 50 000
+ * points, so an 8 M-point file is ~160 chunks), and a worker pool bounds its
+ * wait queue (`DecodeWorkerPool` defaults to 64) — submitting every chunk at
+ * once overflows it. This window keeps the pool's four workers (the decode hard
+ * cap) saturated with headroom to spare while staying well under that bound, and
+ * places each chunk the instant it decodes so only a window's worth of
+ * chunk-local buffers is ever held, not the whole cloud twice over.
+ */
+const MAX_CHUNK_DECODES_IN_FLIGHT = 16;
+
+/**
+ * Decode a whole LAZ by feeding its chunks through `decodeChunk` with a bounded
+ * number in flight, assembling each into the whole-file `out` the instant it
+ * returns. When `decodeChunk` is backed by a worker pool the chunks decode
+ * concurrently, one per core; the assembly and the single whole-file colour
+ * narrowing are identical to the sequential path, so the output is the same
+ * `RawPoints`. Returns `null` for a file the chunked path does not support,
+ * exactly like the sequential decoder.
+ *
+ * `maxInFlight` bounds both the pool's queue pressure and peak memory; the
+ * default keeps the pool saturated for any real cloud. Chunks may finish out of
+ * order — each is placed at its own `firstPointIndex`, into a disjoint span of
+ * `out`, so order never matters.
  */
 export async function decodeLazParallel(
   buffer: ArrayBuffer,
@@ -169,14 +187,26 @@ export async function decodeLazParallel(
   origin: [number, number, number],
   decodeChunk: LazChunkDecoder,
   signal?: AbortSignal,
+  maxInFlight: number = MAX_CHUNK_DECODES_IN_FLIGHT,
 ): Promise<RawPoints | null> {
   const plan = await planChunked(buffer, header, origin, signal);
   if (plan === null) return null;
 
-  const locals = await Promise.all(plan.jobs.map((job) => decodeChunk(job, signal)));
-  for (let i = 0; i < plan.jobs.length; i++) {
-    placeChunk(plan.out, locals[i], plan.jobs[i].firstPointIndex);
-  }
+  const jobs = plan.jobs;
+  const lanes = Math.max(1, Math.min(Math.floor(maxInFlight), jobs.length));
+  let next = 0;
+
+  // Each lane pulls the next chunk index, decodes it, and places it before
+  // pulling again — so at most `lanes` decodes are in flight and each
+  // chunk-local is freed the moment it is copied into `out`.
+  const runLane = async (): Promise<void> => {
+    for (let i = next++; i < jobs.length; i = next++) {
+      signal?.throwIfAborted();
+      placeChunk(plan.out, await decodeChunk(jobs[i], signal), jobs[i].firstPointIndex);
+    }
+  };
+  await Promise.all(Array.from({ length: lanes }, runLane));
+
   finalizeRawColors(plan.out);
   return plan.out;
 }
