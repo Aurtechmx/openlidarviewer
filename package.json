@@ -160,6 +160,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@loaders.gl/las": "^4.4.4",
     "@playwright/test": "^1.62.1",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
@@ -181,6 +182,9 @@
     "vitepress": {
       "vite": "^6.4.3"
     },
-    "texture-compressor": "file:vendor-stubs/texture-compressor"
+    "texture-compressor": "file:vendor-stubs/texture-compressor",
+    "@loaders.gl/las": {
+      "laz-perf": "0.0.7"
+    }
   }
 }
