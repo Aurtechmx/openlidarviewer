@@ -166,6 +166,13 @@ export async function indexOutOfCore(
     buffered = 0;
   }
 
+  // Per-cell occupancy across EVERY level, so a point can find the coarsest
+  // cell with room. Counts (one number per occupied cell) must survive a spill,
+  // unlike the staging bytes, but they are orders of magnitude smaller than the
+  // points they describe, so the pass stays inside its budget.
+  const occupancy = new Map<string, number>();
+  const nodeCapacity = pointsPerLeaf;
+
   // Scratch for the position-only path, so packing an xyz record allocates once
   // rather than per point.
   const scratch = new Float32Array(3);
@@ -184,7 +191,28 @@ export async function indexOutOfCore(
       const x = p[i * 3];
       const y = p[i * 3 + 1];
       const z = p[i * 3 + 2];
-      const key = grid.leafKeyFor(x, y, z);
+      // PYRAMID PLACEMENT. A point does not go straight to its leaf: it settles
+      // at the COARSEST level whose cell still has room. That is what gives the
+      // scheduler something to draw before the fine tiles arrive — with every
+      // point at max depth there is no coarse representation, so showing the
+      // whole scan would mean loading the whole scan, which is the memory wall
+      // this indexer exists to remove.
+      //
+      // The octant path makes the ancestor walk free: the level-d cell of a leaf
+      // path is its first d characters, so no extra geometry is computed. When
+      // every level is full the deepest takes the overflow, so no point is ever
+      // dropped and conservation holds exactly.
+      const leafKey = grid.leafKeyFor(x, y, z);
+      let key = leafKey;
+      for (let d = 0; d <= grid.depth; d++) {
+        const candidate = d === grid.depth ? leafKey : leafKey.slice(0, d);
+        const filled = occupancy.get(candidate) ?? 0;
+        if (filled < nodeCapacity || d === grid.depth) {
+          occupancy.set(candidate, filled + 1);
+          key = candidate;
+          break;
+        }
+      }
       let buf = buffers.get(key);
       if (buf === undefined) {
         buf = new LeafBuffer();

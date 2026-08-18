@@ -128,3 +128,90 @@ describe('out-of-core octree indexer', () => {
     expect(index.leaves[0].pointCount).toBe(1000);
   });
 });
+
+/**
+ * The PYRAMID. A point settles at the coarsest cell with room, not straight at
+ * its leaf, so the store holds nodes at several depths.
+ *
+ * This is what makes the store streamable at all. With every point at maximum
+ * depth there is no coarse representation, so drawing the whole scan would mean
+ * loading the whole scan — the memory wall the out-of-core path exists to
+ * remove, and the reason Phase 3's residency gate could never be met.
+ */
+describe('out-of-core indexer — the LOD pyramid', () => {
+  const build = async (count: number, pointsPerLeaf: number) => {
+    const store = memoryStore();
+    const index = await indexOutOfCore(syntheticSource(count, 20_000), store, {
+      pointsPerLeaf,
+      memoryBudgetBytes: 256 * 1024,
+    });
+    return { store, index };
+  };
+
+  it('emits nodes at MORE THAN ONE depth (a pyramid, not a flat leaf set)', async () => {
+    const { index } = await build(200_000, 10_000);
+    // A node's depth is its key length; the root is the empty key.
+    const depths = new Set(index.leaves.map((l) => l.key.length));
+    expect(depths.size).toBeGreaterThan(1);
+    expect(index.depth).toBeGreaterThan(0);
+  });
+
+  it('fills the COARSEST levels first, so a preview exists before the leaves', async () => {
+    const capacity = 10_000;
+    const { index } = await build(200_000, capacity);
+    const byKey = new Map(index.leaves.map((l) => [l.key, l.pointCount]));
+    // The root holds a full node's worth: something is drawable immediately.
+    expect(byKey.get('')).toBe(capacity);
+    // Every level-1 cell that exists is filled to capacity before level 2 is used.
+    const levelOne = [...byKey.entries()].filter(([k]) => k.length === 1);
+    expect(levelOne.length).toBeGreaterThan(0);
+    for (const [, n] of levelOne) expect(n).toBe(capacity);
+  });
+
+  it('never exceeds the node capacity except at the deepest level, which takes the overflow', async () => {
+    const capacity = 10_000;
+    const { index } = await build(200_000, capacity);
+    for (const leaf of index.leaves) {
+      if (leaf.key.length < index.depth) {
+        // An interior node is capacity-bounded, which is what keeps a coarse
+        // level cheap enough to draw within a point budget.
+        expect(leaf.pointCount).toBeLessThanOrEqual(capacity);
+      }
+    }
+  });
+
+  it('still conserves every point exactly once across the whole pyramid', async () => {
+    const count = 200_000;
+    const { index, store } = await build(count, 10_000);
+    expect(index.pointCount).toBe(count);
+    expect(index.leaves.reduce((n, l) => n + l.pointCount, 0)).toBe(count);
+    expect(store.totalBytes()).toBe(count * RECORD_BYTES);
+  });
+
+  it('keeps every point inside the cube of the node it settled in, at any depth', async () => {
+    const { index, store } = await build(200_000, 10_000);
+    let violations = 0;
+    let checked = 0;
+    for (const leaf of index.leaves) {
+      const cube = index.grid.cubeFor(leaf.key);
+      const bytes = await store.read(leaf.key);
+      const xyz = new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+      for (let i = 0; i < xyz.length; i += 3) {
+        const inside =
+          xyz[i] >= cube.min[0] && xyz[i] <= cube.min[0] + cube.size &&
+          xyz[i + 1] >= cube.min[1] && xyz[i + 1] <= cube.min[1] + cube.size &&
+          xyz[i + 2] >= cube.min[2] && xyz[i + 2] <= cube.min[2] + cube.size;
+        if (!inside) violations++;
+        checked++;
+      }
+    }
+    expect(checked).toBe(200_000);
+    expect(violations).toBe(0);
+  });
+
+  it('a cloud that fits in one node stays a single root node', async () => {
+    const { index } = await build(5_000, 100_000);
+    expect(index.leaves).toHaveLength(1);
+    expect(index.leaves[0].key).toBe('');
+  });
+});
