@@ -1,11 +1,16 @@
 {
-  "total": 146,
+  "total": 156,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/floorPlanPositions.ts": 4,
     "src/app/terrainAnalysisRunner.ts": 3,
     "src/io/copc/copcChunkDecode.ts": 1,
-    "src/io/lasDecodeShared.ts": 3,
+    "src/io/heavy/decodeLazChunked.ts": 2,
+    "src/io/heavy/oocIndexer.ts": 2,
+    "src/io/heavy/slicedLasSource.ts": 1,
+    "src/io/heavy/tileChunkDecoder.ts": 1,
+    "src/io/heavy/tileRecord.ts": 3,
+    "src/io/lasDecodeShared.ts": 4,
     "src/io/loadE57.ts": 1,
     "src/io/loadGltf.ts": 1,
     "src/io/loadLas.ts": 3,
