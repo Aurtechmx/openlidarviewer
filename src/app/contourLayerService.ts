@@ -25,8 +25,14 @@
  * cannot disagree about what is on screen.
  */
 
-import { DerivedLayerStore, type DerivedLayer } from '../model/DerivedLayer';
-import { ContourOverlay, type ContourOverlayHost } from '../render/ContourOverlay';
+import { type DerivedLayer } from '../model/DerivedLayer';
+// TYPE-ONLY on purpose: `ContourOverlay` pulls in three/webgpu, and this module
+// is reachable from the startup shell through the terrain runner. Importing the
+// class as a VALUE here would drag the whole renderer into the index chunk (the
+// chunk-isolation guard's exact subject), so the overlay arrives as an injected
+// factory that the caller lazy-imports.
+import type { ContourOverlay, ContourOverlayHost } from '../render/ContourOverlay';
+import type { DerivedLayerStore } from '../model/DerivedLayer';
 import type { ContourFeatureModel } from '../terrain/contour/contourFeatureModel';
 import type { SourceFormat } from '../io/sniffFormat';
 
@@ -61,7 +67,11 @@ export interface ContourLayerServiceDeps {
   readonly host: ContourOverlayHost;
   /** The app's derived-layer store. Shared, so other products can join it. */
   readonly store: DerivedLayerStore;
-  readonly makeOverlay?: ContourOverlayFactory;
+  /**
+   * Builds the overlay. REQUIRED (not defaulted to `new ContourOverlay`) so this
+   * module never imports three as a value — see the type-only import above.
+   */
+  readonly makeOverlay: ContourOverlayFactory;
 }
 
 export interface ContourLayerService {
@@ -80,7 +90,7 @@ export interface ContourLayerService {
 }
 
 export function createContourLayerService(deps: ContourLayerServiceDeps): ContourLayerService {
-  const makeOverlay = deps.makeOverlay ?? ((host) => new ContourOverlay(host));
+  const makeOverlay = deps.makeOverlay;
   // ONE overlay, reused across regenerations. A per-analysis overlay would need
   // the caller to remember to dispose the previous one, which is exactly the
   // "stale overlay left drawn" bug this service exists to make impossible.
