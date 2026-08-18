@@ -9,12 +9,13 @@
  *     it exports the CRISP geometry stamped `olv.contour.analytical@1`.
  *   - Presentation Map / Engineering Plan / Terrain Research apply cartographic
  *     generalization, so they export the GENERALIZED geometry (honesty-gated
- *     uniform-tolerance simplify + smooth — never the panel's on-screen default
- *     style) stamped `olv.contour.generalize@1`, each at its OWN per-purpose
- *     tolerance (`generalizeToleranceCells`). The stamp names the transformation
- *     the pipeline actually runs: a uniform Douglas–Peucker tolerance, NOT the
- *     terrain-adaptive module (`contourAdaptiveGeneralize`, which has no
- *     production caller). Stamping `terrain-adaptive` here would be an overclaim.
+ *     simplify + smooth — never the panel's on-screen default style), each at its
+ *     OWN per-purpose tolerance (`generalizeToleranceCells`). The stamp names the
+ *     transformation the pipeline actually runs: `olv.contour.generalize@1` for
+ *     the uniform Douglas–Peucker tolerance, or `olv.contour.generalize.terrain-adaptive@1`
+ *     when the surface's `generalizeMode` is 'terrain-aware' — the honesty-gated
+ *     styler then scales that tolerance DOWN per feature (never up), which is a
+ *     real production path, so the stamp is honest either way.
  *
  * The chosen `shapeStyle` + `generalizeToleranceCells` drive the host's
  * `buildResultForExport`, which regenerates the contour geometry at that style
@@ -28,6 +29,7 @@
 
 import type { ContourStudioState } from './contourStudioState';
 import type { ContourShapeStyle } from '../contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../contour/terrainAwareTolerance';
 import { PURPOSE_META } from './contourStudioPurpose';
 
 /**
@@ -79,6 +81,12 @@ export interface ContourExportIntent {
    * stamped into provenance so each file names the tolerance it used.
    */
   readonly generalizeToleranceCells: number;
+  /**
+   * How the 'generalized' style distributes its tolerance across features. The
+   * export host passes it to `applyContourShapeStyle`, and it selects the method
+   * stamp. 'uniform' on the exact (crisp) path, since it generalizes nothing.
+   */
+  readonly generalizeMode: ContourGeneralizeMode;
   /** Whether only index (bold) contours are labelled. */
   readonly labelsIndexOnly: boolean;
   /** Stable method id of the geometry actually exported. */
@@ -117,12 +125,20 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
   // provenance string (the v0.5.9 "all purposes export the same file" bug).
   const shapeStyle: ContourShapeStyle = exact ? 'crisp' : 'generalized';
 
+  // The exact path generalizes nothing, so it always reports 'uniform'; only the
+  // generalized path honours the surface's chosen mode.
+  const generalizeMode: ContourGeneralizeMode = exact ? 'uniform' : state.surface.generalizeMode;
+
   // Honest method id: the crisp path is the exact analytical geometry; the
-  // generalized path is the shipped UNIFORM-tolerance Douglas–Peucker pass, so it
-  // is stamped `olv.contour.generalize` — NOT `terrain-adaptive`, which names a
-  // module (`contourAdaptiveGeneralize`) that has no production caller. The
-  // per-purpose tolerance is carried alongside so the stamp is fully specified.
-  const methodId = exact ? 'olv.contour.analytical' : 'olv.contour.generalize';
+  // generalized path is the uniform-tolerance Douglas–Peucker pass, stamped
+  // `olv.contour.generalize` — unless the surface selected terrain-aware, in
+  // which case the honesty-gated styler scales that tolerance per feature and the
+  // pass that actually runs is stamped `olv.contour.generalize.terrain-adaptive`.
+  const methodId = exact
+    ? 'olv.contour.analytical'
+    : generalizeMode === 'terrain-aware'
+      ? 'olv.contour.generalize.terrain-adaptive'
+      : 'olv.contour.generalize';
   const methodVersion = 1;
 
   const meta = PURPOSE_META[state.purpose];
@@ -130,6 +146,7 @@ export function contourExportIntentFromState(state: ContourStudioState): Contour
     purpose: state.purpose,
     shapeStyle,
     generalizeToleranceCells: exact ? 0 : tol,
+    generalizeMode,
     labelsIndexOnly: state.labels.indexOnly,
     methodId,
     methodVersion,

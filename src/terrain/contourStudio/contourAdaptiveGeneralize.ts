@@ -18,6 +18,7 @@
  */
 
 import type { ContourFeature } from '../contour/contourFeatureModel';
+import { terrainAwareToleranceFactor } from '../contour/terrainAwareTolerance';
 import {
   cartographicProduct,
   type ContourGeometryProduct,
@@ -46,33 +47,18 @@ function featureLength(f: ContourFeature): number {
 }
 
 /**
- * The per-feature tolerance multiplier (§16.1/§16.2). Deterministic, and always
- * within a bounded band [0.25×, 2×] of the base so a single feature can never
- * be wildly over- or under-generalized.
+ * The per-feature tolerance multiplier for a {@link ContourFeature} (the staged
+ * source-unit product path). Thin adapter over the shared
+ * {@link terrainAwareToleranceFactor} policy (see `../contour/terrainAwareTolerance`).
  */
 export function adaptiveToleranceFactor(
   f: ContourFeature,
   opts: { longFeatureLen: number; smallRingLen: number },
 ): number {
-  let factor = 1;
-
-  // Support: smooth interpolated less, unsupported least (fidelity over polish).
-  if (f.grade === 'dashed') factor *= 0.6;
-  else if (f.grade === 'gap') factor *= 0.4;
-
-  // Low confidence → keep more of the original shape.
-  if (Number.isFinite(f.meanConfidence) && f.meanConfidence < 50) factor *= 0.7;
-
-  const len = featureLength(f);
-
-  // Small closed summit/depression → preserve its (few) vertices.
-  if (f.closed && len <= opts.smallRingLen) factor *= 0.4;
-
-  // Long, strongly-measured contour → safe to generalize a little harder.
-  if (f.grade === 'solid' && len >= opts.longFeatureLen) factor *= 1.5;
-
-  // Bound the band.
-  return Math.max(0.25, Math.min(2, factor));
+  return terrainAwareToleranceFactor(
+    { grade: f.grade, meanConfidence: f.meanConfidence, closed: f.closed, length: featureLength(f) },
+    opts,
+  );
 }
 
 /**

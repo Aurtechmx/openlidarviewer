@@ -8577,8 +8577,10 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* Purpose cards */
 /* Compact pills: the label alone; the full description is on hover (title
    attribute) so the picker stays tight instead of a wall of summary text. */
-.olv-cs-purpose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.olv-cs-purpose-card {
+.olv-cs-purpose-grid,
+.olv-cs-genmode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.olv-cs-purpose-card,
+.olv-cs-genmode-card {
   display: flex;
   align-items: center;
   min-height: 30px;
@@ -8590,14 +8592,19 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
 }
-.olv-cs-purpose-card:hover { border-color: var(--hairline-strong); }
-.olv-cs-purpose-card:active { transform: translateY(1px); }
-.olv-cs-purpose-card.is-selected {
+.olv-cs-purpose-card:hover,
+.olv-cs-genmode-card:hover { border-color: var(--hairline-strong); }
+.olv-cs-purpose-card:active,
+.olv-cs-genmode-card:active { transform: translateY(1px); }
+.olv-cs-purpose-card.is-selected,
+.olv-cs-genmode-card.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
-.olv-cs-purpose-label { display: block; font-size: var(--text-sm); font-weight: 620; color: var(--text); }
+.olv-cs-purpose-label,
+.olv-cs-genmode-label { display: block; font-size: var(--text-sm); font-weight: 620; color: var(--text); }
+.olv-cs-genmode { margin-top: 10px; }
 
 /* Review + settings summary — definition grids */
 .olv-cs-review-list, .olv-cs-summary-list {

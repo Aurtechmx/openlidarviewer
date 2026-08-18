@@ -19,6 +19,7 @@
 
 import type { ContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import type { ContourStudioState, ContourStudioPurpose } from '../terrain/contourStudio/contourStudioState';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import type { ContourStudioLaunchState } from '../terrain/contourStudio/contourStudioLaunchState';
 import type { ContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import {
@@ -155,6 +156,48 @@ function renderPurposeCards(
   return wrap;
 }
 
+const GENERALIZE_MODES: ReadonlyArray<{
+  id: ContourGeneralizeMode;
+  label: string;
+  desc: string;
+}> = [
+  { id: 'uniform', label: 'Uniform', desc: 'One simplification strength for every contour.' },
+  {
+    id: 'terrain-aware',
+    label: 'Terrain-aware',
+    desc: 'Keeps interpolated, low-confidence and small closed forms sharper. Never simplifies a line harder than uniform.',
+  },
+];
+
+/**
+ * The Uniform / Terrain-aware generalization toggle. Reuses the purpose-card
+ * pill styling. Only the generalized geometry reads it, so the note says so; a
+ * survey (exact) export ignores it and stays stamped uniform.
+ */
+function renderGeneralizeMode(
+  state: ContourStudioState,
+  onPick: (mode: ContourGeneralizeMode) => void,
+): HTMLElement {
+  const wrap = el('div', { className: 'olv-cs-genmode' });
+  wrap.append(el('div', { className: 'olv-cs-section-head', text: 'Generalization' }));
+  const grid = el('div', { className: 'olv-cs-genmode-grid' });
+  for (const m of GENERALIZE_MODES) {
+    const on = state.surface.generalizeMode === m.id;
+    const card = el('button', {
+      className: `olv-cs-genmode-card${on ? ' is-active' : ''}`,
+    });
+    card.type = 'button';
+    card.setAttribute('aria-pressed', on ? 'true' : 'false');
+    card.title = m.desc;
+    card.setAttribute('aria-label', `${m.label}. ${m.desc}`);
+    card.append(el('span', { className: 'olv-cs-genmode-label', text: m.label }));
+    card.addEventListener('click', () => onPick(m.id));
+    grid.append(card);
+  }
+  wrap.append(grid);
+  return wrap;
+}
+
 function renderSettingsSummary(state: ContourStudioState): HTMLElement {
   const wrap = el('div', { className: 'olv-cs-summary' });
   wrap.append(el('div', { className: 'olv-cs-section-head', text: 'This deliverable' }));
@@ -167,6 +210,7 @@ function renderSettingsSummary(state: ContourStudioState): HTMLElement {
   const rows: Array<[string, string]> = [
     ['Geometry', [state.contour.analytical ? 'analytical' : null, state.contour.cartographic ? 'cartographic' : null].filter(Boolean).join(' + ') || 'none'],
     ['Cartographic smoothing', state.surface.cartographicSmoothing ? 'on' : 'off'],
+    ['Generalization', state.surface.generalizeMode === 'terrain-aware' ? 'terrain-aware' : 'uniform'],
     ['Labels', labelsValue],
     ['Validation appendix', state.validation.appendixRequired ? 'required' : 'optional'],
     ['Exploratory output', state.deliverable.allowExploratory ? 'allowed' : 'not for this purpose'],
@@ -281,6 +325,9 @@ export function renderContourStudioWorkspace(
     body.append(
       renderPurposeCards(state.purpose, (p) =>
         controller.dispatch({ type: 'set-purpose', purpose: p }),
+      ),
+      renderGeneralizeMode(state, (mode) =>
+        controller.dispatch({ type: 'set-setting', path: 'surface.generalizeMode', value: mode }),
       ),
     );
     if (review) body.append(renderReviewBar(review));

@@ -69,6 +69,7 @@ import {
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   loadMapSheetPdf,
   loadDemPackage,
@@ -169,6 +170,8 @@ export interface AnalysePanelCallbacks {
     shapeStyle: ContourShapeStyle;
     /** Per-purpose generalization tolerance (cells) for the 'generalized' style. */
     generalizeToleranceCells?: number;
+    /** Per-purpose generalization mode (uniform | terrain-aware). */
+    generalizeMode?: ContourGeneralizeMode;
   }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
@@ -398,6 +401,13 @@ export class AnalysePanel {
    * "use the default tolerance" (the manual map-PDF style picker never sets it).
    */
   private _contourGeneralizeToleranceCells: number | undefined = undefined;
+  /**
+   * Per-purpose generalization mode adopted from the active Contour Studio export
+   * intent: 'uniform' or 'terrain-aware'. Threaded into `buildResultForExport`
+   * beside the tolerance. Undefined means "uniform" (the manual style picker
+   * never sets it, so its exports are byte-unchanged).
+   */
+  private _contourGeneralizeMode: ContourGeneralizeMode | undefined = undefined;
   /**
    * The §19 export permit for the pending map-sheet PDF. The map PDF export runs
    * asynchronously through a dialog, so the permit minted at click time is
@@ -733,9 +743,10 @@ export class AnalysePanel {
       .then(({ ContourExportAdapter }) => {
         if (!this._contourExportAdapter) {
           const host: ContourExportHost = {
-            setContourStyle: (style, generalizeToleranceCells) => {
+            setContourStyle: (style, generalizeToleranceCells, generalizeMode) => {
               this._contourStyle = style;
               this._contourGeneralizeToleranceCells = generalizeToleranceCells;
+              this._contourGeneralizeMode = generalizeMode;
             },
             exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
             openMapPdf: (permit, intent) => {
@@ -2015,6 +2026,7 @@ export class AnalysePanel {
       intervalM: r.requestedIntervalM ?? r.model.intervalM,
       shapeStyle: style,
       generalizeToleranceCells: this._contourGeneralizeToleranceCells,
+      generalizeMode: this._contourGeneralizeMode,
     });
   }
 

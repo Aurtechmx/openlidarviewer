@@ -16,11 +16,16 @@ import {
   type ContourStudioPurpose,
   type ContourStudioState,
 } from './contourStudioState';
+import type { ContourGeneralizeMode } from '../contour/terrainAwareTolerance';
 import { applyPurpose } from './contourStudioPurpose';
+
+/** The value a settable path can hold. */
+export type ContourSettingValue = boolean | number | ContourGeneralizeMode;
 
 /** A settable path into the state's presentation settings. */
 export type ContourSettingPath =
   | 'surface.cartographicSmoothing'
+  | 'surface.generalizeMode'
   | 'contour.analytical'
   | 'contour.cartographic'
   | 'contour.indexEvery'
@@ -38,7 +43,7 @@ export type ContourSettingPath =
 export type ContourStudioAction =
   | { readonly type: 'set-purpose'; readonly purpose: ContourStudioPurpose }
   | { readonly type: 'set-area'; readonly area: ContourArea }
-  | { readonly type: 'set-setting'; readonly path: ContourSettingPath; readonly value: boolean | number }
+  | { readonly type: 'set-setting'; readonly path: ContourSettingPath; readonly value: ContourSettingValue }
   | { readonly type: 'reset' };
 
 export function contourStudioReducer(
@@ -77,7 +82,7 @@ type SettingGroup =
 function setPath(
   state: ContourStudioState,
   path: ContourSettingPath,
-  value: boolean | number,
+  value: ContourSettingValue,
 ): ContourStudioState {
   const [group, key] = path.split('.') as [SettingGroup, string];
   return {

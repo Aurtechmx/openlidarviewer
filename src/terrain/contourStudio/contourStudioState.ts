@@ -17,6 +17,9 @@
  */
 
 import { canonicalJson, fnv1a } from '../../canonicalHash';
+import type { ContourGeneralizeMode } from '../contour/terrainAwareTolerance';
+
+export { type ContourGeneralizeMode };
 
 export const CONTOUR_STUDIO_SCHEMA = 1 as const;
 
@@ -56,6 +59,15 @@ export interface ContourSurfaceSettings {
    * purpose (preserved on user override) like `cartographicSmoothing`.
    */
   readonly generalizeToleranceCells: number;
+  /**
+   * How the generalized geometry distributes that tolerance across features:
+   * 'uniform' (default) applies it evenly; 'terrain-aware' scales it DOWN per
+   * feature so interpolated / low-confidence / small-closed forms keep more of
+   * their shape (never up, so the tolerance above stays the honest ceiling). The
+   * choice is stamped into export provenance. Owned by the purpose, preserved on
+   * user override.
+   */
+  readonly generalizeMode: ContourGeneralizeMode;
 }
 
 /** Which geometry products to emit + how often an index (bold) contour falls. */
@@ -131,6 +143,7 @@ export function baseContourStudioState(): ContourStudioState {
     surface: {
       cartographicSmoothing: true,
       generalizeToleranceCells: BASE_GENERALIZE_TOLERANCE_CELLS,
+      generalizeMode: 'uniform',
     },
     contour: { analytical: true, cartographic: true, indexEvery: 5 },
     labels: { enabled: true, indexOnly: false },

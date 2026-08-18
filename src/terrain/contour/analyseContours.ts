@@ -102,6 +102,7 @@ import {
   GENERALIZE_EPS_CELLS,
   type ContourShapeStyle,
 } from './contourShapeStyle';
+import type { ContourGeneralizeMode } from './terrainAwareTolerance';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
 import {
@@ -275,6 +276,12 @@ export interface IntervalContourParams {
    * never set it are byte-unchanged.
    */
   readonly generalizeToleranceCells?: number;
+  /**
+   * How the 'generalized' style distributes its tolerance across features:
+   * 'uniform' (default when omitted, byte-unchanged) or 'terrain-aware' (scaled
+   * DOWN per feature, never up). Ignored for every style but 'generalized'.
+   */
+  readonly generalizeMode?: ContourGeneralizeMode;
   /**
    * Legacy boolean toggle for smoothing. Honoured for back-compat when
    * `shapeStyle` is not given: `false` ⇒ `'crisp'`, otherwise the default
@@ -1325,6 +1332,7 @@ export function contoursFromCore(
     polylines: applyContourShapeStyle(level.polylines, shapeStyle, {
       cellSizeM,
       generalizeToleranceCells: intervalParams.generalizeToleranceCells,
+      generalizeMode: intervalParams.generalizeMode,
     }),
   }));
 
