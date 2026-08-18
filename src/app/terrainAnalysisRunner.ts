@@ -286,6 +286,15 @@ export function createTerrainAnalysisRunner(
    * to a successful analysis, so a lazy-chunk failure or a missing cloud must
    * leave the analysis, the panel and the export exactly as they are.
    */
+  /**
+   * The scan's vertical-unit label for the layer controls, or null when the file
+   * declares none — the fail-honest rule the metric readouts already follow.
+   */
+  function layerVerticalUnitLabel(): string | null {
+    const scale = verticalMetresPerUnit(crsService.context(), 'horizontal') ?? null;
+    return scale != null ? verticalUnitLabel(scale) : null;
+  }
+
   async function showContourLayer(
     result: AnalyseContoursResult,
     scanId: string | null,
@@ -322,6 +331,38 @@ export function createTerrainAnalysisRunner(
         // Coverage honesty travels with the layer: a resident-only gather is a
         // partial view, and the record must say so rather than imply the whole scan.
         coverage: result.dtm.coverageMode === 'full' ? 'full' : 'sampled',
+      });
+      // Hand the panel a live view of the layer. Every handler returns what the
+      // service ACTUALLY applied, so a control re-reads the record rather than
+      // assuming its own click won — the drawn state and the UI cannot drift.
+      const svc = contourLayers;
+      const layer = svc.layerFor(scanId);
+      const styleNum = (k: string, fallback: number): number => {
+        const v = layer?.style[k];
+        return typeof v === 'number' ? v : fallback;
+      };
+      const styleBool = (k: string, fallback: boolean): boolean => {
+        const v = layer?.style[k];
+        return typeof v === 'boolean' ? v : fallback;
+      };
+      getAnalysePanel().setContourLayerControls({
+        visible: layer?.visible ?? true,
+        opacity: layer?.opacity ?? 1,
+        indexEmphasis: styleBool('indexEmphasis', true),
+        heightOffset: styleNum('heightOffset', 0),
+        // Same vertical-unit policy the panel's other readouts use: an
+        // undeclared unit prints no label rather than implying metres.
+        verticalUnitLabel: layerVerticalUnitLabel(),
+        onVisible: (next) => svc.setVisible(scanId, next)?.visible ?? null,
+        onOpacity: (next) => svc.setOpacity(scanId, next)?.opacity ?? null,
+        onIndexEmphasis: (next) => {
+          const v = svc.setIndexEmphasis(scanId, next)?.style.indexEmphasis;
+          return typeof v === 'boolean' ? v : null;
+        },
+        onHeightOffset: (next) => {
+          const v = svc.setHeightOffset(scanId, next)?.style.heightOffset;
+          return typeof v === 'number' ? v : null;
+        },
       });
     } catch (err) {
       console.warn('OpenLiDARViewer: contour layer not drawn.', err);
