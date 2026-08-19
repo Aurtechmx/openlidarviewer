@@ -1,6 +1,6 @@
 # OpenLiDARViewer v0.6.6
 
-v0.6.6 is a focused evidence release. It promotes the DSM, DTM and CHM surface products to independent cross-implementation evidence, and adds one opt-in cartographic option that leaves every default output unchanged. The measured figures in this document come from the release-mode gate run at the tagged commit.
+v0.6.6 promotes the DSM, DTM and CHM surface products to independent cross-implementation evidence, draws contours over the point cloud as a derived layer, and adds two opt-in options that leave every default output unchanged. The measured figures in this document come from the release-mode gate run at the tagged commit.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
@@ -24,9 +24,23 @@ A terrain-aware mode is now offered beside the uniform one. It scales the tolera
 
 Exports record which pass produced their geometry, `olv.contour.generalize.terrain-adaptive@1` or `olv.contour.generalize@1`, alongside the tolerance in effect. Uniform remains the default for every purpose, so contour geometry is byte-identical to v0.6.5 unless the mode is selected.
 
+## Contours draw in the 3D scene
+
+Contours produced by a terrain analysis are drawn over the point cloud as a derived layer, with panel controls for visibility, index emphasis, opacity and vertical lift. Solid and dashed support are distinguished by colour and alpha rather than by dash pattern, and a segment that crosses a data gap is not drawn at all, so a drawn line never spans ground the analysis did not measure.
+
+Re-running the analysis regenerates the layer in place, and closing the scan a layer came from removes it. Each layer carries the digest of the analysis receipt that produced it, built through the provenance path exports already use, so a layer still on screen can be traced back to the run behind it. Scans held in the viewer's Y-up frame are drawn through the full Z-up to Y-up rotation, and the overlay adds no origin offset of its own, because contour geometry arrives in the project frame.
+
+Receipts for the other analytical products are not part of this release. They need provenance captured at analysis time, which contours have and the others do not yet.
+
+## Resident stickiness for streaming, opt-in
+
+The streaming selector can hold a node that is already resident against a marginally better competitor, which reduces the swap churn visible as flicker at the point-budget boundary. A node with a finer candidate beneath it in the same tick competes on its raw score with no bonus, so the retention cannot stall refinement.
+
+It is off by default and enabled with `?stickiness=on`. The default selection is byte-for-byte what v0.6.5 produced. Flicker is not observable outside a browser, so the default stays off until the behaviour is measured on a streamed cloud in one.
+
 ## Known limitations
 
-The complete list is in `KNOWN_LIMITATIONS_v0.6.6.md`. It carries the v0.6.5 limits forward, with the evidence-ceiling section updated for the three newly promoted surface products and the scope those cross-checks reach. Terrain-aware generalization is a cartographic option and carries no evidence claim of its own: it changes how a line is drawn, never what the surface says. Multi-layer mounting stays enabled with its one outstanding precision refinement, the residual streaming flicker at the point-budget boundary is unchanged, and there is still no cross-CRS reprojection into a common viewer frame.
+The complete list is in `KNOWN_LIMITATIONS_v0.6.6.md`. It carries the v0.6.5 limits forward, with the evidence-ceiling section updated for the three newly promoted surface products and the scope those cross-checks reach. Terrain-aware generalization is a cartographic option and carries no evidence claim of its own: it changes how a line is drawn, never what the surface says. Multi-layer mounting stays enabled with its one outstanding precision refinement, and there is still no cross-CRS reprojection into a common viewer frame. The residual streaming flicker at the point-budget boundary is unchanged in the default configuration; the stickiness option above is offered against it but is not yet measured in a browser.
 
 ## Compatibility
 
