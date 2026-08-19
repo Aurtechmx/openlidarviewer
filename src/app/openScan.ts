@@ -275,14 +275,37 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // remain exclusive and still call clearOpenStaticLayers below.)
 
     deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
-    deps.stage.hideEmptyState();
+    // PAINT YIELD. `await viewer.ready` above is the last await in this
+    // function, so everything from here to the progress teardown runs in ONE
+    // task: the "Preparing GPU buffers" and "Rendering" lines were written and
+    // cleared without the browser ever painting them, and the user watched the
+    // last decode line freeze through the whole GPU attach. `setTimeout`, not
+    // `requestAnimationFrame`, which resumes inside the same frame's rendering
+    // steps and so still lands before paint (same reason as
+    // terrainAnalysisRunner's pre-compute yield). The yield goes BEFORE
+    // `hideEmptyState` so the frame it buys shows the empty state the user is
+    // already looking at, not a blank stage with no cloud in it yet.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     // A static load replaces any open streaming scan — but only now that the
     // file parsed. A failed or cancelled parse above must leave the current
-    // scene intact rather than clearing it for a scan that never arrived.
+    // scene intact rather than clearing it for a scan that never arrived. The
+    // check sits AHEAD of `hideEmptyState` because the yield above is a real
+    // task boundary: a Cancel click queued during the decode's tail is
+    // dispatched inside it, and hiding the empty state on the way out of a
+    // cancelled load would strand the user on a blank stage (nothing outside
+    // `resetToEmptyState` puts it back).
     if (controller.signal.aborted) throw new LoadCancelledError();
+    deps.stage.hideEmptyState();
     if (viewer.hasStreamingCloud) deps.closeStreaming();
     const uploadStartedAt = performance.now();
     const id = viewer.addCloud(result.cloud);
+    // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
+    // back, so cancelling is no longer a thing this load can honour: retire the
+    // control rather than leave a button that would abandon a half-revealed
+    // scan with no layer row and no Close. Retiring it here also closes the
+    // window the second paint yield would otherwise open. Idempotent with the
+    // teardown's own clear.
+    deps.dropZone.setCancelHandler(null);
     const gpuUploadMs = performance.now() - uploadStartedAt;
     deps.scans.setActive(id);
     // Bind this cloud to a stable, name-independent identity from its SOURCE
@@ -321,6 +344,13 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     catch (err) { if (deps.debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
     deps.dropZone.setProgress(formatProgress({ stage: 'rendering' }));
+    // Second paint yield, same reason as the one above the GPU attach: framing
+    // and the first colour pass are synchronous, so "Rendering" needs a frame
+    // to reach the screen. No abort check here on purpose. This is past the
+    // commit boundary, where Cancel was retired: throwing would leave the cloud
+    // in the scene with the reveal below unrun, so there would be no layer row
+    // to remove it by and no Close in the dock.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     const renderStartedAt = performance.now();
     // A freshly opened scan starts in the orbit overview, then glides in.
     viewer.setMode('orbit');

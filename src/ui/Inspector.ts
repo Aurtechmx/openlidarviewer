@@ -459,6 +459,22 @@ function toggleChip(
  * point-size slider, the Detail readout, the Scan Report, and saved camera
  * views. The exports live in the Output panel.
  */
+/**
+ * Whether removing ONE layer closes the scan rather than dropping a layer.
+ *
+ * The distinction matters because the two are not the same action. Dropping a
+ * layer from a multi-layer scene is reversible by reopening the file. The LAST
+ * removal falls through to `resetToEmptyState` in main.ts, which also clears
+ * placed measurements, saved views and annotations, and `MeasureController.clear()`
+ * takes no snapshot, so the measurements are gone with no undo.
+ *
+ * Exported as a plain predicate so the rule can be read and tested without a
+ * DOM, in the same shape as `shouldResetSavedWork` in the load path.
+ */
+export function removalClosesScan(layerCount: number): boolean {
+  return layerCount <= 1;
+}
+
 export class Inspector {
   readonly element: HTMLElement;
   /**
@@ -1263,7 +1279,29 @@ export class Inspector {
       title: `Remove ${name} from the scene`,
       ariaLabel: `Remove ${name}`,
     });
-    remove.addEventListener('click', () => this._cb.onRemove(id));
+    remove.addEventListener('click', () => {
+      // Removing the LAST layer does more than remove a layer: `removeCloud` in
+      // main.ts falls through to `resetToEmptyState`, which clears placed
+      // measurements, saved views and annotations. Measurements do not survive
+      // that — `MeasureController.clear()` takes no snapshot, so there is no
+      // undo, unlike the annotation clear beside it. The tooltip promises only
+      // a removal from the scene, so the confirm states the rest. A removal
+      // that leaves another layer behind is not destructive and stays one click.
+      if (!removalClosesScan(this._layerRows.size)) {
+        this._cb.onRemove(id);
+        return;
+      }
+      void openConfirm({
+        title: 'Close this scan?',
+        message:
+          `Removing ${name} closes the scan.\n` +
+          'Placed measurements, saved views and annotations are cleared. Measurements cannot be restored.',
+        confirmLabel: 'Remove and close',
+        returnFocusTo: remove,
+      }).then((ok) => {
+        if (ok) this._cb.onRemove(id);
+      });
+    });
 
     const crs = el('span', {
       className: 'olv-layer-crs',

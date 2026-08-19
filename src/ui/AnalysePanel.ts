@@ -312,6 +312,14 @@ function section(text: string): HTMLElement {
 /** Prompt shown in a raster tile's sample readout before the user clicks. */
 const SAMPLE_HINT = 'Click the map to sample a point.';
 
+/**
+ * The panel's resting status line: what it says with no scan and no result.
+ * Named once because `update(null)` has to put it BACK. Without that, the
+ * status kept whatever the last run wrote, so closing a scan left the panel
+ * reading "Analysing…" over an empty state.
+ */
+const IDLE_STATUS = 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.';
+
 // Session-remembered MAP PDF dialog choices. Module-level by design (per the
 // brief — NOT localStorage): they persist across opens within this tab session
 // only, so the next export pre-fills the user's last Prepared by / Sheet /
@@ -520,7 +528,7 @@ export class AnalysePanel {
     this._runBtn = runBtn;
     this._status = el('p', {
       className: 'olv-analyse-status',
-      text: 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.',
+      text: IDLE_STATUS,
     });
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
@@ -700,6 +708,13 @@ export class AnalysePanel {
       this._contourToken++;
       this._contourLauncher.replaceChildren();
       this._contourDeliverable.classList.add('olv-hidden');
+      // Put the resting prompt and the enabled button back. The status line is
+      // shown again just above, so leaving the last run's text there surfaced
+      // "Analysing…" on a panel with no scan; and `setBusy` is the only other
+      // writer of `disabled`, so a run that never reached its release left the
+      // control dead for the session.
+      this._status.textContent = IDLE_STATUS;
+      this._runBtn.disabled = false;
       return;
     }
     this._renderFitness();
