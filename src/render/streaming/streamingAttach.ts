@@ -86,6 +86,13 @@ export interface StreamingHost {
  * fade in; mobile and the low-tier preset skip it to preserve frame-budget
  * headroom (hard add/remove). Pure so the gating is unit-tested without a GPU.
  */
+/**
+ * The stickiness bonus a resident, non-refining node keeps: fifteen percent of
+ * its score. Large enough to absorb the boundary noise that makes regions pulse,
+ * far too small to hold a slot against a genuinely closer or cheaper node.
+ */
+const RESIDENT_STICKY_MARGIN = 0.15;
+
 export function shouldFadeIn(isMobile: boolean, quality: StreamingQuality): boolean {
   return !isMobile && quality !== 'low';
 }
@@ -193,7 +200,13 @@ export async function buildStreamingSession(
       nodeReadyHook: () => host.streamingNodeReadyHook(),
     }),
     streamingBudgets(quality, isMobile),
-    commit.schedulerOptions(),
+    {
+      ...commit.schedulerOptions(),
+      // Opt-in resident stickiness. The flag lives here, with the other host
+      // flag reads, so the scheduler stays free of lookups; 0 keeps the plain
+      // greedy fill that ships today.
+      stickyMargin: readDevFlags().residentStickiness ? RESIDENT_STICKY_MARGIN : 0,
+    },
   );
   return { cloud, scheduler, renderer, decoder, benchmark, commit };
 }

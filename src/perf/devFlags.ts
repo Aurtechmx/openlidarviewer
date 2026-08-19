@@ -91,6 +91,15 @@ export interface DevFlags {
    */
   decodePool: boolean;
   /**
+   * Resident-stickiness in the budget selection. OFF by default: absent the
+   * flag, selection is the plain greedy fill it has always been. `?stickiness=on`
+   * gives an already-resident, non-refining node a small score bonus so
+   * budget-boundary noise cannot bump it out and force an evict → re-decode →
+   * re-fade cycle. Like `decodePool`, this can only ever turn something ON, so a
+   * stray value can never move a session off the shipping default.
+   */
+  residentStickiness: boolean;
+  /**
    * Explicit decode worker count, or null for "not specified". Only 1-4 are
    * accepted; anything else, including garbage and out-of-range values, reads
    * as null. A value here also opts INTO the pool — asking for N workers and
@@ -119,6 +128,10 @@ export const DEV_FLAG_DEFAULTS: Readonly<DevFlags> = Object.freeze({
   // mount already made once.
   decodePool: false,
   decodeWorkers: null,
+  // Stickiness changes what stays on screen at the budget boundary, and flicker
+  // is not observable from Node, so it stays opt-in until a browser run on a
+  // real streamed cloud shows it settling the pulsing WITHOUT stalling refinement.
+  residentStickiness: false,
 });
 
 /** `legacy` (any case) selects the legacy implementation; all else = default. */
@@ -199,6 +212,7 @@ export function parseDevFlags(search: string | URLSearchParams): DevFlags {
     angularPrediction: parseOnOff(params.get('angularPrediction')),
     streamingCommitMode: parseCommitMode(params.get('streamingCommitMode')),
     decodePool: parseOptIn(params.get('decodePool')),
+    residentStickiness: parseOptIn(params.get('stickiness')),
     decodeWorkers: parseWorkerCount(params.get('decodeWorkers')),
   };
 }
