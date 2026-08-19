@@ -16,6 +16,8 @@
  * area. Pure and deterministic.
  */
 
+import { traceOccupancyBoundary, type Pt2 } from './footprintTrace';
+
 export interface FootprintGrid {
   readonly originX: number;
   readonly originY: number;
@@ -27,6 +29,16 @@ export interface FootprintGrid {
 }
 
 export interface Footprint {
+  /**
+   * The footprint's traced outer boundary, in the same world coordinates as the
+   * centroid and bounds (first vertex NOT repeated).
+   *
+   * Carried because a bounding box is not a building: it is the only geometry
+   * that can be DRAWN as a candidate or written to GeoJSON, and both consumers
+   * would otherwise have to re-derive it from cells this function discards.
+   * Empty only for a degenerate component the tracer cannot close.
+   */
+  readonly ring: readonly Pt2[];
   readonly cellCount: number;
   readonly areaM2: number;
   readonly centroidX: number;
@@ -113,8 +125,10 @@ export function extractBuildingFootprints(points: readonly BuildingPoint[], grid
       if (ly < minY) minY = ly;
       if (ly + cell > maxY) maxY = ly + cell;
     }
+    // Trace the block's outline once, here, where the cells still exist.
+    const ring = traceOccupancyBoundary(cells, cell, grid.originX, grid.originY);
     footprints.push({
-      cellCount: cells.length, areaM2,
+      ring, cellCount: cells.length, areaM2,
       centroidX: sx / cells.length, centroidY: sy / cells.length,
       minX, minY, maxX, maxY,
     });
