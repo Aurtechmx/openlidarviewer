@@ -48,6 +48,8 @@ import {
   BOX_EDGES,
   elevationDatumOffset,
 } from './geometry';
+import { areaBreakdown, lineBreakdown } from './measureBreakdown';
+import type { AreaBreakdown, LineBreakdown } from './measureBreakdown';
 import {
   buildPointSnapIndex,
   snapToNearestPoint,
@@ -304,6 +306,19 @@ export interface MeasurementSummary {
    * beneath the volume headline so the analyst understands the cubic
    * metres figure may refine as more nodes stream in.
    */
+  /**
+   * Distance only — the run, rise, slant and grade the SAME two picks already
+   * fix. Surfaced so reading them no longer means placing a second measurement
+   * of another kind over the same points. Absent for other kinds and for a
+   * half-placed distance.
+   */
+  lineMetrics?: LineBreakdown;
+  /**
+   * Area only — planimetric area, best-fit plane area, perimeter and vertex
+   * count for the closed ring. `planarM2` is the ring's own plane, NOT a draped
+   * terrain surface; a consumer that labels it "surface area" overclaims.
+   */
+  areaMetrics?: AreaBreakdown;
   volumeResidentOnly?: boolean;
 }
 
@@ -916,6 +931,17 @@ export class MeasureController {
       profileStationChainages:
         m.kind === 'profile'
           ? this._profileStations(m).map((s) => s.chainage * f)
+          : undefined,
+      // The values the pick already fixed, through the SAME factor split the
+      // headline uses: horizontal quantities by `f`, the rise by the up-axis
+      // factor. No geometry is recomputed here.
+      lineMetrics:
+        m.kind === 'distance' && m.points.length >= 2
+          ? lineBreakdown(m.points[0], m.points[1], this._worldUp, f, this._effVertical())
+          : undefined,
+      areaMetrics:
+        m.kind === 'area' && m.points.length >= 3
+          ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
       trust: m.trust,
