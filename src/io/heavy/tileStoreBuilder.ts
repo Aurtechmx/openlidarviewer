@@ -5,18 +5,16 @@
  * bounded batches of packed records, `indexOutOfCore` settles those records into
  * an octree of spilled tiles, `buildTileStore` describes the result as a
  * manifest and a hierarchy, and `OlvTileSource` presents a parsed store to the
- * streaming scheduler. Running them in the right order, with the right values
- * threaded between them, was left to the caller. It is the kind of sequence that
- * only has to be assembled wrong once — most sharply with the recentring origin,
- * which the LAS reader chooses and the manifest must carry, or every coordinate
- * the store later reports is short by the origin.
+ * streaming scheduler. This module runs that sequence, so the values that have
+ * to travel between the steps are threaded in one place. The recentring origin
+ * is the sharpest of them: the LAS reader chooses it and the manifest must carry
+ * it, or every coordinate the store later reports is short by the origin.
  *
- * So the sequence lives here, in two halves that mirror each other: `buildTileStore
- * FromLas` produces the store and its two text artifacts, and `openTileStore`
- * takes those same two texts back and returns a reader. A caller that wants the
- * store to survive the session writes the artifacts between the two; one that
- * only wants to stream what it just built skips straight to the reader it
- * already has.
+ * Two halves that mirror each other: `buildTileStoreFromLas` produces the store
+ * and its two text artifacts, and `openTileStore` takes those same two texts
+ * back and returns a reader. A caller that wants the store to survive the
+ * session writes the artifacts between the two; one that only wants to stream
+ * what it just built skips straight to the reader it already has.
  *
  * Storage-agnostic: tiles go through the injected {@link SpillStore}, artifacts
  * through the optional {@link TileArtifactSink}. A memory pair makes the whole

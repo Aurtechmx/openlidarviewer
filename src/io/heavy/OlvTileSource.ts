@@ -4,12 +4,12 @@
  * The out-of-core build ends with an octree of tiles on disk: `oocIndexer`
  * settles every point at the coarsest cell with room, `tileStore` writes the
  * manifest and hierarchy that describe the result, and `TileChunkDecoder` turns
- * one tile's bytes back into the parallel arrays the renderer uploads. What was
- * missing is the piece that presents all of that as a {@link StreamingSource},
- * so residency, scoring, eviction, backpressure and GPU commit come from
- * `StreamingScheduler` rather than from a second scheduler written for tiles.
+ * one tile's bytes back into the parallel arrays the renderer uploads. This
+ * module presents all of that as a {@link StreamingSource}, so residency,
+ * scoring, eviction, backpressure and GPU commit come from `StreamingScheduler`
+ * rather than from a second scheduler written for tiles.
  *
- * Two properties of the store make the adapter small. The hierarchy file lists
+ * Two properties of the store keep the adapter small. The hierarchy file lists
  * every occupied node with its point count, so the whole index is known after
  * one small read and there is no progressive hierarchy walk to run (a COPC page
  * tree or an EPT sub-file frontier). And the octant path is the node identity:
@@ -91,13 +91,12 @@ export interface TileBytesReader {
  * The index as a {@link StreamingOctreeView}: every occupied node from the
  * hierarchy, linked parent to child.
  *
- * Completeness is checked, not assumed. The build's placement rule guarantees a
- * node is only occupied once every ancestor is full, so every proper prefix of
- * an occupied key must itself be occupied; a store that breaks that has lost
- * nodes somewhere between the build and the read. Such a node is still added —
- * dropping it would lose its points too — but the gap is recorded, and
- * {@link isComplete} goes false so a completeness-sensitive consumer refuses to
- * claim the cloud is whole.
+ * The build's placement rule occupies a node only once every ancestor is full,
+ * so every proper prefix of an occupied key must itself be occupied; a store
+ * that breaks that has lost nodes between the build and the read. Such a node is
+ * still added, since dropping it would lose its points as well, but the gap is
+ * recorded and {@link isComplete} goes false, so a completeness-sensitive
+ * consumer refuses to claim the cloud is whole.
  */
 export class OlvTileOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();

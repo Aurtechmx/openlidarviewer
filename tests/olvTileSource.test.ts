@@ -1,14 +1,13 @@
 /**
  * olvTileSource.test.ts — a built tile store presented as a StreamingSource.
  *
- * The adapter's job is to make a stored octree indistinguishable, to the
- * scheduler, from a COPC or EPT one. So the assertions here are about the
- * properties the scheduler actually depends on rather than about field shapes:
- * that the index really is a pyramid (interior nodes hold points AND children,
- * which is what lets a coarse view draw before the fine tiles arrive), that a
- * node's VoxelKey agrees with the octant path the ancestor walk derives by
- * shifting, that a node's declared bounds contain the points its tile decodes
- * to, and that the cube and the data extent stay separate figures.
+ * The adapter makes a stored octree indistinguishable, to the scheduler, from a
+ * COPC or EPT one. The properties covered here are the ones the scheduler
+ * depends on: the index is a pyramid (interior nodes hold points AND children,
+ * which is what lets a coarse view draw before the fine tiles arrive), a node's
+ * VoxelKey agrees with the octant path the ancestor walk derives by shifting, a
+ * node's declared bounds contain the points its tile decodes to, and the cube
+ * and the data extent stay separate figures.
  *
  * The bytes come from a memory store, so the whole path runs in Node.
  */

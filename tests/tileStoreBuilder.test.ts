@@ -1,12 +1,11 @@
 /**
  * tileStoreBuilder.test.ts — a LAS file becomes a streamable store in one call.
  *
- * The build is checked as a loop rather than as a sequence of steps: the
- * artifacts it writes are the artifacts a later session reopens, the store that
- * comes back describes the same tree, and the points a node yields land back on
- * the world coordinates the file started with once the render origin is added.
- * The memory budget is asserted too, since staying under it is the reason the
- * out-of-core path exists at all.
+ * The build is covered as a loop: the artifacts it writes are the artifacts a
+ * later session reopens, the store that comes back describes the same tree, and
+ * the points a node yields land back on the world coordinates the file started
+ * with once the render origin is added. Peak staging memory is asserted against
+ * the budget, since staying under it is what the out-of-core path is for.
  */
 import { describe, it, expect } from 'vitest';
 import { writeLas14 } from '../src/convert/writeLas';
