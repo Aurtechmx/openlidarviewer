@@ -67,11 +67,23 @@ describe('removing a layer only warns when it closes the scan', () => {
 });
 
 describe('the attach phase yields so its status lines can paint', () => {
-  /** Line index (0-based) of the single occurrence of `needle`. */
+  /**
+   * Line index (0-based) of the ONE occurrence of `needle`. A needle that
+   * repeats is rejected rather than silently resolved to the first hit, since
+   * every ordering assertion below would then be measuring the wrong line.
+   */
   function lineOf(needle: string): number {
-    const lines = openScanSrc.split('\n');
-    const at = lines.findIndex((l) => l.includes(needle));
-    expect(at, `not found in openScan.ts: ${needle}`).toBeGreaterThan(-1);
+    const src = openScanSrc.split('\n');
+    const hits = src.reduce<number[]>((a, l, i) => (l.includes(needle) ? [...a, i] : a), []);
+    expect(hits, `expected exactly one \`${needle}\` in openScan.ts`).toHaveLength(1);
+    return hits[0];
+  }
+
+  /** Line index of the first occurrence of `needle` at or after `from`. */
+  function lineOfAfter(needle: string, from: number): number {
+    const src = openScanSrc.split('\n');
+    const at = src.findIndex((l, i) => i >= from && l.includes(needle));
+    expect(at, `not found after line ${from} in openScan.ts: ${needle}`).toBeGreaterThan(-1);
     return at;
   }
 
@@ -79,7 +91,8 @@ describe('the attach phase yields so its status lines can paint', () => {
   const readyAt = lineOf('await viewer.ready;');
   const uploadingAt = lineOf("formatProgress({ stage: 'uploading' })");
   const renderingAt = lineOf("formatProgress({ stage: 'rendering' })");
-  const clearAt = lineOf('deps.dropZone.setProgress(null);');
+  const addAt = lineOf('const id = viewer.addCloud(result.cloud);');
+  const clearAt = lineOfAfter('deps.dropZone.setProgress(null);', renderingAt);
 
   /** Does a `setTimeout` yield appear within `window` lines after `from`? */
   function yieldsWithin(from: number, window: number): boolean {
@@ -104,11 +117,27 @@ describe('the attach phase yields so its status lines can paint', () => {
     expect(yieldsWithin(renderingAt, 8)).toBe(true);
   });
 
-  it('re-checks cancellation across the second gap', () => {
-    // The dropzone's cancel handler stays live until the progress teardown, so
-    // a user can cancel inside a gap the yield opened.
-    const gap = lines.slice(renderingAt, renderingAt + 10).join('\n');
-    expect(gap).toContain('controller.signal.aborted');
+  it('checks cancellation before hiding the empty state, not after', () => {
+    // A yield is a real task boundary, so a Cancel click queued during the
+    // decode's tail is dispatched inside the first gap. Hiding the empty state
+    // on the way out of a cancelled load strands the user on a blank stage:
+    // nothing outside `resetToEmptyState` puts it back.
+    const abortAt = lineOf('if (controller.signal.aborted) throw new LoadCancelledError();');
+    const hideAt = lineOf('deps.stage.hideEmptyState();');
+    expect(abortAt).toBeGreaterThan(uploadingAt);
+    expect(hideAt).toBeGreaterThan(abortAt);
+  });
+
+  it('retires Cancel at the commit boundary rather than throwing past it', () => {
+    // Once the cloud is in the scene nothing below rolls it back, so an abort
+    // after that point would abandon a half-revealed scan: no layer row to
+    // remove it by, no Close in the dock, no way out but a reload. The control
+    // goes away at the boundary instead, and no abort check follows it.
+    const retireAt = lineOfAfter('deps.dropZone.setCancelHandler(null);', addAt);
+    expect(retireAt).toBeGreaterThan(addAt);
+    expect(retireAt).toBeLessThan(renderingAt);
+    const afterCommit = lines.slice(addAt, clearAt).join('\n');
+    expect(afterCommit).not.toContain('throw new LoadCancelledError()');
   });
 
   it('uses setTimeout rather than requestAnimationFrame for the yield', () => {
