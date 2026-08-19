@@ -127,6 +127,23 @@ separately so neither borrows the other's number.
 | 3 | `OlvTileSource` + OPFS-directory `RangeSource`; `loadPlan` routes over-ceiling plain files to build-then-stream | E2E: multi-GB plain LAS streams with residency ≤ 1.5 × pointBudget and no whole-file read on the heavy path |
 | 4 (optional) | Compaction: a LAZ encoder enabling single-file `.copc.laz` output from the Tile Store | Gated on a security review of any new WASM; the Tile Store remains the default |
 
+## Status
+
+Phases 0 through 3 are built as libraries and covered by tests that run in
+Node against a memory spill store: the chunk readers, the indexer, the tile
+store and its parsers, the tile decoder, `buildTileStoreFromLas`, and
+`OlvTileSource`. `loadPlan` sets `buildThenStream` for an uncompressed LAS
+whose whole-file buffer would exceed the memory ceiling.
+
+What is not built is the browser half of phase 3. Nothing in the app yet calls
+`buildTileStoreFromLas`, mounts an OPFS directory as the spill store and
+artifact sink, or attaches the resulting `OlvTileSource` to the Viewer. Until
+that lands, a large plain LAS still takes the strided fallback the plan keeps
+populated, and the phase-3 gate (a multi-GB file streaming with residency
+under the budget) has not been run. The pieces it needs all exist and are
+storage-agnostic by construction, so the remaining work is wiring and the
+browser evidence to go with it, not new machinery.
+
 Phase 0 is independently shippable: chunk-parallel decode alone improves
 today's in-memory loads (every chunk still decodes, but on all cores), and the
 sliced LAS reader removes the 2 GB wall for stride viewing before the indexer
