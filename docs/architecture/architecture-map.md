@@ -166,8 +166,18 @@ no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
 `buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
 four thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,419)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,439)** — the constructor and a handful of large
 methods dominate:
+
+The count ROSE by 20 in this cycle, the first deliberate growth since the
+shrink-only ratchet was restored, and the baseline was hand-raised to match. The
+Viewer owns the scene exclusively, so derived layers — analytical results drawn
+in 3D rather than only exported — had no way in. `derivedLayerHost()` is that
+way: a structural host (the same shape as the sky and snapshot hosts) that lends
+scene membership and a redraw request, so the overlay module owns its own
+objects and disposal and the Viewer never learns a product's lifecycle. Twenty
+lines to open a subsystem, rather than a per-product method each time. The next
+extraction below still pays it back several times over.
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
 rather than estimated by pattern-matching — an earlier revision of this table
