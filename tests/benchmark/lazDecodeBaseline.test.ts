@@ -22,7 +22,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdirSync, existsSync, rmSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { cpus } from 'node:os';
@@ -78,8 +78,10 @@ describe('LAZ decode baseline (single-threaded laz-perf)', () => {
   run(
     'measures decode throughput across a size ladder',
     async () => {
-      const dir = join(tmpdir(), 'olv-laz-decode-bench');
-      mkdirSync(dir, { recursive: true });
+      // mkdtemp, not a fixed name under the shared temp dir: a predictable path
+      // there can be pre-created by another user as a symlink, so the benchmark
+      // would write its fixtures through it.
+      const dir = mkdtempSync(join(tmpdir(), 'olv-laz-decode-bench-'));
       // eslint-disable-next-line no-console
       console.log(`\nLAZ decode baseline — cores=${cpus().length}, sizes=${SIZES_M.join(',')}M`);
 

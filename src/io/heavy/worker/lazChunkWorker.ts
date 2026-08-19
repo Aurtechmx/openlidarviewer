@@ -70,6 +70,13 @@ function getLazPerf(): Promise<LazPerfModule> {
 }
 
 ctx.onmessage = (event: MessageEvent<InMessage>): void => {
+  // A dedicated worker only ever receives from the document that created it, and
+  // such a message carries an empty origin, so this rejects nothing on the path
+  // the worker is written for. It declines a message that names a DIFFERENT
+  // origin, which can only happen if the module is ever reached from a context
+  // it was not built for; decoding bytes from an unknown sender is not something
+  // to do by default.
+  if (event.origin !== '' && event.origin !== ctx.location.origin) return;
   const msg = event.data;
 
   if (msg.type === 'cancel') {
