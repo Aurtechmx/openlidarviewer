@@ -1,3 +1,4 @@
+
 // Inspector load-time card refreshers — extracted from main.ts.
 //
 // These functions push freshly-derived facts into the Inspector's
@@ -21,6 +22,7 @@ import {
   TERRAIN_METRIC_VERSION,
   type DerivedComplexity,
 } from '../terrain/datasetIntelligence';
+import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 export interface InspectorCardRefreshers {
   /** Refresh the Inspector's provenance panel from a freshly attached static cloud. */
@@ -30,7 +32,7 @@ export interface InspectorCardRefreshers {
   }): void;
   /** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
   refreshProvenanceFromStreaming(cloud: {
-    readonly kind: 'copc' | 'ept';
+    readonly kind: StreamingSourceKind;
     readonly sourcePointCount?: number;
   }): void;
   /** Push a cheap Dataset Intelligence summary from a static cloud's header. */
@@ -145,7 +147,7 @@ export function createInspectorCardRefreshers(
   }
 
   function refreshProvenanceFromStreaming(cloud: {
-    readonly kind: 'copc' | 'ept';
+    readonly kind: StreamingSourceKind;
     readonly sourcePointCount?: number;
   }): void {
     const signals = signalsForStreamingCloud(cloud as never);

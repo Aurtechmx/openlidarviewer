@@ -111,7 +111,7 @@ describe('OPFS spill store', () => {
     const las = await openSlicedLasSource(new ArrayBufferRangeSource(ab));
     const index = await indexOutOfCore(las.source, store, { pointsPerLeaf: 600, memoryBudgetBytes: 16 * 1024 });
 
-    const { manifestJson, hierarchy } = buildTileStore(index, las.schema);
+    const { manifestJson, hierarchy } = buildTileStore(index, las.schema, las.origin);
     await writeOpfsText(dir, 'manifest.json', manifestJson);
     await writeOpfsText(dir, 'hierarchy.txt', hierarchy);
 

@@ -49,6 +49,7 @@ import type { ClassLegendPanel } from '../ui/ClassLegendPanel';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
+import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 import type {
   loadStreamingPointCloud,
   loadCopcWorkerClient,
@@ -171,7 +172,7 @@ export function shouldDropCandidateOnPostCommitCancel(
  */
 export function activateCommittedStreamingCloud(
   cloud: {
-    readonly kind: 'copc' | 'ept';
+    readonly kind: StreamingSourceKind;
     readonly name: string;
     readonly sourcePointCount?: number;
     crs(): CrsInfo | null | undefined;
@@ -179,9 +180,9 @@ export function activateCommittedStreamingCloud(
   deps: OpenStreamingDeps,
 ): void {
   deps.stage.hideEmptyState();
-  // Local-first counter — categorical only ('copc' or 'ept'); never the URL. Only
-  // a COMMITTED open is counted now, not an attempt that failed to build.
-  recordUsage('scan-open', cloud.kind === 'ept' ? 'ept' : 'copc');
+  // Local-first counter — the categorical source kind, never the URL. Only a
+  // COMMITTED open is counted now, not an attempt that failed to build.
+  recordUsage('scan-open', cloud.kind);
   // Provenance fingerprint. Wrapped: a malformed cloud shape must not break the
   // rest of the activation (CRS, panels).
   try {
@@ -196,7 +197,7 @@ export function activateCommittedStreamingCloud(
   try {
     deps.crsCoordinator.refreshCrsForStreamingCloud(cloud as unknown as {
       readonly name: string;
-      readonly kind: 'copc' | 'ept';
+      readonly kind: StreamingSourceKind;
       crs(): CrsInfo | undefined;
     });
   } catch (err) {
@@ -233,7 +234,7 @@ export function linkAbortSignals(
  * report cloud both satisfy it, and `lastStreamingReportCloud` round-trips.
  */
 export type StreamingReportInput = {
-  readonly kind: 'copc' | 'ept';
+  readonly kind: StreamingSourceKind;
   readonly name: string;
   readonly sourcePointCount: number;
   readonly localBounds?: () => readonly [number, number, number, number, number, number];

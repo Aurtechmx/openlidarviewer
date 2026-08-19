@@ -18,6 +18,23 @@ import {
   keyForDataset as crsKeyForDataset,
 } from '../geo/CrsOverrideStore';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
+import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
+
+/**
+ * Where a streaming cloud's CRS came from. A tile store carries no projection of
+ * its own: whatever it reports was read from the source file's LAS VLRs during
+ * the out-of-core build, so it is recorded as that, not as a manifest CRS.
+ */
+function crsSourceForKind(kind: StreamingSourceKind): CrsSource {
+  switch (kind) {
+    case 'ept':
+      return 'ept-srs';
+    case 'tiles':
+      return 'las-vlr';
+    case 'copc':
+      return 'copc-meta';
+  }
+}
 
 export interface CrsCoordinatorDeps {
   /** The centralised CRS service that owns the active scan's resolved CRS. */
@@ -54,7 +71,7 @@ export interface CrsCoordinator {
   /** Refresh the Inspector's CRS section after a streaming-cloud open. */
   refreshCrsForStreamingCloud(cloud: {
     readonly name: string;
-    readonly kind: 'copc' | 'ept';
+    readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
   }): void;
@@ -124,11 +141,11 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
 
   function refreshCrsForStreamingCloud(cloud: {
     readonly name: string;
-    readonly kind: 'copc' | 'ept';
+    readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
     crs(): CrsInfo | undefined;
   }): void {
-    const source: CrsSource = cloud.kind === 'ept' ? 'ept-srs' : 'copc-meta';
+    const source: CrsSource = crsSourceForKind(cloud.kind);
     trackDataset(cloud.name);
     // Inspector listens via the boot-time `crsService.subscribe`; no
     // direct push needed.
@@ -172,14 +189,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     } else {
       detected = undefined;
     }
-    let source: CrsSource;
-    if (!sc) {
-      source = 'las-vlr';
-    } else if (sc.kind === 'ept') {
-      source = 'ept-srs';
-    } else {
-      source = 'copc-meta';
-    }
+    const source: CrsSource = sc ? crsSourceForKind(sc.kind) : 'las-vlr';
     crsService.setOverride({ override, detected, source });
     // Count a real override (projected / geographic / local); the 'detected'
     // command just clears, so it is not a chosen CRS to record.
@@ -195,7 +205,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       refreshCrsForStreamingCloud(
         streamingCloud as {
           readonly name: string;
-          readonly kind: 'copc' | 'ept';
+          readonly kind: StreamingSourceKind;
           crs(): CrsInfo | undefined;
         },
       );

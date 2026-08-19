@@ -77,14 +77,18 @@ async function buildIndex(n: number) {
   const las = await openSlicedLasSource(new ArrayBufferRangeSource(ab));
   const store = memoryStore();
   const index = await indexOutOfCore(las.source, store, { pointsPerLeaf: 800, memoryBudgetBytes: 32 * 1024 });
-  return { index, store, schema: las.schema };
+  return { index, store, schema: las.schema, origin: las.origin };
 }
 
 describe('tile store', () => {
   it('round-trips the manifest and hierarchy and reads a tile back', async () => {
     const n = 5000;
-    const { index, store, schema } = await buildIndex(n);
-    const { manifest, manifestJson, hierarchy } = buildTileStore(index, schema);
+    const { index, store, schema, origin } = await buildIndex(n);
+    const { manifest, manifestJson, hierarchy } = buildTileStore(index, schema, origin);
+
+    // The recentring origin survives the round trip: without it a reader would
+    // present source-local float32 as world coordinates.
+    expect(manifest.origin).toEqual(origin);
 
     // Manifest round-trips through its own parser, byte-shaped as JSON.
     expect(parseTileManifest(JSON.parse(manifestJson))).toEqual(manifest);
@@ -123,6 +127,8 @@ describe('tile store', () => {
   it('fails closed on a corrupt manifest or hierarchy', () => {
     expect(() => parseTileManifest({ schemaVersion: 1, recordBytes: 30 })).toThrow();
     expect(() => parseTileManifest({ ...validManifest(), recordBytes: 19 })).toThrow(/does not match/);
+    const { origin: _dropped, ...noOrigin } = validManifest() as { origin: unknown };
+    expect(() => parseTileManifest(noOrigin)).toThrow(/origin/);
     expect(() => parseHierarchy('3 12\nnotaline\n')).toThrow();
     expect(() => parseHierarchy('8 5\n')).toThrow(/bad key/); // 8 is not an octant digit
   });
@@ -130,10 +136,11 @@ describe('tile store', () => {
 
 function validManifest(): Record<string, unknown> {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     pointCount: 10,
     recordBytes: 30,
     schema: { hasGps: true, hasRgb: true },
+    origin: [0, 0, 0],
     bounds: { min: [0, 0, 0], max: [1, 1, 1] },
     root: { min: [0, 0, 0], size: 1 },
     depth: 1,

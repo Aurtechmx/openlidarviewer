@@ -20,13 +20,21 @@ import { readTileRecord, tileRecordBytes, type TilePoint, type TileSchema } from
 import type { OocIndex } from './oocIndexer';
 
 /** Bumped when the manifest or hierarchy format changes meaning. */
-export const TILE_STORE_SCHEMA_VERSION = 1;
+export const TILE_STORE_SCHEMA_VERSION = 2;
 
 export interface TileManifest {
   readonly schemaVersion: number;
   readonly pointCount: number;
   readonly recordBytes: number;
   readonly schema: TileSchema;
+  /**
+   * The world coordinate every stored position is relative to — the recentring
+   * origin the LAS reader used. Tile positions are float32, so the store cannot
+   * hold world coordinates directly; without this the reader would present
+   * source-local numbers as world ones, which for a projected CRS is an error of
+   * whole map units. A consumer adds it back to recover world coordinates.
+   */
+  readonly origin: [number, number, number];
   readonly bounds: { readonly min: [number, number, number]; readonly max: [number, number, number] };
   /** The octree root cube; with `depth` it rebuilds the exact grid the build used. */
   readonly root: Cube;
@@ -42,10 +50,15 @@ export interface TileStoreLeaf {
 /** The empty root key has no printable token, so it is written as `-`. */
 const ROOT_TOKEN = '-';
 
-/** Build the manifest and hierarchy text for an index whose tiles use `schema`. */
+/**
+ * Build the manifest and hierarchy text for an index whose tiles use `schema`.
+ * `origin` is the recentring origin the point source used, carried into the
+ * manifest so world coordinates can be recovered from the stored float32.
+ */
 export function buildTileStore(
   index: OocIndex,
   schema: TileSchema,
+  origin: readonly [number, number, number],
 ): { manifest: TileManifest; manifestJson: string; hierarchy: string } {
   if (tileRecordBytes(schema) !== index.recordBytes) {
     throw new Error(
@@ -57,6 +70,7 @@ export function buildTileStore(
     pointCount: index.pointCount,
     recordBytes: index.recordBytes,
     schema: { hasGps: schema.hasGps, hasRgb: schema.hasRgb },
+    origin: [origin[0], origin[1], origin[2]],
     bounds: {
       min: [index.bounds.min[0], index.bounds.min[1], index.bounds.min[2]],
       max: [index.bounds.max[0], index.bounds.max[1], index.bounds.max[2]],
@@ -117,6 +131,7 @@ export function parseTileManifest(input: unknown): TileManifest {
     pointCount: nonNegativeInt(m.pointCount, 'pointCount'),
     recordBytes,
     schema,
+    origin: triple(m.origin, 'origin'),
     bounds: { min: triple(boundsRec.min, 'bounds.min'), max: triple(boundsRec.max, 'bounds.max') },
     root: { min: triple(rootRec.min, 'root.min'), size: finite(rootRec.size, 'root.size') },
     depth: nonNegativeInt(m.depth, 'depth'),
