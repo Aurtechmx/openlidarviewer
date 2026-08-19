@@ -3048,6 +3048,26 @@ export class Viewer {
     this._bumpRenderActivity();
   }
 
+  /**
+   * The scene-attach seam for DERIVED-LAYER overlays (contours today; the other
+   * analytical products next). Structural — the same shape as the sky and
+   * snapshot hosts — so the overlay module owns its own three.js objects and
+   * their disposal, and the Viewer lends only scene membership plus a redraw
+   * request. Deliberately not a `setContourOverlay`: the Viewer must not learn
+   * one product's lifecycle, or every future derived layer adds another method.
+   */
+  derivedLayerHost(): {
+    add(object: THREE.Object3D): void;
+    remove(object: THREE.Object3D): void;
+    requestFrame(): void;
+  } {
+    return {
+      add: (object) => { this._scene.add(object); },
+      remove: (object) => { this._scene.remove(object); },
+      requestFrame: () => { this.requestFrame(); },
+    };
+  }
+
   // ── B.3 — classification editor ─────────────────────────────────────────
   /**
    * Per-cloud snapshot of the classification buffer taken before the last

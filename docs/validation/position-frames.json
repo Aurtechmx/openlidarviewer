@@ -380,6 +380,13 @@
       "frame": "project-local",
       "reads": 1,
       "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
+    },
+    {
+      "file": "src/render/ContourOverlay.ts",
+      "symbol": "ContourOverlay._upload",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
     }
   ]
 }
