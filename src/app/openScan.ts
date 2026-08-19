@@ -275,6 +275,17 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // remain exclusive and still call clearOpenStaticLayers below.)
 
     deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
+    // PAINT YIELD. `await viewer.ready` above is the last await in this
+    // function, so everything from here to the progress teardown runs in ONE
+    // task: the "Preparing GPU buffers" and "Rendering" lines were written and
+    // cleared without the browser ever painting them, and the user watched the
+    // last decode line freeze through the whole GPU attach. `setTimeout`, not
+    // `requestAnimationFrame`, which resumes inside the same frame's rendering
+    // steps and so still lands before paint (same reason as
+    // terrainAnalysisRunner's pre-compute yield). The yield goes BEFORE
+    // `hideEmptyState` so the frame it buys shows the empty state the user is
+    // already looking at, not a blank stage with no cloud in it yet.
+    await new Promise((resolve) => setTimeout(resolve, 0));
     deps.stage.hideEmptyState();
     // A static load replaces any open streaming scan — but only now that the
     // file parsed. A failed or cancelled parse above must leave the current
@@ -321,6 +332,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     catch (err) { if (deps.debug) console.warn('[crs] refreshCrsForStaticCloud threw', err); }
 
     deps.dropZone.setProgress(formatProgress({ stage: 'rendering' }));
+    // Second paint yield, same reason as the one above the GPU attach: framing
+    // and the first colour pass are synchronous, so "Rendering" needs a frame
+    // to reach the screen. Cancel stays live across the gap (the dropzone's
+    // handler is not cleared until the progress teardown), so re-check it.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    if (controller.signal.aborted) throw new LoadCancelledError();
     const renderStartedAt = performance.now();
     // A freshly opened scan starts in the orbit overview, then glides in.
     viewer.setMode('orbit');
