@@ -42,6 +42,9 @@ import type {
 } from '../terrain/contour/analyseContours';
 import type { ContourShapeStyle } from '../terrain/contour/contourShapeStyle';
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
+// TYPE-ONLY: the service and the overlay it builds both load lazily, so
+// neither this import nor the runner widens the startup shell chunk.
+import type { ContourLayerService } from './contourLayerService';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
@@ -199,6 +202,13 @@ export interface TerrainAnalysisRunner {
    */
   buildResultAtInterval(intervalM: number): Promise<AnalyseContoursResult>;
   /**
+   * The contours derived-layer service, or null before the first analysis has
+   * drawn one. The UI reads it to drive the layer's visibility, opacity and
+   * style; it is created lazily so the overlay chunk (and three) never loads for
+   * a session that never analyses terrain.
+   */
+  getContourLayers(): ContourLayerService | null;
+  /**
    * Build a fresh contour result at a chosen interval AND shape style for an
    * export ONLY, over the SAME cached core path as {@link run}. Generalises
    * {@link buildResultAtInterval} with the contour-shape-style picker; a cache
@@ -258,6 +268,128 @@ export function createTerrainAnalysisRunner(
   // previous controller so a superseded worker job is cancelled and its reply
   // dropped. Null when no run is in flight.
   let terrainAbort: AbortController | null = null;
+
+  // ── contours as a derived LAYER in the 3D scene ──────────────────────────
+  // Owned here rather than in the composition root because this is where the
+  // contour model is produced, and because both the store and the service are
+  // three-free — the overlay class (and with it three/webgpu) arrives through a
+  // lazy import, so nothing here widens the startup shell.
+  let contourLayers: ContourLayerService | null = null;
+
+  /** The contour derived-layer service, or null before the first analysis. */
+  const getContourLayers = (): ContourLayerService | null => contourLayers;
+
+  /**
+   * Draw (or regenerate) the contour layer for the scan that produced `result`.
+   *
+   * Every failure path is swallowed deliberately: a scene overlay is an ADDITION
+   * to a successful analysis, so a lazy-chunk failure or a missing cloud must
+   * leave the analysis, the panel and the export exactly as they are.
+   */
+  /**
+   * The scan's vertical-unit label for the layer controls, or null when the file
+   * declares none — the fail-honest rule the metric readouts already follow.
+   */
+  function layerVerticalUnitLabel(): string | null {
+    const scale = verticalMetresPerUnit(crsService.context(), 'horizontal') ?? null;
+    return scale != null ? verticalUnitLabel(scale) : null;
+  }
+
+  async function showContourLayer(
+    result: AnalyseContoursResult,
+    scanId: string | null,
+  ): Promise<void> {
+    if (!scanId) return;
+    try {
+      const viewer = getViewer();
+      const cloud = viewer.getCloud(scanId);
+      if (!cloud) return;
+      if (!contourLayers) {
+        const [{ createContourLayerService }, { DerivedLayerStore }, { ContourOverlay }] =
+          await Promise.all([
+            import('./contourLayerService'),
+            import('../model/DerivedLayer'),
+            import('../render/ContourOverlay'),
+          ]);
+        contourLayers = createContourLayerService({
+          host: viewer.derivedLayerHost(),
+          store: new DerivedLayerStore(),
+          makeOverlay: (host) => new ContourOverlay(host),
+        });
+      }
+      // The digest identifies the RUN reproducibly: the record's fingerprint
+      // covers the scientific content only — not build, not time — so two runs
+      // over the same data agree even though their timestamps differ. The
+      // timestamp below is therefore a display field of the receipt, not an
+      // input to its identity. A receipt failure must not cost the user their
+      // layer, so it degrades to no digest rather than throwing.
+      let receiptDigest: string | null = null;
+      try {
+        const { buildDerivedLayerReceipt } = await import('../science/derivedLayerReceipt');
+        receiptDigest = buildDerivedLayerReceipt({
+          result,
+          generatedAt: new Date(),
+        }).digest;
+      } catch (err) {
+        console.warn('OpenLiDARViewer: contour layer receipt not built.', err);
+      }
+      contourLayers.show({
+        scanId,
+        model: result.model,
+        format: cloud.sourceFormat,
+        // NO offset. The contour model is built from `gatherTerrainPositions`,
+        // which returns one assembled sample with every layer placement already
+        // folded in — the PROJECT frame, which the scene draws at its own
+        // origin. Adding a cloud origin here would translate the contours by it
+        // a second time and float them off their terrain. (The overlay still
+        // accepts an origin, for a future product whose model is source-local.)
+        renderOrigin: null,
+        // Coverage honesty travels with the layer: a resident-only gather is a
+        // partial view, and the record must say so rather than imply the whole scan.
+        coverage: result.dtm.coverageMode === 'full' ? 'full' : 'sampled',
+        // The layer carries the receipt digest for the analysis that produced
+        // it, so "what made this, and was it allowed to claim it" travels with
+        // the layer rather than only with an export. Built through the same
+        // provenance path the exported files use, so a layer and a file can
+        // never disagree about the same run.
+        provenanceDigest: receiptDigest,
+      });
+      // Hand the panel a live view of the layer. Every handler returns what the
+      // service ACTUALLY applied, so a control re-reads the record rather than
+      // assuming its own click won — the drawn state and the UI cannot drift.
+      const svc = contourLayers;
+      const layer = svc.layerFor(scanId);
+      const styleNum = (k: string, fallback: number): number => {
+        const v = layer?.style[k];
+        return typeof v === 'number' ? v : fallback;
+      };
+      const styleBool = (k: string, fallback: boolean): boolean => {
+        const v = layer?.style[k];
+        return typeof v === 'boolean' ? v : fallback;
+      };
+      getAnalysePanel().setContourLayerControls({
+        visible: layer?.visible ?? true,
+        opacity: layer?.opacity ?? 1,
+        indexEmphasis: styleBool('indexEmphasis', true),
+        heightOffset: styleNum('heightOffset', 0),
+        // Same vertical-unit policy the panel's other readouts use: an
+        // undeclared unit prints no label rather than implying metres.
+        verticalUnitLabel: layerVerticalUnitLabel(),
+        onVisible: (next) => svc.setVisible(scanId, next)?.visible ?? null,
+        onOpacity: (next) => svc.setOpacity(scanId, next)?.opacity ?? null,
+        onIndexEmphasis: (next) => {
+          const v = svc.setIndexEmphasis(scanId, next)?.style.indexEmphasis;
+          return typeof v === 'boolean' ? v : null;
+        },
+        onHeightOffset: (next) => {
+          const v = svc.setHeightOffset(scanId, next)?.style.heightOffset;
+          return typeof v === 'number' ? v : null;
+        },
+      });
+    } catch (err) {
+      console.warn('OpenLiDARViewer: contour layer not drawn.', err);
+    }
+  }
 
   // The last gather's raw-scene up-axis, cached so the map-sheet export can plot
   // annotation markers in the same canonical frame the contours were built in.
@@ -430,6 +562,11 @@ export function createTerrainAnalysisRunner(
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
       // same winning result the panel shows.
       onResult?.(result);
+      // Draw the contours as a derived LAYER in the 3D scene. Fire-and-forget:
+      // the overlay chunk loads lazily, and a scene overlay must never delay or
+      // fail the analysis that produced it — a throw here would turn a
+      // successful analysis into a reported failure.
+      void showContourLayer(result, runDatasetId);
     } catch (err) {
       // A stale run must not clobber the winning run's busy flag or status.
       if (isStale()) return;
@@ -516,5 +653,12 @@ export function createTerrainAnalysisRunner(
     return lastSourceUpAxis;
   }
 
-  return { run, buildResultAtInterval, buildResultForExport, abortAndClearCache, getLastSourceUpAxis };
+  return {
+    run,
+    buildResultAtInterval,
+    buildResultForExport,
+    abortAndClearCache,
+    getLastSourceUpAxis,
+    getContourLayers,
+  };
 }
