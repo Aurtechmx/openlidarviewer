@@ -37,8 +37,8 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'CONFIDENCE-OVERLAY': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'EPOCH-ALIGN': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'CHANGE-RASTER': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'CHANGE-VOLUME': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'UNCERTAINTY-BAND': { current: 'E1_UNIT_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
+  'CHANGE-VOLUME': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
+  'UNCERTAINTY-BAND': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'REPORT-DIGEST': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
   'PROVENANCE-INFERENCE': { current: 'E1_UNIT_VERIFIED', required: 'E1_UNIT_VERIFIED', exportAllowed: true },
 };
