@@ -1,12 +1,14 @@
 import { el, formatCount } from './dom';
 import { collapsibleSection } from './collapsibleSection';
+import type { LayerGroupsPanel } from './LayerGroupsPanel';
+import type { SessionLayerGroup } from '../io/session';
 import {
   compatibilityNote,
   type LayerCompatibility,
 } from '../model/layerCompatibility';
 import { openConfirm } from './Modal';
 import { DatasetIntelligenceCard } from './DatasetIntelligenceCard';
-import { loadLayerHealthCard } from '../lazyChunks';
+import { loadLayerHealthCard, loadLayerGroupsPanel } from '../lazyChunks';
 import type { LayerHealthCard } from './LayerHealthCard';
 import type {
   DatasetIntelligence,
@@ -614,6 +616,25 @@ export class Inspector {
   /** Caller registers this to react to user CRS overrides. */
   private _onCrsOverride: ((override: { epsg: number | null; kind: 'projected' | 'geographic' | 'local' | 'detected' }) => void) | null = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
+  /** Per-layer facts the group panel reads: display name and stable identity. */
+  private readonly _layerFacts = new Map<string, { name: string; stableId: string | null }>();
+  /**
+   * Each row's show/hide checkbox. It is the panel's rendering of the layer's
+   * INTENT — the same value `LayerService.setVisible` records — so a group
+   * header can roll its members up without a second store of visibility.
+   */
+  private readonly _layerVisibleBoxes = new Map<string, HTMLInputElement>();
+  /**
+   * Group rows over the layer list, lazily loaded (`ui/LayerGroupsPanel.ts`).
+   * Null until the user makes a group or a session restores one; while it is
+   * null there is no group state at all and the rows are the flat list they
+   * have always been.
+   */
+  private _groups: LayerGroupsPanel | null = null;
+  /** The "New group" control — eager, so grouping is discoverable at first paint. */
+  private readonly _groupBar: HTMLElement;
+  /** An arrangement restored before the chunk landed, applied when it does. */
+  private _groupsPending: readonly SessionLayerGroup[] | null = null;
   /** Lazily-created one-line CRS-mismatch note under the layer list. */
   private _layerNote: HTMLElement | null = null;
   /** Lazily-created two-epoch compare button + result, shown with exactly 2 layers. */
@@ -639,6 +660,20 @@ export class Inspector {
 
   constructor(callbacks: InspectorCallbacks) {
     this._cb = callbacks;
+
+    // The "New group" control. The panel behind it loads on the first click, so
+    // grouping is discoverable from the start without the startup shell paying
+    // for a feature that is opt-in and has no default group.
+    const newGroup = el('button', {
+      className: 'olv-group-new',
+      type: 'button',
+      text: '+ New group',
+      title: 'Collect layers into a named, collapsible group',
+    });
+    newGroup.addEventListener('click', () => {
+      void this._ensureGroups().then((groups) => groups?.createGroup());
+    });
+    this._groupBar = el('div', { className: 'olv-group-bar' }, [newGroup]);
 
     // ── Point size: an adaptive/fixed mode toggle above the size slider ──
     const slider = el('input', {
@@ -919,6 +954,9 @@ export class Inspector {
     // Detail, Provenance, Coordinate system, Scan report — work
     // uniformly against either source type.
     this._layersSection = section('Layers', this._layers);
+    // The group control sits above the rows, so "New group" is reachable
+    // whether or not any group exists yet.
+    this._layersSection.insertBefore(this._groupBar, this._layers);
     // Height percentile-trim row, mounted inside "Color by" beneath the chip
     // rail and shown only while colouring BY elevation. It clips the top/bottom
     // N% of heights from the COLOUR RAMP so tall outliers (a bird, a mast) don't
@@ -1239,12 +1277,29 @@ export class Inspector {
     this._sheetHead?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
-  /** Add a loaded cloud to the layer list. `crsLabel` shows the layer's CRS, when known. */
-  addCloud(id: string, name: string, pointCount: number, crsLabel?: string | null): void {
+  /**
+   * Add a loaded cloud to the layer list. `crsLabel` shows the layer's CRS, when
+   * known. `stableId` is the layer's source-fingerprint identity, recorded here
+   * so a group's membership can be written to a session under an id that still
+   * means the same scan next time; a layer with no proven identity passes null
+   * and is simply left out of a written arrangement.
+   */
+  addCloud(
+    id: string,
+    name: string,
+    pointCount: number,
+    crsLabel?: string | null,
+    stableId?: string | null,
+  ): void {
     const visible = el('input', { type: 'checkbox', title: 'Show or hide this scan' });
     visible.type = 'checkbox';
     visible.checked = true;
-    visible.addEventListener('change', () => this._cb.onToggleVisible(id, visible.checked));
+    visible.addEventListener('change', () => {
+      this._cb.onToggleVisible(id, visible.checked);
+      // A row click changes what its group header rolls up to, so re-read the
+      // headers straight away rather than waiting for the next full paint.
+      this._groups?.syncHeaders();
+    });
 
     // Isolate (solo): show only this layer. A second click clears isolate.
     const solo = el('button', {
@@ -1319,7 +1374,60 @@ export class Inspector {
       remove,
     ]);
     this._layerRows.set(id, row);
-    this._layers.append(row);
+    this._layerFacts.set(id, { name, stableId: stableId ?? null });
+    this._layerVisibleBoxes.set(id, visible);
+    // The group panel decides where the row goes; with no groups in play it
+    // lands at the end of the flat list exactly as it always has.
+    this._refreshLayerRows();
+  }
+
+  /**
+   * Ensure the group panel exists, loading its chunk on first use.
+   *
+   * Resolves to null when the chunk fails to load: grouping is additive, so a
+   * failed import must leave the flat layer list working rather than take the
+   * Layers section down with it.
+   */
+  private _ensureGroups(): Promise<LayerGroupsPanel | null> {
+    if (this._groups) return Promise.resolve(this._groups);
+    return loadLayerGroupsPanel()
+      .then(({ LayerGroupsPanel }) => {
+        if (!this._groups) {
+          // Every group action is written through `onToggleVisible` — the one
+          // call a single row's checkbox already makes — so grouping adds no
+          // second answer to "is this layer shown".
+          this._groups = new LayerGroupsPanel(this._layers, {
+            layerIds: () => [...this._layerRows.keys()],
+            nameOf: (id) => this._layerFacts.get(id)?.name ?? id,
+            rowFor: (id) => this._layerRows.get(id) ?? null,
+            visibilityOf: (id) => this._layerVisibleBoxes.get(id)?.checked ?? true,
+            setVisible: (id, visible) => {
+              const box = this._layerVisibleBoxes.get(id);
+              if (box) box.checked = visible;
+              this._cb.onToggleVisible(id, visible);
+            },
+            stableIdOf: (id) => this._layerFacts.get(id)?.stableId ?? null,
+          });
+          const pending = this._groupsPending;
+          this._groupsPending = null;
+          if (pending) this._groups.restoreFromSession(pending);
+          else this._groups.render();
+        }
+        return this._groups;
+      })
+      .catch((err) => {
+        console.warn('[inspector] layer-groups chunk failed to load', err);
+        return null;
+      });
+  }
+
+  /** Re-lay the layer rows: through the group panel when it exists, else flat. */
+  private _refreshLayerRows(): void {
+    if (this._groups) {
+      this._groups.render();
+      return;
+    }
+    this._layers.replaceChildren(...this._layerRows.values());
   }
 
   /** Mark the isolated (soloed) layer's button as active; `null` clears all. */
@@ -1507,6 +1615,33 @@ export class Inspector {
   removeCloud(id: string): void {
     this._layerRows.get(id)?.remove();
     this._layerRows.delete(id);
+    this._layerFacts.delete(id);
+    this._layerVisibleBoxes.delete(id);
+    // A group whose last scan just closed is KEPT, empty: it is still the
+    // container the user made, and removing a layer must not delete it.
+    this._refreshLayerRows();
+  }
+
+  /**
+   * The Layers panel's groups as a session records them — stable layer ids, so
+   * the arrangement re-attaches to the same scans and not to whichever ones
+   * happen to occupy the same viewer slots.
+   */
+  layerGroupsForSession(): SessionLayerGroup[] {
+    // No panel means no group has ever been made this session, so there is
+    // nothing to write and the file keeps its no-groups byte-shape.
+    return this._groups?.groupsForSession() ?? [];
+  }
+
+  /** Restore a session's group arrangement over the layers currently loaded. */
+  restoreLayerGroups(groups: readonly SessionLayerGroup[]): void {
+    if (this._groups) {
+      this._groups.restoreFromSession(groups);
+      return;
+    }
+    // Remember only the newest arrangement; apply it when the chunk lands.
+    this._groupsPending = groups;
+    void this._ensureGroups();
   }
 
   /** Data-driven colour modes for the active cloud (gated chips are appended separately). */
@@ -1850,8 +1985,12 @@ export class Inspector {
 
   /** Reset the panel to its empty state. */
   clear(): void {
+    this._groups?.reset();
+    this._groupsPending = null;
     this._layers.replaceChildren();
     this._layerRows.clear();
+    this._layerFacts.clear();
+    this._layerVisibleBoxes.clear();
     this._chips.replaceChildren();
     this._detail.replaceChildren();
     this._showReportPlaceholder();

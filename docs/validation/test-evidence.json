@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "96f8c095d8a642ba890407d19f6cb4ef9ac6bc13",
+  "commit": "16722cf208c2957a8e114cf5d7bc9a4192dc0b84",
   "repository": null,
-  "generatedAt": "2026-08-20T11:27:32.666Z",
+  "generatedAt": "2026-08-20T13:55:30.216Z",
   "nodeVersion": "v26.0.0",
   "npmVersion": "11.12.1",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "2443850d496593360d19b3df4ee788f7f5aede52aa883ce832cf49296dfdae9b",
+  "gateLogSha256": "368acac5d2061d06fa0b83aec5358d08b5dab70ee6d5c9f17f96ecf3120e5f0f",
   "stages": {
     "staticGate": "passed",
     "mutation": "not-executed"
@@ -53,7 +53,7 @@
   },
   "buckets": {
     "unit": {
-      "passed": 5974,
+      "passed": 6113,
       "skipped": 22,
       "runs": 3
     },
@@ -63,12 +63,12 @@
       "runs": 1
     },
     "terrain": {
-      "passed": 1608,
+      "passed": 1636,
       "skipped": 0,
       "runs": 2
     },
     "ui": {
-      "passed": 563,
+      "passed": 583,
       "skipped": 0,
       "runs": 1
     },
@@ -79,11 +79,11 @@
     }
   },
   "total": {
-    "passed": 9756,
+    "passed": 9943,
     "skipped": 28
   },
   "bundle": {
-    "liveEntryKiB": 736,
+    "liveEntryKiB": 741,
     "ceilingKiB": 744
   },
   "packageLockSha256": "56be9b578b4ab7fba32abd1ad84e0c80d0990548ef8aaae5a980c850e46b58ef",
@@ -95,10 +95,11 @@
     "components": 56
   },
   "science": {
-    "e4ClaimCount": 11,
+    "e4ClaimCount": 12,
     "e4Claims": [
       "MEAS-AREA",
       "E57-INGEST",
+      "MEAS-PROFILE",
       "DTM",
       "DSM",
       "CHM",
@@ -109,6 +110,6 @@
       "TPI",
       "VRM"
     ],
-    "suppliedReferenceSlots": 11
+    "suppliedReferenceSlots": 12
   }
 }

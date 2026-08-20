@@ -34,6 +34,7 @@ import type {
   RebasedSessionGeometry,
   ScanFacts,
   ScanMatch,
+  SessionLayerGroup,
   SessionScanSummary,
   SessionSpatialClaims,
   SessionSpatialVerdict,
@@ -228,6 +229,12 @@ export interface SessionIoDeps {
   bookmarks: Pick<ViewBookmarksService, 'restore' | 'names'>;
   /** Push the restored view names into the Inspector panel. */
   setInspectorViews: (names: string[]) => void;
+  /**
+   * Restore the Layers panel's group arrangement. The records name their
+   * members by stable layer id, so the panel re-attaches each group to the
+   * scans that are actually open and drops the rest.
+   */
+  restoreLayerGroups: (groups: readonly SessionLayerGroup[]) => void;
   /** Re-render the measurements panel from the viewer's store. */
   refreshMeasurePanel: () => void;
   /** Re-render the annotations panel from the viewer's store. */
@@ -496,6 +503,9 @@ export async function importSession(
       }),
     );
     deps.setInspectorViews(deps.bookmarks.names());
+    // Groups are additive within v8: a file written before the field existed
+    // carries none, and the panel is left exactly as the user arranged it.
+    if (session.layerGroups) deps.restoreLayerGroups(session.layerGroups);
     deps.refreshMeasurePanel();
     deps.refreshAnnotationPanel();
 

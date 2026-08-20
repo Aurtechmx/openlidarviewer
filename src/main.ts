@@ -4830,6 +4830,7 @@ async function exportSession(): Promise<void> {
         // to the file's declared CRS (C4). The v4 schema already carries this
         // field; the exporter simply never populated it.
         crs: crsService.current() ?? undefined,
+        layerGroups: inspector.layerGroupsForSession(),
       });
     },
   });
@@ -4851,12 +4852,11 @@ const sessionIoDeps: SessionIoDeps = {
   exportOrigin: () => exportGeoContext().origin,
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
+  restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),
   refreshMeasurePanel,
   refreshAnnotationPanel,
   applyViewState,
-  setCrsOverride: (args) => {
-    crsService.setOverride(args);
-  },
+  setCrsOverride: (args) => { crsService.setOverride(args); },
   showToast: showLassoToast,
   setDropError: (message) => dropZone.setError(message),
 };

@@ -73,6 +73,7 @@ function makeDeps(
   const loadAnnotations = vi.fn();
   const restore = vi.fn();
   const setInspectorViews = vi.fn();
+  const restoreLayerGroups = vi.fn();
   const refreshMeasurePanel = vi.fn();
   const refreshAnnotationPanel = vi.fn();
   const applyViewState = vi.fn();
@@ -119,6 +120,7 @@ function makeDeps(
     exportOrigin: () => over.origin ?? [0, 0, 0],
     bookmarks: { restore, names: () => ['V1'] },
     setInspectorViews,
+    restoreLayerGroups,
     refreshMeasurePanel,
     refreshAnnotationPanel,
     applyViewState,
@@ -134,6 +136,7 @@ function makeDeps(
       loadAnnotations,
       restore,
       setInspectorViews,
+      restoreLayerGroups,
       refreshMeasurePanel,
       refreshAnnotationPanel,
       applyViewState,
@@ -348,6 +351,19 @@ describe('importSession — restore with no cloud loaded', () => {
     const msg = calls.showToast.mock.calls.at(-1)?.[0] as string;
     expect(msg).toContain('survey.las');
     expect(msg).toContain('drop');
+  });
+
+  it('hands a session\'s layer groups to the Layers panel', async () => {
+    const { deps, calls } = makeDeps();
+    const layerGroups = [{ id: 'g1', name: 'Flight 1', memberIds: ['layer-a'] }];
+    await importSession(asFile(sessionJson({ layerGroups })), {}, deps);
+    expect(calls.restoreLayerGroups).toHaveBeenCalledWith(layerGroups);
+  });
+
+  it('leaves the panel alone for a session that carries no groups', async () => {
+    const { deps, calls } = makeDeps();
+    await importSession(asFile(sessionJson()), {}, deps);
+    expect(calls.restoreLayerGroups).not.toHaveBeenCalled();
   });
 
   it('summarises the restored item count when the session names no scan', async () => {
