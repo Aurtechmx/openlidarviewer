@@ -3873,6 +3873,25 @@ export class Viewer {
   }
 
   /**
+   * Every layer's point `index` in PROJECT-frame coordinates, through the
+   * cloud's own `projectXYZ` so the placement is applied exactly once. A
+   * mounted layer can be DRAWN correctly while a coordinate read back from it
+   * names the wrong frame; those are separate steps and only the first shows.
+   * `twoScanMount` asserts through this. An unplaced layer IS the anchor, so
+   * its project coordinate is its local one.
+   */
+  layerProjectPoints(index: number): { id: string; project: [number, number, number] }[] {
+    const out: { id: string; project: [number, number, number] }[] = [];
+    if (!Number.isInteger(index) || index < 0) return out;
+    const identity = { sourceToProject: [0, 0, 0] as const };
+    for (const [id, e] of this._clouds) {
+      if (index >= e.cloud.pointCount) continue;
+      out.push({ id, project: e.cloud.projectXYZ(index, e.placement ?? identity) });
+    }
+    return out;
+  }
+
+  /**
    * The current colour mode of a static cloud, or `undefined` when no
    * cloud has that id (e.g. it's the streaming cloud, or it was
    * detached). Used by main.ts to re-sync the Inspector's colour-mode
