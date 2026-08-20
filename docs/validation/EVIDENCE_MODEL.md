@@ -23,7 +23,7 @@ Ordered weakest → strongest; higher is stronger.
 | `E2_ANALYTICALLY_VERIFIED` | Output checked against a closed-form / analytic ground truth (e.g. slope of a synthetic plane = atan(gradient)). |
 | `E3_SYNTHETICALLY_VALIDATED` | Validated end-to-end against generated known-truth fixtures (synthetic surfaces, labelled clouds we created). |
 | `E4_CROSS_IMPLEMENTATION_VALIDATED` | A second, independent implementation (PDAL, GDAL, CloudCompare, …) agrees within a stated tolerance. |
-| `E5_EXTERNALLY_VALIDATED` | Validated against external field ground truth / independent checkpoints. |
+| `E5_EXTERNALLY_VALIDATED` | Validated against external field ground truth by a PROSPECTIVE study: the protocol and its tolerance frozen before the observations, and the operators independent of this project. See "What E5 costs" below. |
 | `E6_INDEPENDENTLY_REPRODUCED` | An independent party reproduced the result from the archived artifact. |
 
 **The load-bearing boundary is E3 → E4.** Everything at or below E3 is verified
@@ -31,6 +31,35 @@ only against *our own* code or *our own* synthetic data. Per the non-negotiable
 rules, precision is not accuracy and synthetic validation is not field
 validation, so **nothing at or below E3 may claim independent or field-grade
 accuracy**. Independent evidence begins at E4; field-grade validity at E5.
+
+## What E5 costs, and why data alone does not buy it
+
+The one-line definition above understates E5, so this section states the whole
+price. `scripts/verify-field-study.mjs` enforces it, and two of its rules are
+about the STUDY rather than the data:
+
+F10 refuses a protocol written afterwards. A study whose
+`preregistration.registeredAt` falls after `fieldwork.startedAt` is rejected with
+"a protocol written after the observations is a report, and its tolerance was
+chosen knowing the answer." The tolerance has to be committed while the result is
+still unknown.
+F9 refuses operators who built the software: `operators.independent` cannot
+be true for anyone affiliated with this project.
+
+The consequence is easy to miss when reading the ladder alone. An archival
+dataset cannot reach E5, however good it is. A published survey with a thousand independent checkpoints was observed
+before any protocol here existed, so F10 refuses it on ordering alone. The
+distinction being drawn is between measuring how well the software did on data
+someone already collected, and committing to a tolerance in advance and then
+finding out.
+
+Archival external data is still worth acquiring. It widens the scope a claim has
+been exercised over, it can move a claim to E4 against an independent
+implementation, and it is how a weakness gets found. It sits at E4, and a
+register entry should say so.
+
+Of the 28 registered claims, 17 currently sit below their required level, and
+every one of those 17 requires E5. None of them is waiting on a download.
 
 ## Per-claim fields
 
