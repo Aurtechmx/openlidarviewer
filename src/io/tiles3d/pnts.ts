@@ -12,6 +12,8 @@
 
 const HEADER_BYTES = 28;
 const MAGIC = 0x73746e70; // 'pnts' little-endian
+/** The only PNTS version this decoder claims to read. */
+const SUPPORTED_VERSION = 1;
 
 export interface PntsTile {
   readonly version: number;
@@ -39,17 +41,27 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
     throw new Error('PNTS: bad magic — not a pnts tile.');
   }
   const version = view.getUint32(4, true);
+  if (version !== SUPPORTED_VERSION) {
+    throw new Error(`PNTS: version ${version} is not supported, only ${SUPPORTED_VERSION}.`);
+  }
   const byteLength = view.getUint32(8, true);
   if (byteLength > buffer.byteLength) {
     throw new Error('PNTS: declared byteLength exceeds the buffer.');
   }
+  if (byteLength < HEADER_BYTES) {
+    throw new Error('PNTS: declared byteLength is shorter than the header.');
+  }
+  // The DECLARED tile length is the parse boundary, not the buffer. A tile
+  // concatenated with trailing bytes would otherwise let a feature table or a
+  // POSITION range run past its own tile and read whatever followed it.
+  const limit = byteLength;
   const ftJsonLen = view.getUint32(12, true);
   const ftBinLen = view.getUint32(16, true);
 
   const ftJsonStart = HEADER_BYTES;
   const ftBinStart = ftJsonStart + ftJsonLen;
-  if (ftBinStart + ftBinLen > buffer.byteLength) {
-    throw new Error('PNTS: feature table extends past the buffer.');
+  if (ftBinStart + ftBinLen > limit) {
+    throw new Error('PNTS: feature table extends past the declared tile length.');
   }
 
   const ftJsonText = new TextDecoder().decode(new Uint8Array(buffer, ftJsonStart, ftJsonLen));
@@ -65,17 +77,29 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
   if (!ft.POSITION || typeof ft.POSITION.byteOffset !== 'number') {
     throw new Error('PNTS: feature table has no float32 POSITION.');
   }
+  // A byteOffset is an index into the feature-table binary, so it is a
+  // non-negative whole number. Fractional or negative values reach DataView
+  // construction and fail there, far from the tile that carried them.
+  if (!Number.isSafeInteger(ft.POSITION.byteOffset) || ft.POSITION.byteOffset < 0) {
+    throw new Error('PNTS: POSITION.byteOffset is not a non-negative whole number.');
+  }
 
   const rtc = ft.RTC_CENTER;
   const rtcCenter: [number, number, number] | null =
-    Array.isArray(rtc) && rtc.length === 3 && rtc.every((n) => typeof n === 'number')
+    Array.isArray(rtc) && rtc.length === 3 && rtc.every((n) => typeof n === 'number' && Number.isFinite(n))
       ? [rtc[0], rtc[1], rtc[2]]
       : null;
 
   const posOffset = ftBinStart + ft.POSITION.byteOffset;
   const need = pointsLength * 3 * 4;
-  if (posOffset + need > buffer.byteLength) {
-    throw new Error('PNTS: POSITION array extends past the buffer.');
+  // Guard the product itself: a POINTS_LENGTH near the safe-integer ceiling
+  // makes `need` lose precision, and the range check below would then compare
+  // an approximation.
+  if (!Number.isSafeInteger(need)) {
+    throw new Error(`PNTS: POINTS_LENGTH ${pointsLength} is too large to address.`);
+  }
+  if (posOffset + need > limit) {
+    throw new Error('PNTS: POSITION array extends past the declared tile length.');
   }
   // Copy (POSITION.byteOffset need not be 4-aligned within the buffer, and a
   // Float32Array view requires alignment).

@@ -48,17 +48,48 @@ interface RawTile {
   implicitTiling?: unknown;
 }
 
+/** Component counts the spec fixes for each bounding-volume form. */
+const BOUNDING_VOLUME_LENGTH = { box: 12, region: 6, sphere: 4 } as const;
+
 function boundingVolume(raw: Record<string, unknown> | undefined): BoundingVolume {
   if (!raw) throw new Error('3D Tiles: a tile has no boundingVolume.');
-  const num = (v: unknown): number[] | undefined =>
-    Array.isArray(v) && v.every((n) => typeof n === 'number') ? (v as number[]) : undefined;
-  const box = num(raw.box);
-  const region = num(raw.region);
-  const sphere = num(raw.sphere);
+  // Each form has a fixed length and every component must be a real number.
+  // `parseTileset` also accepts an already-parsed object, and an object can
+  // carry NaN where JSON text cannot, so finiteness is checked rather than
+  // assumed from the source.
+  const num = (v: unknown, kind: keyof typeof BOUNDING_VOLUME_LENGTH): number[] | undefined => {
+    if (v === undefined) return undefined;
+    const want = BOUNDING_VOLUME_LENGTH[kind];
+    if (!Array.isArray(v) || v.length !== want) {
+      throw new Error(`3D Tiles: boundingVolume.${kind} must have ${want} components.`);
+    }
+    if (!v.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      throw new Error(`3D Tiles: boundingVolume.${kind} has a non-finite component.`);
+    }
+    return v as number[];
+  };
+  const box = num(raw.box, 'box');
+  const region = num(raw.region, 'region');
+  const sphere = num(raw.sphere, 'sphere');
   if (!box && !region && !sphere) {
     throw new Error('3D Tiles: boundingVolume must be one of box, region, or sphere.');
   }
+  if (sphere && sphere[3] < 0) {
+    throw new Error('3D Tiles: boundingVolume.sphere has a negative radius.');
+  }
   return { ...(box && { box }), ...(region && { region }), ...(sphere && { sphere }) };
+}
+
+/** A 3D Tiles transform is a column-major 4x4 of real numbers, or absent. */
+function tileTransform(v: unknown): readonly number[] | null {
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v) || v.length !== 16) {
+    throw new Error('3D Tiles: a tile transform must have 16 components.');
+  }
+  if (!v.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+    throw new Error('3D Tiles: a tile transform has a non-finite component.');
+  }
+  return v as number[];
 }
 
 function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
@@ -68,15 +99,28 @@ function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
   if (typeof raw.geometricError !== 'number' || !Number.isFinite(raw.geometricError)) {
     throw new Error('3D Tiles: a tile has no finite geometricError.');
   }
+  // Geometric error is a distance, so a negative one describes nothing.
+  if (raw.geometricError < 0) {
+    throw new Error(`3D Tiles: a tile has a negative geometricError (${raw.geometricError}).`);
+  }
   const refineRaw = (raw.refine ?? '').toUpperCase();
   const refine: Refine = refineRaw === 'ADD' || refineRaw === 'REPLACE' ? refineRaw : inheritedRefine;
-  const contentUri = raw.content?.uri ?? raw.content?.url ?? null;
+  // TypeScript types content.uri as a string, but the runtime accepts whatever
+  // the document held. A non-string here would flow out as a URI and be fetched.
+  const rawUri = raw.content?.uri ?? raw.content?.url;
+  if (rawUri !== undefined && (typeof rawUri !== 'string' || rawUri.length === 0)) {
+    throw new Error('3D Tiles: a tile content URI is not a non-empty string.');
+  }
+  const contentUri = rawUri ?? null;
+  if (raw.children !== undefined && !Array.isArray(raw.children)) {
+    throw new Error('3D Tiles: a tile children field is not an array.');
+  }
   const children = (raw.children ?? []).map((c) => parseTile(c, refine));
   return {
     boundingVolume: boundingVolume(raw.boundingVolume),
     geometricError: raw.geometricError,
     refine,
-    transform: Array.isArray(raw.transform) ? raw.transform : null,
+    transform: tileTransform(raw.transform),
     contentUri,
     children,
   };
@@ -95,6 +139,9 @@ export function parseTileset(input: string | object): Tileset {
   }
   if (typeof doc.geometricError !== 'number' || !Number.isFinite(doc.geometricError)) {
     throw new Error('3D Tiles: tileset.json has no finite geometricError.');
+  }
+  if (doc.geometricError < 0) {
+    throw new Error(`3D Tiles: tileset.json has a negative geometricError (${doc.geometricError}).`);
   }
   if (!doc.root) throw new Error('3D Tiles: tileset.json has no root tile.');
   // The root must declare its own refine; children inherit it when they omit one.
