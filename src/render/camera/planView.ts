@@ -103,9 +103,11 @@ export function enterPlanView(state: PlanViewState, ctx: PlanViewContext): PlanV
  * orthographic does not flip the projection, and leaving from a session that
  * started in pan does not switch the mode. Leaving when inactive is a no-op.
  *
- * The camera is returned to an iso pose rather than left looking straight down.
- * A user turning plan off is asking for the 3D view back, and top-down with
- * perspective restored is neither the plan they had nor the scene they wanted.
+ * The camera is returned to the FRONT standard view rather than left looking
+ * straight down. A user turning plan off is asking for the 3D view back, and
+ * top-down with perspective restored is neither the plan they had nor the scene
+ * they wanted. `leavePlanView` emits `standardView: 'front'` and the tests pin
+ * that; the comment previously said "iso", which no code path produced.
  */
 export function leavePlanView(state: PlanViewState): PlanViewTransition {
   if (!state.active || !state.restore) return { state: PLAN_VIEW_OFF, intents: [] };

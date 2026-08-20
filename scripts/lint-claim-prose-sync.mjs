@@ -32,6 +32,11 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Truth documents that describe the evidence state and must not contradict it. */
 const TRUTH_DOCS = [
+  // The release notes and validation report state the E4 count to the public and
+  // were NOT scanned, which is half of why "Ten products are now at E4" survived
+  // past twelve; the other half was a detector that stopped counting at seven.
+  'docs/releases/RELEASE_NOTES_v0.6.6.md',
+  'docs/releases/VALIDATION_REPORT_v0.6.6.md',
   'docs/releases/KNOWN_LIMITATIONS_v0.6.6.md',
   'docs/project/CLAIMS_AND_LIMITATIONS.md',
   'docs/validation/THREATS_TO_VALIDITY.md',
@@ -41,7 +46,28 @@ const TRUTH_DOCS = [
   'ARTIFACT_EVALUATION.md',
 ];
 
-const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten',
+  'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen',
+  'nineteen', 'twenty',
+];
+
+/**
+ * The alternation the detector matches. It is BUILT from NUMBER_WORDS rather
+ * than written out, because the two lists drifted once: the detector stopped at
+ * "seven" while the register had grown past ten, so "Ten products are now at E4"
+ * and "Eleven products are at E4" were invisible to the very check that exists
+ * to catch them. A bare integer counts too, since prose may write "12".
+ */
+const COUNT_ALTERNATION = NUMBER_WORDS.join('|');
+
+/**
+ * A bare integer counts only when it directly quantifies products ("12 products
+ * are at E4"). Matching loose digits also swallowed the 0 in "0-255 scale" and
+ * the digits of an exponent sitting near an E4 sentence, so the digit form is
+ * deliberately narrower than the word form.
+ */
+const COUNT_DIGITS = '(?<![\\d.×⁻-])\\d{1,3}(?=\\s+products?\\b)';
 
 /** The E4+ claim ids and their count, from the register (the single source). */
 function e4FromRegister() {
@@ -62,8 +88,14 @@ function collectProseProblems(count) {
   const problems = [];
   const expectedWord = NUMBER_WORDS[count] ?? String(count);
   // A count word paired with an E4 / cross-implementation claim in one sentence.
-  const countClaim =
-    /\b(one|two|three|four|five|six|seven)\b[^.\n]{0,80}\b(?:E4|cross-implement\w*)\b|\b(?:E4|cross-implement\w*)\b[^.\n]{0,80}\b(one|two|three|four|five|six|seven)\b[^.\n]{0,20}\bproducts?\b/gi;
+  const any = `(?:${COUNT_ALTERNATION}|${COUNT_DIGITS})`;
+  const countClaim = new RegExp(
+    // The count must QUANTIFY products, not merely share a sentence with E4:
+    // "clamped at zero, and with both parents at E4" is not a count claim.
+    `\\b(${any})\\b\\s+(?:[\\w-]+\\s+){0,3}products?\\b[^.\\n]{0,80}\\b(?:E4|cross-implement\\w*)\\b`
+      + `|\\b(?:E4|cross-implement\\w*)\\b[^.\\n]{0,80}\\b(${any})\\b[^.\\n]{0,20}\\bproducts?\\b`,
+    'gi',
+  );
 
   for (const rel of TRUTH_DOCS) {
     const abs = resolve(ROOT, rel);
@@ -77,7 +109,7 @@ function collectProseProblems(count) {
       const re = new RegExp(countClaim.source, 'gi');
       while ((m = re.exec(line)) !== null) {
         const word = (m[1] ?? m[2] ?? '').toLowerCase();
-        if (word && word !== expectedWord) {
+        if (word && word !== expectedWord && word !== String(count)) {
           problems.push(
             `${rel}:${i + 1} says "${word}" next to an E4 / cross-implementation claim, but the register has ${count} E4 product(s) ("${expectedWord}"). Update the prose to match the register.`,
           );
