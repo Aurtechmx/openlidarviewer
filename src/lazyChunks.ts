@@ -422,6 +422,16 @@ export const loadWorkflowConfigPanel = () => import('./ui/WorkflowConfigPanel');
 export const loadReportVerifier = () => import('./ui/reportVerifier');
 
 /**
+ * Plan View's controller and the pure planner behind it, on the first press of
+ * the Plan chip. Nothing before that press can need them: plan mode holds no
+ * state until it is entered, and the handlers that report a manual view or
+ * projection change ask the controller only if one already exists. Keeping the
+ * pair out of the eager index is what stops a camera mode nobody has used yet
+ * from being paid for on every cold start.
+ */
+export const loadPlanViewController = () => import('./render/camera/planViewController');
+
+/**
  * v0.5.4 — the contour serialisers (GeoJSON / DXF / SVG writers) and the
  * unified export-provenance builder. Only reached from export/report actions
  * (all already async), so they no longer ride the eager index bundle —

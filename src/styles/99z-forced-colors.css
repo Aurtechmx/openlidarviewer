@@ -47,6 +47,7 @@
   .olv-layer-solo.is-active,
   .olv-layer-lock.is-active,
   .olv-ortho-toggle.is-on,
+  .olv-plan-toggle.is-on,
   .olv-wfc-seg-btn.is-active,
   .olv-tool.is-active,
   .olv-tool[aria-pressed='true'] {

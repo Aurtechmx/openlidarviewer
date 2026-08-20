@@ -66,6 +66,66 @@ test.describe('standard views — NavBar "Views" row', () => {
   });
 });
 
+test.describe('plan view', () => {
+  test('the Plan chip enters, presses, and hands the scene back', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(e.message); });
+    page.on('console', (m) => {
+      if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
+    });
+
+    await loadSample(page);
+    const row = viewsRow(page);
+    const plan = row.locator('.olv-plan-toggle');
+    const ortho = row.locator('.olv-ortho-toggle');
+    const toast = page.locator('.olv-lasso-toast');
+    await expect(plan).toBeVisible();
+    await expect(plan).toHaveAttribute('aria-pressed', 'false');
+
+    // Entering loads the controller chunk, so the press is asynchronous.
+    await plan.click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'true');
+    await expect(plan).toHaveClass(/is-on/);
+    await expect(toast).toContainText('Plan view on');
+    // The projection changed without the Ortho chip being clicked.
+    await expect(ortho).toHaveAttribute('aria-pressed', 'true');
+
+    await plan.click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'false');
+    await expect(toast).toContainText('Plan view off');
+    // The scene opened in perspective, so leaving must have put it back.
+    await expect(ortho).toHaveAttribute('aria-pressed', 'false');
+
+    expect(errors).toEqual([]);
+  });
+
+  test('plan mode drops itself when the user leaves the projection', async ({ page }) => {
+    await loadSample(page);
+    const row = viewsRow(page);
+    const plan = row.locator('.olv-plan-toggle');
+
+    await plan.click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'true');
+
+    // Turning the projection off by hand ends plan mode: the chip must stop
+    // claiming a scene the user has already changed.
+    await row.locator('.olv-ortho-toggle').click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('plan mode drops itself when the camera is aimed elsewhere', async ({ page }) => {
+    await loadSample(page);
+    const row = viewsRow(page);
+    const plan = row.locator('.olv-plan-toggle');
+
+    await plan.click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'true');
+
+    await row.locator('.olv-cam-chip').filter({ hasText: /^Front$/ }).click();
+    await expect(plan).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
 test.describe('orthographic toggle', () => {
   test('the Ortho chip toggles aria-pressed and toasts both states', async ({ page }) => {
     const errors: string[] = [];
