@@ -202,6 +202,11 @@ export function createPlanViewController(deps: PlanViewControllerDeps): PlanView
     },
 
     reset(): void {
+      // Bump FIRST, unconditionally. `drop()` returns early when plan is already
+      // inactive, and leaving plan mode goes inactive BEFORE `apply()` schedules
+      // its deferred `setMode`. Without this, closing a scan within
+      // PLAN_VIEW_SETTLE_MS of leaving let that call land on the empty stage.
+      generation += 1;
       drop();
     },
 

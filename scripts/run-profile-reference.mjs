@@ -66,6 +66,26 @@ const wkt = (a, b) => `LINESTRING(${a[0]} ${a[1]},${b[0]} ${b[1]})`;
  * SpatiaLite's distance to the section line. `z` is selected unconverted.
  */
 function corridorSql(layer, line, band, binStep, classFilter) {
+  // Every value below is interpolated into SQL text, because ogr2ogr's -sql takes
+  // a statement and not bind parameters. They all come from the frozen constants
+  // in profile-fixture-params.mjs and this script reads neither argv nor env, so
+  // nothing outside the repository reaches here. These assertions keep that true:
+  // the day someone makes a fixture configurable, the build fails here rather
+  // than composing a statement out of whatever arrived.
+  for (const [name, value] of [['band', band], ['binStep', binStep]]) {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      throw new TypeError(`corridorSql: ${name} must be a finite number, got ${String(value)}`);
+    }
+  }
+  if (!/^[A-Za-z0-9_-]+$/.test(layer)) {
+    throw new TypeError(`corridorSql: layer name is not a bare identifier: ${String(layer)}`);
+  }
+  if (!/^LINESTRING\(-?[\d.]+ -?[\d.]+,-?[\d.]+ -?[\d.]+\)$/.test(line)) {
+    throw new TypeError(`corridorSql: line is not a two-point WKT LINESTRING: ${String(line)}`);
+  }
+  if (!EXCLUDED_CLASSES.every((c) => Number.isInteger(c))) {
+    throw new TypeError('corridorSql: EXCLUDED_CLASSES must be integers');
+  }
   const pt = 'MakePoint(CAST(x AS REAL), CAST(y AS REAL))';
   const geom = `GeomFromText('${line}')`;
   const where = classFilter ? ` AND cls NOT IN (${EXCLUDED_CLASSES.join(',')})` : '';

@@ -1,8 +1,8 @@
 # Evidence model
 
 Research-hardening Phase 1. Every scientific product OpenLiDARViewer generates
-carries an **evidence level** — an explicit, honest statement of how strongly the
-claim is supported — and a **required** level it must reach before it may be
+carries an **evidence level**, an explicit, honest statement of how strongly the
+claim is supported, and a **required** level it must reach before it may be
 exported as a *validated* (non-exploratory) result. This replaces the single
 `Production` status previously used in the validation matrix, which conflated
 "the code works" with "the science is validated".
@@ -37,21 +37,21 @@ accuracy**. Independent evidence begins at E4; field-grade validity at E5.
 Each register entry records, at minimum:
 
 - `claimId`, `product`, `algorithm`, `algorithmVersion`
-- `claim` — the precise scientific statement, with the event and tolerance it refers to
+- `claim`, the precise scientific statement, with the event and tolerance it refers to
 - `currentEvidence`, `requiredEvidence`
 - `supportingTests`, `supportingDatasets`
-- `units`, `crsDatum` — applicable units and CRS/datum requirements
+- `units`, `crsDatum`, applicable units and CRS/datum requirements
 - `assumptions`, `failureModes`
 - `exportAllowed`, `userLabel`
 - `validationOwner`, `lastValidationDate`, `externalSource`
 
 Replacing the old single `Production` status, every entry carries the split:
 
-- `softwareStatus` — does the code work / ship?
-- `evidenceLevel` — the ladder rung above.
-- `externalValidationStatus` — `none` | `pending` | `partial` | `complete`.
-- `approvedClaim` — the strongest statement the evidence permits.
-- `prohibitedClaim` — statements the evidence does **not** permit (guards against overstatement).
+- `softwareStatus`, does the code work / ship?
+- `evidenceLevel`, the ladder rung above.
+- `externalValidationStatus`, `none` | `pending` | `partial` | `complete`.
+- `approvedClaim`, the strongest statement the evidence permits.
+- `prohibitedClaim`, statements the evidence does **not** permit (guards against overstatement).
 
 ## Export & badge gate
 
@@ -77,7 +77,7 @@ source name). `verifyProcessingManifest` recomputes the chain and reports the
 first altered op, so a reviewer holding only the artifact (or a `.olvsession`
 that embeds the same manifest) can confirm the record of *what was run, in
 what order, with which settings* is intact. The claim stops there: it is
-ordering + parameters + tamper-evidence, not an execution recipe — no executor
+ordering + parameters + tamper-evidence, not an execution recipe, no executor
 consumes it, and an op whose settings never reached the provenance says
 `params not captured in this slice` rather than fabricating them.
 
@@ -87,10 +87,10 @@ consumes it, and an op whose settings never reached the provenance says
   change. A product with no register entry is treated as `E0` / not exportable.
 - Existing caveats may be strengthened, never silently removed (rule 12).
 - When external evidence is unavailable, build the harness, write the dataset
-  spec, and set `externalValidationStatus: pending` — do not infer it from
+  spec, and set `externalValidationStatus: pending`, do not infer it from
   density, format, or metadata (rule 9).
 
-## Tooling that moves a claim up the ladder (Phase 3–4)
+## Tooling that moves a claim up the ladder (Phase 3 to 4)
 
 These exist now; they are the mechanisms, not the evidence. A claim only rises
 when the mechanism is actually run against real data and the result committed.
@@ -98,7 +98,7 @@ when the mechanism is actually run against real data and the result committed.
 - **E3 → E4 (cross-implementation).** `src/validation/crossCheck.ts` compares our
   grid to an independent tool's grid within a stated tolerance. The procedure is
   in [`cross-implementation.md`](./cross-implementation.md). Four reference slots
-  are supplied — `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
+  are supplied, `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
   each an independent GDAL comparison on a frozen analytic fixture; every other
   slot ships `pending`. No reference output is bundled for a slot that has not
   been compared, and none is fabricated.

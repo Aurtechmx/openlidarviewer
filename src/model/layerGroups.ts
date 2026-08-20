@@ -70,9 +70,31 @@ let fallbackGroupCounter = 0;
  * refers to. Never a secret — a group id is an internal handle.
  */
 export function newGroupId(): string {
-  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+  const c = (globalThis as {
+    crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint32Array) => Uint32Array };
+  }).crypto;
   if (c && typeof c.randomUUID === 'function') return `group_${c.randomUUID()}`;
-  return `group_${Date.now().toString(36)}_${(fallbackGroupCounter++).toString(36)}`;
+  // Session-local time and counter alone are not unique ACROSS sessions: two
+  // groups minted in the same millisecond in two different sessions, then merged
+  // into one session file, would collide and one would silently absorb the
+  // other's members. The salt below removes that.
+  //
+  // No Math.random here. Not because a group id is a secret (it is an internal
+  // handle and never one), but because a pseudorandom generator in a salt reads
+  // as one to a reader and to a scanner. getRandomValues covers every browser
+  // that ships this app; the high-resolution clock is the fallback for anything
+  // that somehow lacks it, and it separates two sessions inside the same
+  // millisecond of Date.now because timeOrigin and now() are sub-millisecond.
+  let salt: string;
+  if (c && typeof c.getRandomValues === 'function') {
+    salt = c.getRandomValues(new Uint32Array(2))
+      .reduce((acc, n) => acc + n.toString(36), '');
+  } else {
+    const p = (globalThis as { performance?: { now?: () => number; timeOrigin?: number } }).performance;
+    const hi = (p?.timeOrigin ?? 0) + (p?.now?.() ?? 0);
+    salt = Math.trunc(hi * 1000).toString(36);
+  }
+  return `group_${Date.now().toString(36)}_${(fallbackGroupCounter++).toString(36)}_${salt}`;
 }
 
 export interface LayerGroupStoreOptions {

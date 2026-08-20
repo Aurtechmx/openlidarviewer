@@ -7,26 +7,26 @@ agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
 Twelve products are at E4. Five are algorithm checks against GDAL:
-**`SLOPE-RASTER`**, **`ASPECT-RASTER`**, **`HILLSHADE`**, **`CONTOURS`** and
-**`MEAS-AREA`** (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
-planar-polygon fixture, agreeing to machine precision — see
+`SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
+`MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
+planar-polygon fixture, agreeing to machine precision, see
 `tests/measureAreaCrossCheck.test.ts`). Slope, aspect and hillshade were compared
 against GDAL 3.13.1 on the same frozen analytic fixture, and against the
 surface's closed-form gradient, in the same run; contours were compared against
 GDAL `gdal_contour` on a separate frozen analytic tilted plane (where linear
 interpolation is exact, so the tolerance measures agreement, not interpolation
-noise). The other three are surface-gridding checks against PDAL: **`DSM`** (max
-return) and **`DTM`** (min return) were compared against PDAL 2.10.2
+noise). The other three are surface-gridding checks against PDAL: `DSM` (max
+return) and `DTM` (min return) were compared against PDAL 2.10.2
 `writers.gdal` on three seeded synthetic clouds each, agreeing over 7500 cells,
-and **`CHM`** (clamped DSM minus DTM) was compared against the PDAL max grid
+and `CHM` (clamped DSM minus DTM) was compared against the PDAL max grid
 minus the PDAL min grid on the same clouds. The last two are terrain descriptors,
 each checked three ways against an independent tool AND the closed form on a
-controlled analytic fixture: **`TPI`** against gdaldem 3.13.1 TPI on a
+controlled analytic fixture: `TPI` against gdaldem 3.13.1 TPI on a
 low-amplitude quadratic (chosen so the reference's float32 mean accumulation
-stays below the tolerance), and **`VRM`** against SAGA 7.8.2's Vector Ruggedness
+stays below the tolerance), and `VRM` against SAGA 7.8.2's Vector Ruggedness
 Measure on a smooth tilted quadratic (chosen so Horn's normal and SAGA's
 estimator converge), with OLV reproducing the closed-form Sappington VRM to under
-1×10⁻⁹. The eleventh is a measurement rather than a raster: **`MEAS-PROFILE`**,
+1×10⁻⁹. The eleventh is a measurement rather than a raster: `MEAS-PROFILE`,
 the corridor section profile, against a reference assembled from two tools
 because no single one exposes the operation. OGR's SpatiaLite functions place
 every point on the section line and R's `quantile(type = 7)` reduces each
@@ -34,7 +34,7 @@ station, so neither half of the profile is written twice here. One of its two
 fixtures also carries a closed form: ten corridor elevations in an exact
 arithmetic progression reduce to `first + step·(p/100)·(n − 1)`, with no sort and
 no order statistic. The twelfth is a reader rather than an algorithm:
-**`E57-INGEST`**, against PDAL 2.10.2 `readers.e57` over every point of a public
+`E57-INGEST`, against PDAL 2.10.2 `readers.e57` over every point of a public
 CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
 `nor:` namespaced surface normals, and colour) as an exact quantised integer sum
 at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
@@ -43,7 +43,7 @@ at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
 |---|---|---|---|---|---|
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
 | `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
-| `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0–255 |
+| `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0 to 255 |
 | `CONTOURS` | GDAL 3.13.1 `gdal_contour` | `tests/contourCrossCheck.test.ts` | 2,222 vertices | 2.9×10⁻⁵ m vs GDAL (2.0×10⁻⁷ vs closed form) | 0.05 m |
 | `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
 | `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
@@ -67,7 +67,7 @@ inputs. The DSM and DTM checks use clouds where the reference radius is below
 half a cell, so they cover the gridding step, not ground classification
 (`GROUND-FILTER` stays partial) and not real-terrain void interpolation. None of
 this establishes field or survey-grade accuracy, and it says nothing about the
-other terrain products — each carries its own claim and its own evidence level.
+other terrain products, each carries its own claim and its own evidence level.
 
 ## Hillshade agrees, but read its tolerance carefully
 
@@ -81,7 +81,7 @@ write `round(255·h)`, GDAL writes `round(1 + 254·h)` and reserves level 0 for
 nodata.
 
 That difference is exactly `(1 − h)` levels. It is always under one level, for
-any surface — which means it consumes most of a one-level tolerance budget by
+any surface, which means it consumes most of a one-level tolerance budget by
 itself. On this fixture it spends 0.900 of the 1.0, leaving about 0.1 of
 headroom. **The ours-versus-GDAL leg on its own is therefore a weak instrument:
 it would not catch a small shading error.**
@@ -91,7 +91,7 @@ sharp:
 
 - ours versus the closed form: max separation 0.0000643 of a level, RMSE
   0.0000072, over all 11,564 interior cells;
-- and a zero-tolerance identity — re-encoding our intensity in GDAL's own scale,
+- and a zero-tolerance identity, re-encoding our intensity in GDAL's own scale,
   `round(1 + 254·h)`, reproduces the committed `hillshade-gdal.asc` **exactly**
   at every one of those cells.
 
@@ -119,15 +119,15 @@ measures the wrong thing, and all three are handled in
 - **Flat cells.** `gdaldem aspect` writes NODATA where it detects a flat; our
   kernel returns 0, which is a real direction (due north). Comparing those two
   would compare a value against a placeholder, so cells whose *closed-form*
-  slope is at or below 2° are excluded on all three legs — and the test fails
+  slope is at or below 2° are excluded on all three legs, and the test fails
   if GDAL wrote NODATA anywhere inside the surviving set.
 - **Frame and row order.** Ours is radians in the math frame (CCW from east,
   π/2 = north) on a northing-up grid; GDAL is degrees clockwise from north;
   ASCII Grid writes the northern row first while our kernel treats row+1 as
   north. `(90 − mathDeg) mod 360` converts the frame, and the rows are flipped
   in and back out. Getting only half of either conversion right yields a
-  mirrored grid that still looks like a plausible aspect raster — which is how
-  the v0.4.3 north–south aspect mirror shipped (see
+  mirrored grid that still looks like a plausible aspect raster, which is how
+  the v0.4.3 north-south aspect mirror shipped (see
   `src/terrain/ground/terrainDerivatives.ts`).
 
 ## Why this is not automated in CI
@@ -179,19 +179,18 @@ size, extent, and row order), so the two can be compared cell for cell.
 
 2. Pass the sun parameters explicitly rather than relying on GDAL's defaults
    matching ours. They do today (315° / 45° / z 1), but a default that agrees
-   today is not a comparison basis — if either side changed one, the two grids
+   today is not a comparison basis, if either side changed one, the two grids
    would be lit by different suns and the check would report a shading
    disagreement that is really a parameter disagreement. Then read both and
    compare with the slot tolerance (0.5° for slope, 0.5° circular for aspect,
-   1 level for hillshade on 0–255).
+   1 level for hillshade on 0 to 255).
 3. For aspect, do not pass `-trigonometric` (it switches GDAL into our own
    frame and removes the conversion the check exists to test) and do not pass
    `-zero_for_flat` (it turns "no aspect" into "points north"). The full
    reasoning is in `tests/fixtures/reference/aspect/README.md`.
 4. For hillshade, do not pass `-multidirectional`, `-combined` or `-igor`: each
    is a different illumination model. Note that GDAL's Byte band encodes the
-   intensity as `1 + 254·h` with 0 reserved for nodata, while ours is `255·h` —
-   compare the levels as they are and report the offset rather than removing
+   intensity as `1 + 254·h` with 0 reserved for nodata, while ours is `255·h`, compare the levels as they are and report the offset rather than removing
    it. See `tests/fixtures/reference/hillshade/README.md`.
 
 ### Contours (GDAL)
@@ -206,7 +205,7 @@ size, extent, and row order), so the two can be compared cell for cell.
 
 2. Use the plane fixture, not the quadratic slope DEM. Contour vertices are
    placed by linear edge interpolation on both sides, which is exact on a plane
-   and only approximate on a curved surface — where the error is largest in
+   and only approximate on a curved surface, where the error is largest in
    low-gradient regions, so a curved DEM would fail contours for a reason that
    is not a bug. The comparison measures each of our vertices as its distance to
    the nearest GDAL contour of the same level, against the 0.05 m slot tolerance,
@@ -224,9 +223,9 @@ size, extent, and row order), so the two can be compared cell for cell.
    ```
 
 2. The second command runs two tools and computes nothing itself. `ogr2ogr`
-   with the SQLite dialect builds the corridor table — `ST_Line_Locate_Point`
+   with the SQLite dialect builds the corridor table, `ST_Line_Locate_Point`
    for chainage, `ST_Distance` for the corridor test, the nearest station for
-   the bin — and selects the elevation column **as text**, so the value R
+   the bin, and selects the elevation column **as text**, so the value R
    reduces is the value the sampler binned and no number is re-printed on the
    way. `Rscript` then applies `quantile(type = 7)` per station.
 
