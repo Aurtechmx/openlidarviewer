@@ -469,6 +469,34 @@ export function createTerrainAnalysisRunner(
     const runDatasetId = getActiveId();
     const isStale = (): boolean =>
       runToken !== terrainRunToken || getActiveId() !== runDatasetId || !analysePanel.isVisible();
+    /**
+     * Bail on a stale run, releasing the busy state when nothing else owns it.
+     *
+     * `isStale` folds three situations together, and only ONE of them has a
+     * successor: a newer token means another run is in flight and will clear
+     * the flag itself. A hidden panel or a swapped scan leaves no successor at
+     * all, so a bare `return` stranded `setBusy(true)` forever — the Run button
+     * stayed disabled reading "Analysing…", and `setBusy` is the only writer of
+     * `disabled` in the tree, so nothing downstream (not even a scan close)
+     * could release it. Hiding the panel mid-run is one click, and the core
+     * runs off-thread for seconds, so the window is wide.
+     *
+     * It does not restore the previous result: `update()` re-binds the result
+     * to the CURRENT scan, which on the swapped-scan arm would relabel an old
+     * result as belonging to a new dataset.
+     */
+    const bail = (): boolean => {
+      if (!isStale()) return false;
+      // A newer token means a successor run is in flight and owns every piece
+      // of panel state, including the busy flag. Touch nothing.
+      if (runToken !== terrainRunToken) return true;
+      analysePanel.setBusy(false);
+      // Still the same scan, so the panel is just hidden: say why it stopped.
+      // When the scan itself went away the reset owns the panel copy, and
+      // `update(null)` puts its own prompt back.
+      if (getActiveId() === runDatasetId) analysePanel.setStatus('Analysis stopped.');
+      return true;
+    };
     // Abort any prior in-flight compute (a superseded run / interval re-pick) so
     // its worker job is cancelled and its reply dropped, then claim a fresh one.
     terrainAbort?.abort();
@@ -477,7 +505,7 @@ export function createTerrainAnalysisRunner(
     analysePanel.setBusy(true);
     // Let the "Analysing…" state paint before the synchronous compute.
     await new Promise((resolve) => setTimeout(resolve, 0));
-    if (isStale()) return;
+    if (bail()) return;
     try {
       // The terrain "core" (classification → ground → DTM → validation →
       // calibration → gate → quality → surface) depends only on the points +
@@ -496,7 +524,7 @@ export function createTerrainAnalysisRunner(
       // Remember the clear fn so dataset close / new-cloud load can drop cached
       // cores without re-importing this heavy chunk.
       clearTerrainCoreCacheFn = clearTerrainCoreCache;
-      if (isStale()) return;
+      if (bail()) return;
       const pos = gathered.positions;
       // Interval-independent (cacheable) core params. The fingerprint cache keys
       // a core by the cloud content + exactly these, so re-picking an interval
@@ -523,13 +551,13 @@ export function createTerrainAnalysisRunner(
           abort.signal,
         ),
       );
-      if (isStale()) return;
+      if (bail()) return;
       // Cheap interval-dependent stage: contours → stitch → style → labels.
       const result = contoursFromCore(core, { intervalM });
       // Final guard before touching the panel: a newer run, a swapped/closed
       // scan, or a hidden panel means this result lost the race — drop it and
       // leave the busy/skeleton state to whoever owns it now.
-      if (isStale()) return;
+      if (bail()) return;
       analysePanel.setBusy(false);
       analysePanel.update(result);
       // Contour Studio launcher: hand the panel the CRS frame facts (projected
@@ -569,7 +597,7 @@ export function createTerrainAnalysisRunner(
       void showContourLayer(result, runDatasetId);
     } catch (err) {
       // A stale run must not clobber the winning run's busy flag or status.
-      if (isStale()) return;
+      if (bail()) return;
       // An aborted run was superseded on purpose (newer run / interval re-pick /
       // dataset close) — the winning run owns the panel state, so stay quiet.
       if (abort.signal.aborted) return;
