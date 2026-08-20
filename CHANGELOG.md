@@ -20,6 +20,8 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Tie-point rigid registration with control-network validation, and a single planar ICP solver that the registration model now selects directly instead of refusing the planar case.
 - A derived-layer model and store, a feature-extraction service over the building and conductor cores, a scientific receipt serializer over the analysis record, and a product executor registry that runs a compute core only through its authorization gate, so a blocked or review-only product cannot be produced by routing around the check.
 - Classifier v3: a structural-verticality cue and a wall-rescue pass.
+- A Plan view: a top-down orthographic working view reachable from a chip in the navigation bar's Views row and from the command palette. Entering captures the mode and projection first, so leaving restores the scene as it was rather than as plan mode rewrote it, and aiming the camera elsewhere or turning the projection off drops the claim instead of holding a stale one.
+- Tool preflight in Process Studio. A product or measurement tool that is blocked or review-only now says which condition limits it and offers the shortest action that lifts it, and the measurement tools gained a readiness surface they did not have. Conditions that no control can lift, such as waiting for coverage, read as guidance rather than as a button that does nothing.
 - Absolute-accuracy evidence from surveyed reference spheres, gating the measurement leg and recording the findings that did not clear it.
 
 ### Changed
