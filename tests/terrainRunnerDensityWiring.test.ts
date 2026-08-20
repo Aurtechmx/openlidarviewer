@@ -85,7 +85,16 @@ function makeRunner(
   });
 }
 
-describe('terrainAnalysisRunner density wiring (samplePointScale)', () => {
+// Each case runs 3,600 points through the real terrain core on the main thread,
+// so it is compute-bound rather than waiting on anything. v8 coverage
+// instrumentation makes that compute about twenty times slower: measured at
+// roughly 3 s per case uninstrumented against 58 s under `--coverage`. The 15 s
+// default therefore passes everywhere except the coverage job, where all three
+// time out. This budget covers the instrumented cost with room to spare on a
+// slower machine. It is not masking a race; nothing here waits on anything.
+const INSTRUMENTED_COMPUTE_TIMEOUT_MS = 120_000;
+
+describe('terrainAnalysisRunner density wiring (samplePointScale)', { timeout: INSTRUMENTED_COMPUTE_TIMEOUT_MS }, () => {
   // Node has no Worker, so the runner's terrain-core offload announces its
   // (expected) fallback on console.warn before computing on the main thread.
   // Silenced — the assertions here read density figures, not the console.
