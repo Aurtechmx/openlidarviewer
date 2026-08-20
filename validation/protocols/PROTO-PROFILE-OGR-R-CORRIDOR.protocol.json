@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-PROFILE-OGR-R-CORRIDOR",
+  "example": false,
+  "title": "Corridor section profile against OGR/SpatiaLite chainage and R's type-7 quantile, on an analytic ramp and an oblique scatter",
+  "question": "Does sampleProfile's chainage/height series agree with a corridor profile assembled from SpatiaLite's ST_Line_Locate_Point and ST_Distance and reduced by R's quantile(type = 7), on a fixture whose expected series also has a closed form and on a second fixture with irregular corridors, empty stations and a classification channel?",
+  "recordWrittenOn": "2026-08-20",
+  "referenceTool": "GDAL/OGR SpatiaLite and R",
+  "referenceVersion": "GDAL 3.13.1 with SpatiaLite 5.1.0, R 4.4.1",
+  "claims": [
+    {
+      "claimId": "MEAS-PROFILE",
+      "datasetIds": [
+        "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "OLV-DS-024-SCATTER-PROFILE-OBLIQUE"
+      ],
+      "parameterSetIds": [
+        "PS-PROFILE-P25-RAMP",
+        "PS-PROFILE-P50-RAMP",
+        "PS-PROFILE-P25-SCATTER-CLASSIFIED"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.000001,
+        "toleranceUnit": "m",
+        "minimumComparableCells": 700,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "The tolerance is bounded by the fixtures, not chosen from a result. Every coordinate in both point clouds is a multiple of 1/2048 with magnitude under 32, so it is exactly representable in the Float32Array the sampler reads and in the double the reference tools use, and the corridor query selects the elevation column as TEXT so no elevation is re-printed anywhere in the pipeline. Both sides therefore reduce identical numbers, and the only difference either can introduce is double-precision rounding on quantities bounded by a few hundred metres: under 1e-13 m. One micrometre sits seven orders of magnitude above that and far below any elevation difference a reader of a section could act on. Every compared station must pass; the fraction is 1.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-08-20",
+        "witnessCommit": "4788166d3e98bd4eb166f67a48bbd1620daebb3f",
+        "witness": "The commit that registered the MEAS-PROFILE reference slot at status pending in src/validation/crossCheck.ts, carrying this 1e-6 m tolerance and the two fixtures, with no reference output anywhere in the tree and no comparison against the sampler yet run.",
+        "atInstant": "2026-08-20T03:11:50-06:00"
+      }
+    }
+  ],
+  "decisionRule": "Three comparisons run: the ramp fixture at percentile 25 and at percentile 50, and the oblique scatter fixture at percentile 25 with the classification gate on. The study reports agree only when EVERY compared station of EVERY comparison is within the registered tolerance, over at least the minimum comparable stations pooled, AND the per-station corridor counts match the reference exactly, AND the ramp comparisons also agree with the closed form. Any station outside the tolerance is a disagreement. The tolerance is never widened to reach agreement; a result above it is the finding.",
+  "notes": [
+    "Per-station counts are compared as integers, not against the tolerance. They are what makes a gap a gap: a station the sampler reports empty must be a station the reference found no corridor points for, and an interpolated value would show up as a count of zero against a height.",
+    "The closed form applies only to the ramp. Each of its stations holds ten corridor elevations in an exact arithmetic progression, and the type-7 quantile of an arithmetic progression is first + step·(p/100)·(n−1), which contains no sort and no order statistic. That is what keeps the analytic leg from being a second copy of the reduction under test.",
+    "The reference pipeline was run against the closed form before this tolerance was frozen, to establish that SpatiaLite's chainage and R's quantile reproduce the ramp's analytic series. That check involves no OpenLiDARViewer code and produced no comparison against the sampler; the candidate's own series did not exist until after the freeze.",
+    "ST_Distance measures to the section segment, so a point beyond an end is rejected by its distance to the endpoint rather than by an along-line test. Both fixtures place their beyond-the-end returns far enough out that the two rules agree, which is why the along-line gate at exactly ±band is outside this study's scope."
+  ],
+  "digest": "sha256:24f5fa3c54c6dba768c7675055836a54473d0f8b32035de649ebe5577cec5241"
+}

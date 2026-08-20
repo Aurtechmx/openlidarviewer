@@ -19,7 +19,7 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 12,
+  "studiesRead": 13,
   "countedStudies": 11,
   "byStatus": {
     "agree": 10,
@@ -184,6 +184,12 @@
       "claimId": "SLOPE-RASTER",
       "status": "pending",
       "why": "example manifest: a template, not a study"
+    },
+    {
+      "studyId": "MEAS-PROFILE-OGR-R-CORRIDOR",
+      "claimId": "MEAS-PROFILE",
+      "status": "not-executed",
+      "why": "status \"not-executed\": nothing was measured, so there is nothing to count"
     }
   ]
 }
