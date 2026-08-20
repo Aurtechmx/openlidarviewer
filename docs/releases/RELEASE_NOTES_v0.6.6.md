@@ -1,8 +1,52 @@
 # OpenLiDARViewer v0.6.6
 
-v0.6.6 promotes the DSM, DTM and CHM surface products to independent cross-implementation evidence, draws contours over the point cloud as a derived layer, and adds two opt-in options that leave every default output unchanged. The measured figures in this document come from the release-mode gate run at the tagged commit.
+v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence, two more than at v0.6.5, and the E57 reader is checked point for point against PDAL. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
+
+## Corrected calculations and declarations
+
+- the USGS 3DEP Quality Level table read a QL3 density floor of 0.25 pts/m² where the published floor is 0.5, so a survey between the two was awarded QL3 at half the required density; the other three levels were already correct, and datasets in that band now read below-QL3;
+- WKT2 `LENGTHUNIT` is parsed for linear and vertical units;
+- the measurement chain scales vertical and volume quantities by the vertical unit;
+- SMRF ground tolerances and classifier parameters are physical, converted to source units at the boundary;
+- camera flatness and project-card sizes read height off the up axis rather than assuming Z;
+- a two-epoch change volume with no error budget in it is no longer reported as certain: a level of detection of 0 with no co-registration RMSE collapsed the band to plus or minus zero, which cleared every threshold and graded the least supported result available as detectable at 0% relative error and high confidence; an empty budget now reports as unquantified;
+- a surface ICP fit with too little overlap is refused rather than reported, and a net volume is qualified with an uncertainty band;
+- classification reads review rather than ready when the source unit is unknown, and a resident-only surface reads review rather than blocked;
+- hiding the navigation legend no longer takes the view controls with it; the standard views and the orthographic toggle exist nowhere else in the app and the dismissal is persisted, so the old behaviour removed them permanently and across sessions.
+
+## Workspace and tools
+
+- a Work workspace mode that gathers the scene-work tools in one place;
+- an Output panel that consolidates every export behind one surface, and a slimmer Streaming panel whose saved views moved to the Inspector;
+- Process Studio reports live product status and can be docked from the command palette;
+- layer groups in the Layers panel: a named, collapsible set of layer ids with visibility and solo, rename, collapse, select, plus a member picker, where each action writes through the existing layer service one layer at a time so a group never holds a second copy of visibility;
+- an inspection issue workflow on annotations, carrying a severity, an open or resolved status and an observation date, with an issue list ordered worst first and a roll-up of what is still open;
+- one Speed to Quality performance control with an Auto position and an Advanced disclosure that keeps every underlying knob individually settable;
+- a top-down orthographic Plan view, reachable from the navigation bar and the command palette, which restores the scene you left rather than the one it drew;
+- tool preflight in Process Studio: a blocked or review-only tool states the condition that limits it and offers the shortest action that lifts it, and the measurement tools gained a readiness surface they did not have.
+
+The performance control is display and streaming only. It drives the streaming preset, the resident point budget, concurrent decodes, the device-pixel-ratio ceiling, Eye Dome Lighting and antialiasing. It does not touch the static load budget, which voxel-reduces the decoded cloud that terrain analysis reads, along with measurement and export, so no slider position can change a measured number, a terrain product or a reported claim. The panel says so where the control is.
+
+## Reading more data
+
+- Krovák (EPSG:5514) ingest and iPhone PDRF7 reading;
+- footprint reprojection for any proj4-defined projected CRS rather than UTM alone;
+- parsers for 3D Tiles `tileset.json` and PNTS;
+- a local out-of-core read planner, and a cross-CRS project placement planner;
+- tie-point rigid registration with control-network validation, and a single planar ICP solver the registration model now selects directly instead of refusing the planar case.
+
+The Krovák definition uses a seven-parameter Bursa-Wolf shift. It agrees with authoritative PROJ to about 5 cm on the surveyed reference points, where the naive three-parameter shift is roughly 10 m out.
+
+## Also in this release
+
+- a project-wide elevation colour scale, opt-in, applied per frame, so two scans in one project can share a range instead of each stretching its own;
+- classifier v3: a structural-verticality cue and a wall-rescue pass;
+- a derived-layer model and store, a feature-extraction service over the building and conductor cores, and a scientific receipt serializer over the analysis record;
+- a product executor registry that runs a compute core only through its authorization gate, so a blocked or review-only product cannot be produced by routing around the check;
+- streaming corrections: in-flight decodes get eviction hysteresis and the budget counts decoded-pending nodes, while a partial stream stays resident-only beside a static cloud;
+- the Clip panel is reachable on mobile, and one font policy now covers every panel, enforced by a lint.
 
 ## DSM, DTM and CHM reach cross-implementation evidence
 
@@ -10,7 +54,11 @@ The DSM (top surface, max return per cell) and the DTM (bare-earth grid, min ret
 
 The canopy height model (`CHM`) is promoted alongside them. CHM is DSM minus DTM, clamped at zero, and with both parents at E4 it was compared against the PDAL max grid minus the PDAL min grid on the same structure clouds, agreeing over 7,500 cells to a maximum difference under 8×10⁻⁶ m, within a 0.1 m registered tolerance (study `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`, test `tests/chmCrossCheck.test.ts`).
 
-Ten products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, and the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture.
+Twelve products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture, and two more promoted in this release.
+
+`MEAS-PROFILE`, the corridor section profile, reaches its required level. No single tool exposes a corridor percentile over a point cloud, so the reference is assembled from two: OGR/SpatiaLite 5.1.0 places every point on the section line and R 4.4.1 `quantile(type = 7)` reduces each station. Over 751 stations the largest difference is 3.6e-15 m, against a 1e-6 m tolerance registered before the reference existed. Per-station corridor counts match exactly, and the four deliberately empty stations read as gaps on both sides. Both fixtures are synthetic and hold every point clear of a bin boundary and of the corridor edge, so the tie-breaking there is untested and none of this is accuracy against a surveyed section.
+
+`E57-INGEST` reaches E4 against PDAL 2.10.2 `readers.e57`. Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly over all 1,788,994 points of a public CC-BY terrestrial scan across nine dimensions, compared as an exact quantised integer sum at a 1e-6 quantum rather than as a summary statistic, so one point wrong by a micrometre fails the comparison. Intensity is outside it: PDAL rescales intensity by 65535/(max - min) without subtracting the minimum, so the two sides report different numbers for the same file. The scan is a CloudCompare re-export rather than a scanner-native write, so vendor extension blocks, multi-scan files and spherical coordinates are untested.
 
 ## What the DSM, DTM and CHM evidence covers, and what it does not
 

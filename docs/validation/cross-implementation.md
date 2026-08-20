@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Eleven products are at E4. Five are algorithm checks against GDAL:
+Twelve products are at E4. Five are algorithm checks against GDAL:
 **`SLOPE-RASTER`**, **`ASPECT-RASTER`**, **`HILLSHADE`**, **`CONTOURS`** and
 **`MEAS-AREA`** (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision — see
