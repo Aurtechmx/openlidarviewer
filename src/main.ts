@@ -176,11 +176,8 @@ import { isZUpFormat } from './io/sniffFormat';
 // orchestration with type-only imports (no session parser, no three.js), so
 // saveCurrentView/applyView can run synchronously from a keystroke while the
 // ordering contract (camera LAST) stays unit-testable outside this bootstrap.
-import {
-  applyViewStateInOrder,
-  buildViewState,
-  type ViewStateBundle,
-} from './io/viewState';
+import type { ViewStateBundle } from './io/viewState';
+import { createViewStateCoordinator } from './app/viewStateCoordinator';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
@@ -4620,166 +4617,48 @@ function hasScan(): boolean {
 }
 
 /**
- * ONE capture path for a restorable view state. The session exporter's
- * GLOBAL fields and every named saved view both come from here, so the two
- * surfaces can never drift — what a `.olvsession` restores globally is
- * exactly what a saved view restores by name. `buildViewState` prunes unset
- * fields (emit-only-when-set), which is what keeps a bundle-free view's
- * serialisation byte-identical to the v6 writer's output.
+ * Restorable view state — a thin caller over the extracted
+ * `src/app/viewStateCoordinator.ts`. The ONE capture path, the ONE ordered
+ * apply path (camera strictly last, via `io/viewState.ts`) and the saved-view
+ * operations built on them live there, bound to the shell's services through
+ * this deps object. `main.ts` keeps the five delegates the panels, the action
+ * registry and the session / streaming modules already reference by name.
  */
+const viewStateCoordinator = createViewStateCoordinator({
+  getViewer: () => viewer,
+  inspector,
+  classLegend: classLegendPanel,
+  clipPanel,
+  bookmarks,
+  hasScan,
+  getActiveScanId: () => scans.activeId,
+  getPointFilters: () => ({ elevation: activeElevFilter, intensity: activeIntenFilter }),
+  onElevationFilterRestored: (range) => {
+    activeElevFilter = range;
+  },
+  onIntensityFilterRestored: (range) => {
+    activeIntenFilter = range;
+  },
+});
+
 function captureViewState(): ViewStateBundle {
-  return buildViewState({
-    // The camera is meaningful only with a scan on stage — a session exported
-    // from the empty state must not carry a bogus default pose. (`hasScan`
-    // is the same predicate that gates the tool shortcuts.)
-    camera: hasScan() ? viewer.getCameraState() : undefined,
-    render: {
-      pointSize: viewer.pointSize,
-      edlEnabled: viewer.edlEnabled,
-      edlStrength: viewer.edlStrength,
-      pointSizeMode: viewer.pointSizeMode,
-      antialiasing: viewer.antialiasing,
-    },
-    colorMode: viewer.activeColorMode(),
-    // v5 contract — the class filter is the list of HIDDEN ASPRS codes;
-    // empty means "no filter" and is pruned rather than serialised.
-    classFilter: classLegendPanel.getVisibility().hiddenCodes(),
-    // The active point-filter windows, so a restore reproduces "only the
-    // ground band" / "hide low-return noise". Omitted when unset.
-    ...(activeElevFilter || activeIntenFilter
-      ? {
-          pointFilters: {
-            ...(activeElevFilter ? { elevation: activeElevFilter } : {}),
-            ...(activeIntenFilter ? { intensity: activeIntenFilter } : {}),
-          },
-        }
-      : {}),
-    // Whenever the viewer holds a clip — enabled or not — so a
-    // positioned-but-dormant box keeps its geometry across the round trip.
-    clip: viewer.getClip() ?? undefined,
-  }) ?? {};
+  return viewStateCoordinator.capture();
 }
 
-/**
- * ONE apply path for a restorable view state — session import and named-view
- * restore both route through here. The field ORDER and the present/absent
- * guards live in the pure orchestrator (`io/viewState.ts`, unit-tested:
- * camera strictly LAST, every field independent); the sinks below carry the
- * host-specific wiring.
- *
- * Streaming honesty: a restore re-applies the recipe and re-renders — on a
- * streaming cloud the resident node set varies with budget and load order,
- * so identical point MEMBERSHIP is not guaranteed, only the same
- * camera/clip/colour/filter state over whatever is resident.
- */
 function applyViewState(vs: ViewStateBundle): void {
-  applyViewStateInOrder(vs, {
-    render: (r) => {
-      viewer.setPointSize(r.pointSize);
-      viewer.setPointSizeMode(r.pointSizeMode);
-      viewer.setEdlEnabled(r.edlEnabled);
-      viewer.setEdlStrength(r.edlStrength);
-      viewer.setAntialiasing(r.antialiasing);
-      inspector.syncRendering({
-        pointSize: viewer.pointSize,
-        edlEnabled: viewer.edlEnabled,
-        edlStrength: viewer.edlStrength,
-        pointSizeMode: viewer.pointSizeMode,
-        antialiasing: viewer.antialiasing,
-        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
-        splatMode: viewer.splatMode,
-      });
-    },
-    colorMode: (mode) => {
-      // Apply to every static cloud; the streaming subsystem too.
-      for (const id of viewer.clouds()) viewer.setColorMode(id, mode);
-      viewer.setStreamingColorMode(mode);
-    },
-    classFilter: (codes) => {
-      // v5 — re-apply the saved class-visibility filter. The panel re-renders
-      // and emits onChange, which the host has wired to the GPU mask, so the
-      // restored scan shows the same classes the author left visible.
-      classLegendPanel.applyFilter(codes);
-    },
-    pointFilters: (pf) => {
-      // v6 — re-apply the saved elevation / intensity windows, but ONLY when
-      // a scan is actually loaded. The elevation window is converted to the
-      // cloud's attribute space using that cloud's origin + up-axis; applying
-      // it with no scan present would convert against origin 0 and the
-      // default axis, so the window would be wrong the moment a scan did
-      // load. A view state is an overlay for an open scan, so "no scan ⇒
-      // skip the filter" is the correct, non-surprising behaviour.
-      if (scans.activeId == null && !viewer.hasStreamingCloud) return;
-      // The Inspector extents were seeded when the scan opened, so restoring
-      // writes the window into the inputs and drives the GPU filter + cue.
-      if (pf.elevation) {
-        viewer.setElevationFilter(pf.elevation);
-        inspector.restoreElevationFilter(pf.elevation);
-        activeElevFilter = [pf.elevation[0], pf.elevation[1]];
-      }
-      if (pf.intensity) {
-        viewer.setIntensityFilter(pf.intensity);
-        inspector.restoreIntensityFilter(pf.intensity);
-        activeIntenFilter = [pf.intensity[0], pf.intensity[1]];
-      }
-    },
-    clip: (clip) => {
-      // Restore the saved clip box so a shared capsule reproduces the
-      // author's isolation/cut-away, not an unclipped scene.
-      viewer.setClip(clip);
-      clipPanel.setVisible(true);
-      // Reflect the restored clip in the panel UI without re-firing onApply —
-      // the viewer already holds it, and firing through the panel while its
-      // own enabled flag was still false used to clear the restored clip.
-      clipPanel.setState(clip);
-    },
-    camera: (camera) => {
-      // Fly the live camera to the saved viewpoint — the orchestrator applies
-      // this LAST, so nothing after it can move the restored framing.
-      viewer.applyCameraState(camera);
-    },
-  });
+  viewStateCoordinator.apply(vs);
 }
 
-/**
- * Capture the current viewpoint AND display state as a named saved view.
- * The pose keeps the v6 camera-bookmark slot; everything else the exporter
- * would record globally (render, colour mode, class filter, point filters,
- * clip) rides in the bundle, so restoring the view by name reproduces the
- * full picture — the "Figure 3 = view state 'north-scarp'" contract.
- */
 function saveCurrentView(): void {
-  const { camera, ...rest } = captureViewState();
-  // `getCameraState` (not the bare pose) so a non-default FOV or nav mode is
-  // part of what the view restores; the empty-state fallback keeps the old
-  // bare-pose behaviour when no scan gates the capture.
-  bookmarks.add({ pose: camera ?? viewer.getCameraPose(), state: buildViewState(rest) });
-  refreshViewsUI();
+  viewStateCoordinator.saveCurrentView();
 }
 
-/** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
-  const names = bookmarks.names();
-  // Saved views live in the Inspector for both static and streaming scans — the
-  // Inspector's Saved-views section stays visible in streaming mode, so there is
-  // one list (with rename + delete) rather than a second copy in the stream panel.
-  inspector.setViews(names);
+  viewStateCoordinator.refreshViewsUi();
 }
 
-/** Glide the camera to a saved view — and (v7) restore its display state. */
 function applyView(index: number): void {
-  const view = bookmarks.get(index);
-  if (!view) return;
-  if (!view.state) {
-    // A pre-v7 (camera-only) view keeps its exact old behaviour: glide the
-    // pose and touch nothing else — not even the FOV, which the richer
-    // applyCameraState path would reset to the default.
-    viewer.applyCameraPose(view.pose);
-    return;
-  }
-  // Full restore through the one apply path; the pose rides as the bundle's
-  // camera so the orchestrator applies it LAST.
-  applyViewState({ ...view.state, camera: view.pose });
+  viewStateCoordinator.applyView(index);
 }
 
 /**

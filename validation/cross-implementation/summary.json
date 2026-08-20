@@ -146,6 +146,21 @@
         "PS-AREA-OGR-PLANAR"
       ]
     },
+    "MEAS-PROFILE": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "OLV-DS-024-SCATTER-PROFILE-OBLIQUE"
+      ],
+      "parameterSetIds": [
+        "PS-PROFILE-P25-RAMP",
+        "PS-PROFILE-P25-SCATTER-CLASSIFIED",
+        "PS-PROFILE-P50-RAMP"
+      ]
+    },
     "SLOPE-RASTER": {
       "studies": 1,
       "byStatus": {

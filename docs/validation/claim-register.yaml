@@ -4,7 +4,7 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Ten claims
+#   - currentEvidence must reflect evidence that EXISTS today. Eleven claims
 #     currently reach E4. Five are algorithm cross-implementations against
 #     GDAL 3.13.1 on a frozen analytic fixture: SLOPE-RASTER, ASPECT-RASTER,
 #     HILLSHADE and CONTOURS (0.5 degree for slope and aspect, 1.0 8-bit level
@@ -20,7 +20,13 @@
 #     quadratic (chosen so the reference's float32 mean accumulation stays below
 #     the tolerance), and VRM against SAGA 7.8.2 within 1e-4 on a smooth tilted
 #     quadratic (chosen so Horn and SAGA normals converge), with OLV reproducing
-#     the closed-form Sappington VRM to under 1e-9. The slope, hillshade and contour tolerances were registered
+#     the closed-form Sappington VRM to under 1e-9. The eleventh is the section
+#     profile: MEAS-PROFILE against a corridor reference assembled from two
+#     tools, OGR/SpatiaLite chainage (ST_Line_Locate_Point, ST_Distance) and R
+#     4.4.1 quantile(type = 7), over 751 stations on two committed point clouds
+#     within a 1e-6 m tolerance registered before the reference existed. The ramp
+#     fixture also carries a closed form, because ten corridor elevations in an
+#     arithmetic progression reduce without a sort. The slope, hillshade and contour tolerances were registered
 #     before the reference was generated: all three were fixed in the harness
 #     commit a78b0f9 on 2026-07-05, weeks ahead of their results. ASPECT-RASTER
 #     was NOT. Its slot, its tolerance, its flat-ground exclusion and its
@@ -35,9 +41,10 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Ten independent reference slots are supplied (six GDAL,
-#     three PDAL, one SAGA); all remaining independent-reference slots are
-#     pending. Never infer it from density / format / metadata.
+#     and unavailable. Eleven independent reference slots are supplied (six GDAL,
+#     three PDAL, one SAGA, one OGR/SpatiaLite plus R); all remaining
+#     independent-reference slots are pending. Never infer it from density /
+#     format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #   - scope states, in the shape the study manifests use, what the evidence
 #     covers (scope.supported, dataset + parameter-set pairs) and what it does
@@ -278,28 +285,30 @@ claims:
     algorithm: Sampled elevation along a section line
     algorithmVersion: v0.5.x
     claim: "Elevation profile sampled along a user section line."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/profileCrossCheck.test.ts]
+    supportingDatasets: [analytic corridor ramp (OLV-DS-023-ANALYTIC-PROFILE-RAMP) and oblique scatter (OLV-DS-024-SCATTER-PROFILE-OBLIQUE) with an OGR/SpatiaLite chainage and R type-7 quantile reference]
+    supportingStudies: [MEAS-PROFILE-OGR-R-CORRIDOR]
     units: [metres, source-units]
     crsDatum: "Local frame; native→metres when known."
     assumptions: ["sampling density limits vertical fidelity"]
     failureModes: ["gaps along the section", "sparse cloud"]
     exportAllowed: true
-    userLabel: "Section profile (visual-inspection grade)"
+    userLabel: "Cross-implemented section profile"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: none
-    approvedClaim: "Sampled elevation profile along the section."
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Corridor profile agreed with SpatiaLite chainage and R's type-7 quantile over 751 stations on the committed fixtures, exactly on the analytic ramp and to 3.6e-15 m on the oblique scatter, within the preregistered 1e-6 m tolerance. Sampled elevation along the section, not a surveyed one."
     prohibitedClaim: ["survey-grade longitudinal section"]
     scope:
       supported: []
       unsupported:
         - "Vertical fidelity between samples. The profile is what the sampling density can see."
         - "Sections crossing gaps, where the line is interpolated rather than measured."
+        - "Real terrain and real returns. Both fixtures are synthetic and noise-free."
         - "Any survey-grade longitudinal section."
-    scopeNote: "The required level is E4 (cross-implementation), and unlike the raster descriptors it has no reachable second implementation to compare against. The profile samples the raw cloud along a corridor perpendicular to the section line and reduces each bin to a type-7 percentile of the heights inside it (src/render/measure/profileSampler.ts). GDAL, PDAL, WhiteboxTools and SAGA all operate on rasters or offer per-cell statistics, and none exposes this corridor-percentile-of-a-point-cloud operation, so there is no independent tool to run the same definition. Writing one in this project would compare the code to itself. The claim therefore stays at E3 (synthetic known-truth against this project's own implementation) until an independent implementation of the same sampling exists, and this note records that the gap is the absence of a reference, not an untested algorithm."
+    scopeNote: "The profile samples the raw cloud along a corridor around the section line and reduces each bin to a type-7 percentile of the heights inside it (src/render/measure/profileSampler.ts). No single tool exposes that operation, but its two halves are each somebody else's implementation: OGR's SpatiaLite functions place every point on the line (ST_Line_Locate_Point, ST_Distance) and R's quantile(type = 7) reduces each station, so the reference is assembled from two independent tools rather than written here. On the analytic ramp the expected series also has a closed form, because ten corridor elevations in an exact arithmetic progression reduce to first + step·(p/100)·(n−1) with no sort and no order statistic, which is what keeps that leg from being a second copy of the reduction under test. The comparison covers the corridor gate, the classification gate, the nearest-station binning, the type-7 reduction at two percentiles and the reporting of empty stations as gaps. It does not cover a point close enough to a bin boundary or the corridor edge that two projection implementations could place it differently, and it says nothing about accuracy against a surveyed section, which is E5."
 
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
@@ -745,18 +754,21 @@ claims:
     algorithm: Two-metric threshold comparison (density + internal RMSE)
     algorithmVersion: v0.4.x
     claim: "Comparison of density + internal RMSE against named/versioned thresholds — NOT a quality-level compliance determination."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*qualityLevel*.test.ts, tests/verticalAccuracy.test.ts]
+    supportingTests: [tests/qualityLevelOracle.test.ts, tests/demAccuracyStandards.test.ts, tests/verticalAccuracy.test.ts]
     supportingDatasets: []
     units: [pts-per-sq-m, metres]
     crsDatum: metric
-    assumptions: ["compliance requires independent checkpoints + full standard"]
+    assumptions:
+      - "compliance requires independent checkpoints + full standard"
+      - "both legs of the published table are inclusive: density >= the pts/m2 floor, RMSEz <= the metre ceiling"
+      - "the level reported is the strongest row a (density, RMSEz) pair clears; a pair clearing no row is below-QL3, and an unusable density or RMSEz is unknown"
     failureModes: ["misread as compliance"]
     exportAllowed: true
     userLabel: "Two-metric threshold comparison (not a compliance determination)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
     approvedClaim: "Density + internal RMSE compared to stated thresholds."
     prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
@@ -764,7 +776,8 @@ claims:
       supported: []
       unsupported:
         - "Any USGS or ASPRS quality-level compliance determination, which needs independent checkpoints and the full standard."
-        - "The thresholds themselves, which are quoted from a named and versioned source rather than validated here."
+        - "The published thresholds themselves, which are quoted from a named and versioned source; the tests check the transcription and the comparison, not the specification."
+        - "Nominal pulse spacing and the rest of the specification's collection requirements, which are not checked at all."
         - "Real terrain, since the internal RMSE it compares is itself an internal diagnostic."
 
   - claimId: CONFIDENCE-OVERLAY
@@ -854,53 +867,57 @@ claims:
     algorithm: Integrated change over the difference grid
     algorithmVersion: v0.5.x
     claim: "Gain / loss / net volume from the change raster."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/compareDtms*.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/compareDtms*.test.ts, tests/changeVolumeAnalyticalOracle.test.ts]
+    supportingDatasets: [analytic surface pairs]
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
-    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified"]
-    failureModes: ["propagates registration + surface error"]
+    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "volume is a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design"]
+    failureModes: ["propagates registration + surface error", "quadrature defect on a curved surface, second order in cell size"]
     exportAllowed: true
-    userLabel: "Exploratory change volume"
+    userLabel: "Analytically-verified change volume (exploratory)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Integrated change volume with exploratory uncertainty."
+    approvedClaim: "Integrated change volume agreeing with closed-form integrals over analytic surface pairs; uncertainty remains exploratory."
     prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
     scope:
       supported: []
       unsupported:
-        - "Any validated change volume."
+        - "Any validated change volume. The closed-form fixtures verify the integration, not the accuracy of the two surfaces fed into it."
         - "Spatially correlated uncertainty, which is not quantified."
         - "Anything the change raster underneath it does not support."
+        - "Real epoch pairs, and the DTM build that produces them. The oracle enters at the grid pair, so nothing here bounds ground-classification or interpolation error."
+        - "The sub-LoD mass the threshold removes. Its size is stated in closed form on the fixtures, not measured on any survey."
 
   - claimId: UNCERTAINTY-BAND
     product: Uncertainty band (on deltas / volumes)
     algorithm: Model-based propagation (Monte Carlo GUM budget pending — Phases 8/10)
     algorithmVersion: v0.5.x
     claim: "Model-based uncertainty band; not all sources included."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*uncertainty*.test.ts]
+    supportingTests: [tests/*uncertainty*.test.ts, tests/uncertaintyBandScalingLaws.test.ts]
     supportingDatasets: []
     units: [metres, cubic-metres]
     crsDatum: metric
-    assumptions: ["spatial correlation and several GUM terms currently omitted"]
-    failureModes: ["understatement if omitted terms are large"]
+    assumptions: ["spatial correlation and several GUM terms currently omitted", "the random term assumes per-cell errors are independent, which is what makes it fall as the square root of the cell count"]
+    failureModes: ["understatement if omitted terms are large", "an empty error budget, which is reported as unquantified rather than as a zero band"]
     exportAllowed: true
-    userLabel: "Exploratory model-based uncertainty (omitted terms listed)"
+    userLabel: "Analytically-verified propagation model (exploratory; omitted terms listed)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Model-based band over the included sources."
+    approvedClaim: "Model-based band over the included sources, obeying the scaling laws the documented model implies."
     prohibitedClaim: ["complete uncertainty budget", "validated coverage interval"]
     scope:
       supported: []
       unsupported:
         - "A complete uncertainty budget. Several GUM terms and spatial correlation are omitted, and the omitted terms are listed beside the band."
         - "Any coverage interval that has been validated against outcomes."
+        - "The band's coverage. The scaling laws show the propagation model is implemented as documented; whether a 1σ band contains the truth as often as 1σ should is a separate question this evidence does not touch."
+        - "The inputs. A per-cell σ and a registration RMSE are taken as given, and a band is only ever as honest as the two numbers handed to it."
 
   # ── Provenance / integrity ──────────────────────────────────────────────────
   - claimId: REPORT-DIGEST

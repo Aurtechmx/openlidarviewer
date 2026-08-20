@@ -282,11 +282,23 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         cellSigmaM: cellSigmaFromLoD(comparison.levelOfDetectionM),
         registrationSigmaM: ctx.registrationSigmaM ?? 0,
       });
-      lines.push(
-        u.detectable
-          ? `Volume uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative); ${u.confidence} confidence.`
-          : `Net volume is below the level of detection: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — not distinguishable from noise.`,
-      );
+      // Three outcomes, not two. An EMPTY error budget (a zero level of
+      // detection and no registration RMSE) also yields ±0, and printing that
+      // as "below the level of detection" would describe a threshold that was
+      // never set. Say the band bounds nothing, and name what to supply.
+      if (!u.quantified) {
+        lines.push(
+          'Volume uncertainty: not quantified — the level of detection is 0 and no ' +
+            'co-registration RMSE was supplied, so the ±0 m³ band bounds nothing. ' +
+            'Set a level of detection to qualify this figure.',
+        );
+      } else {
+        lines.push(
+          u.detectable
+            ? `Volume uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative); ${u.confidence} confidence.`
+            : `Net volume is below the level of detection: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — not distinguishable from noise.`,
+        );
+      }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
         lines.push('The co-registration error is unquantified (no alignment applied), so this band is a lower bound.');
       }
