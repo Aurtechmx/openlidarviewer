@@ -70,6 +70,12 @@ export interface LayerService {
   setVisible(id: string, visible: boolean): void;
   /** Toggle solo isolation for a layer, then re-apply visibility. */
   toggleSolo(id: string): void;
+  /**
+   * Isolate a layer — idempotent, unlike {@link toggleSolo}. The preflight's
+   * `solo-active-layer` remediation means "show this one on its own", so a
+   * second use must not silently un-isolate the layer it just isolated.
+   */
+  soloOnly(id: string): void;
 }
 
 /**
@@ -448,5 +454,11 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     applyVisibility();
   }
 
-  return { buildLayerInfos, applyVisibility, refreshCrsFlags, setVisible, toggleSolo };
+  function soloOnly(id: string): void {
+    if (layers.solo === id) return; // already isolated — a toggle here would undo it
+    layers.solo = id;
+    applyVisibility();
+  }
+
+  return { buildLayerInfos, applyVisibility, refreshCrsFlags, setVisible, toggleSolo, soloOnly };
 }
