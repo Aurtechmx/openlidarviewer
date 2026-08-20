@@ -256,12 +256,12 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'supplied' },
   { claimId: 'TPI', referenceTool: 'GDAL', toleranceAbs: 1e-5, unit: 'index', status: 'supplied' },
   { claimId: 'VRM', referenceTool: 'SAGA', toleranceAbs: 1e-4, unit: 'index', status: 'supplied' },
-  // Per-point E57 decode against PDAL 2.10.2 readers.e57. The tolerance follows
-  // from the encoding: the file stores cartesian coordinates as IEEE singles, so
-  // both readers surface the same 32-bit values and only double rounding remains,
-  // around 1e-13 m. A micron is far above that and far below any survey
-  // relevance. No reference has been generated at this commit.
-  { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'pending' },
+  // Per-point decode against PDAL 2.10.2 readers.e57 over a CC-BY E57. The
+  // tolerance is a coordinate budget, but the assertion that carries the claim
+  // is an exact quantised integer sum at a 1e-6 quantum, which unlike a mean
+  // cannot absorb one wrong point: at 1.79 M points a single value would have to
+  // be wrong by ~1.79 m to move the mean past this same number.
+  { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */
