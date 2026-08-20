@@ -165,6 +165,16 @@ export class NavBar {
 
   private readonly _cb: NavBarCallbacks;
   private readonly _hud: HTMLElement;
+  /**
+   * The dismissible half of the HUD: the movement / mode / meta legend. Held
+   * separately from {@link _hud} because the camera and view controls beside it
+   * are NOT help. One `olv-hidden` toggle used to cover both, so a user who hid
+   * the legend also lost Top, Front, Side, Iso and the orthographic toggle, and
+   * the choice persisted, leaving no surface for them in any later session.
+   */
+  private readonly _legend: HTMLElement;
+  /** The legend's show/hide control, whose label follows the current state. */
+  private readonly _legendToggle: HTMLButtonElement;
   private readonly _speed: HTMLElement;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
@@ -421,23 +431,31 @@ export class NavBar {
     });
     viewsRow.append(orthoToggle);
 
+    // The toggle stays OUTSIDE the legend it controls. Inside, hiding the
+    // legend would take the only way back with it.
     const hudDismiss = el('button', {
       className: 'olv-nav-hud-close',
       text: '×',
       title: 'Hide navigation help (H)',
       ariaLabel: 'Hide navigation help',
-    });
+    }) as HTMLButtonElement;
     hudDismiss.addEventListener('click', () => {
       hudDismiss.blur();
       this.toggleHelp();
     });
+    this._legendToggle = hudDismiss;
     const hudHeader = el('div', { className: 'olv-nav-hud-header' }, [
       el('div', { className: 'olv-nav-hud-title', text: 'Navigation' }),
       hudDismiss,
     ]);
+    this._legend = el('div', { className: 'olv-legend' }, [
+      movementGroup,
+      modesGroup,
+      metaGroup,
+    ]);
     this._hud = el('div', { className: 'olv-nav-hud' }, [
       hudHeader,
-      el('div', { className: 'olv-legend' }, [movementGroup, modesGroup, metaGroup]),
+      this._legend,
       el('div', { className: 'olv-cam-presets-row' }, [
         el('span', { className: 'olv-cam-presets-label', text: 'Camera' }),
         cameraPresetsRow,
@@ -572,7 +590,15 @@ export class NavBar {
     // are visible by default; pressing H or clicking the X in the
     // title row toggles it off. The Help button in the dock and the
     // command palette surface H as the re-open shortcut.
-    this._hud.classList.toggle('olv-hidden', !this._helpPinned);
+    // Only the legend follows the pin. The camera and view rows are controls,
+    // not help, so they stay reachable once the legend is dismissed.
+    this._legend.classList.toggle('olv-hidden', !this._helpPinned);
+    this._hud.classList.toggle('olv-nav-hud-collapsed', !this._helpPinned);
+    this._legendToggle.textContent = this._helpPinned ? '\u00d7' : '?';
+    const legendLabel = this._helpPinned ? 'Hide navigation help' : 'Show navigation help';
+    this._legendToggle.title = `${legendLabel} (H)`;
+    this._legendToggle.setAttribute('aria-label', legendLabel);
+    this._legendToggle.setAttribute('aria-expanded', this._helpPinned ? 'true' : 'false');
     // The prompt appears only when navigating without the cursor captured —
     // and never while the Measure tool owns clicks.
     this.prompt.classList.toggle(

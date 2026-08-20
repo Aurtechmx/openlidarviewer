@@ -263,6 +263,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* v0.3.10 — Header row carries the title + X close button.
    Flex layout keeps the title flush-left and the X flush-right so the
    panel reads as a normal closable card. */
+/* Collapsed: the legend is hidden, so the panel shrinks to the title row plus
+   the camera and view controls. Those are controls rather than help and stay
+   reachable, which is why the panel does not disappear outright. */
+.olv-nav-hud-collapsed { padding-bottom: var(--space-sm); }
+.olv-nav-hud-collapsed .olv-nav-hud-header { margin-bottom: var(--space-xs); }
+
 .olv-nav-hud-header {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-xl); margin-bottom: var(--space-sm);
