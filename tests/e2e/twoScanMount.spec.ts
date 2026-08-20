@@ -236,3 +236,90 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
 
   expect(errors, `console/page errors: ${errors.join(' | ')}`).toEqual([]);
 });
+
+/**
+ * P1 #3 — a coordinate read back from the NON-ANCHOR layer.
+ *
+ * The two tests above prove the placement VALUES are right: Layer Health shows
+ * each tile's offset and the pair differ by the real 2 km. What they cannot see
+ * is whether that placement reaches the geometry a pick would hit. Those are
+ * separate steps, and a layer drawn in the right place while its coordinates
+ * resolve in the wrong frame looks perfect and measures wrong.
+ *
+ * `layerProjectPoints` resolves a point through the cloud's own `projectXYZ`,
+ * which applies the placement exactly once, so a placement that is computed but
+ * not applied, or applied to the wrong layer, shows up here as a coordinate
+ * rather than as a picture.
+ *
+ * The raycast itself is NOT covered: canvas-click picking is flaky on headless
+ * WebGL 2, which is why `__OLV_TEST_API__` exists at all. This asserts the
+ * transform a pick resolves through, not the screen-to-ray mapping.
+ */
+test('a coordinate read from the mounted non-anchor layer is in the project frame', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (m) => {
+    if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text());
+  });
+  page.on('pageerror', (e) => { if (!isBenignPageError(String(e))) errors.push(String(e)); });
+
+  const w = await loadLasWriter();
+  const bytesA = georefLas(w, 500000, 4100000);
+  const bytesB = georefLas(w, 500000 + SEP_M, 4100000 + SEP_M);
+
+  await page.goto('/?test=1');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+  await dropBytes(page, bytesA, 'utm33-a.las');
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
+  await dropBytes(page, bytesB, 'utm33-b.las');
+  await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
+  await page.waitForTimeout(500); // frame reconcile
+
+  // Point 0 of each tile is its own origin corner: tileAt puts i=0 at (ox, oy).
+  const pts = await page.evaluate(() => {
+    const api = (window as unknown as {
+      __OLV_TEST_API__?: { layerProjectPoints: (i: number) => { id: string; project: [number, number, number] }[] };
+    }).__OLV_TEST_API__;
+    if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+    return api.layerProjectPoints(0);
+  });
+
+  expect(errors, `console/page errors: ${errors.join(' | ')}`).toEqual([]);
+  expect(pts, 'both layers report a world point').toHaveLength(2);
+
+  // Whichever anchored the frame, the two corner points must sit exactly the
+  // real 2 km apart on both axes. A non-anchor layer left in its own frame, or
+  // given the anchor's offset, lands on top of the anchor and fails here.
+  const xs = pts.map((p) => p.project[0]).sort((a, b) => a - b);
+  const ys = pts.map((p) => p.project[1]).sort((a, b) => a - b);
+  expect(xs[1] - xs[0], 'X separation between the two layers').toBeCloseTo(SEP_M, 1);
+  expect(ys[1] - ys[0], 'Y separation between the two layers').toBeCloseTo(SEP_M, 1);
+
+  // The project frame is anchored on one tile, so its own corner sits at the
+  // origin and the other 2 km out. A non-anchor layer left in its own frame
+  // would collapse onto the anchor and read 0 here.
+  expect(Math.abs(xs[0]), 'the anchor corner sits at the project origin').toBeLessThan(1);
+  expect(xs[1], 'the mounted tile sits 2 km out').toBeCloseTo(SEP_M, 1);
+
+  // A measurement placed on those two points reports the same separation, so
+  // the measurement datum agrees with the mount rather than with one layer.
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await expect(page.locator('.olv-measure-bar')).toBeVisible();
+  await page.evaluate((p) => {
+    const api = (window as unknown as { __OLV_TEST_API__?: {
+      setMeasureKind: (k: string) => void;
+      placeMeasurementPoint: (q: { x: number; y: number; z: number }) => void;
+    } }).__OLV_TEST_API__;
+    api!.setMeasureKind('distance');
+    api!.placeMeasurementPoint({ x: p[0].project[0], y: p[0].project[1], z: p[0].project[2] });
+    api!.placeMeasurementPoint({ x: p[1].project[0], y: p[1].project[1], z: p[1].project[2] });
+  }, pts);
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+
+  // 2 km east and 2 km north is a 2.828 km diagonal; the row states it.
+  const row = await page.locator('.olv-mp-row').first().textContent();
+  const metres = Number((row ?? '').match(/([\d.]+)\s*(k?m)/)?.[1] ?? '0')
+    * ((row ?? '').includes('km') ? 1000 : 1);
+  expect(metres, `measurement row read "${row}"`).toBeGreaterThan(2820);
+  expect(metres, `measurement row read "${row}"`).toBeLessThan(2835);
+});

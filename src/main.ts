@@ -3636,6 +3636,7 @@ if (testApi) {
       finishMeasurement: () => v.measure.finishCurrent(),
       clearMeasurements: () => v.clearMeasurements(),
       getMeasurementCount: () => v.measure.getMeasurements().length,
+      layerProjectPoints: (i: number) => v.layerProjectPoints(i),
       // Elevation filter (v0.5.6) device-verify seam: pass a world-space
       // [min, max] window (or null to clear) and confirm points outside it hide.
       setElevationFilter: (range: [number, number] | null) =>
