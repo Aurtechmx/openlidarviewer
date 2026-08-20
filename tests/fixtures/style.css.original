@@ -2264,9 +2264,10 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-xs); padding: 1px var(--space-xs); min-width: 14px; text-align: center;
 }
 .olv-cam-chip-label { font-size: var(--text-xs); }
-/* Orthographic toggle — a pressed-state chip. When on it fills with the brand
-   accent so the "parallel projection mode" reads as engaged at a glance. */
-.olv-ortho-toggle.is-on {
+/* Orthographic and Plan toggles — pressed-state chips. When on they fill with
+   the brand accent so the engaged mode reads at a glance. */
+.olv-ortho-toggle.is-on,
+.olv-plan-toggle.is-on {
   color: var(--accent);
   border-color: rgba(0, 178, 255, 0.55);
   background: rgba(0, 178, 255, 0.16);
@@ -9602,6 +9603,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-layer-solo.is-active,
   .olv-layer-lock.is-active,
   .olv-ortho-toggle.is-on,
+  .olv-plan-toggle.is-on,
   .olv-wfc-seg-btn.is-active,
   .olv-tool.is-active,
   .olv-tool[aria-pressed='true'] {

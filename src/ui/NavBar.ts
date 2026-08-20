@@ -35,6 +35,13 @@ export interface NavBarCallbacks {
   onStandardView: (view: StandardView) => void;
   /** The user toggled the orthographic (parallel) projection. */
   onOrthographic: (on: boolean) => void;
+  /**
+   * The user toggled Plan view — the top-down, parallel-projection,
+   * hand-tool-on-the-drag composition. The bar only reports the press; the
+   * state lives with the caller (`planViewController.ts`), which reflects it
+   * back through {@link NavBar.setPlanActive}.
+   */
+  onPlanView: () => void;
 }
 
 interface ModeDef {
@@ -179,6 +186,14 @@ export class NavBar {
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
   private readonly _panBtn!: HTMLButtonElement;
+  /**
+   * The projection and Plan chips. Both are pressed-state controls that
+   * something other than a click can change — plan mode turns the projection on
+   * for you, and it drops itself when the projection or the view is changed by
+   * hand — so each has a setter that moves the chip without firing a callback.
+   */
+  private readonly _orthoBtn: HTMLButtonElement;
+  private readonly _planBtn: HTMLButtonElement;
   /** Legend chips that only make sense while the hand tool exists. */
   private readonly _panLegendItems: HTMLElement[] = [];
 
@@ -430,6 +445,24 @@ export class NavBar {
       callbacks.onOrthographic(on);
     });
     viewsRow.append(orthoToggle);
+    this._orthoBtn = orthoToggle;
+    // Plan view — one control for the three above. It looks straight down,
+    // drops the perspective and puts the primary drag on the hand tool, and it
+    // remembers the projection and navigation mode it replaced so turning it
+    // off returns the scene the user had. State lives with the caller.
+    const planToggle = el('button', {
+      className: 'olv-cam-chip olv-plan-toggle',
+      title: 'Plan view — look straight down in parallel projection with the hand tool on the drag; turning it off restores the view you had',
+      ariaLabel: 'Toggle plan view',
+    });
+    planToggle.setAttribute('aria-pressed', 'false');
+    planToggle.append(el('span', { className: 'olv-cam-chip-label', text: 'Plan' }));
+    planToggle.addEventListener('click', () => {
+      planToggle.blur();
+      callbacks.onPlanView();
+    });
+    viewsRow.append(planToggle);
+    this._planBtn = planToggle;
 
     // The toggle stays OUTSIDE the legend it controls. Inside, hiding the
     // legend would take the only way back with it.
@@ -526,6 +559,26 @@ export class NavBar {
     for (const item of this._panLegendItems) {
       item.classList.toggle('olv-hidden', !available);
     }
+  }
+
+  /**
+   * Reflect plan mode without firing the callback. Plan mode can end without a
+   * click on this chip — the caller drops it when the user turns the projection
+   * off or aims the camera somewhere that is not straight down.
+   */
+  setPlanActive(on: boolean): void {
+    this._planBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    this._planBtn.classList.toggle('is-on', on);
+  }
+
+  /**
+   * Reflect the projection without firing the callback — plan mode turns it on
+   * from outside this bar, and a chip that still reads "off" would be lying
+   * about the projection the scene is actually in.
+   */
+  setOrthographicActive(on: boolean): void {
+    this._orthoBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    this._orthoBtn.classList.toggle('is-on', on);
   }
 
   /** Reflect the pointer-lock state. */

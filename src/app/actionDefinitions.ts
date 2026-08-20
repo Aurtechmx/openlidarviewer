@@ -22,6 +22,7 @@ import {
   CAMERA_PRESET_KEY,
   CAMERA_PRESET_LABEL,
   CAMERA_PRESET_ORDER,
+  type CameraPresetName,
 } from '../render/camera/cameraPresets';
 import { buildScanStory, buildExportHealth, type ScanStoryInputs } from '../intelligence/scanStory';
 import { renderDatasetStoryCard, renderExportHealthPanel } from '../ui/scanStoryViews';
@@ -56,6 +57,22 @@ export interface ActionRegistryDeps {
   toggleOrbitInvert: (axis: 'x' | 'y') => void;
   /** Return orbit navigation to the shipped defaults. */
   resetNavigation: () => void;
+  /** Plan mode, reached the same way the NavBar's Plan chip reaches it. */
+  planView: PlanViewActions;
+}
+
+/**
+ * The plan-mode surface the palette needs. `navBarWiring` satisfies it; the
+ * shape is declared here so this module stays clear of the shell's graph.
+ */
+export interface PlanViewActions {
+  togglePlanView: () => void;
+  /**
+   * A camera preset fired from the palette rather than the bar. Plan mode is a
+   * claim that the camera is looking straight down, so it has to hear about
+   * every route that aims it.
+   */
+  notePlanViewPreset: (name: CameraPresetName) => void;
 }
 
 export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
@@ -77,12 +94,25 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
       run: () => {
         const fired = deps.getViewer().setCameraPreset(name);
         if (fired) {
+          deps.planView.notePlanViewPreset(name);
           deps.workflowController.capture({ type: 'camera-preset', name });
           deps.showLassoToast(`Camera · ${label} view.`);
         }
       },
     });
   }
+  // Plan view — the composed top-down workflow, not a pose. It lives in the
+  // Camera section beside the presets because that is where a user looking for
+  // "look straight down" goes; the state and the restore live in
+  // planViewController.ts, which this only pokes.
+  actions.push({
+    id: 'camera.plan-view',
+    title: 'Plan view',
+    section: 'Camera',
+    hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
+    keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
+    run: () => deps.planView.togglePlanView(),
+  });
   // Reset / Frame All — exposed alongside the named presets.
   actions.push({
     id: 'camera.frame-all',
