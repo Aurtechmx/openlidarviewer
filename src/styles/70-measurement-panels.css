@@ -72,6 +72,30 @@
 .olv-anno-chip-info.olv-anno-chip-active { box-shadow: inset 0 -2px 0 #22dcff; }
 .olv-anno-chip-warning.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-good); }
 .olv-anno-chip-issue.olv-anno-chip-active { box-shadow: inset 0 -2px 0 var(--rating-weak); }
+/* Inspection block. Picking a severity is what marks the annotation as a
+   tracked issue, so the status row only appears once one is picked. Each
+   severity chip carries a rising bar and the word; the accent underline is the
+   third channel, never the only one. */
+.olv-anno-editor-issue { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-anno-editor-issue-label { font-size: var(--text-xs); color: var(--text-dim); }
+.olv-anno-editor-issue-hint { font-size: var(--text-2xs); color: var(--text-faint); }
+.olv-anno-editor-sevs { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.olv-anno-editor-status { display: flex; gap: var(--space-xs); }
+.olv-anno-sev,
+.olv-anno-status {
+  font-size: var(--text-xs); font-family: var(--font); padding: var(--space-xs) 0;
+  cursor: pointer; background: transparent; color: var(--text); opacity: 0.6;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+}
+/* Severity wraps two-up so the bar and the word both fit; status is a pair. */
+.olv-anno-sev { flex: 1 1 44%; }
+.olv-anno-status { flex: 1; }
+.olv-anno-sev-active,
+.olv-anno-status-active { opacity: 1; border-color: var(--accent); }
+.olv-anno-sev-low.olv-anno-sev-active { box-shadow: inset 0 -2px 0 var(--text-dim); }
+.olv-anno-sev-medium.olv-anno-sev-active { box-shadow: inset 0 -2px 0 var(--rating-good); }
+.olv-anno-sev-high.olv-anno-sev-active { box-shadow: inset 0 -2px 0 var(--rating-moderate); }
+.olv-anno-sev-critical.olv-anno-sev-active { box-shadow: inset 0 -2px 0 var(--rating-weak); }
 .olv-anno-editor-camera {
   display: flex; align-items: center; gap: var(--space-sm);
   font-size: var(--text-xs); color: var(--text-dim); cursor: pointer; user-select: none;

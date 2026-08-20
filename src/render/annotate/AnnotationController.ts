@@ -19,6 +19,10 @@ import type {
   Vec3Object,
 } from './types';
 import { createAnnotation, editAnnotation } from './types';
+import type { IssueDetails, IssueInput, IssueStatus } from './issueWorkflow';
+// Aliased because the controller exposes a method of the same name: the import
+// is the model's pure transform, the method is the list-owning write around it.
+import { attachIssue, setIssueStatus as applyIssueStatus } from './issueWorkflow';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { AnnotationGeoref } from './pickGeoref';
 import { AnnotationOverlay } from './AnnotationOverlay';
@@ -50,6 +54,13 @@ export interface AnnotationSummary {
   selected: boolean;
   /** Name of the linked measurement, when one is linked and still exists. */
   linkedMeasurement?: string;
+  /**
+   * The inspection workflow, for the annotations that carry one. Absent means
+   * the annotation is not a tracked issue, which is what the issue helpers in
+   * `annotate/issueWorkflow.ts` read — the panel passes these summaries
+   * straight to them rather than deciding for itself what counts as an issue.
+   */
+  issue?: IssueDetails;
   /** Local-frame anchor — lets the panel spatially cluster without the model. */
   localPosition: Vec3Object;
 }
@@ -158,7 +169,7 @@ export class AnnotationController {
       showCamera: cameraState !== undefined,
       measurements: this._measurements(),
       onSave: (fields) => {
-        this.add({
+        const created = this.add({
           title: fields.title,
           note: fields.note,
           type: fields.type,
@@ -175,6 +186,10 @@ export class AnnotationController {
             ? { linkedMeasurementId: fields.linkedMeasurementId }
             : {}),
         });
+        // An annotation can be born as an issue. `add` has already banked the
+        // undo snapshot, so the workflow folds into that one step: undoing the
+        // creation undoes the triage with it.
+        if (fields.issue) this._applyIssue(created.id, fields.issue);
         this._setHint('Click a point on the scan to annotate it');
       },
       onCancel: () => {
@@ -214,6 +229,7 @@ export class AnnotationController {
         note: a.note ?? '',
         type: a.type,
         linkedMeasurementId: a.linkedMeasurementId ?? null,
+        issue: a.issue ?? null,
       },
       measurements: this._measurements(),
       onSave: (fields) => {
@@ -223,6 +239,9 @@ export class AnnotationController {
           type: fields.type,
           linkedMeasurementId: fields.linkedMeasurementId,
         });
+        // Folded into the snapshot `update` just banked, so one Save is one
+        // undo step whether or not it also changed the triage.
+        if (fields.issue) this._applyIssue(id, fields.issue);
       },
       onCancel: () => {
         /* editing cancelled — the annotation is left unchanged */
@@ -298,6 +317,7 @@ export class AnnotationController {
       };
       const linked = a.linkedMeasurementId ? names.get(a.linkedMeasurementId) : undefined;
       if (linked !== undefined) summary.linkedMeasurement = linked;
+      if (a.issue) summary.issue = a.issue;
       return summary;
     });
   }
@@ -329,6 +349,25 @@ export class AnnotationController {
     if (i < 0) return;
     this._snapshot();
     this._annotations[i] = editAnnotation(this._annotations[i], edit);
+    this._sync();
+    this._emit();
+  }
+
+  /**
+   * Move a tracked issue between open and resolved.
+   *
+   * Nothing is recorded when there is no workflow step to record: the model
+   * returns the SAME object for an annotation that is not an issue and for one
+   * already in `status`, so the undo stack does not collect steps that changed
+   * nothing and `updatedAt` does not drift on a no-op click.
+   */
+  setIssueStatus(id: string, status: IssueStatus): void {
+    const i = this._annotations.findIndex((a) => a.id === id);
+    if (i < 0) return;
+    const next = applyIssueStatus(this._annotations[i], status);
+    if (next === this._annotations[i]) return;
+    this._snapshot();
+    this._annotations[i] = next;
     this._sync();
     this._emit();
   }
@@ -385,6 +424,23 @@ export class AnnotationController {
     this._editor.element.remove();
     this._hint.remove();
     this._draw.dispose();
+  }
+
+  /**
+   * Attach or replace the inspection workflow on an annotation, through the
+   * model's `attachIssue` so the category follows the workflow and the anchor,
+   * note, camera view and ownership are carried through untouched.
+   *
+   * Takes no undo snapshot of its own. Both call sites run inside one editor
+   * Save that has already banked one (`add` on create, `update` on edit), and a
+   * second snapshot would make a single Save take two undos to reverse.
+   */
+  private _applyIssue(id: string, input: IssueInput): void {
+    const i = this._annotations.findIndex((a) => a.id === id);
+    if (i < 0) return;
+    this._annotations[i] = attachIssue(this._annotations[i], input);
+    this._sync();
+    this._emit();
   }
 
   /** Push the current list onto the undo stack; a fresh edit forks history. */
