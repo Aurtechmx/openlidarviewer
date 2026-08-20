@@ -194,7 +194,7 @@ function harness(opts: HarnessOptions = {}) {
       setActive: calls.setActive,
       get activeId(): string | null { return activeId; },
     } as unknown as OpenScanDeps['scans'],
-    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: calls.ensureStoresWired },
+    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: calls.ensureStoresWired, stableIdFor: vi.fn(() => null) },
     inspector,
     exportPanel: {
       setImageExportEnabled: vi.fn(),

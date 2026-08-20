@@ -121,7 +121,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     stage: { hideEmptyState: vi.fn() },
     closeStreaming: calls.closeStreaming,
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
-    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn() },
+    layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn(), stableIdFor: vi.fn(() => null) },
     inspector: {} as unknown as OpenScanDeps['inspector'],
     exportPanel: { setImageExportEnabled: () => {}, setImageExportAvailability: () => {}, setStreamingMode: () => {} } as unknown as OpenScanDeps['exportPanel'],
     inspectorCards: {} as unknown as OpenScanDeps['inspectorCards'],

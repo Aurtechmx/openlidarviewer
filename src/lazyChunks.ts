@@ -76,6 +76,14 @@ export const loadLayerHealth = () => import('./app/layerHealth');
 /** The health card component itself — same reasoning, same boundary. */
 export const loadLayerHealthCard = () => import('./ui/LayerHealthCard');
 
+/**
+ * Load the Layers panel's group rows, with the group model behind them.
+ * Grouping is opt-in and there is no default group, so a session that never
+ * creates one never loads this. The first "New group" click and a session
+ * carrying an arrangement are the two things that pull it in.
+ */
+export const loadLayerGroupsPanel = () => import('./ui/LayerGroupsPanel');
+
 /** Load the streaming point-cloud module (COPC octree + IO). */
 export const loadStreamingPointCloud = () =>
   import('./render/streaming/StreamingPointCloud');
