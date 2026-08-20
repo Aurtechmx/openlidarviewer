@@ -716,18 +716,21 @@ claims:
     algorithm: Two-metric threshold comparison (density + internal RMSE)
     algorithmVersion: v0.4.x
     claim: "Comparison of density + internal RMSE against named/versioned thresholds — NOT a quality-level compliance determination."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*qualityLevel*.test.ts, tests/verticalAccuracy.test.ts]
+    supportingTests: [tests/qualityLevelOracle.test.ts, tests/demAccuracyStandards.test.ts, tests/verticalAccuracy.test.ts]
     supportingDatasets: []
     units: [pts-per-sq-m, metres]
     crsDatum: metric
-    assumptions: ["compliance requires independent checkpoints + full standard"]
+    assumptions:
+      - "compliance requires independent checkpoints + full standard"
+      - "both legs of the published table are inclusive: density >= the pts/m2 floor, RMSEz <= the metre ceiling"
+      - "the level reported is the strongest row a (density, RMSEz) pair clears; a pair clearing no row is below-QL3, and an unusable density or RMSEz is unknown"
     failureModes: ["misread as compliance"]
     exportAllowed: true
     userLabel: "Two-metric threshold comparison (not a compliance determination)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
     approvedClaim: "Density + internal RMSE compared to stated thresholds."
     prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
@@ -735,7 +738,8 @@ claims:
       supported: []
       unsupported:
         - "Any USGS or ASPRS quality-level compliance determination, which needs independent checkpoints and the full standard."
-        - "The thresholds themselves, which are quoted from a named and versioned source rather than validated here."
+        - "The published thresholds themselves, which are quoted from a named and versioned source; the tests check the transcription and the comparison, not the specification."
+        - "Nominal pulse spacing and the rest of the specification's collection requirements, which are not checked at all."
         - "Real terrain, since the internal RMSE it compares is itself an internal diagnostic."
 
   - claimId: CONFIDENCE-OVERLAY
