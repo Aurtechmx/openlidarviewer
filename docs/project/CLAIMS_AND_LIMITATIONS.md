@@ -1,8 +1,8 @@
 # Claims and limitations policy
 
 This is the canonical reference for what OpenLiDARViewer publicly claims and
-what it explicitly does not. Every other document — README, release notes,
-validation reports, exported PDFs, the website — should reference these
+what it explicitly does not. Every other document, README, release notes,
+validation reports, exported PDFs, the website, should reference these
 definitions rather than restate them. One authoritative source is the
 strongest protection against contradictory or overly broad claims appearing
 as the project evolves.
@@ -15,28 +15,28 @@ other way.
 
 The project uses these words with these meanings, and no others.
 
-**Validated** — compared against a named reference under recorded conditions,
+**Validated**, compared against a named reference under recorded conditions,
 with the tolerance, fixture, and result written down. "The slope raster is
 validated against GDAL 3.13.1 on the analytic fixture" is a complete claim;
 "validated" without a reference is not a claim this project makes.
 
-**Verified** — a fact the software established mechanically and records: a
+**Verified**, a fact the software established mechanically and records: a
 checksum matched, a frame compatibility ladder was climbed, a gate exited 0.
 Verification names its mechanism.
 
-**Agreement** — the measured difference between this implementation and a
+**Agreement**, the measured difference between this implementation and a
 reference. The project reports agreement figures (maximum difference, RMSE)
 rather than accuracy figures: agreement against a named reference is
 checkable by anyone; accuracy is a claim about the world.
 
-**Deterministic** — the same input on the same toolchain produces the same
+**Deterministic**, the same input on the same toolchain produces the same
 output. This is a property the project tests for, not an accuracy statement.
 
-**Numerically stable** — an implementation that does not lose precision to
+**Numerically stable**, an implementation that does not lose precision to
 its own arithmetic (origin-relative coordinates, Float64 transforms). Says
 nothing about how well the data represents the ground.
 
-**Evidence level (E0-E6)** — the ladder recorded in
+**Evidence level (E0 to E6)**, the ladder recorded in
 `docs/validation/claim-register.yaml`. E3 is synthetic known-truth against our
 own implementation; E4 is cross-implementation agreement with an independent
 reference; E5 is field validation against ground truth. A claim's level is
@@ -44,22 +44,22 @@ machine-checked by `lint:claim-register` and changes only with new evidence.
 
 ## Words this project does not use as claims
 
-**Accurate / accuracy** — never claimed. The word appears only when naming an
+**Accurate / accuracy**, never claimed. The word appears only when naming an
 external standard ("ASPRS accuracy standards", NVA, VVA) or when stating what
 is NOT claimed. Accuracy is nearly impossible to defend; agreement against a
 named reference is what we publish.
 
-**Survey-grade** — never claimed, anywhere, for anything. It appears only in
+**Survey-grade**, never claimed, anywhere, for anything. It appears only in
 negations ("not survey-grade unless validated against ground-truth control"),
 which every terrain export carries.
 
-**Professional / certified / precise / exact** — not used as quality claims.
+**Professional / certified / precise / exact**, not used as quality claims.
 A report is "technical", a workflow is described by what it does, precision
 is stated as a measured figure with units, and exactness is claimed only for
 discrete properties a test pins (byte-identity, exact inverses).
 
-**Marketing superlatives** — "best", "industry-leading", "most accurate",
-"state-of-the-art", "world-class", "ultimate" — never, in any document.
+**Marketing superlatives**, "best", "industry-leading", "most accurate",
+"state-of-the-art", "world-class", "ultimate", never, in any document.
 `lint:claims-language` fails the gate if one appears.
 
 ## What the software currently claims
@@ -68,9 +68,9 @@ discrete properties a test pins (byte-identity, exact inverses).
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
-  and aspect, 1.0 level on the 0–255 scale for hillshade). This validates those
+  and aspect, 1.0 level on the 0 to 255 scale for hillshade). This validates those
   algorithms on one fixture. Aspect is compared as a circular quantity, and only where the
-  surface is steeper than 2° — a level cell has no aspect to compare. The
+  surface is steeper than 2°, a level cell has no aspect to compare. The
   hillshade tolerance is weaker than it looks: GDAL encodes the shared
   intensity as `1 + 254·h` where we write `255·h`, and that fixed offset
   consumes most of the one-level budget on its own, so the hillshade claim
@@ -136,6 +136,6 @@ discrete properties a test pins (byte-identity, exact inverses).
 ## How other documents should use this file
 
 State the specific claim with its evidence ("agrees with GDAL 3.13.1 within
-0.5° on the analytic fixture — see CLAIMS_AND_LIMITATIONS.md for what
+0.5° on the analytic fixture, see CLAIMS_AND_LIMITATIONS.md for what
 'validated' means here") and link here for the definitions. Do not restate
 the vocabulary; restatements drift.

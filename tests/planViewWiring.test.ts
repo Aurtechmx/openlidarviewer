@@ -588,3 +588,38 @@ describe('the NavBar callbacks', () => {
     expect(toasts).toEqual([]);
   });
 });
+
+describe('reset cancels work the scene will not be there for', () => {
+  it('drops a deferred mode change owed by a leave that already completed', () => {
+    const v = new FakeViewport();
+    const { plan, settle } = controller(v);
+
+    plan.toggle();
+    settle();
+    v.calls.length = 0;
+
+    // Leaving goes INACTIVE immediately and leaves a deferred setMode owed.
+    plan.toggle();
+    expect(plan.active).toBe(false);
+
+    // The scan closes before the camera tween lands.
+    plan.reset();
+    settle();
+
+    // Nothing may steer a viewer whose scan just went away.
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+  });
+
+  it('still cancels when reset runs while plan is active', () => {
+    const v = new FakeViewport();
+    const { plan, settle } = controller(v);
+
+    plan.toggle();
+    v.calls.length = 0;
+    plan.reset();
+    settle();
+
+    expect(v.calls.filter((c) => c.startsWith('mode:'))).toEqual([]);
+    expect(plan.active).toBe(false);
+  });
+});

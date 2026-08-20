@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   LayerGroupStore,
   bulkAppearanceIntent,
@@ -419,5 +419,27 @@ describe('bulk appearance safety', () => {
     const plan = bulkAppearanceIntent(group(['c1', 'c2']), members, 'cross-layer');
     expect(plan.applyTo).toEqual(['c1', 'c2']);
     expect(plan.reason).toBe('');
+  });
+});
+
+describe('the no-WebCrypto id fallback', () => {
+  it('does not collide between two sessions that share a millisecond', async () => {
+    const realNow = Date.now;
+    // No randomUUID and no getRandomValues: the weakest host this runs on.
+    vi.stubGlobal('crypto', {});
+    // A frozen clock is the collision case: the session counter also restarts
+    // at zero in a fresh process, so time plus counter alone repeat exactly.
+    Date.now = () => 1_700_000_000_000;
+    try {
+      vi.resetModules();
+      const first = (await import('../src/model/layerGroups')).newGroupId();
+      vi.resetModules();
+      const second = (await import('../src/model/layerGroups')).newGroupId();
+      expect(second).not.toBe(first);
+    } finally {
+      Date.now = realNow;
+      vi.unstubAllGlobals();
+      vi.resetModules();
+    }
   });
 });
