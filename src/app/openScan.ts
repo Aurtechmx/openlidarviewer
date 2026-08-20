@@ -131,7 +131,7 @@ export interface OpenScanDeps {
    * stores are wired so new measurements/annotations record which layer they
    * belong to once more than one is open.
    */
-  layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired'>;
+  layerIdentity: Pick<LayerIdentityService, 'bindOnLoad' | 'ensureStoresWired' | 'stableIdFor'>;
   /** The Inspector panel. */
   inspector: Inspector;
   /** The Output panel — owns the image-export / report gating. */
@@ -403,7 +403,10 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // count DETAIL renders as "loaded / total"), not the strided display
       // subset — consistent with the Scan Report's file-scale Point Count.
       const layerCount = layerChipCount(result.originalPointCount, result.cloud.pointCount);
-      deps.inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null);
+      // The stable id rides along so the Layers panel can persist a group's
+      // membership under an identity that still names this scan next session;
+      // a layer the registry refused a binding carries null and is left out.
+      deps.inspector.addCloud(id, result.cloud.name, layerCount, result.cloud.metadata?.crs?.name ?? null, deps.layerIdentity.stableIdFor(id));
       deps.setLayerVisible(id, true);
       deps.layerService.refreshCrsFlags();
       deps.inspector.setColorModes(availableModes(result.cloud), mode);

@@ -77,6 +77,14 @@ export const loadLayerHealth = () => import('./app/layerHealth');
 export const loadLayerHealthCard = () => import('./ui/LayerHealthCard');
 
 /**
+ * Load the Layers panel's group rows, with the group model behind them.
+ * Grouping is opt-in and there is no default group, so a session that never
+ * creates one never loads this. The first "New group" click and a session
+ * carrying an arrangement are the two things that pull it in.
+ */
+export const loadLayerGroupsPanel = () => import('./ui/LayerGroupsPanel');
+
+/**
  * Load the Speed ↔ Quality panel — the popover markup behind the header's
  * performance button — on the first click, never in the startup shell.
  *

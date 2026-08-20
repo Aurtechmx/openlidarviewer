@@ -81,6 +81,10 @@ import type { WorkOwnership } from '../model/workOwnership';
  * still gets every annotation. Bumping would instead make every file this app
  * writes unreadable to a v8 reader for a field that reader never needed.
  *
+ * The Layers panel's groups (`layerGroups` — name, collapsed flag, and member
+ * STABLE layer ids) are additive within v8 on the same terms, and are emitted
+ * only when a group exists.
+ *
  * Older v1..v7 files parse with no loss: the new optional fields just
  * read as undefined, and the Viewer falls back to its current state. A v7
  * file's work carries no owner, and `io/sessionOwnership.ts` attributes it to
@@ -141,6 +145,28 @@ export interface SessionPointFilters {
   elevation?: readonly [number, number];
   /** Intensity window in raw intensity units. */
   intensity?: readonly [number, number];
+}
+
+/**
+ * One layer group as a session records it.
+ *
+ * Membership is stored by STABLE layer id — the source-fingerprint identity
+ * `model/layerIdentity.ts` mints and `owner` already uses — never by the
+ * viewer's `cloud_N` handle. A viewer id is a slot number: reopening the same
+ * project in another order would hand `cloud_1` to a different file, and the
+ * group would silently restore around the wrong scan. A layer that carries no
+ * proven identity is therefore left out of the written membership rather than
+ * written under an id that means nothing next session.
+ */
+export interface SessionLayerGroup {
+  /** The group's stable id, as minted by `LayerGroupStore`. */
+  id: string;
+  /** Display label. Non-blank; not required to be unique. */
+  name: string;
+  /** Whether the panel drew the group folded shut. Omitted when false. */
+  collapsed?: boolean;
+  /** Member STABLE layer ids, in join order. */
+  memberIds: string[];
 }
 
 /**
@@ -282,6 +308,22 @@ export interface InspectionSession {
    */
   layerName?: string;
   /**
+   * The Layers panel's groups — the named, collapsible containers a user
+   * arranged the loaded scans into, each holding stable layer ids (see
+   * {@link SessionLayerGroup}).
+   *
+   * Additive WITHIN v8, no bump, for the same reason `annotation.issue` needed
+   * none: it adds one optional field, changes the meaning of none, and is
+   * emitted only when at least one group exists, so a session with no groups
+   * keeps its byte-shape exactly and a reader that predates the field ignores
+   * an unknown key and still gets every measurement, annotation and view.
+   *
+   * Tolerantly parsed like the other display fields: a malformed entry is
+   * dropped, never thrown. A lost group costs an arrangement of rows; nothing
+   * about where geometry is read back depends on it.
+   */
+  layerGroups?: SessionLayerGroup[];
+  /**
    * v8. The project frame: the one origin the project's layers map into, plus
    * a record per layer (see `io/sessionFrame.ts`). Present only for a session
    * that actually describes a project frame; absent means the pre-v8 reading
@@ -376,6 +418,11 @@ export function serializeSession(
   if (typeof session.layerName === 'string' && session.layerName !== '') {
     doc.layerName = session.layerName;
   }
+  // Layer groups — through the same sanitiser the reader uses, so this app can
+  // never write an arrangement it would itself drop on the way back in. Only
+  // emitted when a group survives, keeping the no-groups byte-shape.
+  const groups = sanitizeLayerGroups(session.layerGroups);
+  if (groups.length > 0) doc.layerGroups = groups;
   // v8. The project frame, validated here as well as on read, so this app can
   // never write a session it would itself refuse to open.
   if (session.projectFrame) {
@@ -558,6 +605,11 @@ export function parseSession(text: string): InspectionSession {
   // ignored (treated as absent) rather than throwing.
   if (typeof raw.layerId === 'string' && raw.layerId !== '') out.layerId = raw.layerId;
   if (typeof raw.layerName === 'string' && raw.layerName !== '') out.layerName = raw.layerName;
+  // Layer groups — additive within v8, version-independent on read like the
+  // other additive fields, so a file that carries an arrangement is never
+  // stripped by a round trip.
+  const layerGroups = sanitizeLayerGroups(raw.layerGroups);
+  if (layerGroups.length > 0) out.layerGroups = layerGroups;
   // v8. The project frame. Version-independent on read, like the other
   // additive fields, so a file that carries one is never stripped by a round
   // trip. An inconsistent frame THROWS (see `sessionFrame.ts`): it decides
@@ -1026,6 +1078,47 @@ function sanitizeClassFilter(v: unknown): number[] {
     seen.add(e);
   }
   return [...seen].sort((a, b) => a - b);
+}
+
+/**
+ * Normalise the layer-group list, dropping anything malformed rather than
+ * throwing. Both the reader and the writer run it, so a file this app writes is
+ * one it would read back identically.
+ *
+ * Three rules do the work. A group needs an id and a non-blank name, because a
+ * nameless row in the panel cannot be told from its neighbours and an id-less
+ * one cannot be addressed at all. A group id appearing twice keeps its first
+ * occurrence, since handing one id to two groups merges them on import. And
+ * membership is EXCLUSIVE across the whole list, matching `LayerGroupStore`: a
+ * layer already claimed by an earlier group is dropped from every later one, so
+ * a hand-edited file cannot produce two groups issuing contradicting visibility
+ * plans for the same layer.
+ */
+function sanitizeLayerGroups(v: unknown): SessionLayerGroup[] {
+  if (!Array.isArray(v)) return [];
+  const out: SessionLayerGroup[] = [];
+  const groupIds = new Set<string>();
+  const claimed = new Set<string>();
+  for (const entry of v.slice(0, MAX_SESSION_ITEMS)) {
+    if (!isRecord(entry)) continue;
+    const id = typeof entry.id === 'string' ? entry.id : '';
+    const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+    if (id === '' || name === '' || groupIds.has(id)) continue;
+    groupIds.add(id);
+    const memberIds: string[] = [];
+    if (Array.isArray(entry.memberIds)) {
+      for (const member of entry.memberIds.slice(0, MAX_SESSION_ITEMS)) {
+        if (typeof member !== 'string' || member === '' || claimed.has(member)) continue;
+        claimed.add(member);
+        memberIds.push(member);
+      }
+    }
+    const group: SessionLayerGroup = { id, name, memberIds };
+    // Emitted only when folded, so the common expanded case adds no key.
+    if (entry.collapsed === true) group.collapsed = true;
+    out.push(group);
+  }
+  return out;
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
