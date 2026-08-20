@@ -1,6 +1,6 @@
 # Known limitations: OpenLiDARViewer v0.6.6
 
-This cycle promotes five products to E4: the DSM, DTM and CHM surface grids against PDAL 2.10.2, the corridor section profile against OGR/SpatiaLite and R, and the E57 reader against PDAL `readers.e57`. It also ships new interactive surfaces, none of which carries an evidence claim of its own. The limits below are the v0.6.5 limits with the evidence-ceiling section updated, plus the scope those cross-checks do and do not cover.
+This cycle promotes the DSM, DTM and CHM surface grids to E4 against PDAL 2.10.2, the corridor section profile against OGR/SpatiaLite and R, and the E57 reader against PDAL `readers.e57`, bringing the register to 12 products at E4. It also ships new interactive surfaces, none of which carries an evidence claim of its own. The limits below are the v0.6.5 limits with the evidence-ceiling section updated, plus the scope those cross-checks do and do not cover.
 
 ## The two monoliths are still monoliths
 
