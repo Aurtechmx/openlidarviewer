@@ -17,7 +17,7 @@ import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
 import { ThemeToggle } from './ui/ThemeToggle';
-import { mountHeaderControls } from './ui/headerControls';
+import { mountHeaderControls, mountQualityControl } from './ui/headerControls';
 import { ToolDock } from './ui/toolDock';
 import { revealStreamingScanChrome } from './ui/streamingScanReveal';
 import { createCompassController } from './ui/compassController';
@@ -3576,9 +3576,9 @@ void viewerLoaded.then(() => {
     // the (extremely rare) backend swap mid-session.
     try { dock.setBackend(viewer.activeBackend()); }
     catch (err) { if (debug) console.warn('[dock] setBackend post-ready threw', err); }
-    // Degraded defaults for a weak device come first; a saved user
+    // The performance control's position comes first; a saved user
     // preference, applied immediately after, still wins.
-    applyDeviceDefaults();
+    mountPerformanceControl();
     applyPrefs();
     // If the browser advertised WebGPU but the renderer settled on the
     // WebGL 2 fallback, surface a one-shot console note so a user who
@@ -4556,16 +4556,16 @@ function persistPrefs(): void {
   });
 }
 
-/**
- * Apply degraded rendering defaults on a low-capability device — Eye Dome
- * Lighting and antialiasing off — so a weak GPU stays interactive. Runs before
- * `applyPrefs`, so an explicit saved preference still takes precedence.
- */
-function applyDeviceDefaults(): void {
-  if (deviceCapsValue.tier === 'low') {
-    viewer.setEdlEnabled(false);
-    viewer.setAntialiasing(false);
-  }
+/** Mount the Speed ↔ Quality performance control and apply its stored position.
+ *  Runs before `applyPrefs`, so a saved Eye Dome Lighting / antialiasing
+ *  preference still wins; the control writes prefs back on every user change. */
+function mountPerformanceControl(): void {
+  mountQualityControl(stage, {
+    getViewer: () => viewer, getStreamingQuality: () => streamingQuality,
+    device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
+    onStreamingQuality: (q) => { streamingQuality = q; streamingPanel.setQuality(q); },
+    onUserChange: () => { syncInspectorRendering(); persistPrefs(); },
+  });
 }
 
 /** Apply preferences saved in a previous session; each key applies only if it was stored. */

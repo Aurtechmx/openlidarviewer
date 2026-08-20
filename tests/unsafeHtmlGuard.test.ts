@@ -128,6 +128,10 @@ const ALLOWLIST: readonly string[] = [
   // Back-to-centre glyph: a module-level literal SVG string with no
   // interpolation and no parameter, same shape as the entries above.
   'src/ui/RecenterButton.ts::ICON_RECENTER',
+  // Speed to Quality header button glyph: `ICON_QUALITY`, a module-level
+  // literal SVG string (a gauge arc and needle) with no interpolation and no
+  // parameter, same shape as the two entries above it.
+  'src/ui/qualityControl.ts::ICON_QUALITY',
   // P11 left-rail toggle: `chevron` is a hardcoded, literal static SVG string
   // (a chevron path) defined inline in panelChrome.ts — no user data, same
   // sanctioned pattern as the other icon SVGs above.

@@ -72,3 +72,68 @@
 }
 .olv-github:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
 
+/* ── Speed ↔ Quality performance control ────────────────────────────────────
+   A header ghost button (same vocabulary as .olv-recenter) plus a panel
+   anchored under it. The wrapper is the positioning context; the panel is
+   `hidden` when closed, so it is out of the accessibility tree as well as out
+   of sight. Kept above the panels (z 10+) so it is never clipped by the rails. */
+.olv-quality { position: relative; display: inline-flex; }
+.olv-quality-button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  color: var(--text-dim); background: transparent;
+  border: none; border-radius: var(--radius-sm); padding: 0;
+  cursor: pointer;
+}
+.olv-quality-button svg { width: 18px; height: 18px; }
+.olv-quality-button:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.olv-quality-button-open { color: var(--accent); background: var(--accent-soft); }
+.olv-quality-pop {
+  position: absolute; top: calc(100% + var(--space-md)); right: 0;
+  z-index: 20;
+  width: 280px; max-width: calc(100vw - var(--space-4xl));
+  display: flex; flex-direction: column; gap: var(--space-md);
+  padding: var(--space-xl);
+  background: var(--panel-raised);
+  border: 0.5px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-raised);
+  font-size: var(--text-xs); color: var(--text-dim);
+  text-align: left;
+}
+.olv-quality-pop[hidden] { display: none; }
+.olv-quality-title {
+  font-size: var(--text-sm); font-weight: 600; color: var(--text);
+}
+/* Speed — slider — Quality, on one line, with the ends as fixed captions. */
+.olv-quality-track { display: flex; align-items: center; gap: var(--space-md); }
+.olv-quality-track .olv-slider { flex: 1 1 auto; min-width: 0; }
+.olv-quality-end { flex: 0 0 auto; color: var(--text-faint); }
+.olv-quality-position { font-weight: 600; color: var(--text); }
+.olv-quality-check {
+  display: flex; align-items: center; gap: var(--space-sm);
+  cursor: pointer;
+}
+.olv-quality-check input { accent-color: var(--accent); }
+.olv-quality-summary, .olv-quality-advanced {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+}
+.olv-quality-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-md);
+  font-variant-numeric: tabular-nums;
+}
+.olv-quality-row-label { color: var(--text-faint); }
+.olv-quality-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.olv-quality-follow {
+  align-self: flex-start;
+  color: var(--text-dim); background: transparent;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--text-xs); cursor: pointer;
+}
+.olv-quality-follow:hover:not(:disabled) { color: var(--text); border-color: var(--hairline-strong); }
+.olv-quality-follow:disabled { opacity: 0.4; cursor: default; }
+/* The honesty line. Small, but it is the reason the control can exist at all:
+   nothing here reaches a computed quantity. */
+.olv-quality-note { margin: 0; color: var(--text-faint); line-height: 1.45; }
