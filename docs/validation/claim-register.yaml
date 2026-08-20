@@ -825,53 +825,57 @@ claims:
     algorithm: Integrated change over the difference grid
     algorithmVersion: v0.5.x
     claim: "Gain / loss / net volume from the change raster."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/compareDtms*.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/compareDtms*.test.ts, tests/changeVolumeAnalyticalOracle.test.ts]
+    supportingDatasets: [analytic surface pairs]
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
-    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified"]
-    failureModes: ["propagates registration + surface error"]
+    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "volume is a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design"]
+    failureModes: ["propagates registration + surface error", "quadrature defect on a curved surface, second order in cell size"]
     exportAllowed: true
-    userLabel: "Exploratory change volume"
+    userLabel: "Analytically-verified change volume (exploratory)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Integrated change volume with exploratory uncertainty."
+    approvedClaim: "Integrated change volume agreeing with closed-form integrals over analytic surface pairs; uncertainty remains exploratory."
     prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
     scope:
       supported: []
       unsupported:
-        - "Any validated change volume."
+        - "Any validated change volume. The closed-form fixtures verify the integration, not the accuracy of the two surfaces fed into it."
         - "Spatially correlated uncertainty, which is not quantified."
         - "Anything the change raster underneath it does not support."
+        - "Real epoch pairs, and the DTM build that produces them. The oracle enters at the grid pair, so nothing here bounds ground-classification or interpolation error."
+        - "The sub-LoD mass the threshold removes. Its size is stated in closed form on the fixtures, not measured on any survey."
 
   - claimId: UNCERTAINTY-BAND
     product: Uncertainty band (on deltas / volumes)
     algorithm: Model-based propagation (Monte Carlo GUM budget pending — Phases 8/10)
     algorithmVersion: v0.5.x
     claim: "Model-based uncertainty band; not all sources included."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*uncertainty*.test.ts]
+    supportingTests: [tests/*uncertainty*.test.ts, tests/uncertaintyBandScalingLaws.test.ts]
     supportingDatasets: []
     units: [metres, cubic-metres]
     crsDatum: metric
-    assumptions: ["spatial correlation and several GUM terms currently omitted"]
-    failureModes: ["understatement if omitted terms are large"]
+    assumptions: ["spatial correlation and several GUM terms currently omitted", "the random term assumes per-cell errors are independent, which is what makes it fall as the square root of the cell count"]
+    failureModes: ["understatement if omitted terms are large", "an empty error budget, which is reported as unquantified rather than as a zero band"]
     exportAllowed: true
-    userLabel: "Exploratory model-based uncertainty (omitted terms listed)"
+    userLabel: "Analytically-verified propagation model (exploratory; omitted terms listed)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Model-based band over the included sources."
+    approvedClaim: "Model-based band over the included sources, obeying the scaling laws the documented model implies."
     prohibitedClaim: ["complete uncertainty budget", "validated coverage interval"]
     scope:
       supported: []
       unsupported:
         - "A complete uncertainty budget. Several GUM terms and spatial correlation are omitted, and the omitted terms are listed beside the band."
         - "Any coverage interval that has been validated against outcomes."
+        - "The band's coverage. The scaling laws show the propagation model is implemented as documented; whether a 1σ band contains the truth as often as 1σ should is a separate question this evidence does not touch."
+        - "The inputs. A per-cell σ and a registration RMSE are taken as given, and a band is only ever as honest as the two numbers handed to it."
 
   # ── Provenance / integrity ──────────────────────────────────────────────────
   - claimId: REPORT-DIGEST
