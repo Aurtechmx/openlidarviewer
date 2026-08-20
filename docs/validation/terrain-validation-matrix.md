@@ -26,10 +26,10 @@ The **Status** column has been replaced by an **evidence level** per
 [`EVIDENCE_MODEL.md`](./EVIDENCE_MODEL.md) and the machine-readable
 [`claim-register.yaml`](./claim-register.yaml). "Production" is no longer used as
 a scientific-validation status — it conflated "the code works" with "the science
-is validated". **Slope, aspect, hillshade, contours, the DSM, the DTM and the CHM are the terrain products at E4+** (slope, aspect and hillshade each
+is validated". **Slope, aspect, hillshade, contours, the DSM, the DTM, the CHM and the cross-section profile are the products at E4+ in this matrix** (slope, aspect and hillshade each
 independently cross-implemented against GDAL 3.13.1 on the same analytic fixture, contours against GDAL `gdal_contour`
-on a frozen analytic tilted plane, and the DSM, DTM and CHM grids against PDAL 2.10.2 `writers.gdal` on seeded synthetic clouds where the
-reference radius is below half a cell, covering the cell gridding rather than ground classification); every other product tops out at E3 synthetic known-truth,
+on a frozen analytic tilted plane, the DSM, DTM and CHM grids against PDAL 2.10.2 `writers.gdal` on seeded synthetic clouds where the
+reference radius is below half a cell, covering the cell gridding rather than ground classification, and the profile against OGR/SpatiaLite chainage reduced by R's type-7 quantile); every other product tops out at E3 synthetic known-truth,
 with analytic checks E2 and interop/unit checks E1. Held-out RMSE is an INTERNAL diagnostic (points withheld from the same
 scan), not independent checkpoint accuracy — optimistic relative to a
 spatially-blocked or field checkpoint (research-hardening Phases 4–5).
@@ -52,7 +52,7 @@ spatially-blocked or field checkpoint (research-hardening Phases 4–5).
 | DEM export — Esri ASCII Grid | Interop check: header fields, north-row-first ordering, NODATA for empty cells | `tests/demExport.test.ts` | E2 Interop-verified |
 | DEM export — GeoTIFF | Interop check: valid little-endian TIFF, expected raster + geo tags, north-row-first, NODATA; EPSG propagated into every GeoTIFF; full package (DTM/DSM/CHM `.asc` + `.tif` + `.prj` + README) bundled | `tests/demExport.test.ts` | E2 Interop-verified |
 | CRS / datum warnings (detection + propagation only) | Propagation check: known CRS+datum emit no warning and carry a GeoJSON `crs` member; unknown CRS/datum surface the exact pinned warning and propagate into export metadata; vertical-datum detection, compound-CRS WKT, LAS GeoKey fidelity, `.prj` sidecar. **Detection, unit conversion, recentering, metadata propagation, warnings only — no full reprojection or vertical-datum transformation.** | `tests/crsDatumWarnings.test.ts`, `tests/crsVerticalHardening.test.ts` | E1 Unit verified |
-| Profiles (cross-section) | Known-truth fixture: sampled (distance, height) polyline asserted against the analytic surface; height sampler, civil stats, stationing, and chart bounds covered | `tests/profileAnalyticalFixtures.test.ts`, `tests/profileSampler.test.ts`, `tests/civilProfileStats.test.ts`, `tests/profileStations.test.ts` | E2 Analytically verified |
+| Profiles (cross-section) | Known-truth fixture: sampled (distance, height) polyline asserted against the analytic surface; height sampler, civil stats, stationing, and chart bounds covered. PLUS cross-implementation against a corridor reference assembled from OGR/SpatiaLite 5.1.0 (`ST_Line_Locate_Point`, `ST_Distance`) and R 4.4.1 `quantile(type = 7)` on two committed clouds: OLV agrees over 751 stations to a max Δ of 3.6×10⁻¹⁵ m within the preregistered 1×10⁻⁶ m tolerance, with per-station corridor counts matching exactly, and both sides reproduce the ramp fixture's closed form. Synthetic clouds that hold every point clear of a bin boundary and of the corridor edge, so the tie-breaking there is not covered | `tests/profileAnalyticalFixtures.test.ts`, `tests/profileSampler.test.ts`, `tests/civilProfileStats.test.ts`, `tests/profileStations.test.ts`, `tests/profileCrossCheck.test.ts` | **E4 Cross-implementation validated (OGR/SpatiaLite + R), corridor sampling on these clouds only** |
 | Measurements (distance / area / height / angle / slope / volume) | Analytic check: closed-form geometry (length, planar + horizontal area, angle at vertex, slope, volume) on known inputs | `tests/measureGeometry.test.ts`, `tests/measurementChains.test.ts` | E2 Analytically verified — visual-inspection grade, not survey-grade |
 
 ## What the matrix does and does not assert
