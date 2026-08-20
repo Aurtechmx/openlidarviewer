@@ -174,6 +174,28 @@ const TOOL_BINDING: Readonly<Record<ToolId, ToolBinding>> = {
 /** Every tool the model reasons about, in declaration order. */
 export const ALL_TOOLS: readonly ToolId[] = Object.keys(TOOL_BINDING) as ToolId[];
 
+/**
+ * The measurement kind a tool drives, or `null` when the tool is a derived
+ * product. Reads {@link TOOL_BINDING}, so a surface that has to act on a tool —
+ * arm the measurement the user was refused, say — asks the binding instead of
+ * keeping its own tool→kind table beside this one.
+ */
+export function toolMeasurementKind(tool: ToolId): MeasurementKind | null {
+  const binding = TOOL_BINDING[tool];
+  return binding.family === 'measure' ? binding.kind : null;
+}
+
+/**
+ * The derived product a tool makes, or `null` when the tool is an interactive
+ * measurement. The counterpart of {@link toolMeasurementKind}: between them a
+ * surface can file every tool under the authority that answered for it without
+ * keeping a second tool table of its own.
+ */
+export function toolProduct(tool: ToolId): ProductId | null {
+  const binding = TOOL_BINDING[tool];
+  return binding.family === 'product' ? binding.product : null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Remediation catalogue
 // ─────────────────────────────────────────────────────────────────────────────

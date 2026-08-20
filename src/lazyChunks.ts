@@ -48,6 +48,14 @@ export const loadViewer = () => import('./render/Viewer');
 export const loadContourStudioMount = () => import('./ui/contourStudioMount');
 
 /**
+ * Load the tool preflight — the model that says what limits a tool and what
+ * would lift it, plus its live-input builder and its action bindings — on the
+ * first Process Studio refresh that has a scan to reason about. Nothing can be
+ * limited before a scan opens, so none of it belongs in the startup shell.
+ */
+export const loadToolPreflight = () => import('./app/toolPreflightRuntime');
+
+/**
  * Load the Contour Studio export ORCHESTRATION (the permit gate + dispatch) on
  * the first export click. The permit resolver pulls the evidence registry, so
  * keeping it here — not eager in AnalysePanel — holds that whole chain out of the
