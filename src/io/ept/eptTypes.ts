@@ -149,12 +149,11 @@ export function eptStringToKey(s: string): EptKey | null {
   const y = Number(m[3]);
   const z = Number(m[4]);
   // The regex admits digits of any length, and a long enough run of them turns
-  // into an imprecise Number. Depth is also bounded by what an octree address
-  // can mean: at depth d each axis has 2^d cells, so a coordinate at or above
-  // that names no node.
+  // into an imprecise Number. Depth is bounded so a hostile address cannot ask
+  // for 2**d work. Whether a coordinate is in range FOR that depth is a
+  // question about the tree, not about the string, so `parseHierarchyFile`
+  // asks it where an address is accepted as a node.
   if (![d, x, y, z].every((n) => Number.isSafeInteger(n) && n >= 0)) return null;
   if (d > EPT_MAX_DEPTH) return null;
-  const span = 2 ** d;
-  if (x >= span || y >= span || z >= span) return null;
   return { d, x, y, z };
 }

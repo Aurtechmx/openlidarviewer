@@ -98,18 +98,20 @@ describe('EPT hierarchy perimeter', () => {
 });
 
 describe('EPT octree addresses', () => {
-  it('accepts an address inside its depth', () => {
+  it('parses a well-formed address', () => {
     expect(eptStringToKey('2-3-3-3')).toEqual({ d: 2, x: 3, y: 3, z: 3 });
-  });
-
-  it('refuses a coordinate outside the cells that depth has', () => {
-    // At depth 2 each axis has 4 cells, so index 4 names nothing.
-    expect(eptStringToKey('2-4-0-0')).toBeNull();
-    expect(eptStringToKey('0-1-0-0')).toBeNull();
   });
 
   it('refuses a depth beyond the bound and digits beyond precision', () => {
     expect(eptStringToKey('99-0-0-0')).toBeNull();
     expect(eptStringToKey('1-99999999999999999999-0-0')).toBeNull();
+  });
+
+  it('leaves the coordinate-versus-depth question to the hierarchy', () => {
+    // The string is well formed; whether depth 2 HAS a cell 4 is a question
+    // about the tree, and parseHierarchyFile is where an address is accepted.
+    expect(eptStringToKey('2-4-0-0')).toEqual({ d: 2, x: 4, y: 0, z: 0 });
+    expect(() => parseHierarchyFile(JSON.stringify({ '2-4-0-0': 5 }))).toThrow(/outside the 4 cells/);
+    expect(() => parseHierarchyFile(JSON.stringify({ '0-1-0-0': 5 }))).toThrow(/outside the 1 cells/);
   });
 });

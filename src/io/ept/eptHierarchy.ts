@@ -70,7 +70,13 @@ export function parseHierarchyFile(text: string): ParsedHierarchyFile {
     // A hierarchy value is either the -1 link sentinel or a whole point count.
     // Accepting any finite number let 0.5 be counted as a node and -2 fall
     // through both branches, silently ignored rather than refused.
-    if (typeof val !== 'number' || !(val === -1 || (Number.isSafeInteger(val) && val >= 0))) {
+    if (typeof val !== 'number' || !Number.isFinite(val)) {
+      throw new Error(`EPT hierarchy entry "${keyStr}" has non-numeric value.`);
+    }
+    // A hierarchy value is either the -1 link sentinel or a whole point count.
+    // Accepting any finite number let 0.5 be counted as a node and -2 fall
+    // through both branches, silently ignored rather than refused.
+    if (!(val === -1 || (Number.isSafeInteger(val) && val >= 0))) {
       throw new Error(
         `EPT hierarchy entry "${keyStr}" must be -1 or a non-negative whole point count, got ${String(val)}.`,
       );
@@ -78,6 +84,12 @@ export function parseHierarchyFile(text: string): ParsedHierarchyFile {
     const key = eptStringToKey(keyStr);
     if (!key) {
       throw new Error(`EPT hierarchy entry "${keyStr}" is not a valid D-X-Y-Z address.`);
+    }
+    // At depth d each axis has 2**d cells, so an index at or above that names
+    // no node in this tree however well-formed the string was.
+    const span = 2 ** key.d;
+    if (key.x >= span || key.y >= span || key.z >= span) {
+      throw new Error(`EPT hierarchy entry "${keyStr}" is outside the ${span} cells depth ${key.d} has.`);
     }
     const entry: EptHierarchyEntry = { key, value: val };
     entries.push(entry);
