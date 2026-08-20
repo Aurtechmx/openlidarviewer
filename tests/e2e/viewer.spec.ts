@@ -69,8 +69,14 @@ test('opens a dropped E57 scan', async ({ page }) => {
 
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-layer')).toHaveCount(1);
+  // The report rows are analysis-module output, so they land AFTER the attach
+  // the line above waits on, on the same heaviest-decode path this test already
+  // calls `test.slow()` for. A 5 s budget here was the tightest in the test and
+  // sat on its slowest step, which is how a loaded runner failed it twice in one
+  // run while every other job on the same commit passed. Matched to the budget
+  // the attach already gets.
   await expect
-    .poll(() => page.locator('.olv-report-row').count(), { timeout: 5_000 })
+    .poll(() => page.locator('.olv-report-row').count(), { timeout: 20_000 })
     .toBeGreaterThan(0);
 });
 
