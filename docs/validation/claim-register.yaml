@@ -378,7 +378,7 @@ claims:
     units: [class-codes]
     crsDatum: "Metric grid; unit-aware cell floors."
     assumptions: ["implements a SUBSET of SMRF stages — see output metadata for which"]
-    failureModes: ["steep + sparse terrain", "dense low vegetation", "buildings vs ground on complex roofs", "derived-ground vertical thresholds are in source-Z units, so metre vs foot scans of the same terrain can differ (review-grade; physical normalization scheduled for v0.6.6). Trusted ASPRS class-2 ground bypasses this path."]
+    failureModes: ["steep + sparse terrain", "dense low vegetation", "buildings vs ground on complex roofs", "derived ground is unmeasured against surveyed ground on steep sparse terrain, dense low vegetation and complex roofs (review-grade). Trusted ASPRS class-2 ground bypasses this path."]
     exportAllowed: true
     userLabel: "SMRF-core progressive morphological ground filter"
     softwareStatus: shipping
