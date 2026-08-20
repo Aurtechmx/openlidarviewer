@@ -197,8 +197,13 @@ export function pendingCrossCheck(): CrossCheckReport {
 export interface ReferenceSlot {
   /** Matches a `claimId` in the claim register. */
   readonly claimId: string;
-  /** The reference tool that would produce the comparison output. */
-  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA';
+  /**
+   * The reference tool that would produce the comparison output. `R` names the
+   * statistical reduction where the geometry comes from GDAL/OGR and the
+   * per-station quantile from R; one slot holds one label, and the study
+   * manifest carries the full pipeline.
+   */
+  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R';
   /** Absolute agreement tolerance in the product's unit. */
   readonly toleranceAbs: number;
   /** Unit label for the tolerance, for docs / reports. */
@@ -256,6 +261,14 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'supplied' },
   { claimId: 'TPI', referenceTool: 'GDAL', toleranceAbs: 1e-5, unit: 'index', status: 'supplied' },
   { claimId: 'VRM', referenceTool: 'SAGA', toleranceAbs: 1e-4, unit: 'index', status: 'supplied' },
+  // Corridor profile against OGR/SpatiaLite chainage and R's type-7 quantile.
+  // The tolerance is derived, not observed: every fixture coordinate is a
+  // Float32-exact decimal and the reference SQL passes the elevation through as
+  // text, so the two sides read identical numbers and the only difference left
+  // is double rounding on quantities bounded by a few hundred metres, which
+  // cannot exceed about 1e-13 m. A micrometre sits seven orders above that and
+  // far below any elevation a reader of a section could act on.
+  { claimId: 'MEAS-PROFILE', referenceTool: 'R', toleranceAbs: 1e-6, unit: 'm', status: 'pending' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

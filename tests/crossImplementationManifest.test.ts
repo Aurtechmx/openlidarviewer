@@ -901,6 +901,7 @@ describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
       'MEAS-AREA',
       'TPI',
       'VRM',
+      'MEAS-PROFILE',
     ]);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM']);
