@@ -175,7 +175,22 @@ export async function loadLas(
     // Lazy chunk: pulls laz-perf + the embedded WASM only when a `.laz`
     // file is actually opened. Uncompressed `.las` files never download it.
     const { decodeLaz } = await import('./lazDecode');
-    raw = await decodeLaz(buffer, header, origin, stride, onProgress);
+    // A full-resolution decode (stride 1) can fan the file's chunks across a
+    // worker pool — byte-for-byte the same points, produced in parallel. It is
+    // opt-in and fails closed: `decodeLazPooled` returns null (engaging no
+    // worker) unless pooling is enabled, and for any file its chunk table
+    // cannot describe, so `decodeLaz` stays the default and the fallback. A
+    // strided fast-load stays on `decodeLaz`, which SAMPLES records the chunked
+    // path would fully decode.
+    const pooled =
+      stride === 1
+        ? await (await import('./heavy/worker/lazChunkWorkerClient')).decodeLazPooled(
+            buffer,
+            header,
+            origin,
+          )
+        : null;
+    raw = pooled ?? (await decodeLaz(buffer, header, origin, stride, onProgress));
   } else {
     raw = decodeLas(buffer, header, origin, stride, onProgress);
   }

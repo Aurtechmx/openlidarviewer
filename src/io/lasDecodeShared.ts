@@ -225,6 +225,30 @@ export function finalizeRawColors(raw: RawPoints): void {
   raw.colors16 = null;
 }
 
+/**
+ * The transferable backing buffers of a chunk-local {@link RawPoints}, so a
+ * decode worker can hand its result back to the main thread zero-copy. Colours
+ * are still STAGED here (`colors16`); the 8-bit-vs-16-bit narrowing is the
+ * caller's single per-file decision, so `colors` is null on a worker's output
+ * and only `colors16`, when the format carries colour, is transferred. Every
+ * present typed array is listed exactly once — a buffer left off the list would
+ * be structure-cloned (a silent copy), which is the whole cost the chunked path
+ * exists to avoid.
+ */
+export function rawPointsTransferables(raw: RawPoints): ArrayBuffer[] {
+  const buffers: ArrayBuffer[] = [
+    raw.positions.buffer as ArrayBuffer,
+    raw.intensity.buffer as ArrayBuffer,
+    raw.classification.buffer as ArrayBuffer,
+    raw.returnNumber.buffer as ArrayBuffer,
+    raw.returnCount.buffer as ArrayBuffer,
+    raw.pointSourceId.buffer as ArrayBuffer,
+  ];
+  if (raw.gpsTime) buffers.push(raw.gpsTime.buffer as ArrayBuffer);
+  if (raw.colors16) buffers.push(raw.colors16.buffer as ArrayBuffer);
+  return buffers;
+}
+
 export function decodingUpdate(done: number, total: number): ProgressUpdate {
   return {
     stage: 'decoding',

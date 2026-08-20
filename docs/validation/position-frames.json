@@ -43,11 +43,60 @@
       "why": "Lists the decoded chunk buffers for a zero-copy postMessage. No arithmetic happens; the buffer stays recentred on the streaming render origin."
     },
     {
+      "file": "src/io/heavy/decodeLazChunked.ts",
+      "symbol": "placeChunk",
+      "frame": "source-local",
+      "reads": 2,
+      "why": "Assembles the parallel-decoded LAZ chunks: copies each chunk-local buffer into the whole-file buffer at its point offset. Both are the loader's source frame, so the copy carries no reframing."
+    },
+    {
+      "file": "src/io/heavy/oocIndexer.ts",
+      "symbol": "indexOutOfCore",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Second out-of-core pass buckets each point into its octree leaf by its source-local xyz; the grid keys and the spilled tiles are all in that source frame."
+    },
+    {
+      "file": "src/io/heavy/oocIndexer.ts",
+      "symbol": "scanBounds",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "First out-of-core pass reads each decoded batch to compute the cloud's min/max extent; the octree grid it seeds is defined in the same source frame the loader produced."
+    },
+    {
+      "file": "src/io/heavy/slicedLasSource.ts",
+      "symbol": "openSlicedLasSource",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Exposes each decoded LAS batch to the indexer through the PointSource contract; the load origin travels beside it (returned as `origin`), so the buffer stays source-local."
+    },
+    {
+      "file": "src/io/heavy/tileChunkDecoder.ts",
+      "symbol": "TileChunkDecoder.decode",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Reads a tile's positions back from the OLV tile store into a DecodedChunk; they are the source-local values packTileRecord wrote at build time, returned verbatim (the render-origin recentre is applied downstream, as for COPC/EPT chunks)."
+    },
+    {
+      "file": "src/io/heavy/tileRecord.ts",
+      "symbol": "packTileRecord",
+      "frame": "source-local",
+      "reads": 3,
+      "why": "Packs each decoded point into a tile-store record; raw.positions is the loader's source-local buffer (scaled value + header offset − load origin), copied into the tile verbatim with no reframing."
+    },
+    {
       "file": "src/io/lasDecodeShared.ts",
       "symbol": "decodeRecord",
       "frame": "source-local",
       "reads": 3,
       "why": "The loader WRITES the buffer here: scaled record value plus header offset minus the load-time origin is the definition of source-local."
+    },
+    {
+      "file": "src/io/lasDecodeShared.ts",
+      "symbol": "rawPointsTransferables",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Lists the decoded chunk's backing buffers for a zero-copy postMessage back from the decode worker. No arithmetic: raw.positions is the loader's source-local buffer, transferred verbatim."
     },
     {
       "file": "src/io/loadE57.ts",
@@ -218,6 +267,13 @@
       "why": "The source-local accessor itself. This is the one place the label is attached to a cloud buffer."
     },
     {
+      "file": "src/render/ContourOverlay.ts",
+      "symbol": "ContourOverlay._upload",
+      "frame": "project-local",
+      "reads": 1,
+      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
+    },
+    {
       "file": "src/render/densityColors.ts",
       "symbol": "densityForChunk",
       "frame": "source-local",
@@ -380,13 +436,6 @@
       "frame": "project-local",
       "reads": 1,
       "why": "Rebuilds a view over the transferred gather buffer, which the gather assembler already placed into the project frame."
-    },
-    {
-      "file": "src/render/ContourOverlay.ts",
-      "symbol": "ContourOverlay._upload",
-      "frame": "project-local",
-      "reads": 1,
-      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
     }
   ]
 }

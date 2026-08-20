@@ -54,6 +54,7 @@
     "benchmark:repro": "BENCHMARK_SUITES=reproducibility vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:scaling": "BENCHMARK_SUITES=scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:quick": "BENCHMARK_SUITES=reproducibility,scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
+    "benchmark:loaders": "BENCHMARK_SUITES=loaderComparison vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
     "benchmark:scaling:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:scaling",
     "benchmark:quick:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:quick",
     "benchmark:units": "vitest run tests/benchmark/unitIntegrity.test.ts",
@@ -160,6 +161,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@loaders.gl/las": "^4.4.4",
     "@playwright/test": "^1.62.1",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
@@ -181,6 +183,9 @@
     "vitepress": {
       "vite": "^6.4.3"
     },
-    "texture-compressor": "file:vendor-stubs/texture-compressor"
+    "texture-compressor": "file:vendor-stubs/texture-compressor",
+    "@loaders.gl/las": {
+      "laz-perf": "0.0.7"
+    }
   }
 }

@@ -92,6 +92,19 @@ export interface LoadPlan {
    * Optional for backward-compat — treat `undefined` as `false`.
    */
   largeNonLasFormat?: boolean;
+  /**
+   * True when the file is a large uncompressed LAS whose whole-file load would
+   * exceed the memory ceiling, so it should be built into an out-of-core tile
+   * store and streamed rather than materialised (see `src/io/heavy/`). The
+   * sliced reader never holds the whole file, so the out-of-core path removes
+   * exactly the fixed whole-file cost that trips the ceiling here.
+   *
+   * Only uncompressed LAS routes here today, because the tile builder reads
+   * sliced LAS (`openSlicedLasSource`); a compressed LAZ stays on the strided
+   * whole-file path until the chunked-LAZ builder is wired. Optional for
+   * backward-compat — treat `undefined` as `false`.
+   */
+  buildThenStream?: boolean;
 }
 
 /**
@@ -364,6 +377,13 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     NON_STREAMING_FORMATS.has(format) &&
     fileBytes > LARGE_NON_LAS_THRESHOLD_BYTES;
 
+  // Route an over-ceiling uncompressed LAS to the out-of-core build: its whole-
+  // file buffer is the fixed cost that pushed the estimate past the ceiling, and
+  // the sliced reader that feeds the tile builder never holds it. The strided
+  // plan above stays populated as the fallback for a caller that does not yet
+  // act on this flag.
+  const buildThenStream = format === 'las' && mayExceedCeiling;
+
   return {
     mode: plan.mode,
     sourceCount,
@@ -374,5 +394,6 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     memoryGuardTriggered,
     mayExceedCeiling,
     largeNonLasFormat,
+    buildThenStream,
   };
 }
