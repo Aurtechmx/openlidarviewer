@@ -112,6 +112,89 @@ test(
   },
 );
 
+// The Distance and Area rows carry a breakdown line under the headline: the run,
+// rise, slant and grade a two-point pick already fixes, and the planimetric area,
+// plane area, perimeter and vertex count a closed ring fixes. The arithmetic is
+// covered by tests/measureBreakdown.test.ts; what only a browser can show is that
+// the line reaches the panel at all, and that the ring's plane area is never
+// labelled a surface area, which would claim a draped terrain measurement that is
+// not computed.
+test(
+  'a distance row shows the run, rise and slant it already fixes',
+  async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(500); // let the test API mount on viewerLoaded
+    await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+
+    // 3 across and 4 up: a 3-4-5 line, so the slant is a value a reader can
+    // check by eye against the two components beside it.
+    await page.evaluate(() => {
+      const api = (window as unknown as { __OLV_TEST_API__?: {
+        setMeasureKind: (k: string) => void;
+        placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+      } }).__OLV_TEST_API__;
+      if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+      api.setMeasureKind('distance');
+      api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+      api.placeMeasurementPoint({ x: 3, y: 0, z: 4 });
+    });
+
+    await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+    const breakdown = page.locator('.olv-mp-breakdown');
+    await expect(breakdown).toHaveCount(1);
+    const text = (await breakdown.textContent()) ?? '';
+    expect(text).toContain('Run');
+    expect(text).toContain('Rise');
+    expect(text).toContain('Slant');
+    expect(text).toContain('Grade');
+    // Every part carries a number, so an empty or dash-filled line fails here.
+    expect(text).toMatch(/Run\s+[\d.]/);
+    expect(text).toMatch(/Slant\s+[\d.]/);
+  },
+);
+
+test(
+  'an area row separates the planimetric area from the plane area, and claims no surface',
+  async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await page.waitForTimeout(500);
+    await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+
+    await page.evaluate(() => {
+      const api = (window as unknown as { __OLV_TEST_API__?: {
+        setMeasureKind: (k: string) => void;
+        placeMeasurementPoint: (p: { x: number; y: number; z: number }) => void;
+        finishMeasurement?: () => void;
+      } }).__OLV_TEST_API__;
+      if (!api) throw new Error('__OLV_TEST_API__ not mounted — was ?test=1 set?');
+      api.setMeasureKind('area');
+      api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+      api.placeMeasurementPoint({ x: 2, y: 0, z: 0 });
+      api.placeMeasurementPoint({ x: 2, y: 2, z: 0 });
+      api.placeMeasurementPoint({ x: 0, y: 2, z: 0 });
+      api.finishMeasurement?.();
+    });
+
+    await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+    const breakdown = page.locator('.olv-mp-breakdown');
+    await expect(breakdown).toHaveCount(1);
+    const text = (await breakdown.textContent()) ?? '';
+    expect(text).toContain('Horizontal');
+    expect(text).toContain('Perimeter');
+    expect(text).toContain('4 vertices');
+    // "Plane" is the ring's own best-fit plane. "Surface" would name a draped
+    // terrain area that nothing here computes.
+    expect(text).toContain('Plane');
+    expect(text.toLowerCase()).not.toContain('surface');
+  },
+);
+
 // Regression: an object/interior scan routes the tall Object/Space panel into
 // the shared left column. `.olv-measure-panel` carries `overflow: auto` (for its
 // horizontal resize), which drops its flex auto-min-height to 0 — so the flex

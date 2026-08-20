@@ -559,6 +559,18 @@
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
+
+/* Distance / Area breakdown: the values the same picks already fixed, under the
+   confidence line. Quieter than the headline it qualifies, and it wraps rather
+   than truncating, since every part of it is a number the reader came for. */
+.olv-mp-breakdown {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: 1.45;
+  padding: 0 var(--space-xs) var(--space-2xs);
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
 .olv-mp-del {
   background: none; border: none; color: var(--text-faint);
   font-size: var(--text-lg); line-height: 1; flex-shrink: 0; padding: 0 var(--space-2xs);

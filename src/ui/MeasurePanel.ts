@@ -42,9 +42,13 @@ import {
 // imperial mode).
 import {
   DATUM_CONFLICT_MEASURE_NOTICE,
+  formatAngle,
+  formatArea,
+  formatGrade,
   formatLength,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
 } from '../render/measure/format';
+import { breakdownParts } from './measureBreakdownRow';
 // Measurement context state — every displayed value states what kind of
 // number it is (viewer measurement with a resolved datum / approximate
 // scene-local figure / no shared basis), so a screenshot of the panel can
@@ -1199,6 +1203,23 @@ export class MeasurePanel {
       title: conf.level === 'verified' ? conf.label : `${conf.label} — ${conf.reason}`,
     });
 
+    // Distance / Area: the values the same picks already fixed. Reading a run,
+    // a rise or a grade used to mean placing a second measurement of another
+    // kind over the same points. The parts are composed by a pure helper so the
+    // panel decides layout, not arithmetic or wording.
+    const breakdown = breakdownParts(
+      s,
+      this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
+      { formatLength, formatArea, formatGrade, formatAngle },
+    );
+    const breakdownLine = breakdown
+      ? el('div', {
+          className: 'olv-mp-breakdown',
+          text: breakdown.text,
+          title: breakdown.title,
+        })
+      : null;
+
     // Profile-only: render a compact height-vs-distance chart strip
     // beneath the headline row. The chart is a single inline SVG, no
     // external libraries — keeps the Measurements panel a leaf module.
@@ -1564,10 +1585,19 @@ export class MeasurePanel {
         className: 'olv-mp-chart-caveat',
         text: 'Resident-node analysis only — cut / fill may refine as streaming loads.',
       });
-      return el('div', { className: 'olv-mp-row-stack' }, [headRow, confLine, caveat]);
+      return el('div', { className: 'olv-mp-row-stack' }, [
+        headRow,
+        confLine,
+        ...(breakdownLine ? [breakdownLine] : []),
+        caveat,
+      ]);
     }
 
-    return el('div', { className: 'olv-mp-row-stack' }, [headRow, confLine]);
+    return el('div', { className: 'olv-mp-row-stack' }, [
+      headRow,
+      confLine,
+      ...(breakdownLine ? [breakdownLine] : []),
+    ]);
   }
 }
 
