@@ -67,8 +67,13 @@ export function parseHierarchyFile(text: string): ParsedHierarchyFile {
   let totalPoints = 0;
 
   for (const [keyStr, val] of Object.entries(obj)) {
-    if (typeof val !== 'number' || !Number.isFinite(val)) {
-      throw new Error(`EPT hierarchy entry "${keyStr}" has non-numeric value.`);
+    // A hierarchy value is either the -1 link sentinel or a whole point count.
+    // Accepting any finite number let 0.5 be counted as a node and -2 fall
+    // through both branches, silently ignored rather than refused.
+    if (typeof val !== 'number' || !(val === -1 || (Number.isSafeInteger(val) && val >= 0))) {
+      throw new Error(
+        `EPT hierarchy entry "${keyStr}" must be -1 or a non-negative whole point count, got ${String(val)}.`,
+      );
     }
     const key = eptStringToKey(keyStr);
     if (!key) {
