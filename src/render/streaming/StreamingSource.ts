@@ -71,7 +71,39 @@ export interface StreamingOctreeView {
 }
 
 /** The on-disk format a streaming source is backed by. */
-export type StreamingSourceKind = 'copc' | 'ept';
+export type StreamingSourceKind = 'copc' | 'ept' | 'tiles';
+
+/**
+ * The name to show a user for a source kind. Kept beside the union so a new
+ * kind cannot be added without deciding what the scan report calls it — the
+ * report used to branch on `kind === 'ept'` and label everything else COPC,
+ * which would have mislabelled a third format the moment one existed.
+ */
+export function streamingSourceLabel(kind: StreamingSourceKind): string {
+  switch (kind) {
+    case 'ept':
+      return 'EPT (Entwine Point Tile)';
+    case 'tiles':
+      return 'OLV tile store (out-of-core index)';
+    case 'copc':
+      return 'COPC (Cloud Optimized Point Cloud)';
+  }
+}
+
+/**
+ * The short format token for a source kind — what the PDF report's metadata
+ * block prints beside a static cloud's `LAS` or `PLY`.
+ */
+export function streamingFormatToken(kind: StreamingSourceKind): string {
+  switch (kind) {
+    case 'ept':
+      return 'EPT';
+    case 'tiles':
+      return 'OLV tiles';
+    case 'copc':
+      return 'COPC';
+  }
+}
 
 /**
  * The format-agnostic streaming source.

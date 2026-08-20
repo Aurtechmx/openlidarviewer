@@ -110,10 +110,13 @@ function liveSourceTransformPlugin() {
     // The remaining literal entries below are the NON-worker split points that
     // carry an `import()` specifier Vite must read statically:
     //   - `lazyChunks.ts`      — the COPC/streaming `import()` split points
-    //   - `parseBuffer.ts` / `loaderRegistry.ts` / `loadLas.ts` — the loader
-    //     chain reached from the main thread (the format converter's
-    //     full-resolution decode), so their `import('./loadLas' | './loadXyz'
-    //     | './lazDecode')` split points must stay literal here too.
+    //   - `parseBuffer.ts` / `loaderRegistry.ts` — the loader chain reached
+    //     from the main thread (the format converter's full-resolution
+    //     decode), so their `import('./loadXyz' | './lazDecode')` split points
+    //     must stay literal here too. `loadLas.ts` carries such a split point
+    //     as well, but it is now covered by the worker registry above: it is
+    //     the async bridge that lazy-imports the LAZ chunk-decode worker
+    //     client, so `workerExcludePatterns()` already excludes it.
     include: [/src\/.*\.ts$/],
     exclude: [
       /node_modules/,
@@ -123,7 +126,6 @@ function liveSourceTransformPlugin() {
       /lazyChunks\.ts/,
       /parseBuffer\.ts/,
       /loaderRegistry\.ts/,
-      /loadLas\.ts/,
       // ── Performance exclusions (v0.5.3) ────────────────────────────────
       // The stringArray pass rewrites property access (`obj.prop` →
       // `obj[decode(n)]`) and built-in calls (`Math.hypot` →

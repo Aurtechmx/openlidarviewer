@@ -284,6 +284,7 @@ describe('the written tree', () => {
       workingTreeClean: true,
       reproducibility: null,
       scaling: null,
+      loaderComparison: null,
       notRun: [],
       forcedGc: { requested: true, observedInRuns: 'all' },
     };

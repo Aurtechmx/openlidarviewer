@@ -43,6 +43,7 @@ here for transparency.
 | @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| @loaders.gl/las | ^4.4.4 | 4.4.4 | MIT | https://github.com/visgl/loaders.gl |
 
 ## License texts
 

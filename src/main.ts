@@ -163,7 +163,8 @@ import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
 import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 // Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
-import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
+import { estimateDecodedBytes, estimateGpuBytes, type StreamingQuality } from './render/streaming/streamingBudget';
+import { streamingSourceLabel, type StreamingSourceKind } from './render/streaming/StreamingSource';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
@@ -199,7 +200,6 @@ import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
 import { StreamingPanel } from './ui/StreamingPanel';
-import type { StreamingQuality } from './render/streaming/streamingBudget';
 // The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build source-transform so Vite can still see the
 // dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
@@ -4271,7 +4271,7 @@ function syncInspectClassScope(): void {
  * and the PDF Report Engine can consume it without a separate code path.
  */
 function runStreamingModules(cloud: {
-  readonly kind: 'copc' | 'ept';
+  readonly kind: StreamingSourceKind;
   readonly name: string;
   readonly sourcePointCount: number;
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
@@ -4303,7 +4303,7 @@ function runStreamingModules(cloud: {
     return row;
   };
 
-  rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
+  rows.push(info('Source', streamingSourceLabel(cloud.kind)));
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
     rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   }

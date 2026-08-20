@@ -32,6 +32,12 @@ export const BENCHMARK_SEED = 20260726;
  * 2 — the manifest gained `forcedGc`. A version-1 manifest is silent about the
  * garbage-collection regime, which is not the same claim as "GC was not
  * controlled", and a reader must not be able to mistake one for the other.
+ *
+ * The `loaderComparison` suite did NOT bump this: it adds a self-contained suite
+ * directory and a `suites[]` entry, and `suites[]` already tells a reader which
+ * suites ran, so a version-2 tree without it is not misread — exactly as one
+ * without the scaling ladder is not. No existing file changed meaning, which is
+ * the only thing this number tracks.
  */
 export const BENCHMARK_SCHEMA_VERSION = 2;
 
@@ -179,6 +185,66 @@ export const SCALING_CONFIG: ScalingConfig = {
   isolation: 'process-per-tier',
 };
 
+/**
+ * One file the loader comparison times both loaders on.
+ *
+ * A case is a LAS version and a size. The version is the whole point: the
+ * competitor (loaders.gl's LASLoader) reads LAS 1.2 and refuses LAS 1.4
+ * outright, and that split is a measured result, not an assumption — so a 1.2
+ * case expects the competitor to decode and a 1.4 case expects it to reject.
+ * `competitorReadable` records which is which, and the suite fails if reality
+ * disagrees (a competitor that suddenly reads a 1.4 file, or refuses a 1.2 one).
+ */
+export interface LoaderCase {
+  readonly id: string;
+  readonly lasVersion: '1.2' | '1.4';
+  readonly pointCount: number;
+  readonly competitorReadable: boolean;
+}
+
+/**
+ * The loader-comparison suite: OLV's `loadLas` against a standard web loader on
+ * identical, deterministically generated uncompressed LAS files.
+ *
+ * WHY UNCOMPRESSED, AND WHY IN-PROCESS FIXTURES. laz-perf ships no encoder, so a
+ * `.laz` fixture can only be made by shelling out to an external tool, and the
+ * suite would then measure a machine's PDAL install as much as its loaders. The
+ * two writers in `src/convert/writeLas.ts` produce byte-exact LAS 1.2 and 1.4
+ * from a seeded synthetic cloud with no external tool and no entropy, so the
+ * INPUT is as reproducible as the rest of the harness; only the timings vary,
+ * exactly as they do for the scaling ladder.
+ *
+ * WHY THE COMPETITOR IS NOT NAMED AS A DEPENDENCY HERE. Every module under
+ * `benchmarks/` may import only `node:` builtins and repo-relative paths (a
+ * source guard enforces it, so a browser-side suite can bundle the tree). The
+ * competitor decoder is therefore injected by the Node entry point, which lives
+ * outside the guarded tree; this config carries only its identity, and the
+ * runner records the version the entry point captured at run time.
+ */
+export interface LoaderComparisonConfig {
+  readonly suiteId: 'loaderComparison';
+  readonly seed: number;
+  readonly warmupRuns: number;
+  readonly recordedRuns: number;
+  /** The competitor being timed. Identity only; the version is captured at run time. */
+  readonly competitor: { readonly name: string; readonly packageName: string };
+  readonly cases: readonly LoaderCase[];
+}
+
+export const LOADER_COMPARISON_CONFIG: LoaderComparisonConfig = {
+  suiteId: 'loaderComparison',
+  seed: BENCHMARK_SEED,
+  warmupRuns: WARMUP_RUNS,
+  recordedRuns: 5,
+  competitor: { name: 'loaders.gl LASLoader', packageName: '@loaders.gl/las' },
+  cases: [
+    // The common ground both loaders accept: the honest head-to-head.
+    { id: 'las-1.2', lasVersion: '1.2', pointCount: 1_000_000, competitorReadable: true },
+    // The capability gap: OLV decodes it, the competitor refuses the version.
+    { id: 'las-1.4', lasVersion: '1.4', pointCount: 1_000_000, competitorReadable: false },
+  ],
+};
+
 // ── validation ──────────────────────────────────────────────────────────────
 
 function fail(message: string): never {
@@ -303,5 +369,48 @@ export function parseScalingConfig(input: unknown): ScalingConfig {
     terrain: parseTerrain(c.terrain),
     acceptedTierFailures,
     isolation: c.isolation,
+  };
+}
+
+function parseCompetitor(value: unknown): { name: string; packageName: string } {
+  const c = asRecord(value, 'competitor');
+  return {
+    name: nonEmptyString(c.name, 'competitor.name'),
+    packageName: nonEmptyString(c.packageName, 'competitor.packageName'),
+  };
+}
+
+export function parseLoaderComparisonConfig(input: unknown): LoaderComparisonConfig {
+  const c = asRecord(input, 'loader comparison config');
+  if (c.suiteId !== 'loaderComparison') fail("suiteId must be 'loaderComparison'");
+  if (!Array.isArray(c.cases) || c.cases.length === 0) fail('cases must be a non-empty array');
+
+  const seenIds = new Set<string>();
+  const cases: LoaderCase[] = c.cases.map((raw, i) => {
+    const t = asRecord(raw, `cases[${i}]`);
+    const id = nonEmptyString(t.id, `cases[${i}].id`);
+    if (seenIds.has(id)) fail(`duplicate case id ${JSON.stringify(id)}`);
+    seenIds.add(id);
+    if (t.lasVersion !== '1.2' && t.lasVersion !== '1.4') {
+      fail(`cases[${i}].lasVersion must be '1.2' or '1.4', got ${JSON.stringify(t.lasVersion)}`);
+    }
+    if (typeof t.competitorReadable !== 'boolean') {
+      fail(`cases[${i}].competitorReadable must be a boolean, got ${JSON.stringify(t.competitorReadable)}`);
+    }
+    return {
+      id,
+      lasVersion: t.lasVersion,
+      pointCount: positiveInt(t.pointCount, `cases[${i}].pointCount`),
+      competitorReadable: t.competitorReadable,
+    };
+  });
+
+  return {
+    suiteId: 'loaderComparison',
+    seed: finiteNumber(c.seed, 'seed'),
+    warmupRuns: nonNegativeInt(c.warmupRuns, 'warmupRuns'),
+    recordedRuns: positiveInt(c.recordedRuns, 'recordedRuns'),
+    competitor: parseCompetitor(c.competitor),
+    cases,
   };
 }
