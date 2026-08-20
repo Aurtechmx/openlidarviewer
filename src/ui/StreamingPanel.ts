@@ -2,9 +2,12 @@
  * StreamingPanel.ts
  *
  * The user-facing panel for a streaming COPC scan: a metadata scan summary,
- * the live load phase and status (nodes, points, cache), the streaming
- * controls (colour, quality, pause/resume, clear cache), and saved camera
- * views.
+ * the live load phase and status (nodes, points, cache), and the streaming
+ * controls (colour, quality, pause/resume, clear cache, full-cloud grade).
+ *
+ * Saved camera views are NOT here. No panel renders them: they are reached
+ * through the command palette, whose actions in `src/app/actionDefinitions.ts`
+ * are the only surface the bookmark store has.
  *
  * It is calm by design — a few clear sections, no technical noise. The deep
  * counters belong to the `?debug=1` overlay, not here.
