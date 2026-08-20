@@ -2103,6 +2103,7 @@ const annotationPanel = new AnnotationPanel({
   onDelete: (id) => viewer.annotate.remove(id),
   onClearAll: () => viewer.annotate.clear(),
   onHover: (id) => viewer.annotate.hover(id),
+  onSetIssueStatus: (id, status) => viewer.annotate.setIssueStatus(id, status),
 });
 
 // The Analyse panel surfaces terrain readiness (ground confidence, DTM
@@ -4604,8 +4605,7 @@ function applyPrefs(): void {
 /** Refresh the Annotations panel's contents and visibility. */
 function refreshAnnotationPanel(): void {
   annotationPanel.update(viewer.annotate.getSummaries());
-  const hasAnnotations = viewer.annotate.getAnnotations().length > 0;
-  annotationPanel.setVisible(viewer.annotateMode || hasAnnotations);
+  annotationPanel.setVisible(viewer.annotateMode || viewer.annotate.getAnnotations().length > 0);
   // Keep the Export panel's Site-KML enablement in sync — annotations alone can
   // make a KML worth exporting, not only measurements.
   exportPanel.refresh();
