@@ -98,4 +98,25 @@ test.describe('runtime lazy chunks resolve on the served build', () => {
       `dynamic-import failure while loading the context menu:\n${failures.join('\n')}`,
     ).toEqual([]);
   });
+
+  test('performance panel chunk loads on the header button', async ({ page }) => {
+    const failures = watchForImportFailures(page);
+    await suppressOnboardingTour(page);
+    await page.goto('/');
+    await expect(page.locator('.olv-empty')).toBeVisible();
+
+    // The Speed to Quality button mounts once the renderer settles, so it is
+    // available on the empty state. Clicking it is the only trigger for the
+    // QualityPanel chunk; the slider inside proves the module evaluated rather
+    // than merely fetched.
+    const button = page.locator('.olv-quality-button');
+    await expect(button).toBeVisible({ timeout: 20_000 });
+    await button.click();
+    await expect(page.locator('.olv-quality-pop .olv-slider')).toBeVisible({ timeout: 10_000 });
+
+    expect(
+      failures,
+      `dynamic-import failure while loading the performance panel:\n${failures.join('\n')}`,
+    ).toEqual([]);
+  });
 });

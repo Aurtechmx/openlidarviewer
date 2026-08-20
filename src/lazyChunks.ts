@@ -76,6 +76,17 @@ export const loadLayerHealth = () => import('./app/layerHealth');
 /** The health card component itself — same reasoning, same boundary. */
 export const loadLayerHealthCard = () => import('./ui/LayerHealthCard');
 
+/**
+ * Load the Speed ↔ Quality panel — the popover markup behind the header's
+ * performance button — on the first click, never in the startup shell.
+ *
+ * The boundary is drawn at the DOM, not at the feature: the policy, the stored
+ * preference and the apply path stay eager in `ui/qualityControl.ts`, because a
+ * weak device has to get its degraded display settings on the first frame
+ * rather than on the first time someone opens the panel.
+ */
+export const loadQualityPanel = () => import('./ui/QualityPanel');
+
 /** Load the streaming point-cloud module (COPC octree + IO). */
 export const loadStreamingPointCloud = () =>
   import('./render/streaming/StreamingPointCloud');

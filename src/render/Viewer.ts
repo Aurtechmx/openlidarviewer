@@ -108,6 +108,7 @@ import {
   DPR_MOTION_FLOOR,
   DPR_FULL_REDUCTION_ANGULAR,
 } from './adaptiveDpr';
+import { maxPixelRatio } from './quality/pixelRatioCeiling';
 import {
   nextRefinementPhase,
   phaseDprScale,
@@ -486,21 +487,20 @@ const QUAD_INDEX = [0, 1, 2, 0, 2, 3];
 
 /**
  * Device-pixel-ratio cap. High-density displays render at up to DPR² the pixel
- * area; capping at 2 bounds the cost — most visible once the EDL pass adds a
- * full-screen render target — with no perceptible loss of sharpness.
+ * area; capping bounds the cost — most visible once the EDL pass adds a
+ * full-screen render target — with little perceptible loss of sharpness. A
+ * retina display reports DPR=2 and shades 4 sub-pixels per logical pixel; for a
+ * point cloud that is almost pure GPU waste, because points rasterise as sprite
+ * quads and fragment cost grows with the square of the ratio (~44 % more work
+ * going 1.5 → 2.0). The 1.5 default is what keeps laptop-class GPUs out of the
+ * thermal envelope on a long session; a low-DPR display is unaffected, because
+ * the `Math.min` below keeps the native ratio as the floor.
+ *
+ * The value itself is no longer a constant here. It is the display half of the
+ * Speed ↔ Quality control, so it lives in `quality/pixelRatioCeiling.ts` and is
+ * read through `maxPixelRatio()` at each of the three sites below: construction,
+ * the adaptive-DPR frame, and the resize handler.
  */
-/**
- * Cap the renderer's pixel ratio. A retina display reports DPR=2
- * and shades 4 sub-pixels per logical pixel. For a point-cloud
- * scene that's almost pure GPU waste — points are rasterised as
- * sprite quads, so the visible quality difference between 1.5x and
- * 2x is minimal but the fragment-shading cost grows quadratically
- * with the ratio (~44 % more work going 1.5 → 2.0). Capping to
- * 1.5 is what keeps M3-class laptops out of the thermal envelope
- * during long sessions; users on a low-DPR display still get their
- * native pixel ratio because `Math.min` keeps the floor.
- */
-const MAX_PIXEL_RATIO = 1.5;
 
 /**
  * Idle-render throttling. After any user input (pointer / key /
@@ -1202,7 +1202,7 @@ export class Viewer {
       logarithmicDepthBuffer: true,
     } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
 
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio()));
     // updateStyle=false: the stylesheet owns the canvas display size
     // (.olv-canvas is inset:0/100%×100%). Letting three.js write inline
     // style.width/height in px would override the CSS and pin the canvas to a
@@ -6266,7 +6266,7 @@ export class Viewer {
     this._hasPrevCamQuat = true;
     const maxDpr = Math.min(
       typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1,
-      MAX_PIXEL_RATIO,
+      maxPixelRatio(),
     );
     const floor = Math.min(maxDpr, DPR_MOTION_FLOOR);
 
@@ -6416,7 +6416,7 @@ export class Viewer {
     // Re-apply the pixel ratio: browser zoom and monitor-DPI changes alter
     // devicePixelRatio, and the backing-store resolution must follow or the
     // scene renders soft/aliased after a zoom.
-    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this._renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio()));
     // updateStyle=false — CSS owns the display box (see the constructor note);
     // we resize only the WebGPU drawing buffer so the canvas keeps tracking the
     // container at any browser zoom instead of pinning to a stale pixel size.
