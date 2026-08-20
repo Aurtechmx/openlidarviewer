@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-E57-INGEST-PDAL-CROSS-DECODE",
+  "example": false,
+  "title": "Per-point E57 decode against PDAL readers.e57 over a CC-BY terrestrial scan",
+  "question": "On a real third-party-written E57, does this project's reader decode every point and per-point attribute to the same values as PDAL's independent reader of the same standard?",
+  "recordWrittenOn": "2026-08-20",
+  "referenceTool": "PDAL",
+  "referenceVersion": "PDAL 2.10.2 (git-version: Release), driver readers.e57",
+  "claims": [
+    {
+      "claimId": "E57-INGEST",
+      "datasetIds": [
+        "OLV-DS-040-E57-FINESTRAT-2016"
+      ],
+      "parameterSetIds": [
+        "PS-E57-PDAL-CROSS-DECODE"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.000001,
+        "toleranceUnit": "metre",
+        "minimumComparableCells": 1788994,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "1e-6 m is derived from the encoding, not from the observed error. The file stores cartesian coordinates as IEEE singles (prototype precision=\"single\"), so both readers surface the same 32-bit values and the only residual is double rounding on quantities under a few hundred metres, around 1e-13 m. A micron is seven orders of magnitude above that and far below any survey relevance, so it cannot be met by accident and cannot pass a real decode fault: a wrong stride, a dropped extension field or a scale error moves coordinates by O(1) m or more. The comparison that carries the claim is not a mean but an exact quantised integer sum at a 1e-6 quantum, because a mean cannot support this tolerance at this point count: a single value would have to be wrong by about 1.79 m before it moved the mean past the same number. minimumComparableCells is the full record count, so no subset can satisfy it.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-20",
+        "witnessCommit": "9ffbc1e1bb6878005c0a6dcd601b3e1544b4f07b",
+        "witness": "REFERENCE_SLOTS in src/validation/crossCheck.ts at 9ffbc1e1 reads { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'pending' }, the study manifest does not exist at that commit, and E57-INGEST is not yet a claim in docs/validation/claim-register.yaml. That commit is a checkable witness for the tolerance and the scope, and it is NOT a preregistration: the comparison had already been run in the working tree when it was written, so the number is recorded as adopted-with-result. What stands on its own is the derivation, which follows from the file's single-precision cartesian encoding rather than from the residual that was observed. One figure was widened after measuring and is disclosed rather than quiet: the MEAN needed a relative budget for float64 summation order, and it is not the statistic the claim rests on.",
+        "resultLandedOn": "2026-08-20"
+      }
+    }
+  ],
+  "decisionRule": "Decode the file with this project's reader and compare against PDAL readers.e57 streamed at precision 17. For each of X, Y, Z, NormalX/Y/Z and Red/Green/Blue, compute the sum of round(value * 1e6) as an exact integer over all 1788994 points and require it to be identical, colour first reconciled by PDAL's exact uint16 promotion (c * 257). Recorded as agree only when every dimension's integer matches and the positional samples agree in file order; a single point differing by one quantum makes it disagree. The quantum is not to be coarsened, the comparison is not to be reduced to summary statistics, and intensity is not to be folded in by fitting a scale factor to make it agree.",
+  "notes": [
+    "Rounding must match across the two languages. Python's round() is round-half-to-even while JavaScript's Math.round is half away from zero; the reference uses floor(x + 0.5) to match. Before that was noticed the sums differed by 208 units, which reads exactly like a decoder disagreement and is not one.",
+    "The file declares its own recordCount, cartesianBounds and per-field limits, and this project reproduces every one exactly. That is asserted and it is deliberately NOT the evidence: six extremal statistics out of 1788994 values cannot separate a correct decode from one that corrupts the interior.",
+    "Intensity is excluded. PDAL scales it by 65535/(max-min) without subtracting the minimum, so its uint16 values do not round-trip the declared limits; a tolerance there would measure PDAL's scaling choice."
+  ],
+  "digest": "sha256:03cf343101bb96aa627ca36d9b1dd6223f64119d159711ce47e54564a90e841c"
+}

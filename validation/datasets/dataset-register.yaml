@@ -954,3 +954,36 @@ datasets:
     localPath: validation/cross-implementation/profile/profile-scatter.csv
     controlPointIds: []
     checkpointIds: []
+
+  - datasetId: OLV-DS-040-E57-FINESTRAT-2016
+    title: "Terrestrial laser scan of a gypsum slope, Finestrat (Alicante, Spain), 2016 epoch"
+    sourceUrl: https://zenodo.org/records/7576524
+    landingPage: https://doi.org/10.5281/zenodo.7576524
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2016-01-01
+    sourceSha256: 5f5f3a17b91e5f15bf02bfd1a69b3ec2fe4d4c352cd81cc02b9678d1c5c65b85
+    sourceBytes: 55711744
+    format: e57
+    pointCount: 1788994
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: 2016-01-01
+    horizontalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalCrs: local-vertical-none-declared
+    verticalUnits: metre
+    nominalDensity: not-recorded
+    terrainClasses: [gypsum-slope, rock-face]
+    landCoverClasses: [bare-rock]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Abellan, A. (CREALP) and Riquelme, A. (University of Alicante)"
+    citation: "Abellan, A. and Riquelme, A. 3DPC of a gypsum slope in Finestrat, Alicante (Spain). Zenodo. https://doi.org/10.5281/zenodo.7576524 (CC-BY-4.0)."
+    knownLimitations: "A third-party RE-EXPORT, written by CloudCompare 2.12.4 via E57Format 2.3.0, not a scanner-native file. It carries no sensor vendor, model or serial and no acquisition time, so it exercises writer interoperability rather than scanner metadata. Cartesian fields are single-precision floats, so the scaled-integer encoding path is untouched. One file is one writer profile and says nothing about the format at large. The sibling 2011, 2012 and 2014 epochs are of an actively eroding slope captured with a different instrument, so cross-epoch differences are real change confounded with instrument change and support no repeatability claim."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []

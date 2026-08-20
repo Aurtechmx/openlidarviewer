@@ -269,6 +269,12 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // cannot exceed about 1e-13 m. A micrometre sits seven orders above that and
   // far below any elevation a reader of a section could act on.
   { claimId: 'MEAS-PROFILE', referenceTool: 'R', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
+  // Per-point decode against PDAL 2.10.2 readers.e57 over a CC-BY E57. The
+  // tolerance is a coordinate budget, but the assertion that carries the claim
+  // is an exact quantised integer sum at a 1e-6 quantum, which unlike a mean
+  // cannot absorb one wrong point: at 1.79 M points a single value would have to
+  // be wrong by ~1.79 m to move the mean past this same number.
+  { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

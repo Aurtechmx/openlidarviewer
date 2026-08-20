@@ -33,7 +33,11 @@ every point on the section line and R's `quantile(type = 7)` reduces each
 station, so neither half of the profile is written twice here. One of its two
 fixtures also carries a closed form: ten corridor elevations in an exact
 arithmetic progression reduce to `first + step·(p/100)·(n − 1)`, with no sort and
-no order statistic.
+no order statistic. The twelfth is a reader rather than an algorithm:
+**`E57-INGEST`**, against PDAL 2.10.2 `readers.e57` over every point of a public
+CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
+`nor:` namespaced surface normals, and colour) as an exact quantised integer sum
+at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -46,9 +50,10 @@ no order statistic.
 | `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
 | `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
+| `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
 
-All nine tolerances were registered in `REFERENCE_SLOTS` before the references
+Every tolerance above was registered in `REFERENCE_SLOTS` before the references
 were generated. Each reference output, the exact command, the tool version and the
 checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a

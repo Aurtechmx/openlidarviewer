@@ -129,8 +129,11 @@ describe('reference manifest honesty', () => {
     // fixtures (tpiCrossCheck.test.ts, vrmCrossCheck.test.ts). MEAS-PROFILE is
     // the corridor section profile against OGR/SpatiaLite chainage reduced by R's
     // type-7 quantile, plus the closed form on the ramp fixture
-    // (profileCrossCheck.test.ts).
-    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE'];
+    // (profileCrossCheck.test.ts). E57-INGEST is a per-point decode against
+    // PDAL readers.e57 over a CC-BY terrestrial scan
+    // (e57PdalCrossDecode.test.ts), compared as an exact quantised integer sum
+    // rather than a summary statistic.
+    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

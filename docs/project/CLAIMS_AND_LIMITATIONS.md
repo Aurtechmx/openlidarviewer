@@ -106,6 +106,15 @@ discrete properties a test pins (byte-identity, exact inverses).
   the surface implies, to the last bit. It covers the corridor gate, the
   classification gate, the station binning and the type-7 reduction at two
   percentiles on synthetic clouds; it is not accuracy against a surveyed section.
+- `E57-INGEST` is the twelfth, and it covers a reader rather than an algorithm.
+  The decoded cartesian coordinates, `nor:` namespaced surface normals and colour
+  of a public CC-BY terrestrial scan agreed exactly with PDAL 2.10.2
+  `readers.e57` over all 1,788,994 points and nine dimensions, compared as an
+  exact quantised integer sum at a 1×10⁻⁶ quantum under a tolerance registered
+  before the reference existed. The scan is a CloudCompare re-export rather than
+  a scanner-native write, so vendor extension blocks, multi-scan files and
+  spherical coordinates are untested. Intensity sits outside the comparison
+  because PDAL rescales it by 65535/(max − min) without subtracting the minimum.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

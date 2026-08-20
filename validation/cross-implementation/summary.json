@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 13,
-  "countedStudies": 12,
+  "studiesRead": 14,
+  "countedStudies": 13,
   "byStatus": {
-    "agree": 11,
+    "agree": 12,
     "partial": 1
   },
   "byClaim": {
@@ -91,6 +91,18 @@
       ],
       "parameterSetIds": [
         "PS-DTM-MIN-CELL1-R045"
+      ]
+    },
+    "E57-INGEST": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-040-E57-FINESTRAT-2016"
+      ],
+      "parameterSetIds": [
+        "PS-E57-PDAL-CROSS-DECODE"
       ]
     },
     "GROUND-FILTER": {
@@ -188,10 +200,10 @@
     }
   },
   "agreement": {
-    "denominator": 12,
+    "denominator": 13,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 11,
-    "fraction": 0.9166666666666666
+    "agree": 12,
+    "fraction": 0.9230769230769231
   },
   "excludedFromCounts": [
     {

@@ -5,12 +5,13 @@
   `npm run docs:render`. tests/renderClaimRegister.test.ts fails on drift.
 -->
 
-_Register last reviewed at software version **0.6.6**, dated 2026-07-26. 27 claims._
+_Register last reviewed at software version **0.6.6**, dated 2026-07-26. 28 claims._
 
 | Claim | Product | Method@version | Current evidence | Required | External status | Approved claim | Prohibited claims |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `MEAS-DISTANCE` | Distance measurement | Euclidean distance between picked points (unit-aware) @ v0.5.x | `E3_SYNTHETICALLY_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | none | Geometric distance in the stated units; visual-inspection grade. | survey-grade distance; certified accuracy |
 | `MEAS-AREA` | Area measurement | Polygon shoelace area (planimetric, unit-aware) @ v0.5.x | `E4_CROSS_IMPLEMENTATION_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | partial | Planimetric polygon area agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 0 m² over 8 polygons), within the preregistered 1e-6 m² tolerance. Visual-inspection grade against a real feature. | survey-grade area; geodetic area |
+| `E57-INGEST` | E57 point-cloud ingestion | ASTM E57 reader (XML header, CompressedVector, extension namespaces) @ v0.6.6 | `E4_CROSS_IMPLEMENTATION_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | partial | Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of the committed reference file, compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance. | survey-grade ingestion; validated against every E57 writer; scanner-native metadata handling |
 | `MEAS-HEIGHT` | Height / vertical measurement | Vertical delta (unit-aware, up-axis-aware) @ v0.5.x | `E3_SYNTHETICALLY_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | none | Vertical delta in the stated units; visual-inspection grade. | orthometric height; datum-referenced elevation |
 | `MEAS-ANGLE` | Angle measurement | Angle between two vectors @ v0.5.x | `E3_SYNTHETICALLY_VALIDATED` | `E5_EXTERNALLY_VALIDATED` | none | Geometric angle between picked segments. | true bearing / azimuth without CRS north |
 | `MEAS-PROFILE` | Cross-section profile | Sampled elevation along a section line @ v0.5.x | `E4_CROSS_IMPLEMENTATION_VALIDATED` | `E4_CROSS_IMPLEMENTATION_VALIDATED` | partial | Corridor profile agreed with SpatiaLite chainage and R's type-7 quantile over 751 stations on the committed fixtures, exactly on the analytic ramp and to 3.6e-15 m on the oblique scatter, within the preregistered 1e-6 m tolerance. Sampled elevation along the section, not a surveyed one. | survey-grade longitudinal section |

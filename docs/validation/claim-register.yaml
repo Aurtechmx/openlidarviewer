@@ -197,6 +197,35 @@ claims:
         - "Geographic-degree grids, which are refused."
         - "Extents large enough for the planar-projection assumption to fail."
 
+  - claimId: E57-INGEST
+    product: E57 point-cloud ingestion
+    algorithm: ASTM E57 reader (XML header, CompressedVector, extension namespaces)
+    algorithmVersion: v0.6.6
+    claim: "Every point and per-point attribute decoded from an E57 file matches an independent reader of the same standard."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/e57PdalCrossDecode.test.ts, tests/e57*.test.ts]
+    supportingDatasets: ["Finestrat_2016.e57 (Zenodo 10.5281/zenodo.7576524, CC-BY-4.0, Abellan and Riquelme), 1788994 points, referenced by sha256 and not redistributed"]
+    supportingStudies: [E57-INGEST-PDAL-CROSS-DECODE]
+    units: [metres, source-units]
+    crsDatum: "The file declares no coordinate metadata; coordinates are read in the file's own local frame."
+    assumptions: ["the reference reader implements the same standard independently", "both readers consume the CompressedVector in file order"]
+    failureModes: ["scaled-integer cartesian fields, where per-field limits are decode parameters and are not exercised here", "scanner-native writers, not represented by this file"]
+    exportAllowed: true
+    userLabel: "Cross-implementation validated E57 decode"
+    softwareStatus: shipping
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of the committed reference file, compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance."
+    prohibitedClaim: ["survey-grade ingestion", "validated against every E57 writer", "scanner-native metadata handling"]
+    scope:
+      supported: []
+      unsupported:
+        - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
+        - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
+        - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
+        - "Scaled-integer cartesian encodings, where the declared per-field limits ARE decode parameters."
+
   - claimId: MEAS-HEIGHT
     product: Height / vertical measurement
     algorithm: Vertical delta (unit-aware, up-axis-aware)
