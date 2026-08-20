@@ -33,7 +33,8 @@
         "witness": "The commit that registered the MEAS-PROFILE reference slot at status pending in src/validation/crossCheck.ts, carrying this 1e-6 m tolerance and the two fixtures, with no reference output anywhere in the tree and no comparison against the sampler yet run.",
         "atInstant": "2026-08-20T03:11:50-06:00",
         "resultLandedOn": "2026-08-20",
-        "resultAtInstant": "2026-08-20T03:31:00-06:00"
+        "resultAtInstant": "2026-08-20T03:31:00-06:00",
+        "resultCommit": "dcaac41e275762ba2aa10220c278a10286a89781"
       }
     }
   ],
@@ -45,5 +46,5 @@
     "ST_Distance measures to the section segment, so a point beyond an end is rejected by its distance to the endpoint rather than by an along-line test. Both fixtures place their beyond-the-end returns far enough out that the two rules agree, which is why the along-line gate at exactly ±band is outside this study's scope.",
     "The freeze and the result fall on the same day, so the record carries both instants and the two commits that hold them. atInstant belongs to the commit that registered the tolerance at pending; resultAtInstant belongs to the commit that flipped the study manifest to agree, named in resultCommit. Both are checkable with git show -s --format=%aI."
   ],
-  "digest": "sha256:7468b3ef49617c4a2f726d8fe0880a3d4a334e802fe3bf8b8b037eb597718b27"
+  "digest": "sha256:f6b902e9384049d2938f8551c94a5f1cefe39052e7d21f7152961eccd6b856f5"
 }

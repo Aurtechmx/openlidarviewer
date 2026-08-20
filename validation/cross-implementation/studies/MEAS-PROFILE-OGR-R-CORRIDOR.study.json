@@ -11,7 +11,7 @@
   "protocolDigest": "sha256:a550c2d52612d48a8035ec270f0c61fd039354e56f4b443efaa3b8fac3850b42",
   "protocolRef": {
     "protocolId": "PROTO-PROFILE-OGR-R-CORRIDOR",
-    "digest": "sha256:7468b3ef49617c4a2f726d8fe0880a3d4a334e802fe3bf8b8b037eb597718b27"
+    "digest": "sha256:f6b902e9384049d2938f8551c94a5f1cefe39052e7d21f7152961eccd6b856f5"
   },
   "candidate": {
     "revision": "4788166d3e98bd4eb166f67a48bbd1620daebb3f",
