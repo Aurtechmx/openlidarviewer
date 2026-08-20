@@ -29,7 +29,7 @@ keep that arrow pointing one way.
 | Export / report | `src/export`, `src/report`, `src/convert` | ~9.3k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~1.6k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~19.9k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 5,821 | Wiring. **A monolith under decomposition.** |
+| Shell | `src/main.ts` | 5,700 | Wiring. **A monolith under decomposition.** |
 
 ## Composition root
 
@@ -99,7 +99,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-**`src/main.ts` (5,821)** — the largest blocks, which are the extraction
+**`src/main.ts` (5,700)** — the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` (344 lines) is now extracted to `src/app/actionDefinitions.ts`,
@@ -165,6 +165,21 @@ CRS gate are a separate pure module, `src/export/scanFootprint.ts`, testable wit
 no DOM, three.js or proj4 (`tests/scanFootprint.test.ts`); the serialiser is
 `buildFootprintKml` in the existing `src/export/kmlExport.ts`. `main.ts` keeps
 four thin delegates and the deps object.
+
+Done: the restorable view-state cluster (~162 lines) now lives in
+`src/app/viewStateCoordinator.ts`: `captureViewState`, `applyViewState`,
+`saveCurrentView`, `refreshViewsUI` and `applyView`, driven through a
+`ViewStateCoordinatorDeps` object of accessor functions. Capture and apply are
+one contract with two surfaces (a `.olvsession`'s global fields and every named
+saved view), so the saved-view operations layered on them belong beside them.
+Every collaborator is named structurally (the viewer surface a view state
+actually touches, the Inspector mirror, the class legend, the clip panel), so
+the cluster decides against plain object fakes in Node: the empty-state camera
+gate, the no-scan point-filter skip, the shell's restored-window write-back, the
+`getCameraState` / bare-pose fallback, and the pre-v7 camera-only restore path
+that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
+field order and the present/absent guards stay in `src/io/viewState.ts`.
+`main.ts` keeps five thin delegates and the deps object.
 
 **`src/render/Viewer.ts` (6,439)** — the constructor and a handful of large
 methods dominate:

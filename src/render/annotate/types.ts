@@ -13,6 +13,7 @@
 
 import type { NavMode } from '../NavController';
 import type { WorkOwnership } from '../../model/workOwnership';
+import type { IssueDetails } from './issueWorkflow';
 
 /** The four annotation categories — each drives a distinct marker style. */
 export type AnnotationType = 'note' | 'info' | 'warning' | 'issue';
@@ -104,6 +105,19 @@ export interface Annotation {
   cameraState?: SavedCameraState;
   /** Optional link to a measurement by its id. */
   linkedMeasurementId?: string;
+  /**
+   * Inspection workflow, when this annotation is an ISSUE: severity, an
+   * open/resolved status, and the date the condition was observed. See
+   * `annotate/issueWorkflow.ts`, which owns the vocabulary and the helpers.
+   *
+   * Optional, and its absence is meaningful: an annotation saved before this
+   * workflow existed carries no block and stays a plain annotation, including
+   * one already categorised `type: 'issue'`. The category drives marker
+   * styling; this block is what says the annotation is being tracked. Nothing
+   * infers one from the other, so no saved annotation gains a severity or a
+   * status it was never given.
+   */
+  issue?: IssueDetails;
 }
 
 /** Type guard for a valid {@link AnnotationType}. */
