@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Ten products are at E4. Five are algorithm checks against GDAL:
+- Eleven products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -87,8 +87,8 @@ discrete properties a test pins (byte-identity, exact inverses).
   clouds where the reference radius is below half a cell. They do not validate
   ground classification (`GROUND-FILTER` stays partial) or real-terrain void
   interpolation, so the DTM's own required bar remains E5.
-- The terrain descriptors are the remaining E4 products, each checked three ways
-  against an independent tool and the closed form on a controlled analytic
+- The two terrain descriptors are each checked three ways against an independent
+  tool and the closed form on a controlled analytic
   fixture: `TPI` agrees with gdaldem 3.13.1 and the closed-form quadratic
   curvature to under 9×10⁻⁷ within a 1×10⁻⁵ tolerance, on a
   low-amplitude quadratic chosen so the reference's float32 accumulation stays
@@ -96,6 +96,16 @@ discrete properties a test pins (byte-identity, exact inverses).
   closed-form Sappington VRM to under 1×10⁻⁹, on a smooth tilted quadratic
   chosen so Horn and SAGA normals converge. They do not cover under-resolved
   sharp features (VRM) or high absolute elevations (TPI).
+- `MEAS-PROFILE`, the corridor section profile, is the eleventh, and it is a
+  measurement rather than a raster. Its reference is built from two tools:
+  OGR/SpatiaLite 5.1.0 places every point on the section line and R 4.4.1
+  `quantile(type = 7)` reduces each station. Over 751 stations on two committed
+  point clouds the largest difference is 3.6×10⁻¹⁵ m, under a 1×10⁻⁶ m tolerance
+  registered before the reference existed, and the per-station corridor counts
+  match exactly. On the analytic ramp both sides also reproduce the closed form
+  the surface implies, to the last bit. It covers the corridor gate, the
+  classification gate, the station binning and the type-7 reduction at two
+  percentiles on synthetic clouds; it is not accuracy against a surveyed section.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

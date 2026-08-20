@@ -268,7 +268,7 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // is double rounding on quantities bounded by a few hundred metres, which
   // cannot exceed about 1e-13 m. A micrometre sits seven orders above that and
   // far below any elevation a reader of a section could act on.
-  { claimId: 'MEAS-PROFILE', referenceTool: 'R', toleranceAbs: 1e-6, unit: 'm', status: 'pending' },
+  { claimId: 'MEAS-PROFILE', referenceTool: 'R', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

@@ -4,13 +4,14 @@
   "claimId": "MEAS-PROFILE",
   "example": false,
   "notes": [
-    "Registered before the reference exists. The tolerance is on record in the commit the protocol's freeze names, where the slot stands at pending and no reference output exists in the tree.",
-    "The independent side is assembled from two tools and this repository writes neither half: SpatiaLite computes chainage and perpendicular distance, R computes the type-7 quantile per station. The corridor query passes the elevation column through as text, so the number R reduces is the number the sampler binned."
+    "The tolerance was registered before the reference existed, in the commit the protocol's freeze names, where the slot stands at pending and no reference output is in the tree. This record promotes nothing on its own.",
+    "The independent side is assembled from two tools and this repository writes neither half: SpatiaLite computes chainage and perpendicular distance, R computes the type-7 quantile per station. The corridor query passes the elevation column through as text, so the number R reduces is the number the sampler binned.",
+    "Three-way on the ramp: the sampler against the OGR/R reference AND against the closed form the surface implies, with the reference checked against the closed form as well. The ramp differences are exactly zero because every quantity in that fixture is representable without rounding in both Float32 and double; the oblique scatter is where double-precision projection differences show, at 3.6e-15 m."
   ],
   "protocolDigest": "sha256:a550c2d52612d48a8035ec270f0c61fd039354e56f4b443efaa3b8fac3850b42",
   "protocolRef": {
     "protocolId": "PROTO-PROFILE-OGR-R-CORRIDOR",
-    "digest": "sha256:24f5fa3c54c6dba768c7675055836a54473d0f8b32035de649ebe5577cec5241"
+    "digest": "sha256:7468b3ef49617c4a2f726d8fe0880a3d4a334e802fe3bf8b8b037eb597718b27"
   },
   "candidate": {
     "revision": "4788166d3e98bd4eb166f67a48bbd1620daebb3f",
@@ -22,7 +23,7 @@
     "version": "GDAL 3.13.1 with SpatiaLite 5.1.0, R 4.4.1",
     "containerDigest": null,
     "containerPinning": "not-executed",
-    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host this reference is produced on, so no image was pulled and no digest exists to record; the resolved executable paths, the versions the two tools report and the exact command lines stand in for it.",
+    "containerPinningNote": "A container digest is the pin this record wants. The Docker daemon is not running on the host this reference was produced on, so no image was pulled and no digest exists to record; the resolved executable paths, the versions the two tools report and the exact command lines stand in for it.",
     "executablePath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/ogr2ogr",
     "commandLine": "ogr2ogr -f CSV <corridor.csv> <fixture.csv> -lco STRING_QUOTING=IF_NEEDED -dialect SQLITE -sql \"SELECT CAST(ST_Line_Locate_Point(line, MakePoint(x, y)) * ST_Length(line) / <binStep> + 0.5 AS INTEGER) AS bin, z AS z FROM <layer> WHERE ST_Distance(line, MakePoint(x, y)) <= <band>\", then Rscript validation/cross-implementation/profile/profile-quantile.R <corridor.csv> <profile.csv> <stations> <percentiles>",
     "platform": "darwin-arm64"
@@ -123,8 +124,16 @@
     "minimumComparableCells": 700,
     "requiredWithinToleranceFraction": 1
   },
-  "status": "not-executed",
-  "statusReason": "The tolerance, the fixtures and the reference procedure are registered; no reference output has been produced at this commit and nothing has been compared.",
+  "status": "agree",
+  "statusReason": "All 751 compared stations are within the registered 1e-6 m across the three parameter sets, and the per-station corridor counts match the reference exactly on all three. The ramp legs are exact against both the reference and the closed form; the largest difference anywhere is 3.55e-15 m, on the oblique scatter. Four stations were skipped, the four the fixture leaves empty, and both sides report them as gaps. Nothing was widened.",
+  "result": {
+    "comparableCells": 751,
+    "skippedCells": 4,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 3.552713678800501e-15,
+    "rmse": 4.763291104635723e-16,
+    "meanDiff": 0
+  },
   "rawArtifacts": [
     {
       "path": "validation/cross-implementation/profile/profile-ramp.csv",
@@ -140,13 +149,55 @@
       "path": "validation/cross-implementation/profile/profile-quantile.R",
       "sha256": "3b357d7731ec7a189aa26b48ca54fbf078075f26bf46b4fccfd7c70cc806cfda",
       "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/profile/profile-ramp__corridor.csv",
+      "sha256": "9d154e5dafc887c8fee12ba54e05312d79fedf5ac68a832f81ce1783fde049a9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/profile/profile-ramp__profile.csv",
+      "sha256": "db00d93dc6c4aa2fb97d68cb5c68e232fd894e5dcead9c561ce4026d49d03681",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/profile/profile-scatter__corridor.csv",
+      "sha256": "ef2db619da65ef97891d666198981c2b2a056efbd9b858bd610d93e99f0a3fe2",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/profile/profile-scatter__profile.csv",
+      "sha256": "04f2ddc2d2502c49946f7f05bc12cc2030621529507874e3a556978d53afdb64",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/profile/reference-runs-profile.json",
+      "sha256": "5a7a4225cefac6c883fc649c7410324c1e06df3060f747462c3179b943e208ae",
+      "role": "reference-environment"
     }
   ],
   "derivedArtifacts": [],
   "scope": {
-    "supported": [],
+    "supported": [
+      {
+        "datasetId": "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "parameterSetId": "PS-PROFILE-P25-RAMP"
+      },
+      {
+        "datasetId": "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "parameterSetId": "PS-PROFILE-P50-RAMP"
+      },
+      {
+        "datasetId": "OLV-DS-024-SCATTER-PROFILE-OBLIQUE",
+        "parameterSetId": "PS-PROFILE-P25-SCATTER-CLASSIFIED"
+      }
+    ],
     "unsupported": [
-      "Nothing. No comparison has been run under this record."
+      "A point close enough to a bin boundary or to the corridor edge that two projection implementations could place it differently. Both fixtures keep every point clear of both by construction, so the tie-breaking is untested.",
+      "The along-line gate at the ends of the section. ST_Distance measures to the segment, so a return beyond an end is rejected here by its distance to the endpoint; both fixtures place those returns far enough out that the two rules agree.",
+      "Real returns. Both fixtures are synthetic, noise-free and evenly lit by construction.",
+      "Corridor half-widths, sample counts and percentiles other than the three parameter sets listed.",
+      "Accuracy against a surveyed section. Agreement with an independent implementation is not accuracy against ground truth."
     ]
   }
 }

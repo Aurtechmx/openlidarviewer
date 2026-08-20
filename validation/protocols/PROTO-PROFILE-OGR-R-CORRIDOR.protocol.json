@@ -31,7 +31,9 @@
         "on": "2026-08-20",
         "witnessCommit": "4788166d3e98bd4eb166f67a48bbd1620daebb3f",
         "witness": "The commit that registered the MEAS-PROFILE reference slot at status pending in src/validation/crossCheck.ts, carrying this 1e-6 m tolerance and the two fixtures, with no reference output anywhere in the tree and no comparison against the sampler yet run.",
-        "atInstant": "2026-08-20T03:11:50-06:00"
+        "atInstant": "2026-08-20T03:11:50-06:00",
+        "resultLandedOn": "2026-08-20",
+        "resultAtInstant": "2026-08-20T03:31:00-06:00"
       }
     }
   ],
@@ -40,7 +42,8 @@
     "Per-station counts are compared as integers, not against the tolerance. They are what makes a gap a gap: a station the sampler reports empty must be a station the reference found no corridor points for, and an interpolated value would show up as a count of zero against a height.",
     "The closed form applies only to the ramp. Each of its stations holds ten corridor elevations in an exact arithmetic progression, and the type-7 quantile of an arithmetic progression is first + step·(p/100)·(n−1), which contains no sort and no order statistic. That is what keeps the analytic leg from being a second copy of the reduction under test.",
     "The reference pipeline was run against the closed form before this tolerance was frozen, to establish that SpatiaLite's chainage and R's quantile reproduce the ramp's analytic series. That check involves no OpenLiDARViewer code and produced no comparison against the sampler; the candidate's own series did not exist until after the freeze.",
-    "ST_Distance measures to the section segment, so a point beyond an end is rejected by its distance to the endpoint rather than by an along-line test. Both fixtures place their beyond-the-end returns far enough out that the two rules agree, which is why the along-line gate at exactly ±band is outside this study's scope."
+    "ST_Distance measures to the section segment, so a point beyond an end is rejected by its distance to the endpoint rather than by an along-line test. Both fixtures place their beyond-the-end returns far enough out that the two rules agree, which is why the along-line gate at exactly ±band is outside this study's scope.",
+    "The freeze and the result fall on the same day, so the record carries both instants and the two commits that hold them. atInstant belongs to the commit that registered the tolerance at pending; resultAtInstant belongs to the commit that flipped the study manifest to agree, named in resultCommit. Both are checkable with git show -s --format=%aI."
   ],
-  "digest": "sha256:24f5fa3c54c6dba768c7675055836a54473d0f8b32035de649ebe5577cec5241"
+  "digest": "sha256:7468b3ef49617c4a2f726d8fe0880a3d4a334e802fe3bf8b8b037eb597718b27"
 }

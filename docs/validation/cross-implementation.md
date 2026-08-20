@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Ten products are at E4. Five are algorithm checks against GDAL:
+Eleven products are at E4. Five are algorithm checks against GDAL:
 **`SLOPE-RASTER`**, **`ASPECT-RASTER`**, **`HILLSHADE`**, **`CONTOURS`** and
 **`MEAS-AREA`** (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision — see
@@ -26,7 +26,14 @@ low-amplitude quadratic (chosen so the reference's float32 mean accumulation
 stays below the tolerance), and **`VRM`** against SAGA 7.8.2's Vector Ruggedness
 Measure on a smooth tilted quadratic (chosen so Horn's normal and SAGA's
 estimator converge), with OLV reproducing the closed-form Sappington VRM to under
-1×10⁻⁹.
+1×10⁻⁹. The eleventh is a measurement rather than a raster: **`MEAS-PROFILE`**,
+the corridor section profile, against a reference assembled from two tools
+because no single one exposes the operation. OGR's SpatiaLite functions place
+every point on the section line and R's `quantile(type = 7)` reduces each
+station, so neither half of the profile is written twice here. One of its two
+fixtures also carries a closed form: ten corridor elevations in an exact
+arithmetic progression reduce to `first + step·(p/100)·(n − 1)`, with no sort and
+no order statistic.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -39,6 +46,7 @@ estimator converge), with OLV reproducing the closed-form Sappington VRM to unde
 | `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
 | `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
+| `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
 
 All nine tolerances were registered in `REFERENCE_SLOTS` before the references
 were generated. Each reference output, the exact command, the tool version and the
@@ -200,6 +208,28 @@ size, extent, and row order), so the two can be compared cell for cell.
    and separately checks both against the analytic line so a wrong DEM or a
    half-cell georeferencing offset shows up rather than averaging into agreement.
    The full reasoning is in `tests/fixtures/reference/contour/README.md`.
+
+### Section profile (OGR/SpatiaLite + R)
+
+1. Generate the two point clouds, then run the reference pipeline:
+
+   ```
+   node scripts/make-profile-fixture.mjs
+   node scripts/run-profile-reference.mjs
+   ```
+
+2. The second command runs two tools and computes nothing itself. `ogr2ogr`
+   with the SQLite dialect builds the corridor table — `ST_Line_Locate_Point`
+   for chainage, `ST_Distance` for the corridor test, the nearest station for
+   the bin — and selects the elevation column **as text**, so the value R
+   reduces is the value the sampler binned and no number is re-printed on the
+   way. `Rscript` then applies `quantile(type = 7)` per station.
+
+3. Both fixtures keep every point clear of a bin boundary and of the corridor
+   edge, and every coordinate is exactly representable in Float32 and in double.
+   That is what lets a 1×10⁻⁶ m tolerance measure the algorithm rather than a
+   tie-break or a transcode. The ramp fixture is also checked against the closed
+   form its surface implies, on both sides.
 
 ### Ground filter (CloudCompare or PDAL SMRF)
 

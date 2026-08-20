@@ -20,9 +20,9 @@
     "pending"
   ],
   "studiesRead": 13,
-  "countedStudies": 11,
+  "countedStudies": 12,
   "byStatus": {
-    "agree": 10,
+    "agree": 11,
     "partial": 1
   },
   "byClaim": {
@@ -134,6 +134,21 @@
         "PS-AREA-OGR-PLANAR"
       ]
     },
+    "MEAS-PROFILE": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "OLV-DS-024-SCATTER-PROFILE-OBLIQUE"
+      ],
+      "parameterSetIds": [
+        "PS-PROFILE-P25-RAMP",
+        "PS-PROFILE-P25-SCATTER-CLASSIFIED",
+        "PS-PROFILE-P50-RAMP"
+      ]
+    },
     "SLOPE-RASTER": {
       "studies": 1,
       "byStatus": {
@@ -173,10 +188,10 @@
     }
   },
   "agreement": {
-    "denominator": 11,
+    "denominator": 12,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 10,
-    "fraction": 0.9090909090909091
+    "agree": 11,
+    "fraction": 0.9166666666666666
   },
   "excludedFromCounts": [
     {
@@ -184,12 +199,6 @@
       "claimId": "SLOPE-RASTER",
       "status": "pending",
       "why": "example manifest: a template, not a study"
-    },
-    {
-      "studyId": "MEAS-PROFILE-OGR-R-CORRIDOR",
-      "claimId": "MEAS-PROFILE",
-      "status": "not-executed",
-      "why": "status \"not-executed\": nothing was measured, so there is nothing to count"
     }
   ]
 }
