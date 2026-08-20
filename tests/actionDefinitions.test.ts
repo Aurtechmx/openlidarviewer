@@ -185,6 +185,8 @@ interface Harness {
   applyView: ReturnType<typeof vi.fn>;
   toggleOrbitInvert: ReturnType<typeof vi.fn>;
   resetNavigation: ReturnType<typeof vi.fn>;
+  togglePlanView: ReturnType<typeof vi.fn>;
+  notePlanViewPreset: ReturnType<typeof vi.fn>;
   run: (id: string) => void;
   find: (id: string) => Action;
 }
@@ -218,6 +220,8 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     applyView: vi.fn(),
     toggleOrbitInvert: vi.fn(),
     resetNavigation: vi.fn(),
+    togglePlanView: vi.fn(),
+    notePlanViewPreset: vi.fn(),
   };
   const self = h as Harness;
 
@@ -256,6 +260,10 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     applyView: self.applyView,
     toggleOrbitInvert: self.toggleOrbitInvert,
     resetNavigation: self.resetNavigation,
+    planView: {
+      togglePlanView: self.togglePlanView,
+      notePlanViewPreset: self.notePlanViewPreset,
+    },
   };
 
   self.actions = buildActionRegistry(deps as unknown as ActionRegistryDeps);
@@ -296,8 +304,25 @@ describe('buildActionRegistry — registry shape', () => {
 
   it('registers one Camera entry per preset, in preset order', () => {
     const { actions } = harness();
-    const cameras = actions.filter((a) => a.id.startsWith('camera.') && a.id !== 'camera.frame-all');
+    // The section also holds two entries that are not poses: Frame all, and the
+    // Plan-view toggle (a composed mode, covered by planViewWiring.test.ts).
+    const notAPreset = new Set(['camera.frame-all', 'camera.plan-view']);
+    const cameras = actions.filter((a) => a.id.startsWith('camera.') && !notAPreset.has(a.id));
     expect(cameras.map((a) => a.id)).toEqual(CAMERA_PRESET_ORDER.map((n) => `camera.${n}`));
+  });
+
+  it('offers Plan view from the palette, on the same toggle as the chip', () => {
+    const h = harness();
+    h.run('camera.plan-view');
+    expect(h.togglePlanView).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells plan mode which pose a palette preset aimed at', () => {
+    const h = harness();
+    // Plan mode claims the camera is looking straight down, so a preset fired
+    // from here has to reach it the same way the NavBar chips do.
+    h.run('camera.oblique');
+    expect(h.notePlanViewPreset).toHaveBeenCalledWith('oblique');
   });
 
   it('advertises the preset keys but suppresses the Iso chip', () => {

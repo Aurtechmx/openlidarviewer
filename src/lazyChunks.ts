@@ -48,6 +48,14 @@ export const loadViewer = () => import('./render/Viewer');
 export const loadContourStudioMount = () => import('./ui/contourStudioMount');
 
 /**
+ * Load the tool preflight — the model that says what limits a tool and what
+ * would lift it, plus its live-input builder and its action bindings — on the
+ * first Process Studio refresh that has a scan to reason about. Nothing can be
+ * limited before a scan opens, so none of it belongs in the startup shell.
+ */
+export const loadToolPreflight = () => import('./app/toolPreflightRuntime');
+
+/**
  * Load the Contour Studio export ORCHESTRATION (the permit gate + dispatch) on
  * the first export click. The permit resolver pulls the evidence registry, so
  * keeping it here — not eager in AnalysePanel — holds that whole chain out of the
@@ -420,6 +428,16 @@ export const loadChangeRaster = () => import('./terrain/change/changeRaster');
 export const loadViewCube = () => import('./ui/viewCube');
 export const loadWorkflowConfigPanel = () => import('./ui/WorkflowConfigPanel');
 export const loadReportVerifier = () => import('./ui/reportVerifier');
+
+/**
+ * Plan View's controller and the pure planner behind it, on the first press of
+ * the Plan chip. Nothing before that press can need them: plan mode holds no
+ * state until it is entered, and the handlers that report a manual view or
+ * projection change ask the controller only if one already exists. Keeping the
+ * pair out of the eager index is what stops a camera mode nobody has used yet
+ * from being paid for on every cold start.
+ */
+export const loadPlanViewController = () => import('./render/camera/planViewController');
 
 /**
  * v0.5.4 — the contour serialisers (GeoJSON / DXF / SVG writers) and the

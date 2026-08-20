@@ -1597,6 +1597,49 @@ export class Inspector {
   }
 
   /**
+   * Reveal the coordinate-system override control and put the keyboard on it.
+   * The destination of the tool preflight's `set-coordinate-system` remediation:
+   * a user told the physical unit is unconfirmed lands on the control that
+   * confirms it, rather than being asked to go and find it.
+   *
+   * Returns false when the section is unavailable (it is hidden while a
+   * streaming scan is mounted), so a caller can tell "done" from "nothing here".
+   */
+  focusCrsOverride(): boolean {
+    return this._revealSection(this._crsSection, '.olv-crs-select');
+  }
+
+  /**
+   * Reveal the layer list, where each layer's CRS label and compatibility flag
+   * are shown — the destination of the `inspect-layer-crs` remediation.
+   */
+  focusLayers(): boolean {
+    return this._revealSection(this._layersSection, null);
+  }
+
+  /**
+   * Bring one Inspector section into view, expanding it when it is a collapsed
+   * disclosure, and focus a control inside it when one is named. Opening the
+   * bottom sheet is unconditional: the class it adds is scoped to the phone
+   * media query, so it is inert on desktop and necessary on a phone, where the
+   * section is otherwise behind a closed sheet.
+   */
+  private _revealSection(target: HTMLElement | null, focusSelector: string | null): boolean {
+    if (!target || target.classList.contains('olv-hidden')) return false;
+    this.openSheet();
+    // Duck-typed rather than `instanceof HTMLDetailsElement`: this file is
+    // built under recording-DOM stubs in the node test environment, where the
+    // constructor does not exist.
+    if ('open' in target) (target as HTMLDetailsElement).open = true;
+    target.scrollIntoView?.({ block: 'nearest' });
+    const control = focusSelector ? target.querySelector(focusSelector) : null;
+    if (control && typeof (control as HTMLElement).focus === 'function') {
+      (control as HTMLElement).focus();
+    }
+    return true;
+  }
+
+  /**
    * Hide the Inspector entirely while the user is on the empty state, reveal
    * once a scan attaches. v0.3.6 desktop-audit fix: the panel was painting on
    * the empty state with placeholder controls (Point Size, EDL, Antialiasing,

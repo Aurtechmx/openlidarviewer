@@ -10,12 +10,20 @@
  *   2. creating and mounting the panel and handing back one `refresh()` the
  *      caller invokes on any scan change.
  *
- * The signals themselves are read by the composition root, where the live
- * `viewer` / `scans` / `crsService` objects are, and handed in through the
- * `getSignals` seam. That keeps this module pure of three.js and the GPU and
+ * The composition root hands in the live objects it holds (`viewer`, the scan
+ * service, `crsService`, the class legend) through {@link ProcessStudioShell};
+ * every read off them, and the fail-closed default behind it, is written here.
+ * Structural types keep this module free of three.js and the GPU, so it stays
  * Node-testable: a `null` signal set is the no-scan empty state, and a throwing
  * signal read is caught and treated as no-scan rather than propagating into a
  * scan-change handler.
+ *
+ * The same refresh also carries the TOOL PREFLIGHT — what limits each tool and
+ * what would lift it — and routes the remediation a user picks to a real app
+ * action. The model, its input builder and its action bindings ride ONE lazy
+ * chunk (`toolPreflightRuntime`), pulled on the first refresh with a scan to
+ * reason about; until it lands the panel simply offers nothing. The verdicts
+ * stay the model's: nothing here decides.
  */
 
 import { ProcessStudioPanel } from '../ui/ProcessStudioPanel';
@@ -24,6 +32,15 @@ import type { RawScanSignals } from '../process/scanFacts';
 import type { ScanFacts, ProductId } from '../process/ProcessPlan';
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { MeasurementKind } from '../render/measure/types';
+import type { PreflightInput } from '../process/toolPreflight';
+// TYPE-ONLY, all three: the preflight model, its live-input builder and its
+// action bindings ride one lazy chunk, reached through `loadToolPreflight()`.
+// A value import here would put the whole model back in the startup shell.
+import type { PreflightLiveReads } from './toolPreflightInput';
+import type { PreflightActionHost } from './preflightActions';
+import type { PreflightActionRunner, PreflightView } from './toolPreflightRuntime';
+import { loadToolPreflight } from '../lazyChunks';
 
 /** LAS standard classification codes the panel keys ground/building on. */
 const CLASS_GROUND = 2;
@@ -82,6 +99,13 @@ export function signalsFromLive(a: LiveScanAccessors): RawScanSignals | null {
 export interface ProcessStudioDeps {
   /** Live signals for the active scan, or null when none is loaded. */
   getSignals(): RawScanSignals | null | undefined;
+  /**
+   * Live reads for the tool preflight. Omitted ⇒ the panel renders no preflight
+   * and offers no remediation, which is "nothing to say", never "all ready".
+   */
+  preflight?: PreflightLiveReads;
+  /** What the app can do about a remediation. Omitted ⇒ every action is guidance. */
+  actions?: PreflightActionHost;
 }
 
 /**
@@ -108,9 +132,51 @@ export interface MountedProcessStudio {
   clearProduced(): void;
 }
 
-/** Create the panel and return it plus a `refresh()` bound to `deps`. */
+/**
+ * Create the panel and return it plus a `refresh()` bound to `deps`.
+ *
+ * The preflight model arrives asynchronously (its chunk is pulled on the first
+ * refresh that has live reads to give it) and the panel repaints when it lands.
+ * Until then the panel renders the products from the single-scan service alone,
+ * with no remediation offered — never a more permissive verdict.
+ */
 export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStudio {
-  const panel = new ProcessStudioPanel();
+  /** The lazy module, once it has landed. */
+  let runtime: Awaited<ReturnType<typeof loadToolPreflight>> | null = null;
+  let runner: PreflightActionRunner | null = null;
+  let loading: Promise<void> | null = null;
+  const panel = new ProcessStudioPanel({
+    canRemediate: (action, tool) => runner?.canRun(action, tool) === true,
+    onRemediate: (action, tool) => { runner?.run(action, tool); },
+  });
+
+  /**
+   * Single-flight load of the preflight chunk, repainting once it is in. A
+   * failed load (a stale chunk after a redeploy is the known case) leaves the
+   * panel exactly as it is — no verdict, no remediation — and lets a later
+   * refresh try again, rather than rejecting into an unhandled promise.
+   */
+  function ensureRuntime(): void {
+    if (runtime || loading || !deps.preflight) return;
+    loading = loadToolPreflight()
+      .then((module) => {
+        runtime = module;
+        runner = module.createPreflightActionRunner(deps.actions ?? {});
+        loading = null;
+        repaint();
+      })
+      .catch(() => {
+        loading = null;
+      });
+  }
+
+  const preflight = (): PreflightView | undefined => {
+    ensureRuntime();
+    return runtime && deps.preflight ? runtime.preflightView(deps.preflight) : undefined;
+  };
+  function repaint(): void {
+    panel.update(resolveActiveScanFacts(deps), preflight());
+  }
   panel.update(null);
   // Start hidden: the shell reveals it on scan load (like the class legend) and
   // hides it on scan close, so the boot shell never shows an empty studio.
@@ -118,7 +184,7 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
   return {
     panel,
     refresh() {
-      panel.update(resolveActiveScanFacts(deps));
+      repaint();
     },
     markProduced(ids) {
       panel.setProduced(ids);
@@ -129,7 +195,121 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
   };
 }
 
-/** Convenience wiring for the composition root: create the studio straight from live accessors. */
-export function createProcessStudioFromLive(accessors: LiveScanAccessors): MountedProcessStudio {
-  return createProcessStudio({ getSignals: () => signalsFromLive(accessors) });
+/**
+ * The live viewer reads the studio and the preflight need, typed structurally so
+ * this module never imports the Viewer (and stays Node-testable with a fake).
+ */
+export interface StudioViewer {
+  /** The mounted streaming source, or null for a static / empty scene. */
+  readonly streamingCloud: { readonly sourcePointCount: number } | null;
+  /** Every loaded static layer's id. */
+  clouds(): readonly string[];
+  getCloud(id: string):
+    | {
+        readonly name: string;
+        readonly pointCount: number;
+        readonly metadata?: { readonly crs?: CrsInfo | null };
+      }
+    | undefined;
+  /** The measure controller — the scene's shared-datum authority. */
+  readonly measure: { readonly datumResolved: boolean; setKind(kind: MeasurementKind): void };
+  setMeasureMode(on: boolean): void;
+}
+
+/**
+ * The shell objects the studio and the tool preflight read. Assembling them here
+ * rather than in the composition root keeps every live read — and the fail-closed
+ * choice behind it — next to the model it feeds.
+ */
+export interface ProcessStudioShell {
+  getViewer(): StudioViewer;
+  /** The active STATIC cloud, or null when none is loaded. */
+  getActiveCloud(): { readonly pointCount: number } | null | undefined;
+  /** The active scan's id (streaming-aware), so companion layers exclude it. */
+  getActiveLayerId(): string | null;
+  /** The CRS service: the active scan's resolved CRS and its spatial context. */
+  crsService: {
+    current(): CrsInfo | ResolvedCrs | null;
+    context(): PreflightInput['spatial'];
+  };
+  /** The classification legend — which class codes are present, and their origin. */
+  classLegend: {
+    presentCodes(): readonly number[];
+    classificationIsDerived(): boolean;
+  };
+  /** Resolve a NON-active layer's CRS the way the Inspector shows it (override applied). */
+  resolveLayerCrs(name: string, detected: CrsInfo | null | undefined): CrsInfo | ResolvedCrs | null;
+  /** Isolate one layer (the `solo-active-layer` remediation). */
+  soloLayer(id: string): void;
+  /** Derive classes for the active scan (the `classify-scan` remediation). */
+  classifyScan(): void;
+  /** Reveal the coordinate-system control (the `set-coordinate-system` remediation). */
+  focusCrs(): void;
+  /** Reveal the layer list (the `inspect-layer-crs` remediation). */
+  focusLayers(): void;
+}
+
+/**
+ * Every loaded layer except the active one, as loose signals. Each carries only
+ * what a cheap read establishes — its kind, its point count and its resolved
+ * CRS. Classification is deliberately NOT walked (a full per-point scan per
+ * layer, per refresh), so a companion reads as unclassified: the capability
+ * model's two-scan products do not consult it, and every other product reads
+ * `scans[0]`, the active scan, whose facts are complete.
+ */
+function companionSignals(shell: ProcessStudioShell): readonly RawScanSignals[] {
+  const viewer = shell.getViewer();
+  const activeId = shell.getActiveLayerId();
+  const out: RawScanSignals[] = [];
+  for (const id of viewer.clouds()) {
+    if (id === activeId) continue;
+    const cloud = viewer.getCloud(id);
+    if (!cloud) continue;
+    out.push({
+      kind: 'static',
+      pointCount: cloud.pointCount,
+      crs: shell.resolveLayerCrs(cloud.name, cloud.metadata?.crs),
+    });
+  }
+  return out;
+}
+
+/**
+ * Create the Process Studio and its tool preflight from the live shell — the
+ * one call the composition root makes.
+ */
+export function createProcessStudioFromShell(shell: ProcessStudioShell): MountedProcessStudio {
+  const accessors: LiveScanAccessors = {
+    getStreamingPointCount: () => shell.getViewer().streamingCloud?.sourcePointCount ?? null,
+    getActivePointCount: () => shell.getActiveCloud()?.pointCount ?? null,
+    // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
+    getResolvedCrs: () => shell.crsService.current(),
+    getPresentClassCodes: () => shell.classLegend.presentCodes(),
+    getClassificationDerived: () => shell.classLegend.classificationIsDerived(),
+  };
+  return createProcessStudio({
+    getSignals: () => signalsFromLive(accessors),
+    preflight: {
+      getActiveSignals: () => signalsFromLive(accessors),
+      getSpatialContext: () => shell.crsService.context(),
+      getCompanionSignals: () => companionSignals(shell),
+      getDatumResolved: () => shell.getViewer().measure.datumResolved,
+    },
+    actions: {
+      openCoordinateSystem: () => shell.focusCrs(),
+      inspectLayerCrs: () => shell.focusLayers(),
+      soloActiveLayer: () => {
+        const id = shell.getActiveLayerId();
+        if (id !== null) shell.soloLayer(id);
+      },
+      classifyScan: () => shell.classifyScan(),
+      // Proceeding arms the tool; the figure keeps the exploratory label the
+      // measure surfaces already give it, so nothing here re-states the caveat.
+      armMeasurement: (kind) => {
+        const viewer = shell.getViewer();
+        viewer.setMeasureMode(true);
+        viewer.measure.setKind(kind);
+      },
+    },
+  });
 }

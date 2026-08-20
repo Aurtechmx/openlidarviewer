@@ -22,6 +22,7 @@ import { ToolDock } from './ui/toolDock';
 import { revealStreamingScanChrome } from './ui/streamingScanReveal';
 import { createCompassController } from './ui/compassController';
 import { NavBar } from './ui/NavBar';
+import { createNavBarWiring } from './ui/navBarWiring';
 import { ProjectCard } from './ui/ProjectCard';
 import {
   wireMeasureBarClearance,
@@ -75,7 +76,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
 import { createMeasurePanelMount } from './app/measurePanelMount';
-import { createProcessStudioFromLive } from './app/processStudioMount';
+import { createProcessStudioFromShell } from './app/processStudioMount';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -1811,6 +1812,12 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
   };
 }
 
+// The navigation bar's handlers, and the Plan-view state they share.
+const navWiring = createNavBarWiring({
+  getViewer: () => viewer,
+  getNavBar: () => navBar,
+  toast: showLassoToast,
+});
 const ACTION_REGISTRY = buildActionRegistry({
   getViewer: () => viewer,
   getTour: () => tour,
@@ -1832,6 +1839,7 @@ const ACTION_REGISTRY = buildActionRegistry({
   saveCurrentView,
   applyView,
   ...makeNavPaletteActions({ viewer, inspector, persist: persistPrefs, toast: showLassoToast }),
+  planView: navWiring,
 });
 const duplicateActionIds = findDuplicateIds(ACTION_REGISTRY);
 if (duplicateActionIds.length > 0) {
@@ -1987,29 +1995,7 @@ dock.setEmpty(true);
 inspector.setEmpty(true);
 
 // Game-style navigation: mode switcher, speed slider, controls HUD.
-const navBar = new NavBar({
-  onMode: (mode) => viewer.setMode(mode),
-  onSpeed: (multiplier) => viewer.setNavSpeed(multiplier),
-  onReset: () => viewer.frameAll(),
-  onCameraPreset: (name) => {
-    const fired = viewer.setCameraPreset(name);
-    if (fired) {
-      showLassoToast(
-        `Camera · ${name[0].toUpperCase() + name.slice(1)} view.`,
-      );
-    }
-  },
-  onStandardView: (view) => {
-    const fired = viewer.setStandardView(view);
-    if (fired) {
-      showLassoToast(`View · ${view[0].toUpperCase() + view.slice(1)}.`);
-    }
-  },
-  onOrthographic: (on) => {
-    viewer.setOrthographic(on);
-    showLassoToast(on ? 'Orthographic (parallel) view on.' : 'Perspective view restored.');
-  },
-});
+const navBar = new NavBar(navWiring.callbacks);
 
 const projectCard = new ProjectCard();
 
@@ -2318,14 +2304,13 @@ let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null =
 
 const classLegendPanel = new ClassLegendPanel();
 
-// Process Studio — fail-closed readiness over the Phase-1/2 services (multi-line so the deferred `viewer.*` read is not a top-level deref).
-const processStudio = createProcessStudioFromLive({
-  getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
-  getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
-  // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
-  getResolvedCrs: () => crsService.current(),
-  getPresentClassCodes: () => classLegendPanel.presentCodes(),
-  getClassificationDerived: () => classLegendPanel.classificationIsDerived(),
+// Process Studio + tool preflight — fail-closed readiness over the Phase-1/2 services. Every live read (and its fail-closed default) is assembled in processStudioMount; these thunks only defer them, so no `viewer.*` deref runs at module top level.
+const processStudio = createProcessStudioFromShell({
+  getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
+  crsService, classLegend: classLegendPanel,
+  resolveLayerCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
+  focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); },
 });
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
@@ -5476,6 +5461,7 @@ function resetToEmptyState(): void {
   // and floats over the empty-state Open-a-scan UI (visibly covering the
   // QUICK DEMOS section). Resetting to orbit hides it via `_render`.
   navBar.setMode('orbit');
+  navWiring.resetPlanView();
   navBar.hideTouchHint();
   projectCard.hide();
   // Hides the phone-only Scan Info launcher; the sheet is closed by clear().
