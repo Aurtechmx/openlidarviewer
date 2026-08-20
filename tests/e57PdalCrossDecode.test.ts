@@ -49,8 +49,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseE57 } from '../src/io/e57/parseE57';
 
-/** Where a local copy of the CC-BY source lives, if the runner has one. */
-const E57_PATH = '/Users/ssid02/Documents/OpenLiDAR/Sets/e57/7576524/Finestrat_2016.e57';
+/**
+ * Where a local copy of the CC-BY source lives, if the runner has one. The file
+ * is not vendored, so the path is supplied rather than baked in: set
+ * `OLV_E57_FINESTRAT` to a copy fetched from the DOI in the study manifest. With
+ * no such copy the comparison skips and the committed reference is still checked.
+ */
+const E57_PATH = process.env.OLV_E57_FINESTRAT ?? '';
 
 const FIXTURES = join(import.meta.dirname, 'fixtures', 'e57-pdal');
 
@@ -114,7 +119,7 @@ function pdalSamples(): Record<string, number>[] {
 
 /** Decode with OLV, or null when the source file is not on this machine. */
 function decode(): Record<string, ArrayLike<number>> | null {
-  if (!existsSync(E57_PATH)) return null;
+  if (!E57_PATH || !existsSync(E57_PATH)) return null;
   const buf = readFileSync(E57_PATH);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
   const parsed = parseE57(ab) as unknown as { scans: Record<string, unknown>[] };

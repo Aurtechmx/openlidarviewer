@@ -91,6 +91,7 @@
   },
   "notes": [
     "The file declares its own recordCount, cartesianBounds and per-field limits, and OLV reproduces all of them exactly. That is asserted but is NOT the evidence: six extremal statistics out of 1788994 decoded values cannot distinguish a correct decode from one that corrupts the interior.",
-    "Rounding had to be matched across languages. Python's round() is round-half-to-even; JavaScript's Math.round is half away from zero. The mismatch produced a spurious 208-unit gap in the sum before floor(x+0.5) was adopted for the reference."
+    "Rounding had to be matched across languages. Python's round() is round-half-to-even; JavaScript's Math.round is half away from zero. The mismatch produced a spurious 208-unit gap in the sum before floor(x+0.5) was adopted for the reference.",
+    "The comparison test reads the source path from OLV_E57_FINESTRAT and skips without it, so no machine path is baked into the tree. Fetch the file from the DOI in datasets[0] to reproduce."
   ]
 }
