@@ -216,7 +216,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of the committed reference file, compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance."
+    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance."
     prohibitedClaim: ["survey-grade ingestion", "validated against every E57 writer", "scanner-native metadata handling"]
     scope:
       supported: []
