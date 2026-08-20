@@ -132,6 +132,11 @@ function setup(
     setCloudMounted: (id: string, m: boolean) => {
       mountCalls.set(id, m);
     },
+    // Project-shared elevation scale — the mount refresh re-runs these; the
+    // mock only needs them to exist (no rendering in a unit test).
+    refreshProjectSharedElevation: () => {},
+    projectSharedElevationRange: () => null,
+    projectSharedElevation: false,
   } as unknown as Viewer;
 
   const inspector = {
@@ -148,6 +153,7 @@ function setup(
     setLayerCompareAvailable: (b: boolean) => {
       compareCalls.push(b);
     },
+    setProjectSharedElevationAvailable: () => {},
   } as unknown as Inspector;
 
   const projectFrame = createProjectFrameService(context);

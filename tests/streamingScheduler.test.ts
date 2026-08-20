@@ -10,6 +10,7 @@ import {
   selectWithinBudget,
 } from '../src/render/streaming/streamingBudget';
 import { StreamingScheduler } from '../src/render/streaming/StreamingScheduler';
+import { evaluateRefinementReadiness } from '../src/render/streaming/refinementReadiness';
 import { StreamingPointCloud } from '../src/render/streaming/StreamingPointCloud';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import { buildSyntheticCopc } from './fixtures/copc/synthCopc';
@@ -994,4 +995,52 @@ test('nodes ingested AFTER scheduler construction still stream (late hierarchy)'
   await drain(scheduler);
   expect(ready.map((n) => n.record.id)).toContain('3-0-0-0');
   expect(cloud.counts().resident).toBe(6);
+});
+
+test('readinessFacts reports unknown before the first cull and settled once the wanted set is resident', async () => {
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+
+  // Before any update the wanted set is null: no denominator, no verdict.
+  const before = scheduler.readinessFacts();
+  expect(before.wantedCount).toBe(0);
+  expect(evaluateRefinementReadiness(before).phase).toBe('unknown');
+
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // Every wanted node is resident, nothing outstanding, no failures → settled.
+  const after = scheduler.readinessFacts();
+  expect(after.wantedCount).toBeGreaterThan(0);
+  expect(after.residentCount).toBe(after.wantedCount);
+  expect(after.inFlightCount + after.queuedCount + after.decodedPendingCount).toBe(0);
+  const verdict = evaluateRefinementReadiness(after);
+  expect(verdict.phase).toBe('settled');
+  if (verdict.phase === 'settled') expect(verdict.fractionResident).toBe(1);
+});
+
+test('readinessFacts counts are measured over the wanted set, not globally', async () => {
+  const cloud = await openCloud();
+  const scheduler = new StreamingScheduler(
+    cloud,
+    fakeDecoder,
+    { onNodeReady: () => {}, onNodeEvicted: () => {} },
+    streamingBudgets('balanced', false),
+  );
+  scheduler.update({ viewProjection: WIDE, cameraPosition: [0, 0, 0] });
+  await drain(scheduler);
+
+  // The wanted count never exceeds the nodes the hierarchy has revealed, and the
+  // per-state buckets sum to no more than the wanted count (a node outside the
+  // wanted set cannot inflate any bucket).
+  const f = scheduler.readinessFacts();
+  const bucketed =
+    f.residentCount + f.inFlightCount + f.queuedCount + f.decodedPendingCount + f.failedCount;
+  expect(f.wantedCount).toBeLessThanOrEqual(cloud.counts().known);
+  expect(bucketed).toBeLessThanOrEqual(f.wantedCount);
 });

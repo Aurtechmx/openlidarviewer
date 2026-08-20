@@ -54,8 +54,18 @@ export interface E57ParseResult {
   warnings: string[];
 }
 
+/** Options for {@link parseE57}. */
+export interface ParseE57Options {
+  /**
+   * Decode only the prototype columns this accepts (by field name). Omitted →
+   * every column decodes (the default; callers inspecting the full prototype
+   * rely on it). The loader passes a predicate to skip columns it never reads.
+   */
+  keepField?: (name: string) => boolean;
+}
+
 /** Parse an E57 file into decoded scans and file metadata. */
-export function parseE57(buffer: ArrayBuffer): E57ParseResult {
+export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseResult {
   const header = parseE57Header(buffer);
   const { logical } = depage(buffer, header.pageSize);
 
@@ -89,6 +99,7 @@ export function parseE57(buffer: ArrayBuffer): E57ParseResult {
       scan.recordCount,
       scan.prototype,
       header.pageSize,
+      opts?.keepField,
     ),
   }));
 

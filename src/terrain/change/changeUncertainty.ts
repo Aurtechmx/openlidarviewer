@@ -25,6 +25,12 @@
  * previously compared |net| against 1σ — a ~68% bar — while the module
  * converted LoDs at 1.96σ; the two conventions now agree.)
  *
+ * Both σ terms are built from numbers the caller supplies, so supplying
+ * neither collapses the band to ±0 — and a ±0 band clears every threshold
+ * here. An empty error budget is the WEAKEST result this module can produce,
+ * not the strongest, so `quantified` records that nothing was measured and
+ * `detectable` / `confidence` refuse to read certainty out of it.
+ *
  * Pure, deterministic. Sits beside {@link detectChange}: that computes the
  * volume, this bounds it.
  */
@@ -63,9 +69,17 @@ export interface ChangeVolumeUncertainty {
   readonly systematicErrorM3: number;
   readonly confidence: ChangeConfidence;
   /**
-   * True only when |net| exceeds the ~95% level of detection, 1.96σ — the
-   * same LoD convention {@link cellSigmaFromLoD} documents. A |net| between
-   * 1σ and 1.96σ is NOT detectable under this convention.
+   * False when NO error source was supplied — `cellSigmaM` and
+   * `registrationSigmaM` are both 0. The band is then ±0, which bounds nothing:
+   * that is the absence of an error budget, not a perfect measurement. Read
+   * this before the band; `detectable` and `confidence` already do.
+   */
+  readonly quantified: boolean;
+  /**
+   * True only when the budget is `quantified`, at least one cell changed, and
+   * |net| exceeds the ~95% level of detection, 1.96σ — the same LoD convention
+   * {@link cellSigmaFromLoD} documents. A |net| between 1σ and 1.96σ is NOT
+   * detectable under this convention.
    */
   readonly detectable: boolean;
   readonly caveats: readonly string[];
@@ -94,10 +108,22 @@ export function changeVolumeUncertainty(
   const net = input.netVolumeM3;
   const absNet = Math.abs(net);
   const relativeError = absNet > 0 ? sigmaM3 / absNet : 0;
+  // An error budget with NO source in it. Both σ terms are built from inputs
+  // the caller supplies, so with neither supplied the band collapses to ±0 —
+  // and a ±0 band passes every threshold below, which used to grade an
+  // entirely unmeasured change "detectable, 0% relative, high confidence".
+  // That reads as the most certain result the module can produce when it is
+  // in fact the least supported one, so nothing was measured is now stated
+  // rather than rendered as certainty. Reachable through the public surface:
+  // `levelOfDetectionM: 0` is explicitly permitted (both the change core and
+  // `compareDtms` clamp with Math.max(0, …)), and `cellSigmaFromLoD(0)` is 0.
+  const quantified = cellSigma > 0 || reg > 0;
   // Detection threshold: the module's documented LoD convention is ~95%,
   // i.e. 1.96σ (see cellSigmaFromLoD). Comparing against bare σ would call
-  // a ~68%-significant wiggle "detectable".
-  const detectable = absNet > 1.96 * sigmaM3;
+  // a ~68%-significant wiggle "detectable". `n >= 1` closes the same
+  // fail-open from the other side: with no changed cells σ is 0 whatever the
+  // budget says, so any net at all would clear a zero threshold.
+  const detectable = quantified && n >= 1 && absNet > 1.96 * sigmaM3;
 
   let confidence: ChangeConfidence;
   if (!detectable || n < 1) confidence = 'low';
@@ -106,7 +132,14 @@ export function changeVolumeUncertainty(
   else confidence = 'low';
 
   const caveats: string[] = [];
-  if (!detectable) {
+  if (!quantified) {
+    caveats.push(
+      'No error source is quantified — per-cell σ and co-registration RMSE are both 0, ' +
+        'so the ±0 m³ band bounds nothing and the change is reported as not detectable ' +
+        'rather than as certain. Supply a level of detection (and a registration RMSE) ' +
+        'to bound it.',
+    );
+  } else if (!detectable) {
     caveats.push(
       `Net change (${Math.round(net)} m³) is below the ~95% level of detection ` +
         `(1.96σ ≈ ${Math.round(1.96 * sigmaM3)} m³) — not distinguishable from ` +
@@ -131,6 +164,7 @@ export function changeVolumeUncertainty(
     randomErrorM3,
     systematicErrorM3,
     confidence,
+    quantified,
     detectable,
     caveats,
   };

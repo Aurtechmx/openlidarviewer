@@ -297,3 +297,38 @@ describe('formatPointCount', () => {
     expect(formatPointCount(0)).toBe('0');
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// buildThenStream — routing an over-ceiling plain LAS to the out-of-core build
+// ────────────────────────────────────────────────────────────────────────────
+
+describe('build-then-stream routing', () => {
+  // 3 GB is past the desktop fallback ceiling (1.5 GB), so the whole-file buffer
+  // alone would not fit — exactly the case the out-of-core sliced path removes.
+  const HUGE = 3_000_000_000;
+  const HUGE_COUNT = 400_000_000;
+
+  it('routes an over-ceiling uncompressed LAS to build-then-stream', () => {
+    const plan = planLoad(input({ format: 'las', fileBytes: HUGE, sourceCount: HUGE_COUNT }));
+    expect(plan.mayExceedCeiling).toBe(true);
+    expect(plan.buildThenStream).toBe(true);
+  });
+
+  it('leaves an in-budget LAS on the in-memory path', () => {
+    const plan = planLoad(input());
+    expect(plan.mayExceedCeiling).toBe(false);
+    expect(plan.buildThenStream).toBe(false);
+  });
+
+  it('does not route a compressed LAZ (no sliced-tile builder yet)', () => {
+    const plan = planLoad(input({ format: 'laz', fileBytes: HUGE, sourceCount: HUGE_COUNT }));
+    expect(plan.mayExceedCeiling).toBe(true);
+    expect(plan.buildThenStream).toBe(false);
+  });
+
+  it('does not route a large non-LAS format', () => {
+    const plan = planLoad(input({ format: 'e57', fileBytes: HUGE, sourceCount: HUGE_COUNT }));
+    expect(plan.buildThenStream).toBe(false);
+    expect(plan.largeNonLasFormat).toBe(true);
+  });
+});

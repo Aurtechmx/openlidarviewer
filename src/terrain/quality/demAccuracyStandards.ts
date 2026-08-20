@@ -52,7 +52,31 @@ export interface DemAccuracyStandards {
   readonly qualityLevelReason: string;
 }
 
-/** USGS 3DEP joint density (pts/m²) + RMSEz (m) thresholds, best level first. */
+/**
+ * USGS 3DEP joint nominal-pulse-density (pts/m²) + RMSEz (m) thresholds,
+ * transcribed from the published quality-level table of the USGS Lidar Base
+ * Specification (3D Elevation Program, "Topographic Data Quality Levels (QLs)",
+ * Table 1):
+ *
+ *   QL0  RMSEz  5 cm   NPS ≤ 0.35 m   NPD ≥ 8   pts/m²
+ *   QL1  RMSEz 10 cm   NPS ≤ 0.35 m   NPD ≥ 8   pts/m²
+ *   QL2  RMSEz 10 cm   NPS ≤ 0.71 m   NPD ≥ 2   pts/m²
+ *   QL3  RMSEz 20 cm   NPS ≤ 1.41 m   NPD ≥ 0.5 pts/m²
+ *
+ * BOTH BOUNDS ARE INCLUSIVE, and the comparisons below say so with `>=` / `<=`:
+ * the specification writes the density leg as "≥ N pts/square meter", and states
+ * the accuracy leg as the RMSEz a collection is required to be at or within, so
+ * a value that lands exactly on either figure MEETS that level. Only the density
+ * leg is checked here; nominal pulse SPACING is the same quantity expressed
+ * inversely, and this module has no swath geometry to check the rest of the
+ * specification's collection requirements against.
+ *
+ * Ordered best level first, and each successive row relaxes BOTH legs (density
+ * non-increasing, RMSEz non-decreasing), so the first row a pair satisfies is
+ * also the strongest row it satisfies. `tests/qualityLevelOracle.test.ts` pins
+ * that property against an independent transcription of the table above, so a
+ * reordered or edited row fails rather than silently returning a weaker level.
+ */
 const QL_TABLE: ReadonlyArray<{
   level: Exclude<UsgsQualityLevel, 'below-QL3' | 'unknown'>;
   minDensity: number;
@@ -61,7 +85,7 @@ const QL_TABLE: ReadonlyArray<{
   { level: 'QL0', minDensity: 8, maxRmseM: 0.05 },
   { level: 'QL1', minDensity: 8, maxRmseM: 0.1 },
   { level: 'QL2', minDensity: 2, maxRmseM: 0.1 },
-  { level: 'QL3', minDensity: 0.25, maxRmseM: 0.2 },
+  { level: 'QL3', minDensity: 0.5, maxRmseM: 0.2 },
 ];
 
 /**

@@ -48,6 +48,7 @@ const intent = (over: Partial<ContourExportIntent> = {}): ContourExportIntent =>
   purpose: 'Survey Review',
   shapeStyle: 'crisp',
   generalizeToleranceCells: 0,
+  generalizeMode: 'uniform',
   labelsIndexOnly: false,
   methodId: 'olv.contour.analytical',
   methodVersion: 1,

@@ -115,13 +115,18 @@ export function computeTerrainReadiness(
   opts?: { readonly verticalUnitToMetres?: number | null },
 ): TerrainReadiness {
   const vSuffix = verticalUnitSuffix(opts?.verticalUnitToMetres);
+  // Unit-only suffix for the readiness card: the "(vertical unit unverified)"
+  // caveat is carried once on the recommended-interval line, so the card shows
+  // the unit when known and nothing when not, rather than repeating the caveat.
+  const vm = opts?.verticalUnitToMetres;
+  const unitKnown = vm != null && Number.isFinite(vm) && vm > 0;
+  const reliefSuffix = unitKnown ? vSuffix : '';
   const cov = tallyCoverage(result.dtm.coverage);
   const meanConf = result.dtm.meanConfidence;
   const measuredFrac = cov.covered > 0 ? cov.measured / cov.covered : 0;
   const coverageFrac = cov.total > 0 ? cov.covered / cov.total : 0;
   const calibrated = result.confidenceCalibrationApplied;
   const tol = result.confidenceToleranceM;
-  const rmse = result.validation.rmse;
 
   // ── Ground confidence ────────────────────────────────────────────────
   let groundRating = rate(meanConf);
@@ -150,7 +155,6 @@ export function computeTerrainReadiness(
   // whether the confidence is calibrated.
   let dtmRating = rate(measuredFrac * 100);
   if (dtmRating !== 'unavailable' && !calibrated) dtmRating = demote(dtmRating);
-  const rmseText = Number.isFinite(rmse) ? `${rmse.toFixed(2)} m` : 'not measurable';
   const dtmQuality: ReadinessIndicator = {
     // "Measured coverage" — not "DTM quality" — so this card (a % of the
     // surface that is real measurement vs interpolated) can't be mistaken for
@@ -160,10 +164,12 @@ export function computeTerrainReadiness(
     label: 'Measured coverage',
     rating: cov.covered === 0 ? 'unavailable' : dtmRating,
     value: cov.covered === 0 ? '—' : `${pct(measuredFrac)} measured`,
+    // RMSE lives on the Ground-confidence card (± tolerance) and in Validation
+    // detail; this card is about coverage, so it does not restate it.
     detail:
       cov.covered === 0
         ? 'No covered cells — nothing to model.'
-        : `${pct(1 - measuredFrac)} interpolated · vertical RMSE ${rmseText}`,
+        : `${pct(1 - measuredFrac)} interpolated`,
   };
 
   // ── Contour readiness ────────────────────────────────────────────────
@@ -181,9 +187,9 @@ export function computeTerrainReadiness(
   const contourReadiness: ReadinessIndicator = {
     label: 'Contour readiness',
     rating: contourRating,
-    value: contoursRecommended ? `${recommended}${vSuffix}` : 'Not ready',
+    value: contoursRecommended ? `${recommended}${reliefSuffix}` : 'Not ready',
     detail: contoursRecommended
-      ? `Coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)}${vSuffix}`
+      ? `Coverage ${pct(coverageFrac)} · relief ${result.elevationRangeM.toFixed(1)}${reliefSuffix}`
       : 'No reliable contour interval — the scan is too sparse or the vertical error is too high for honest contours.',
   };
 

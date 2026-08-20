@@ -35,7 +35,7 @@
 import { deviceTier, type DeviceSignals } from '../../render/deviceProfile';
 
 /** Which decode client is asking. */
-export type DecodeFormat = 'copc' | 'ept';
+export type DecodeFormat = 'copc' | 'ept' | 'laz';
 
 /** Ceiling on pooled decode workers, whatever the device or the override says. */
 export const DECODE_POOL_HARD_CAP = 4;
@@ -160,13 +160,24 @@ export function resolveDecodePoolSize(
   explicitSize?: number,
 ): number {
   const requested = explicitSize ?? flags.decodeWorkers;
-  const optedIn = explicitSize !== undefined || flags.decodePool || flags.decodeWorkers !== null;
   return decodeWorkerPoolSize({
     ...readDecodePoolEnvironment(),
     format,
     requested,
-    poolDisabled: !optedIn,
+    poolDisabled: !decodePoolOptedIn(flags, explicitSize),
   });
+}
+
+/**
+ * Whether pooled decoding is opted in for this session. Three switches can ask:
+ * an explicit constructor size, `?decodePool=on`, or `?decodeWorkers=N`. Absent
+ * all three the answer is false and the historical single-worker path stands —
+ * the whole-file LAZ path reads this to decide whether to engage the worker
+ * pool at all, rather than moving every `.laz` open off the main thread before
+ * a browser run has measured the trade.
+ */
+export function decodePoolOptedIn(flags: DecodePoolFlags, explicitSize?: number): boolean {
+  return explicitSize !== undefined || flags.decodePool || flags.decodeWorkers !== null;
 }
 
 /** The device signals the policy needs, as read from the live environment. */

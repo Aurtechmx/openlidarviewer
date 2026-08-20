@@ -102,6 +102,7 @@ import {
   GENERALIZE_EPS_CELLS,
   type ContourShapeStyle,
 } from './contourShapeStyle';
+import type { ContourGeneralizeMode } from './terrainAwareTolerance';
 import { placeLabels, type ContourLabel } from './labelPlacement';
 import { computeVerticalAccuracy, type VerticalAccuracy } from '../validate/verticalAccuracy';
 import {
@@ -275,6 +276,12 @@ export interface IntervalContourParams {
    * never set it are byte-unchanged.
    */
   readonly generalizeToleranceCells?: number;
+  /**
+   * How the 'generalized' style distributes its tolerance across features:
+   * 'uniform' (default when omitted, byte-unchanged) or 'terrain-aware' (scaled
+   * DOWN per feature, never up). Ignored for every style but 'generalized'.
+   */
+  readonly generalizeMode?: ContourGeneralizeMode;
   /**
    * Legacy boolean toggle for smoothing. Honoured for back-compat when
    * `shapeStyle` is not given: `false` ⇒ `'crisp'`, otherwise the default
@@ -626,13 +633,25 @@ export function resolveGroundFilterParams(
     params.verticalUnitToMetres && params.verticalUnitToMetres > 0
       ? params.verticalUnitToMetres
       : 1;
+  // The SMRF tolerances are physical constants (0.5 m base, 2.5 m cap; Pingel
+  // et al. 2013) but the filter compares them against source-unit Δz, so convert
+  // metres → source vertical units here. On a foot frame a 0.5 m base tolerance
+  // is 1.64 ft; left as 0.5 source-ft (0.15 m) it rejects real ground and warps
+  // the DTM for the same physical terrain. The ratio is exactly 1 for a metre
+  // frame, so metric clouds are unchanged.
+  const zPerMetre = 1 / vertToMetres;
   return {
     cellSizeM: params.cellSizeM,
     cellSizeZUnits: params.cellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: params.ground?.maxWindowCells ?? 8,
     slope: params.ground?.slope ?? 0.2,
-    elevationThresholdM: params.ground?.elevationThresholdM ?? 0.5,
-    scalingFactorM: params.ground?.scalingFactorM,
+    elevationThresholdM: (params.ground?.elevationThresholdM ?? 0.5) * zPerMetre,
+    maxElevationThresholdM:
+      (params.ground?.maxElevationThresholdM ?? 2.5) * zPerMetre,
+    scalingFactorM:
+      params.ground?.scalingFactorM != null
+        ? params.ground.scalingFactorM * zPerMetre
+        : undefined,
     // Despike by default in the pipeline (the leaf stays strict-min).
     floorPercentile: params.ground?.floorPercentile ?? 5,
     verticalAxis,
@@ -1313,6 +1332,7 @@ export function contoursFromCore(
     polylines: applyContourShapeStyle(level.polylines, shapeStyle, {
       cellSizeM,
       generalizeToleranceCells: intervalParams.generalizeToleranceCells,
+      generalizeMode: intervalParams.generalizeMode,
     }),
   }));
 

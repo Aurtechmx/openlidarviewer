@@ -197,8 +197,13 @@ export function pendingCrossCheck(): CrossCheckReport {
 export interface ReferenceSlot {
   /** Matches a `claimId` in the claim register. */
   readonly claimId: string;
-  /** The reference tool that would produce the comparison output. */
-  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare';
+  /**
+   * The reference tool that would produce the comparison output. `R` names the
+   * statistical reduction where the geometry comes from GDAL/OGR and the
+   * per-station quantile from R; one slot holds one label, and the study
+   * manifest carries the full pipeline.
+   */
+  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R';
   /** Absolute agreement tolerance in the product's unit. */
   readonly toleranceAbs: number;
   /** Unit label for the tolerance, for docs / reports. */
@@ -233,9 +238,9 @@ export interface ReferenceSlot {
  * `status` to `supplied` and register its study manifest.
  */
 export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
-  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
-  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'pending' },
-  { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'pending' },
+  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
+  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
+  { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'supplied' },
   { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   // Aspect is a BEARING, so its tolerance is read as a circular separation
   // (0..180), never a plain subtraction — see tests/aspectCrossCheck.test.ts.
@@ -254,6 +259,22 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // committed polygon fixture. 1e-6 m² is coarse against the ~1e-9 the two
   // implementations reach, yet far tighter than any real area-formula error.
   { claimId: 'MEAS-AREA', referenceTool: 'GDAL', toleranceAbs: 1e-6, unit: 'm²', status: 'supplied' },
+  { claimId: 'TPI', referenceTool: 'GDAL', toleranceAbs: 1e-5, unit: 'index', status: 'supplied' },
+  { claimId: 'VRM', referenceTool: 'SAGA', toleranceAbs: 1e-4, unit: 'index', status: 'supplied' },
+  // Corridor profile against OGR/SpatiaLite chainage and R's type-7 quantile.
+  // The tolerance is derived, not observed: every fixture coordinate is a
+  // Float32-exact decimal and the reference SQL passes the elevation through as
+  // text, so the two sides read identical numbers and the only difference left
+  // is double rounding on quantities bounded by a few hundred metres, which
+  // cannot exceed about 1e-13 m. A micrometre sits seven orders above that and
+  // far below any elevation a reader of a section could act on.
+  { claimId: 'MEAS-PROFILE', referenceTool: 'R', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
+  // Per-point decode against PDAL 2.10.2 readers.e57 over a CC-BY E57. The
+  // tolerance is a coordinate budget, but the assertion that carries the claim
+  // is an exact quantised integer sum at a 1e-6 quantum, which unlike a mean
+  // cannot absorb one wrong point: at 1.79 M points a single value would have to
+  // be wrong by ~1.79 m to move the mean past this same number.
+  { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

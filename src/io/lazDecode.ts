@@ -61,7 +61,7 @@ function lazPerfWasmBinary(): Uint8Array {
 }
 
 /** The instantiated laz-perf WASM module. */
-type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
+export type LazPerfModule = Awaited<ReturnType<typeof createLazPerf>>;
 
 /**
  * Memoised laz-perf WASM module. Instantiating the decoder is the fixed cost

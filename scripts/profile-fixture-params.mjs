@@ -1,0 +1,110 @@
+/**
+ * profile-fixture-params.mjs — frozen parameters for the MEAS-PROFILE
+ * cross-implementation fixtures. Pure (no runtime imports) so the cross-check
+ * test can import the constants without pulling in the generator's node
+ * dependencies. See scripts/make-profile-fixture.mjs for the surfaces and
+ * scripts/run-profile-reference.mjs for the reference pipeline.
+ *
+ * ─── WHY THESE NUMBERS ──────────────────────────────────────────────────────
+ *
+ * RAMP is the fixture that carries the closed form. `sampleProfile` reduces each
+ * corridor bin with the type-7 quantile, which needs a sort and a linear
+ * interpolation between two order statistics; writing that reduction a second
+ * time to predict the answer would compare the code to a copy of itself. The
+ * ramp removes the need. Every bin holds RAMP_T_COUNT points whose elevations
+ * are an exact arithmetic progression across the corridor (the surface has a
+ * constant cross-line gradient RAMP_CROSS), and the type-7 quantile of an
+ * arithmetic progression collapses to a closed form with no sort and no
+ * interpolation in it:
+ *
+ *     q(p) = first + step · (p/100) · (n − 1)
+ *
+ * so the expected series is read off the surface equation. RAMP_T_START and
+ * RAMP_T_STEP are chosen so the p=25 rank is 2.25 — a FRACTIONAL rank, which is
+ * the case that exercises the interpolation rather than landing on an order
+ * statistic.
+ *
+ * Every coordinate is a multiple of 1/2048 with |value| < 32, so the fixture is
+ * exactly representable in the Float32Array the sampler reads AND in the double
+ * the reference tools use. The two sides therefore see identical numbers and the
+ * comparison measures the algorithm, not a transcode.
+ *
+ * SCATTER is the fixture the closed form cannot reach: an oblique line,
+ * irregular corridor populations, empty bins, off-corridor returns and a
+ * classification channel. It is compared against the external reference only.
+ * Its 192/144/240 triangle makes the line length exact, and every point is kept
+ * at least SCATTER_EDGE_MARGIN from a bin boundary and from the corridor edge so
+ * that a difference of one part in 1e15 between two projection implementations
+ * cannot flip a point into a different bin.
+ */
+
+// ── RAMP: analytic corridor, closed form available ──────────────────────────
+
+/** Section line, local render space. Axis-aligned so chainage is x. */
+export const RAMP_A = [0, 0, 0];
+export const RAMP_B = [256, 0, 0];
+/** 257 stations over 256 m = a 1 m bin step. */
+export const RAMP_SAMPLES = 257;
+/** Corridor half-width, metres. Wider than the outermost corridor offset. */
+export const RAMP_BAND = 2.5;
+/** Cross-line offsets: RAMP_T_START + k·RAMP_T_STEP, k = 0 … RAMP_T_COUNT−1. */
+export const RAMP_T_START = -2.25;
+export const RAMP_T_STEP = 0.5;
+export const RAMP_T_COUNT = 10;
+/** Cross-line gradient, metres of elevation per metre of offset. */
+export const RAMP_CROSS = 0.25;
+/** Off-corridor decoy offset (outside RAMP_BAND) and its elevation lift. */
+export const RAMP_DECOY_T = 4;
+export const RAMP_DECOY_LIFT = 40;
+/** Chainages of the beyond-the-end decoys, which the along-line gate must drop. */
+export const RAMP_END_DECOYS = [-10, 266];
+
+/**
+ * Ground elevation along the section: 8 + s/16 − s²/2048, a metre-scale crest
+ * peaking at s = 64. Dyadic by construction, so g(s) is exact for integer s.
+ */
+export const rampGround = (s) => 8 + s / 16 - (s * s) / 2048;
+
+/** Bin step, metres. Exact: 256 / 256. */
+export const RAMP_BIN_STEP = (RAMP_B[0] - RAMP_A[0]) / (RAMP_SAMPLES - 1);
+
+/**
+ * Closed-form profile height at station index `i` for percentile `p`, derived
+ * from the surface equation and the type-7 definition, with no sort and no
+ * order statistics of any implementation involved.
+ */
+export const rampExpected = (i, p) =>
+  rampGround(i * RAMP_BIN_STEP)
+  + RAMP_CROSS * (RAMP_T_START + RAMP_T_STEP * (p / 100) * (RAMP_T_COUNT - 1));
+
+// ── SCATTER: oblique line, irregular corridor, classification ───────────────
+
+/** Section line: a 192 / 144 / 240 triangle, so the length is exactly 240 m. */
+export const SCATTER_A = [10, 5, 0];
+export const SCATTER_B = [202, 149, 0];
+/** 241 stations over 240 m = a 1 m bin step. */
+export const SCATTER_SAMPLES = 241;
+/** Corridor half-width, metres. */
+export const SCATTER_BAND = 1.75;
+/** Bin step, metres. Exact: 240 / 240. */
+export const SCATTER_BIN_STEP = 1;
+/**
+ * How far every point is kept from a bin boundary and from the corridor edge.
+ * Two projection implementations agree to about 1e-15 relative; this margin is
+ * twelve orders of magnitude above that, so bin membership is not in question.
+ */
+export const SCATTER_EDGE_MARGIN = 0.05;
+/** Stations deliberately left with no corridor points, to exercise the gaps. */
+export const SCATTER_EMPTY_BINS = [37, 38, 100, 199];
+/** Seed for the fixture's own generator, so the bytes are reproducible. */
+export const SCATTER_SEED = 20260819;
+
+/** The percentile both fixtures are compared at, and the RAMP-only second one. */
+export const PERCENTILE_PRIMARY = 25;
+export const PERCENTILE_SECONDARY = 50;
+
+/** ASPRS classes the sampler drops when a classification channel is supplied. */
+export const EXCLUDED_CLASSES = [3, 4, 5, 6, 7, 18];
+
+/** World up. Both fixtures are Z-up, so the sampled height is the point's z. */
+export const UP = [0, 0, 1];

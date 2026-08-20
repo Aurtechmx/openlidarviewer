@@ -17,10 +17,9 @@
  * path); an abort stays silent; the path taken is recorded for verification.
  */
 
-import {
-  deriveClassification,
-  type DeriveClassificationOptions,
-  type DeriveClassificationResult,
+import type {
+  DeriveClassificationOptions,
+  DeriveClassificationResult,
 } from './deriveClassification';
 import type { DeriveClassificationClientLike } from './deriveClassificationWorkerClient';
 
@@ -128,6 +127,11 @@ export async function deriveClassificationAsync(
     if (debugEnabled()) console.info(`[classify] falling back to main thread (${n} pts)`);
     // The synchronous fallback reports the same phases (best-effort, though it
     // blocks the main thread so the UI won't repaint between them).
+    // Lazy: the classifier core (with its eigen-descriptor deps) is a heavy,
+    // on-demand module — dynamic-import it here so it stays out of the eager
+    // shell bundle. Same-origin chunk load, orthogonal to the worker failures
+    // this fallback exists for.
+    const { deriveClassification } = await import('./deriveClassification');
     const result = deriveClassification(positions, n, options, onProgress);
     lastComputePath = 'fallback';
     if (debugEnabled()) console.info('[classify] derived via main thread (fallback)');

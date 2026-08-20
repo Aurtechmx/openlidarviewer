@@ -71,7 +71,6 @@
   color: var(--text); text-align: right; overflow-wrap: anywhere;
 }
 .olv-layerhealth-row-value.is-mono {
-  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 /* Quiet status dot before the value: ok = established (green),

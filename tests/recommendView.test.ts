@@ -42,4 +42,13 @@ describe('flatnessFromBounds', () => {
     expect(flatnessFromBounds([0, 0, 0], [100, 100, 0])).toBeGreaterThanOrEqual(6);
     expect(flatnessFromBounds([5, 5, 5], [5, 5, 5])).toBe(1);
   });
+
+  it('reads height off the up axis, so a Y-up wide-shallow tile is still flat', () => {
+    // Same wide-shallow tile with its 50-unit shallow extent on Y (Y-up). Read
+    // Z-up it would look like a 1000x50 wall (ratio 1); with upAxis='y' the
+    // shallow Y is the height and the ratio is 20.
+    expect(flatnessFromBounds([0, 0, 0], [1000, 50, 1000], 'y')).toBeCloseTo(20, 5);
+    // Default (Z-up) on the same box treats Z as height → not flat.
+    expect(flatnessFromBounds([0, 0, 0], [1000, 50, 1000])).toBeCloseTo(1, 5);
+  });
 });

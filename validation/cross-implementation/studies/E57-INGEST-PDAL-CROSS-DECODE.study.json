@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "studyId": "E57-INGEST-PDAL-CROSS-DECODE",
+  "claimId": "E57-INGEST",
+  "example": false,
+  "protocolDigest": "sha256:49599594abff4ea5f7c51dd8b1d01a26b39ac8d04078957bbc613091cd7e583c",
+  "protocolRef": {
+    "protocolId": "PROTO-E57-INGEST-PDAL-CROSS-DECODE",
+    "digest": "sha256:03cf343101bb96aa627ca36d9b1dd6223f64119d159711ce47e54564a90e841c"
+  },
+  "candidate": {
+    "revision": "b7aa5b7a2040d489cd548c2c5a3939b1dce17a67",
+    "version": "0.6.6",
+    "algorithmVersion": "e57-compressedvector-1"
+  },
+  "reference": {
+    "tool": "PDAL",
+    "version": "2.10.2 (git-version: Release)",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "Docker is not available on this host; pinned by version string, driver and exact pipeline.",
+    "executablePath": "/opt/homebrew/bin/pdal",
+    "commandLine": "pdal pipeline stream.json  # readers.e57 -> writers.text STDOUT precision=17 (streamed, no intermediate file)"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-040-E57-FINESTRAT-2016",
+      "description": "Terrestrial laser scan of a gypsum slope, 1788994 points with cartesian coordinates, namespaced surface normals, float intensity and 8-bit colour. Written by CloudCompare 2.12.4 via E57Format 2.3.0, so it is a third-party re-export rather than a scanner-native file. Referenced by sha256 and not redistributed; the test skips when it is absent. Source: Zenodo 10.5281/zenodo.7576524, CC-BY-4.0, Abellan and Riquelme. Not vendored into the repository; the comparison test skips when it is absent.",
+      "path": "external:zenodo/7576524/Finestrat_2016.e57",
+      "sha256": "5f5f3a17b91e5f15bf02bfd1a69b3ec2fe4d4c352cd81cc02b9678d1c5c65b85"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-E57-PDAL-CROSS-DECODE",
+      "description": "Per-point decode comparison over X, Y, Z, NormalX/Y/Z and Red/Green/Blue. The statistic is the sum of round(value * 1e6) as an exact integer over all points, order independent and lossless. Colour is reconciled by PDAL's exact uint16 promotion (c * 257). Intensity is excluded because PDAL's scaling does not round-trip the declared limits.",
+      "candidateParameters": {
+        "reader": "src/io/e57/parseE57.ts",
+        "quantum": 0.000001,
+        "rounding": "Math.round"
+      },
+      "referenceParameters": {
+        "driver": "readers.e57",
+        "precision": 17,
+        "rounding": "floor(x + 0.5)"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.000001,
+    "toleranceUnit": "metre",
+    "minimumComparableCells": 1788994,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 1788994 points compared on 9 dimensions. The exact quantised integer sum at a 1e-6 quantum is identical between OLV and PDAL on every dimension, so no single value differs by as much as one quantum. Extremes match exactly, and 18 positional samples spread through the file agree point for point in file order.",
+  "result": {
+    "comparableCells": 1788994,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0,
+    "meanDiff": 0
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/e57-ingest/pdal-reference.json",
+      "sha256": "3677c85c4ac34247ecb1ed090aeac666a4e3d38b3d53a496d2ae71a5e8a16947",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/e57-ingest/pdal-sample.csv",
+      "sha256": "b6598162396f8472da11cb0aa5efda57ca560a244410250afc797ce1e70f6393",
+      "role": "reference-output"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-040-E57-FINESTRAT-2016",
+        "parameterSetId": "PS-E57-PDAL-CROSS-DECODE"
+      }
+    ],
+    "unsupported": [
+      "Intensity. PDAL scales it by 65535/(max-min) without subtracting the minimum, so an agreement tolerance would measure that transform rather than either reader.",
+      "Any writer other than CloudCompare 2.12.4 via E57Format 2.3.0. One file is one profile, not the format.",
+      "Scanner-native acquisition metadata. This file is a re-export with no sensor vendor, model, serial or acquisition time.",
+      "Scaled-integer cartesian encodings, where declared per-field limits ARE decode parameters and a bounds comparison would be circular.",
+      "Measurement repeatability across the sibling epochs. The site is an actively eroding slope and the instrument changed between surveys, so cross-epoch differences are real change confounded with instrument change."
+    ]
+  },
+  "notes": [
+    "The file declares its own recordCount, cartesianBounds and per-field limits, and OLV reproduces all of them exactly. That is asserted but is NOT the evidence: six extremal statistics out of 1788994 decoded values cannot distinguish a correct decode from one that corrupts the interior.",
+    "Rounding had to be matched across languages. Python's round() is round-half-to-even; JavaScript's Math.round is half away from zero. The mismatch produced a spurious 208-unit gap in the sum before floor(x+0.5) was adopted for the reference.",
+    "The comparison test reads the source path from OLV_E57_FINESTRAT and skips without it, so no machine path is baked into the tree. Fetch the file from the DOI in datasets[0] to reproduce."
+  ]
+}

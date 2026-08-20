@@ -1,6 +1,6 @@
 {
   "name": "openlidarviewer",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "View supported LiDAR and point-cloud datasets locally in a browser. No installation or account required; local files are not uploaded.",
   "license": "MIT",
   "author": "A. Urias",
@@ -54,6 +54,7 @@
     "benchmark:repro": "BENCHMARK_SUITES=reproducibility vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:scaling": "BENCHMARK_SUITES=scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000",
     "benchmark:quick": "BENCHMARK_SUITES=reproducibility,scaling vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
+    "benchmark:loaders": "BENCHMARK_SUITES=loaderComparison vitest run tests/benchmark/runSuites.test.ts --testTimeout=3600000 && npm run benchmark:verify",
     "benchmark:scaling:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:scaling",
     "benchmark:quick:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:quick",
     "benchmark:units": "vitest run tests/benchmark/unitIntegrity.test.ts",
@@ -84,6 +85,7 @@
     "lint:inline-imports": "node scripts/lint-inline-imports.mjs",
     "lint:unsafe-html": "node scripts/lint-unsafe-html.mjs",
     "lint:layer-boundaries": "node scripts/lint-layer-boundaries.mjs",
+    "lint:mono-usage": "node scripts/lint-mono-usage.mjs",
     "lint:no-ignored-src": "node scripts/lint-no-ignored-src.mjs",
     "lint:no-tracked-ignored": "node scripts/lint-no-tracked-ignored.mjs",
     "lint:claim-register": "node scripts/lint-claim-register.mjs",
@@ -116,7 +118,7 @@
     "validation:impact:summary": "node scripts/build-impact-summary.mjs",
     "validation:impact:summary:check": "node scripts/build-impact-summary.mjs --check",
     "package:source": "bash scripts/package.sh --source-only",
-    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:position-access && npm run lint:int-truncation && npm run lint:spatial-context && npm run lint:upload-queue-seam && npm run lint:monolith-size && npm run lint:architecture-truth && npm run lint:worker-registry && npm run lint:claim-register && npm run validation:datasets:verify && npm run validation:study:verify && npm run validation:field:verify && npm run validation:reproduction:verify && npm run validation:generalization:verify && npm run validation:impact:verify && npm run validation:impact:summary:check && npm run validation:ground-metrics:verify && npm run validation:freeze:verify && npm run validation:snapshot:verify && npm run validation:classifier-corpus:verify && npm run lint:release-truth && npm run lint:claim-prose-sync && npm run lint:doc-links && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
+    "test:release:execute": "npm run typecheck && npm run lint:no-ignored-src && npm run lint:no-tracked-ignored && npm run lint:no-host-paths && npm run lint:release-sync && npm run lint:main-deferral && npm run lint:inline-imports && npm run lint:unsafe-html && npm run lint:csp-html && npm run lint:html-assets && npm run lint:python-version && npm run lint:layer-boundaries && npm run lint:mono-usage && npm run lint:position-access && npm run lint:int-truncation && npm run lint:spatial-context && npm run lint:upload-queue-seam && npm run lint:monolith-size && npm run lint:architecture-truth && npm run lint:worker-registry && npm run lint:claim-register && npm run validation:datasets:verify && npm run validation:study:verify && npm run validation:field:verify && npm run validation:reproduction:verify && npm run validation:generalization:verify && npm run validation:impact:verify && npm run validation:impact:summary:check && npm run validation:ground-metrics:verify && npm run validation:freeze:verify && npm run validation:snapshot:verify && npm run validation:classifier-corpus:verify && npm run lint:release-truth && npm run lint:claim-prose-sync && npm run lint:doc-links && npm run lint:claims-language && npm run lint:archive-vocab && npm run lint:sbom && npm run check:deps && npm run test:build && npm run build:live && npm run check:bundle && npm run test:buckets:verify && npm run benchmark:archive-portability && npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow && npm run test:smoke && npm run test:smoke:live && npm run test:smoke:mobile && npm run verify:reachability",
     "test:release:tag": "npm run test:release && npm run test:e2e",
     "gate": "bash scripts/gate.sh",
     "lint:position-access": "node scripts/lint-position-access.mjs",
@@ -159,6 +161,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@loaders.gl/las": "^4.4.4",
     "@playwright/test": "^1.62.1",
     "@stryker-mutator/core": "^9.6.1",
     "@stryker-mutator/vitest-runner": "^9.6.1",
@@ -167,7 +170,7 @@
     "@vitest/coverage-v8": "^4.1.10",
     "rollup-plugin-visualizer": "^7.0.1",
     "typescript": "~7.0.2",
-    "vite": "^8.2.0",
+    "vite": "^8.2.1",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
     "vitest": "^4.1.7"
@@ -180,6 +183,9 @@
     "vitepress": {
       "vite": "^6.4.3"
     },
-    "texture-compressor": "file:vendor-stubs/texture-compressor"
+    "texture-compressor": "file:vendor-stubs/texture-compressor",
+    "@loaders.gl/las": {
+      "laz-perf": "0.0.7"
+    }
   }
 }

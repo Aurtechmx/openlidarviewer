@@ -23,6 +23,7 @@
  * regressions cannot come back unnoticed.
  */
 import type { ScanSignals } from './provenance';
+import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 /** The subset of `PointCloud` the static-cloud signal helper uses. */
 export interface StaticCloudShape {
@@ -63,7 +64,7 @@ export interface StaticCloudShape {
 
 /** The subset of a streaming cloud the streaming-cloud signal helper uses. */
 export interface StreamingCloudShape {
-  readonly kind: 'copc' | 'ept';
+  readonly kind: StreamingSourceKind;
   readonly sourcePointCount?: number;
   /**
    * The TIGHT data extent — preferred for the aspect-ratio + density signals.
@@ -158,7 +159,7 @@ export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignal
     }
   }
   return {
-    sourceFormat: cloud.kind === 'ept' ? 'ept' : 'copc',
+    sourceFormat: cloud.kind,
     pointCount: cloud.sourcePointCount ?? 0,
     extent,
     densityPerSqM: density,

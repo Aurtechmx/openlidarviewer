@@ -93,6 +93,20 @@ describe('renderContourStudioWorkspace', () => {
     expect(selected).toHaveLength(1);
   });
 
+  it('renders the generalization toggle; clicking Terrain-aware dispatches set-setting', () => {
+    const c = createContourStudioController();
+    const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE }) as unknown as FakeEl;
+    const modes = root.byClass('olv-cs-genmode-card');
+    expect(modes).toHaveLength(2);
+    expect(c.getState().surface.generalizeMode).toBe('uniform'); // default is opt-in uniform
+    // Order is Uniform, Terrain-aware.
+    modes[1].click();
+    expect(c.getState().surface.generalizeMode).toBe('terrain-aware');
+    // After re-render exactly one mode card is active, and it is not a purpose card.
+    expect(root.byClass('is-active')).toHaveLength(1);
+    expect(root.byClass('olv-cs-purpose-card')).toHaveLength(5);
+  });
+
   it('evidence ladder claim reflects the launch state', () => {
     const c = createContourStudioController();
     const avail = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE }) as unknown as FakeEl;

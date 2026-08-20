@@ -38,6 +38,7 @@ import { compareCodeUnits } from '../../src/canonicalHash';
 import { nodeSha256Hex } from '../framework/node';
 import {
   BENCHMARK_SCHEMA_VERSION,
+  parseLoaderComparisonConfig,
   parseReproducibilityConfig,
   parseScalingConfig,
 } from './config';
@@ -45,6 +46,8 @@ import {
   overviewHtml,
   overviewInputFrom,
   overviewMarkdown,
+  loaderComparisonCsv,
+  loaderComparisonMarkdown,
   reproducibilityCsv,
   reproducibilityMarkdown,
   scalingCsv,
@@ -54,6 +57,8 @@ import {
 } from './render';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
 import { PRINCIPAL_SERIES, type ScalingRaw, type ScalingSummary } from './scaling';
+import type { LoaderComparisonRaw, LoaderComparisonSummary } from './loaderComparison';
+import { SERIES_OLV_LOAD_MS } from './series';
 import { firstSummaryDifference } from './stats';
 import { summariseRuns, type SummarisedSeries } from './summarise';
 import type { BenchmarkManifest } from './writer';
@@ -260,6 +265,81 @@ function verifyScaling(dir: string, checked: string[], problems: string[]): Scal
   return summary;
 }
 
+function verifyLoaderComparison(
+  dir: string,
+  checked: string[],
+  problems: string[],
+): LoaderComparisonSummary | null {
+  const raw = readJson(join(dir, 'raw.json'), problems) as LoaderComparisonRaw | null;
+  const summary = readJson(join(dir, 'summary.json'), problems) as LoaderComparisonSummary | null;
+  if (raw === null || summary === null) return null;
+
+  checked.push('loaderComparison/raw.json + summary.json parsed');
+
+  try {
+    parseLoaderComparisonConfig(raw.config);
+    parseLoaderComparisonConfig(summary.config);
+    checked.push('loaderComparison configuration is valid');
+  } catch (err) {
+    problems.push(`loaderComparison: invalid configuration — ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (raw.schemaVersion !== BENCHMARK_SCHEMA_VERSION) {
+    problems.push(`loaderComparison: raw.json schema version ${String(raw.schemaVersion)} is not ${BENCHMARK_SCHEMA_VERSION}`);
+  }
+  if (raw.cases.length !== raw.config.cases.length) {
+    problems.push(`loaderComparison: raw.json has ${raw.cases.length} cases, configuration lists ${raw.config.cases.length}`);
+  }
+  // The competitor version is provenance the comparison rests on; the two files
+  // must agree on it, or one of them was edited.
+  if (summary.competitorVersion !== raw.competitorVersion) {
+    problems.push(`loaderComparison: summary competitor version ${summary.competitorVersion} does not match raw ${raw.competitorVersion}`);
+  }
+
+  let totalRuns = 0;
+  for (const c of raw.cases) {
+    totalRuns += c.runs.length;
+    const published = summary.cases.find((s) => s.id === c.case.id);
+    if (!published) {
+      problems.push(`loaderComparison: case ${c.case.id} is in raw.json but not in summary.json`);
+      continue;
+    }
+    if (published.runCount !== c.runs.length) {
+      problems.push(`loaderComparison: case ${c.case.id} summary reports ${published.runCount} runs, raw.json has ${c.runs.length}`);
+    }
+    if (c.status === 'ok' && c.runs.length !== raw.config.recordedRuns) {
+      problems.push(`loaderComparison: case ${c.case.id} is marked ok with ${c.runs.length} of ${raw.config.recordedRuns} runs`);
+    }
+    if (published.status !== c.status) {
+      problems.push(`loaderComparison: case ${c.case.id} status is ${published.status} in the summary and ${c.status} in raw`);
+    }
+    if (published.competitorStatus !== c.competitorStatus) {
+      problems.push(`loaderComparison: case ${c.case.id} competitor status is ${published.competitorStatus} in the summary and ${c.competitorStatus} in raw`);
+    }
+    checkSeriesBlock(
+      `loaderComparison case ${c.case.id}`,
+      published.series,
+      summariseRuns(c.runs.map((r) => r.series), raw.config.recordedRuns),
+      problems,
+    );
+    // OLV's own timing is the one series taken on every run, so an ok case must
+    // always summarise it — a missing OLV column means the case did not really
+    // measure what it claims to.
+    if (c.status === 'ok' && !published.series.available.some((b) => b.key === SERIES_OLV_LOAD_MS)) {
+      problems.push(`loaderComparison: case ${c.case.id} is marked ok but the OLV timing has no summary`);
+    }
+  }
+  if (summary.pass && summary.failures.length > 0) {
+    problems.push('loaderComparison: summary claims a pass while listing failures');
+  }
+  checked.push('loaderComparison case records agree with the published summary');
+
+  checkText(join(dir, 'summary.md'), loaderComparisonMarkdown(summary), 'loaderComparison/summary.md', problems, checked);
+  checkText(join(dir, 'runs.csv'), loaderComparisonCsv(raw), 'loaderComparison/runs.csv', problems, checked);
+  checkCsvRows(join(dir, 'runs.csv'), totalRuns, 'loaderComparison/runs.csv', problems, checked);
+  return summary;
+}
+
 /** A rendered file must equal what the JSON re-renders to, byte for byte. */
 function checkText(
   path: string,
@@ -317,6 +397,14 @@ export function requiredFiles(manifest: BenchmarkManifest): readonly string[] {
     }
     if (suite.suiteId === 'scaling') {
       files.push('scaling/raw.json', 'scaling/runs.csv', 'scaling/summary.json', 'scaling/summary.md');
+    }
+    if (suite.suiteId === 'loaderComparison') {
+      files.push(
+        'loaderComparison/raw.json',
+        'loaderComparison/runs.csv',
+        'loaderComparison/summary.json',
+        'loaderComparison/summary.md',
+      );
     }
   }
   return files;
@@ -433,6 +521,9 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
   const scalingSummary = manifest.suites.some((s) => s.suiteId === 'scaling')
     ? verifyScaling(join(dir, 'scaling'), checked, problems)
     : null;
+  const loaderSummary = manifest.suites.some((s) => s.suiteId === 'loaderComparison')
+    ? verifyLoaderComparison(join(dir, 'loaderComparison'), checked, problems)
+    : null;
 
   // The TOP-LEVEL page, re-rendered from the manifest header and the two
   // summaries it points at.
@@ -459,6 +550,7 @@ export function verifyResultsDir(dir: string): VerifyOutcome {
     manifest.benchmarkPackageVersion,
     reproSummary,
     scalingSummary,
+    loaderSummary,
   );
   checkText(join(dir, 'summary.md'), overviewMarkdown(overview), 'summary.md', problems, checked);
   checkText(join(dir, 'summary.html'), overviewHtml(overview), 'summary.html', problems, checked);

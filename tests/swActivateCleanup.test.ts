@@ -43,16 +43,16 @@ function evalSw(initialKeys: string[]) {
 describe('service worker activate cleanup is scoped to OLV caches', () => {
   it('prunes stale olv-shell-* caches but keeps the current one and unrelated apps', async () => {
     const { listeners, remaining } = evalSw([
-      'olv-shell-0.6.4', // stale OLV → delete
-      'olv-shell-0.6.5', // current (matches VERSION) → keep
+      'olv-shell-0.6.5', // stale OLV → delete
+      'olv-shell-0.6.6', // current (matches VERSION) → keep
       'my-other-app-v3', // a co-hosted PWA on the same origin → MUST survive
       'workbox-precache-v2', // another library's cache → MUST survive
     ]);
     let done: Promise<unknown> = Promise.resolve();
     listeners.get('activate')?.({ waitUntil: (p: Promise<unknown>) => (done = p) });
     await done;
-    expect(remaining.has('olv-shell-0.6.4')).toBe(false); // pruned
-    expect(remaining.has('olv-shell-0.6.5')).toBe(true); // kept (current)
+    expect(remaining.has('olv-shell-0.6.5')).toBe(false); // pruned
+    expect(remaining.has('olv-shell-0.6.6')).toBe(true); // kept (current)
     expect(remaining.has('my-other-app-v3')).toBe(true); // untouched
     expect(remaining.has('workbox-precache-v2')).toBe(true); // untouched
   });

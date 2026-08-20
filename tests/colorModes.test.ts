@@ -1,5 +1,6 @@
 import {
   colorForMode,
+  rampRangeForMode,
   availableModes,
   defaultMode,
   colorByScalar,
@@ -229,6 +230,37 @@ describe('colorForMode — elevation', () => {
 
     const zUpDefault = colorForMode('elevation', cloud);
     expect(new Set([0, 1, 2, 3].map((i) => colourOf(zUpDefault, i))).size).toBe(1);
+  });
+
+  test('elevationRangeOverride replaces the per-cloud percentile window', () => {
+    const cloud = makeFullCloud(); // Z = 0,1,2,3
+    // A finite, ordered override is returned verbatim by rampRangeForMode.
+    expect(
+      rampRangeForMode('elevation', cloud, { elevationRangeOverride: { min: -10, max: 50 } }),
+    ).toEqual({ min: -10, max: 50 });
+  });
+
+  test('override widens the window: Z=3 no longer reaches the hot end', () => {
+    const cloud = makeFullCloud();
+    const local = colorForMode('elevation', cloud);
+    // Widen far beyond the data so the top data point sits mid-ramp, not at red.
+    const shared = colorForMode('elevation', cloud, {
+      elevationRangeOverride: { min: -100, max: 100 },
+    });
+    const redLocalTop = local[9];
+    const redSharedTop = shared[9];
+    expect(redSharedTop).toBeLessThan(redLocalTop);
+  });
+
+  test('non-finite or disordered override falls back to per-cloud percentile', () => {
+    const cloud = makeFullCloud();
+    const base = rampRangeForMode('elevation', cloud);
+    expect(
+      rampRangeForMode('elevation', cloud, { elevationRangeOverride: { min: Number.NaN, max: 5 } }),
+    ).toEqual(base);
+    expect(
+      rampRangeForMode('elevation', cloud, { elevationRangeOverride: { min: 10, max: 5 } }),
+    ).toEqual(base);
   });
 });
 

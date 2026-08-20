@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 9,
-  "countedStudies": 8,
+  "studiesRead": 14,
+  "countedStudies": 13,
   "byStatus": {
-    "agree": 7,
+    "agree": 12,
     "partial": 1
   },
   "byClaim": {
@@ -37,6 +37,20 @@
       ],
       "parameterSetIds": [
         "PS-HORN-COMPASS-METRE-NOEDGES"
+      ]
+    },
+    "CHM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-015-PC-PLANE-STRUCTURES",
+        "OLV-DS-016-PC-ROLLING-STRUCTURES",
+        "OLV-DS-017-PC-RIDGE-STRUCTURES"
+      ],
+      "parameterSetIds": [
+        "PS-CHM-DIFF-CELL1-R045"
       ]
     },
     "CONTOURS": {
@@ -77,6 +91,18 @@
       ],
       "parameterSetIds": [
         "PS-DTM-MIN-CELL1-R045"
+      ]
+    },
+    "E57-INGEST": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-040-E57-FINESTRAT-2016"
+      ],
+      "parameterSetIds": [
+        "PS-E57-PDAL-CROSS-DECODE"
       ]
     },
     "GROUND-FILTER": {
@@ -120,6 +146,21 @@
         "PS-AREA-OGR-PLANAR"
       ]
     },
+    "MEAS-PROFILE": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-023-ANALYTIC-PROFILE-RAMP",
+        "OLV-DS-024-SCATTER-PROFILE-OBLIQUE"
+      ],
+      "parameterSetIds": [
+        "PS-PROFILE-P25-RAMP",
+        "PS-PROFILE-P25-SCATTER-CLASSIFIED",
+        "PS-PROFILE-P50-RAMP"
+      ]
+    },
     "SLOPE-RASTER": {
       "studies": 1,
       "byStatus": {
@@ -132,13 +173,37 @@
       "parameterSetIds": [
         "PS-HORN-DEG-METRE-NOEDGES"
       ]
+    },
+    "TPI": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-021-ANALYTIC-TPI-QUADRATIC"
+      ],
+      "parameterSetIds": [
+        "PS-TPI-MOORE-QUADRATIC"
+      ]
+    },
+    "VRM": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-022-ANALYTIC-VRM-TILTED"
+      ],
+      "parameterSetIds": [
+        "PS-VRM-3X3-TILTED"
+      ]
     }
   },
   "agreement": {
-    "denominator": 8,
+    "denominator": 13,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 7,
-    "fraction": 0.875
+    "agree": 12,
+    "fraction": 0.9230769230769231
   },
   "excludedFromCounts": [
     {

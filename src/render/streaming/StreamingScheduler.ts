@@ -32,6 +32,7 @@ import {
   selectLapsedEvictions,
 } from './evictionPolicy';
 import type { EvictionCandidate, EvictionHysteresis } from './evictionPolicy';
+import type { SchedulerReadinessFacts } from './refinementReadiness';
 
 /** Renderer-facing callbacks the scheduler drives. */
 export interface SchedulerCallbacks {
@@ -227,6 +228,16 @@ export interface SchedulerOptions {
   /** Identifies this scan to the queue, for cancellation and staleness. */
   readonly datasetId?: string;
 
+  /**
+   * Resident-stickiness strength for the budget selection, 0..1. Absent or 0
+   * keeps the plain greedy fill, which is the shipping default; a positive
+   * value lets an already-resident node whose subtree has no finer candidate
+   * hold its slot against marginally-higher-scoring newcomers. The host reads
+   * the `?stickiness=on` dev flag and passes the value, so the scheduler itself
+   * stays free of flag lookups.
+   */
+  readonly stickyMargin?: number;
+
   /** Hysteresis window for eviction, ms. */
   evictDeferMs?: number;
   /**
@@ -278,6 +289,53 @@ function buildAncestorProtection(nodes: readonly StreamingNode[]): Set<string> {
     }
   }
   return set;
+}
+
+/** The ids currently resident, as a set the budget selection can test against. */
+function residentIdSet(store: { residentNodes(): IterableIterator<StreamingNode> }): Set<string> {
+  const ids = new Set<string>();
+  for (const node of store.residentNodes()) ids.add(node.record.id);
+  return ids;
+}
+
+/**
+ * The candidates that a FINER candidate sits underneath this tick.
+ *
+ * This is the exemption that keeps resident-stickiness from freezing LOD. A
+ * coarse node holding its slot is only harmless while nothing finer is waiting
+ * to replace it; the moment its own descendant is also a candidate, the coarse
+ * node IS the thing refinement is trying to displace, so it must compete on its
+ * raw score with no bonus.
+ *
+ * Computed from THIS tick's candidate list rather than the previous wanted set,
+ * because that is the question stickiness actually asks: "is a finer node
+ * competing for this budget right now?" A previous-tick answer would let a
+ * coarse node keep a bonus for one extra tick against the very child that had
+ * just become a candidate.
+ *
+ * Exported for its own test: an exemption that silently marked nothing would
+ * leave stickiness free to freeze LOD while every other test still passed.
+ */
+export function buildRefiningCandidateIds(
+  scored: readonly { readonly node: StreamingNode; readonly candidate: ScoredCandidate }[],
+): Set<string> {
+  // key -> candidate id, so an ancestor walk can ask "is this ancestor itself a
+  // candidate?" without rebuilding ids per level.
+  const idByKey = new Map<string, string>();
+  for (const s of scored) idByKey.set(voxelKeyString(s.node.record.key), s.candidate.id);
+  const refining = new Set<string>();
+  for (const s of scored) {
+    const key = s.node.record.key;
+    let { x, y, z } = key;
+    for (let d = key.depth - 1; d >= 0; d--) {
+      x >>= 1;
+      y >>= 1;
+      z >>= 1;
+      const ancestorId = idByKey.get(`${d}/${x}/${y}/${z}`);
+      if (ancestorId !== undefined) refining.add(ancestorId);
+    }
+  }
+  return refining;
 }
 
 /**
@@ -423,6 +481,15 @@ export class StreamingScheduler {
 
   /** Hysteresis state — node id → wall-clock deadline (ms) past which it may evict. */
   private readonly _deferredEvictAt = new Map<string, number>();
+  /**
+   * The same hysteresis for IN-FLIGHT decodes (fetching/decoding, not yet
+   * resident). `_deferredEvictAt` only ever holds residents, so without this an
+   * in-flight node that leaves the wanted set for a single tick was aborted
+   * immediately and re-fetched from scratch — the budget-boundary thrash. Kept
+   * separate from `_deferredEvictAt` so the resident eviction walk never sees a
+   * non-resident id.
+   */
+  private readonly _inFlightGraceAt = new Map<string, number>();
   private readonly _evictDeferMs: number;
   private readonly _memoryPressureRatio: number;
   /** Resolved thresholds handed to the pure eviction policy each pressure run. */
@@ -489,6 +556,14 @@ export class StreamingScheduler {
   private _lastSigStoreSize = -1;
   /** Last full rescore's wanted set (reused while the signature stays equal). */
   private _lastWanted: ReadonlySet<string> | null = null;
+  /**
+   * Resident-stickiness strength, read once from the dev flags. 0 disables the
+   * pass entirely and reproduces the plain greedy fill exactly, which is the
+   * shipping default. 0.15 is a fifteen-percent score bonus: enough to hold a
+   * slot against boundary noise, far too small to hold one against a genuinely
+   * closer or coarser-and-cheaper node.
+   */
+  private readonly _stickyMargin: number;
   /** Last full rescore's scored list (same lifecycle as `_lastWanted`). */
   private _lastScored: { node: StreamingNode; candidate: ScoredCandidate }[] | null = null;
   /** Tick index of the last full rescore — drives the periodic forced rescore. */
@@ -512,6 +587,7 @@ export class StreamingScheduler {
     this._maxConcurrent = budgets.maxConcurrentDecodes;
     this._effectiveMaxConcurrent = budgets.maxConcurrentDecodes;
     this._cache = new CompressedChunkCache(budgets.chunkCacheBytes);
+    this._stickyMargin = Math.max(0, Math.min(1, options.stickyMargin ?? 0));
     this._evictDeferMs = options.evictDeferMs ?? DEFAULT_EVICT_DEFER_MS;
     this._memoryPressureRatio =
       options.memoryPressureRatio ?? DEFAULT_MEMORY_PRESSURE_RATIO;
@@ -628,6 +704,46 @@ export class StreamingScheduler {
       pressureDepthReduction: this._pressureDepthReduction,
       fpsBudgetFactor: this._fpsBudgetFactor,
       fullRescoreCount: this._fullRescoreCount,
+    };
+  }
+
+  /**
+   * Node-state counts over the LAST rescore's wanted set — the facts
+   * {@link evaluateRefinementReadiness} turns into a readiness verdict. Measured
+   * over the wanted set, not globally, so a node held resident by eviction
+   * hysteresis after leaving the view cannot vote readiness for the view. Before
+   * the first cull the wanted set is null and every count is 0, which the
+   * evaluator reads as `'unknown'` (its refusal rule), never `'settled'`.
+   */
+  readinessFacts(): SchedulerReadinessFacts {
+    const store = this._cloud.octree.store;
+    const wanted = this._lastWanted;
+    let residentCount = 0;
+    let inFlightCount = 0;
+    let queuedCount = 0;
+    let decodedPendingCount = 0;
+    let failedCount = 0;
+    if (wanted) {
+      for (const id of wanted) {
+        const node = store.get(id);
+        if (!node) continue;
+        switch (node.state) {
+          case 'resident': residentCount++; break;
+          case 'loading': inFlightCount++; break;
+          case 'queued': queuedCount++; break;
+          case 'decoded': decodedPendingCount++; break;
+          case 'error': failedCount++; break;
+          default: break; // 'unloaded' — not yet requested, counts against the denominator
+        }
+      }
+    }
+    return {
+      wantedCount: wanted ? wanted.size : 0,
+      residentCount,
+      inFlightCount,
+      queuedCount,
+      decodedPendingCount,
+      failedCount,
     };
   }
 
@@ -879,9 +995,25 @@ export class StreamingScheduler {
         1,
         Math.floor(this._pointBudget * this._fpsBudgetFactor),
       );
+      // Resident stickiness (opt-in). A node already on screen keeps a small
+      // bonus so score noise at the budget boundary cannot bump it out and pay
+      // an evict → re-decode → re-fade cycle for nothing. The exemption is what
+      // makes that safe: any candidate with a finer candidate beneath it is
+      // refinement's own target, so it competes on its raw score and LOD cannot
+      // freeze. Off by default; flicker is not observable from Node, so this
+      // stays behind `?stickiness=on` until a browser run on a streamed cloud
+      // shows it settling the pulsing without stalling refinement.
+      const sticky = this._stickyMargin > 0;
       const freshWanted = selectWithinBudget(
         freshScored.map((s) => s.candidate),
         fpsAdjustedBudget,
+        sticky
+          ? {
+              resident: residentIdSet(store),
+              refining: buildRefiningCandidateIds(freshScored),
+              stickyMargin: this._stickyMargin,
+            }
+          : {},
       );
       scored = freshScored;
       wanted = freshWanted;
@@ -1030,7 +1162,7 @@ export class StreamingScheduler {
     // level below is arriving ranks first, which is the case the split existed
     // to approximate.
     if (
-      store.residentPointCount >
+      store.residentPointCount + store.decodedPendingPointCount >
       this._pointBudget * this._memoryPressureRatio
     ) {
       // The one input that costs a walk of the wanted set. Built here rather
@@ -1075,12 +1207,23 @@ export class StreamingScheduler {
       }
     }
 
-    // Cancel in-flight decodes for nodes that left the working set — but
-    // keep them in-flight if they are still within the hysteresis window
-    // (a quick camera flick can want them back before they finish).
+    // Cancel in-flight decodes for nodes that left the working set — but keep
+    // them fetching through the SAME hysteresis window residents get (a quick
+    // camera flick, or one tick of score noise at the budget boundary, can want
+    // them back before they finish). Aborting on the first unwanted tick threw
+    // the in-progress chunk away and re-fetched from scratch next tick — the
+    // boundary thrash. Grant a grace window, and only abort once it lapses.
     for (const [id, controller] of this._inFlight) {
-      if (!wanted.has(id) && !this._deferredEvictAt.has(id)) {
+      if (wanted.has(id)) {
+        this._inFlightGraceAt.delete(id);
+        continue;
+      }
+      const deadline = this._inFlightGraceAt.get(id);
+      if (deadline === undefined) {
+        this._inFlightGraceAt.set(id, nowTs + this._evictDeferMs);
+      } else if (nowTs >= deadline) {
         controller.abort();
+        this._inFlightGraceAt.delete(id);
       }
     }
 
@@ -1284,7 +1427,7 @@ export class StreamingScheduler {
       // yet — only then can a single oversized node truly block forward
       // progress.
       const projected =
-        store.residentPointCount + inFlightEstimate + node.record.pointCount;
+        store.residentPointCount + store.decodedPendingPointCount + inFlightEstimate + node.record.pointCount;
       if (projected > pressureCap && store.residentPointCount > 0) {
         // Put it back at the head of the queue — same state, same priority.
         this._queue.unshift(node);
@@ -1310,6 +1453,7 @@ export class StreamingScheduler {
       })
       .then((decoded) => {
         this._inFlight.delete(id);
+        this._inFlightGraceAt.delete(id);
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {
@@ -1328,6 +1472,7 @@ export class StreamingScheduler {
       })
       .catch((err: unknown) => {
         this._inFlight.delete(id);
+        this._inFlightGraceAt.delete(id);
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {

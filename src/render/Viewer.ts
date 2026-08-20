@@ -93,7 +93,8 @@ import { classifyScanShape } from '../terrain/scanShape';
 import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode } from './colorModes';
-import type { ColorMode, CoverageColorGrid } from './colorModes';
+import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
+import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import { captureSnapshot, canvasToBlob, type SnapshotHost, type SnapshotOptions } from './snapshot';
 import { runRenderFrame, type RenderLoopHost } from './renderLoop';
@@ -112,6 +113,8 @@ import {
   phaseDprScale,
   type RefinementPhase,
 } from './refinementPhase';
+import { evaluateRefinementReadiness } from './streaming/refinementReadiness';
+import type { RefinementReadiness } from './streaming/refinementReadiness';
 import { readDevFlags } from '../perf/devFlags';
 import { POINT_STYLE_DEFAULTS } from './pointStyle';
 import type { PointSizeMode } from './pointStyle';
@@ -1088,6 +1091,8 @@ export class Viewer {
     firstStaticCloud: () => this._clouds.values().next().value?.cloud ?? null,
     streaming: () => this._streaming,
     heightPercentileTrim: () => this._heightPercentileTrim,
+    projectSharedElevationRange: () =>
+      this._projectSharedElevation ? this.projectSharedElevationRange() : null,
     elevationUnitLabel: () => this._elevationUnitLabel,
     worldUpIsZ: () => this._worldUp.z === 1,
     residentIntensityBuffers: () => {
@@ -1356,7 +1361,6 @@ export class Viewer {
         // be computed over classified ground (vegetation / buildings dropped).
         const buffers: ProfileSourceBuffer[] = [];
         let total = 0;
-        let staticPoints = 0;
         let streamingPoints = 0;
         let anyClass = false;
         const aligned = (
@@ -1371,7 +1375,6 @@ export class Viewer {
             if (cls) anyClass = true;
             buffers.push({ pos: cloud.positions, cls, placement });
             total += cloud.positions.length;
-            staticPoints += cloud.positions.length;
           }
         }
         // A stream joins the estimate only on the terms a static cloud would
@@ -1415,11 +1418,11 @@ export class Viewer {
           groundPercentile,
           classification,
         });
-        // The chart is "resident-only" whenever any streaming bytes are
-        // in the walk and there is no fully-loaded static cloud beside
-        // it — that's exactly the case where additional nodes may
-        // refine the profile as they stream in.
-        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        // "Resident-only" whenever any streaming bytes are in the walk: those
+        // nodes may still refine the profile as they stream in, and a fully-
+        // loaded static cloud beside them does not complete the streaming part
+        // (audit #8: gating on `staticPoints === 0` hid the caveat in mixed scenes).
+        const residentOnly = streamingPoints > 0;
         return {
           samples,
           residentOnly,
@@ -1437,7 +1440,6 @@ export class Viewer {
       (polygon, referenceZ): { record: VolumeRecord; residentOnly: boolean } | null => {
         const buffers: PlacedVolumeBuffer[] = [];
         let total = 0;
-        let staticPoints = 0;
         let streamingPoints = 0;
         // Match the picker: only visible, unlocked clouds feed the cut/fill, so
         // a soloed epoch's volume never absorbs a hidden epoch's points behind it.
@@ -1445,7 +1447,6 @@ export class Viewer {
           if (cloud.positions && cloud.positions.length > 0) {
             buffers.push({ pos: cloud.positions, placement });
             total += cloud.positions.length;
-            staticPoints += cloud.positions.length;
           }
         }
         const streamOk = this._streamingMayCombine(buffers.length);
@@ -1477,10 +1478,10 @@ export class Viewer {
         if (result.pointsInPolygon >= 1000) confidence = 'high';
         else if (result.pointsInPolygon >= 100) confidence = 'medium';
         else confidence = 'low';
-        // Volume readout is "resident-only" whenever any streaming bytes
-        // were in the walk and no fully-loaded static cloud sat beside
-        // them — same rationale as the profile sampler.
-        const residentOnly = streamingPoints > 0 && staticPoints === 0;
+        // Volume readout is "resident-only" whenever any streaming bytes were in
+        // the walk — those may still refine as they stream in, regardless of a
+        // fully-loaded static cloud beside them (audit #8, same as the profile).
+        const residentOnly = streamingPoints > 0;
         const record: VolumeRecord = {
           fill: result.fill,
           cut: result.cut,
@@ -1756,6 +1757,8 @@ export class Viewer {
     this._scene.add(mesh);
 
     this._clouds.set(id, { cloud, mesh, material, colorAttr, mode });
+    // A new frame-sharing cloud changes the shared elevation window when on.
+    this.refreshProjectSharedElevation();
     this._configureForClouds(cloud);
     // A first cloud can arrive already in a scalar default mode (elevation
     // on a colourless scan) without any setColorMode call — the legend must
@@ -2161,6 +2164,16 @@ export class Viewer {
   }
 
   /**
+   * Wanted-set refinement readiness for the active streaming session, or null
+   * when nothing is streaming. Drives the DPR phase machine and lets the panel
+   * read the same verdict the renderer acts on, not a divergent guess.
+   */
+  refinementReadiness(): RefinementReadiness | null {
+    const scheduler = this._streaming?.scheduler;
+    return scheduler ? evaluateRefinementReadiness(scheduler.readinessFacts()) : null;
+  }
+
+  /**
    * The chunk decoder for the active streaming session, or null. Exposed so the
    * full-cloud grade can re-decode a sampling plan through the same decoder the
    * scheduler drives (one worker pool, not two).
@@ -2323,6 +2336,8 @@ export class Viewer {
     // REMAINING clouds agree on.
     this._refreshMeasureDatum();
     if (this._clouds.size === 0) this._nav.setHasCloud(false);
+    // A removed layer shrinks the shared elevation window when on.
+    this.refreshProjectSharedElevation();
     // Removing the active cloud can hide (or re-target) the legend.
     this._notifyColorContextChanged();
   }
@@ -2447,7 +2462,11 @@ export class Viewer {
     // sample is spatially complete and the analysis reports full coverage. A
     // stride is still applied (`sampled`), but that's a representative subsample
     // of the WHOLE extent, not a partial one.
-    let residentOnly = streamingPoints > 0 && staticPoints === 0;
+    // A partial stream reports resident-only whether or not a static cloud sits
+    // beside it: the static half being complete does not complete the streaming
+    // half (audit #8). It clears only once every known octree node is resident,
+    // i.e. the working set spans the whole cloud.
+    let residentOnly = streamingPoints > 0;
     if (residentOnly && this._streaming) {
       const totalNodes = this._streaming.cloud.octree.nodes().length;
       if (totalNodes > 0 && this._streamingPickData.size >= totalNodes) residentOnly = false;
@@ -2643,34 +2662,52 @@ export class Viewer {
   }
 
   /**
-   * Set the symmetric percentile trim used by the elevation colour
-   * mode and reseed every cloud currently rendering in elevation
-   * mode. The streaming renderer reads the trim through the same
+   * Set the symmetric percentile trim for the elevation colour mode and reseed
+   * every elevation-mode cloud. Streaming reads the trim through the same
    * `colorForMode` seam, so subsequent streaming nodes pick it up.
    */
   setHeightPercentileTrim(trim: number): void {
     const next = Math.max(0, Math.min(25, Math.round(trim)));
     if (next === this._heightPercentileTrim) return;
     this._heightPercentileTrim = next;
-    for (const [id, entry] of this._clouds) {
-      if (entry.mode !== 'elevation') continue;
-      const raw = colorForMode('elevation', entry.cloud, {
-        heightPercentileTrim: next,
-        upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
-      });
-      const arr = entry.colorAttr.array as Float32Array;
-      // sRGB → linear via the shared EOTF seam (see colorEncode.ts).
-      writeFloatColorsInto(arr, raw);
-      entry.colorAttr.needsUpdate = true;
-      void id; // silence the unused-binding lint
-    }
-    // A trim change moves the elevation ramp window — the legend must follow.
-    this._notifyColorContextChanged();
+    this._recolorElevation();
   }
 
   /** Read the current percentile-trim setting. */
   get heightPercentileTrim(): number {
     return this._heightPercentileTrim;
+  }
+
+  // ── Project-shared elevation scale (math in projectElevationScale.ts) ──────
+  // Off (default) = per-cloud percentile windows; on = every frame-sharing layer
+  // colours elevation against one world-Z window.
+  private _projectSharedElevation = false;
+
+  get projectSharedElevation(): boolean {
+    return this._projectSharedElevation;
+  }
+
+  /** World-Z union of the frame-sharing elevation clouds; null when < 2 share. */
+  projectSharedElevationRange(): { min: number; max: number } | null {
+    return computeSharedElevationRange(this._clouds.values(), this._heightPercentileTrim);
+  }
+
+  setProjectSharedElevation(on: boolean): void {
+    if (on === this._projectSharedElevation) return;
+    this._projectSharedElevation = on;
+    this._recolorElevation();
+  }
+
+  /** Re-apply the shared window after the cloud set changes while on. */
+  refreshProjectSharedElevation(): void {
+    if (this._projectSharedElevation) this._recolorElevation();
+  }
+
+  /** Recolour every elevation-mode cloud; shared window folded in when on. */
+  private _recolorElevation(): void {
+    const shared = this._projectSharedElevation ? this.projectSharedElevationRange() : null;
+    applyElevationColors(this._clouds.values(), shared, this._heightPercentileTrim);
+    this._notifyColorContextChanged();
   }
 
   // ── Visuals Studio — Visuals Studio state ─────────────────────────────
@@ -2982,11 +3019,11 @@ export class Viewer {
     if (!entry) return;
     if (entry.mode === mode) return;
 
-    const raw = colorForMode(mode, entry.cloud, {
-      heightPercentileTrim: this._heightPercentileTrim,
-      coverageGrid: this._coverageGrid ?? undefined,
-      upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1,
-    });
+    const opts: ColorForModeOptions =
+      mode === 'elevation'
+        ? elevationOptsFor(entry, this._projectSharedElevation ? this.projectSharedElevationRange() : null, this._heightPercentileTrim)
+        : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1 };
+    const raw = colorForMode(mode, entry.cloud, opts);
     const arr = entry.colorAttr.array as Float32Array;
     // sRGB → linear via the shared EOTF seam — keeps a mode switch
     // byte-identical to what the initial `toFloatColors` upload produced.
@@ -3009,6 +3046,26 @@ export class Viewer {
    */
   requestFrame(): void {
     this._bumpRenderActivity();
+  }
+
+  /**
+   * The scene-attach seam for DERIVED-LAYER overlays (contours today; the other
+   * analytical products next). Structural — the same shape as the sky and
+   * snapshot hosts — so the overlay module owns its own three.js objects and
+   * their disposal, and the Viewer lends only scene membership plus a redraw
+   * request. Deliberately not a `setContourOverlay`: the Viewer must not learn
+   * one product's lifecycle, or every future derived layer adds another method.
+   */
+  derivedLayerHost(): {
+    add(object: THREE.Object3D): void;
+    remove(object: THREE.Object3D): void;
+    requestFrame(): void;
+  } {
+    return {
+      add: (object) => { this._scene.add(object); },
+      remove: (object) => { this._scene.remove(object); },
+      requestFrame: () => { this.requestFrame(); },
+    };
   }
 
   // ── B.3 — classification editor ─────────────────────────────────────────
@@ -6215,18 +6272,30 @@ export class Viewer {
 
     let target: number;
     if (this._refinementPhasesEnabled) {
-      // P6 — track settle time and step DPR by discrete refinement phase. The
-      // coverage / central-refinement readiness are time proxies here until the
-      // P4 scheduler emits real signals; the phase machine itself is exact.
+      // P6 — step DPR by discrete refinement phase. With a streaming scheduler
+      // active the coverage / central-refine signals come from the WANTED-SET
+      // readiness verdict, so full resolution is reached only when the requested
+      // nodes are resident, not after a fixed time over a half-loaded cloud.
+      // Without a verdict (static cloud, or before the first cull) the
+      // elapsed-time proxy stands in; there is nothing to wait on there.
       if (moving) this._settledAtMs = 0;
       else if (this._settledAtMs === 0) this._settledAtMs = nowMs;
       const msSinceSettle = moving ? 0 : nowMs - this._settledAtMs;
+      const readiness = this.refinementReadiness();
+      const coverageComplete =
+        readiness && readiness.phase !== 'unknown'
+          ? readiness.phase === 'settling' || readiness.phase === 'settled'
+          : msSinceSettle >= SETTLE_MS;
+      const centralRefined =
+        readiness && readiness.phase !== 'unknown'
+          ? readiness.phase === 'settled'
+          : msSinceSettle >= PHASE_CENTER_PROXY_MS;
       this._phase = nextRefinementPhase(this._phase, {
         moving,
         msSinceSettle,
         settleMs: SETTLE_MS,
-        coverageComplete: msSinceSettle >= SETTLE_MS,
-        centralRefined: msSinceSettle >= PHASE_CENTER_PROXY_MS,
+        coverageComplete,
+        centralRefined,
       });
       target = Math.max(floor, maxDpr * phaseDprScale(this._phase));
       if (this._phase === 'moving' && angularSpeed > 0) {

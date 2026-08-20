@@ -28,6 +28,37 @@
  */
 
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
+
+/**
+ * What the panel needs to drive the contours derived layer. Every handler
+ * RETURNS the value that was actually applied (or null when the layer is gone),
+ * so the control re-reads the truth instead of assuming its own click won — the
+ * record stays authoritative and the UI cannot drift from what is drawn.
+ */
+export interface ContourLayerControls {
+  readonly visible: boolean;
+  /** 0..1. */
+  readonly opacity: number;
+  readonly indexEmphasis: boolean;
+  /** Display lift along the scene vertical axis, in the scan's vertical unit. */
+  readonly heightOffset: number;
+  /** e.g. "m" / "ft"; null when the file declares no vertical unit. */
+  readonly verticalUnitLabel: string | null;
+  onVisible(next: boolean): boolean | null;
+  onOpacity(next: number): number | null;
+  onIndexEmphasis(next: boolean): boolean | null;
+  onHeightOffset(next: number): number | null;
+}
+
+/**
+ * Label a display lift. An unknown vertical unit prints the bare number rather
+ * than inventing "m" — the same fail-honest rule the metric readouts follow.
+ */
+function formatHeightOffset(offset: number, unitLabel: string | null): string {
+  const n = Number.isFinite(offset) ? offset : 0;
+  const shown = n.toFixed(2).replace(/\.?0+$/, '') || '0';
+  return unitLabel ? `${shown} ${unitLabel}` : shown;
+}
 import {
   ANALYSE_LABELS,
   GRADE_MEANING,
@@ -69,6 +100,7 @@ import {
   defaultContourShapeStyle,
   type ContourShapeStyle,
 } from '../terrain/contour/contourShapeStyle';
+import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   loadMapSheetPdf,
   loadDemPackage,
@@ -169,6 +201,8 @@ export interface AnalysePanelCallbacks {
     shapeStyle: ContourShapeStyle;
     /** Per-purpose generalization tolerance (cells) for the 'generalized' style. */
     generalizeToleranceCells?: number;
+    /** Per-purpose generalization mode (uniform | terrain-aware). */
+    generalizeMode?: ContourGeneralizeMode;
   }) => Promise<AnalyseContoursResult>;
   /** Optional basename for downloaded files (e.g. the scan name). */
   getExportBasename?: () => string;
@@ -278,6 +312,14 @@ function section(text: string): HTMLElement {
 /** Prompt shown in a raster tile's sample readout before the user clicks. */
 const SAMPLE_HINT = 'Click the map to sample a point.';
 
+/**
+ * The panel's resting status line: what it says with no scan and no result.
+ * Named once because `update(null)` has to put it BACK. Without that, the
+ * status kept whatever the last run wrote, so closing a scan left the panel
+ * reading "Analysing…" over an empty state.
+ */
+const IDLE_STATUS = 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.';
+
 // Session-remembered MAP PDF dialog choices. Module-level by design (per the
 // brief — NOT localStorage): they persist across opens within this tab session
 // only, so the next export pre-fills the user's last Prepared by / Sheet /
@@ -375,6 +417,8 @@ export class AnalysePanel {
    * `_contourDeliverable`, hidden until the launcher's action is invoked.
    */
   private readonly _contourLauncher: HTMLElement;
+  /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
+  private readonly _contourLayerControls: HTMLElement;
   private readonly _contourDeliverable: HTMLElement;
   /** Monotonic token so a slow lazy launcher load can't mount a stale result. */
   private _contourToken = 0;
@@ -398,6 +442,13 @@ export class AnalysePanel {
    * "use the default tolerance" (the manual map-PDF style picker never sets it).
    */
   private _contourGeneralizeToleranceCells: number | undefined = undefined;
+  /**
+   * Per-purpose generalization mode adopted from the active Contour Studio export
+   * intent: 'uniform' or 'terrain-aware'. Threaded into `buildResultForExport`
+   * beside the tolerance. Undefined means "uniform" (the manual style picker
+   * never sets it, so its exports are byte-unchanged).
+   */
+  private _contourGeneralizeMode: ContourGeneralizeMode | undefined = undefined;
   /**
    * The §19 export permit for the pending map-sheet PDF. The map PDF export runs
    * asynchronously through a dialog, so the permit minted at click time is
@@ -477,7 +528,7 @@ export class AnalysePanel {
     this._runBtn = runBtn;
     this._status = el('p', {
       className: 'olv-analyse-status',
-      text: 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.',
+      text: IDLE_STATUS,
     });
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
@@ -504,6 +555,7 @@ export class AnalysePanel {
     // Studio export section dispatches to, so every exporter's guards, provenance
     // and busy-state are reused verbatim rather than re-implemented.
     this._contourLauncher = el('div', { className: 'olv-analyse-contour-launcher' });
+    this._contourLayerControls = el('div', { className: 'olv-analyse-layer-controls olv-hidden' });
     this._contourDeliverable = el('div', {
       className: 'olv-analyse-contour-deliverable olv-hidden',
     });
@@ -545,7 +597,7 @@ export class AnalysePanel {
     // own "Terrain Products" eyebrow; this wrapper just groups + spaces it. Only
     // the stale caveat outranks it, so a stale verdict is never read as current.
     const terrainProducts = el('div', { className: 'olv-analyse-products' });
-    terrainProducts.append(this._contourLauncher, this._contourDeliverable);
+    terrainProducts.append(this._contourLauncher, this._contourLayerControls, this._contourDeliverable);
 
     this._resultsRegion.append(
       this._staleNotice,
@@ -656,6 +708,13 @@ export class AnalysePanel {
       this._contourToken++;
       this._contourLauncher.replaceChildren();
       this._contourDeliverable.classList.add('olv-hidden');
+      // Put the resting prompt and the enabled button back. The status line is
+      // shown again just above, so leaving the last run's text there surfaced
+      // "Analysing…" on a panel with no scan; and `setBusy` is the only other
+      // writer of `disabled`, so a run that never reached its release left the
+      // control dead for the session.
+      this._status.textContent = IDLE_STATUS;
+      this._runBtn.disabled = false;
       return;
     }
     this._renderFitness();
@@ -682,6 +741,93 @@ export class AnalysePanel {
    * launcher's action. `null` (or no current result) clears the launcher.
    * Honesty-first: label + enabled state come from the computed launch state.
    */
+  /**
+   * Show (or clear) the controls for the CONTOURS derived layer drawn in the 3D
+   * scene. Passing null hides the group — there is no layer to drive, so an
+   * inert control would imply one exists.
+   *
+   * The panel owns no layer state: every control reports the user's intent and
+   * re-reads what the service actually applied, so the record stays the single
+   * source of truth and the UI can never drift from what is drawn.
+   */
+  setContourLayerControls(controls: ContourLayerControls | null): void {
+    const host = this._contourLayerControls;
+    host.replaceChildren();
+    if (!controls) {
+      host.classList.add('olv-hidden');
+      return;
+    }
+    host.classList.remove('olv-hidden');
+    host.append(el('div', { className: 'olv-analyse-layer-head', text: 'Contours in 3D' }));
+
+    const row = el('div', { className: 'olv-analyse-layer-row' });
+
+    // Visibility.
+    const visLabel = el('label', { className: 'olv-analyse-layer-toggle' });
+    const visCb = document.createElement('input');
+    visCb.type = 'checkbox';
+    visCb.checked = controls.visible;
+    visCb.setAttribute('aria-label', 'Show contours in the 3D scene');
+    visLabel.append(visCb, el('span', { text: 'Show' }));
+
+    // Index emphasis.
+    const idxLabel = el('label', { className: 'olv-analyse-layer-toggle' });
+    const idxCb = document.createElement('input');
+    idxCb.type = 'checkbox';
+    idxCb.checked = controls.indexEmphasis;
+    idxCb.setAttribute('aria-label', 'Emphasise index contours');
+    idxLabel.append(idxCb, el('span', { text: 'Index emphasis' }));
+    row.append(visLabel, idxLabel);
+
+    // Opacity.
+    const opRow = el('label', { className: 'olv-analyse-layer-slider' });
+    const opVal = el('span', {
+      className: 'olv-analyse-layer-val',
+      text: `${Math.round(controls.opacity * 100)}%`,
+    });
+    const opInput = document.createElement('input');
+    opInput.type = 'range'; opInput.min = '0'; opInput.max = '100'; opInput.step = '5';
+    opInput.value = String(Math.round(controls.opacity * 100));
+    opInput.setAttribute('aria-label', 'Contour layer opacity');
+    opRow.append(el('span', { className: 'olv-analyse-layer-tag', text: 'Opacity' }), opInput, opVal);
+
+    // Height offset — a DISPLAY lift so the lines read on the surface rather
+    // than z-fighting the points. Labelled in the scan's own vertical unit, and
+    // never presented as a change to the contour elevations.
+    const hOff = el('label', { className: 'olv-analyse-layer-slider' });
+    const hVal = el('span', {
+      className: 'olv-analyse-layer-val',
+      text: formatHeightOffset(controls.heightOffset, controls.verticalUnitLabel),
+    });
+    const hInput = document.createElement('input');
+    hInput.type = 'range'; hInput.min = '0'; hInput.max = '200'; hInput.step = '5';
+    hInput.value = String(Math.round(controls.heightOffset * 100));
+    hInput.setAttribute('aria-label', 'Contour layer height offset (display only)');
+    hOff.append(el('span', { className: 'olv-analyse-layer-tag', text: 'Lift' }), hInput, hVal);
+
+    visCb.addEventListener('change', () => {
+      // Re-read the applied value: the service, not the checkbox, decides.
+      const applied = controls.onVisible(visCb.checked);
+      visCb.checked = applied ?? visCb.checked;
+    });
+    idxCb.addEventListener('change', () => {
+      const applied = controls.onIndexEmphasis(idxCb.checked);
+      idxCb.checked = applied ?? idxCb.checked;
+    });
+    opInput.addEventListener('input', () => {
+      const next = Number(opInput.value) / 100;
+      const applied = controls.onOpacity(next) ?? next;
+      opVal.textContent = `${Math.round(applied * 100)}%`;
+    });
+    hInput.addEventListener('input', () => {
+      const next = Number(hInput.value) / 100;
+      const applied = controls.onHeightOffset(next) ?? next;
+      hVal.textContent = formatHeightOffset(applied, controls.verticalUnitLabel);
+    });
+
+    host.append(row, opRow, hOff);
+  }
+
   setContourFrame(ctx: LaunchFrameContext | null): void {
     const token = ++this._contourToken; // any new call supersedes a pending mount
     this._contourLauncher.replaceChildren();
@@ -733,9 +879,10 @@ export class AnalysePanel {
       .then(({ ContourExportAdapter }) => {
         if (!this._contourExportAdapter) {
           const host: ContourExportHost = {
-            setContourStyle: (style, generalizeToleranceCells) => {
+            setContourStyle: (style, generalizeToleranceCells, generalizeMode) => {
               this._contourStyle = style;
               this._contourGeneralizeToleranceCells = generalizeToleranceCells;
+              this._contourGeneralizeMode = generalizeMode;
             },
             exportVector: (fmt, opts) => this._exportContourFormat(fmt, undefined, opts),
             openMapPdf: (permit, intent) => {
@@ -2015,6 +2162,7 @@ export class AnalysePanel {
       intervalM: r.requestedIntervalM ?? r.model.intervalM,
       shapeStyle: style,
       generalizeToleranceCells: this._contourGeneralizeToleranceCells,
+      generalizeMode: this._contourGeneralizeMode,
     });
   }
 

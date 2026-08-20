@@ -10,6 +10,8 @@
  */
 
 import type { DeriveClassificationOptions } from './deriveClassification';
+import { classifierParamsForFrame } from './classifierFrame';
+import { verticalMetresPerUnit, type SpatialContext } from '../../geo/SpatialContext';
 
 /** The cloud attributes the classifier can optionally consume. */
 export interface ClassifierCueSource {
@@ -42,5 +44,26 @@ export function classifierCues(
     // A colour-only cue: pointless without RGB, so only surfaced when colours
     // are present and the caller opted in (see DeriveClassificationOptions).
     ...(hasColors && opts?.lowVegByGreenness ? { lowVegByGreenness: true } : {}),
+  };
+}
+
+/**
+ * The full classifier options for a cloud in its resolved CRS frame: the optional
+ * cues plus the physical (metre) parameters restated in the cloud's SOURCE units
+ * (see {@link classifierParamsForFrame}). Production MUST pass this so a foot or
+ * mixed-unit cloud classifies the same physical terrain as a metre one; passing
+ * the bare cues would run the metre defaults against foot coordinates.
+ */
+export function classifierOptions(
+  cloud: ClassifierCueSource,
+  ctx: SpatialContext,
+  opts?: { readonly lowVegByGreenness?: boolean },
+): DeriveClassificationOptions {
+  return {
+    ...classifierCues(cloud, opts),
+    ...classifierParamsForFrame({
+      linearUnitToMetres: ctx.linearUnitToMetres,
+      verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? ctx.linearUnitToMetres,
+    }),
   };
 }

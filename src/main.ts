@@ -61,7 +61,7 @@ import {
 import { WorkflowController, WORKFLOW_RECORDER_ENABLED } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
-import { recommendCameraPreset, flatnessFromBounds } from './render/camera/recommendView';
+import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
 import { LassoVolumeTool } from './ui/LassoVolumeTool';
@@ -94,11 +94,9 @@ import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
 import { toClassBuffer } from './render/class/classBuffer';
 import { deriveClassificationAsync } from './render/class/deriveClassificationAsync';
-import { classifierCues } from './render/class/classifierCues';
-import {
-  classificationCoverage,
-  type DeriveClassificationOptions,
-} from './render/class/deriveClassification';
+import { classifierOptions } from './render/class/classifierCues';
+import { classificationCoverage } from './render/class/classificationCoverage';
+import type { DeriveClassificationOptions } from './render/class/deriveClassification';
 import { footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, notScopedSentinel, type ClassScope } from './render/class/classScope';
 import { classificationLabel } from './render/pointInfo';
@@ -165,7 +163,8 @@ import type { StreamingBenchmark } from './render/streaming/streamingBenchmark';
 import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 // Type-only: the overlay itself rides a lazy chunk (loadColorbarOverlay).
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
-import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
+import { estimateDecodedBytes, estimateGpuBytes, type StreamingQuality } from './render/streaming/streamingBudget';
+import { streamingSourceLabel, type StreamingSourceKind } from './render/streaming/StreamingSource';
 import { isZUpFormat } from './io/sniffFormat';
 // `exportCloud` is dynamically imported via `loadExporters` in the onExport
 // callback — the PLY/OBJ/XYZ/CSV encoders stay in their own chunk and never
@@ -177,11 +176,8 @@ import { isZUpFormat } from './io/sniffFormat';
 // orchestration with type-only imports (no session parser, no three.js), so
 // saveCurrentView/applyView can run synchronously from a keystroke while the
 // ordering contract (camera LAST) stays unit-testable outside this bootstrap.
-import {
-  applyViewStateInOrder,
-  buildViewState,
-  type ViewStateBundle,
-} from './io/viewState';
+import type { ViewStateBundle } from './io/viewState';
+import { createViewStateCoordinator } from './app/viewStateCoordinator';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
@@ -201,7 +197,6 @@ import type { RangeSource } from './io/range/RangeSource';
 import type { CopcWorkerClient } from './io/copc/worker/copcWorkerClient';
 import type { EptLaszipWorkerClient } from './io/ept/worker/eptLaszipWorkerClient';
 import { StreamingPanel } from './ui/StreamingPanel';
-import type { StreamingQuality } from './render/streaming/streamingBudget';
 // The COPC/streaming `import()` split points live in `lazyChunks.ts` — a
 // module excluded from the live-build source-transform so Vite can still see the
 // dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
@@ -1246,6 +1241,10 @@ const inspector = new Inspector({
     viewer.setHeightPercentileTrim(trim);
     syncInspectorVisuals();
   },
+  onProjectSharedElevation: (on) => {
+    viewer.setProjectSharedElevation(on);
+    syncProjectElevationScale();
+  },
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
     activeElevFilter = range;
@@ -1265,113 +1264,6 @@ const inspector = new Inspector({
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: () => compareLoadedLayers(),
   onExportDifference: () => exportDifferenceRaster(),
-  onExport: (format) => {
-    const cloud = scans.activeCloud() ?? undefined;
-    if (!cloud) return;
-    // The exporter is a lazy chunk; fetched on first export of the session.
-    void loadExporters().then(({ exportCloud }) => {
-      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
-    });
-  },
-  onExportImage: (mode) => {
-    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
-    // pulled in by viewer.exportImage on the first invocation. The download
-    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
-    // surfaces as a visible alert.
-    const sourceName = scans.activeId
-      ? viewer.getCloud(scans.activeId)?.name
-      : viewer.streamingCloud?.name;
-    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
-    // surface a precise per-mode progress string while the lazy
-    // Studio chunk loads and the export renders.
-    const modeLabel: Record<string, string> = {
-      'orthographic-rgb': 'orthographic RGB',
-      'height-map': 'height map',
-      intensity: 'intensity map',
-      classification: 'classification map',
-      depth: 'depth map',
-      normal: 'normal map',
-      contour: 'contour map',
-    };
-    const label = modeLabel[mode] ?? mode;
-    dropZone.setProgress(`Exporting ${label}…`);
-    viewer
-      // Thread the active class-scope stamp so a filtered export carries the
-      // "showing N of M classes" banner; empty when nothing is hidden.
-      .exportImage(mode, {}, currentClassScopeStamp())
-      .then(async (result) => {
-        // Georeferenced ortho path (v0.4.5, workplan C4): when the exporter
-        // returned world-file data (true top-down ortho frame + known world
-        // origin + CRS WKT), the download is one ZIP — PNG + `.pgw` + `.prj`
-        // — that QGIS/ArcGIS place directly. Every other export keeps the
-        // existing bare-PNG download and filename. Packaging failures fall
-        // back to the bare PNG rather than sinking an export that already
-        // rendered fine.
-        if (result.worldFile) {
-          try {
-            const { buildStudioPngPackage } = await loadPngWorldFile();
-            const wf = result.worldFile;
-            const pkg = buildStudioPngPackage({
-              basename: `${base}-${mode}`,
-              png: new Uint8Array(await result.blob.arrayBuffer()),
-              extent: wf.extent,
-              widthPx: wf.widthPx,
-              heightPx: wf.heightPx,
-              worldOrigin: wf.worldOrigin,
-              wkt: wf.wkt,
-            });
-            if (pkg) {
-              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
-              recordUsage('export', mode);
-              dropZone.setProgress(null);
-              return;
-            }
-          } catch (err) {
-            console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
-          }
-        }
-        triggerDownload(result.blob, `${base}-${mode}.png`);
-        recordUsage('export', mode);
-        dropZone.setProgress(null);
-      })
-      .catch((err: unknown) => {
-        recordUsage('error', 'export');
-        dropZone.setProgress(null);
-        // The orchestrator's explicit reason ("Classification export is
-        // unavailable — this cloud has no classification channel.") is the
-        // most actionable thing we can show, so it goes both to the console
-        // (for debugging) and to a non-blocking alert (so the user knows
-        // something happened and why). Replaces the alert with a
-        // Surface the failure through the shared toast UI rather than a
-        // modal alert — blocking the page on a generation failure is a UX
-        // regression we no longer accept.
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[image-export]', err);
-        dropZone.setError(`Image export failed: ${msg}`);
-      });
-  },
-  onExportReport: (templateId) => {
-    // Generate a PDF report from the live scan state + annotations +
-    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
-    // lives behind `loadReportEngine()`; first click downloads both. The
-    // report covers what the scan-report card already does on PNG
-    // exports, but as a multi-page PDF with the full Inspector context.
-    // The progress toast surfaces while the lazy module loads and the PDF
-    // renders; failures route through the same toast UI as every other
-    // export.
-    dropZone.setProgress('Generating report…');
-    generateReportPdf(templateId)
-      .then(() => {
-        recordUsage('report', templateId);
-        dropZone.setProgress(null);
-      })
-      .catch((err: unknown) => {
-        recordUsage('error', 'report');
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[report]', err);
-        dropZone.setError(`Report generation failed: ${msg}`);
-      });
-  },
   onSaveView: () => saveCurrentView(),
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -1726,7 +1618,7 @@ async function runDeriveClassification(): Promise<void> {
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
-  const deriveOptions = classifierCues(cloud);
+  const deriveOptions = classifierOptions(cloud, crsService.context());
 
   classifyRunning = true;
   showLassoToast('Classify · deriving ground / vegetation / building…');
@@ -1813,7 +1705,7 @@ async function runFillUnclassified(): Promise<void> {
   // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
   const deriveOptions: DeriveClassificationOptions = {
     existingClassification: cloud.classification,
-    ...classifierCues(cloud),
+    ...classifierOptions(cloud, crsService.context()),
   };
 
   classifyRunning = true;
@@ -2054,10 +1946,10 @@ const dock = new ToolDock({
   onFrameAll: () => viewer.frameAll(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => void copyShareLink(),
-  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('data'); },
+  onMeasureToggle: () => { const on = !viewer.measureMode; viewer.setMeasureMode(on); if (on) showWorkspaceMode?.('work'); },
   onInspectToggle: () => viewer.setInspectMode(!viewer.inspectMode),
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
-  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('data'); },
+  onAnnotateToggle: () => { const on = !viewer.annotateMode; viewer.setAnnotateMode(on); if (on) showWorkspaceMode?.('work'); },
   onAnalyseToggle: () => {
     // Re-open (or hide) the terrain analysis panel. If an object scan had
     // demoted it behind the Object panel, opening Analyse takes over —
@@ -2133,9 +2025,6 @@ const streamingPanel = new StreamingPanel({
     else viewer.resumeStreaming();
   },
   onClearCache: () => viewer.clearStreamingCache(),
-  onSaveView: () => saveCurrentView(),
-  onApplyView: (index) => applyView(index),
-  onDeleteView: (index) => deleteView(index),
   onGradeFullCloud: () => void runFullCloudGradeAction(),
   onCancelGrade: () => cancelFullCloudGrade(),
 });
@@ -2951,6 +2840,113 @@ const measurementExportActionDeps = (v: Viewer): MeasurementExportActionDeps => 
 });
 
 const exportPanel = new ExportPanel({
+  onExport: (format) => {
+    const cloud = scans.activeCloud() ?? undefined;
+    if (!cloud) return;
+    // The exporter is a lazy chunk; fetched on first export of the session.
+    void loadExporters().then(({ exportCloud }) => {
+      downloadText(`${baseName(cloud.name)}.${format}`, exportCloud(cloud, format, crsService.context().isGeographic));
+    });
+  },
+  onExportImage: (mode) => {
+    // The Visual Export Studio ships in its own lazy chunk (`loadExportStudio`),
+    // pulled in by viewer.exportImage on the first invocation. The download
+    // triggers off the returned Blob; an unsupported-on-this-cloud rejection
+    // surfaces as a visible alert.
+    const sourceName = scans.activeId
+      ? viewer.getCloud(scans.activeId)?.name
+      : viewer.streamingCloud?.name;
+    const base = sourceName ? baseName(sourceName) : 'openlidarviewer';
+    // surface a precise per-mode progress string while the lazy
+    // Studio chunk loads and the export renders.
+    const modeLabel: Record<string, string> = {
+      'orthographic-rgb': 'orthographic RGB',
+      'height-map': 'height map',
+      intensity: 'intensity map',
+      classification: 'classification map',
+      depth: 'depth map',
+      normal: 'normal map',
+      contour: 'contour map',
+    };
+    const label = modeLabel[mode] ?? mode;
+    dropZone.setProgress(`Exporting ${label}…`);
+    viewer
+      // Thread the active class-scope stamp so a filtered export carries the
+      // "showing N of M classes" banner; empty when nothing is hidden.
+      .exportImage(mode, {}, currentClassScopeStamp())
+      .then(async (result) => {
+        // Georeferenced ortho path (v0.4.5, workplan C4): when the exporter
+        // returned world-file data (true top-down ortho frame + known world
+        // origin + CRS WKT), the download is one ZIP — PNG + `.pgw` + `.prj`
+        // — that QGIS/ArcGIS place directly. Every other export keeps the
+        // existing bare-PNG download and filename. Packaging failures fall
+        // back to the bare PNG rather than sinking an export that already
+        // rendered fine.
+        if (result.worldFile) {
+          try {
+            const { buildStudioPngPackage } = await loadPngWorldFile();
+            const wf = result.worldFile;
+            const pkg = buildStudioPngPackage({
+              basename: `${base}-${mode}`,
+              png: new Uint8Array(await result.blob.arrayBuffer()),
+              extent: wf.extent,
+              widthPx: wf.widthPx,
+              heightPx: wf.heightPx,
+              worldOrigin: wf.worldOrigin,
+              wkt: wf.wkt,
+            });
+            if (pkg) {
+              triggerDownload(new Blob([pkg.zip as BlobPart], { type: 'application/zip' }), pkg.filename);
+              recordUsage('export', mode);
+              dropZone.setProgress(null);
+              return;
+            }
+          } catch (err) {
+            console.warn('[image-export] world-file packaging failed — shipping bare PNG:', err);
+          }
+        }
+        triggerDownload(result.blob, `${base}-${mode}.png`);
+        recordUsage('export', mode);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'export');
+        dropZone.setProgress(null);
+        // The orchestrator's explicit reason ("Classification export is
+        // unavailable — this cloud has no classification channel.") is the
+        // most actionable thing we can show, so it goes both to the console
+        // (for debugging) and to a non-blocking alert (so the user knows
+        // something happened and why). Replaces the alert with a
+        // Surface the failure through the shared toast UI rather than a
+        // modal alert — blocking the page on a generation failure is a UX
+        // regression we no longer accept.
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[image-export]', err);
+        dropZone.setError(`Image export failed: ${msg}`);
+      });
+  },
+  onExportReport: (templateId) => {
+    // Generate a PDF report from the live scan state + annotations +
+    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
+    // lives behind `loadReportEngine()`; first click downloads both. The
+    // report covers what the scan-report card already does on PNG
+    // exports, but as a multi-page PDF with the full Inspector context.
+    // The progress toast surfaces while the lazy module loads and the PDF
+    // renders; failures route through the same toast UI as every other
+    // export.
+    dropZone.setProgress('Generating report…');
+    generateReportPdf(templateId)
+      .then(() => {
+        recordUsage('report', templateId);
+        dropZone.setProgress(null);
+      })
+      .catch((err: unknown) => {
+        recordUsage('error', 'report');
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[report]', err);
+        dropZone.setError(`Report generation failed: ${msg}`);
+      });
+  },
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
   // via getCloud below). Reads only scalar facts: resident count + colour/CRS
@@ -3833,7 +3829,7 @@ void viewerLoaded.then(() => {
       mobileSheet.slot('layers').append(dataEls.layers, dataEls.layerHealth);
       const layersPanels: HTMLElement[] = [classLegendPanel.element, processStudio.panel.element];
       if (measureMount.panel) layersPanels.push(measureMount.panel.element);
-      layersPanels.push(annotationPanel.element, exportPanel.element);
+      layersPanels.push(clipPanel.element, annotationPanel.element, exportPanel.element);
       mobileSheet.slot('layers').append(...layersPanels);
       // Drop the desktop collapsed state so mobile users don't see a nested
       // collapsed header inside the sheet's own collapse chrome.
@@ -3933,8 +3929,8 @@ void viewerLoaded.then(() => {
           slot.append(el);
         }
       } else {
-        // Data mode — measure sits under the class legend with annotations, clip.
-        workspace.mountInMode('data', el);
+        // Work mode — measure sits with annotations and clip, the scene-work tools.
+        workspace.mountInMode('work', el);
       }
     });
     // If either panel already mounted before this wiring ran (possible only if a
@@ -4272,7 +4268,7 @@ function syncInspectClassScope(): void {
  * and the PDF Report Engine can consume it without a separate code path.
  */
 function runStreamingModules(cloud: {
-  readonly kind: 'copc' | 'ept';
+  readonly kind: StreamingSourceKind;
   readonly name: string;
   readonly sourcePointCount: number;
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
@@ -4304,7 +4300,7 @@ function runStreamingModules(cloud: {
     return row;
   };
 
-  rows.push(info('Source', cloud.kind === 'ept' ? 'EPT (Entwine Point Tile)' : 'COPC (Cloud Optimized Point Cloud)'));
+  rows.push(info('Source', streamingSourceLabel(cloud.kind)));
   if (cloud.metadata?.header?.pointDataRecordFormat !== undefined) {
     rows.push(info('Point format', `PDRF ${cloud.metadata.header.pointDataRecordFormat}`));
   }
@@ -4323,8 +4319,8 @@ function runStreamingModules(cloud: {
     // metres. `streamingExtentRows` FAILS CLOSED on an unconfirmed unit
     // (placeholder `linearUnitToMetres: 1`): it drops the "m"/"pts/m²" claim
     // rather than stamping metres onto non-metre data — as measure/lasso do.
-    const crsInfo = cloud.crs?.() ?? null;
-    const ext = streamingExtentRows(header, crsInfo, cloud.sourcePointCount);
+    // Reads the active scan's resolved frame (`crsService.context()`).
+    const ext = streamingExtentRows(header, crsService.context(), cloud.sourcePointCount);
     if (!ext.unitConfirmed) {
       rows.push({
         label: 'Units',
@@ -4518,6 +4514,18 @@ function syncColorModeForActive(): void {
   inspector.setColorModes(availableModes(cloud), currentColorMode);
 }
 
+/**
+ * Surface the project-shared elevation toggle only when ≥2 layers share the
+ * project frame, and mirror its current on/off state. Called after the cloud
+ * set changes so opening or closing a second scan updates the control.
+ */
+function syncProjectElevationScale(): void {
+  inspector.setProjectSharedElevationAvailable(
+    viewer.projectSharedElevationRange() != null,
+    viewer.projectSharedElevation,
+  );
+}
+
 function syncInspectorRendering(): void {
   inspector.syncRendering({
     pointSize: viewer.pointSize,
@@ -4609,170 +4617,48 @@ function hasScan(): boolean {
 }
 
 /**
- * ONE capture path for a restorable view state. The session exporter's
- * GLOBAL fields and every named saved view both come from here, so the two
- * surfaces can never drift — what a `.olvsession` restores globally is
- * exactly what a saved view restores by name. `buildViewState` prunes unset
- * fields (emit-only-when-set), which is what keeps a bundle-free view's
- * serialisation byte-identical to the v6 writer's output.
+ * Restorable view state — a thin caller over the extracted
+ * `src/app/viewStateCoordinator.ts`. The ONE capture path, the ONE ordered
+ * apply path (camera strictly last, via `io/viewState.ts`) and the saved-view
+ * operations built on them live there, bound to the shell's services through
+ * this deps object. `main.ts` keeps the five delegates the panels, the action
+ * registry and the session / streaming modules already reference by name.
  */
+const viewStateCoordinator = createViewStateCoordinator({
+  getViewer: () => viewer,
+  inspector,
+  classLegend: classLegendPanel,
+  clipPanel,
+  bookmarks,
+  hasScan,
+  getActiveScanId: () => scans.activeId,
+  getPointFilters: () => ({ elevation: activeElevFilter, intensity: activeIntenFilter }),
+  onElevationFilterRestored: (range) => {
+    activeElevFilter = range;
+  },
+  onIntensityFilterRestored: (range) => {
+    activeIntenFilter = range;
+  },
+});
+
 function captureViewState(): ViewStateBundle {
-  return buildViewState({
-    // The camera is meaningful only with a scan on stage — a session exported
-    // from the empty state must not carry a bogus default pose. (`hasScan`
-    // is the same predicate that gates the tool shortcuts.)
-    camera: hasScan() ? viewer.getCameraState() : undefined,
-    render: {
-      pointSize: viewer.pointSize,
-      edlEnabled: viewer.edlEnabled,
-      edlStrength: viewer.edlStrength,
-      pointSizeMode: viewer.pointSizeMode,
-      antialiasing: viewer.antialiasing,
-    },
-    colorMode: viewer.activeColorMode(),
-    // v5 contract — the class filter is the list of HIDDEN ASPRS codes;
-    // empty means "no filter" and is pruned rather than serialised.
-    classFilter: classLegendPanel.getVisibility().hiddenCodes(),
-    // The active point-filter windows, so a restore reproduces "only the
-    // ground band" / "hide low-return noise". Omitted when unset.
-    ...(activeElevFilter || activeIntenFilter
-      ? {
-          pointFilters: {
-            ...(activeElevFilter ? { elevation: activeElevFilter } : {}),
-            ...(activeIntenFilter ? { intensity: activeIntenFilter } : {}),
-          },
-        }
-      : {}),
-    // Whenever the viewer holds a clip — enabled or not — so a
-    // positioned-but-dormant box keeps its geometry across the round trip.
-    clip: viewer.getClip() ?? undefined,
-  }) ?? {};
+  return viewStateCoordinator.capture();
 }
 
-/**
- * ONE apply path for a restorable view state — session import and named-view
- * restore both route through here. The field ORDER and the present/absent
- * guards live in the pure orchestrator (`io/viewState.ts`, unit-tested:
- * camera strictly LAST, every field independent); the sinks below carry the
- * host-specific wiring.
- *
- * Streaming honesty: a restore re-applies the recipe and re-renders — on a
- * streaming cloud the resident node set varies with budget and load order,
- * so identical point MEMBERSHIP is not guaranteed, only the same
- * camera/clip/colour/filter state over whatever is resident.
- */
 function applyViewState(vs: ViewStateBundle): void {
-  applyViewStateInOrder(vs, {
-    render: (r) => {
-      viewer.setPointSize(r.pointSize);
-      viewer.setPointSizeMode(r.pointSizeMode);
-      viewer.setEdlEnabled(r.edlEnabled);
-      viewer.setEdlStrength(r.edlStrength);
-      viewer.setAntialiasing(r.antialiasing);
-      inspector.syncRendering({
-        pointSize: viewer.pointSize,
-        edlEnabled: viewer.edlEnabled,
-        edlStrength: viewer.edlStrength,
-        pointSizeMode: viewer.pointSizeMode,
-        antialiasing: viewer.antialiasing,
-        twoFingerTwistEnabled: viewer.twoFingerTwistEnabled,
-        splatMode: viewer.splatMode,
-      });
-    },
-    colorMode: (mode) => {
-      // Apply to every static cloud; the streaming subsystem too.
-      for (const id of viewer.clouds()) viewer.setColorMode(id, mode);
-      viewer.setStreamingColorMode(mode);
-    },
-    classFilter: (codes) => {
-      // v5 — re-apply the saved class-visibility filter. The panel re-renders
-      // and emits onChange, which the host has wired to the GPU mask, so the
-      // restored scan shows the same classes the author left visible.
-      classLegendPanel.applyFilter(codes);
-    },
-    pointFilters: (pf) => {
-      // v6 — re-apply the saved elevation / intensity windows, but ONLY when
-      // a scan is actually loaded. The elevation window is converted to the
-      // cloud's attribute space using that cloud's origin + up-axis; applying
-      // it with no scan present would convert against origin 0 and the
-      // default axis, so the window would be wrong the moment a scan did
-      // load. A view state is an overlay for an open scan, so "no scan ⇒
-      // skip the filter" is the correct, non-surprising behaviour.
-      if (scans.activeId == null && !viewer.hasStreamingCloud) return;
-      // The Inspector extents were seeded when the scan opened, so restoring
-      // writes the window into the inputs and drives the GPU filter + cue.
-      if (pf.elevation) {
-        viewer.setElevationFilter(pf.elevation);
-        inspector.restoreElevationFilter(pf.elevation);
-        activeElevFilter = [pf.elevation[0], pf.elevation[1]];
-      }
-      if (pf.intensity) {
-        viewer.setIntensityFilter(pf.intensity);
-        inspector.restoreIntensityFilter(pf.intensity);
-        activeIntenFilter = [pf.intensity[0], pf.intensity[1]];
-      }
-    },
-    clip: (clip) => {
-      // Restore the saved clip box so a shared capsule reproduces the
-      // author's isolation/cut-away, not an unclipped scene.
-      viewer.setClip(clip);
-      clipPanel.setVisible(true);
-      // Reflect the restored clip in the panel UI without re-firing onApply —
-      // the viewer already holds it, and firing through the panel while its
-      // own enabled flag was still false used to clear the restored clip.
-      clipPanel.setState(clip);
-    },
-    camera: (camera) => {
-      // Fly the live camera to the saved viewpoint — the orchestrator applies
-      // this LAST, so nothing after it can move the restored framing.
-      viewer.applyCameraState(camera);
-    },
-  });
+  viewStateCoordinator.apply(vs);
 }
 
-/**
- * Capture the current viewpoint AND display state as a named saved view.
- * The pose keeps the v6 camera-bookmark slot; everything else the exporter
- * would record globally (render, colour mode, class filter, point filters,
- * clip) rides in the bundle, so restoring the view by name reproduces the
- * full picture — the "Figure 3 = view state 'north-scarp'" contract.
- */
 function saveCurrentView(): void {
-  const { camera, ...rest } = captureViewState();
-  // `getCameraState` (not the bare pose) so a non-default FOV or nav mode is
-  // part of what the view restores; the empty-state fallback keeps the old
-  // bare-pose behaviour when no scan gates the capture.
-  bookmarks.add({ pose: camera ?? viewer.getCameraPose(), state: buildViewState(rest) });
-  refreshViewsUI();
+  viewStateCoordinator.saveCurrentView();
 }
 
-/** Push the saved-view names to whichever panel is currently shown. */
 function refreshViewsUI(): void {
-  const names = bookmarks.names();
-  if (viewer.hasStreamingCloud) streamingPanel.setViews(names);
-  else inspector.setViews(names);
+  viewStateCoordinator.refreshViewsUi();
 }
 
-/** Glide the camera to a saved view — and (v7) restore its display state. */
 function applyView(index: number): void {
-  const view = bookmarks.get(index);
-  if (!view) return;
-  if (!view.state) {
-    // A pre-v7 (camera-only) view keeps its exact old behaviour: glide the
-    // pose and touch nothing else — not even the FOV, which the richer
-    // applyCameraState path would reset to the default.
-    viewer.applyCameraPose(view.pose);
-    return;
-  }
-  // Full restore through the one apply path; the pose rides as the bundle's
-  // camera so the orchestrator applies it LAST.
-  applyViewState({ ...view.state, camera: view.pose });
-}
-
-/** Delete a saved view and refresh the list. */
-function deleteView(index: number): void {
-  bookmarks.remove(index);
-  refreshViewsUI();
+  viewStateCoordinator.applyView(index);
 }
 
 /**
@@ -5006,6 +4892,7 @@ const openScanDeps: OpenScanDeps = {
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
+  exportPanel,
   inspectorCards,
   crsCoordinator,
   dock,
@@ -5034,9 +4921,9 @@ const openScanDeps: OpenScanDeps = {
   getDebugOverlay: () => debugOverlay,
 };
 
-/** Load a File: parse, render, populate the Inspector, land on the Data panel. */
+/** Load a File: land on Data up front (visibility only, not gated on the render promise), then parse/render/populate. */
 function handleFile(file: File): Promise<void> {
-  return openScan(file, openScanDeps).then(() => showWorkspaceMode?.('data'));
+  showWorkspaceMode?.('data'); return openScan(file, openScanDeps);
 }
 
 /**
@@ -5073,6 +4960,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   dropZone,
   stage,
   inspector,
+  exportPanel,
   streamingPanel,
   classLegendPanel,
   inspectorCards,
@@ -5271,6 +5159,8 @@ function closeStreaming(): void {
   // and clear the streaming-mode positioning class.
   try { inspector.setStreamingMode(false); }
   catch (err) { if (debug) console.warn('[inspector] setStreamingMode(false) threw', err); }
+  try { exportPanel.setStreamingMode(false); }
+  catch (err) { if (debug) console.warn('[exportPanel] setStreamingMode(false) threw', err); }
   try { inspector.clearDatasetIntelligence(); }
   catch (err) { if (debug) console.warn('[inspector] clearDatasetIntelligence threw', err); }
   inspector.element.classList.remove('olv-hidden');
@@ -5321,7 +5211,7 @@ function startStreamingStatusPolling(): void {
     });
     if (counts.resident === 0) {
       streamingPanel.setPhase('Streaming coarse geometry…');
-    } else if (counts.loading > 0 || counts.queued > 0) {
+    } else if (counts.loading > 0 || counts.queued > 0 || counts.decoded > 0) {
       streamingPanel.setPhase('Refining visible detail…');
     } else {
       streamingPanel.setPhase('Streaming ready');
@@ -5420,14 +5310,13 @@ function stopStreamingStatusPolling(): void {
 /** Reveal the "Project ready" summary card for a freshly opened scan. */
 function showProjectCard(cloud: PointCloud, totalCount: number): void {
   const b = cloud.bounds();
+  const c = crsService.context();
   projectCard.show({
     name: cloud.name,
     format: cloud.sourceFormat,
     shownCount: cloud.pointCount,
     totalCount,
-    width: b.max[0] - b.min[0],
-    depth: b.max[1] - b.min[1],
-    height: b.max[2] - b.min[2],
+    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: c.linearUnitKnown, linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
@@ -5437,7 +5326,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
   const rec = recommendCameraPreset({
     hasRgb: cloud.colors !== undefined,
     hasClassification: cloud.classification !== undefined,
-    flatness: flatnessFromBounds(b.min, b.max),
+    flatness: flatnessFromBounds(b.min, b.max, c.upAxis),
   });
   recommendedViewChip.show(rec, () => viewer.setCameraPreset(rec.preset));
 }
@@ -5578,7 +5467,7 @@ function resetToEmptyState(): void {
   // Visual Export Studio — no scan loaded, no source to render. The
   // buttons go back to disabled with their "load a scan first" hint so the
   // user can't fire an export against nothing.
-  inspector.setImageExportEnabled(false);
+  exportPanel.setImageExportEnabled(false);
   stage.showEmptyState();
   navBar.element.classList.add('olv-hidden');
   // Reset the NavBar mode to 'orbit'. The "Click the scan to look around"
@@ -5665,7 +5554,7 @@ function compareLoadedLayers(): void {
         verticalUnitToMetres: ctxA.verticalUnitToMetres, // Z keeps its OWN declared scale; the horizontal verdict never stands in for it
       });
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
-      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp)]);
+      inspector.setCompareResult([header, summarizeAlignment(alignment), ...summarizeChange(cmp, { registrationSigmaM: alignment.applied ? alignment.rmsResidualM : 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })]);
       // A georeferenced .asc of the signed difference. The shared grid is built
       // in the common world frame, so its origin IS the scan's projected corner.
       // The .asc grid geometry (cellsize + corners) is in the source LINEAR
@@ -5724,6 +5613,7 @@ function removeCloud(id: string): void {
     layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent());
     inspector.setIntensityExtent(viewer.intensityExtent());
+    syncProjectElevationScale();
   }
 }
 

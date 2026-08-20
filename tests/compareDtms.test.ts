@@ -144,6 +144,37 @@ describe('summarizeChange', () => {
     expect(lines.some((l) => /Needs for a measured result/.test(l))).toBe(false);
   });
 
+  it('qualifies the net volume with a ± band + detectability when a unit factor is given (#3)', () => {
+    const a = grid([1, 1, 1, 1], 2, 2);
+    const b = grid([2, 2, 2, 2], 2, 2);
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0.02 });
+    expect(lines.some((l) => /Volume uncertainty|below the level of detection/.test(l))).toBe(true);
+  });
+
+  it('flags the band as a lower bound when the co-registration error is unquantified (#3)', () => {
+    const a = grid([1, 1, 1, 1], 2, 2);
+    const b = grid([2, 2, 2, 2], 2, 2);
+    const lines = summarizeChange(compareDtms(a, b), { horizontalUnitToMetres: 1, registrationSigmaM: 0 });
+    expect(lines.some((l) => /lower bound/.test(l))).toBe(true);
+  });
+
+  it('says the band bounds nothing when no error source was supplied at all', () => {
+    // A level of detection of 0 is permitted and no alignment was applied, so
+    // both σ terms are empty and the band collapses to ±0. That is the absence
+    // of an error budget, not a perfect measurement, and the line has to say so
+    // rather than report a threshold nobody set.
+    const a = grid([1, 1, 1, 1], 2, 2);
+    const b = grid([2, 2, 2, 2], 2, 2);
+    const lines = summarizeChange(
+      compareDtms(a, b, { levelOfDetectionM: 0 }),
+      { horizontalUnitToMetres: 1, registrationSigmaM: 0 },
+    );
+    const band = lines.find((l) => /^Volume uncertainty/.test(l));
+    expect(band).toMatch(/not quantified/);
+    expect(band).toMatch(/bounds nothing/);
+    expect(lines.some((l) => /below the level of detection/.test(l))).toBe(false);
+  });
+
   it('spells out the co-registration checklist when not co-registered', () => {
     const a = grid([1, 1], 2, 1);
     const b = grid([2, 2], 2, 1, { originH1: 10 });

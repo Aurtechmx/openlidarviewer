@@ -27,6 +27,9 @@ import {
 import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { clipCloud } from '../render/clip/clipCloud';
 import type { ClipBox } from '../render/clip/clipBox';
+import type { ExportFormat } from '../io/exporters';
+import type { ExportMode } from '../export/types';
+import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
 
 /**
  * Lightweight, allocation-free description of the exportable cloud, used to
@@ -152,10 +155,18 @@ export interface ExportPanelCallbacks {
    * "open a scan first" during the brief window before the first node lands.
    */
   isStreamingPending?: () => boolean;
+  /** Export the active cloud to a point-cloud file format (ply / obj / xyz / csv). */
+  onExport?: (format: ExportFormat) => void;
+  /** Render the live scan in one Visual Export Studio mode and download a PNG. */
+  onExportImage?: (mode: ExportMode) => void;
+  /** Generate a PDF report from the live scan using the named template. */
+  onExportReport?: (templateId: string) => void;
 }
 
 export class ExportPanel {
   readonly element: HTMLElement;
+  /** The moved deliverables (formats / image / report), or null when not wired. */
+  private readonly _deliverables: ExportDeliverables | null;
   private readonly _formatRow: HTMLElement;
   private readonly _crsLabel: HTMLElement;
   private readonly _crsRow: HTMLElement;
@@ -266,6 +277,21 @@ export class ExportPanel {
       this._products,
     );
 
+    // The Output Center's deliverables — point-cloud formats, image export, PDF
+    // report — moved here from the Inspector so every export lives in one place.
+    // Wired only when the host supplies the callbacks; the controller drives the
+    // load-time gating.
+    if (callbacks.onExport && callbacks.onExportImage && callbacks.onExportReport) {
+      this._deliverables = buildExportDeliverables({
+        onExport: callbacks.onExport,
+        onExportImage: callbacks.onExportImage,
+        onExportReport: callbacks.onExportReport,
+      });
+      body.append(this._deliverables.element);
+    } else {
+      this._deliverables = null;
+    }
+
     this.element.append(head, body);
     this.element.classList.add('olv-collapsed');
     this.setVisible(false);
@@ -282,6 +308,27 @@ export class ExportPanel {
 
   setVisible(on: boolean): void {
     this.element.style.display = on ? '' : 'none';
+  }
+
+  /** Enable or disable the image-export + report buttons as a group (see the deliverables). */
+  setImageExportEnabled(enabled: boolean): void {
+    this._deliverables?.setImageExportEnabled(enabled);
+  }
+
+  /** Per-mode availability override for the image-export buttons (see the deliverables). */
+  setImageExportAvailability(
+    availability: ReadonlyMap<ExportMode, { readonly available: boolean; readonly reason?: string }>,
+  ): void {
+    this._deliverables?.setImageExportAvailability(availability);
+  }
+
+  /**
+   * Hide the point-cloud file-format quick export while a streaming scan is
+   * active — a streaming cloud has no resident file to write those formats from.
+   * Image export and the PDF report stay available (they render the live view).
+   */
+  setStreamingMode(streaming: boolean): void {
+    if (this._deliverables) this._deliverables.formatSection.style.display = streaming ? 'none' : '';
   }
 
   /** Re-evaluate the full-resolution availability for the active cloud. */

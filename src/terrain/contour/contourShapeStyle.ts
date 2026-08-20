@@ -33,6 +33,11 @@ import { EVIDENCE_THRESHOLDS, gradeForConfidence } from '../ground/cellConfidenc
 import { chaikinSmooth } from './smoothing';
 import type { ContourPolyline, ContourVertex } from './stitchContours';
 import { unionProvBits } from './contourSegmentEvidence';
+import {
+  terrainAwareToleranceFactor,
+  type TerrainAwareFeatureShape,
+  type ContourGeneralizeMode,
+} from './terrainAwareTolerance';
 
 /** The contour shape presets the user can pick from. */
 export type ContourShapeStyle =
@@ -296,6 +301,17 @@ export interface ContourShapeStyleOptions {
    * `simplifyPolyline` returns the polyline unchanged for epsilon ≤ 0).
    */
   readonly generalizeToleranceCells?: number;
+  /**
+   * How the 'generalized' style distributes its simplification strength across
+   * features. 'uniform' (default, and the value when omitted) applies the same
+   * epsilon to every polyline — byte-identical to before this option existed.
+   * 'terrain-aware' scales the epsilon DOWN per feature from what it is
+   * (interpolated / low-confidence support and small closed summits are smoothed
+   * less), and NEVER up — so `generalizeToleranceCells × cell` still bounds every
+   * line and the honesty-gated `simplifyPolyline` still protects gap and
+   * low-confidence vertices. Only the 'generalized' style reads it.
+   */
+  readonly generalizeMode?: ContourGeneralizeMode;
 }
 
 // Simplify epsilons as a fraction of the cell size. 'generalized' keeps the
@@ -309,6 +325,36 @@ export interface ContourShapeStyleOptions {
 // may override it via {@link ContourShapeStyleOptions.generalizeToleranceCells}.
 export const GENERALIZE_EPS_CELLS = 0.5;
 const SEMI_GEOMETRIC_EPS_CELLS = 1.75;
+
+/**
+ * Reduce a polyline to the whole-feature evidence signals the terrain-aware
+ * tolerance policy reads: its WEAKEST grade (the most conservative — a single
+ * gap span grades the whole line 'gap'), the mean vertex confidence, closure,
+ * and planimetric length in source units. Pure.
+ */
+function polylineTerrainShape(poly: ContourPolyline): TerrainAwareFeatureShape {
+  const vs = poly.vertices;
+  let grade: 'solid' | 'dashed' | 'gap' = 'solid';
+  let confSum = 0;
+  let confN = 0;
+  let length = 0;
+  for (let i = 0; i < vs.length; i++) {
+    const v = vs[i];
+    if (v.grade === 'gap') grade = 'gap';
+    else if (v.grade === 'dashed' && grade !== 'gap') grade = 'dashed';
+    if (Number.isFinite(v.confidence)) {
+      confSum += v.confidence;
+      confN += 1;
+    }
+    if (i > 0) length += Math.hypot(v.x - vs[i - 1].x, v.y - vs[i - 1].y);
+  }
+  return {
+    grade,
+    meanConfidence: confN > 0 ? confSum / confN : NaN,
+    closed: poly.closed,
+    length,
+  };
+}
 
 /**
  * Apply a shape style to a list of raw stitched polylines, returning new
@@ -339,10 +385,28 @@ export function applyContourShapeStyle(
       return polylines.map((p) => chaikinSmooth(p, { iterations: 2 }));
     case 'rounded':
       return polylines.map((p) => chaikinSmooth(p, { iterations: 4 }));
-    case 'generalized':
-      return polylines.map((p) =>
-        chaikinSmooth(simplifyPolyline(p, generalizeEpsCells * cell), { iterations: 2 }),
-      );
+    case 'generalized': {
+      const base = generalizeEpsCells * cell;
+      // Terrain-aware: scale the epsilon DOWN per feature (interpolated /
+      // low-confidence / small-closed lines keep more of their shape). The
+      // `Math.min(1, …)` is the honesty clamp — terrain-awareness may only make
+      // a line MORE faithful than the uniform pass, never less, so the historical
+      // "at most `base`" ceiling still bounds every line and `simplifyPolyline`'s
+      // vertex protections are untouched. `longFeatureLen` / `smallRingLen` mirror
+      // the staged product pipeline's defaults (40× / 8× the base tolerance).
+      if (opts.generalizeMode === 'terrain-aware') {
+        const longFeatureLen = base * 40;
+        const smallRingLen = base * 8;
+        return polylines.map((p) => {
+          const factor = Math.min(
+            1,
+            terrainAwareToleranceFactor(polylineTerrainShape(p), { longFeatureLen, smallRingLen }),
+          );
+          return chaikinSmooth(simplifyPolyline(p, base * factor), { iterations: 2 });
+        });
+      }
+      return polylines.map((p) => chaikinSmooth(simplifyPolyline(p, base), { iterations: 2 }));
+    }
     case 'semi-geometric':
       return polylines.map((p) =>
         chaikinSmooth(simplifyPolyline(p, SEMI_GEOMETRIC_EPS_CELLS * cell), { iterations: 1 }),

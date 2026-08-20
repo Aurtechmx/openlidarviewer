@@ -4,25 +4,47 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Four claims
-#     currently reach E4: SLOPE-RASTER, ASPECT-RASTER, HILLSHADE and CONTOURS,
-#     each cross-implemented against GDAL 3.13.1 on a frozen analytic fixture
-#     (0.5 degree for slope and aspect, 1.0 8-bit level for hillshade, 0.05 m
-#     contour-position distance for contours). The slope, hillshade and contour
-#     tolerances were registered before the reference was generated: all three
-#     were fixed in the harness commit a78b0f9 on 2026-07-05, weeks ahead of
-#     their results. ASPECT-RASTER was NOT. Its slot, its
-#     tolerance, its flat-ground exclusion and its reference raster all landed in
-#     40e2ca1 on 2026-07-26, so no commit shows its gate while it had no result;
-#     carrying slope's number over is defensible, and it is not a preregistration
-#     and must not be written as one. Per-claim freeze provenance, with the
-#     commit to check, is in validation/protocols/. No claim reaches E5 (no field
+#   - currentEvidence must reflect evidence that EXISTS today. Eleven claims
+#     currently reach E4. Five are algorithm cross-implementations against
+#     GDAL 3.13.1 on a frozen analytic fixture: SLOPE-RASTER, ASPECT-RASTER,
+#     HILLSHADE and CONTOURS (0.5 degree for slope and aspect, 1.0 8-bit level
+#     for hillshade, 0.05 m contour-position distance for contours), plus
+#     MEAS-AREA against GDAL/OGR OGR_GEOM_AREA on a planar-polygon fixture. Three
+#     are surface-gridding cross-implementations against PDAL 2.10.2
+#     writers.gdal on seeded synthetic clouds: DSM (max return) and DTM (min
+#     return), each agreeing over 7500 cells within a 0.05 m registered
+#     tolerance, and CHM (clamped max minus min) agreeing over 7500 cells within
+#     a 0.1 m registered tolerance. Two are terrain descriptors compared three
+#     ways (an independent tool AND the closed form) on a controlled analytic
+#     fixture: TPI against gdaldem 3.13.1 within 1e-5 on a low-amplitude
+#     quadratic (chosen so the reference's float32 mean accumulation stays below
+#     the tolerance), and VRM against SAGA 7.8.2 within 1e-4 on a smooth tilted
+#     quadratic (chosen so Horn and SAGA normals converge), with OLV reproducing
+#     the closed-form Sappington VRM to under 1e-9. The eleventh is the section
+#     profile: MEAS-PROFILE against a corridor reference assembled from two
+#     tools, OGR/SpatiaLite chainage (ST_Line_Locate_Point, ST_Distance) and R
+#     4.4.1 quantile(type = 7), over 751 stations on two committed point clouds
+#     within a 1e-6 m tolerance registered before the reference existed. The ramp
+#     fixture also carries a closed form, because ten corridor elevations in an
+#     arithmetic progression reduce without a sort. The slope, hillshade and contour tolerances were registered
+#     before the reference was generated: all three were fixed in the harness
+#     commit a78b0f9 on 2026-07-05, weeks ahead of their results. ASPECT-RASTER
+#     was NOT. Its slot, its tolerance, its flat-ground exclusion and its
+#     reference raster all landed in 40e2ca1 on 2026-07-26, so no commit shows
+#     its gate while it had no result; carrying slope's number over is
+#     defensible, and it is not a preregistration and must not be written as
+#     one. Per-claim freeze provenance, with the commit to check, is in
+#     validation/protocols/. The DSM and DTM cross-checks exercise the cell
+#     gridding over bare or overlaid synthetic clouds where the reference radius
+#     is below half a cell, not ground classification (GROUND-FILTER, still
+#     partial) or real-terrain void interpolation. No claim reaches E5 (no field
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Three independent GDAL reference slots are supplied; all
-#     remaining independent-reference slots are pending. Never infer it from
-#     density / format / metadata.
+#     and unavailable. Eleven independent reference slots are supplied (six GDAL,
+#     three PDAL, one SAGA, one OGR/SpatiaLite plus R); all remaining
+#     independent-reference slots are pending. Never infer it from density /
+#     format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #   - scope states, in the shape the study manifests use, what the evidence
 #     covers (scope.supported, dataset + parameter-set pairs) and what it does
@@ -98,7 +120,23 @@ schemaVersion: 1
 # aspect divergence with no reference to arbitrate it, the multidirectional
 # hillshade split, and the nodata-halo difference. Every one of those narrows a
 # claim. None of them promotes one, and the per-claim scopeNote says so.
-softwareVersion: 0.6.5
+# 0.6.6 changes the EVIDENCE STATE of two claims without changing any algorithm:
+# DSM and DTM are promoted E3->E4 by committed PDAL 2.10.2 writers.gdal
+# cross-implementation references over three seeded synthetic clouds each,
+# agreeing over 7500 cells within a 0.05 m tolerance registered before the
+# references were generated (recorded in DSM-PDAL-WRITERS-GDAL-CELL-CENTRED and
+# DTM-PDAL-WRITERS-GDAL-CELL-CENTRED). The agreement covers the cell gridding:
+# the reference radius is below half a cell, so it does not exercise a divergent
+# neighbourhood search, and the DTM clouds are bare-earth by construction, so it
+# does not exercise ground classification (GROUND-FILTER stays partial) or
+# real-terrain void interpolation. DTM's required bar therefore remains E5.
+# CHM is promoted the same cycle by CHM-PDAL-WRITERS-GDAL-DIFFERENCE: OLV's
+# heightAboveGround (clamped DSM minus DTM) agrees with the PDAL max grid minus
+# the PDAL min grid over 7500 cells within the 0.1 m tolerance registered at
+# pending, max difference under 8e-6 m. It rests on the two already-validated
+# grids and the same below-half-a-cell radius, so it adds the differencing
+# arithmetic and not ground classification or real canopy.
+softwareVersion: 0.6.6
 generated: 2026-07-26
 validationOwner: A. Urias / Aurtech
 
@@ -159,6 +197,35 @@ claims:
         - "Geographic-degree grids, which are refused."
         - "Extents large enough for the planar-projection assumption to fail."
 
+  - claimId: E57-INGEST
+    product: E57 point-cloud ingestion
+    algorithm: ASTM E57 reader (XML header, CompressedVector, extension namespaces)
+    algorithmVersion: v0.6.6
+    claim: "Every point and per-point attribute decoded from an E57 file matches an independent reader of the same standard."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/e57PdalCrossDecode.test.ts, tests/e57*.test.ts]
+    supportingDatasets: ["Finestrat_2016.e57 (Zenodo 10.5281/zenodo.7576524, CC-BY-4.0, Abellan and Riquelme), 1788994 points, referenced by sha256 and not redistributed"]
+    supportingStudies: [E57-INGEST-PDAL-CROSS-DECODE]
+    units: [metres, source-units]
+    crsDatum: "The file declares no coordinate metadata; coordinates are read in the file's own local frame."
+    assumptions: ["the reference reader implements the same standard independently", "both readers consume the CompressedVector in file order"]
+    failureModes: ["scaled-integer cartesian fields, where per-field limits are decode parameters and are not exercised here", "scanner-native writers, not represented by this file"]
+    exportAllowed: true
+    userLabel: "Cross-implementation validated E57 decode"
+    softwareStatus: shipping
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared as an exact quantised integer sum at a 1e-6 quantum, within the preregistered 1e-6 m tolerance."
+    prohibitedClaim: ["survey-grade ingestion", "validated against every E57 writer", "scanner-native metadata handling"]
+    scope:
+      supported: []
+      unsupported:
+        - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
+        - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
+        - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
+        - "Scaled-integer cartesian encodings, where the declared per-field limits ARE decode parameters."
+
   - claimId: MEAS-HEIGHT
     product: Height / vertical measurement
     algorithm: Vertical delta (unit-aware, up-axis-aware)
@@ -218,27 +285,30 @@ claims:
     algorithm: Sampled elevation along a section line
     algorithmVersion: v0.5.x
     claim: "Elevation profile sampled along a user section line."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts, tests/measurementAnalyticalFixtures.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/profile*.test.ts, tests/profileStations*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/profileCrossCheck.test.ts]
+    supportingDatasets: [analytic corridor ramp (OLV-DS-023-ANALYTIC-PROFILE-RAMP) and oblique scatter (OLV-DS-024-SCATTER-PROFILE-OBLIQUE) with an OGR/SpatiaLite chainage and R type-7 quantile reference]
+    supportingStudies: [MEAS-PROFILE-OGR-R-CORRIDOR]
     units: [metres, source-units]
     crsDatum: "Local frame; native→metres when known."
     assumptions: ["sampling density limits vertical fidelity"]
     failureModes: ["gaps along the section", "sparse cloud"]
     exportAllowed: true
-    userLabel: "Section profile (visual-inspection grade)"
+    userLabel: "Cross-implemented section profile"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: none
-    approvedClaim: "Sampled elevation profile along the section."
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Corridor profile agreed with SpatiaLite chainage and R's type-7 quantile over 751 stations on the committed fixtures, exactly on the analytic ramp and to 3.6e-15 m on the oblique scatter, within the preregistered 1e-6 m tolerance. Sampled elevation along the section, not a surveyed one."
     prohibitedClaim: ["survey-grade longitudinal section"]
     scope:
       supported: []
       unsupported:
         - "Vertical fidelity between samples. The profile is what the sampling density can see."
         - "Sections crossing gaps, where the line is interpolated rather than measured."
+        - "Real terrain and real returns. Both fixtures are synthetic and noise-free."
         - "Any survey-grade longitudinal section."
+    scopeNote: "The profile samples the raw cloud along a corridor around the section line and reduces each bin to a type-7 percentile of the heights inside it (src/render/measure/profileSampler.ts). No single tool exposes that operation, but its two halves are each somebody else's implementation: OGR's SpatiaLite functions place every point on the line (ST_Line_Locate_Point, ST_Distance) and R's quantile(type = 7) reduces each station, so the reference is assembled from two independent tools rather than written here. On the analytic ramp the expected series also has a closed form, because ten corridor elevations in an exact arithmetic progression reduce to first + step·(p/100)·(n−1) with no sort and no order statistic, which is what keeps that leg from being a second copy of the reduction under test. The comparison covers the corridor gate, the classification gate, the nearest-station binning, the type-7 reduction at two percentiles and the reporting of empty stations as gaps. It does not cover a point close enough to a bin boundary or the corridor edge that two projection implementations could place it differently, and it says nothing about accuracy against a surveyed section, which is E5."
 
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
@@ -329,27 +399,36 @@ claims:
     algorithm: Gridded interpolation of ground-classified returns
     algorithmVersion: v0.4.4
     claim: "Bare-earth elevation grid over covered cells; gaps left empty or interpolated, never fabricated."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/terrainTruth.dtm.test.ts]
-    supportingDatasets: [synthetic analytic surfaces]
+    supportingTests: [tests/terrainTruth.dtm.test.ts, tests/groundFilterPdalAgreement.test.ts]
+    supportingDatasets: [synthetic analytic surfaces, seeded bare-earth point clouds with PDAL writers.gdal reference]
+    supportingStudies: [DTM-PDAL-WRITERS-GDAL-CELL-CENTRED]
     units: [metres]
     crsDatum: "Metric; refuses geographic-degree area/volume derivatives."
     assumptions: ["interpolation model as configured", "coverage-gated"]
     failureModes: ["large voids", "steep breaklines", "vegetation leakage from ground filter"]
     exportAllowed: true
-    userLabel: "Synthetically validated DTM"
+    userLabel: "Cross-implementation validated DTM (min-return gridding)"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "DTM validated against analytic surfaces (covered cells)."
-    prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "DTM min-return gridding agreed with PDAL writers.gdal on three seeded bare-earth clouds, over 7500 cells within the 0.05 m registered tolerance (max difference under 4e-6 m). Still validated against analytic surfaces on covered cells."
+    prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy", "ground-classification accuracy", "full point-cloud-to-DTM pipeline validated", "real-terrain void interpolation validated"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-012-PC-BARE-PLANE
+          parameterSetId: PS-DTM-MIN-CELL1-R045
+        - datasetId: OLV-DS-013-PC-BARE-ROLLING
+          parameterSetId: PS-DTM-MIN-CELL1-R045
+        - datasetId: OLV-DS-014-PC-BARE-RIDGE
+          parameterSetId: PS-DTM-MIN-CELL1-R045
       unsupported:
-        - "Real terrain. The evidence is analytic surfaces."
+        - "Real terrain. The evidence is analytic surfaces and seeded synthetic clouds."
+        - "Ground classification. The three supporting clouds are bare-earth by construction, so the cross-check exercises the min-return gridding, not the ground filter. That step is GROUND-FILTER, still partial."
+        - "The neighbourhood search. The reference radius is 0.45 m, below half a cell, so each cell reduces to the returns at its centre and the agreement covers the cell estimator, not a divergent gridding strategy."
         - "Independent checkpoint accuracy, which needs checkpoints this project does not have."
-        - "Large voids and steep breaklines."
+        - "Large voids and steep breaklines. Interpolation across them is not exercised by the supporting clouds."
         - "Vegetation leakage inherited from the ground filter."
 
   - claimId: DSM
@@ -357,25 +436,33 @@ claims:
     algorithm: Top-return gridded surface
     algorithmVersion: v0.4.4
     claim: "Top-surface elevation grid."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts]
-    supportingDatasets: [synthetic overlay scenes]
+    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts, tests/groundFilterPdalAgreement.test.ts]
+    supportingDatasets: [synthetic overlay scenes, seeded structure point clouds with PDAL writers.gdal reference]
+    supportingStudies: [DSM-PDAL-WRITERS-GDAL-CELL-CENTRED]
     units: [metres]
     crsDatum: metric
     assumptions: ["top-return selection per cell"]
     failureModes: ["thin structures below grid resolution"]
     exportAllowed: true
-    userLabel: "Synthetically validated DSM"
+    userLabel: "Cross-implementation validated DSM (max-return gridding)"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "DSM equals the top surface on synthetic scenes."
-    prohibitedClaim: ["field-validated DSM accuracy"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "DSM max-return gridding agreed with PDAL writers.gdal on three seeded structure clouds, over 7500 cells within the 0.05 m registered tolerance (max difference under 4e-6 m). Still equals the top surface on synthetic scenes."
+    prohibitedClaim: ["field-validated DSM accuracy", "full point-cloud-to-DSM pipeline validated"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-015-PC-PLANE-STRUCTURES
+          parameterSetId: PS-DSM-MAX-CELL1-R045
+        - datasetId: OLV-DS-016-PC-ROLLING-STRUCTURES
+          parameterSetId: PS-DSM-MAX-CELL1-R045
+        - datasetId: OLV-DS-017-PC-RIDGE-STRUCTURES
+          parameterSetId: PS-DSM-MAX-CELL1-R045
       unsupported:
-        - "Real scenes. The evidence is synthetic overlay scenes."
+        - "Real scenes. The evidence is synthetic overlay scenes and seeded structure clouds."
+        - "The neighbourhood search. The reference radius is 0.45 m, below half a cell, so each cell reduces to the returns at its centre and the agreement covers the cell estimator, not a divergent gridding strategy."
         - "Structures thinner than the grid resolution."
         - "Any field-validated accuracy figure."
 
@@ -384,25 +471,34 @@ claims:
     algorithm: DSM − DTM with NoData preservation
     algorithmVersion: v0.4.4
     claim: "Height-above-ground field."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts]
-    supportingDatasets: [synthetic overlay scenes]
+    supportingTests: [tests/terrainTruth.surface.test.ts, tests/dsmChm.test.ts, tests/chmCrossCheck.test.ts]
+    supportingDatasets: [synthetic overlay scenes, seeded structure point clouds with PDAL writers.gdal max and min references]
+    supportingStudies: [CHM-PDAL-WRITERS-GDAL-DIFFERENCE]
     units: [metres]
     crsDatum: metric
     assumptions: ["depends on DTM + DSM validity"]
     failureModes: ["propagates DTM/DSM error"]
     exportAllowed: true
-    userLabel: "Synthetically validated CHM"
+    userLabel: "Cross-implementation validated CHM (max − min difference)"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "Canopy-height reconstruction validated on synthetic scenes."
-    prohibitedClaim: ["field-validated canopy height"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "CHM (clamped DSM − DTM) agreed with PDAL writers.gdal (max minus min) on three seeded structure clouds, over 7500 cells within the 0.1 m registered tolerance (max difference under 8e-6 m). Still reconstructed correctly on synthetic scenes."
+    prohibitedClaim: ["field-validated canopy height", "ground-classification accuracy", "real-canopy accuracy"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-015-PC-PLANE-STRUCTURES
+          parameterSetId: PS-CHM-DIFF-CELL1-R045
+        - datasetId: OLV-DS-016-PC-ROLLING-STRUCTURES
+          parameterSetId: PS-CHM-DIFF-CELL1-R045
+        - datasetId: OLV-DS-017-PC-RIDGE-STRUCTURES
+          parameterSetId: PS-CHM-DIFF-CELL1-R045
       unsupported:
-        - "Real canopy. The evidence is synthetic overlay scenes."
+        - "Real canopy. The evidence is synthetic overlay scenes and seeded structure clouds."
+        - "Ground classification. The canopy height rests on the per-cell minimum being the ground, which holds by construction here; on a real cloud the ground comes from the SMRF filter (GROUND-FILTER), still partial."
+        - "The neighbourhood search. The reference radius is 0.45 m, below half a cell, so the difference covers the gridding arithmetic on two already-validated grids."
         - "Anything the DTM and DSM it is differenced from do not support; their errors propagate here unchanged."
 
   - claimId: CONTOURS
@@ -536,32 +632,67 @@ claims:
         - "Accuracy of any kind. Hillshade is a shading index, not a physical quantity, and carries no elevation-accuracy meaning."
     scopeNote: "The 24-fixture GDAL matrix in validation/cross-implementation/raster-matrix/ ran after this level was set and did not raise it. It is still not a registered study: OLV-XS-001 through 003 are registered under frozen protocols, and each one's scope is the single analytic DEM this claim already cites, so registering them changed the paperwork and not the breadth, and its extra sun positions and multidirectional legs were compared under its own tolerances rather than this claim's one-level gate. Its multidirectional finding is a divergence of up to 50 of 255 levels, which is recorded above as unsupported. The level did not move."
 
-  - claimId: VRM-TPI
-    product: VRM / TPI terrain descriptors
-    algorithm: Vector ruggedness measure / topographic position index
+  - claimId: TPI
+    product: TPI terrain descriptor
+    algorithm: Topographic position index (centre minus mean of the 8 Moore neighbours)
     algorithmVersion: v0.4.x
-    claim: "Ruggedness / relative-position indices over a stated neighbourhood."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    claim: "Relative-position index over a 3x3 Moore neighbourhood."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts, tests/tpiCrossCheck.test.ts]
+    supportingDatasets: [low-amplitude analytic quadratic with gdaldem TPI reference]
+    supportingStudies: [TPI-GDALDEM-ANALYTIC]
     units: [dimensionless]
     crsDatum: metric
-    assumptions: ["neighbourhood radius documented (Phase 11)"]
+    assumptions: ["3x3 Moore neighbourhood (discrete radius root 2)"]
     failureModes: ["scale sensitivity", "edge effects"]
     exportAllowed: true
-    userLabel: "Synthetically-validated terrain descriptor"
+    userLabel: "Cross-implementation validated TPI"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "Index per the documented convention + neighbourhood."
-    prohibitedClaim: ["standardised / cross-validated ruggedness"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "TPI agreed with gdaldem 3.13.1 TPI and with the closed-form quadratic curvature on a low-amplitude analytic fixture, over 3364 interior cells within a preregistered 1e-5, with the largest difference under 9e-7."
+    prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated terrain position", "TPI on real terrain of arbitrary elevation without accounting for the reference's float32 accumulation"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-021-ANALYTIC-TPI-QUADRATIC
+          parameterSetId: PS-TPI-MOORE-QUADRATIC
       unsupported:
-        - "Any cross-implementation or standardised ruggedness figure; no second implementation has been compared."
-        - "Neighbourhood radii other than the documented one, since both indices are scale-sensitive."
-        - "Cells near the grid edge."
+        - "The one-cell border, where the documented gdaldem command omits -compute_edges."
+        - "High absolute elevations. gdaldem accumulates the neighbourhood mean in float32, whose spacing scales with |z|; the fixture is re-centred so |z| stays small and that float32 error is far below the tolerance. On a high-elevation grid the reference, not OLV, loses precision (OLV is the more precise side)."
+        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive."
+        - "Agreement with gdaldem is not accuracy against ground truth."
+
+  - claimId: VRM
+    product: VRM terrain descriptor
+    algorithm: Vector ruggedness measure (Sappington et al. 2007), 3x3 mean-resultant of unit normals
+    algorithmVersion: v0.4.x
+    claim: "Vector ruggedness over a 3x3 neighbourhood."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts, tests/vrmCrossCheck.test.ts]
+    supportingDatasets: [smooth tilted analytic quadratic with SAGA VRM reference]
+    supportingStudies: [VRM-SAGA-ANALYTIC]
+    units: [dimensionless]
+    crsDatum: metric
+    assumptions: ["3x3 neighbourhood", "surface well resolved by the grid"]
+    failureModes: ["scale sensitivity", "slope/aspect estimator sensitivity at under-resolved sharp features", "edge effects"]
+    exportAllowed: true
+    userLabel: "Cross-implementation validated VRM"
+    softwareStatus: shipping
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "VRM agreed with SAGA 7.8.2 Vector Ruggedness Measure and with the closed-form Sappington VRM on a smooth tilted analytic fixture, over 3136 interior cells within a preregistered 1e-4 (largest difference under 2e-5 against SAGA), and reproduced the closed form to under 1e-9."
+    prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated ruggedness", "VRM at under-resolved sharp features, where discrete slope/aspect estimators differ"]
+    scope:
+      supported:
+        - datasetId: OLV-DS-022-ANALYTIC-VRM-TILTED
+          parameterSetId: PS-VRM-3X3-TILTED
+      unsupported:
+        - "The two-cell border. Horn's slope halves on the outer ring (edge clamp) and the 3x3 VRM window carries that ring one cell inward, so the affected zone is two cells deep."
+        - "Under-resolved sharp features (ridge crests, pit bottoms undersampled by the grid). There the discrete slope/aspect estimators diverge and OLV (Horn) and SAGA differ by up to about 1e-2; the fixture is smooth and well resolved so both converge to the analytic normal, and the claim covers that regime. This is a property of the discrete estimate, and it is why the closed-form leg carries the correctness and the SAGA leg the independence."
+        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive."
+        - "Agreement with SAGA is not accuracy against ground truth."
 
   # ── Accuracy statistics ─────────────────────────────────────────────────────
   - claimId: HOLDOUT-RMSE
@@ -623,18 +754,21 @@ claims:
     algorithm: Two-metric threshold comparison (density + internal RMSE)
     algorithmVersion: v0.4.x
     claim: "Comparison of density + internal RMSE against named/versioned thresholds — NOT a quality-level compliance determination."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*qualityLevel*.test.ts, tests/verticalAccuracy.test.ts]
+    supportingTests: [tests/qualityLevelOracle.test.ts, tests/demAccuracyStandards.test.ts, tests/verticalAccuracy.test.ts]
     supportingDatasets: []
     units: [pts-per-sq-m, metres]
     crsDatum: metric
-    assumptions: ["compliance requires independent checkpoints + full standard"]
+    assumptions:
+      - "compliance requires independent checkpoints + full standard"
+      - "both legs of the published table are inclusive: density >= the pts/m2 floor, RMSEz <= the metre ceiling"
+      - "the level reported is the strongest row a (density, RMSEz) pair clears; a pair clearing no row is below-QL3, and an unusable density or RMSEz is unknown"
     failureModes: ["misread as compliance"]
     exportAllowed: true
     userLabel: "Two-metric threshold comparison (not a compliance determination)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
     approvedClaim: "Density + internal RMSE compared to stated thresholds."
     prohibitedClaim: ["USGS QL compliance", "meets ASPRS quality level"]
@@ -642,7 +776,8 @@ claims:
       supported: []
       unsupported:
         - "Any USGS or ASPRS quality-level compliance determination, which needs independent checkpoints and the full standard."
-        - "The thresholds themselves, which are quoted from a named and versioned source rather than validated here."
+        - "The published thresholds themselves, which are quoted from a named and versioned source; the tests check the transcription and the comparison, not the specification."
+        - "Nominal pulse spacing and the rest of the specification's collection requirements, which are not checked at all."
         - "Real terrain, since the internal RMSE it compares is itself an internal diagnostic."
 
   - claimId: CONFIDENCE-OVERLAY
@@ -732,53 +867,57 @@ claims:
     algorithm: Integrated change over the difference grid
     algorithmVersion: v0.5.x
     claim: "Gain / loss / net volume from the change raster."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/compareDtms*.test.ts]
-    supportingDatasets: []
+    supportingTests: [tests/compareDtms*.test.ts, tests/changeVolumeAnalyticalOracle.test.ts]
+    supportingDatasets: [analytic surface pairs]
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
-    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified"]
-    failureModes: ["propagates registration + surface error"]
+    assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "volume is a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design"]
+    failureModes: ["propagates registration + surface error", "quadrature defect on a curved surface, second order in cell size"]
     exportAllowed: true
-    userLabel: "Exploratory change volume"
+    userLabel: "Analytically-verified change volume (exploratory)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Integrated change volume with exploratory uncertainty."
+    approvedClaim: "Integrated change volume agreeing with closed-form integrals over analytic surface pairs; uncertainty remains exploratory."
     prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
     scope:
       supported: []
       unsupported:
-        - "Any validated change volume."
+        - "Any validated change volume. The closed-form fixtures verify the integration, not the accuracy of the two surfaces fed into it."
         - "Spatially correlated uncertainty, which is not quantified."
         - "Anything the change raster underneath it does not support."
+        - "Real epoch pairs, and the DTM build that produces them. The oracle enters at the grid pair, so nothing here bounds ground-classification or interpolation error."
+        - "The sub-LoD mass the threshold removes. Its size is stated in closed form on the fixtures, not measured on any survey."
 
   - claimId: UNCERTAINTY-BAND
     product: Uncertainty band (on deltas / volumes)
     algorithm: Model-based propagation (Monte Carlo GUM budget pending — Phases 8/10)
     algorithmVersion: v0.5.x
     claim: "Model-based uncertainty band; not all sources included."
-    currentEvidence: E1_UNIT_VERIFIED
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/*uncertainty*.test.ts]
+    supportingTests: [tests/*uncertainty*.test.ts, tests/uncertaintyBandScalingLaws.test.ts]
     supportingDatasets: []
     units: [metres, cubic-metres]
     crsDatum: metric
-    assumptions: ["spatial correlation and several GUM terms currently omitted"]
-    failureModes: ["understatement if omitted terms are large"]
+    assumptions: ["spatial correlation and several GUM terms currently omitted", "the random term assumes per-cell errors are independent, which is what makes it fall as the square root of the cell count"]
+    failureModes: ["understatement if omitted terms are large", "an empty error budget, which is reported as unquantified rather than as a zero band"]
     exportAllowed: true
-    userLabel: "Exploratory model-based uncertainty (omitted terms listed)"
+    userLabel: "Analytically-verified propagation model (exploratory; omitted terms listed)"
     softwareStatus: shipping
-    evidenceLevel: E1_UNIT_VERIFIED
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
-    approvedClaim: "Model-based band over the included sources."
+    approvedClaim: "Model-based band over the included sources, obeying the scaling laws the documented model implies."
     prohibitedClaim: ["complete uncertainty budget", "validated coverage interval"]
     scope:
       supported: []
       unsupported:
         - "A complete uncertainty budget. Several GUM terms and spatial correlation are omitted, and the omitted terms are listed beside the band."
         - "Any coverage interval that has been validated against outcomes."
+        - "The band's coverage. The scaling laws show the propagation model is implemented as documented; whether a 1σ band contains the truth as often as 1σ should is a separate question this evidence does not touch."
+        - "The inputs. A per-cell σ and a registration RMSE are taken as given, and a band is only ever as honest as the two numbers handed to it."
 
   # ── Provenance / integrity ──────────────────────────────────────────────────
   - claimId: REPORT-DIGEST

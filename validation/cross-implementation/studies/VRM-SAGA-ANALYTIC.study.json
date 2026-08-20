@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "studyId": "VRM-SAGA-ANALYTIC",
+  "claimId": "VRM",
+  "example": false,
+  "notes": [
+    "The tolerance was registered at pending in the commit named by the protocol's freeze witness, before the comparison was run. This record promotes nothing on its own.",
+    "Three-way: OLV computeVRM (3x3) against SAGA 7.8.2 Vector Ruggedness Measure AND against the closed-form Sappington VRM from the analytic gradient. The fixture is smooth and well resolved so Horn's normal and SAGA's estimator converge to the analytic normal; OLV reproduces the closed form to under 1e-9, so the closed-form leg carries correctness and the SAGA leg independence."
+  ],
+  "protocolDigest": "sha256:9be6269a8b0569eceb665e5d0fc5729a34f0333d7f25406d6d2949e10c865044",
+  "protocolRef": {
+    "protocolId": "PROTO-VRM-SAGA-ANALYTIC",
+    "digest": "sha256:4a487382edbbb1c79385f3a3b5f223992d0a1a8a5697ea93dfd08f6e734c900c"
+  },
+  "candidate": {
+    "revision": "f0f51d4fe1ea908555a41ef6980d57fd534b1aa1",
+    "version": "0.6.6",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "SAGA",
+    "version": "7.8.2",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "A container digest is the pin this record wants. SAGA was invoked from the saga_cmd bundled in QGIS-LTR.app on the host; no container was pulled, so the resolved path, the version SAGA reports and the exact command line stand in for it.",
+    "executablePath": "/Applications/QGIS-LTR.app/Contents/MacOS/bin/saga_cmd",
+    "commandLine": "saga_cmd ta_morphometry 17 -DEM=<crs.tif> -VRM=<out.tif> -MODE=1 -RADIUS=1 -DW_WEIGHTING=0, then gdal_translate -of AAIGrid -co DECIMAL_PRECISION=9",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-022-ANALYTIC-VRM-TILTED",
+      "description": "Smooth tilted quadratic z=a·x+c·(x²+y²), 60 by 60 cells at 1 m, slope non-zero everywhere (no aspect singularity) and gentle curvature well resolved by the grid.",
+      "path": "validation/cross-implementation/descriptor/vrm-tilted.asc",
+      "sha256": "c4949906c2022108081913640bb8fe198fcc688a398aa975fa2cfadf9b9ab82e"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-VRM-3X3-TILTED",
+      "description": "VRM as one minus the 3x3 mean-resultant of unit normals (computeVRM windowCells 3), interior with a two-cell border removed, compared against SAGA VRM (RADIUS 1, MODE 1, no weighting) and against the closed-form Sappington VRM.",
+      "candidateParameters": {
+        "function": "computeVRM",
+        "windowCells": 3,
+        "normal": "Horn slope/aspect"
+      },
+      "referenceParameters": {
+        "stage": "SAGA ta_morphometry 17",
+        "mode": 1,
+        "radius": 1,
+        "dwWeighting": 0
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.0001,
+    "toleranceUnit": "dimensionless",
+    "minimumComparableCells": 3000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 3136 interior cells are within the registered 1e-4, against BOTH SAGA VRM (largest difference 1.71e-5) and the closed-form Sappington VRM (largest difference under 1e-9). Nothing was widened.",
+  "result": {
+    "comparableCells": 3136,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0.0000171,
+    "rmse": 0.0000155,
+    "meanDiff": 0.0000154
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/descriptor/vrm-tilted.asc",
+      "sha256": "c4949906c2022108081913640bb8fe198fcc688a398aa975fa2cfadf9b9ab82e",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/descriptor/vrm-tilted__vrm.asc",
+      "sha256": "d04e3e8c717d06e6ffd7e0db43130aeaa54bc94e489feeb3b442a8987bafc9c3",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/descriptor/reference-runs-descriptor.json",
+      "sha256": "33dc9dce3c006543c10e19ec1f3d4524897ff00d29006dc961449a07de71c496",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-022-ANALYTIC-VRM-TILTED",
+        "parameterSetId": "PS-VRM-3X3-TILTED"
+      }
+    ],
+    "unsupported": [
+      "The two-cell border, where Horn's edge clamp halves the slope and the 3x3 window carries it inward.",
+      "Under-resolved sharp features, where discrete slope/aspect estimators diverge and OLV and SAGA differ by up to about 1e-2.",
+      "Neighbourhood sizes other than 3x3.",
+      "Agreement with SAGA is not accuracy against ground truth."
+    ]
+  }
+}

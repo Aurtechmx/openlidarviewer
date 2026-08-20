@@ -50,11 +50,11 @@ has re-opened the divergence this closes.
   `carrier` path must be free of the deprecated predicates listed below.
 - **Reads** — the context fields it now uses.
 
-## Inventory (13 consumers)
+## Inventory (16 consumers)
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
-| 1 | Point inspection | migrated | `src/render/pointInfo.ts` | `linearUnit`, `verticalReference`, `verticalUnitToMetres` |
+| 1 | Point inspection | migrated | `src/render/pointInfo.ts`, `src/geo/cursorReadout.ts` | `linearUnit`, `linearUnitKnown`, `linearUnitToMetres`, `kind`, `epsg`, `crsName`, `isGeographic`, `upAxis`, `verticalReference`, `verticalUnitToMetres` |
 | 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres` |
 | 3 | Space / object report | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown` |
 | 4 | Stockpile and cut/fill volume | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `verticalMetresPerUnit` |
@@ -67,6 +67,9 @@ has re-opened the divergence this closes.
 | 11 | GeoJSON / KML / DXF export | migrated | `src/main.ts`, `src/app/kmlActions.ts`, `src/export/scanFootprint.ts` | `isGeographic`, `verticalDatum`, `verticalMetresPerUnit`, `upAxis` |
 | 12 | Measurement labels | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
 | 13 | Elevation colorbars | migrated | `src/main.ts`, `src/app/terrainAnalysisRunner.ts` | `verticalMetresPerUnit`, `kind` |
+| 14 | Classification | migrated | `src/render/class/classifierCues.ts` | `linearUnitToMetres`, `verticalMetresPerUnit` |
+| 15 | Streaming scan-report extents | migrated | `src/analysis/streamingExtentRows.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
+| 16 | Tool preflight | migrated | `src/process/toolPreflight.ts` | `metricClaimsPermitted`, `verticalReferenceKnown`, `crsName` |
 
 ## Deprecated predicates
 
@@ -107,13 +110,9 @@ factor would answer a question the file already answered wrongly.
 
 ## Seams inside routed consumers that still derive
 
-Every row above is routed. Three seams inside those consumers still hold their
+Every row above is routed. Two seams inside those consumers still hold their
 own derivation, and they are named here rather than hidden:
 
-- **`src/analysis/streamingExtentRows.ts`** takes a structural CRS subset rather
-  than a context, so the streaming Scan Report's extent rows still call
-  `isLinearUnitKnown` directly. Its signature is exercised by six existing test
-  call sites; changing it is a separate, mechanical change.
 - **`src/main.ts`'s contour-export `linearUnit`** still reads
   `crsService.current()?.linearUnit`, because "no scan open yet" and "a scan
   whose CRS is unknown" are two different answers there and the context

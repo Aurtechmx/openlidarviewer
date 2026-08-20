@@ -44,6 +44,7 @@ import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
 import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
+import { streamingFormatToken } from '../render/streaming/StreamingSource';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -266,7 +267,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     const nodeCounts = streamingCloud.counts();
     metadata = {
       fileName: streamingCloud.name,
-      format: streamingCloud.kind === 'ept' ? 'EPT' : 'COPC',
+      format: streamingFormatToken(streamingCloud.kind),
       sourcePointCount: streamingCloud.sourcePointCount,
       ...ext,
       hasRgb: modes.includes('rgb'),

@@ -1,8 +1,8 @@
 /**
  * desktopWorkspace.test.ts
  *
- * The desktop left-rail workspace shell: a three-way Data · Analyse ·
- * Output tablist over three mode-host slots the host re-parents panels into.
+ * The desktop left-rail workspace shell: a four-way Data · Work · Analyse ·
+ * Output tablist over four mode-host slots the host re-parents panels into.
  * Runs in the node environment through the same recording DOM stub the other
  * UI tests use, asserting on state, ARIA, node identity and persistence rather
  * than pixels.
@@ -113,9 +113,9 @@ describe('DesktopWorkspace', () => {
   it('renders a three-tab tablist over three mode panels wired by aria-controls', async () => {
     const { root } = await make();
     const tabs = root.findAll((e) => e.attrs['role'] === 'tab');
-    expect(tabs.map((t) => t.dataset.mode)).toEqual(['data', 'analyse', 'output']);
+    expect(tabs.map((t) => t.dataset.mode)).toEqual(['data', 'work', 'analyse', 'output']);
     const panels = root.findAll((e) => e.attrs['role'] === 'tabpanel');
-    expect(panels.map((p) => p.dataset.mode)).toEqual(['data', 'analyse', 'output']);
+    expect(panels.map((p) => p.dataset.mode)).toEqual(['data', 'work', 'analyse', 'output']);
     for (const t of tabs) {
       expect(t.attrs['aria-controls']).toBe(`olv-ws-mode-${t.dataset.mode}`);
     }
@@ -195,8 +195,8 @@ describe('DesktopWorkspace', () => {
   it('ArrowRight moves the active mode and focuses the next tab', async () => {
     const { ws, tab } = await make();
     tab('data').fire('keydown', { key: 'ArrowRight', preventDefault: () => {} });
-    expect(ws.getMode()).toBe('analyse');
-    expect(tab('analyse').focused).toBe(true);
+    expect(ws.getMode()).toBe('work');
+    expect(tab('work').focused).toBe(true);
   });
 
   it('exposes a callable dispose()', async () => {

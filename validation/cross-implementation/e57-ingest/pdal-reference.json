@@ -1,0 +1,89 @@
+{
+  "source": "Zenodo 10.5281/zenodo.7576524 - 3DPC of a gypsum slope in Finestrat, Alicante (Spain)",
+  "attribution": "Abellan, A. and Riquelme, A. (CC-BY-4.0)",
+  "file": "Finestrat_2016.e57",
+  "referenceTool": "PDAL 2.10.2 readers.e57",
+  "recordCount": 1788994,
+  "reconciliation": {
+    "colorRGB": "pdal_uint16 = e57_8bit * 257 (exact)",
+    "normals": "direct, dimensionless",
+    "cartesian": "direct, metres"
+  },
+  "stats": {
+    "X": {
+      "count": 1788994,
+      "mean": -23.91711502,
+      "min": -77.20232391,
+      "max": 58.14835358
+    },
+    "Y": {
+      "count": 1788994,
+      "mean": 144.3302895,
+      "min": 89.38768768,
+      "max": 254.9962616
+    },
+    "Z": {
+      "count": 1788994,
+      "mean": 1.739594657,
+      "min": -9.491985321,
+      "max": 40.43920135
+    },
+    "Red": {
+      "count": 1788994,
+      "mean": 30498.45893,
+      "min": 771,
+      "max": 65535
+    },
+    "Green": {
+      "count": 1788994,
+      "mean": 27640.56898,
+      "min": 2056,
+      "max": 65535
+    },
+    "Blue": {
+      "count": 1788994,
+      "mean": 19123.23244,
+      "min": 0,
+      "max": 65535
+    },
+    "NormalX": {
+      "count": 1788994,
+      "mean": -0.2314118877,
+      "min": -0.9999990463,
+      "max": 0.9700229764
+    },
+    "NormalY": {
+      "count": 1788994,
+      "mean": -0.288454923,
+      "min": -0.9999990463,
+      "max": 0.980553031
+    },
+    "NormalZ": {
+      "count": 1788994,
+      "mean": -0.2384947725,
+      "min": -0.9999990463,
+      "max": 0.9632174373
+    },
+    "_excluded_Intensity": {
+      "count": 1788994,
+      "mean": 13456.6134,
+      "min": 0,
+      "max": 65052,
+      "note": "EXCLUDED from the agreement claim. PDAL scales E57 intensity by 65535/(intensityMaximum - intensityMinimum) without subtracting the minimum, so its uint16 values do not round-trip the declared limits. The transform is not pinned by the E57 standard, so an agreement tolerance here would measure PDAL's scaling choice rather than either reader's decode."
+    }
+  },
+  "sha256": "5f5f3a17b91e5f15bf02bfd1a69b3ec2fe4d4c352cd81cc02b9678d1c5c65b85",
+  "quantum": 1000000,
+  "quantisedSums": {
+    "X": "-42787575266576",
+    "Y": "258206021944282",
+    "Z": "3112124403504",
+    "Red": "54561560030000000",
+    "Green": "49448812053000000",
+    "Blue": "34211348102000000",
+    "NormalX": "-413994481020",
+    "NormalY": "-516044130827",
+    "NormalZ": "-426665721385"
+  },
+  "quantisedSumsNote": "Sum of floor(value * 1e6 + 0.5) over all 1788994 points, as exact integers. Order independent and lossless, so it catches ANY single point differing by 1e-6 or more. The mean alone does not: at this point count a single value would have to be wrong by about 1.79 m before it moved the mean past the registered 1e-6 budget. ROUNDING MUST MATCH ON BOTH SIDES: the reference uses floor(x+0.5) because that is what JavaScript's Math.round does; Python's round() is round-half-to-even and disagrees on ties, which showed up as a spurious 208-unit gap before it was matched. PDAL is streamed at precision 17 so text rounding cannot move a value across a quantum boundary. Colour sums are in PDAL's uint16 space; multiply the 8-bit sum by 257."
+}

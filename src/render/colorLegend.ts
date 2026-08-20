@@ -44,6 +44,12 @@ export interface ColorLegendHost {
   firstStaticCloud(): PointCloud | null;
   streaming(): ColorLegendStreaming | null;
   heightPercentileTrim(): number;
+  /**
+   * The project-shared elevation window in WORLD units, or null when the mode
+   * is off or fewer than two clouds share the frame. When present the elevation
+   * colorbar reports it, so the legend describes the whole project.
+   */
+  projectSharedElevationRange(): { min: number; max: number } | null;
   /** CRS-resolved elevation unit ('m' / 'ft'), or null when unknown. */
   elevationUnitLabel(): string | null;
   worldUpIsZ(): boolean;
@@ -144,12 +150,15 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
       // subtracted `origin`); add the up-axis origin back so the legend reads
       // true world/source heights — the same reconstruction elevationExtent()
       // performs for the filter controls.
+      // When the project-shared scale is on, the legend describes the shared
+      // WORLD window (all frame-sharing layers), not this one cloud's ramp.
+      const shared = mode === 'elevation' ? host.projectSharedElevationRange() : null;
       const display =
         mode === 'elevation'
-          ? {
+          ? (shared ?? {
               min: range.min + cloud.sourceOrigin[upAxis],
               max: range.max + cloud.sourceOrigin[upAxis],
-            }
+            })
           : range;
       let trimPercent = 0;
       if (mode === 'elevation') trimPercent = host.heightPercentileTrim();

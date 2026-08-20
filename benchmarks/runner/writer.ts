@@ -42,6 +42,7 @@ import { BENCHMARK_PACKAGE_VERSION, BENCHMARK_SCHEMA_VERSION } from './config';
 import { forcedGcRequested, summariseForcedGc } from './gcMode';
 import type { ReproducibilityResult } from './reproducibility';
 import type { ScalingResult } from './scaling';
+import type { LoaderComparisonResult } from './loaderComparison';
 import { requireBinaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
@@ -53,6 +54,8 @@ import {
   overviewInputFrom,
   overviewMarkdown,
   type ForcedGcReport,
+  loaderComparisonCsv,
+  loaderComparisonMarkdown,
   reproducibilityCsv,
   reproducibilityMarkdown,
   scalingCsv,
@@ -181,6 +184,12 @@ export interface WriteResultsOptions {
   readonly completedAtUtc: string;
   readonly reproducibility: ReproducibilityResult | null;
   readonly scaling: ScalingResult | null;
+  /**
+   * Optional so the existing two-suite callers stay valid; a run that omits it
+   * simply has no loader-comparison directory, exactly as omitting either of the
+   * others leaves theirs out.
+   */
+  readonly loaderComparison?: LoaderComparisonResult | null;
   /** Suites deliberately not run, each with a reason a reader can act on. */
   readonly notRun?: readonly { readonly suiteId: string; readonly reason: string }[];
   /** Overridable for tests; defaults to the repo's `benchmark-results/`. */
@@ -322,6 +331,21 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     writeFile(latestDir, join('scaling', 'summary.md'), scalingMarkdown(summary), files);
   }
 
+  if (options.loaderComparison) {
+    const { raw, summary } = options.loaderComparison;
+    configuration.loaderComparison = raw.config;
+    suites.push({ suiteId: 'loaderComparison', pass: summary.pass });
+    writeFile(latestDir, join('loaderComparison', 'raw.json'), `${JSON.stringify(raw, null, 2)}\n`, files);
+    writeFile(latestDir, join('loaderComparison', 'runs.csv'), loaderComparisonCsv(raw), files);
+    writeFile(
+      latestDir,
+      join('loaderComparison', 'summary.json'),
+      `${JSON.stringify(summary, null, 2)}\n`,
+      files,
+    );
+    writeFile(latestDir, join('loaderComparison', 'summary.md'), loaderComparisonMarkdown(summary), files);
+  }
+
   writeFile(
     latestDir,
     'environment.json',
@@ -348,6 +372,7 @@ export function writeResults(options: WriteResultsOptions): WriteResultsOutcome 
     BENCHMARK_PACKAGE_VERSION,
     options.reproducibility?.summary ?? null,
     options.scaling?.summary ?? null,
+    options.loaderComparison?.summary ?? null,
   );
   writeFile(latestDir, 'summary.md', overviewMarkdown(overview), files);
   writeFile(latestDir, 'summary.html', overviewHtml(overview), files);

@@ -112,7 +112,7 @@ describe('crossCheck cannot be tricked into a false AGREE (audit hardening)', ()
 });
 
 describe('reference manifest honesty', () => {
-  it('supplies SLOPE-RASTER, ASPECT-RASTER, HILLSHADE, CONTOURS and MEAS-AREA, and ships every other slot as pending', () => {
+  it('supplies DTM, DSM, CHM, SLOPE-RASTER, ASPECT-RASTER, HILLSHADE, CONTOURS, MEAS-AREA, TPI, VRM and MEAS-PROFILE, and ships every other slot as pending', () => {
     // Each of those reached E4 once an independent reference was committed beside
     // the fixture; every cross-check agreed with the reference and with the
     // closed-form truth inside the preregistered tolerance. No other slot has a
@@ -121,7 +121,19 @@ describe('reference manifest honesty', () => {
     // enforced in slopeCrossCheck.test.ts, aspectCrossCheck.test.ts,
     // hillshadeCrossCheck.test.ts, contourCrossCheck.test.ts and
     // measureAreaCrossCheck.test.ts; MEAS-AREA is against GDAL/OGR OGR_GEOM_AREA).
-    const E4 = ['SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA'];
+    // DTM and DSM are recomputed and compared against their committed PDAL
+    // writers.gdal references in groundFilterPdalAgreement.test.ts; CHM is the
+    // clamped DSM − DTM difference against the same PDAL grids in
+    // chmCrossCheck.test.ts. TPI (gdaldem) and VRM (SAGA) are three-way checks
+    // against an independent tool and the closed form on controlled analytic
+    // fixtures (tpiCrossCheck.test.ts, vrmCrossCheck.test.ts). MEAS-PROFILE is
+    // the corridor section profile against OGR/SpatiaLite chainage reduced by R's
+    // type-7 quantile, plus the closed form on the ramp fixture
+    // (profileCrossCheck.test.ts). E57-INGEST is a per-point decode against
+    // PDAL readers.e57 over a CC-BY terrestrial scan
+    // (e57PdalCrossDecode.test.ts), compared as an exact quantised integer sum
+    // rather than a summary statistic.
+    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

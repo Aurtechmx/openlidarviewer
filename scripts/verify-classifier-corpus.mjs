@@ -18,7 +18,7 @@
  *   2. THE METRICS DID NOT FALL. `FROZEN_BASELINE` is the measured result at
  *      the commit that last moved it, low figures included. The gate does not
  *      call those figures good — `rolling-terrain` sits at 0.40 ground recall
- *      and `walls-roofs` at 0.33 macro-F1. It refuses a DROP and nothing else,
+ *      and `walls-roofs` at 0.40 macro-F1 (v3 structural rescue). It refuses a DROP and nothing else,
  *      because the failure mode being guarded is a silent regression.
  *
  * WHAT THIS DOES NOT DO. It does not run the classifier and it does not
@@ -82,7 +82,7 @@ export const FROZEN_BASELINE = {
     'aerial-urban': { macroF1: 0.9991111111111112, groundRecall: 1 },
     'aerial-vegetation': { macroF1: 0.9901007905138339, groundRecall: 1 },
     'scan-edge-void': { macroF1: 0.9919991432146027, groundRecall: 1 },
-    'walls-roofs': { macroF1: 0.32544967041385714, groundRecall: 1 },
+    'walls-roofs': { macroF1: 0.39754996492098316, groundRecall: 1 },
     'low-vegetation': { macroF1: 0.9987985556475145, groundRecall: 1 },
     'steep-terrain': { macroF1: 0.38020672712009773, groundRecall: 0.63625 },
     'rolling-terrain': { macroF1: 0.28287608247826823, groundRecall: 0.40175 },
@@ -92,7 +92,7 @@ export const FROZEN_BASELINE = {
     'units-metre': { macroF1: 0.989786971754634, groundRecall: 1 },
     'units-foot': { macroF1: 0.989786971754634, groundRecall: 1 },
   },
-  pooled: { macroF1: 0.7017404908380184, groundRecall: 0.9144432586268232 },
+  pooled: { macroF1: 0.7230467502459119, groundRecall: 0.9144432586268232 },
 };
 
 const f3 = (v) => (v === null || v === undefined ? 'n/a' : Number(v).toFixed(4));

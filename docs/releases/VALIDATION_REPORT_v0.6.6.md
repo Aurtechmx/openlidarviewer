@@ -1,0 +1,45 @@
+# Validation report: OpenLiDARViewer v0.6.6
+
+This report states what v0.6.6 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
+
+v0.6.6 is a focused evidence release on top of v0.6.5. It promotes grades, and the only behaviour it changes is how a change-volume band with no error budget in it is reported (see below). The application, its interactive surfaces and every other evidence grade are inherited from v0.6.5 unchanged, and their evidence carries over intact and is not restated here. This report covers the grades that moved and the boundary of the evidence behind them.
+
+## What moved
+
+`DSM`, `DTM` and `CHM` reach `E4_CROSS_IMPLEMENTATION_VALIDATED`. All three were already checked against known analytic surfaces at E3. This release adds an independent-implementation comparison against PDAL 2.10.2 `writers.gdal`: each surface grid is recomputed from its point cloud and compared to the PDAL grid, and the canopy height is compared to the PDAL grids differenced.
+
+**DSM (top surface).** OLV's max-return grid was compared against PDAL's `writers.gdal` maximum output on three seeded structure clouds (`OLV-DS-015`, `OLV-DS-016`, `OLV-DS-017`). The two agree over 7,500 cells to a maximum difference under 4×10⁻⁶ m, within the 0.05 m tolerance registered in `REFERENCE_SLOTS` before the reference existed. Recorded in the study manifest `DSM-PDAL-WRITERS-GDAL-CELL-CENTRED`.
+
+**DTM (bare-earth grid).** OLV's min-return grid was compared against PDAL's `writers.gdal` minimum output on three seeded bare-earth clouds (`OLV-DS-012`, `OLV-DS-013`, `OLV-DS-014`). The two agree over 7,500 cells to a maximum difference under 4×10⁻⁶ m, within the same registered 0.05 m tolerance. Recorded in the study manifest `DTM-PDAL-WRITERS-GDAL-CELL-CENTRED`.
+
+Both recomputes run on every gate through `tests/groundFilterPdalAgreement.test.ts`, which also asserts that a row-order flip or an axis mirror breaks the agreement, so a coincidental match cannot pass.
+
+**CHM (canopy height).** CHM is DSM minus DTM per cell, clamped at zero. With both parents at E4, OLV's `heightAboveGround` was compared against the PDAL max grid minus the PDAL min grid on the same three structure clouds, where every cell carries a ground return so the minimum is the ground and the maximum is the top surface. The two agree over 7,500 cells to a maximum difference under 8×10⁻⁶ m, within a 0.1 m tolerance registered before the difference was run. Recorded in the study manifest `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`, checked on every gate by `tests/chmCrossCheck.test.ts`, which also breaks under a row flip.
+
+Ten products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, and the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture.
+
+## The boundary of the DSM and DTM evidence
+
+The comparison isolates the cell gridding. The reference radius is 0.45 m, below half a cell, so each cell reduces to the returns placed at its centre and both implementations take the maximum or minimum over the same point set: the agreement measures the gridding arithmetic, not a divergent neighbourhood search. The DTM clouds are bare-earth by construction, so it does not touch ground classification either. `GROUND-FILTER` stays at E3 in this release, because its agreement with PDAL's `filters.smrf` holds on low-relief terrain (0.99985 of 95,005 returns on the Estonian crop) but falls on steep terrain (0.983 at Coconino, 0.61 to 0.77 on the synthetic rolling and ridge scenes), and a grade that only holds on gentle ground cannot be written as unconditional E4.
+
+Three more things sit outside the check. Void interpolation across real gaps is not exercised. The supporting clouds are single-unit metre grids, so the mixed-unit ground-filter threshold path is not exercised. And the DTM's required bar for field validation stays at E5: none of this is survey-grade accuracy, and no product here is field-validated.
+
+## Change volume and its uncertainty band
+
+`CHANGE-VOLUME` and `UNCERTAINTY-BAND` reach `E2_ANALYTICALLY_VERIFIED`, each on a different kind of closed-form check.
+
+Cut/fill is a cell-centre Riemann sum over the difference grid, thresholded at the level of detection, and every fixture behind the grade has an answer solved on paper. Parallel planes 0.5 m apart over 4,000 m² return 2,000 m³ with no rounding at all, and the same slab returns 2,000 m³ on a raster four times finer and 8,000 m³ on cells four times larger, which is what pins the cell area to the square of its side. Cell-centre quadrature is exact for a linear surface, so tilting the upper plane about the footprint centroid returns the same 2,000 m³. For a quadratic dome the sum and the true integral differ by exactly k·L²s²/6, so a 32 m footprint at 0.5 m cells reads 2,771.2 m³ against a true 2,771.627 m³, and halving the cell size quarters that gap: 1.707, 0.427, 0.107 m³ down the ladder. A cone of radius 20 m and height 5 m converges on πR²H/3 to 2.5×10⁻⁷ relative, and under a 0.1 m level of detection it matches the truncated integral 2πH(r₀²/2 − r₀³/3R) instead, 2.48 m³ lower, which states the size of the threshold's bias rather than absorbing it. A saddle's lobes cancel to a net of zero, and a surface differenced against itself returns exact zeros. `tests/changeVolumeAnalyticalOracle.test.ts` carries all of it; a 0.01% scale drift injected into the difference fails thirteen of them.
+
+The band is checked against the scaling laws its documented model implies, because a test that restated `area · σ · √N` would only prove the file agrees with itself. Random per-cell noise added in quadrature grows as the square root of the changed-cell count, so quadrupling the cells doubles the term; a systematic co-registration bias grows linearly with the changed area, so the same input quadruples it. The two therefore answer differently to one change, which is why they are modelled apart: relative error falls as 1/√N under survey noise, and under a registration bias it does not move with cell count at all, so detectability there depends only on the size of the change against the registration error. A single cell that just clears the level of detection sits exactly at the band's 95% volume threshold, tying `cellSigmaFromLoD` and the band to one convention. `tests/uncertaintyBandScalingLaws.test.ts` carries these; dropping the square root, or giving the systematic term a square root it should not have, each fails four of them.
+
+Neither grade is a validated volume or a validated coverage interval, and the required bar for both stays E5. The volume oracle enters at the grid pair, so ground classification, interpolation and registration error are all upstream of it and unbounded by it. The band's scaling laws show the propagation model is implemented as documented; whether a 1σ band contains the truth as often as 1σ should is a separate question, and the omitted GUM terms and the spatial-correlation assumption are unchanged. This release also fixes a fail-open in that model: with a level of detection of 0 and no registration RMSE, both terms were empty, the band collapsed to ±0, and a ±0 band cleared every threshold in the module, so an entirely unmeasured change graded detectable at 0% relative error and high confidence. An empty budget now reports as unquantified.
+
+## What was tested for v0.6.6
+
+Whole-suite evidence for this release comes from the release-mode gate run at the tagged commit, with an exit marker per blocking stage in the shipped `gate.log`. The authoritative record is the release asset `test-evidence-v0.6.6.json`; its SHA-256 is in `SHA256SUMS`, and `release-manifest-v0.6.6.json` binds the tag to the full 40-character commit and to every artifact hash, which `npm run release:verify` walks. Published totals are read from `docs/validation/test-evidence.json` rather than entered by hand, and `npm run lint:evidence` checks the documents against it.
+
+The two promoted grades are covered by the recompute-and-compare test above, by the study manifests the study verifier walks (`npm run validation:study:verify`), and by the reference-slot honesty tests (`tests/crossCheck.test.ts`, `tests/crossImplementationManifest.test.ts`) that pin which slots are supplied and confirm the rest stay pending.
+
+## What was NOT tested (and is not claimed)
+
+Real-terrain DSM and DTM accuracy, ground-classification accuracy, void interpolation, mixed-unit gridding, and any field-grade or survey-grade figure. The DTM checkpoint results reported below the grade line in v0.6.5 remain external agreement on found public data, not a preregistered field campaign, and do not move the grade. Everything staged but not shipped in v0.6.5 (the feature-extraction and registration interactive surfaces) remains staged and is not claimed here.

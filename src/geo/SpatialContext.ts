@@ -5,7 +5,7 @@
  * consumer that is about to make a metric claim — a distance in metres, an area
  * in m², a volume in m³, a density in pts/m², an elevation against a datum — can
  * read a single object instead of re-deriving unit, datum, axis and frame from
- * `metadata.crs` five different ways. The inventory tracks 13 consumers that
+ * `metadata.crs` five different ways. The inventory tracks 16 consumers that
  * each used to reach into a `CrsInfo` / `ResolvedCrs` and re-answer the same
  * questions (see docs/architecture/spatial-context-consumers.md, which
  * `scripts/lint-spatial-context.mjs` holds to the tree); the divergence between
@@ -195,7 +195,7 @@ export interface SpatialContextPlacement {
  * project-frame placement. A `null` / `undefined` CRS fails closed: the context
  * resolves to `unknown`, and `metricClaimsPermitted` is `false`.
  *
- * Accepting both inputs is what lets all 13 consumers route through this one
+ * Accepting both inputs is what lets all 16 consumers route through this one
  * façade without hand-building anything: a `CrsInfo` is bridged through the
  * canonical `resolvedFromCrsInfo` mapper, while a `ResolvedCrs` — which already
  * carries the resolved `kind` (including `local` / `unknown`, which a `CrsInfo`

@@ -1,9 +1,19 @@
 # Derived classifier: corpus evaluation and ground-recall diagnosis
 
-Method: `olv.class.derived-heuristic@2`, preset `derived-heuristic-v2`.
+Method: `olv.class.derived-heuristic@3`, preset `derived-heuristic-v3`.
 Corpus: `src/validation/classifierCorpus.ts` v1, digest
 `sha256:2a0c0165…73b1db`.
 Record: `validation/classifier-corpus/results-classifier-corpus.json`.
+
+v3 adds a structural-verticality wall rescue. A tall point the per-cell
+roughness rule sends to vegetation is re-examined with eigen descriptors
+(`classification/geometryDescriptors` + `verticalityCue`) over a 1.0-unit
+neighbourhood. A planar surface with verticality at or above 0.85 and 12 or more
+neighbours is a wall face, so it is reclassified as building. It moved one scene
+and no other. `walls-roofs` macro-F1 rose from 0.325 to 0.398 (building F1 0.423
+to 0.638); the verticality and neighbour-count gates keep the rescue from firing
+on natural steep or rolling terrain, which stay byte-identical to v2. The tables
+below are the v3 record. Every non-wall scene reads the same as v2.
 
 ## What this evidence is
 
@@ -62,7 +72,7 @@ False building is the share of non-building points called building.
 | aerial-urban | 8880 | 0.999 | 1.000 | 1.000 | 0.996 | 1.000 | 1.000 | 0.000 | 0.000 |
 | aerial-vegetation | 8960 | 0.990 | 1.000 | 0.977 | 0.989 | 0.994 | n/a | 0.001 | 0.000 |
 | scan-edge-void | 8200 | 0.992 | 1.000 | 0.986 | 0.989 | 0.995 | 0.989 | 0.004 | 0.000 |
-| walls-roofs | 10669 | 0.325 | 1.000 | 0.048 | 0.081 | 0.088 | 0.423 | 0.000 | 0.000 |
+| walls-roofs | 10669 | 0.398 | 1.000 | 0.048 | 0.213 | 0.101 | 0.638 | 0.000 | 0.000 |
 | low-vegetation | 8880 | 0.999 | 1.000 | 0.998 | n/a | n/a | n/a | 0.000 | 0.000 |
 | steep-terrain | 8320 | 0.380 | 0.636 | 0.065 | 0.220 | 0.839 | n/a | 0.005 | 0.187 |
 | rolling-terrain | 8320 | 0.283 | 0.402 | 0.017 | 0.115 | 0.709 | n/a | 0.005 | 0.242 |
@@ -90,9 +100,10 @@ Four results stand out before any diagnosis.
 2. Removing the colour cue (`urban-no-rgb`) and removing the return dimensions
    (`vegetation-no-returns`) leave their scenes unchanged to three decimals. On
    these scenes the geometry decides, and the cues change nothing.
-3. `walls-roofs` scores 0.325 macro-F1 while its ground recall stays at 1.000.
-   Wall returns fill a cell from the ground to the eaves, the per-cell roughness
-   reads that as vegetation, and the vegetation bands then split one wall across
+3. `walls-roofs` scored 0.325 macro-F1 in v2 (0.398 in v3 with the wall rescue
+   above) while its ground recall stays at 1.000. Wall returns fill a cell from
+   the ground to the eaves, the per-cell roughness reads that as vegetation, and
+   the vegetation bands then split one wall across
    three classes. Ground is untouched, so this is a vegetation-versus-structure
    failure and not a ground-filter failure. It is a separate question from the
    one below.
@@ -273,8 +284,10 @@ by-product and not a fix for mechanism 2.
   Height above ground is clamped at zero, so a return below the surface lands in
   the ground band, and the classifier has no low-noise class to put it in. v2
   stops a blunder from dragging the surface; it does not label the blunder.
-- **Walls.** `walls-roofs` stays at 0.325 macro-F1. Wall returns read as rough
-  and split across the vegetation bands.
+- **Walls.** `walls-roofs` was 0.325 macro-F1 in v2. Wall returns read as rough
+  and split across the vegetation bands. v3's structural-verticality rescue
+  reclassifies planar-vertical neighbourhoods as building walls, which lifts it
+  to 0.398 (building F1 0.423 to 0.638).
 - **One blunder per cell.** The rejection is a single pass and falls back to the
   second-lowest return, so a cell holding two blunders stays low.
 

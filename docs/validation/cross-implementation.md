@@ -6,15 +6,38 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Five products are at E4: **`SLOPE-RASTER`**, **`ASPECT-RASTER`**,
-**`HILLSHADE`**, **`CONTOURS`** and **`MEAS-AREA`** (polygon area against
-GDAL/OGR `OGR_GEOM_AREA` on a committed planar-polygon fixture, agreeing to
-machine precision — see `tests/measureAreaCrossCheck.test.ts`). Slope, aspect and hillshade were compared
+Eleven products are at E4. Five are algorithm checks against GDAL:
+**`SLOPE-RASTER`**, **`ASPECT-RASTER`**, **`HILLSHADE`**, **`CONTOURS`** and
+**`MEAS-AREA`** (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
+planar-polygon fixture, agreeing to machine precision — see
+`tests/measureAreaCrossCheck.test.ts`). Slope, aspect and hillshade were compared
 against GDAL 3.13.1 on the same frozen analytic fixture, and against the
 surface's closed-form gradient, in the same run; contours were compared against
 GDAL `gdal_contour` on a separate frozen analytic tilted plane (where linear
 interpolation is exact, so the tolerance measures agreement, not interpolation
-noise).
+noise). The other three are surface-gridding checks against PDAL: **`DSM`** (max
+return) and **`DTM`** (min return) were compared against PDAL 2.10.2
+`writers.gdal` on three seeded synthetic clouds each, agreeing over 7500 cells,
+and **`CHM`** (clamped DSM minus DTM) was compared against the PDAL max grid
+minus the PDAL min grid on the same clouds. The last two are terrain descriptors,
+each checked three ways against an independent tool AND the closed form on a
+controlled analytic fixture: **`TPI`** against gdaldem 3.13.1 TPI on a
+low-amplitude quadratic (chosen so the reference's float32 mean accumulation
+stays below the tolerance), and **`VRM`** against SAGA 7.8.2's Vector Ruggedness
+Measure on a smooth tilted quadratic (chosen so Horn's normal and SAGA's
+estimator converge), with OLV reproducing the closed-form Sappington VRM to under
+1×10⁻⁹. The eleventh is a measurement rather than a raster: **`MEAS-PROFILE`**,
+the corridor section profile, against a reference assembled from two tools
+because no single one exposes the operation. OGR's SpatiaLite functions place
+every point on the section line and R's `quantile(type = 7)` reduces each
+station, so neither half of the profile is written twice here. One of its two
+fixtures also carries a closed form: ten corridor elevations in an exact
+arithmetic progression reduce to `first + step·(p/100)·(n − 1)`, with no sort and
+no order statistic. The twelfth is a reader rather than an algorithm:
+**`E57-INGEST`**, against PDAL 2.10.2 `readers.e57` over every point of a public
+CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
+`nor:` namespaced surface normals, and colour) as an exact quantised integer sum
+at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -22,19 +45,29 @@ noise).
 | `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
 | `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0–255 |
 | `CONTOURS` | GDAL 3.13.1 `gdal_contour` | `tests/contourCrossCheck.test.ts` | 2,222 vertices | 2.9×10⁻⁵ m vs GDAL (2.0×10⁻⁷ vs closed form) | 0.05 m |
+| `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
+| `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
+| `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
+| `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
+| `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
+| `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
+| `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
 
-All four tolerances were registered in `REFERENCE_SLOTS` before the references
-were generated. Each GDAL output, the exact command, the tool version and the
-checksums are committed beside the input DEM. The three rasters share one DEM,
+Every tolerance above was registered in `REFERENCE_SLOTS` before the references
+were generated. Each reference output, the exact command, the tool version and the
+checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a
 plane linear interpolation is exact and the tolerance measures cross-implementation
-agreement rather than the interpolation error a curved surface would add.
+agreement rather than the interpolation error a curved surface would add. The
+DSM and DTM references are gridded from seeded synthetic clouds pinned by hash.
 
-This validates the slope, aspect, hillshade and contour *algorithms* against an
-independent implementation on a known surface. It does not validate the
-point-cloud-to-DTM pipeline, does not establish field or survey-grade accuracy,
-and says nothing about the other terrain products — each carries its own claim
-and its own evidence level.
+This validates the slope, aspect, hillshade and contour *algorithms*, and the
+DSM and DTM cell gridding, against an independent implementation on known
+inputs. The DSM and DTM checks use clouds where the reference radius is below
+half a cell, so they cover the gridding step, not ground classification
+(`GROUND-FILTER` stays partial) and not real-terrain void interpolation. None of
+this establishes field or survey-grade accuracy, and it says nothing about the
+other terrain products — each carries its own claim and its own evidence level.
 
 ## Hillshade agrees, but read its tolerance carefully
 
@@ -180,6 +213,28 @@ size, extent, and row order), so the two can be compared cell for cell.
    and separately checks both against the analytic line so a wrong DEM or a
    half-cell georeferencing offset shows up rather than averaging into agreement.
    The full reasoning is in `tests/fixtures/reference/contour/README.md`.
+
+### Section profile (OGR/SpatiaLite + R)
+
+1. Generate the two point clouds, then run the reference pipeline:
+
+   ```
+   node scripts/make-profile-fixture.mjs
+   node scripts/run-profile-reference.mjs
+   ```
+
+2. The second command runs two tools and computes nothing itself. `ogr2ogr`
+   with the SQLite dialect builds the corridor table — `ST_Line_Locate_Point`
+   for chainage, `ST_Distance` for the corridor test, the nearest station for
+   the bin — and selects the elevation column **as text**, so the value R
+   reduces is the value the sampler binned and no number is re-printed on the
+   way. `Rscript` then applies `quantile(type = 7)` per station.
+
+3. Both fixtures keep every point clear of a bin boundary and of the corridor
+   edge, and every coordinate is exactly representable in Float32 and in double.
+   That is what lets a 1×10⁻⁶ m tolerance measure the algorithm rather than a
+   tie-break or a transcode. The ramp fixture is also checked against the closed
+   form its surface implies, on both sides.
 
 ### Ground filter (CloudCompare or PDAL SMRF)
 

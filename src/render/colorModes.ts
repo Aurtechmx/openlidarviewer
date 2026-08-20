@@ -651,6 +651,14 @@ export interface ColorForModeOptions {
    * fallback.
    */
   coverageGrid?: CoverageColorGrid;
+  /**
+   * Explicit ramp window for the `'elevation'` mode, in the cloud's LOCAL
+   * (origin-subtracted) frame along `upAxis`. When present and finite/ordered
+   * it REPLACES the per-cloud percentile computation, so several layers can be
+   * coloured against one shared window. Set by the project-shared elevation
+   * scale (see projectElevationScale.ts); absent = per-cloud percentile.
+   */
+  elevationRangeOverride?: { min: number; max: number };
 }
 
 /**
@@ -713,6 +721,12 @@ export function rampRangeForMode(
       return finiteMinMax(cloud.returnNumber, n);
     }
     case 'elevation': {
+      // A finite, ordered override wins: the project-shared scale paints every
+      // frame-sharing layer against one window instead of each cloud's own.
+      const ov = opts?.elevationRangeOverride;
+      if (ov && Number.isFinite(ov.min) && Number.isFinite(ov.max) && ov.min <= ov.max) {
+        return { min: ov.min, max: ov.max };
+      }
       const trim = clamp(opts?.heightPercentileTrim ?? 5, 0, 25);
       const upAxis = opts?.upAxis ?? 2;
       const r = computeElevationRange({

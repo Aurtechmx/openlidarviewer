@@ -154,10 +154,9 @@ body.olv-theme-light .olv-empty::before {
   margin-left: var(--space-lg);
 }
 .olv-rail-num {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 .olv-rail-label { font-size: var(--text-xs); }
 .olv-rail-step-active { color: var(--text-dim); }
@@ -260,7 +259,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-sample:hover { border-color: var(--accent); }
 .olv-sample:active { transform: scale(0.96); }
 .olv-sample-label { font-size: var(--text-md); }
-.olv-sample-detail { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+.olv-sample-detail { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 /* Open-from-URL — the quiet, secondary entry point for a remote COPC scan. */
 .olv-empty-url {
@@ -271,7 +270,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-url-controls { display: flex; gap: var(--space-md); flex-wrap: wrap; justify-content: center; }
 .olv-url-input {
   width: 280px; max-width: 64vw;
-  font-size: var(--text-sm); color: var(--text); font-family: var(--mono);
+  font-size: var(--text-sm); color: var(--text); font-variant-numeric: tabular-nums;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
 }
@@ -371,7 +370,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-catalog-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-catalog-result-main { display: flex; gap: var(--space-md); align-items: baseline; width: 100%; }
 .olv-catalog-result-name {
-  font-size: var(--text-sm); font-family: var(--mono); color: var(--text);
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--text);
   /* min-width:0 is required for text-overflow:ellipsis to engage on a
    * flex child — without it long dataset names overflow the result row. */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;

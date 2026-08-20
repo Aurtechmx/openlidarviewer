@@ -93,7 +93,16 @@ function compareVerticalReference(a: ScanFacts, b: ScanFacts): VerticalReference
   return { ok: true };
 }
 
-/** Classification of unclassified points — geometry-driven, no CRS needed. */
+/**
+ * Classification of unclassified points. The classifier is geometry-driven but
+ * its thresholds are PHYSICAL (a 20 m object size, a 1 m structural
+ * neighbourhood, 0.5/2/5 m height bands), so a known source unit is needed to
+ * normalize them. With the unit unconfirmed the classifier falls back to a
+ * factor of 1, treating one source unit as one metre, and the same physical
+ * geometry expressed in feet or metres can classify differently. Classification
+ * for inspection is still allowed; the confirmed-unit result is what a graded
+ * product needs.
+ */
 function classifyGaps(scan: ScanFacts): ProductCapability {
   const p: ProductId = 'classify-gaps';
   if (scan.pointCount <= 0) {
@@ -104,6 +113,9 @@ function classifyGaps(scan: ScanFacts): ProductCapability {
   }
   if (!isFullCoverage(scan)) {
     return cap(p, 'review', 'PARTIAL_COVERAGE', 'Only resident or sampled points are available, so classification would cover part of the scan; it is labelled as such.');
+  }
+  if (!isLinearUnitKnown(scan.crs)) {
+    return cap(p, 'review', 'UNIT_UNKNOWN', 'Classification can be derived for inspection, but its physical neighbourhood and height thresholds cannot be normalized until the source unit is confirmed, so the same geometry in another unit may classify differently.');
   }
   return cap(p, 'ready', 'GAPS_CLASSIFIABLE', 'Unclassified points can be classified from geometry while producer classes are preserved.');
 }

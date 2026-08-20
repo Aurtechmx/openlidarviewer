@@ -80,6 +80,14 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
     asyncBridgeModule: 'src/render/class/deriveClassificationAsync.ts',
     pinClientChunk: true,
   },
+  {
+    id: 'lazChunk',
+    workerModule: 'src/io/heavy/worker/lazChunkWorker.ts',
+    workerChunk: 'lazChunkWorker',
+    clientModule: 'src/io/heavy/worker/lazChunkWorkerClient.ts',
+    asyncBridgeModule: 'src/io/loadLas.ts',
+    pinClientChunk: true,
+  },
 ] as const;
 
 /** Escape a string for safe embedding inside a `RegExp`. */

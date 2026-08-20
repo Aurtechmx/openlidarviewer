@@ -123,6 +123,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
     layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn() },
     inspector: {} as unknown as OpenScanDeps['inspector'],
+    exportPanel: { setImageExportEnabled: () => {}, setImageExportAvailability: () => {}, setStreamingMode: () => {} } as unknown as OpenScanDeps['exportPanel'],
     inspectorCards: {} as unknown as OpenScanDeps['inspectorCards'],
     crsCoordinator: {} as unknown as OpenScanDeps['crsCoordinator'],
     dock: {} as unknown as OpenScanDeps['dock'],

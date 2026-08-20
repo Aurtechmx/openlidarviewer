@@ -22,6 +22,7 @@ import {
   type ChangeResult,
   type ChangeDetectionOptions,
 } from './changeDetection';
+import { changeVolumeUncertainty, cellSigmaFromLoD } from './changeUncertainty';
 
 /**
  * Adapt a {@link DtmGrid} to the bare {@link ChangeGrid} the change core
@@ -218,7 +219,15 @@ export function compareDtms(
  * cut/fill volumes, the change significance, and every co-registration caveat,
  * so the numbers never travel without their honesty context.
  */
-export function summarizeChange(comparison: EpochComparison): string[] {
+/** Extra facts, known only at the call site, that qualify the net-volume figure. */
+export interface ChangeSummaryContext {
+  /** Co-registration RMSE (m) of the applied alignment — the systematic error term. */
+  readonly registrationSigmaM?: number;
+  /** Horizontal linear-unit factor, to turn the source-unit cell size into m². */
+  readonly horizontalUnitToMetres?: number;
+}
+
+export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryContext = {}): string[] {
   const { result, coregistered, coregistrationNotes } = comparison;
   const s = result.stats;
   const lines: string[] = [];
@@ -261,6 +270,39 @@ export function summarizeChange(comparison: EpochComparison): string[] {
       `Net volume change: ${s.netVolumeM3.toFixed(1)} m³ ` +
         `(gain ${s.gainVolumeM3.toFixed(1)} m³, loss ${s.lossVolumeM3.toFixed(1)} m³).`,
     );
+    // Qualify the net volume with a ± band + detectability. A bare figure hides
+    // whether the change exceeds the noise, and an unquantified co-registration
+    // error is the most common way a change number lies — so both are surfaced.
+    const hM = ctx.horizontalUnitToMetres;
+    if (hM && hM > 0) {
+      const u = changeVolumeUncertainty({
+        netVolumeM3: s.netVolumeM3,
+        significantCells: s.gained + s.lost,
+        cellAreaM2: (result.cellSizeM * hM) * (result.cellSizeM * hM),
+        cellSigmaM: cellSigmaFromLoD(comparison.levelOfDetectionM),
+        registrationSigmaM: ctx.registrationSigmaM ?? 0,
+      });
+      // Three outcomes, not two. An EMPTY error budget (a zero level of
+      // detection and no registration RMSE) also yields ±0, and printing that
+      // as "below the level of detection" would describe a threshold that was
+      // never set. Say the band bounds nothing, and name what to supply.
+      if (!u.quantified) {
+        lines.push(
+          'Volume uncertainty: not quantified — the level of detection is 0 and no ' +
+            'co-registration RMSE was supplied, so the ±0 m³ band bounds nothing. ' +
+            'Set a level of detection to qualify this figure.',
+        );
+      } else {
+        lines.push(
+          u.detectable
+            ? `Volume uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative); ${u.confidence} confidence.`
+            : `Net volume is below the level of detection: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — not distinguishable from noise.`,
+        );
+      }
+      if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
+        lines.push('The co-registration error is unquantified (no alignment applied), so this band is a lower bound.');
+      }
+    }
   }
   lines.push(
     `${(s.significantFraction * 100).toFixed(1)}% of comparable cells changed beyond the ` +

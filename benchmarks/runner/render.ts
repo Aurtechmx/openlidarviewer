@@ -26,8 +26,16 @@ import type { FirstRunCheck, SeriesSummary } from './stats';
 import type { SummarisedSeries } from './summarise';
 import type { ReproducibilityRaw, ReproducibilitySummary } from './reproducibility';
 import type { ScalingRaw, ScalingSummary, ScalingTierSummary } from './scaling';
+import type {
+  LoaderCaseSummary,
+  LoaderComparisonRaw,
+  LoaderComparisonSummary,
+} from './loaderComparison';
 import {
   SERIES_ANALYSIS_MS,
+  SERIES_COMPETITOR_LOAD_MS,
+  SERIES_LOADER_SPEEDUP,
+  SERIES_OLV_LOAD_MS,
   SERIES_PEAK_RSS_BYTES,
   SERIES_PIPELINE_TOTAL_MS,
   SERIES_POINTS_PER_SECOND,
@@ -152,6 +160,7 @@ const STATS_HEADER = [
 function decimalsFor(key: string): number {
   if (key === SERIES_POINTS_PER_SECOND) return RATE_DECIMALS;
   if (key === SERIES_PEAK_RSS_BYTES) return 0;
+  if (key === SERIES_LOADER_SPEEDUP) return 4;
   return MS_DECIMALS;
 }
 
@@ -560,6 +569,155 @@ export function scalingCsv(raw: ScalingRaw): string {
   return [csvRow(header), ...rows].join('\n') + '\n';
 }
 
+// ── loader comparison ───────────────────────────────────────────────────────
+
+/**
+ * The caveats that make the loader table honest, carried WITH the table so the
+ * version a reader copies out is never the bare speedup column. OLV decodes more
+ * per point than the competitor, and the competitor cannot read the modern
+ * format at all — both change what a "1.1x" or a blank cell means.
+ */
+function loaderCaveats(summary: LoaderComparisonSummary): string[] {
+  return [
+    `Competitor: ${cell(summary.config.competitor.name)} (${cell(summary.config.competitor.packageName)}), ` +
+      `version ${cell(summary.competitorVersion)}. Timings are single-threaded, best read as medians; ` +
+      'this is a wall-clock race and no threshold gates the suite.',
+    '',
+    'On the same file OLV decodes full-precision local coordinates plus intensity, classification, returns, ' +
+      'GPS time and RGB, where the competitor returns a float32 global position — so an equal wall-clock is OLV ' +
+      'moving more data per point, and the speedup column understates the difference in work done.',
+    '',
+    'A blank competitor cell is a CAPABILITY gap, not a slow decode: the competitor refuses the LAS version ' +
+      'outright. The speedup a reader can quote lives only in the rows where both loaders ran.',
+  ];
+}
+
+/** Median of a case's series, formatted, or the unavailable label. */
+function caseMedian(caseSummary: LoaderCaseSummary, key: string, decimals: number): string {
+  const s = findSeries(caseSummary.series, key);
+  return s ? formatFixed(s.median, decimals) : UNAVAILABLE_LABEL;
+}
+
+/** The compact loader table: one row per case, medians only. */
+export function loaderTable(summary: LoaderComparisonSummary): string[] {
+  const lines = [
+    ...loaderCaveats(summary),
+    '',
+    '| case | LAS | points | OLV median (ms) | competitor median (ms) | speedup (x) | competitor | CV OLV |',
+    '| --- | --- | ---: | ---: | ---: | ---: | --- | ---: |',
+  ];
+  for (const c of summary.cases) {
+    const olv = findSeries(c.series, SERIES_OLV_LOAD_MS);
+    lines.push(
+      `| ${cell(c.id)} | ${cell(c.lasVersion)} | ${c.requestedPointCount} | ` +
+        `${caseMedian(c, SERIES_OLV_LOAD_MS, MS_DECIMALS)} | ` +
+        `${caseMedian(c, SERIES_COMPETITOR_LOAD_MS, MS_DECIMALS)} | ` +
+        `${caseMedian(c, SERIES_LOADER_SPEEDUP, 4)} | ` +
+        `${cell(c.competitorStatus)} | ` +
+        `${olv ? formatFixed(olv.cv, RATIO_DECIMALS) : UNAVAILABLE_LABEL} |`,
+    );
+  }
+  return lines;
+}
+
+function loaderCaseDetail(c: LoaderCaseSummary): string[] {
+  const lines: string[] = [];
+  lines.push(`### ${cell(c.id)} — LAS ${cell(c.lasVersion)}, ${c.requestedPointCount} points`);
+  lines.push('');
+  lines.push(`- status: ${c.status}`);
+  if (c.failureReason !== null) lines.push(`- failure reason: ${cell(c.failureReason)}`);
+  lines.push(`- recorded runs: ${c.runCount}`);
+  lines.push(`- fixture size: ${formatMib(c.fixtureBytes)} MiB`);
+  lines.push(`- OLV decoded points: ${formatInteger(c.olvPointCount)}`);
+  lines.push(`- competitor expected to read this file: ${c.competitorReadable ? 'yes' : 'no'}`);
+  lines.push(`- competitor outcome: ${cell(c.competitorStatus)}`);
+  if (c.competitorPointCount !== null) {
+    lines.push(`- competitor decoded points: ${formatInteger(c.competitorPointCount)}`);
+  }
+  if (c.competitorRejectionMessage !== null) {
+    lines.push(`- competitor rejection message: ${cell(c.competitorRejectionMessage)}`);
+  }
+  lines.push('');
+  if (c.series.available.length > 0) {
+    lines.push(...STATS_HEADER);
+    for (const block of c.series.available) {
+      lines.push(statsRow(block.key, block.summary, decimalsFor(block.key)));
+    }
+    lines.push('');
+  }
+  if (c.series.unavailable.length > 0) {
+    lines.push('Series with no summary:');
+    lines.push('');
+    for (const u of c.series.unavailable) lines.push(`- \`${cell(u.key)}\`: ${cell(u.reason)}`);
+    lines.push('');
+  }
+  return lines;
+}
+
+export function loaderComparisonMarkdown(summary: LoaderComparisonSummary): string {
+  const lines: string[] = [];
+  lines.push('# Benchmark 3 — loader comparison');
+  lines.push('');
+  lines.push(`Verdict: **${summary.pass ? 'PASS' : 'FAIL'}**`);
+  lines.push('');
+  lines.push(`- seed: ${summary.config.seed}`);
+  lines.push(`- warm-up runs per case: ${summary.config.warmupRuns}`);
+  lines.push(`- recorded runs per case: ${summary.config.recordedRuns}`);
+  lines.push(`- quantile convention: ${cell(summary.quantileConvention)}, CV is sd/mean`);
+  lines.push('');
+  lines.push(...loaderTable(summary));
+  lines.push('');
+  lines.push('## Per-case detail');
+  lines.push('');
+  for (const c of summary.cases) lines.push(...loaderCaseDetail(c));
+  lines.push('## Failures');
+  lines.push('');
+  if (summary.failures.length === 0) lines.push('None.');
+  else for (const f of summary.failures) lines.push(`- ${cell(f)}`);
+  lines.push('');
+  return lines.join('\n');
+}
+
+/** One row per case-run. Row count is checked against `raw.json`. */
+export function loaderComparisonCsv(raw: LoaderComparisonRaw): string {
+  const header = [
+    'case',
+    'lasVersion',
+    'requestedPointCount',
+    'run',
+    'caseStatus',
+    'competitorStatus',
+    'olvLoadMs',
+    'olvPointCount',
+    'competitorLoadMs',
+    'competitorPointCount',
+    'speedup',
+  ];
+  const rows: string[] = [];
+  for (const c of raw.cases) {
+    for (const run of c.runs) {
+      const speedup =
+        run.competitorLoadMs !== null ? run.competitorLoadMs / run.olvLoadMs : null;
+      rows.push(
+        csvRow([
+          c.case.id,
+          c.case.lasVersion,
+          String(c.case.pointCount),
+          String(run.index),
+          c.status,
+          c.competitorStatus,
+          formatFixed(run.olvLoadMs, MS_DECIMALS),
+          formatInteger(run.olvPointCount),
+          formatFixed(run.competitorLoadMs, MS_DECIMALS),
+          formatInteger(run.competitorPointCount),
+          formatFixed(speedup, 4),
+        ]),
+      );
+    }
+  }
+  return [csvRow(header), ...rows].join('\n') + '\n';
+}
+
 // ── the run overview ────────────────────────────────────────────────────────
 
 export interface OverviewInput {
@@ -572,6 +730,7 @@ export interface OverviewInput {
   readonly workingTreeClean: boolean | null;
   readonly reproducibility: ReproducibilitySummary | null;
   readonly scaling: ScalingSummary | null;
+  readonly loaderComparison: LoaderComparisonSummary | null;
   /** Suites that were deliberately not run here, with the reason. */
   readonly notRun: readonly { readonly suiteId: string; readonly reason: string }[];
   /**
@@ -636,6 +795,13 @@ export function overviewMarkdown(input: OverviewInput): string {
       `| scaling | ${input.scaling.pass ? 'PASS' : 'FAIL'} | ${ok} of ${input.scaling.tiers.length} tiers complete |`,
     );
   }
+  if (input.loaderComparison) {
+    const lc = input.loaderComparison;
+    const measured = lc.cases.filter((c) => c.competitorStatus === 'measured').length;
+    lines.push(
+      `| loaderComparison | ${lc.pass ? 'PASS' : 'FAIL'} | ${lc.cases.length} cases, ${measured} head-to-head vs ${cell(lc.config.competitor.name)} |`,
+    );
+  }
   for (const suite of input.notRun) {
     lines.push(`| ${cell(suite.suiteId)} | not run | ${cell(suite.reason)} |`);
   }
@@ -644,6 +810,12 @@ export function overviewMarkdown(input: OverviewInput): string {
     lines.push('## Scaling');
     lines.push('');
     lines.push(...scalingTable(input.scaling));
+    lines.push('');
+  }
+  if (input.loaderComparison) {
+    lines.push('## Loader comparison');
+    lines.push('');
+    lines.push(...loaderTable(input.loaderComparison));
     lines.push('');
   }
   if (input.reproducibility) {
@@ -697,6 +869,7 @@ export function overviewInputFrom(
   benchmarkPackageVersion: string,
   reproducibility: ReproducibilitySummary | null,
   scaling: ScalingSummary | null,
+  loaderComparison: LoaderComparisonSummary | null,
 ): OverviewInput {
   return {
     startedAt: header.startedAtUtc,
@@ -709,6 +882,7 @@ export function overviewInputFrom(
       header.workingTree.status === 'captured' ? header.workingTree.value === 'clean' : null,
     reproducibility,
     scaling,
+    loaderComparison,
     notRun: header.notRun,
     forcedGc: header.forcedGc,
   };

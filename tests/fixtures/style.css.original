@@ -215,7 +215,7 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
-.olv-workflow-badge-label { font-family: var(--mono); font-size: var(--text-xs); }
+.olv-workflow-badge-label { font-variant-numeric: tabular-nums; font-size: var(--text-xs); }
 .olv-workflow-badge-stop {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -786,10 +786,9 @@ body.olv-theme-light .olv-empty::before {
   margin-left: var(--space-lg);
 }
 .olv-rail-num {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
 }
 .olv-rail-label { font-size: var(--text-xs); }
 .olv-rail-step-active { color: var(--text-dim); }
@@ -892,7 +891,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-sample:hover { border-color: var(--accent); }
 .olv-sample:active { transform: scale(0.96); }
 .olv-sample-label { font-size: var(--text-md); }
-.olv-sample-detail { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+.olv-sample-detail { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 /* Open-from-URL — the quiet, secondary entry point for a remote COPC scan. */
 .olv-empty-url {
@@ -903,7 +902,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-url-controls { display: flex; gap: var(--space-md); flex-wrap: wrap; justify-content: center; }
 .olv-url-input {
   width: 280px; max-width: 64vw;
-  font-size: var(--text-sm); color: var(--text); font-family: var(--mono);
+  font-size: var(--text-sm); color: var(--text); font-variant-numeric: tabular-nums;
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-xl);
 }
@@ -1003,7 +1002,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-catalog-result:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-catalog-result-main { display: flex; gap: var(--space-md); align-items: baseline; width: 100%; }
 .olv-catalog-result-name {
-  font-size: var(--text-sm); font-family: var(--mono); color: var(--text);
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--text);
   /* min-width:0 is required for text-overflow:ellipsis to engage on a
    * flex child — without it long dataset names overflow the result row. */
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;
@@ -1139,14 +1138,14 @@ body.olv-theme-light .olv-empty::before {
 .olv-layer-name {
   /* min-width:0 lets ellipsis engage so long layer names truncate
    * instead of overflowing the Inspector panel. */
-  flex: 1; min-width: 0; font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
+  flex: 1; min-width: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-layer-count { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+.olv-layer-count { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-faint); }
 /* Per-layer CRS badge: short, faint, truncates; turns warning-coloured when the
  * layer's coordinate system doesn't match the others. */
 .olv-layer-crs {
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-faint);
   max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-layer-solo, .olv-layer-lock {
@@ -1174,7 +1173,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-layer-compare-result {
   margin: var(--space-sm) 0 0; padding: var(--space-sm);
   background: var(--panel-2, rgba(255,255,255,0.04)); border-radius: var(--radius-sm, 6px);
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text);
   white-space: pre-wrap; word-break: break-word; line-height: 1.4;
 }
 .olv-chips { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
@@ -1261,7 +1260,7 @@ body.olv-theme-light .olv-empty::before {
      inset-free displays, so desktop width is unchanged. */
   max-width: min(720px, calc(100vw - 32px - env(safe-area-inset-left) - env(safe-area-inset-right)));
   padding: var(--space-lg) var(--space-2xl);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
   background: rgba(11, 17, 33, 0.92);
@@ -1301,7 +1300,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-lasso-toast-action {
   flex: 0 0 auto;
   padding: var(--space-sm) var(--space-xl);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--on-accent);
@@ -1354,7 +1353,8 @@ body.olv-theme-light .olv-empty::before {
 .olv-wb-auto { margin-top: var(--space-2xs); }
 /* v0.3.7 final-polish — height percentile-trim slider.
  * Sits beneath the Color By chips when "Height" is the active mode. */
-.olv-height-trim-row {
+.olv-height-trim-row,
+.olv-project-scale-row {
   display: flex;
   align-items: center;
   gap: var(--space-md);
@@ -1463,16 +1463,16 @@ body.olv-theme-light .olv-empty::before {
 .olv-render-sublabel:first-child { margin-top: 0; }
 /* Sublabel that carries a right-aligned value readout (e.g. "Point size · 1.0 px"). */
 .olv-render-sublabel-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.olv-render-value { font-family: var(--mono); font-weight: 500; color: var(--text-dim); font-variant-numeric: tabular-nums; }
+.olv-render-value { font-variant-numeric: tabular-nums; font-weight: 500; color: var(--text-dim); }
 .olv-render-label { font-size: var(--text-xs); color: var(--text-faint); min-width: 52px; }
 .olv-detail-bar { height: 4px; background: rgba(255, 255, 255, 0.12); border-radius: 2px; overflow: hidden; }
 .olv-detail-fill { height: 100%; background: var(--brand-gradient); }
-.olv-detail-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); margin-top: var(--space-sm); }
+.olv-detail-text { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; margin-top: var(--space-sm); }
 .olv-report { display: flex; flex-direction: column; gap: var(--space-sm); }
 .olv-report-empty { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-report-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-report-label { flex: 1; font-size: var(--text-xs); color: var(--text-dim); }
-.olv-report-value { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim); text-align: right; }
+.olv-report-value { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim); text-align: right; }
 /* Honesty stamp appended to a class-scoped (or not-class-scoped header) metric */
 .olv-report-scope { font-size: var(--text-2xs); color: var(--text-faint); opacity: 0.85; }
 .olv-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
@@ -1559,7 +1559,7 @@ body.olv-theme-light .olv-empty::before {
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-lg);
 }
 .olv-backend-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-.olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-family: var(--mono); }
+.olv-backend-text { font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 
 /* Developer performance overlay (?debug=1) */
 .olv-debug {
@@ -1673,7 +1673,7 @@ body.olv-theme-light .olv-empty::before {
 .olv-stream-prog-readout {
   display: flex; justify-content: space-between; gap: var(--space-md);
   margin-top: var(--space-sm);
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
 .olv-streaming-rows { display: flex; flex-direction: column; gap: var(--space-xs); }
 .olv-streaming-row {
@@ -1681,25 +1681,9 @@ body.olv-theme-light .olv-empty::before {
 }
 .olv-streaming-key { color: var(--text-faint); flex: none; }
 .olv-streaming-stat {
-  color: var(--text-dim); font-family: var(--mono);
+  color: var(--text-dim); font-variant-numeric: tabular-nums;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.olv-streaming-views { display: flex; flex-direction: column; gap: var(--space-xs); }
-.olv-streaming-empty { font-size: var(--text-xs); color: var(--text-faint); }
-.olv-streaming-view { display: flex; gap: var(--space-xs); }
-.olv-streaming-view-name {
-  flex: 1; min-width: 0; text-align: left; font-size: var(--text-xs); color: var(--text-dim);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-md);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.olv-streaming-view-name:hover { color: var(--text); border-color: var(--accent); }
-.olv-streaming-view-del {
-  flex: none; width: 26px; font-size: var(--text-md); color: var(--text-faint);
-  background: rgba(255, 255, 255, 0.04);
-  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
-}
-.olv-streaming-view-del:hover { color: #ff9a9a; border-color: rgba(255, 120, 120, 0.55); }
 /*
  * StreamingPanel section eyebrow — matches .olv-section-label so
  * Inspector and Streaming, sharing the same 232 px right column,
@@ -1712,10 +1696,9 @@ body.olv-theme-light .olv-empty::before {
 .olv-streaming-chips { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
 .olv-streaming-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-xl); }
 /*
- * The destructive actions row (Clear cache) gets extra top margin so
- * it visually segregates from the constructive Save view + Pause
- * pair above it (Gestalt common region — destructive deserves its
- * own region, not just a colour cue).
+ * The destructive actions row (Clear cache) gets extra top margin so it
+ * visually segregates from the Pause control above it (Gestalt common
+ * region — destructive deserves its own region, not just a colour cue).
  */
 .olv-streaming-actions + .olv-streaming-actions { margin-top: var(--space-2xl); }
 .olv-streaming-btn {
@@ -2060,7 +2043,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-speed-slider { width: 116px; }
 .olv-speed-readout {
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim);
   min-width: 30px; text-align: right;
 }
 
@@ -2079,6 +2062,12 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* v0.3.10 — Header row carries the title + X close button.
    Flex layout keeps the title flush-left and the X flush-right so the
    panel reads as a normal closable card. */
+/* Collapsed: the legend is hidden, so the panel shrinks to the title row plus
+   the camera and view controls. Those are controls rather than help and stay
+   reachable, which is why the panel does not disappear outright. */
+.olv-nav-hud-collapsed { padding-bottom: var(--space-sm); }
+.olv-nav-hud-collapsed .olv-nav-hud-header { margin-bottom: var(--space-xs); }
+
 .olv-nav-hud-header {
   display: flex; align-items: center; justify-content: space-between;
   gap: var(--space-xl); margin-bottom: var(--space-sm);
@@ -2187,7 +2176,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   opacity: 0; transition: opacity 220ms var(--ease-standard);
 }
 .olv-nav-prompt.olv-visible { opacity: 1; animation: olv-prompt-breathe 2.6s ease-in-out infinite; }
-.olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono); }
+.olv-nav-prompt-sub { font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
 
 @keyframes olv-prompt-breathe {
   0%, 100% { border-color: rgba(0, 178, 255, 0.22); }
@@ -2261,7 +2250,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /* Version mark — bottom-right corner, revealed once a scan loads */
 .olv-version {
   position: absolute; bottom: 13px; right: 14px;
-  font-size: var(--text-2xs); line-height: 1; font-family: var(--mono);
+  font-size: var(--text-2xs); line-height: 1; font-variant-numeric: tabular-nums;
   letter-spacing: 0.03em; color: var(--text-faint);
   pointer-events: auto; user-select: none;
 }
@@ -2356,7 +2345,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-crs-epsg {
   font-size: var(--text-xs); color: var(--text-faint);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 .olv-crs-meta { display: flex; flex-direction: column; gap: 1px; margin-top: var(--space-2xs); }
 .olv-crs-meta-row { font-size: var(--text-xs); color: var(--text-dim); }
@@ -2580,7 +2569,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-pc-dismiss:hover { color: var(--text); }
 .olv-pc-name {
-  font-size: var(--text-sm); font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-sm); font-variant-numeric: tabular-nums; color: var(--text-dim);
   margin: var(--space-md) 0 var(--space-lg);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -2588,7 +2577,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-pc-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-xl); }
 .olv-pc-label { font-size: var(--text-xs); color: var(--text-faint); flex-shrink: 0; }
 .olv-pc-value {
-  font-size: var(--text-xs); color: var(--text); font-family: var(--mono);
+  font-size: var(--text-xs); color: var(--text); font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .olv-pc-countdown {
@@ -2668,7 +2657,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-measure-label {
   fill: var(--accent);
-  font: 600 12px var(--mono);
+  font: 600 12px var(--font); font-variant-numeric: tabular-nums;
   paint-order: stroke;
   stroke: #0a0e1a; stroke-width: 4px; stroke-linejoin: round;
 }
@@ -2781,7 +2770,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-inspect-row-label { font-size: var(--text-xs); color: var(--text-faint); }
 .olv-inspect-row-value {
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text);
   text-align: right; max-width: 128px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
@@ -3457,10 +3446,9 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 /*
  * Save (primary action) — aligned with the rest of the app's primary
  * vocabulary: cyan text on accent-soft fill, NOT solid-cyan. This is
- * the same treatment used by .olv-measure-done, .olv-inspect-copy and
- * .olv-streaming-view-save, so a user who learned "this is the primary
- * action" anywhere in the app reads it the same way here (Gestalt
- * similarity).
+ * the same treatment used by .olv-measure-done and .olv-inspect-copy, so a
+ * user who learned "this is the primary action" anywhere in the app reads it
+ * the same way here (Gestalt similarity).
  */
 .olv-anno-editor-save {
   font-size: var(--text-xs); padding: var(--space-sm) var(--space-xl); cursor: pointer; border-radius: var(--radius-sm);
@@ -3632,7 +3620,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(8, 13, 26, 0.94);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
   border: 0.5px solid rgba(0, 178, 255, 0.42);
-  color: var(--text); font-size: var(--text-2xs); font-family: var(--mono);
+  color: var(--text); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em; white-space: nowrap; line-height: 1.2;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 14px rgba(0, 178, 255, 0.14);
   opacity: 0; pointer-events: none; z-index: 60;
@@ -3814,32 +3802,11 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-rail-tab { display: none; } }
 
 /* ── Right rail — one-tap collapse for the right column ──────────────────────
-   Mirror of the left rail. A single grabber slides BOTH right panels (the
-   Streaming/COPC card and the Inspector) out to the screen's right edge. The
-   two panels are separate absolutely-positioned elements, so the collapse
-   transform is applied to each; the grabber is a handle growing out of the
-   column's left (canvas-facing) edge. Desktop only — the mobile sheet owns
-   small screens. Motion/opacity are scoped to desktop so the mobile bottom
-   sheet's own transforms are never touched. */
-@media (min-width: 768px) {
-  .olv-inspector,
-  .olv-streaming-panel {
-    transition: transform 420ms var(--ease-spring), opacity 260ms var(--ease-standard);
-  }
-  /* Collapsed — slide the panel fully past the right edge (its own width plus
-     the 14px inset and a small margin), GPU transform only, no reflow.
-     `animation: none` releases the `olv-rise-in` entrance animation's hold: it
-     runs with fill-mode `both`, so its held end-state would otherwise pin the
-     Inspector's transform/opacity and override this rule (the Streaming card has
-     no such animation, which is why only it collapsed before). */
-  .olv-inspector.olv-right-collapsed,
-  .olv-streaming-panel.olv-right-collapsed {
-    animation: none;
-    transform: translateX(calc(100% + var(--space-lg, 16px)));
-    opacity: 0;
-    pointer-events: none;
-  }
-}
+   A single grabber slides the whole right rail out to the screen's right edge.
+   The rail collapse lives on the `.olv-right-rail` wrapper (both the Streaming
+   card and the Inspector move together inside it) in `40-inspector.css`; the
+   grabber styling below is a handle growing out of the column's left
+   (canvas-facing) edge. Desktop only — the mobile sheet owns small screens. */
 /* The grabber — a handle growing out of the right column's LEFT edge: flush to
    the edge, right corners squared, right border merged into the column (−1px
    overlap hides the shared hairline), only the outer (left) corners rounded.
@@ -3891,12 +3858,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-right-rail-tab svg { width: 14px; height: 14px; transition: transform 300ms var(--ease-spring); }
 .olv-right-rail-tab[aria-expanded="false"] svg { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
-  .olv-inspector, .olv-streaming-panel { transition: none; }
-  /* No slide under reduced motion, but still release the entrance animation so
-     the collapse's opacity:0 / pointer-events:none actually take (the panel
-     fades out in place instead of staying a dead, visible layer). */
-  .olv-inspector.olv-right-collapsed,
-  .olv-streaming-panel.olv-right-collapsed { animation: none; transform: none; }
   .olv-right-rail-tab, .olv-right-rail-tab svg { transition: none; }
 }
 @media (max-width: 767px), (max-height: 500px) and (pointer: coarse) { .olv-right-rail-tab { display: none; } }
@@ -4414,7 +4375,6 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   position: absolute;
   inset: 2px 4px;
   pointer-events: none;
-  font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
@@ -4453,7 +4413,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   background: rgba(255, 255, 255, 0.03);
   border: 0.5px solid rgba(255, 255, 255, 0.10);
   cursor: pointer;
-  font-family: var(--olv-mono, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
   transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 .olv-mp-vex-chip:hover {
@@ -4532,7 +4492,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-witness-row-value {
   color: var(--text);
-  font-family: var(--mono-font, monospace);
+  font-variant-numeric: tabular-nums;
   word-break: break-all;
 }
 
@@ -4580,8 +4540,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-size: var(--text-2xs); color: var(--text-faint); white-space: nowrap;
 }
 .olv-mp-summary-value {
-  margin: 0; font-family: var(--mono); font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums; color: var(--text-dim);
+  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
+  color: var(--text-dim);
   overflow-wrap: anywhere;
 }
 
@@ -4622,9 +4582,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-sampler-summary {
   cursor: pointer;
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
   color: var(--text-faint);
   padding: var(--space-2xs) 0;
   list-style: none;
@@ -4660,9 +4619,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-sampler-input {
   width: 76px;
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
   font-variant-numeric: tabular-nums;
+  font-size: var(--text-2xs);
   color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
@@ -4712,8 +4670,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-mp-stations-wrap { max-height: 220px; overflow-y: auto; }
 .olv-mp-stations-table {
   width: 100%; border-collapse: collapse;
-  font-family: var(--mono); font-size: var(--text-2xs);
-  font-variant-numeric: tabular-nums; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; font-size: var(--text-2xs);
+  color: var(--text-dim);
 }
 .olv-mp-stations-th {
   text-align: left; font-weight: 500; color: var(--text-faint);
@@ -4801,7 +4759,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   outline: none; border-style: solid; border-color: var(--accent);
 }
 .olv-mp-value {
-  font-size: var(--text-xs); font-family: var(--mono); color: var(--text-dim);
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim);
   /* Take the leftover width and wrap rather than overflow; min-width:0
    * lets it shrink below content size, overflow-wrap breaks the long
    * monospace reading so it never spills past the panel border. */
@@ -4823,6 +4781,18 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-mp-confidence-approximate { color: var(--warn, #e0a030); }
 .olv-mp-confidence-unavailable { color: var(--text-faint); font-style: italic; }
+
+/* Distance / Area breakdown: the values the same picks already fixed, under the
+   confidence line. Quieter than the headline it qualifies, and it wraps rather
+   than truncating, since every part of it is a number the reader came for. */
+.olv-mp-breakdown {
+  font-size: var(--text-xs);
+  color: var(--text-faint);
+  line-height: 1.45;
+  padding: 0 var(--space-xs) var(--space-2xs);
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
 .olv-mp-del {
   background: none; border: none; color: var(--text-faint);
   font-size: var(--text-lg); line-height: 1; flex-shrink: 0; padding: 0 var(--space-2xs);
@@ -4917,7 +4887,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-reclass-actions .olv-bc-pill { flex: 1; text-align: center; }
 /* The "Filtered — showing N of M classes" banner — persistent while filtered. */
 .olv-cl-banner {
-  font-size: 10.5px; font-family: var(--mono); color: var(--accent);
+  font-size: 10.5px; font-variant-numeric: tabular-nums; color: var(--accent);
   background: var(--accent-soft);
   border: 0.5px solid var(--hairline);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 8px;
@@ -4950,9 +4920,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 /* Tabular figures so counts line up column-right as they refine while streaming. */
 .olv-cl-count {
-  flex-shrink: 0; font-size: 11px; font-family: var(--mono);
+  flex-shrink: 0; font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--text-dim); text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 .olv-cl-solo {
   flex-shrink: 0; font-size: 10px; color: var(--text-faint);
@@ -5122,7 +5091,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 }
 .olv-shortcuts-input {
   width: 100%;
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-md);
   padding: var(--space-md) var(--space-lg);
   color: var(--text);
@@ -5143,7 +5112,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   padding: 0 var(--space-xs);
 }
 .olv-shortcuts-section {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5252,7 +5221,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   font-family: var(--sans);
 }
 .olv-tour-progress {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -5367,7 +5336,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-color: var(--accent);
 }
 .olv-mp-chain-result {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-sm);
   color: var(--text);
   padding: var(--space-xs) 0 0;
@@ -5614,7 +5583,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-help-row { display: flex; gap: var(--space-lg); align-items: baseline; }
 .olv-help-term {
   flex: 0 0 92px; font-size: var(--text-xs); font-weight: 600; color: var(--text);
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 .olv-help-desc { flex: 1; font-size: var(--text-xs); color: var(--text-dim); line-height: 1.45; }
 
@@ -5722,8 +5691,8 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   color: var(--text-faint);
 }
 .olv-rf-stat-value {
-  margin: 0; font-family: var(--mono); font-size: var(--text-md);
-  color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  margin: 0; font-variant-numeric: tabular-nums; font-size: var(--text-md);
+  color: var(--text); overflow-wrap: anywhere;
 }
 /* Station table — reuses the in-panel scroll wrap + sticky header, with room to
    read more rows at once than the 220px dock cap allows. */
@@ -5769,7 +5738,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
 .olv-modal-locked-k { font-size: var(--text-2xs); color: var(--text-faint); }
 .olv-modal-locked-v {
   font-size: var(--text-2xs); color: var(--text-dim);
-  font-family: var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere;
 }
 .olv-modal-locked-note { font-size: var(--text-2xs); color: var(--text-faint); margin: var(--space-md) 0 0; }
 
@@ -5846,7 +5815,7 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-lg);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
 }
-.olv-probe-coords { font-size: var(--text-xs); font-family: var(--mono); color: var(--text); }
+.olv-probe-coords { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text); }
 .olv-probe-attr { font-size: var(--text-2xs); color: var(--text-dim); margin-top: var(--space-xs); }
 
 /* ───────────────────────────────────────────────────────────────────────────
@@ -6223,7 +6192,7 @@ body.olv-has-scan .olv-version { opacity: 0.7; }
 .olv-empty-formats-summary::-webkit-details-marker { display: none; }
 .olv-empty-formats-summary:hover { color: var(--text-dim); background: rgba(255,255,255,0.03); }
 .olv-empty-formats-full {
-  font-size: var(--text-xs); color: var(--text-faint); font-family: var(--mono);
+  font-size: var(--text-xs); color: var(--text-faint); font-variant-numeric: tabular-nums;
   max-width: 440px; line-height: 1.6; margin-top: var(--space-sm);
 }
 
@@ -6516,7 +6485,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
   background: rgba(8, 14, 28, 0.95);
   display: grid;
   place-items: center;
-  font-family: var(--olv-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
   font-size: var(--text-2xs);
   font-weight: 600;
   color: rgba(255, 255, 255, 0.45);
@@ -6698,12 +6667,12 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-analyse-ready-side { flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-lg); }
 .olv-analyse-ready-figure { display: flex; align-items: baseline; gap: var(--space-2xs); }
 .olv-analyse-ready-value {
-  font-family: var(--mono); font-size: 22px; font-weight: 600; line-height: 1;
+  font-size: var(--text-xl); font-weight: 600; line-height: 1;
   color: var(--text); font-variant-numeric: tabular-nums;
 }
 .olv-analyse-ready-figure.is-text .olv-analyse-ready-value { font-size: var(--text-lg); }
 .olv-analyse-ready-unit {
-  font-family: var(--mono); font-size: var(--text-xs); color: var(--text-dim);
+  font-size: var(--text-xs); color: var(--text-dim);
 }
 /* Rating pill — capitalised word on a tinted ground keyed to the rating. */
 .olv-analyse-ready-rating {
@@ -6770,7 +6739,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 
 .olv-analyse-validation { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-sm); }
-.olv-analyse-rmse { font-family: var(--mono); }
+.olv-analyse-rmse { font-variant-numeric: tabular-nums; }
 .olv-analyse-caption { font-size: var(--text-xs); color: var(--text-dim); margin-bottom: var(--space-md); overflow-wrap: anywhere; }
 
 /* Export buttons. */
@@ -6894,7 +6863,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 
 /* Recommended grid / interval. */
 .olv-analyse-recommend-box { display: flex; flex-direction: column; gap: var(--space-2xs); margin: var(--space-sm) 0; }
-.olv-analyse-reco { font-size: var(--text-xs); color: var(--text); font-family: var(--mono); }
+.olv-analyse-reco { font-size: var(--text-2xs); color: var(--text-dim); font-variant-numeric: tabular-nums; }
 /* Quality gate reasons. */
 .olv-analyse-quality { display: flex; flex-direction: column; gap: var(--space-xs); margin: var(--space-xs) 0; }
 /* v0.4.6: quality-gate reason rides the shared caveat primitive (tinted
@@ -7130,7 +7099,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-clip-enable { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); }
 .olv-clip-grid-head { display: grid; grid-template-columns: 1.2rem 1fr 1fr; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text-faint); }
 .olv-clip-grid { display: grid; grid-template-columns: 1.2rem 1fr 1fr; gap: var(--space-sm); align-items: center; }
-.olv-clip-axis { font-size: var(--text-xs); font-family: var(--mono); color: var(--text-faint); }
+.olv-clip-axis { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-faint); }
 .olv-clip-num { width: 100%; box-sizing: border-box; }
 @media (max-width: 767px) { .olv-clip-panel { width: auto; } }
 .olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
@@ -7225,7 +7194,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-analyse-assess-top { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-md); }
 .olv-analyse-assess-label {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 /* The hero word — large, the unmistakable focal point of the panel. */
@@ -7289,7 +7258,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   border-top: 0.5px solid var(--hairline);
 }
 .olv-analyse-assess-export-label {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 700; }
@@ -7308,7 +7277,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 .olv-analyse-derived-label {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-derived-label::-webkit-details-marker { display: none; }
@@ -7439,7 +7408,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-product-glyph { text-align: center; font-weight: 700; line-height: 1; }
 .olv-analyse-product-label { font-size: var(--text-xs); color: var(--text-dim); white-space: nowrap; }
 .olv-analyse-product-status {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 600;
+  font-size: var(--text-2xs); font-weight: 600;
   letter-spacing: 0.04em; justify-self: start;
 }
 /* Line two: the engine-selected reason, IN FULL — it wraps, never ellipsizes,
@@ -7504,7 +7473,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-workflow-details { margin-top: var(--space-xs); }
 .olv-analyse-workflow-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   letter-spacing: 0.04em; color: var(--text-faint);
 }
 .olv-analyse-workflow-details-summary::-webkit-details-marker { display: none; }
@@ -7521,7 +7490,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-why { margin-top: var(--space-sm); }
 .olv-analyse-why-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   letter-spacing: 0.04em; color: var(--rating-moderate);
 }
 .olv-analyse-why-summary::-webkit-details-marker { display: none; }
@@ -7544,7 +7513,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-details { margin-bottom: var(--space-lg); }
 .olv-analyse-details-summary {
   cursor: pointer; list-style: none; user-select: none;
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim);
   padding: var(--space-sm) 0; display: flex; align-items: center; gap: var(--space-sm);
   border-bottom: 0.5px solid var(--hairline);
@@ -7560,7 +7529,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 
 .olv-analyse-score { margin-bottom: var(--space-xl); }
 .olv-analyse-score-head { display: flex; align-items: baseline; gap: var(--space-sm); margin-bottom: var(--space-md); }
-.olv-analyse-score-num { font-size: var(--text-3xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.olv-analyse-score-num { font-size: var(--text-2xl); font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
 .olv-analyse-score-num.is-excellent { color: var(--rating-excellent); }
 .olv-analyse-score-num.is-good { color: var(--rating-good); }
 .olv-analyse-score-num.is-fair { color: var(--rating-moderate); }
@@ -7586,7 +7555,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* A labelled preview tile — heading, raster, optional legend, caption, export. */
 .olv-analyse-raster-tile { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-analyse-sublabel {
-  font-family: var(--mono); font-size: var(--text-2xs); font-weight: 500;
+  font-size: var(--text-2xs); font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint);
 }
 .olv-analyse-caption { font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums; }
@@ -7595,7 +7564,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-legend-bar { height: 6px; border-radius: var(--radius-xs); border: 0.5px solid var(--hairline); }
 .olv-analyse-legend-ticks {
   display: flex; justify-content: space-between;
-  font-family: var(--mono); font-size: 9px; color: var(--text-faint);
+  font-size: var(--text-2xs); color: var(--text-faint); font-variant-numeric: tabular-nums;
 }
 /* Discrete 3-stop coverage legend (green/yellow/red = strong/moderate/weak). */
 .olv-analyse-coverage-legend { display: flex; flex-direction: column; gap: var(--space-2xs); }
@@ -7623,19 +7592,48 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 .olv-analyse-relief-toggle input { accent-color: var(--accent); cursor: pointer; }
 .olv-analyse-relief-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-relief-tag {
-  font-family: var(--mono); font-size: var(--text-2xs); text-transform: uppercase;
+  font-size: var(--text-2xs); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-faint); width: 26px; flex: 0 0 auto;
 }
 .olv-analyse-relief-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
 .olv-analyse-relief-slider input[type='range']:disabled { opacity: 0.4; }
 .olv-analyse-relief-val {
-  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-size: var(--text-2xs); color: var(--text-dim);
   width: 34px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
 }
+/* ── Derived-layer controls (contours drawn in the 3D scene) ─────────────────
+   Same control vocabulary as the relief sliders above, so a layer reads as part
+   of the same panel rather than a new kind of surface. */
+.olv-analyse-layer-controls {
+  display: flex; flex-direction: column; gap: var(--space-2xs);
+  margin-top: var(--space-md); padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-analyse-layer-head {
+  font-size: var(--text-2xs); font-weight: 700; letter-spacing: 0.9px;
+  text-transform: uppercase; color: var(--text-faint);
+}
+.olv-analyse-layer-row { display: flex; align-items: center; gap: var(--space-lg); flex-wrap: wrap; }
+.olv-analyse-layer-toggle {
+  display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
+  font-size: var(--text-xs); color: var(--text-dim); user-select: none;
+}
+.olv-analyse-layer-toggle input { accent-color: var(--accent); cursor: pointer; }
+.olv-analyse-layer-slider { display: flex; align-items: center; gap: var(--space-md); }
+.olv-analyse-layer-tag {
+  font-size: var(--text-2xs); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); width: 46px; flex: 0 0 auto;
+}
+.olv-analyse-layer-slider input[type='range'] { flex: 1 1 auto; accent-color: var(--accent); min-width: 0; }
+.olv-analyse-layer-val {
+  font-size: var(--text-2xs); color: var(--text-dim);
+  width: 46px; text-align: right; flex: 0 0 auto; font-variant-numeric: tabular-nums;
+}
+
 /* Click-to-sample readout under a raster tile. */
 .olv-analyse-raster.is-samplable { cursor: crosshair; }
 .olv-analyse-sample {
-  font-family: var(--mono); font-size: var(--text-2xs); color: var(--text-dim);
+  font-size: var(--text-2xs); color: var(--text-dim);
   font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
   border-top: 0.5px dashed var(--hairline);
 }
@@ -7694,7 +7692,7 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 }
 
 /* Stratified RMSE breakdown (by slope band / surface zone). */
-.olv-analyse-strata { font-size: var(--text-2xs); color: var(--text-faint); margin-top: var(--space-2xs); }
+.olv-analyse-strata { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 
 /* USGS 3DEP Quality Level badge in the Analyse panel validation section. */
 .olv-analyse-ql {
@@ -8626,8 +8624,10 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
 /* Purpose cards */
 /* Compact pills: the label alone; the full description is on hover (title
    attribute) so the picker stays tight instead of a wall of summary text. */
-.olv-cs-purpose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.olv-cs-purpose-card {
+.olv-cs-purpose-grid,
+.olv-cs-genmode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.olv-cs-purpose-card,
+.olv-cs-genmode-card {
   display: flex;
   align-items: center;
   min-height: 30px;
@@ -8639,14 +8639,19 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
 }
-.olv-cs-purpose-card:hover { border-color: var(--hairline-strong); }
-.olv-cs-purpose-card:active { transform: translateY(1px); }
-.olv-cs-purpose-card.is-selected {
+.olv-cs-purpose-card:hover,
+.olv-cs-genmode-card:hover { border-color: var(--hairline-strong); }
+.olv-cs-purpose-card:active,
+.olv-cs-genmode-card:active { transform: translateY(1px); }
+.olv-cs-purpose-card.is-selected,
+.olv-cs-genmode-card.is-active {
   border-color: var(--accent);
   background: var(--accent-soft);
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
-.olv-cs-purpose-label { display: block; font-size: var(--text-sm); font-weight: 620; color: var(--text); }
+.olv-cs-purpose-label,
+.olv-cs-genmode-label { display: block; font-size: var(--text-sm); font-weight: 620; color: var(--text); }
+.olv-cs-genmode { margin-top: 10px; }
 
 /* Review + settings summary — definition grids */
 .olv-cs-review-list, .olv-cs-summary-list {
@@ -8854,7 +8859,6 @@ body.olv-theme-light .olv-analyse-assess-export.is-preview .olv-analyse-assess-e
   color: var(--text); text-align: right; overflow-wrap: anywhere;
 }
 .olv-layerhealth-row-value.is-mono {
-  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 /* Quiet status dot before the value: ok = established (green),

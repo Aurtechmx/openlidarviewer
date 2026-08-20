@@ -1,0 +1,164 @@
+{
+  "generatedBy": "scripts/run-pdal-chm-reference.mjs",
+  "reference": "PDAL",
+  "evidenceNote": "These `output_type: min` grids are the ground half of the CHM (E4) reference for the structure fixtures; the DSM half is `<id>__dsm-max.asc` from run-pdal-dsm-reference.mjs. CHM = max − min, clamped at zero. The by-construction fixture heights are E3.",
+  "environment": {
+    "pdalVersion": "--------------------------------------------------------------------------------\npdal 2.10.2 (git-version: Release)\n--------------------------------------------------------------------------------",
+    "pdalResolvedPath": "/opt/homebrew/Cellar/pdal/2.10.2_1/bin/pdal",
+    "gdalTranslateVersion": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "gdalTranslateResolvedPath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/gdal_translate",
+    "containerPinning": "not-executed",
+    "containerPinningReason": "The Docker daemon is not running on this host, so no pinned image was pulled and no digest exists to record; PDAL was invoked from the host PATH.",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "node": "v26.0.0"
+  },
+  "parameters": {
+    "dtmMin": {
+      "outputType": "min",
+      "resolution": 1,
+      "radius": 0.45,
+      "originX": 0,
+      "originY": 0,
+      "width": 50,
+      "height": 50,
+      "nodata": -9999,
+      "dataType": "double",
+      "decimalPrecision": 6
+    }
+  },
+  "runs": [
+    {
+      "runId": "pc-09-plane-structures__dtm-min",
+      "fixtureId": "pc-09-plane-structures",
+      "datasetId": "OLV-DS-015-PC-PLANE-STRUCTURES",
+      "kind": "dtm-min",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dtm-min.json",
+      "pipelineSha256": "4c1c0a72cfa7aae9ec5d2a96ecf0ab23631d3276604bb8c5bb644cb2f1845086",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-09-plane-structures__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.tif",
+      "rasterSha256": "eac413b4218c234d1dfcaad7f40616a3e9d088b761a07933d503c21b3883de7a",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-09-plane-structures__dtm-min.asc",
+      "sha256": "0da399e0c050001576a2b57b2747862b7c375179120570f35b7c215200785512"
+    },
+    {
+      "runId": "pc-10-rolling-structures__dtm-min",
+      "fixtureId": "pc-10-rolling-structures",
+      "datasetId": "OLV-DS-016-PC-ROLLING-STRUCTURES",
+      "kind": "dtm-min",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dtm-min.json",
+      "pipelineSha256": "9e6695fe10b865ccf9f6b75de836a5c3ab142f3628abeba286444bf699ce5a9b",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-10-rolling-structures__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.tif",
+      "rasterSha256": "025ea7ac17f176073ba1b1da9cbb6552ba3ab9c2571561bf875954bf381ae349",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-10-rolling-structures__dtm-min.asc",
+      "sha256": "e80a44425b51be4d98beb2bfb9cbee558484c66bb1555b7f68e634c4a4ce5fc9"
+    },
+    {
+      "runId": "pc-11-ridge-structures__dtm-min",
+      "fixtureId": "pc-11-ridge-structures",
+      "datasetId": "OLV-DS-017-PC-RIDGE-STRUCTURES",
+      "kind": "dtm-min",
+      "reference": "PDAL",
+      "pipeline": "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dtm-min.json",
+      "pipelineSha256": "99edabc2dc7b927bc4bac560491f0549e660181f7e754a6ca5545a70d1827f46",
+      "argv": [
+        "pipeline",
+        "validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dtm-min.json"
+      ],
+      "commandLine": "pdal pipeline validation/cross-implementation/pdal-pipeline/pipelines/pc-11-ridge-structures__dtm-min.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "parameters": {
+        "outputType": "min",
+        "resolution": 1,
+        "radius": 0.45,
+        "originX": 0,
+        "originY": 0,
+        "width": 50,
+        "height": 50,
+        "nodata": -9999,
+        "dataType": "double",
+        "decimalPrecision": 6
+      },
+      "rasterOutput": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.tif",
+      "rasterSha256": "c4bec5f17c3dd210566a8d9d55b1209e5bb95f5157dbbd86b8bca897b8fd4bf1",
+      "transcodeArgv": [
+        "-of",
+        "AAIGrid",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.tif",
+        "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.asc"
+      ],
+      "transcodeCommandLine": "gdal_translate -of AAIGrid -co DECIMAL_PRECISION=6 validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.tif validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.asc",
+      "transcodeExitCode": 0,
+      "transcodeStderr": null,
+      "output": "validation/cross-implementation/pdal-pipeline/pdal/pc-11-ridge-structures__dtm-min.asc",
+      "sha256": "d276951a5f30a6a420cb3ac9b7940c8b959dccca73e6d52cdf6c271430fbf37c"
+    }
+  ]
+}

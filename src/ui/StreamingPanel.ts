@@ -2,9 +2,12 @@
  * StreamingPanel.ts
  *
  * The user-facing panel for a streaming COPC scan: a metadata scan summary,
- * the live load phase and status (nodes, points, cache), the streaming
- * controls (colour, quality, pause/resume, clear cache), and saved camera
- * views.
+ * the live load phase and status (nodes, points, cache), and the streaming
+ * controls (colour, quality, pause/resume, clear cache, full-cloud grade).
+ *
+ * Saved camera views are NOT here. No panel renders them: they are reached
+ * through the command palette, whose actions in `src/app/actionDefinitions.ts`
+ * are the only surface the bookmark store has.
  *
  * It is calm by design — a few clear sections, no technical noise. The deep
  * counters belong to the `?debug=1` overlay, not here.
@@ -78,9 +81,6 @@ export interface StreamingPanelCallbacks {
   onQuality(quality: StreamingQuality): void;
   onPauseToggle(paused: boolean): void;
   onClearCache(): void;
-  onSaveView(): void;
-  onApplyView(index: number): void;
-  onDeleteView(index: number): void;
   /** Run the full-cloud grade (decode a representative octree sample + grade it). */
   onGradeFullCloud(): void;
   /** Cancel a full-cloud grade that is currently running. */
@@ -258,7 +258,6 @@ export class StreamingPanel {
   private readonly _cache: HTMLElement;
   private readonly _modeRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
-  private readonly _views: HTMLElement;
   private readonly _pause: HTMLButtonElement;
   // Full-cloud grade: a button that decodes a representative octree
   // sample across the whole cloud and grades it, plus a result/status area.
@@ -300,8 +299,6 @@ export class StreamingPanel {
     this._cache = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._modeRow = el('div', { className: 'olv-streaming-chips' });
     this._qualityRow = el('div', { className: 'olv-streaming-chips' });
-    this._views = el('div', { className: 'olv-streaming-views' });
-
     for (const quality of QUALITIES) {
       const chip = el('button', {
         className: 'olv-chip',
@@ -313,9 +310,6 @@ export class StreamingPanel {
       });
       this._qualityRow.append(chip);
     }
-
-    const saveView = el('button', { className: 'olv-streaming-btn', text: 'Save view' });
-    saveView.addEventListener('click', () => this._callbacks.onSaveView());
 
     this._pause = el('button', { className: 'olv-streaming-btn', text: 'Pause' });
     this._pause.addEventListener('click', () => {
@@ -399,12 +393,9 @@ export class StreamingPanel {
       el('div', { className: 'olv-streaming-label', text: 'Full-cloud grade' }),
       el('div', { className: 'olv-streaming-actions' }, [this._gradeBtn]),
       this._gradeResult,
-      el('div', { className: 'olv-streaming-label', text: 'Saved views' }),
-      this._views,
-      el('div', { className: 'olv-streaming-actions' }, [saveView, this._pause]),
+      el('div', { className: 'olv-streaming-actions' }, [this._pause]),
       el('div', { className: 'olv-streaming-actions' }, [clearCache]),
     ]);
-    this.setViews([]);
   }
 
   /** Show the panel. */
@@ -608,29 +599,6 @@ export class StreamingPanel {
       this._progressFill.style.width = '0%';
       this._progressTrack.removeAttribute('aria-valuenow');
     }
-  }
-
-  /** Populate the saved-views list. */
-  setViews(names: string[]): void {
-    if (names.length === 0) {
-      this._views.replaceChildren(
-        el('div', { className: 'olv-streaming-empty', text: 'No saved views yet' }),
-      );
-      return;
-    }
-    this._views.replaceChildren(
-      ...names.map((name, index) => {
-        const apply = el('button', { className: 'olv-streaming-view-name', text: name });
-        apply.addEventListener('click', () => this._callbacks.onApplyView(index));
-        const del = el('button', {
-          className: 'olv-streaming-view-del',
-          text: '×',
-          ariaLabel: `Delete ${name}`,
-        });
-        del.addEventListener('click', () => this._callbacks.onDeleteView(index));
-        return el('div', { className: 'olv-streaming-view' }, [apply, del]);
-      }),
-    );
   }
 
   private _statRow(label: string, value: HTMLElement): HTMLElement {

@@ -26,6 +26,7 @@ import { MIN_POINTS } from '../render/measure/types';
 import type { MeasurementTrust, TrustGrade } from '../render/measure/measurementTrust';
 import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotate/types';
 import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
+import { parseIssueDetails } from '../render/annotate/issueWorkflow';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
@@ -71,6 +72,14 @@ import type { WorkOwnership } from '../model/workOwnership';
  * one origin, so saved work had no way to say which layer it belonged to,
  * which is why multi-layer mounting is disabled. v8 is the persistence half of
  * removing that block; the mount flag itself stays off (see `LayerService.ts`).
+ *
+ * The per-annotation inspection workflow (`annotation.issue` — severity,
+ * open/resolved status, observation date) is additive WITHIN v8 and carries no
+ * bump. It adds one optional field, changes the meaning of none, and is only
+ * emitted for annotations that have one, so a session with no issues keeps its
+ * byte-shape exactly; a reader that predates it ignores an unknown key and
+ * still gets every annotation. Bumping would instead make every file this app
+ * writes unreadable to a v8 reader for a field that reader never needed.
  *
  * Older v1..v7 files parse with no loss: the new optional fields just
  * read as undefined, and the Viewer falls back to its current state. A v7
@@ -1290,6 +1299,14 @@ function parseAnnotations(v: unknown): Annotation[] {
     if (typeof item.linkedMeasurementId === 'string') {
       annotation.linkedMeasurementId = item.linkedMeasurementId;
     }
+    // The inspection workflow (severity, open/resolved status, observation
+    // date). Additive and OPTIONAL, so it is read version-independently like
+    // `layerId` above: a file that carries the block gets it back whatever
+    // version it declares, and a file without one yields a plain annotation.
+    // Malformed contents degrade inside `parseIssueDetails` rather than
+    // failing the import; a block that is not an object is treated as absent.
+    const issue = parseIssueDetails(item.issue);
+    if (issue) annotation.issue = issue;
     out.push(annotation);
   }
   return out;
