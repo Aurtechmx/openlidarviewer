@@ -113,12 +113,12 @@ export function parseEptMetadata(text: string): EptDetection {
 
   // ── points + span ────────────────────────────────────────────────────────
   const points = json['points'];
-  if (typeof points !== 'number' || !Number.isFinite(points) || points < 0) {
-    return { isEpt: false, reason: 'EPT manifest is missing a non-negative "points" count.' };
+  if (typeof points !== 'number' || !Number.isSafeInteger(points) || points < 0) {
+    return { isEpt: false, reason: 'EPT manifest is missing a non-negative whole "points" count.' };
   }
   const span = json['span'];
-  if (typeof span !== 'number' || !Number.isFinite(span) || span <= 0) {
-    return { isEpt: false, reason: 'EPT manifest is missing a positive "span".' };
+  if (typeof span !== 'number' || !Number.isSafeInteger(span) || span <= 0) {
+    return { isEpt: false, reason: 'EPT manifest is missing a positive whole "span".' };
   }
 
   // ── schema ───────────────────────────────────────────────────────────────
@@ -133,6 +133,12 @@ export function parseEptMetadata(text: string): EptDetection {
       return {
         isEpt: false,
         reason: 'EPT schema contains an invalid field entry.',
+      };
+    }
+    if (parsedSchema.some((f) => f.name === field.name)) {
+      return {
+        isEpt: false,
+        reason: `EPT schema declares "${field.name}" more than once.`,
       };
     }
     parsedSchema.push(field);
@@ -177,6 +183,19 @@ export function parseEptMetadata(text: string): EptDetection {
 
   if (!cubic || !conforming) {
     return { isEpt: false, reason: 'EPT manifest is missing a valid bounds array.' };
+  }
+  // Six finite numbers are not yet a box. An inverted axis (min above max)
+  // describes no volume, and every consumer downstream treats these as an
+  // extent, so refuse it here rather than let it become a negative span.
+  for (const [label, box] of [['bounds', cubic], ['boundsConforming', conforming]] as const) {
+    for (let axis = 0; axis < 3; axis++) {
+      if (!(box[axis] <= box[axis + 3])) {
+        return {
+          isEpt: false,
+          reason: `EPT "${label}" is inverted on axis ${axis}: ${box[axis]} is above ${box[axis + 3]}.`,
+        };
+      }
+    }
   }
 
   // ── srs (optional WKT string + authority codes) ──────────────────────────
@@ -238,13 +257,20 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
+/** Attribute widths `decodeEptBinaryTile` can actually read. */
+const EPT_ATTRIBUTE_SIZES: ReadonlySet<number> = new Set([1, 2, 4, 8]);
+
 function parseSchemaField(raw: unknown): EptSchemaField | null {
   if (!isPlainObject(raw)) return null;
   const name = raw['name'];
   const size = raw['size'];
   const type = raw['type'];
   if (typeof name !== 'string' || name.length === 0) return null;
-  if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) return null;
+  // The binary decoder reads 1, 2, 4 and 8 byte attributes and nothing else.
+  // Accepting any positive number here let a size of 3, or a fractional size,
+  // past the perimeter and into stride and byte-offset arithmetic, where it
+  // fails far from the manifest that caused it.
+  if (typeof size !== 'number' || !EPT_ATTRIBUTE_SIZES.has(size)) return null;
   if (type !== 'signed' && type !== 'unsigned' && type !== 'float') return null;
   const out: { -readonly [K in keyof EptSchemaField]: EptSchemaField[K] } = {
     name,

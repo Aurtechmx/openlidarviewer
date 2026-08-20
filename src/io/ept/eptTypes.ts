@@ -135,13 +135,25 @@ export function eptKeyToString(k: EptKey): string {
 }
 
 /** Parse an `"D-X-Y-Z"` hierarchy address back to a typed key. */
+/**
+ * Deepest octree level an address may name. EPT datasets in the wild sit far
+ * below this; the bound exists so a hostile address cannot ask for 2**d work.
+ */
+export const EPT_MAX_DEPTH = 32;
+
 export function eptStringToKey(s: string): EptKey | null {
   const m = /^(\d+)-(\d+)-(\d+)-(\d+)$/.exec(s);
   if (!m) return null;
-  return {
-    d: Number(m[1]),
-    x: Number(m[2]),
-    y: Number(m[3]),
-    z: Number(m[4]),
-  };
+  const d = Number(m[1]);
+  const x = Number(m[2]);
+  const y = Number(m[3]);
+  const z = Number(m[4]);
+  // The regex admits digits of any length, and a long enough run of them turns
+  // into an imprecise Number. Depth is bounded so a hostile address cannot ask
+  // for 2**d work. Whether a coordinate is in range FOR that depth is a
+  // question about the tree, not about the string, so `parseHierarchyFile`
+  // asks it where an address is accepted as a node.
+  if (![d, x, y, z].every((n) => Number.isSafeInteger(n) && n >= 0)) return null;
+  if (d > EPT_MAX_DEPTH) return null;
+  return { d, x, y, z };
 }

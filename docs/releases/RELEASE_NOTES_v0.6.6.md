@@ -41,10 +41,12 @@ The Krovák definition uses a seven-parameter Bursa-Wolf shift. It agrees with a
 
 ## Also in this release
 
+Several items below are foundations: implemented and tested, but not yet reached by the normal loading or analysis routes. They are `ProductExecutorRegistry`, the feature-extraction service, the 3D Tiles and PNTS parsers, the out-of-core read planner, the cross-CRS placement planner, and the registration model. Nothing in the running application passes through them in this release, so treat them as groundwork rather than as behaviour you can exercise.
+
 - a project-wide elevation colour scale, opt-in, applied per frame, so two scans in one project can share a range instead of each stretching its own;
 - classifier v3: a structural-verticality cue and a wall-rescue pass;
 - a derived-layer model and store, a feature-extraction service over the building and conductor cores, and a scientific receipt serializer over the analysis record;
-- a product executor registry that runs a compute core only through its authorization gate, so a blocked or review-only product cannot be produced by routing around the check;
+- a product executor registry foundation that invokes a registered compute core through `ProcessService.runIfAuthorized`, preparing one fail-closed execution seam; production product routes do not pass through it yet;
 - streaming corrections: in-flight decodes get eviction hysteresis and the budget counts decoded-pending nodes, while a partial stream stays resident-only beside a static cloud;
 - the Clip panel is reachable on mobile, and one font policy now covers every panel, enforced by a lint.
 
