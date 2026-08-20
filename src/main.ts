@@ -75,7 +75,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
 import { createMeasurePanelMount } from './app/measurePanelMount';
-import { createProcessStudioFromLive } from './app/processStudioMount';
+import { createProcessStudioFromShell } from './app/processStudioMount';
 import { ICON_LASSO } from './render/measure/measureIcons';
 // Workflow presets (v0.4.5) — pure table + matcher; applied through the
 // Viewer's existing setters in the Inspector callback below.
@@ -2318,14 +2318,13 @@ let lastStreamingReportCloud: Parameters<typeof runStreamingModules>[0] | null =
 
 const classLegendPanel = new ClassLegendPanel();
 
-// Process Studio — fail-closed readiness over the Phase-1/2 services (multi-line so the deferred `viewer.*` read is not a top-level deref).
-const processStudio = createProcessStudioFromLive({
-  getStreamingPointCount: () => viewer.streamingCloud?.sourcePointCount ?? null,
-  getActivePointCount: () => scans.activeCloud()?.pointCount ?? null,
-  // Resolved CRS (override applied), not raw metadata — Studio agrees with the Inspector (C7).
-  getResolvedCrs: () => crsService.current(),
-  getPresentClassCodes: () => classLegendPanel.presentCodes(),
-  getClassificationDerived: () => classLegendPanel.classificationIsDerived(),
+// Process Studio + tool preflight — fail-closed readiness over the Phase-1/2 services. Every live read (and its fail-closed default) is assembled in processStudioMount; these thunks only defer them, so no `viewer.*` deref runs at module top level.
+const processStudio = createProcessStudioFromShell({
+  getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
+  crsService, classLegend: classLegendPanel,
+  resolveLayerCrs: (name, detected) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr' }),
+  soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
+  focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); },
 });
 
 // Manual classification-edit panel — lazy-loaded below the legend on first
