@@ -54,7 +54,7 @@ has re-opened the divergence this closes.
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
-| 1 | Point inspection | migrated | `src/render/pointInfo.ts` | `linearUnit`, `verticalReference`, `verticalUnitToMetres` |
+| 1 | Point inspection | migrated | `src/render/pointInfo.ts`, `src/geo/cursorReadout.ts` | `linearUnit`, `linearUnitKnown`, `linearUnitToMetres`, `kind`, `epsg`, `crsName`, `isGeographic`, `upAxis`, `verticalReference`, `verticalUnitToMetres` |
 | 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres` |
 | 3 | Space / object report | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown` |
 | 4 | Stockpile and cut/fill volume | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `verticalMetresPerUnit` |
