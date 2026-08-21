@@ -252,3 +252,68 @@ withMulti('E57 multiple registered scans (libE57 Pump)', () => {
     }
   }, 180_000);
 });
+
+/**
+ * An unknown vendor extension. 587 MB, so read from `OLV_E57_OPENPITMINE`.
+ *
+ * The corpus publishes this file so readers can show they cope with data they
+ * were never told about: it declares the Riegl `rlms` namespace and carries
+ * two fields inside it. The failure this guards against is a reader that
+ * treats an unrecognised prefix as corruption and refuses the file, or worse,
+ * reads the extension columns as if they were part of the standard prototype
+ * and shifts every subsequent field.
+ *
+ * OLV keeps the prefix on the column name rather than dropping or flattening
+ * it, so an extension field stays distinguishable from a standard one.
+ */
+const OPENPIT = process.env.OLV_E57_OPENPITMINE ?? '';
+const withExtension = OPENPIT && existsSync(OPENPIT) ? describe : describe.skip;
+
+withExtension('E57 unknown vendor extension (libE57 openpitmine, Riegl rlms)', () => {
+  it('reads the file, keeps the extension namespaced, and does not warn', () => {
+    const r = parseE57(bufferOf(OPENPIT));
+    expect(r.scans.length, 'every station decodes').toBeGreaterThan(1);
+    const s = r.scans[0];
+    const columns = Object.keys(s.columns);
+
+    // The standard prototype survives alongside the extension.
+    for (const need of ['cartesianX', 'cartesianY', 'cartesianZ']) {
+      expect(columns, `${need} still present`).toContain(need);
+    }
+    // The extension fields keep their prefix, so nothing mistakes them for
+    // standard attributes.
+    const extension = columns.filter((c) => c.startsWith('rlms:'));
+    expect(extension.length, 'rlms fields are carried, not dropped').toBeGreaterThan(0);
+    for (const c of extension) expect(c).toMatch(/^rlms:[a-zA-Z]+$/);
+
+    // An unknown extension is not a defect, so it must not raise one.
+    const warnings = (r as unknown as { warnings?: unknown[] }).warnings ?? [];
+    expect(warnings, 'an unrecognised namespace is not a warning').toEqual([]);
+  }, 300_000);
+
+  it('decodes coordinates that did not shift by an extension field width', () => {
+    // Reading the rlms columns as part of the standard prototype would slide
+    // every later field along the record and put coordinates somewhere else
+    // entirely. The declared extent catches that.
+    const buf = bufferOf(OPENPIT);
+    const declared = declaredExtent(buf);
+    const s = parseE57(buf).scans[0];
+    if (declared) {
+      for (const [axis, col] of [
+        ['x', s.columns.cartesianX],
+        ['y', s.columns.cartesianY],
+        ['z', s.columns.cartesianZ],
+      ] as const) {
+        const [lo, hi] = extent(col);
+        expect(lo, `${axis} minimum vs ${declared.source}`).toBeGreaterThanOrEqual(declared[axis][0] - 1e-3);
+        expect(hi, `${axis} maximum vs ${declared.source}`).toBeLessThanOrEqual(declared[axis][1] + 1e-3);
+      }
+    }
+    // Whether or not the file declares an extent, the values must be real.
+    let nonFinite = 0;
+    for (let i = 0; i < s.recordCount; i += 997) {
+      if (!Number.isFinite(s.columns.cartesianX[i])) nonFinite++;
+    }
+    expect(nonFinite, 'sampled coordinates are finite').toBe(0);
+  }, 300_000);
+});
