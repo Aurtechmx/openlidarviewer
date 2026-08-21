@@ -190,3 +190,65 @@ withPump3('E57 multiple returns (libE57 pumpARowColumnIndex3ReturnIndex)', () =>
     for (const step of steps) expect(step).toBeCloseTo(0.1, 5);
   });
 });
+
+/**
+ * Multiple registered scans. 50 MB, so read from `OLV_E57_PUMP_MULTI`.
+ *
+ * What this can and cannot say is worth being exact about. The file carries no
+ * independent registration truth, so nothing here shows the poses are RIGHT.
+ * What it shows is that a real vendor multi-station file decodes: five scans,
+ * four carrying a pose, every quaternion already a unit quaternion needing no
+ * repair, and the composition arithmetic reversible. `e57Pose.test.ts` covers
+ * the repair policy on synthetic quaternions; this covers a real one.
+ *
+ * Each scan is stored in its own scanner-centred frame, which is why the raw
+ * centroids all sit near the origin and applying the poses moves them apart
+ * rather than together. Station spread is not misalignment.
+ */
+const PUMP_MULTI = process.env.OLV_E57_PUMP_MULTI ?? '';
+const withMulti = PUMP_MULTI && existsSync(PUMP_MULTI) ? describe : describe.skip;
+
+withMulti('E57 multiple registered scans (libE57 Pump)', () => {
+  it('reads every station and its pose without needing to repair one', () => {
+    const r = parseE57(bufferOf(PUMP_MULTI));
+    expect(r.scans).toHaveLength(5);
+    const posed = r.scans.filter((s) => s.pose !== null);
+    expect(posed.length, 'stations carrying a pose').toBe(4);
+    for (const s of posed) {
+      // readPose normalises a non-unit quaternion and warns. A real writer's
+      // file should give it nothing to do.
+      expect(Math.hypot(...s.pose!.rotation), `${s.name} rotation is a unit quaternion`).toBeCloseTo(1, 9);
+      expect(s.pose!.translation).toHaveLength(3);
+      for (const t of s.pose!.translation) expect(Number.isFinite(t)).toBe(true);
+    }
+    const warnings = (r as unknown as { warnings?: unknown[] }).warnings ?? [];
+    expect(warnings, 'no pose repair was needed').toEqual([]);
+  }, 180_000);
+
+  it('composes a pose reversibly, so the transform is a rigid motion', () => {
+    const r = parseE57(bufferOf(PUMP_MULTI));
+    const s = r.scans.find((x) => x.pose !== null)!;
+    const [w, x, y, z] = s.pose!.rotation;
+    const t = s.pose!.translation;
+    const rotate = (q: readonly number[], v: readonly number[]): [number, number, number] => {
+      const [qw, qx, qy, qz] = q;
+      const tx = 2 * (qy * v[2] - qz * v[1]);
+      const ty = 2 * (qz * v[0] - qx * v[2]);
+      const tz = 2 * (qx * v[1] - qy * v[0]);
+      return [
+        v[0] + qw * tx + (qy * tz - qz * ty),
+        v[1] + qw * ty + (qz * tx - qx * tz),
+        v[2] + qw * tz + (qx * ty - qy * tx),
+      ];
+    };
+    const c = s.columns;
+    const step = Math.max(1, Math.floor(s.recordCount / 500));
+    for (let i = 0; i < s.recordCount; i += step) {
+      const p = [c.cartesianX[i], c.cartesianY[i], c.cartesianZ[i]] as const;
+      const fwd = rotate([w, x, y, z], p).map((v, k) => v + t[k]);
+      // The conjugate undoes the rotation; a rigid motion loses nothing.
+      const back = rotate([w, -x, -y, -z], fwd.map((v, k) => v - t[k]));
+      for (let k = 0; k < 3; k++) expect(back[k]).toBeCloseTo(p[k], 6);
+    }
+  }, 180_000);
+});

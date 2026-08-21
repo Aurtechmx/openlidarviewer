@@ -955,6 +955,39 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  - datasetId: OLV-DS-043-LIBE57-PUMP-MULTISCAN
+    title: "libE57 Pump, five registered stations each carrying a pose"
+    sourceUrl: http://libe57.org/data.html
+    landingPage: http://libe57.org/data.html
+    licence: libE57-test-data
+    licenceUrl: http://libe57.org/data.html
+    redistribution: permitted
+    acquisitionDate: 2026-08-20
+    sourceSha256: 5b582e9247979a29ac7cccb6afa942e632d84f91867130f094fa488629e3c124
+    sourceBytes: 52496384
+    format: e57
+    pointCount: 2879
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-recorded
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Carnahan-Proctor and Cross, Inc. (copyright 2008), published by the libE57 project"
+    citation: "libE57 E57 Example/Test Data, Pump.e57. http://libe57.org/data.html"
+    knownLimitations: "Carries no independent registration truth, so it fixes decode behaviour for multi-station poses and says nothing about whether those poses are correct. Each scan is stored in its own scanner-centred frame. Not vendored at 50 MB; read from OLV_E57_PUMP_MULTI."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────
   - datasetId: OLV-DS-023-ANALYTIC-PROFILE-RAMP
     title: "Analytic corridor transect, 257 stations at 1 m with a cross-line elevation ramp"

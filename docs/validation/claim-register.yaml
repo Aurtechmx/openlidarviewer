@@ -210,7 +210,7 @@ claims:
     units: [metres, source-units]
     crsDatum: "The file declares no coordinate metadata; coordinates are read in the file's own local frame."
     assumptions: ["the reference reader implements the same standard independently", "both readers consume the CompressedVector in file order"]
-    failureModes: ["scanner-native writers, not represented by this file", "multi-scan registration and pose composition, which the return-index file does not carry"]
+    failureModes: ["scanner-native writers, not represented by this file", "whether a multi-station pose is CORRECT, since no file here carries independent registration truth"]
     exportAllowed: true
     userLabel: "Cross-implementation validated E57 decode"
     softwareStatus: shipping
