@@ -57,11 +57,13 @@ export function pickInBucket(
   count: number,
   rand: () => number,
 ): number {
-  // `count - b * step` is at least 1 for every bucket a caller walks, since all
-  // of them stop at `ceil(count / step)`. The floor is there so a bucket past
-  // the end returns its own first index rather than reading backwards.
+  // Two independent guards. `size` narrows the draw to the records the bucket
+  // holds, which is what makes the pick uniform. The clamp keeps the return
+  // inside the file for every argument, including a bucket at or past the end,
+  // which no caller walks but which this exported function must still answer
+  // safely: without it, b*step alone lands beyond the last record.
   const size = Math.max(1, Math.min(step, count - b * step));
-  return b * step + Math.floor(rand() * size);
+  return Math.min(count - 1, b * step + Math.floor(rand() * size));
 }
 
 /**

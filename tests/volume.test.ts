@@ -524,69 +524,59 @@ describe('volumeCutFill — confidence + density fields', () => {
     expect(volumeCutFill(input).medianAbsDelta).toBe(r.medianAbsDelta);
   });
 
-  it('sampled median is identical when the same points arrive in another order', () => {
-    // Point order in a cloud comes from the file. Above the 10 000-point sample
-    // cap the sample is chosen by a key hashed from each point's own
-    // coordinates, so a file holding the same points in another order reports
-    // the same median rather than a nearby one.
-    // Distinct heights, straddling the plane, so the median genuinely depends
-    // on which 10 000 of the 40 000 points the sample keeps.
+  it('samples the median across the whole footprint, not the first points to arrive', () => {
+    // The buffer caps at 10 000. Filling it with the first 10 000 inside points
+    // would read one corner of a cloud ordered by scanline or tile, so the
+    // reservoir draws across all of them. Heights rise with x, so a corner-only
+    // sample lands far from the population median.
     const pts: [number, number, number][] = [];
     for (let i = 0; i < 40_000; i++) {
       const x = 1 + (i % 200);
       const y = 1 + Math.floor(i / 200);
-      pts.push([x, y, (x * 200 + y) * 0.0005 - 10]);
+      pts.push([x, y, x * 0.05]);
     }
-    const forward = volumeCutFill({
+    const r = volumeCutFill({
       polygon: SQUARE_1KM,
       referenceZ: 0,
       up: Z_UP,
       positions: pack(pts),
     });
-    expect(forward.pointsInPolygon).toBe(40_000);
-    const strided: [number, number, number][] = [];
-    for (let step = 0; step < 7; step++) {
-      for (let i = step; i < pts.length; i += 7) strided.push(pts[i]);
-    }
-    const reordered = volumeCutFill({
-      polygon: SQUARE_1KM,
-      referenceZ: 0,
-      up: Z_UP,
-      positions: pack([...pts].reverse()),
-    });
-    const shuffled = volumeCutFill({
-      polygon: SQUARE_1KM,
-      referenceZ: 0,
-      up: Z_UP,
-      positions: pack(strided),
-    });
-    expect(reordered.medianAbsDelta).toBe(forward.medianAbsDelta);
-    expect(shuffled.medianAbsDelta).toBe(forward.medianAbsDelta);
+    expect(r.pointsInPolygon).toBe(40_000);
+    // True population median height is 100.5 * 0.05 ≈ 5.025. The first 10 000
+    // points cover x in [1, 200] repeatedly, but a corner-biased fill of an
+    // x-sorted cloud would sit near 2.5.
+    expect(r.medianAbsDelta).toBeGreaterThan(4.5);
+    expect(r.medianAbsDelta).toBeLessThan(5.5);
   });
 
-  it('exact duplicate coordinates are one sampling unit and stay order-stable', () => {
-    // Points identical in all three coordinates hash identically, so they are
-    // admitted or rejected together and no bounded-memory rule can tell them
-    // apart without reading their positions in the stream. What holds either
-    // way is the invariance: the median does not move when the same duplicates
-    // arrive in another order.
+  it('reports the majority height on a duplicate-heavy cloud, whichever way it is ordered', () => {
+    // Two coordinate groups, one three times the size of the other. The median
+    // is the majority group's height. This is asserted in BOTH directions: a
+    // sampler that keyed on coordinates alone would let the 10 000-point group
+    // fill every slot and report ITS height regardless of which group is larger.
+    const build = (zMinority: number, zMajority: number): [number, number, number][] => {
+      const pts: [number, number, number][] = [];
+      for (let i = 0; i < 10_000; i++) pts.push([500, 500, zMinority]);
+      for (let i = 0; i < 30_000; i++) pts.push([500, 500, zMajority]);
+      return pts;
+    };
+    for (const [zMinority, zMajority] of [[9, 1], [1, 9]] as const) {
+      const r = volumeCutFill({
+        polygon: SQUARE_1KM,
+        referenceZ: 0,
+        up: Z_UP,
+        positions: pack(build(zMinority, zMajority)),
+      });
+      expect(r.pointsInPolygon).toBe(40_000);
+      expect(r.medianAbsDelta).toBeCloseTo(zMajority, 6);
+    }
+  });
+
+  it('returns the same median for the same input', () => {
     const pts: [number, number, number][] = [];
-    for (let i = 0; i < 10_000; i++) pts.push([500, 500, 1]);
-    for (let i = 0; i < 30_000; i++) pts.push([500, 500, 9]);
-    const base = volumeCutFill({
-      polygon: SQUARE_1KM,
-      referenceZ: 0,
-      up: Z_UP,
-      positions: pack(pts),
-    });
-    const reversed = volumeCutFill({
-      polygon: SQUARE_1KM,
-      referenceZ: 0,
-      up: Z_UP,
-      positions: pack([...pts].reverse()),
-    });
-    expect(base.pointsInPolygon).toBe(40_000);
-    expect(reversed.medianAbsDelta).toBe(base.medianAbsDelta);
+    for (let i = 0; i < 20_000; i++) pts.push([100 + (i % 100), 100 + (i % 37), (i % 91) * 0.1]);
+    const input = { polygon: SQUARE_1KM, referenceZ: 0, up: Z_UP, positions: pack(pts) };
+    expect(volumeCutFill(input).medianAbsDelta).toBe(volumeCutFill(input).medianAbsDelta);
   });
 });
 

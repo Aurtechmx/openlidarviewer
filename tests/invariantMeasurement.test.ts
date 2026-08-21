@@ -690,52 +690,47 @@ describe('metamorphic: volumeCutFill', () => {
       }
     });
 
-    it('HOLDS bitwise: medianAbsDelta is permutation-stable ABOVE the sample cap', () => {
-      // Once more than 10 000 points land inside the footprint volume.ts keeps
-      // a bottom-k sample of |Δz|: every inside point carries a key hashed from
-      // its own float32 coordinate bits, and the 10 000 smallest keys are held
-      // in a max-heap. No part of the key reads the point's position in the
-      // stream, so the retained sample is a function of the inside-point set
-      // and the median is bit-identical under any reordering. Measured on
-      // 24 079 inside points over the 8 shuffles below: deviation exactly 0,
-      // against 9.8e-3 relative for the encounter-keyed draw this replaced.
-      // fill/cut carry their usual summation noise, worst 6.2e-15 here.
+    it('PINNED: medianAbsDelta is NOT permutation-stable above the sample cap', () => {
+      // Above the 10 000-point cap the median comes from a reservoir sample,
+      // and Algorithm R accepts an item on its index in the stream, so the
+      // retained set reads encounter order. fill and cut do not: they sum every
+      // inside point and carry only summation noise. Measured over the 8
+      // shuffles below, the median moves while fill and cut hold near 1e-15.
+      //
+      // This pins the gap rather than hiding it. Keying the draw on the points
+      // themselves would close it, but keying on coordinates ALONE lets one
+      // duplicate-coordinate group fill the whole sample and report a minority
+      // height, which is a worse failure than the order dependence. An
+      // order-free rule that also weights by multiplicity, a histogram over
+      // |Δz| for instance, is what satisfies both. `tests/volume.test.ts` pins
+      // the unbiasedness this sampler does provide, in both directions.
       const big = buildCloud(0xbeef, HEX, 44, SURFACE, 45_000);
       const src = emit(big, identity);
       const base = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: src });
       expect(base.pointsInPolygon).toBeGreaterThan(10_000);
       expect(Number.isFinite(base.medianAbsDelta)).toBe(true);
 
+      let moved = 0;
+      let worst = 0;
       for (let trial = 0; trial < 8; trial++) {
         const r = volumeCutFill({
           polygon: HEX,
           referenceZ: PERM_REF_Z,
           positions: shufflePoints(src, makeRng(0xabc + trial)),
         });
+        // The volume figures ARE order-invariant. That contrast is the point.
         expect(r.pointsInPolygon).toBe(base.pointsInPolygon);
         assertRelClose(r.fill, base.fill, TOL_PERMUTATION, 'big permute fill');
         assertRelClose(r.cut, base.cut, TOL_PERMUTATION, 'big permute cut');
-        expect(r.medianAbsDelta).toBe(base.medianAbsDelta);
+        const dev = Math.abs(r.medianAbsDelta - base.medianAbsDelta)
+          / Math.abs(base.medianAbsDelta);
+        if (dev > 0) moved++;
+        if (dev > worst) worst = dev;
       }
-    });
-
-    it('HOLDS bitwise: the sampled median survives a reversal, not only a shuffle', () => {
-      // A reversal is the worst case for an encounter-ordered draw: every
-      // point's index changes, and a cloud written back-to-front is a real file
-      // layout rather than a synthetic permutation.
-      const big = buildCloud(0xbeef, HEX, 44, SURFACE, 45_000);
-      const src = emit(big, identity);
-      const base = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: src });
-      const reversed = new Float32Array(src.length);
-      const n = src.length / 3;
-      for (let i = 0; i < n; i++) {
-        reversed[i * 3] = src[(n - 1 - i) * 3];
-        reversed[i * 3 + 1] = src[(n - 1 - i) * 3 + 1];
-        reversed[i * 3 + 2] = src[(n - 1 - i) * 3 + 2];
-      }
-      const r = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: reversed });
-      expect(r.pointsInPolygon).toBe(base.pointsInPolygon);
-      expect(r.medianAbsDelta).toBe(base.medianAbsDelta);
+      // The lower bound asserts the gap is still open, so closing it reds this
+      // test and forces the pin to be rewritten rather than left stale.
+      expect(moved).toBeGreaterThan(0);
+      expect(worst).toBeLessThan(0.1);
     });
   });
 });

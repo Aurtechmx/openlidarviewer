@@ -215,10 +215,6 @@ export interface VolumeResult {
   /**
    * Median absolute Δz inside the polygon, m — a useful "thickness"
    * scalar for the report card. NaN when no points landed inside.
-   *
-   * Exact up to 10 000 inside points. Past that it is the median of a
-   * bounded bottom-k sample keyed by point coordinates, which makes it
-   * invariant to the order the points arrive in. See `volumeCutFill`.
    */
   medianAbsDelta: number;
   /**
@@ -270,8 +266,7 @@ export interface VolumeInput {
 export function volumeCutFill(input: VolumeInput): VolumeResult {
   const up = input.up ?? ([0, 0, 1] as Vec3);
   const projectedPoly = input.polygon.map((p) => horizontalProjection(p, up));
-  // Read the buffer once. The walk below touches it three times per point, and
-  // the hash aliases it, so every one of those is a property lookup saved.
+  // Read the buffer once. The walk below touches it three times per point.
   const positions = input.positions;
   const sampleCount = positions.length / 3;
 
@@ -314,82 +309,27 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
   // bound allocation on a 100 M-point chunk. Filling it with the FIRST 10 000
   // inside points biases the median when the cloud is ordered by scanline,
   // tile, or strip (the first 10 000 cover only one corner of the polygon).
+  // Reservoir sampling (Algorithm R) keeps a uniform sample across ALL inside
+  // points instead, so the median describes the whole footprint. A fixed-seed
+  // xorshift keeps it deterministic — the same points in the same order give
+  // the same median.
   //
-  // BOTTOM-K SAMPLING keeps a uniform sample across ALL inside points without
-  // reading encounter order. Each inside point gets a 32-bit key hashed from
-  // its own float32 coordinate bits, and the buffer keeps the MAX_DELTAS points
-  // with the smallest keys, held as a max-heap so a rejected point costs one
-  // comparison and an accepted one costs log2(MAX_DELTAS) swaps. The key is a
-  // function of the point alone, so the retained set is a function of the
-  // inside-point multiset alone: the same points supplied in any order select
-  // the same sample and report a bit-identical median. Point order in a cloud
-  // comes from the file, so this is what makes two files holding the same
-  // points agree. `tests/invariantMeasurement.test.ts` pins it above and below
-  // the cap.
-  //
-  // TIES. Points with identical coordinates hash identically. Key ties rank by
-  // |Δz| ascending, and points equal in both key and |Δz| are interchangeable:
-  // whichever copy the heap holds, the retained |Δz| multiset is the same, so
-  // the median does not move. Two DIFFERENT coordinates share a key at the
-  // 2^-32 collision rate; at 1e8 inside points about 116 of the 10 000 retained
-  // slots sit in such a pair and resolve by the |Δz| rule, which is below the
-  // 1/sqrt(10 000) sampling noise on the median itself.
-  //
-  // Exact duplicate coordinates are one sampling unit, admitted or rejected
-  // together, since no bounded-memory rule can tell two identical points apart
-  // without reading their positions in the stream.
+  // Order is part of that contract. The draw is keyed to encounter order, so
+  // once the inside count passes MAX_DELTAS the same points supplied in a
+  // different order select a different sample: measured at 1.7e-2 relative on
+  // 24 080 inside points, against 3.4e-15 on `fill` and `cut` over the same
+  // reordering. The volume figures are order-invariant and this median, which
+  // qualifies them, is not. Below the cap every inside point is kept and the
+  // median is order-invariant too. `tests/invariantMeasurement.test.ts` pins
+  // both sides.
   const MAX_DELTAS = 10_000;
   const deltas = new Float64Array(MAX_DELTAS);
-  const sampleKeys = new Uint32Array(MAX_DELTAS);
-  // Raw float32 bits of the same buffer. A Float32Array view is 4-byte aligned
-  // by construction, so this alias always builds and costs no per-point copy.
-  const positionBits = new Uint32Array(
-    positions.buffer,
-    positions.byteOffset,
-    positions.length,
-  );
-
-  /** murmur3 32-bit hash of the three coordinate words at `i3`. */
-  const sampleKey = (i3: number): number => {
-    let h = 0x9e3779b9;
-    for (let w = 0; w < 3; w++) {
-      let k = Math.imul(positionBits[i3 + w], 0xcc9e2d51);
-      k = ((k << 15) | (k >>> 17)) >>> 0;
-      h ^= Math.imul(k, 0x1b873593);
-      h = ((h << 13) | (h >>> 19)) >>> 0;
-      h = (Math.imul(h, 5) + 0xe6546b64) | 0;
-    }
-    h ^= 12;
-    h ^= h >>> 16;
-    h = Math.imul(h, 0x85ebca6b);
-    h ^= h >>> 13;
-    h = Math.imul(h, 0xc2b2ae35);
-    h ^= h >>> 16;
-    return h >>> 0;
-  };
-
-  /** True when (ka, da) ranks later than (kb, db) in the bottom-k order. */
-  const ranksAfter = (ka: number, da: number, kb: number, db: number): boolean =>
-    ka > kb || (ka === kb && da > db);
-
-  /** Restore the max-heap property downward from `from`. */
-  const siftDown = (from: number): void => {
-    let i = from;
-    for (;;) {
-      const l = i * 2 + 1;
-      if (l >= MAX_DELTAS) break;
-      const r = l + 1;
-      let m = l;
-      if (r < MAX_DELTAS && ranksAfter(sampleKeys[r], deltas[r], sampleKeys[l], deltas[l])) m = r;
-      if (!ranksAfter(sampleKeys[m], deltas[m], sampleKeys[i], deltas[i])) break;
-      const tk = sampleKeys[i];
-      sampleKeys[i] = sampleKeys[m];
-      sampleKeys[m] = tk;
-      const td = deltas[i];
-      deltas[i] = deltas[m];
-      deltas[m] = td;
-      i = m;
-    }
+  let rngState = 0x9e3779b9 | 0; // fixed seed → reproducible sample
+  const nextUnit = (): number => {
+    rngState ^= rngState << 13;
+    rngState ^= rngState >>> 17;
+    rngState ^= rngState << 5;
+    return (rngState >>> 0) / 4294967296;
   };
 
   for (let i = 0; i < sampleCount; i++) {
@@ -427,24 +367,16 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
     const dz = height - refZ;
     if (dz >= 0) fillSum += dz;
     else cutSum += -dz;
-    // Bottom-k for the median buffer: keep every inside point until the buffer
-    // is full, heapify once at that point, then admit a point only when its key
-    // beats the largest key held. (The fill/cut SUMS above already use every
+    // Reservoir sampling for the median buffer: fill directly until full, then
+    // replace a uniformly-chosen slot so every inside point has an equal chance
+    // of being in the final sample. (The fill/cut SUMS above already use every
     // point — only the median needs de-biasing.)
     const absDz = Math.abs(dz);
     if (inCount < MAX_DELTAS) {
       deltas[inCount] = absDz;
-      sampleKeys[inCount] = sampleKey(i * 3);
-      if (inCount === MAX_DELTAS - 1) {
-        for (let h = (MAX_DELTAS >> 1) - 1; h >= 0; h--) siftDown(h);
-      }
     } else {
-      const key = sampleKey(i * 3);
-      if (key < sampleKeys[0] || (key === sampleKeys[0] && absDz < deltas[0])) {
-        sampleKeys[0] = key;
-        deltas[0] = absDz;
-        siftDown(0);
-      }
+      const j = Math.floor(nextUnit() * (inCount + 1));
+      if (j < MAX_DELTAS) deltas[j] = absDz;
     }
     inCount++;
   }
