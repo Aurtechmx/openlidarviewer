@@ -888,6 +888,73 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  # ── Public libE57 conformance file (E57-INGEST decode scope) ───────────────
+  - datasetId: OLV-DS-041-LIBE57-BUNNY-FLOAT
+    title: "libE57 BunnyFloat conformance file, single-precision Float cartesian profile"
+    sourceUrl: http://libe57.org/data.html
+    landingPage: http://libe57.org/data.html
+    licence: libE57-test-data
+    licenceUrl: http://libe57.org/data.html
+    redistribution: permitted
+    acquisitionDate: 2026-08-20
+    sourceSha256: ed48ac81e9e79c00a14950f6d00c8f93b0a7df0b400a01e85d488d9ddea11660
+    sourceBytes: 374784
+    format: e57
+    pointCount: 30571
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "libE57 / E57 3D Imaging System File Format project"
+    citation: "libE57 E57 Example/Test Data, BunnyFloat.e57. http://libe57.org/data.html"
+    knownLimitations: "One of six Bunny encodings the corpus publishes; only the single-precision Float profile is held here, so the cross-encoding equivalence the corpus is designed for is not exercised. Carries no colour, intensity or pose, and the object is a scanned model rather than surveyed ground, so it fixes decode behaviour and not accuracy."
+    storage: committed
+    localPath: tests/bunnyFloat.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-042-LIBE57-PUMP-3RETURN
+    title: "libE57 pumpARowColumnIndex3ReturnIndex, structured scan with three returns per pixel"
+    sourceUrl: http://libe57.org/data.html
+    landingPage: http://libe57.org/data.html
+    licence: libE57-test-data
+    licenceUrl: http://libe57.org/data.html
+    redistribution: permitted
+    acquisitionDate: 2026-08-20
+    sourceSha256: c705b2d16098a97d902f39363e227a4356f308279a016bc956457e680663607b
+    sourceBytes: 8131584
+    format: e57
+    pointCount: 465603
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-recorded
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Carnahan-Proctor and Cross, Inc. (copyright 2008), published by the libE57 project"
+    citation: "libE57 E57 Example/Test Data, PumpARowColumnIndex3ReturnIndex.e57. http://libe57.org/data.html"
+    knownLimitations: "Generated returns rather than recorded ones: the same pump repeated three times, each one step further along its own ray, so it fixes decode behaviour for the return columns and says nothing about how a real sensor resolves multiple returns. Not vendored at 7.8 MB; read from OLV_E57_PUMP3."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────
   - datasetId: OLV-DS-023-ANALYTIC-PROFILE-RAMP
     title: "Analytic corridor transect, 257 stations at 1 m with a cross-line elevation ramp"
