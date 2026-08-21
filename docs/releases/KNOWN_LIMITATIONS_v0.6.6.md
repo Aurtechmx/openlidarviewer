@@ -77,3 +77,19 @@ Points are held as Float32 local to a render origin, so what the application rec
 ## Cross-platform reproducibility covers two little-endian platforms
 
 The two-platform result is tracked at `docs/validation/evidence/portability-v0.6.2/`: platforms darwin-arm64 and linux-x64, both little-endian, one commit, one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data is in the comparison. What holds is that the same arithmetic returns the same values on a second architecture.
+
+## Derived classification is translation-invariant only inside the render-local range
+
+Labels do not move for a vertical or horizontal offset up to 1000 m. Past that they do: on a 6981-point test scene the shipping v3 preset moves 3 labels at +100 m, 27 at +1000 m and 89 at +100000 m, and a horizontal offset of +100000 m moves 82. The cause is the Float32 position contract rather than the classifier, which is exactly translation-clean: rounding the same coordinates through the grid a large offset lands on and then classifying at the origin reproduces the offset run's labels byte for byte. The structural verticality rescue is the only stage fine enough to notice, because a 0.05 m wall face is thinner than the 0.0078 m Float32 quantum at 1e5 leaves it. With that rescue disabled the path is exact to +100000 m and first moves at +1000000 m. Loading subtracts an integer source origin before any of this runs, so a file in a projected CRS is classified render-local and never reaches those offsets. `tests/invariantClassification.test.ts` pins the measured figures.
+
+## Scan-shape aspect depends on orientation in the source CRS
+
+The routing verdict a scan receives is invariant under translation, rotation about the vertical axis and point order. The aspect ratio it reports is not: aspect comes from the axis-aligned bounding box, so rotating the same scan changes it, measured at 0.17454 unrotated against 0.12446 at 45 degrees. Every current test scan sits far from the threshold the value is compared against, so no routing decision turns on it today. A scan close to that threshold would route differently depending on how it happens to be oriented in its source CRS.
+
+## Classification is not exactly invariant under rotation about the vertical axis
+
+Agreement across an 18-angle sweep stays at or above 0.968, and an exact quarter turn still moves about 1.8 percent of labels. Every stage bins on an axis-aligned grid anchored at a bounding-box corner, so rotation moves that anchor, resizes the grid and carries boundary points into neighbouring cells. Floor is not symmetric under the coordinate mirroring a quarter turn applies, which is why even the exact-integer case moves. The figure is an agreement fraction rather than a tolerance.
+
+## The volume median that qualifies a cut/fill figure depends on point order
+
+Cut and fill are invariant to the order the points arrive in, to 3.4e-15 relative. The median absolute height difference reported alongside them is not, once more than 10000 points fall inside the footprint. That median comes from a 10000-slot reservoir sample, which bounds allocation on a very large chunk and keeps the sample spread across the whole footprint rather than the first corner of it, and the draw is keyed to the order points are encountered. Supplying the same points in a different order selects a different sample: measured at 1.7e-2 relative on 24080 inside points. Below the cap every inside point is kept and the median is order-invariant. The volume itself is unaffected either way. `tests/invariantMeasurement.test.ts` pins both sides.
