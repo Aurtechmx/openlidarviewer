@@ -77,3 +77,47 @@ Points are held as Float32 local to a render origin, so what the application rec
 ## Cross-platform reproducibility covers two little-endian platforms
 
 The two-platform result is tracked at `docs/validation/evidence/portability-v0.6.2/`: platforms darwin-arm64 and linux-x64, both little-endian, one commit, one synthetic seeded fixture. Windows is untested, no big-endian host has run a leg, and no real scan data is in the comparison. What holds is that the same arithmetic returns the same values on a second architecture.
+
+## Derived classification is translation-invariant only inside the render-local range
+
+Labels do not move for a vertical or horizontal offset up to 1000 m. Past that they do: on a 6981-point test scene the shipping v3 preset moves 3 labels at +100 m, 27 at +1000 m and 89 at +100000 m, and a horizontal offset of +100000 m moves 82. The cause is the Float32 position contract rather than the classifier, which is exactly translation-clean: rounding the same coordinates through the grid a large offset lands on and then classifying at the origin reproduces the offset run's labels byte for byte. The structural verticality rescue is the only stage fine enough to notice, because a 0.05 m wall face is thinner than the 0.0078 m Float32 quantum at 1e5 leaves it. With that rescue disabled the path is exact to +100000 m and first moves at +1000000 m. Loading subtracts an integer source origin before any of this runs, so a file in a projected CRS is classified render-local and never reaches those offsets. `tests/invariantClassification.test.ts` pins the measured figures.
+
+## Scan-shape aspect measures the outline, and extent still measures the box
+
+The routing verdict a scan receives is invariant under translation, rotation about the vertical axis and point order, and so is the aspect ratio reported with it. Aspect divides the vertical extent by the longer side of the smallest rectangle enclosing the horizontal outline, which is a property of the shape rather than of how it happens to sit in its source CRS. For a horizontal outline whose convex hull is at most 512 vertices, a sweep of angles holds aspect to 6.1e-8 relative and the four quarter turns are bit-identical. Past 512 the rectangle scan reads a subset of 512 spaced evenly around the outline, which bounds a cost that grows with the square of the vertex count, and that subset is anchored to the hull's first vertex, so it turns with the frame rather than with the shape. The retained vertices inscribe a 512-gon, whose width is cos(pi/512) of the circle's, so above the cap the measured size moves under rotation on the order of that 1.9e-5 instead of not at all. On a 72000-point circular outline the diameter reads 2.0e-5 short of the true 100 and the sweep moves aspect by 3.3e-7. Every figure here sits far below the gap between the two thresholds the value is compared against.
+
+The `extent` field is still the axis-aligned bounding box and still turns with the scan. It reports the box a viewer draws, so it is meant to follow the axes; nothing routes on it.
+
+## Classification is not exactly invariant under rotation about the vertical axis
+
+Agreement across an 18-angle sweep stays at or above 0.968, and an exact quarter turn still moves about 1.8 percent of labels. Every stage bins on an axis-aligned grid anchored at a bounding-box corner, so rotation moves that anchor, resizes the grid and carries boundary points into neighbouring cells. Floor is not symmetric under the coordinate mirroring a quarter turn applies, which is why even the exact-integer case moves. The figure is an agreement fraction rather than a tolerance.
+
+## The volume median depends on point order above the sample cap
+
+Cut and fill do not move with the order the points arrive in. Over eight reorderings of a 45000-point cloud they hold to 6.2e-15 relative on fill and 4.5e-15 on cut, which is the noise of summing the same numbers in a different sequence. The median absolute height difference reported alongside them does move, once more than 10000 points fall inside the footprint. On that cloud, 24079 of them inside, it shifts by 9.9e-3 relative across those same eight reorderings and by 2.3e-2 across 200. Above the cap the median comes from a 10000-slot reservoir sample, and Algorithm R accepts a point on its index in the stream, so the retained sample reads encounter order. Below the cap every inside point is kept and the median is order-invariant to the bit.
+
+Sampling is what bounds memory on a chunk of any size, and drawing it as a reservoir is what spreads it over the whole footprint: a buffer holding the first 10000 inside points would read one corner of a cloud ordered by scanline, tile or strip.
+
+Keying the draw on each point's own coordinates would remove the order dependence, and it costs more than it buys. Points sharing exact coordinates rank identically, so one duplicate group can fill the whole sample and the median then reports that group's height whatever its share of the population. On the fixture that pins this, 10000 points at one height and 30000 at another with every point on a single coordinate, drawing from the smaller group is wrong by a factor of nine. Duplicate coordinates are ordinary, since LAS quantises to its scale factor. An order-free rule has to weight by multiplicity as well, a histogram over the height differences for instance. `tests/volume.test.ts` pins the majority height in both directions and `tests/invariantMeasurement.test.ts` pins the order gap that remains.
+
+## LAS support targets 1.4, and 1.5 is read through the 1.4 path
+
+ASPRS published LAS 1.4 R16 on 25 August 2025 and LAS 1.5 R00 on 26 August 2025. This release was written against 1.4. Export writes 1.2 or 1.4 and nothing else.
+
+For import the reader branches on a minor version of 4 or above, so a file declaring 1.5 takes the 1.4 path. That path holds up for the fields the reader uses, because it locates the variable-length records from the header's own size field rather than from a constant, and 1.5 lengthens the public header by appending Max and Min GPS Time. `tests/lasVersionConformance.test.ts` reshapes a file the project's own writer produced into that longer form and checks the point count, scale, offset, bounding box and CRS all survive, with a control confirming a fixed-layout reader would lose the CRS instead.
+
+What is not covered: no file written by a 1.5 producer has been read, the two GPS-time fields the version adds are not surfaced, and the reader still accepts point data record formats 0 to 5 and GeoTIFF CRS encoding, both of which 1.5 removes. Accepting them is what lets older files keep opening, and it means a file can be read here that a 1.5 reader would reject.
+
+## A density gradient shifts a volume figure, and more points do not fix it
+
+The cut/fill estimator multiplies the footprint area by the mean height of the points inside it, so it returns the area times the height at the SAMPLE centroid rather than at the polygon centroid. Where sampling density varies across the footprint those two points separate, and the figure moves by the area times the height gradient times that separation.
+
+Measured on a tilted plane whose true volume is 2 m3, with one half of the footprint sampled twice as densely as the other: 2.075 m3, an overstatement of 3.75 per cent. Raising the sample count from 5000 to 320000 returned 2.075 m3 at every step, identical to six decimals. This is the one volume error in the suite that does not shrink as sampling improves, because it is a property of where the points sit rather than how many there are. The same one-sided doubling on a shape symmetric about its centroid costs 0.0031 per cent, which is what identifies the height gradient as the cause.
+
+Every other error measured does shrink with sampling. Against exactly integrable solids the estimator reproduces the closed-form volume to 1.25e-3 per cent or better at 160000 samples, improving by a factor of four each time the sample spacing halves. One case is not monotone: where the reference plane cuts through the solid, the error changes sign between sample counts because the level set falls at a different position relative to the sample lattice each time, though its magnitude still falls. The figures are in `tests/analyticVolumeOracle.test.ts`.
+
+Those solids all sit on a square footprint, which is what makes their closed forms exact. A tilted plane integrates exactly over any polygon and is checked that way; the curved and ridged solids are not, so none of these figures describes a concave or irregular footprint.
+
+## Volume accuracy depends on the render-local position contract
+
+Positions reach the estimator as Float32, so a large vertical offset spends mantissa bits that the heights need. On a square pyramid the volume error against the unshifted run is 6.7e-7 at 1 m, 9.8e-5 at 1024 m, 0.101 per cent at 1048576 m and 4.94 per cent at 4194304 m. Loading subtracts an integer source origin first, so a file in a projected CRS is measured render-local and does not reach those offsets. The figures describe what the contract is buying.

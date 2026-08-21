@@ -20,7 +20,7 @@
  * Pure data, deterministic, O(sampled). No ML, no RANSAC.
  */
 
-import type { Axis } from './scanShape';
+import { footprintRect, type Axis } from './scanShape';
 import { objectMetrics } from './objectMetrics';
 import { denseFootprintBbox } from './space/floorplan/wallSlice';
 
@@ -31,7 +31,15 @@ export const metresToFeet = (m: number): number => m * FT_PER_M;
 export const sqMetresToSqFeet = (a: number): number => a * FT_PER_M * FT_PER_M;
 export const cubicMetresToCubicFeet = (v: number): number => v * FT_PER_M * FT_PER_M * FT_PER_M;
 
-/** L × W × H, in metres. Length ≥ width (oriented footprint), height vertical. */
+/**
+ * L × W × H, in metres. Length ≥ width, height vertical.
+ *
+ * L and W are the sides of the minimum-area rectangle around the horizontal
+ * footprint, the same rectangle `classifyScanShape` measures its `aspect`
+ * against (`footprintRect` in scanShape.ts). One definition of a footprint's
+ * size for the whole subsystem, so the panel's L × W and the routing threshold
+ * can never describe different rectangles.
+ */
 export interface SpaceDims {
   readonly lengthM: number;
   readonly widthM: number;
@@ -158,43 +166,6 @@ const upOffsets = (a: Axis): { v: number; h1: number; h2: number } => {
   if (a === 'y') return { v: 1, h1: 0, h2: 2 };
   return { v: 2, h1: 0, h2: 1 };
 };
-
-/** 2-D PCA on the horizontal projection → oriented footprint side lengths. */
-function orientedFootprint(h1: number[], h2: number[]): { major: number; minor: number } {
-  const m = h1.length;
-  if (m < 3) return { major: 0, minor: 0 };
-  let cx = 0, cy = 0;
-  for (let i = 0; i < m; i++) { cx += h1[i]; cy += h2[i]; }
-  cx /= m; cy /= m;
-  let xx = 0, yy = 0, xy = 0;
-  for (let i = 0; i < m; i++) {
-    const dx = h1[i] - cx, dy = h2[i] - cy;
-    xx += dx * dx; yy += dy * dy; xy += dx * dy;
-  }
-  xx /= m; yy /= m; xy /= m;
-  const tr = xx + yy;
-  const disc = Math.sqrt(Math.max(0, (tr * tr) / 4 - (xx * yy - xy * xy)));
-  const l1 = tr / 2 + disc;
-  // Principal direction for the larger eigenvalue l1.
-  let ax: number, ay: number;
-  if (Math.abs(xy) > 1e-12) { ax = l1 - yy; ay = xy; } else { ax = 1; ay = 0; }
-  const len = Math.hypot(ax, ay) || 1;
-  ax /= len; ay /= len;
-  const bx = -ay, by = ax; // perpendicular
-  let lo1 = Infinity, hi1 = -Infinity, lo2 = Infinity, hi2 = -Infinity;
-  for (let i = 0; i < m; i++) {
-    const dx = h1[i] - cx, dy = h2[i] - cy;
-    const p1 = dx * ax + dy * ay;
-    const p2 = dx * bx + dy * by;
-    if (p1 < lo1) lo1 = p1;
-    if (p1 > hi1) hi1 = p1;
-    if (p2 < lo2) lo2 = p2;
-    if (p2 > hi2) hi2 = p2;
-  }
-  const r1 = Math.max(0, hi1 - lo1);
-  const r2 = Math.max(0, hi2 - lo2);
-  return { major: Math.max(r1, r2), minor: Math.min(r1, r2) };
-}
 
 /**
  * Count storeys from the height histogram. A storey is a strong FLOOR peak with
@@ -356,9 +327,20 @@ export function spaceMetrics(
   const ex2 = Math.max(0, maxH2 - minH2);
   const exV = Math.max(0, maxV - minV);
 
-  // ── Oriented dimensions (footprint from 2-D PCA, height from vertical AABB) ──
-  const fp = orientedFootprint(H1, H2);
-  const dims: SpaceDims = { lengthM: fp.major, widthM: fp.minor, heightM: exV };
+  // ── Oriented dimensions (footprint rectangle, height from the vertical AABB) ──
+  // The sides of the minimum-area rectangle around the clipped footprint, from
+  // the same helper `classifyScanShape` measures `aspect` against, so the
+  // panel's L × W and the size the router thresholds describe one rectangle.
+  //
+  // Until v0.6.6 this pair came from a local 2-D PCA: the covariance
+  // eigenvectors set the rectangle's direction, then the projections onto them
+  // set its sides. An isotropic footprint has no principal direction, since a
+  // square room and a circular scan both have covariance c*I, so the direction
+  // came from sampling noise and the rectangle drifted toward the footprint's
+  // diagonal. The 8 x 8 x 4 m fixture in spaceMetrics.test.ts reported
+  // 11.31 x 11.17 m, its diagonal, and two samplings of one room disagreed.
+  const fp = footprintRect(H1, H2);
+  const dims: SpaceDims = { lengthM: fp.longSide, widthM: fp.shortSide, heightM: exV };
 
   // ── Footprint occupancy grid + per-cell vertical span ──
   // Size the grid to the data: cells finer than the point spacing would leave

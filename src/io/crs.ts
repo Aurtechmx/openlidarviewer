@@ -35,6 +35,7 @@ import {
   wktNodeName,
   type WktNode,
 } from './wktParser';
+import { getCrsEntry } from '../geo/CrsRegistry';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -153,6 +154,7 @@ const RECORD_ID_GEO_ASCII_PARAMS = 34737;
 
 /** GeoTIFF GeoKey IDs we care about. */
 const GEOKEY_GT_MODEL_TYPE = 1024;       // projected (1) / geographic (2) / geocentric (3)
+const GEOKEY_GT_CITATION = 1026;         // ASCII citation naming the CRS the file is in
 const GEOKEY_GEODETIC_CRS = 2048;        // EPSG of a geographic CRS
 const GEOKEY_GEODETIC_CITATION = 2049;   // ASCII citation
 const GEOKEY_GEOGRAPHIC_LINEAR_UNITS = 2052;  // linear units of a geographic CRS
@@ -571,6 +573,8 @@ export function crsFromGeoTiff(
   let modelType: number | undefined;
   let projectedCrs: number | undefined;
   let geodeticCrs: number | undefined;
+  let gtCitationOffset: number | undefined;
+  let gtCitationCount: number | undefined;
   let projectedCitationOffset: number | undefined;
   let projectedCitationCount: number | undefined;
   let geodeticCitationOffset: number | undefined;
@@ -592,6 +596,12 @@ export function crsFromGeoTiff(
       case GEOKEY_GT_MODEL_TYPE:           modelType = value; break;
       case GEOKEY_PROJECTED_CRS:           projectedCrs = value; break;
       case GEOKEY_GEODETIC_CRS:            geodeticCrs = value; break;
+      case GEOKEY_GT_CITATION:
+        if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
+          gtCitationOffset = value;
+          gtCitationCount = count;
+        }
+        break;
       case GEOKEY_PROJECTED_CITATION:
         if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
           projectedCitationOffset = value;
@@ -656,6 +666,16 @@ export function crsFromGeoTiff(
     projectedCitationOffset,
     projectedCitationCount,
   );
+  // GTCitationGeoKey (1026) is the citation for the CRS the file is in. libLAS
+  // 1.2 writes a name there and leaves 3073 unset, so it is the only citation a
+  // file like utm15.las carries. readGeoTiffCitation stops at the `|` GeoTIFF
+  // terminator and returns undefined for an empty or whitespace-only run, so a
+  // blank 1026 falls through to the names below.
+  const gtCitation = readGeoTiffCitation(
+    geoAsciiBytes,
+    gtCitationOffset,
+    gtCitationCount,
+  );
   const citation = projectedCitation ?? readGeoTiffCitation(
     geoAsciiBytes,
     geodeticCitationOffset,
@@ -677,15 +697,35 @@ export function crsFromGeoTiff(
 
   // A citation only names THIS CRS when it is the projected one. GeoTIFF
   // citations are free text, and a projected file that carries only a
-  // GeogCitation ("WGS 84") was taking it as the CRS's own name — so a UTM
-  // zone 29N survey displayed as "WGS 84 (EPSG:32629)", which a reader is
-  // entitled to read as EPSG:4326 and degrees. A geographic CRS is still free
-  // to use its geographic citation, because there it does describe the CRS.
-  const ownCitation = isGeographic ? citation : projectedCitation;
-  const baseName = ownCitation ?? wellKnownCrsName(epsg) ?? (epsg ? `EPSG:${epsg}` : 'Unknown CRS');
+  // GeogCitation ("WGS 84") was taking it as the CRS's own name, so a UTM zone
+  // 29N survey displayed as "WGS 84 (EPSG:32629)", which a reader is entitled
+  // to read as EPSG:4326 and degrees. A geographic CRS is still free to use its
+  // geographic citation, because there it does describe the CRS.
+  //
+  // Projected name precedence, highest first:
+  //   1. ProjectedCSCitationGeoKey (3073), which by definition names this
+  //      projected CRS;
+  //   2. the curated registry label for the EPSG code, which carries the datum;
+  //   3. wellKnownCrsName, the systematic WGS 84 UTM naming that covers every
+  //      zone the registry does not list;
+  //   4. GTCitationGeoKey (1026);
+  //   5. the bare `EPSG:<code>`.
+  //
+  // 1026 ranks below both code-derived names because GTCitationGeoKey
+  // guarantees only free text describing the CRS the file is in, not that the
+  // text names the projected CRS: a 32615 file whose 1026 reads "NAD83" would
+  // otherwise print a geographic datum name over a metre grid.
+  //
+  // A WKT VLR outranks all five: `parseCrsFromVlrs` takes the WKT name and
+  // reads the GeoKeys only for vertical fields.
+  const codeDerivedName =
+    (isGeographic ? undefined : curatedProjectedName(epsg)) ?? wellKnownCrsName(epsg);
+  const baseName = isGeographic
+    ? (citation ?? codeDerivedName)
+    : (projectedCitation ?? codeDerivedName ?? gtCitation);
   let name: string;
-  if (epsg && !ownCitation && !wellKnownCrsName(epsg)) {
-    name = `EPSG:${epsg}`;
+  if (baseName === undefined) {
+    name = epsg ? `EPSG:${epsg}` : 'Unknown CRS';
   } else if (epsg) {
     name = `${baseName} (EPSG:${epsg})`;
   } else {
@@ -766,11 +806,27 @@ export function crsFromEpsg(horizontalEpsg: number, params: EpsgCrsParams = {}):
 }
 
 /**
+ * The curated registry's label for a PROJECTED EPSG code, or undefined when the
+ * code is unregistered or registered as geographic. `getCrsEntry` is the same
+ * catalogue the CRS-override picker offers by name and `resolveHorizontalDatum`
+ * reads for a GeoTIFF-keyed file's datum, so one code resolves to one name
+ * across those seams. Its labels carry the datum ("NAD83 / UTM zone 15N"); a
+ * zone name without one is ambiguous, because UTM zone 15N exists on NAD83,
+ * WGS 84 and NAD27 alike.
+ */
+function curatedProjectedName(epsg: number | undefined): string | undefined {
+  if (epsg === undefined) return undefined;
+  const entry = getCrsEntry(epsg);
+  return entry?.kind === 'projected' ? entry.label : undefined;
+}
+
+/**
  * The name a well-known EPSG code fully determines, or undefined.
  *
- * The WGS 84 UTM ranges are systematic — 326zz is zone zz north, 327zz is
- * zone zz south — so the code names the CRS exactly, with no catalog and no
- * guesswork. Worth stating outright because the alternative was a writer's
+ * The WGS 84 UTM ranges are systematic (326zz is zone zz north, 327zz is zone
+ * zz south), so the code names the CRS exactly, with no catalog and no
+ * guesswork. This covers all 120 zones, including the ones the curated registry
+ * does not list. Worth stating outright because the alternative was a writer's
  * free-text citation, which is how a projected scan came to be labelled with
  * its base geographic CRS.
  */

@@ -12,8 +12,11 @@
  * with an OPTIONAL index-aligned per-point ASPRS classification.
  *
  * The signals (all cheap, grid-based on the detected up frame):
- *   - aspect = vertical extent / horizontal footprint. Terrain is flat-ish
- *     (low aspect); objects are compact or tall (higher aspect).
+ *   - aspect = vertical extent / horizontal footprint size. Terrain is flat-ish
+ *     (low aspect); objects are compact or tall (higher aspect). The footprint
+ *     size is the longer side of the minimum-area rectangle around the
+ *     horizontal outline, so it does not depend on how the scan is oriented in
+ *     its source CRS (see footprintSize).
  *   - overhangFraction = fraction of occupied footprint cells whose returns
  *     span a large VERTICAL range (more than one surface stacked over the same
  *     footprint). Terrain ≈ 0; interiors AND forests are high.
@@ -76,7 +79,13 @@ export interface ScanShape {
   readonly spaceKind: SpaceKind;
   /** 0..1 confidence in the routing verdict. */
   readonly confidence: number;
-  /** Vertical extent / horizontal footprint, in the detected up frame. */
+  /**
+   * Vertical extent / horizontal footprint size, in the detected up frame.
+   * Invariant under rotation about the up axis: the denominator is the longer
+   * side of the minimum-area rectangle around the horizontal outline, NOT the
+   * larger side of `extent`, so this is not `extent[2] / max(extent[0],
+   * extent[1])`. See footprintSize.
+   */
   readonly aspect: number;
   /** Fraction of occupied footprint cells carrying more than one surface. */
   readonly overhangFraction: number;
@@ -100,7 +109,9 @@ export interface ScanShape {
    * 3/4/5). 0 when no classification is supplied. Drives the forest tiebreaker.
    */
   readonly topVegFraction: number;
-  /** AABB extents [horizontal1, horizontal2, vertical], source units. */
+  /** AABB extents [horizontal1, horizontal2, vertical], source units. The two
+   *  horizontal entries stay axis-aligned and so still depend on the source CRS
+   *  axes; `aspect` does not. */
   readonly extent: readonly [number, number, number];
   /** The detected (or supplied) up axis. */
   readonly up: Axis;
@@ -372,6 +383,302 @@ function enclosureForAxis(
   return { score: total > 0 ? bandPts / total : 0 };
 }
 
+// ── Frame-independent horizontal footprint. ──────────────────────────────────
+/**
+ * `aspect` divides the vertical extent by a horizontal SIZE. That size used to
+ * be the larger side of the AXIS-ALIGNED horizontal bounding box, which is a
+ * property of the source CRS axes and not of the scan: rotating one scene about
+ * the vertical axis moved aspect from 0.17454 to 0.12821 at 31 degrees and
+ * 0.12446 at 45 degrees, a swing of about 29 per cent, so ASPECT_OBJECT and
+ * ASPECT_SOLID were being applied to a number that depended on how the scan
+ * happened to be oriented on disk.
+ *
+ * The replacement is the longer side of the MINIMUM-AREA rectangle enclosing
+ * the horizontal footprint. It is defined by the point set alone, so it is
+ * invariant under rotation about the vertical axis, translation and input
+ * order.
+ *
+ * SAME SCALE AND SAME ORIENTATION as the value it replaces: still a length in
+ * source units, still small-for-wide and large-for-compact, and it reproduces
+ * the axis-aligned max extent exactly on the footprint shapes the thresholds
+ * were tuned against. An axis-aligned rectangle a x b gives a, a square of
+ * side s gives s, a disc of radius r gives 2r (both statue fixtures are discs).
+ * ASPECT_OBJECT and ASPECT_SOLID therefore keep their meaning unchanged.
+ *
+ * Two covariance-based candidates were rejected, for different reasons.
+ *
+ * Covariance principal EXTENTS, i.e. sqrt(12 * eigenvalue), are weighted by
+ * point density rather than by the outline, so a uniformly sampled disc reads
+ * sqrt(3)*r instead of 2r (13 per cent narrow, which lifts the compact-solid
+ * fixture from 0.606 across the 0.65 object bar).
+ *
+ * Projecting onto the covariance EIGENVECTORS and taking the min/max of the
+ * projections does enclose the point set, and it does reproduce 2r on a disc,
+ * but the eigenvectors of an isotropic footprint carry no direction: a square
+ * and a disc both have covariance c*I, so the principal direction is fixed by
+ * sampling noise. The enclosing rectangle in that arbitrary direction is up to
+ * the footprint's diagonal, sqrt(2) times its side on a square, and two
+ * samplings of the same room disagree. Measured on a seeded 8 x 8 m room over
+ * 20 samplings, that estimator returned 8.51 to 11.31 m for the same 8.00 m
+ * side; the minimum-area rectangle returns 8.00 on all 20.
+ */
+function footprintSize(hx: Float64Array, hy: Float64Array, k: number): number {
+  return footprintRectOf(hx, hy, k).longSide;
+}
+
+/** Side lengths of the minimum-area rectangle around a horizontal footprint. */
+export interface FootprintRect {
+  /** Longer side, in the units the coordinates were supplied in. */
+  readonly longSide: number;
+  /** Shorter side, same units. Never greater than `longSide`. */
+  readonly shortSide: number;
+}
+
+const ZERO_RECT: FootprintRect = { longSide: 0, shortSide: 0 };
+
+/**
+ * Both sides of the rectangle {@link footprintSize} takes its long side from.
+ *
+ * ONE definition of "how big is this footprint" for the terrain subsystem.
+ * `aspect` divides by the long side; the space report prints both sides as a
+ * space's L and W. The report used to derive its own pair from the covariance
+ * eigenvectors, which is the estimator the note above rejects, so a square room
+ * could be reported up to 41 per cent wider than it is.
+ *
+ * The two callers still measure DIFFERENT SAMPLES on purpose, and the values
+ * are not interchangeable: `aspect` measures the raw strided sample in source
+ * units, while the space report measures a metre-scaled sample with stray
+ * returns outside the dense footprint already clipped away (the same clip the
+ * floor plan applies). Only the geometry is shared.
+ *
+ * Non-finite coordinates are dropped. A footprint with fewer than two distinct
+ * points has no rectangle and measures zero on both sides.
+ */
+export function footprintRect(h1: ArrayLike<number>, h2: ArrayLike<number>): FootprintRect {
+  const supplied = Math.min(h1.length, h2.length);
+  const hx = new Float64Array(supplied);
+  const hy = new Float64Array(supplied);
+  let k = 0;
+  for (let i = 0; i < supplied; i++) {
+    const x = h1[i], y = h2[i];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    hx[k] = x;
+    hy[k] = y;
+    k++;
+  }
+  return footprintRectOf(hx, hy, k);
+}
+
+/** Shared body: hull, vertex cap, rectangle scan. */
+function footprintRectOf(hx: Float64Array, hy: Float64Array, k: number): FootprintRect {
+  if (k < 2) return ZERO_RECT;
+  return minAreaRectSides(hx, hy, thinHull(hx, hy, convexHull(hx, hy, k)));
+}
+
+/**
+ * Hull vertices the rectangle scan is allowed to measure.
+ *
+ * minAreaRectSides is quadratic in the hull vertex count. On an area-filling
+ * footprint the hull is a handful of vertices and that is free, but a densely
+ * sampled CONVEX outline (a silo wall, a tunnel bore, a terrestrial scanner's
+ * outer ring) puts nearly every sampled point in convex position, so the hull
+ * approaches the sample cap: 27016 vertices on an 80000-point ring, 7.3e8
+ * edge-vertex pairs, about 5 s on the main thread during load.
+ *
+ * 512 bounds the scan at 512^2 = 262144 pairs regardless of point count. On a
+ * circular outline the retained vertices inscribe a regular 512-gon, whose
+ * width is cos(pi/512) of the circle's, so the measured footprint is at most
+ * 1 - cos(pi/512) = 1.9e-5 short. `aspect` is that same 1.9e-5 relative, i.e.
+ * 1.3e-5 absolute at the 0.65 bar, against the 0.20 that separates
+ * ASPECT_OBJECT (0.65) from ASPECT_SOLID (0.45), a factor of 15000. Hulls of 512 vertices or fewer are measured whole and are bit-for-
+ * bit unchanged, which covers every polygonal and lattice-sampled footprint.
+ */
+const HULL_SCAN_CAP = 512;
+
+/**
+ * At most HULL_SCAN_CAP hull vertices, spaced uniformly by ARC POSITION around
+ * the outline so the retained set still spans the whole shape. Vertex t is kept
+ * when it is the nearest vertex to one of HULL_SCAN_CAP positions spaced evenly
+ * along the hull perimeter, so a long edge keeps both of its endpoints, which
+ * are the vertices an enclosing rectangle rests on. Keeping the first N
+ * vertices instead would measure one side of the outline.
+ *
+ * The retained set is anchored at the hull's first vertex, which is its
+ * lexicographic minimum, so it follows the frame: on a hull above the cap a
+ * rotation about the vertical axis retains different vertices and moves the
+ * measured size by up to the same 1.9e-5. Below the cap nothing is dropped and
+ * the size is exactly rotation-invariant.
+ */
+function thinHull(hx: Float64Array, hy: Float64Array, hull: Int32Array): Int32Array {
+  const h = hull.length;
+  if (h <= HULL_SCAN_CAP) return hull;
+  const cum = new Float64Array(h + 1);
+  for (let t = 0; t < h; t++) {
+    const a = hull[t], b = hull[(t + 1) % h];
+    cum[t + 1] = cum[t] + Math.hypot(hx[b] - hx[a], hy[b] - hy[a]);
+  }
+  const perimeter = cum[h];
+  if (!(perimeter > 0)) return hull.subarray(0, HULL_SCAN_CAP);
+  const kept = new Int32Array(HULL_SCAN_CAP);
+  let m = 0;
+  // `cum` is non-decreasing and the targets increase, so the nearest vertex to
+  // each successive target is found by advancing `t` and never rewinding.
+  let t = 0;
+  for (let j = 0; j < HULL_SCAN_CAP; j++) {
+    const target = (j * perimeter) / HULL_SCAN_CAP;
+    while (t + 1 < h && Math.abs(cum[t + 1] - target) <= Math.abs(cum[t] - target)) t++;
+    if (m === 0 || kept[m - 1] !== hull[t]) kept[m++] = hull[t];
+  }
+  return kept.subarray(0, m);
+}
+
+/**
+ * Convex hull of `k` planar points held in (hx, hy), returned as vertex indices
+ * in counter-clockwise order with no repeated endpoint. Andrew monotone chain.
+ * Collinear vertices are dropped, so every hull edge has non-zero length.
+ */
+function convexHull(hx: Float64Array, hy: Float64Array, k: number): Int32Array {
+  if (k < 3) {
+    const all = new Int32Array(k);
+    for (let i = 0; i < k; i++) all[i] = i;
+    return all;
+  }
+  const order = new Int32Array(k);
+  const q = keepHullCandidates(hx, hy, k, order);
+  const cand = order.subarray(0, q);
+  cand.sort((a, b) => (hx[a] - hx[b]) || (hy[a] - hy[b]));
+  const turn = (o: number, a: number, b: number): number =>
+    (hx[a] - hx[o]) * (hy[b] - hy[o]) - (hy[a] - hy[o]) * (hx[b] - hx[o]);
+
+  const stack = new Int32Array(2 * q);
+  let m = 0;
+  for (let i = 0; i < q; i++) {
+    const p = cand[i];
+    while (m >= 2 && turn(stack[m - 2], stack[m - 1], p) <= 0) m--;
+    stack[m++] = p;
+  }
+  const lowerEnd = m + 1;
+  for (let i = q - 2; i >= 0; i--) {
+    const p = cand[i];
+    while (m >= lowerEnd && turn(stack[m - 2], stack[m - 1], p) <= 0) m--;
+    stack[m++] = p;
+  }
+  // The last entry repeats the first vertex.
+  return stack.slice(0, Math.max(1, m - 1));
+}
+
+/**
+ * Write the indices that can still be hull vertices into `out` and return how
+ * many there are.
+ *
+ * The four axis extremes are hull vertices, so every point strictly inside the
+ * quadrilateral they span lies inside the hull and cannot be one of its
+ * vertices (Akl and Toussaint 1978). Dropping them leaves the comparator sort
+ * in convexHull with the outline instead of the whole sample: on an
+ * area-filling height field that is a few hundred points rather than the 60000
+ * the sampler admits, and the sort is the largest single cost in the call.
+ *
+ * The hull is unchanged, not approximated. A rejected point is interior, and
+ * an interior point is neither a hull vertex nor a collinear boundary point.
+ *
+ * The test is one-sided on purpose: a point must clear all four edges strictly
+ * to be rejected. Coincident or collinear extremes therefore give edges that
+ * reject nothing and the whole sample survives, which costs one linear pass and
+ * changes no result.
+ */
+function keepHullCandidates(hx: Float64Array, hy: Float64Array, k: number, out: Int32Array): number {
+  // Corner-most extreme in each direction: left, bottom, right, top. Any
+  // tie-break is valid (every candidate is a point of the set); these keep the
+  // quadrilateral as large as the sample allows.
+  let left = 0, bottom = 0, right = 0, top = 0;
+  for (let i = 1; i < k; i++) {
+    const x = hx[i], y = hy[i];
+    if (x < hx[left] || (x === hx[left] && y < hy[left])) left = i;
+    if (y < hy[bottom] || (y === hy[bottom] && x > hx[bottom])) bottom = i;
+    if (x > hx[right] || (x === hx[right] && y > hy[right])) right = i;
+    if (y > hy[top] || (y === hy[top] && x < hx[top])) top = i;
+  }
+  const qx0 = hx[left], qy0 = hy[left];
+  const qx1 = hx[bottom], qy1 = hy[bottom];
+  const qx2 = hx[right], qy2 = hy[right];
+  const qx3 = hx[top], qy3 = hy[top];
+  // Edge vectors of that counter-clockwise quadrilateral.
+  const e0x = qx1 - qx0, e0y = qy1 - qy0;
+  const e1x = qx2 - qx1, e1y = qy2 - qy1;
+  const e2x = qx3 - qx2, e2y = qy3 - qy2;
+  const e3x = qx0 - qx3, e3y = qy0 - qy3;
+  let n = 0;
+  for (let i = 0; i < k; i++) {
+    const x = hx[i], y = hy[i];
+    if (
+      e0x * (y - qy0) - e0y * (x - qx0) > 0 &&
+      e1x * (y - qy1) - e1y * (x - qx1) > 0 &&
+      e2x * (y - qy2) - e2y * (x - qx2) > 0 &&
+      e3x * (y - qy3) - e3y * (x - qx3) > 0
+    ) continue;
+    out[n++] = i;
+  }
+  return n;
+}
+
+/**
+ * Side lengths of the MINIMUM-AREA rectangle enclosing the hull. The minimum
+ * always has a side flush with a hull edge (Freeman and Shapira 1975), so it is
+ * enough to measure the rectangle aligned with each edge in turn and keep the
+ * smallest.
+ *
+ * Cost is quadratic in the HULL vertex count, not in the point count: the hull
+ * is the footprint outline, tens of vertices for a scan whose sample fills an
+ * area. A densely sampled convex outline is the exception, and thinHull bounds
+ * the count at HULL_SCAN_CAP before this runs.
+ *
+ * The tie-break is on the value, not on which edge the loop reached first. An
+ * exact quarter turn reproduces every per-edge area bit for bit but visits the
+ * edges from a different starting vertex, so first-edge-wins would return a
+ * different side of two equal-area rectangles for the same scan.
+ */
+function minAreaRectSides(hx: Float64Array, hy: Float64Array, hull: Int32Array): FootprintRect {
+  const h = hull.length;
+  if (h < 2) return ZERO_RECT;
+  const vx = (t: number): number => hx[hull[t % h]];
+  const vy = (t: number): number => hy[hull[t % h]];
+  // A hull of two vertices is a segment: it encloses no area, so its rectangle
+  // is the segment itself and the short side is zero.
+  if (h === 2) return { longSide: Math.hypot(vx(1) - vx(0), vy(1) - vy(0)), shortSide: 0 };
+
+  let bestArea = Infinity;
+  let bestLong = 0;
+  let bestShort = 0;
+  for (let i = 0; i < h; i++) {
+    const ox = vx(i), oy = vy(i);
+    const ex = vx(i + 1) - ox, ey = vy(i + 1) - oy;
+    const len = Math.hypot(ex, ey);
+    if (!(len > 0)) continue;
+    // Distance from the edge line and projection along it, both scaled by
+    // |edge| while they are compared, then divided out once at the end. The
+    // edge origin itself scores zero on all three, which seeds the extremes.
+    let maxOff = 0, maxAlong = 0, minAlong = 0;
+    for (let t = 0; t < h; t++) {
+      const dx = vx(t) - ox, dy = vy(t) - oy;
+      const off = ex * dy - ey * dx;
+      const along = ex * dx + ey * dy;
+      if (off > maxOff) maxOff = off;
+      if (along > maxAlong) maxAlong = along;
+      if (along < minAlong) minAlong = along;
+    }
+    const width = (maxAlong - minAlong) / len;
+    const height = maxOff / len;
+    const area = width * height;
+    const long = Math.max(width, height);
+    if (area < bestArea || (area === bestArea && long < bestLong)) {
+      bestArea = area;
+      bestLong = long;
+      bestShort = Math.min(width, height);
+    }
+  }
+  return { longSide: bestLong, shortSide: bestShort };
+}
+
 interface AxisMetrics {
   aspect: number;
   overhangFraction: number;
@@ -398,10 +705,17 @@ function axisMetrics(
   h2Off: number,
 ): AxisMetrics {
   let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  const sampled = Math.ceil(n / stride);
+  const hx = new Float64Array(sampled);
+  const hy = new Float64Array(sampled);
+  let k = 0;
   for (let i = 0; i < n; i += stride) {
     const b = i * 3;
     const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    hx[k] = h1;
+    hy[k] = h2;
+    k++;
     if (h1 < minH1) minH1 = h1;
     if (h1 > maxH1) maxH1 = h1;
     if (h2 < minH2) minH2 = h2;
@@ -412,7 +726,10 @@ function axisMetrics(
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
   const exV = Math.max(0, maxV - minV);
-  const footprint = Math.max(ex1, ex2, 1e-9);
+  // Frame-independent footprint (see footprintSize). A footprint too degenerate
+  // to hull (fewer than two distinct points) falls back to the axis-aligned box.
+  const invariantFootprint = footprintSize(hx, hy, k);
+  const footprint = invariantFootprint > 0 ? invariantFootprint : Math.max(ex1, ex2, 1e-9);
   const aspect = exV / footprint;
   if (exV <= 0) {
     return { aspect, overhangFraction: 0, wallCoverage: 0, floorCoverage: 0, ceilingCoverage: 0, topVegFraction: 0, ex1, ex2, exV };

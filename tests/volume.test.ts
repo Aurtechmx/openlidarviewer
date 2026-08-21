@@ -498,27 +498,85 @@ describe('volumeCutFill — confidence + density fields', () => {
     expect(r.medianAbsDelta).toBeCloseTo(3, 5);
   });
 
+  const SQUARE_1KM: ReadonlyArray<[number, number, number]> = [
+    [0, 0, 0],
+    [1000, 0, 0],
+    [1000, 1000, 0],
+    [0, 1000, 0],
+  ];
+
   it('median samples the whole polygon, not just the first inside points', () => {
-    // Spatially-ordered cloud: the FIRST 10 000 inside points have |Δz| = 1,
-    // the next 30 000 have |Δz| = 9. The population is 75% nines, so the true
-    // median is 9. A first-10 000 buffer would see only the ones and report a
-    // biased median of 1. Reservoir sampling across all inside points must
-    // recover ~9.
+    // Spatially-ordered cloud: the FIRST 10 000 inside points have |Δz| = 1 and
+    // sit in one corner, the next 30 000 have |Δz| = 9 and sit in another. The
+    // population is 75% nines, so the true median is 9. A buffer holding the
+    // first 10 000 inside points would see only the ones and report a biased
+    // median of 1. The bottom-k sample spans all 40 000, so it recovers 9.
+    // Every point has distinct coordinates, which is what makes the sample
+    // spread across the population rather than land on one duplicate group.
     const pts: [number, number, number][] = [];
-    for (let i = 0; i < 10_000; i++) pts.push([500, 500, 1]);
-    for (let i = 0; i < 30_000; i++) pts.push([500, 500, 9]);
-    const square: ReadonlyArray<[number, number, number]> = [
-      [0, 0, 0],
-      [1000, 0, 0],
-      [1000, 1000, 0],
-      [0, 1000, 0],
-    ];
-    const input = { polygon: square, referenceZ: 0, up: Z_UP, positions: pack(pts) };
+    for (let i = 0; i < 10_000; i++) pts.push([1 + (i % 100), 1 + Math.floor(i / 100), 1]);
+    for (let i = 0; i < 30_000; i++) pts.push([200 + (i % 300), 200 + Math.floor(i / 300), 9]);
+    const input = { polygon: SQUARE_1KM, referenceZ: 0, up: Z_UP, positions: pack(pts) };
     const r = volumeCutFill(input);
     expect(r.pointsInPolygon).toBe(40_000);
-    expect(r.medianAbsDelta).toBeGreaterThan(8); // ≈ 9, the true median — not the biased 1
-    // Deterministic: the seeded reservoir gives the same median every run.
+    expect(r.medianAbsDelta).toBe(9); // the true median, not the biased 1
+    // Deterministic: the coordinate-keyed sample gives the same median every run.
     expect(volumeCutFill(input).medianAbsDelta).toBe(r.medianAbsDelta);
+  });
+
+  it('samples the median across the whole footprint, not the first points to arrive', () => {
+    // The buffer caps at 10 000. Filling it with the first 10 000 inside points
+    // would read one corner of a cloud ordered by scanline or tile, so the
+    // reservoir draws across all of them. Heights rise with x, so a corner-only
+    // sample lands far from the population median.
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 40_000; i++) {
+      const x = 1 + (i % 200);
+      const y = 1 + Math.floor(i / 200);
+      pts.push([x, y, x * 0.05]);
+    }
+    const r = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack(pts),
+    });
+    expect(r.pointsInPolygon).toBe(40_000);
+    // True population median height is 100.5 * 0.05 ≈ 5.025. The first 10 000
+    // points cover x in [1, 200] repeatedly, but a corner-biased fill of an
+    // x-sorted cloud would sit near 2.5.
+    expect(r.medianAbsDelta).toBeGreaterThan(4.5);
+    expect(r.medianAbsDelta).toBeLessThan(5.5);
+  });
+
+  it('reports the majority height on a duplicate-heavy cloud, whichever way it is ordered', () => {
+    // Two coordinate groups, one three times the size of the other. The median
+    // is the majority group's height. This is asserted in BOTH directions: a
+    // sampler that keyed on coordinates alone would let the 10 000-point group
+    // fill every slot and report ITS height regardless of which group is larger.
+    const build = (zMinority: number, zMajority: number): [number, number, number][] => {
+      const pts: [number, number, number][] = [];
+      for (let i = 0; i < 10_000; i++) pts.push([500, 500, zMinority]);
+      for (let i = 0; i < 30_000; i++) pts.push([500, 500, zMajority]);
+      return pts;
+    };
+    for (const [zMinority, zMajority] of [[9, 1], [1, 9]] as const) {
+      const r = volumeCutFill({
+        polygon: SQUARE_1KM,
+        referenceZ: 0,
+        up: Z_UP,
+        positions: pack(build(zMinority, zMajority)),
+      });
+      expect(r.pointsInPolygon).toBe(40_000);
+      expect(r.medianAbsDelta).toBeCloseTo(zMajority, 6);
+    }
+  });
+
+  it('returns the same median for the same input', () => {
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 20_000; i++) pts.push([100 + (i % 100), 100 + (i % 37), (i % 91) * 0.1]);
+    const input = { polygon: SQUARE_1KM, referenceZ: 0, up: Z_UP, positions: pack(pts) };
+    expect(volumeCutFill(input).medianAbsDelta).toBe(volumeCutFill(input).medianAbsDelta);
   });
 });
 
