@@ -108,7 +108,9 @@ The cut/fill estimator multiplies the footprint area by the mean height of the p
 
 Measured on a tilted plane whose true volume is 2 m3, with one half of the footprint sampled twice as densely as the other: 2.075 m3, an overstatement of 3.75 per cent. Raising the sample count from 5000 to 320000 returned 2.075 m3 at every step, identical to six decimals. This is the one volume error in the suite that does not shrink as sampling improves, because it is a property of where the points sit rather than how many there are. The same one-sided doubling on a shape symmetric about its centroid costs 0.0031 per cent, which is what identifies the height gradient as the cause.
 
-Everything else measured converges. Against exactly integrable solids the estimator reproduces the closed-form volume to 1.25e-3 per cent or better at 160000 samples, improving by a factor of four each time the sample spacing halves. `tests/analyticVolumeOracle.test.ts` holds the figures.
+Every other error measured does shrink with sampling. Against exactly integrable solids the estimator reproduces the closed-form volume to 1.25e-3 per cent or better at 160000 samples, improving by a factor of four each time the sample spacing halves. One case is not monotone: where the reference plane cuts through the solid, the error changes sign between sample counts because the level set falls at a different position relative to the sample lattice each time, though its magnitude still falls. The figures are in `tests/analyticVolumeOracle.test.ts`.
+
+Those solids all sit on a square footprint, which is what makes their closed forms exact. A tilted plane integrates exactly over any polygon and is checked that way; the curved and ridged solids are not, so none of these figures describes a concave or irregular footprint.
 
 ## Volume accuracy depends on the render-local position contract
 
