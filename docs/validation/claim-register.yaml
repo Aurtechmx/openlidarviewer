@@ -320,7 +320,7 @@ claims:
     claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Refuses on geographic degrees; local metric only."
@@ -347,7 +347,7 @@ claims:
     claim: "Stockpile volume above a reference base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Local metric; refuses geographic degrees."
