@@ -24,7 +24,17 @@ import type { DecodedColumns } from './compressedVector';
 export interface E57ScanData {
   name: string;
   guid: string;
+  /**
+   * Records the decoded columns actually hold. Equal to `declaredRecordCount`
+   * for an unstrided parse; `ceil(declaredRecordCount / stride)` for a strided
+   * one. Every consumer that walks the columns indexes against THIS.
+   */
   recordCount: number;
+  /**
+   * Records the file's XML declares for this scan, whatever the parse read.
+   * The source count a strided load has to keep disclosing.
+   */
+  declaredRecordCount: number;
   /** Decoded point columns, keyed by prototype field name. */
   columns: DecodedColumns;
   /** The prototype fields, so callers know which columns exist and their kind. */
@@ -62,6 +72,13 @@ export interface ParseE57Options {
    * rely on it). The loader passes a predicate to skip columns it never reads.
    */
   keepField?: (name: string) => boolean;
+  /**
+   * Read one record per bucket of `stride` rather than every record. 1 (the
+   * default) reads every record. The loader sets this from its decode plan when
+   * a full read would not fit in memory; the sampling is stratified and
+   * jittered, and every column of every scan lands on the same records.
+   */
+  stride?: number;
 }
 
 /** Parse an E57 file into decoded scans and file metadata. */
@@ -85,10 +102,14 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
     throw new Error('E57: the file contains no 3D scans.');
   }
 
+  const stride = Math.max(1, Math.floor(opts?.stride ?? 1));
   const scans: E57ScanData[] = document.scans.map((scan) => ({
     name: scan.name,
     guid: scan.guid,
-    recordCount: scan.recordCount,
+    // What the columns below will hold. `decodeCompressedVector` keeps one
+    // record per bucket, so the two counts diverge exactly when a stride is set.
+    recordCount: stride === 1 ? scan.recordCount : Math.ceil(scan.recordCount / stride),
+    declaredRecordCount: scan.recordCount,
     fields: scan.prototype,
     pose: scan.pose,
     colorMax: scan.colorMax,
@@ -99,7 +120,7 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
       scan.recordCount,
       scan.prototype,
       header.pageSize,
-      opts?.keepField,
+      { keepField: opts?.keepField, stride },
     ),
   }));
 

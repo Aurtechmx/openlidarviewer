@@ -8,11 +8,14 @@ import { POINT_BUDGET, parseBuffer } from './parseBuffer';
 import { parseLasHeader, lasDecodedAttributes } from './lasHeader';
 import {
   planLoad,
+  planE57Decode,
+  formatPointCount,
   NON_STREAMING_FORMATS,
   LARGE_NON_LAS_THRESHOLD_BYTES,
   LARGE_STATIC_LAS_THRESHOLD_BYTES,
 } from './loadPlan';
-import type { LoadPlan } from './loadPlan';
+import type { LoadPlan, E57DecodePlan } from './loadPlan';
+import type { E57Preflight } from './e57/preflight';
 import { formatByteSize } from './formatByteSize';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
@@ -130,13 +133,62 @@ function buildLasPlan(
   }
 }
 
+/** What an E57 declares about itself, plus how it will be decoded. */
+export interface E57FilePreflight {
+  declared: E57Preflight;
+  plan: E57DecodePlan;
+}
+
 /**
- * A file's detected format plus, for LAS/LAZ, its budget-aware load plan, and
- * for PTS the point count read from its optional header line.
+ * Read an E57's declared facts and plan its decode, without decoding a point.
+ *
+ * The 48-byte header sits in the head slice already read; it names the XML
+ * section, which is fetched as a second small slice — a few tens of KB even on
+ * a 600 MB file. That is the E57 equivalent of reading a LAS public header, and
+ * it is what lets the preload summary state the real point count and the real
+ * memory verdict BEFORE the whole file is pulled into memory.
+ *
+ * The E57 reader is dynamically imported so it stays in its own lazily-fetched
+ * chunk; opening a `.las` must not download the E57 parser.
+ *
+ * Returns `undefined` when anything about the declaration will not read. The
+ * preflight is informational and never load-blocking: the loader re-reads the
+ * same header during the decode and reports a proper error there.
+ */
+async function buildE57Preflight(
+  file: File,
+  headSlice: ArrayBuffer,
+  options: LoadOptions,
+): Promise<E57FilePreflight | undefined> {
+  try {
+    const { e57XmlPageRunFromHead, preflightE57FromXmlPages } = await import('./e57/preflight');
+    const run = e57XmlPageRunFromHead(headSlice, file.size);
+    const pages = await file.slice(run.physicalStart, run.physicalEnd).arrayBuffer();
+    const declared = preflightE57FromXmlPages(new Uint8Array(pages), run);
+    const plan = planE57Decode({
+      sourceCount: declared.recordCount,
+      fileBytes: file.size,
+      columnsPerRecord: declared.columnsPerRecord,
+      attributes: declared.attributes,
+      isMobile: options.isMobile ?? false,
+      deviceMemoryGB: options.deviceMemoryGB,
+    });
+    return { declared, plan };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A file's detected format plus, for LAS/LAZ, its budget-aware load plan, for
+ * E57 its declared scan facts and decode plan, and for PTS the point count read
+ * from its optional header line.
  */
 interface FilePreflight {
   format: SourceFormat;
   plan?: LoadPlan;
+  /** E57 only — the declaration and decode plan `buildE57Preflight` produced. */
+  e57?: E57FilePreflight;
   /** Point count from a header that exposes one without a plan (PTS). */
   headerPointCount?: number;
   /**
@@ -200,6 +252,8 @@ async function preflightFile(
   const preflight: FilePreflight = { format };
   if (format === 'las' || format === 'laz') {
     preflight.plan = buildLasPlan(headSlice, format, file.size, budget, options);
+  } else if (format === 'e57') {
+    preflight.e57 = await buildE57Preflight(file, headSlice, options);
   } else if (format === 'pts') {
     preflight.headerPointCount = readPtsHeaderCount(headSlice);
   }
@@ -233,6 +287,12 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
     meta.estimatedPointCount = plan.sourceCount;
     meta.loadModeSummary =
       plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
+  } else if (preflight.e57) {
+    // E57's declared record total is read from its XML section, so it can state
+    // a real count and a real mode up front exactly as LAS does.
+    meta.estimatedPointCount = preflight.e57.plan.sourceCount;
+    meta.loadModeSummary =
+      preflight.e57.plan.mode === 'all' ? 'Standard load' : 'Large-file optimization enabled';
   } else if (headerPointCount !== undefined) {
     meta.estimatedPointCount = headerPointCount;
   }
@@ -252,6 +312,24 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
       `memory needed is above what this device can be expected to give the tab, even at ` +
       `the smallest load setting. The open may fail. Convert to COPC/EPT (PDAL or ` +
       `untwine) to stream it instead.`;
+  } else if (preflight.e57 && !preflight.e57.plan.fits) {
+    // Read off the file's own declaration, so this is a verdict rather than a
+    // size-based guess: the open WILL be refused, and it says why before the
+    // user waits for a multi-hundred-megabyte read.
+    meta.warning =
+      `${formatInfo(format).label} too large for this device — reading it needs about ` +
+      `${formatByteSize(preflight.e57.plan.fullDecodeEstimateBytes)} against a ` +
+      `${formatByteSize(preflight.e57.plan.ceilingBytes)} budget, and no sample small ` +
+      `enough to fit would be worth showing. Convert to COPC/EPT (PDAL or untwine) to ` +
+      `stream it instead.`;
+  } else if (preflight.e57 && preflight.e57.plan.stride > 1) {
+    meta.warning =
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — reading every ` +
+      `record needs about ${formatByteSize(preflight.e57.plan.fullDecodeEstimateBytes)}, ` +
+      `so it will be read as a SAMPLE of one record per ${preflight.e57.plan.stride} ` +
+      `(${formatPointCount(preflight.e57.plan.decodedCount)} of ` +
+      `${formatPointCount(preflight.e57.plan.sourceCount)} points). Counts and densities ` +
+      `will describe the sample. Convert to COPC/EPT (PDAL or untwine) for all of it.`;
   } else if (preflight.largeNonLasFormat || plan?.largeNonLasFormat) {
     // LAS/LAZ carries this one on the plan; non-LAS formats carry it on
     // `preflight.largeNonLasFormat` (set above). Either way the user sees it

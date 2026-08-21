@@ -32,6 +32,7 @@ function scan(
     name,
     guid: `guid-${name}`,
     recordCount,
+    declaredRecordCount: recordCount,
     columns,
     fields: [],
     pose,

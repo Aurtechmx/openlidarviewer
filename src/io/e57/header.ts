@@ -57,8 +57,17 @@ function readUint64(view: DataView, offset: number, field: string): number {
   return value;
 }
 
-/** Parse and validate the 48-byte E57 header. Throws on a non-E57 file. */
-export function parseE57Header(buffer: ArrayBuffer): E57Header {
+/**
+ * Parse and validate the 48-byte E57 header. Throws on a non-E57 file.
+ *
+ * `fileBytes` is the length of the file the header came from. It defaults to
+ * `buffer.byteLength`, which is what a whole-file caller passes implicitly. The
+ * preflight reads the header out of a small HEAD SLICE, where the buffer is
+ * shorter than the file by design, so it passes the real file length and the
+ * truncation check below keeps its meaning instead of firing on every large
+ * file.
+ */
+export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLength): E57Header {
   if (buffer.byteLength < 48) {
     throw new Error('Not an E57 file: shorter than the 48-byte header.');
   }
@@ -86,10 +95,10 @@ export function parseE57Header(buffer: ArrayBuffer): E57Header {
   // loss, whereas trailing extra bytes are left to `depage`, which checksums
   // every page present and will reject junk on its own terms.
   const filePhysicalLength = readUint64(view, 16, 'the file length');
-  if (filePhysicalLength > buffer.byteLength) {
+  if (filePhysicalLength > fileBytes) {
     throw new Error(
       `E57 file is truncated: the header declares ${filePhysicalLength} bytes ` +
-        `but only ${buffer.byteLength} are present.`,
+        `but only ${fileBytes} are present.`,
     );
   }
 

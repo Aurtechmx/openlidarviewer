@@ -145,6 +145,13 @@ export interface MemoryEstimateInput {
   attributes: PointAttributes;
   fileBytes: number;
   format: SourceFormat;
+  /**
+   * E57 only: Float64 decode columns the parse materialises per record, from
+   * the E57 preflight (`summariseE57Scans`). Omitted, the estimate still counts
+   * the file copies and the merged arrays but not the columns, which is the
+   * largest term — so an E57 estimate without it is a floor, not a peak.
+   */
+  decodeColumnsPerPoint?: number;
 }
 
 // --- tuning constants ------------------------------------------------------
@@ -182,6 +189,85 @@ const BYTES_LAS_EXTRAS = 12;
 
 /** Fixed laz-perf WASM scratch allowance, on top of the heap's file copy. */
 const LAZ_SCRATCH_BYTES = 16_000_000;
+
+// --- E57 decode cost -------------------------------------------------------
+//
+// The E57 reader's peak is nothing like the LAS reader's, and the generic
+// `pointCount * perPointBytes + fileBytes` model under-reports it by about 3x.
+// The constants below were fitted to measured peaks, not assumed; the fit is
+// recorded in `tests/loadPlanE57Memory.test.ts`, which re-derives each measured
+// figure from the model.
+//
+// WHAT THE DECODE ACTUALLY HOLDS, CONCURRENTLY:
+//
+//   1. the source ArrayBuffer, alive for the whole parse;
+//   2. the de-paged logical buffer — a second, near-identical copy of the file,
+//      because `depage` strips the per-page CRC trailers into a fresh buffer;
+//   3. one Float64Array per CONSUMED prototype field per scan, and every scan's
+//      columns are alive at once because the parse returns them all before the
+//      merge starts. This is the largest term and the one the generic model has
+//      no expression for at all;
+//   4. the merged Float64 xyz buffer plus the merged attribute arrays;
+//   5. the Float32 positions the recentre produces, alive beside (4).
+//
+// Terms 1 and 2 give the two file-byte costs. Terms 3-5 give the per-record
+// cost below.
+
+/** Bytes one decoded E57 column value occupies (`Float64Array`, one per field). */
+const E57_COLUMN_BYTES = 8;
+
+/** Bytes the merged global-coordinate buffer holds per point (Float64 x3). */
+const E57_MERGE_XYZ_BYTES = 24;
+
+/**
+ * Copies of the file the E57 decode holds at once: the source ArrayBuffer and
+ * the de-paged logical buffer (`pageSize - 4` of every `pageSize` bytes, so
+ * within 0.4 % of the source at the 1024-byte page size every E57 in
+ * circulation uses).
+ */
+const E57_FILE_COPIES = 2;
+
+/**
+ * Headroom over the itemised array total above.
+ *
+ * The five terms account for every array the decode KEEPS. What they do not
+ * itemise is the per-field bytestream concatenation it allocates and drops one
+ * field at a time, bounded by a single scan's widest field (22 MB on the
+ * 616 MB, 26.9 M-record file measured), plus allocator slack.
+ *
+ * Measured peak committed bytes exceeded the itemised total by at most 28 MB
+ * across six real files spanning 0.4 MB to 616 MB, and the excess did not track
+ * file size. So this is a flat allowance sized well above every observation
+ * rather than a fraction that would have to be wrong at one end of the range —
+ * and it is deliberately generous, because the failure it guards against is a
+ * dead tab, not a slow load.
+ */
+const E57_RESIDENT_SLACK_BYTES = 200_000_000;
+
+/**
+ * Ceiling the E57 whole-file decode may plan to occupy, on top of the shared
+ * device-memory ceiling.
+ *
+ * `memoryCeilingBytes` is a fraction of what the DEVICE reports, and a browser
+ * caps `navigator.deviceMemory` at 8, so on any well-provisioned desktop it
+ * resolves to 4.8 GB. A tab does not get 4.8 GB: opening a 616 MB, 26.9 M-point
+ * E57 committed 3.57 GB of typed arrays and killed the tab outright. LAS/LAZ can
+ * answer an over-ceiling estimate by building an out-of-core tile store
+ * (`buildThenStream`); a whole-file decode has no such fallback, so it is held
+ * to the low end of a tab's practical working set, leaving the render buffers
+ * and the application itself their share of the same process.
+ */
+export const E57_DECODE_CEILING_BYTES = 2_000_000_000;
+
+/**
+ * Fewest points a strided E57 decode may leave. Below this a "sample of the
+ * scan" stops being one: the same floor `planLoad`'s memory guard refuses to
+ * plan under. Checked against the points the chosen stride actually keeps, not
+ * against the room the ceiling leaves — a whole-number stride rounded up to fit
+ * can keep far fewer points than the room would have held. A file that cannot
+ * reach the floor is refused rather than decoded.
+ */
+const E57_MIN_SAMPLE_POINTS = MIN_BUDGET_FLOOR;
 
 // --- mode selection --------------------------------------------------------
 
@@ -237,15 +323,47 @@ function perPointBytes(a: PointAttributes): number {
  * smaller, safer load rather than risking an out-of-memory crash.
  */
 export function estimateMemoryBytes(input: MemoryEstimateInput): number {
-  const points = Math.max(0, input.pointCount) * perPointBytes(input.attributes);
   const fileBytes = Math.max(0, input.fileBytes);
+  const count = Math.max(0, input.pointCount);
+  if (input.format === 'e57') {
+    return (
+      E57_FILE_COPIES * fileBytes +
+      E57_RESIDENT_SLACK_BYTES +
+      count * e57BytesPerRecord(input.decodeColumnsPerPoint ?? 0, input.attributes)
+    );
+  }
+  const points = count * perPointBytes(input.attributes);
   let total = points + fileBytes;
   if (input.format === 'laz') total += fileBytes + LAZ_SCRATCH_BYTES;
   return total;
 }
 
-/** Memory ceiling a single load may plan to occupy, in bytes. */
-function memoryCeilingBytes(deviceMemoryGB: number | undefined, isMobile: boolean): number {
+/**
+ * Bytes one E57 record costs at the decode's peak: its Float64 columns, its
+ * slot in the merged Float64 xyz buffer and the merged attribute arrays, and
+ * its slot in the Float32 cloud the recentre produces beside them. Every one of
+ * those is alive at the same moment (see the E57 decode cost note above).
+ */
+export function e57BytesPerRecord(
+  columnsPerRecord: number,
+  attributes: PointAttributes,
+): number {
+  const attributeBytes = perPointBytes(attributes) - BYTES_POSITION;
+  return (
+    E57_COLUMN_BYTES * Math.max(0, columnsPerRecord) +
+    E57_MERGE_XYZ_BYTES +
+    attributeBytes +
+    BYTES_POSITION
+  );
+}
+
+/**
+ * Memory ceiling a single load may plan to occupy, in bytes.
+ *
+ * Exported so a loader that plans its own decode can name the same number in a
+ * refusal message rather than quoting a second, differently-derived figure.
+ */
+export function memoryCeilingBytes(deviceMemoryGB: number | undefined, isMobile: boolean): number {
   if (deviceMemoryGB !== undefined && deviceMemoryGB > 0) {
     const fraction = isMobile ? MOBILE_MEMORY_FRACTION : DESKTOP_MEMORY_FRACTION;
     return deviceMemoryGB * 1_000_000_000 * fraction;
@@ -395,5 +513,132 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     mayExceedCeiling,
     largeNonLasFormat,
     buildThenStream,
+  };
+}
+
+// --- the E57 decode plan ---------------------------------------------------
+
+/** What `planE57Decode` needs, all of it from the E57 preflight plus the device. */
+export interface E57DecodePlanInput {
+  /** Declared record total across the scans that merge, from the E57 preflight. */
+  sourceCount: number;
+  /** Size of the file, in bytes. */
+  fileBytes: number;
+  /** Float64 decode columns the parse materialises per record. */
+  columnsPerRecord: number;
+  /** Attributes the merged cloud will carry. */
+  attributes: PointAttributes;
+  /** True on phones — tightens the ceiling. */
+  isMobile: boolean;
+  /** `navigator.deviceMemory` in GB when the browser reports it, else undefined. */
+  deviceMemoryGB?: number;
+}
+
+/** How an E57 file will be decoded, decided before a point is read. */
+export interface E57DecodePlan {
+  /** `all` reads every record; `stride` reads one record per bucket. */
+  mode: LoadMode;
+  /** Read every `stride`-th record. Always 1 unless `mode === 'stride'`. */
+  stride: number;
+  /** Declared record total the plan started from. */
+  sourceCount: number;
+  /**
+   * Records the decode will read: `ceil(sourceCount / stride)`. The stride is
+   * applied per SCAN, so a multi-scan file rounds up once per scan and can read
+   * up to `scanCount - 1` records more than this (2 more on the 10-scan,
+   * 26.9 M-record file measured). The cloud reports what it actually read.
+   */
+  decodedCount: number;
+  /** Estimated peak for the chosen mode, in bytes. */
+  memoryEstimateBytes: number;
+  /** Estimated peak for reading every record, in bytes — what a refusal reports. */
+  fullDecodeEstimateBytes: number;
+  /** The ceiling the estimate was judged against, in bytes. */
+  ceilingBytes: number;
+  /**
+   * False when no stride down to the minimum sample brings the estimate under
+   * the ceiling. The loader refuses BEFORE decoding rather than starting a read
+   * it has already worked out cannot finish.
+   */
+  fits: boolean;
+}
+
+/**
+ * Decide how to read an E57 file from what it declares about itself.
+ *
+ * Three outcomes, the same three the LAS path has: read every record when the
+ * estimate fits; read one record per bucket at the smallest stride that fits;
+ * refuse when even the minimum sample does not. The stride is stratified and
+ * jittered at decode (see `strideSample.ts`), so the sample carries no
+ * scan-line phase.
+ *
+ * The point budget plays no part here. The E57 decode's peak is reached and
+ * released inside the loader, before the budget voxel-reduce runs on the
+ * returned cloud, and that later step's peak — the returned cloud plus its
+ * reduction — is an order of magnitude below the decode's. So this plan answers
+ * one question only: what fits in memory.
+ */
+export function planE57Decode(input: E57DecodePlanInput): E57DecodePlan {
+  const sourceCount = Math.max(0, Math.floor(input.sourceCount));
+  const fileBytes = Math.max(0, input.fileBytes);
+  const perRecord = e57BytesPerRecord(input.columnsPerRecord, input.attributes);
+  const ceilingBytes = Math.min(
+    memoryCeilingBytes(input.deviceMemoryGB, input.isMobile),
+    E57_DECODE_CEILING_BYTES,
+  );
+  const estimate = (records: number): number =>
+    estimateMemoryBytes({
+      pointCount: records,
+      attributes: input.attributes,
+      fileBytes,
+      format: 'e57',
+      decodeColumnsPerPoint: input.columnsPerRecord,
+    });
+
+  const fullDecodeEstimateBytes = estimate(sourceCount);
+  const base = {
+    sourceCount,
+    fullDecodeEstimateBytes,
+    ceilingBytes,
+  };
+  if (fullDecodeEstimateBytes <= ceilingBytes) {
+    return {
+      ...base,
+      mode: 'all',
+      stride: 1,
+      decodedCount: sourceCount,
+      memoryEstimateBytes: fullDecodeEstimateBytes,
+      fits: true,
+    };
+  }
+
+  // The file copies and the resident allowance are paid whatever the stride, so
+  // what is left over is all a strided decode has to spend on records.
+  const fixed = E57_FILE_COPIES * fileBytes + E57_RESIDENT_SLACK_BYTES;
+  const affordable = perRecord > 0 ? Math.floor((ceilingBytes - fixed) / perRecord) : 0;
+  const stride = affordable > 0 ? strideFor(sourceCount, affordable) : 0;
+  // Test the SURVIVING sample, not the room. A stride is a whole number, so
+  // rounding it up to fit can land well under what the room could have held —
+  // 900 k records with room for 260 k needs a stride of 4 and keeps 225 k, not
+  // 260 k. Guarding the room instead would let exactly those cases through.
+  const decodedCount = stride > 0 ? Math.ceil(sourceCount / stride) : 0;
+  if (decodedCount < E57_MIN_SAMPLE_POINTS) {
+    return {
+      ...base,
+      mode: 'all',
+      stride: 1,
+      decodedCount: sourceCount,
+      memoryEstimateBytes: fullDecodeEstimateBytes,
+      fits: false,
+    };
+  }
+
+  return {
+    ...base,
+    mode: 'stride',
+    stride,
+    decodedCount,
+    memoryEstimateBytes: estimate(decodedCount),
+    fits: true,
   };
 }

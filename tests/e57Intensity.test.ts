@@ -36,6 +36,7 @@ function scan(
     name: 'scan',
     guid: 'guid',
     recordCount,
+    declaredRecordCount: recordCount,
     columns: {
       cartesianX: Float64Array.from(intensityVals.map((_, i) => 10.5 + i)),
       cartesianY: Float64Array.from(intensityVals.map(() => 20.5)),
