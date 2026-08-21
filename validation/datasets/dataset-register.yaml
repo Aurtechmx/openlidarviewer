@@ -1021,6 +1021,39 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  - datasetId: OLV-DS-045-VT-STREAM-2026-PUBLISHED-DTM
+    title: "Virginia Tech StREAM Lab Spring 2026 published 0.1 m DTM"
+    sourceUrl: https://doi.org/10.5069/G9NZ85W7
+    landingPage: https://doi.org/10.5069/G9NZ85W7
+    licence: OpenTopography-attribution
+    licenceUrl: https://opentopography.org/usageterms
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-20
+    sourceSha256: 40c55c63d4d26159444dab98f43abe901310a1360511794f3e420c5d82eab8dd
+    sourceBytes: 68735859
+    format: geotiff
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: uas
+    captureDate: 2026-04-23
+    horizontalCrs: EPSG:6346
+    verticalCrs: EPSG:5703
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1294.86
+    terrainClasses: [riparian-corridor, open-field, dirt-road, stream-channel]
+    landCoverClasses: [bare-earth, grass, deciduous-forest, water]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Hession, W., Lehmann, L., Resop, J., Chandel, A. (Virginia Tech), distributed by OpenTopography"
+    citation: "Hession, W., Lehmann, L., Resop, J., Chandel, A. (2026). Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey. Distributed by OpenTopography. https://doi.org/10.5069/G9NZ85W7"
+    knownLimitations: "A derived product, not surveyed ground: it is the survey team's own interpolated surface and carries interpolated stream bathymetry rather than measured bed, so cells over the channel are modelled. Agreement with it bounds product-to-product difference and is not accuracy. The raster is 65 MB and not vendored; the committed reference is a 40 x 40 m mean aggregation onto the crop grid."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────
   - datasetId: OLV-DS-023-ANALYTIC-PROFILE-RAMP
     title: "Analytic corridor transect, 257 stations at 1 m with a cross-line elevation ramp"

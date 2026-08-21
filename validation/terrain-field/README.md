@@ -40,6 +40,36 @@ A 40 × 40 m riparian crop of the VT StREAM Lab drone survey (OpenTopography DOI
 
 **Why recall and vegetation-precision, not ground-precision.** OLV's ground is more *inclusive* than the survey's: the survey leaves ambiguous near-ground returns Unclassified, and OLV assigns those to ground, so ground precision against the survey's conservative class 2 measures a definitional difference, not an error. The honest, robust statements are that OLV catches the survey's ground (recall) and that when OLV calls a point vegetation it really is vegetation (precision). Both hold above 0.95 on real riparian terrain. The DTM leg is the same point-in-cell check as White Sands, confirming the gridding on ultra-dense drone data at a different UTM zone.
 
+### Against the survey team's own published DTM
+
+`references/sl-field__published-dtm.asc` is the 0.1 m DTM the survey team
+published beside the point cloud (OpenTopography DOI 10.5069/G9NZ85W7),
+aggregated by mean onto the crop's 1 m grid. It shares no code and no method
+with OLV, which makes it a different kind of reference from the bin-cell grid
+above: that one is scipy computing the same statistic and agreeing to
+3.4 × 10⁻⁵ m, this one is another team's product.
+
+| | |
+|---|---|
+| Cells measured by both | 1,071 of 1,600 |
+| Mean difference | +0.0153 m |
+| RMSE | 0.0716 m |
+| Within 0.10 m | 91.3 % |
+
+Three asymmetries make this a product-agreement bound rather than an accuracy
+figure. The committed crop is decimated 1:160, about 8 pts/m² against the
+survey's 1,295, so the published product saw 160 times more ground. Their
+method interpolates a continuous surface at 0.1 m where OLV takes the mean of
+the ground returns that land in each 1 m cell. And their DTM fills all 1,600
+cells because voids and the stream channel are interpolated, the channel
+carrying interpolated bathymetry rather than measured bed, so only cells where
+both carry a value are compared and OLV is never scored against an invented
+elevation. Restricting to open ground under 0.5 m of canopy barely moves the
+result (RMSE 0.0734 m), so the disagreement is not a canopy artifact.
+
+Neither surface is a check shot. Agreement between two derived products is not
+accuracy against surveyed ground.
+
 ## The Estonia leg (Lambert Conformal Conic national survey)
 
 A 100 × 100 m interior crop of the Estonian Land Board 2020 national LiDAR (tile 568539, Zenodo DOI 10.5281/zenodo.19232743, CC BY 4.0). Its coordinate system is **L-EST97 / Lambert Conformal Conic (EPSG:3301)** with an EH2000 vertical datum — a third projection family beside the UTM/TM White Sands and StREAM crops, so it checks OLV grids LCC easting/northing correctly. Flat boreal plain, ~1.6 m of relief, 12,571 class-2 ground returns.
@@ -119,4 +149,4 @@ The command is an orchestrator: the legs live in the harness test files and ever
 
 ## Boundaries
 
-This validates OLV's DTM **gridding** against independent implementations on real ground (two datasets, two UTM zones), and OLV's **ground classification** against a real survey classification. It does not on its own establish survey-grade accuracy (that needs surveyed ground control), and it does not yet cover: the StREAM Lab published 0.1 m DTM/CHM as a raster reference (needs the published product downloaded), ground extraction under the Hyytiälä forest canopy, and coastal ground + structure classification on the Pangandaran dataset. Those are the next crops, staged in `datasets/manifest.json`.
+This validates OLV's DTM **gridding** against independent implementations on real ground (two datasets, two UTM zones), and OLV's **ground classification** against a real survey classification. It does not on its own establish survey-grade accuracy (that needs surveyed ground control), and it does not yet cover: the StREAM Lab published 0.1 m CHM as a raster reference, ground extraction under the Hyytiälä forest canopy, and coastal ground + structure classification on the Pangandaran dataset. Those are the next crops, staged in `datasets/manifest.json`.
