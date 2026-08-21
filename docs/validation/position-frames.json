@@ -350,7 +350,7 @@
       "file": "src/render/measure/volume.ts",
       "symbol": "volumeCutFill",
       "frame": "project-local",
-      "reads": 4,
+      "reads": 1,
       "why": "Every caller (the Viewer volume sampler, the stockpile estimator, the lasso walk) supplies placed positions."
     },
     {

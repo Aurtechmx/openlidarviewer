@@ -498,27 +498,95 @@ describe('volumeCutFill — confidence + density fields', () => {
     expect(r.medianAbsDelta).toBeCloseTo(3, 5);
   });
 
+  const SQUARE_1KM: ReadonlyArray<[number, number, number]> = [
+    [0, 0, 0],
+    [1000, 0, 0],
+    [1000, 1000, 0],
+    [0, 1000, 0],
+  ];
+
   it('median samples the whole polygon, not just the first inside points', () => {
-    // Spatially-ordered cloud: the FIRST 10 000 inside points have |Δz| = 1,
-    // the next 30 000 have |Δz| = 9. The population is 75% nines, so the true
-    // median is 9. A first-10 000 buffer would see only the ones and report a
-    // biased median of 1. Reservoir sampling across all inside points must
-    // recover ~9.
+    // Spatially-ordered cloud: the FIRST 10 000 inside points have |Δz| = 1 and
+    // sit in one corner, the next 30 000 have |Δz| = 9 and sit in another. The
+    // population is 75% nines, so the true median is 9. A buffer holding the
+    // first 10 000 inside points would see only the ones and report a biased
+    // median of 1. The bottom-k sample spans all 40 000, so it recovers 9.
+    // Every point has distinct coordinates, which is what makes the sample
+    // spread across the population rather than land on one duplicate group.
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 10_000; i++) pts.push([1 + (i % 100), 1 + Math.floor(i / 100), 1]);
+    for (let i = 0; i < 30_000; i++) pts.push([200 + (i % 300), 200 + Math.floor(i / 300), 9]);
+    const input = { polygon: SQUARE_1KM, referenceZ: 0, up: Z_UP, positions: pack(pts) };
+    const r = volumeCutFill(input);
+    expect(r.pointsInPolygon).toBe(40_000);
+    expect(r.medianAbsDelta).toBe(9); // the true median, not the biased 1
+    // Deterministic: the coordinate-keyed sample gives the same median every run.
+    expect(volumeCutFill(input).medianAbsDelta).toBe(r.medianAbsDelta);
+  });
+
+  it('sampled median is identical when the same points arrive in another order', () => {
+    // Point order in a cloud comes from the file. Above the 10 000-point sample
+    // cap the sample is chosen by a key hashed from each point's own
+    // coordinates, so a file holding the same points in another order reports
+    // the same median rather than a nearby one.
+    // Distinct heights, straddling the plane, so the median genuinely depends
+    // on which 10 000 of the 40 000 points the sample keeps.
+    const pts: [number, number, number][] = [];
+    for (let i = 0; i < 40_000; i++) {
+      const x = 1 + (i % 200);
+      const y = 1 + Math.floor(i / 200);
+      pts.push([x, y, (x * 200 + y) * 0.0005 - 10]);
+    }
+    const forward = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack(pts),
+    });
+    expect(forward.pointsInPolygon).toBe(40_000);
+    const strided: [number, number, number][] = [];
+    for (let step = 0; step < 7; step++) {
+      for (let i = step; i < pts.length; i += 7) strided.push(pts[i]);
+    }
+    const reordered = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack([...pts].reverse()),
+    });
+    const shuffled = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack(strided),
+    });
+    expect(reordered.medianAbsDelta).toBe(forward.medianAbsDelta);
+    expect(shuffled.medianAbsDelta).toBe(forward.medianAbsDelta);
+  });
+
+  it('exact duplicate coordinates are one sampling unit and stay order-stable', () => {
+    // Points identical in all three coordinates hash identically, so they are
+    // admitted or rejected together and no bounded-memory rule can tell them
+    // apart without reading their positions in the stream. What holds either
+    // way is the invariance: the median does not move when the same duplicates
+    // arrive in another order.
     const pts: [number, number, number][] = [];
     for (let i = 0; i < 10_000; i++) pts.push([500, 500, 1]);
     for (let i = 0; i < 30_000; i++) pts.push([500, 500, 9]);
-    const square: ReadonlyArray<[number, number, number]> = [
-      [0, 0, 0],
-      [1000, 0, 0],
-      [1000, 1000, 0],
-      [0, 1000, 0],
-    ];
-    const input = { polygon: square, referenceZ: 0, up: Z_UP, positions: pack(pts) };
-    const r = volumeCutFill(input);
-    expect(r.pointsInPolygon).toBe(40_000);
-    expect(r.medianAbsDelta).toBeGreaterThan(8); // ≈ 9, the true median — not the biased 1
-    // Deterministic: the seeded reservoir gives the same median every run.
-    expect(volumeCutFill(input).medianAbsDelta).toBe(r.medianAbsDelta);
+    const base = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack(pts),
+    });
+    const reversed = volumeCutFill({
+      polygon: SQUARE_1KM,
+      referenceZ: 0,
+      up: Z_UP,
+      positions: pack([...pts].reverse()),
+    });
+    expect(base.pointsInPolygon).toBe(40_000);
+    expect(reversed.medianAbsDelta).toBe(base.medianAbsDelta);
   });
 });
 

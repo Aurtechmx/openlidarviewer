@@ -678,7 +678,7 @@ describe('metamorphic: volumeCutFill', () => {
       );
     });
 
-    it('PINNED: medianAbsDelta is bitwise permutation-stable below the 10 000 reservoir cap', () => {
+    it('HOLDS bitwise: medianAbsDelta is permutation-stable below the 10 000-sample cap', () => {
       for (let trial = 0; trial < 4; trial++) {
         const r = volumeCutFill({
           polygon: HEX,
@@ -690,20 +690,23 @@ describe('metamorphic: volumeCutFill', () => {
       }
     });
 
-    it('PINNED: medianAbsDelta is NOT permutation-stable above the reservoir cap', () => {
-      // volume.ts reservoir-samples |Δz| into a 10 000-slot buffer once more
-      // than that many points land inside the footprint, drawing slots from a
-      // fixed-seed xorshift keyed to encounter order. Reordering the buffer
-      // therefore selects a different sample and moves the median, while the
-      // fill/cut sums stay within summation noise. Measured at 24 080 inside
-      // points: median deviates by ~1.7e-2 relative, fill by 3.4e-15.
+    it('HOLDS bitwise: medianAbsDelta is permutation-stable ABOVE the sample cap', () => {
+      // Once more than 10 000 points land inside the footprint volume.ts keeps
+      // a bottom-k sample of |Δz|: every inside point carries a key hashed from
+      // its own float32 coordinate bits, and the 10 000 smallest keys are held
+      // in a max-heap. No part of the key reads the point's position in the
+      // stream, so the retained sample is a function of the inside-point set
+      // and the median is bit-identical under any reordering. Measured on
+      // 24 079 inside points over the 8 shuffles below: deviation exactly 0,
+      // against 9.8e-3 relative for the encounter-keyed draw this replaced.
+      // fill/cut carry their usual summation noise, worst 6.2e-15 here.
       const big = buildCloud(0xbeef, HEX, 44, SURFACE, 45_000);
       const src = emit(big, identity);
       const base = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: src });
       expect(base.pointsInPolygon).toBeGreaterThan(10_000);
+      expect(Number.isFinite(base.medianAbsDelta)).toBe(true);
 
-      let medianMoved = false;
-      for (let trial = 0; trial < 4; trial++) {
+      for (let trial = 0; trial < 8; trial++) {
         const r = volumeCutFill({
           polygon: HEX,
           referenceZ: PERM_REF_Z,
@@ -712,12 +715,27 @@ describe('metamorphic: volumeCutFill', () => {
         expect(r.pointsInPolygon).toBe(base.pointsInPolygon);
         assertRelClose(r.fill, base.fill, TOL_PERMUTATION, 'big permute fill');
         assertRelClose(r.cut, base.cut, TOL_PERMUTATION, 'big permute cut');
-        if (r.medianAbsDelta !== base.medianAbsDelta) medianMoved = true;
-        // The drift is a resampling effect, not divergence: it stays small
-        // against the median itself.
-        expect(relDiff(r.medianAbsDelta, base.medianAbsDelta)).toBeLessThan(0.1);
+        expect(r.medianAbsDelta).toBe(base.medianAbsDelta);
       }
-      expect(medianMoved).toBe(true);
+    });
+
+    it('HOLDS bitwise: the sampled median survives a reversal, not only a shuffle', () => {
+      // A reversal is the worst case for an encounter-ordered draw: every
+      // point's index changes, and a cloud written back-to-front is a real file
+      // layout rather than a synthetic permutation.
+      const big = buildCloud(0xbeef, HEX, 44, SURFACE, 45_000);
+      const src = emit(big, identity);
+      const base = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: src });
+      const reversed = new Float32Array(src.length);
+      const n = src.length / 3;
+      for (let i = 0; i < n; i++) {
+        reversed[i * 3] = src[(n - 1 - i) * 3];
+        reversed[i * 3 + 1] = src[(n - 1 - i) * 3 + 1];
+        reversed[i * 3 + 2] = src[(n - 1 - i) * 3 + 2];
+      }
+      const r = volumeCutFill({ polygon: HEX, referenceZ: PERM_REF_Z, positions: reversed });
+      expect(r.pointsInPolygon).toBe(base.pointsInPolygon);
+      expect(r.medianAbsDelta).toBe(base.medianAbsDelta);
     });
   });
 });
