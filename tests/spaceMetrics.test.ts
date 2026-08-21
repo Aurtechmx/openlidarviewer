@@ -9,6 +9,7 @@ import {
   sqMetresToSqFeet,
   cubicMetresToCubicFeet,
 } from '../src/terrain/spaceMetrics';
+import { classifyScanShape } from '../src/terrain/scanShape';
 
 function pts(triples: Array<[number, number, number]>): Float32Array {
   const a = new Float32Array(triples.length * 3);
@@ -326,5 +327,105 @@ describe('spaceMetrics — storeys & units & objects', () => {
     expect(m.enclosedVolumeM3).toBeNull();
     expect(m.storyCount).toBe(0);
     expect(m.floorAreaM2).toBe(0);
+  });
+});
+
+/**
+ * Reported L × W: the sides of the minimum-area rectangle around the clipped
+ * horizontal footprint, the rectangle `classifyScanShape` measures `aspect`
+ * against.
+ *
+ * Until v0.6.6 the pair came from a local 2-D PCA over the same sample: the
+ * covariance eigenvectors set the rectangle's direction, the projections onto
+ * them set its sides. A square room's covariance is c*I and a circular scan's
+ * is too, so on those the direction came from sampling noise and the rectangle
+ * drifted toward the footprint's diagonal: up to sqrt(2) times the true side,
+ * and different for two scans of the same room.
+ */
+describe('spaceMetrics — reported dimensions', () => {
+  /** `Math.random()` is banned in this repo; mulberry32 at a fixed seed gives
+   *  the same scene on every run and on every machine. */
+  function mulberry32(seed: number): () => number {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6d2b79f5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  /** A square room scanned point by point rather than on a lattice: walls,
+   *  floor and ceiling. Isotropic covariance, so the eigenvectors of the
+   *  horizontal projection carry no direction. */
+  function scannedSquareRoom(seed: number, side = 8, H = 2.6): Float32Array {
+    const rnd = mulberry32(seed);
+    const t: Array<[number, number, number]> = [];
+    for (let i = 0; i < 12000; i++) {
+      const s = rnd() * 4 * side;
+      let x: number, y: number;
+      if (s < side) { x = s; y = 0; }
+      else if (s < 2 * side) { x = side; y = s - side; }
+      else if (s < 3 * side) { x = 3 * side - s; y = side; }
+      else { x = 0; y = 4 * side - s; }
+      t.push([x, y, rnd() * H]);
+    }
+    for (let i = 0; i < 8000; i++) t.push([rnd() * side, rnd() * side, 0]);
+    for (let i = 0; i < 8000; i++) t.push([rnd() * side, rnd() * side, H]);
+    return pts(t);
+  }
+
+  function turned(p: Float32Array, deg: number): Float32Array {
+    const rad = (deg * Math.PI) / 180, c = Math.cos(rad), s = Math.sin(rad);
+    const out = new Float32Array(p.length);
+    for (let i = 0; i < p.length; i += 3) {
+      out[i] = p[i] * c - p[i + 1] * s;
+      out[i + 1] = p[i] * s + p[i + 1] * c;
+      out[i + 2] = p[i + 2];
+    }
+    return out;
+  }
+
+  it('reads a square room as its side, not its diagonal', () => {
+    // The 8 x 8 x 4 m fixture already in this suite. It reported 11.31 x 11.17,
+    // which is its 11.31 m diagonal, on a panel labelled "Dimensions (L×W×H)".
+    const m = spaceMetrics(room(8, 8, 4, 0.3), { upAxis: 'z', spaceKind: 'interior' });
+    expect(m.dims.lengthM).toBeCloseTo(8, 6);
+    expect(m.dims.widthM).toBeCloseTo(8, 6);
+  });
+
+  it('reports one room the same way however it was sampled', () => {
+    // Ten samplings of the same 8.00 m room. The eigenvector pair returned
+    // 9.5351 to 11.3127 m across them, so two scans of one room disagreed by
+    // 1.8 m with nothing in the room having changed.
+    for (const seed of [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]) {
+      const m = spaceMetrics(scannedSquareRoom(seed), { upAxis: 'z', spaceKind: 'interior' });
+      expect(m.dims.lengthM).toBeCloseTo(8, 3);
+      expect(m.dims.widthM).toBeCloseTo(8, 3);
+    }
+  });
+
+  it('holds L and W under rotation about the up axis', () => {
+    // A space's dimensions are a property of the space, not of how the scan
+    // happens to be oriented in its source CRS.
+    const base = spaceMetrics(room(), { upAxis: 'z', spaceKind: 'interior' });
+    for (const deg of [17, 45, 90, 123]) {
+      const m = spaceMetrics(turned(room(), deg), { upAxis: 'z', spaceKind: 'interior' });
+      expect(m.dims.lengthM).toBeCloseTo(base.dims.lengthM, 4);
+      expect(m.dims.widthM).toBeCloseTo(base.dims.widthM, 4);
+    }
+  });
+
+  it('prints the rectangle the router measured, not a second one', () => {
+    // `aspect` divides the vertical extent by the long side of this same
+    // rectangle, so on a metre scan with nothing clipped the panel's L is
+    // recoverable from the routing verdict. Two figures describing one scan
+    // must not imply two different footprints.
+    const pos = room();
+    const shape = classifyScanShape(pos, { verticalAxis: 'z' });
+    const m = spaceMetrics(pos, { upAxis: 'z', spaceKind: 'interior' });
+    expect(m.reasons.some((r) => /outside the dense footprint/.test(r))).toBe(false);
+    expect(m.dims.lengthM).toBeCloseTo(shape.extent[2] / shape.aspect, 6);
   });
 });

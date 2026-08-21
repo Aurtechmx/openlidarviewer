@@ -17,10 +17,17 @@
  *
  * `extent` still reports the axis-aligned box, which is what lets these tests
  * recompute the old value from a returned ScanShape.
+ *
+ * The last block covers the hull vertex cap. The rectangle scan is quadratic in
+ * the hull vertex count, and a densely sampled convex outline puts nearly every
+ * sampled point in convex position, so the scan measures at most 512 hull
+ * vertices spaced by arc position. These tests pin what that costs (the
+ * inscribed 512-gon's 1.9e-5) and that the retained vertices still span the
+ * whole outline.
  */
 
 import { describe, it, expect } from 'vitest';
-import { classifyScanShape, type ScanShape } from '../src/terrain/scanShape';
+import { classifyScanShape, footprintRect, type ScanShape } from '../src/terrain/scanShape';
 
 /** `Math.random()` is banned in this repo; mulberry32 at a fixed seed gives the
  *  same scene on every run and on every machine. */
@@ -137,6 +144,62 @@ function thresholdPyramid(): Float32Array {
   for (let x = -R; x <= R; x += 0.25)
     for (let y = -R; y <= R; y += 0.25)
       t.push([x, y, H * (1 - Math.max(Math.abs(x), Math.abs(y)) / R)]);
+  return f32(t);
+}
+
+/**
+ * A densely sampled CONVEX outline: a circle of radius 50 sampled at `nRim`
+ * distinct angles with a small vertical spread, over a sparse interior floor so
+ * the up-axis detector has a height field to score. Nearly every sampled point
+ * is in convex position, so the hull vertex count tracks the sample. This is a
+ * silo wall, a tunnel bore, a terrestrial scanner's outer ring.
+ */
+function convexOutline(nRim: number): Float32Array {
+  const rnd = mulberry32(0x51101);
+  const nFloor = Math.max(200, Math.floor(nRim * 0.1));
+  const p = new Float32Array((nRim + nFloor) * 3);
+  for (let i = 0; i < nRim; i++) {
+    const a = (2 * Math.PI * i) / nRim;
+    p[i * 3] = 50 * Math.cos(a);
+    p[i * 3 + 1] = 50 * Math.sin(a);
+    p[i * 3 + 2] = rnd() * 3;
+  }
+  for (let i = 0; i < nFloor; i++) {
+    const a = 2 * Math.PI * rnd(), r = 50 * Math.sqrt(rnd()), b = (nRim + i) * 3;
+    p[b] = r * Math.cos(a);
+    p[b + 1] = r * Math.sin(a);
+    p[b + 2] = rnd() * 0.05;
+  }
+  return p;
+}
+
+/** A cone over a disc of radius 10, its rim sampled at `nRim` angles, 13.013
+ *  tall so `aspect` lands 0.1 per cent above ASPECT_OBJECT (0.65). The rim is
+ *  the hull, so `nRim` decides whether the cap engages. */
+function rimmedCone(nRim: number): Float32Array {
+  const t: Array<[number, number, number]> = [];
+  for (let x = -10; x <= 10; x += 0.25)
+    for (let y = -10; y <= 10; y += 0.25)
+      if (Math.hypot(x, y) <= 10) t.push([x, y, 13.013 * (1 - Math.hypot(x, y) / 10)]);
+  for (let i = 0; i < nRim; i++) {
+    const a = (2 * Math.PI * i) / nRim;
+    t.push([10 * Math.cos(a), 10 * Math.sin(a), 0]);
+  }
+  return f32(t);
+}
+
+/** A dense circular outline of radius 1 at the origin plus a sparse tail out to
+ *  x = 200. Its hull is thousands of crowded arc vertices and a handful of far
+ *  ones, so the outline's size lives entirely in the vertices an index-ordered
+ *  truncation would discard. */
+function lollipop(nArc: number): Float32Array {
+  const rnd = mulberry32(0x10771);
+  const t: Array<[number, number, number]> = [];
+  for (let i = 0; i < nArc; i++) {
+    const a = (2 * Math.PI * i) / nArc;
+    t.push([Math.cos(a), Math.sin(a), rnd() * 0.02]);
+  }
+  for (let x = 1; x <= 200; x += 0.5) t.push([x, (rnd() - 0.5) * 0.02, rnd() * 0.02]);
   return f32(t);
 }
 
@@ -294,5 +357,217 @@ describe('scan-shape footprint size', () => {
       expect(s.aspect).toBeGreaterThan(0.65);
       expect(s.nonTerrain).toBe(true);
     });
+  });
+
+  describe('densely sampled convex outlines', () => {
+    // The rectangle scan is quadratic in the hull vertex count. An area-filling
+    // footprint hulls to a handful of vertices, but a convex outline hulls to
+    // its whole sample: 27016 vertices on an 80000-point ring, which measured
+    // 5075 ms before the cap. At most HULL_SCAN_CAP = 512 vertices are measured,
+    // chosen by arc position around the hull.
+
+    it('measures the outline diameter to within the inscribed 512-gon', () => {
+      // 512 vertices spaced around a circle inscribe a regular 512-gon, whose
+      // width is cos(pi/512) of the circle's, so the measured size is at most
+      // 1 - cos(pi/512) = 1.9e-5 short and never long.
+      const s = classifyScanShape(convexOutline(72000));
+      const footprint = s.extent[2] / s.aspect;
+      expect(footprint).toBeLessThanOrEqual(100 * (1 + 1e-6));
+      expect(relative(footprint, 100)).toBeLessThan(5e-5);
+    });
+
+    it('holds the verdict and `aspect` across the cap on a scan sitting on a bar', () => {
+      // Same cone at 0.6507, 0.1 per cent above ASPECT_OBJECT (0.65). A 400-vertex
+      // rim is under the cap and measured whole; a 72000-vertex rim is 140 times
+      // over it. The two agree to 1e-4, which is a sixth of the distance to the
+      // bar, and land on the same side of it.
+      const under = classifyScanShape(rimmedCone(400));
+      const over = classifyScanShape(rimmedCone(72000));
+      expect(verdict(over)).toEqual(verdict(under));
+      expect(Math.abs(over.aspect - under.aspect)).toBeLessThan(1e-4);
+      expect(under.aspect).toBeGreaterThan(0.65);
+      expect(over.aspect).toBeGreaterThan(0.65);
+    });
+
+    it('retains vertices spanning the whole outline, not one side of it', () => {
+      // The lollipop's size is the 200-long tail. Keeping the first 512 hull
+      // vertices in index order measures 0.16 of it, because the monotone chain
+      // emits the crowded arc first. Arc position keeps the far vertices.
+      const under = classifyScanShape(lollipop(200), { verticalAxis: 'z' });
+      for (const nArc of [20000, 60000]) {
+        const s = classifyScanShape(lollipop(nArc), { verticalAxis: 'z' });
+        const footprint = s.extent[2] / s.aspect;
+        expect(footprint).toBeGreaterThan(200);
+        expect(relative(footprint, under.extent[2] / under.aspect)).toBeLessThan(1e-6);
+      }
+    });
+
+    it('holds `aspect` through the rotation sweep above the cap', () => {
+      // Above the cap the retained set is anchored at the hull's lexicographic
+      // minimum, so it follows the frame and invariance is bounded by the same
+      // 1.9e-5 rather than exact. The bar is 1e-4; the sweep measures 3.3e-7.
+      const scene = convexOutline(72000);
+      const base = classifyScanShape(scene);
+      for (const deg of SWEEP) {
+        const s = classifyScanShape(turned(scene, deg));
+        expect(relative(s.aspect, base.aspect)).toBeLessThan(1e-4);
+        expect(verdict(s)).toEqual(verdict(base));
+      }
+    });
+
+    it('classifies a 79200-point convex outline without a multi-second stall', () => {
+      // classifyScanShape runs synchronously on the main thread during load.
+      // This scan took 5075 ms uncapped and takes about 22 ms capped; the bar is
+      // 2000 ms, which is 90 times the capped cost and under half the uncapped.
+      const scene = convexOutline(72000);
+      classifyScanShape(scene);
+      const t0 = performance.now();
+      classifyScanShape(scene);
+      expect(performance.now() - t0).toBeLessThan(2000);
+    });
+  });
+});
+
+/**
+ * The same rectangle, exported for the space report.
+ *
+ * `aspect` divides by the long side; `SpaceMetrics.dims` prints both sides as a
+ * space's L and W. The report used to derive its own pair from the covariance
+ * eigenvectors of the horizontal projection, which measures a different
+ * rectangle on any footprint whose covariance carries no direction.
+ */
+describe('footprintRect', () => {
+  /** Horizontal coordinates of an interleaved xyz buffer. */
+  const horizontals = (p: Float32Array): [number[], number[]] => {
+    const xs: number[] = [], ys: number[] = [];
+    for (let i = 0; i < p.length; i += 3) { xs.push(p[i]); ys.push(p[i + 1]); }
+    return [xs, ys];
+  };
+
+  /** Widest distance between any two points, i.e. the footprint's diameter. */
+  const diameter = (xs: readonly number[], ys: readonly number[]): number => {
+    let best = 0;
+    for (let i = 0; i < xs.length; i++)
+      for (let j = i + 1; j < xs.length; j++) {
+        const d = Math.hypot(xs[i] - xs[j], ys[i] - ys[j]);
+        if (d > best) best = d;
+      }
+    return best;
+  };
+
+  /** A square room scanned point by point: walls, floor and ceiling, no lattice.
+   *  Its covariance is isotropic, so the eigenvectors carry no direction. */
+  function scannedSquareRoom(seed: number, side = 8, H = 2.6): Float32Array {
+    const rnd = mulberry32(seed);
+    const t: Array<[number, number, number]> = [];
+    for (let i = 0; i < 12000; i++) {
+      const s = rnd() * 4 * side;
+      let x: number, y: number;
+      if (s < side) { x = s; y = 0; }
+      else if (s < 2 * side) { x = side; y = s - side; }
+      else if (s < 3 * side) { x = 3 * side - s; y = side; }
+      else { x = 0; y = 4 * side - s; }
+      t.push([x, y, rnd() * H]);
+    }
+    for (let i = 0; i < 8000; i++) t.push([rnd() * side, rnd() * side, 0]);
+    for (let i = 0; i < 8000; i++) t.push([rnd() * side, rnd() * side, H]);
+    return f32(t);
+  }
+
+  it('reports the same long side `aspect` divides by', () => {
+    // One definition for both consumers: the value the report prints as L is
+    // the value the router compares against ASPECT_OBJECT. Sampled under the
+    // 60000-point cap so `classifyScanShape` measures every point and the two
+    // read the same footprint.
+    for (const scene of [roomBox(), roughField(), thresholdPyramid()]) {
+      const s = classifyScanShape(scene);
+      const [xs, ys] = horizontals(scene);
+      expect(xs.length).toBeLessThan(60000);
+      expect(relative(footprintRect(xs, ys).longSide, s.extent[2] / s.aspect)).toBeLessThan(1e-12);
+    }
+  });
+
+  it('measures the side of a square footprint, not its diagonal', () => {
+    // The regression this replaced. A square's covariance is c*I, so the
+    // principal direction was fixed by sampling noise and the enclosing
+    // rectangle drifted toward the 11.31 m diagonal: the eigenvector estimator
+    // returned 9.5351 to 11.3127 m across these ten samplings of one 8.00 m
+    // room. The rectangle around the outline returns the side every time.
+    for (const seed of [1, 2, 3, 5, 8, 13, 21, 34, 55, 89]) {
+      const [xs, ys] = horizontals(scannedSquareRoom(seed));
+      const rect = footprintRect(xs, ys);
+      expect(rect.longSide).toBeCloseTo(8, 3);
+      expect(rect.shortSide).toBeCloseTo(8, 3);
+    }
+  });
+
+  it('holds both sides under rotation about the vertical axis', () => {
+    const scene = roomBox();
+    const [bx, by] = horizontals(scene);
+    const base = footprintRect(bx, by);
+    for (const deg of [7, 17, 31, 45, 90, 123]) {
+      const [xs, ys] = horizontals(turned(scene, deg));
+      const rect = footprintRect(xs, ys);
+      expect(relative(rect.longSide, base.longSide)).toBeLessThan(1e-5);
+      expect(relative(rect.shortSide, base.shortSide)).toBeLessThan(1e-5);
+    }
+  });
+
+  it('returns a rectangle that encloses the footprint, long side first', () => {
+    // Enclosure without recomputing the hull: every pair of points fits inside
+    // the rectangle, so no distance can exceed its diagonal, and the widest
+    // pair spans at least its long side. Point count kept small, since the
+    // check is quadratic.
+    const rnd = mulberry32(0xf007);
+    const shapes: Array<[string, Array<[number, number]>]> = [
+      ['disc', Array.from({ length: 300 }, () => {
+        const a = 2 * Math.PI * rnd(), r = 6 * Math.sqrt(rnd());
+        return [r * Math.cos(a), r * Math.sin(a)] as [number, number];
+      })],
+      ['diagonal slab', Array.from({ length: 300 }, () => {
+        const u = rnd() * 30 - 15, v = rnd() * 4 - 2;
+        return [(u - v) * Math.SQRT1_2, (u + v) * Math.SQRT1_2] as [number, number];
+      })],
+      ['L outline', Array.from({ length: 300 }, () => {
+        let x = rnd() * 10, y = rnd() * 10;
+        if (x > 4 && y > 4) { x -= 4; y -= 4; }
+        return [x, y] as [number, number];
+      })],
+    ];
+    for (const [, pairs] of shapes) {
+      const xs = pairs.map((p) => p[0]), ys = pairs.map((p) => p[1]);
+      const rect = footprintRect(xs, ys);
+      const d = diameter(xs, ys);
+      expect(rect.shortSide).toBeLessThanOrEqual(rect.longSide);
+      expect(rect.longSide).toBeLessThanOrEqual(d * (1 + 1e-9));
+      expect(Math.hypot(rect.longSide, rect.shortSide)).toBeGreaterThanOrEqual(d * (1 - 1e-9));
+    }
+  });
+
+  it('measures a footprint with no area as a segment', () => {
+    const xs: number[] = [], ys: number[] = [];
+    for (let x = 0; x <= 20; x += 0.5) { xs.push(x); ys.push(3); }
+    const rect = footprintRect(xs, ys);
+    expect(rect.longSide).toBeCloseTo(20, 9);
+    expect(rect.shortSide).toBe(0);
+  });
+
+  it('measures zero when there is no second distinct point', () => {
+    expect(footprintRect([], [])).toEqual({ longSide: 0, shortSide: 0 });
+    expect(footprintRect([2], [2])).toEqual({ longSide: 0, shortSide: 0 });
+    // Repeats of one position hull to nothing measurable.
+    expect(footprintRect([2, 2, 2], [2, 2, 2]).longSide).toBe(0);
+  });
+
+  it('drops non-finite coordinates instead of measuring them', () => {
+    const xs = [0, 4, 4, 0], ys = [0, 0, 3, 3];
+    const clean = footprintRect(xs, ys);
+    const dirty = footprintRect(
+      [...xs, Number.NaN, 7, Number.POSITIVE_INFINITY],
+      [...ys, 9, Number.NaN, 9],
+    );
+    expect(dirty).toEqual(clean);
+    expect(clean.longSide).toBeCloseTo(4, 9);
+    expect(clean.shortSide).toBeCloseTo(3, 9);
   });
 });
