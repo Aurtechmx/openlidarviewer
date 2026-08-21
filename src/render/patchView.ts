@@ -24,7 +24,7 @@
  * ships through the same module-graph seam every Stream A leaf uses.
  */
 
-import { srgbToLinearScalar, linearToSrgbScalar } from './colorEncode';
+import { srgbByteToLinear, linearToSrgbScalar } from './colorEncode';
 
 /** A 3D vector — `[x, y, z]`. */
 export type Vec3 = readonly [number, number, number];
@@ -111,12 +111,15 @@ function normalize(v: Vec3): Vec3 {
 
 /**
  * Piecewise sRGB Uint8 → linear (IEC 61966-2-1). Thin u8 adapter over the
- * shared `srgbToLinearScalar` seam in `colorEncode.ts` — itself an
+ * shared `srgbByteToLinear` seam in `colorEncode.ts` — itself an
  * import-free leaf, so this module's pure-leaf / Node-testable status is
  * preserved while the EOTF curve can no longer drift from the GPU path.
+ * `srgbByteToLinear` reads the byte's precomputed entry, which is the same
+ * double the formula returns; an out-of-bounds `colorsU8` read still yields
+ * NaN as before.
  */
 function srgb8ToLinearFloat(v: number): number {
-  return srgbToLinearScalar(v / 255);
+  return srgbByteToLinear(v);
 }
 
 /**
