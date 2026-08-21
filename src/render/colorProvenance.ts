@@ -23,7 +23,7 @@
  * of the math.
  */
 
-import { srgbToLinearScalar, linearToSrgbScalar } from './colorEncode';
+import { srgbByteToLinear, linearToSrgbScalar } from './colorEncode';
 
 /** A formatted colour provenance row — every channel as a string. */
 export interface ColorProvenance {
@@ -40,8 +40,12 @@ export interface ColorProvenance {
 // u8 adapter over the shared EOTF seam in `colorEncode.ts` (an import-free
 // leaf, so this module stays pure data). One curve for renderer and card —
 // the provenance values can no longer drift from what the GPU multiplies.
+// The argument is already clamped and rounded to an integer [0, 255] by
+// `clamp255`, so it reads the byte's precomputed entry; the Float64 table
+// returns the same double the formula did, so the formatted linear strings
+// are unchanged.
 function srgb8ToLinearFloat(v: number): number {
-  return srgbToLinearScalar(v / 255);
+  return srgbByteToLinear(v);
 }
 
 function linearFloatToSrgb8(v: number): number {
