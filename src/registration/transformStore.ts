@@ -20,7 +20,20 @@ export interface RigidTransform {
   readonly t: Vec3;
 }
 
-export const IDENTITY: RigidTransform = { R: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], t: [0, 0, 0] };
+/**
+ * The identity placement, and the base of every store's stack. `readonly` stops
+ * a write at compile time; the freeze stops one at runtime, where a cast would
+ * otherwise redefine "the original placement" for every layer at once. Frozen
+ * through the rows, since freezing the outer object leaves them writable.
+ */
+export const IDENTITY: RigidTransform = Object.freeze({
+  R: Object.freeze([
+    Object.freeze([1, 0, 0]),
+    Object.freeze([0, 1, 0]),
+    Object.freeze([0, 0, 1]),
+  ]) as Mat3,
+  t: Object.freeze([0, 0, 0]) as Vec3,
+});
 
 export class TransformStore {
   /** Stack of composed placements; [0] is always identity (the original). */

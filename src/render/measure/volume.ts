@@ -309,7 +309,17 @@ export function volumeCutFill(input: VolumeInput): VolumeResult {
   // tile, or strip (the first 10 000 cover only one corner of the polygon).
   // Reservoir sampling (Algorithm R) keeps a uniform sample across ALL inside
   // points instead, so the median describes the whole footprint. A fixed-seed
-  // xorshift keeps it deterministic — same input, same median.
+  // xorshift keeps it deterministic — the same points in the same order give
+  // the same median.
+  //
+  // Order is part of that contract. The draw is keyed to encounter order, so
+  // once the inside count passes MAX_DELTAS the same points supplied in a
+  // different order select a different sample: measured at 1.7e-2 relative on
+  // 24 080 inside points, against 3.4e-15 on `fill` and `cut` over the same
+  // reordering. The volume figures are order-invariant and this median, which
+  // qualifies them, is not. Below the cap every inside point is kept and the
+  // median is order-invariant too. `tests/invariantMeasurement.test.ts` pins
+  // both sides.
   const MAX_DELTAS = 10_000;
   const deltas = new Float64Array(MAX_DELTAS);
   let rngState = 0x9e3779b9 | 0; // fixed seed → reproducible sample
