@@ -320,9 +320,10 @@ describe('crsFromGeoTiff — projected CRS naming', () => {
     expect(north.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
     const south = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 32733]]), null, null);
     expect(south.name).toBe('WGS 84 / UTM zone 33S (EPSG:32733)');
-    // A code outside the systematic ranges must NOT be invented into a name.
-    const other = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 2056]]), null, null);
-    expect(other.name).toBe('EPSG:2056');
+    // A code neither the curated registry nor the systematic ranges know must
+    // NOT be invented into a name. 3414 (SVY21, Singapore) is one such code.
+    const other = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 3414]]), null, null);
+    expect(other.name).toBe('EPSG:3414');
   });
 
   it('still prefers a PROJECTED citation, which does describe this CRS', () => {
@@ -350,19 +351,24 @@ describe('crsFromGeoTiff — GTCitationGeoKey (1026)', () => {
   // 1026 at offset 0 (33 chars, terminator included), 2049 at offset 33.
   const UTM15_ASCII = ascii('UTM Zone 15, Northern Hemisphere|NAD83|');
 
-  it('names a projected CRS from 1026 when no 3073 is present', () => {
+  // 3414 (SVY21, Singapore) is projected and is known to neither the curated
+  // registry nor the systematic WGS 84 UTM ranges, so it isolates the 1026 rung
+  // of the precedence from the two code-derived rungs above it.
+  const UNCATALOGUED = 3414;
+
+  it('names a projected CRS from 1026 when the code is in no registry', () => {
     const bytes = geoKeyBytesWithAscii([
-      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, 26915],
+      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, UNCATALOGUED],
     ]);
     const crs = crsFromGeoTiff(bytes, UTM15_ASCII, null);
-    expect(crs.epsg).toBe(26915);
+    expect(crs.epsg).toBe(UNCATALOGUED);
     expect(crs.isGeographic).toBe(false);
-    expect(crs.name).toBe('UTM Zone 15, Northern Hemisphere (EPSG:26915)');
+    expect(crs.name).toBe('UTM Zone 15, Northern Hemisphere (EPSG:3414)');
   });
 
   it('strips the `|` terminator and everything after it', () => {
     const bytes = geoKeyBytesWithAscii([
-      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, 26915],
+      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, UNCATALOGUED],
     ]);
     const crs = crsFromGeoTiff(bytes, UTM15_ASCII, null);
     expect(crs.name).not.toContain('|');
@@ -370,26 +376,26 @@ describe('crsFromGeoTiff — GTCitationGeoKey (1026)', () => {
   });
 
   it('does not use GeogCitationGeoKey (2049) as the projected name when 1026 is absent', () => {
-    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 26915], [2049, 0, 34737, 6]]);
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, UNCATALOGUED], [2049, 0, 34737, 6]]);
     const crs = crsFromGeoTiff(bytes, ascii('NAD83|'), null);
-    expect(crs.name).toBe('EPSG:26915');
+    expect(crs.name).toBe('EPSG:3414');
     expect(crs.name).not.toContain('NAD83');
   });
 
   it('falls back to the EPSG code when no 1026 is present', () => {
-    const crs = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 26915]]), null, null);
-    expect(crs.name).toBe('EPSG:26915');
+    const crs = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, UNCATALOGUED]]), null, null);
+    expect(crs.name).toBe('EPSG:3414');
   });
 
   it('falls back to the EPSG code for an empty 1026', () => {
-    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 0], [3072, 26915]]);
-    expect(crsFromGeoTiff(bytes, ascii('|'), null).name).toBe('EPSG:26915');
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 0], [3072, UNCATALOGUED]]);
+    expect(crsFromGeoTiff(bytes, ascii('|'), null).name).toBe('EPSG:3414');
   });
 
   it('falls back to the EPSG code for a whitespace-only 1026', () => {
-    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 5], [3072, 26915]]);
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 5], [3072, UNCATALOGUED]]);
     const crs = crsFromGeoTiff(bytes, ascii('    |'), null);
-    expect(crs.name).toBe('EPSG:26915');
+    expect(crs.name).toBe('EPSG:3414');
     expect(crs.name.trim()).toBe(crs.name);
   });
 
@@ -402,6 +408,16 @@ describe('crsFromGeoTiff — GTCitationGeoKey (1026)', () => {
     expect(crs.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
   });
 
+  it('yields to 3073 even when 3073 disagrees with a registered code', () => {
+    // 3073 names the projected CRS by definition, so it outranks every
+    // code-derived name below it. ASCII: 3073 at 0 (12 chars), 1026 at 12.
+    const bytes = geoKeyBytesWithAscii([
+      [1024, 1], [1026, 12, 34737, 6], [3072, 26915], [3073, 0, 34737, 12],
+    ]);
+    const crs = crsFromGeoTiff(bytes, ascii('Survey grid|NAD83|'), null);
+    expect(crs.name).toBe('Survey grid (EPSG:26915)');
+  });
+
   it('leaves a geographic CRS naming unchanged', () => {
     const bytes = geoKeyBytesWithAscii([
       [1024, 2], [1026, 0, 34737, 8], [2048, 4326], [2049, 8, 34737, 7],
@@ -409,5 +425,70 @@ describe('crsFromGeoTiff — GTCitationGeoKey (1026)', () => {
     const crs = crsFromGeoTiff(bytes, ascii('GeoTIFF|WGS 84|'), null);
     expect(crs.isGeographic).toBe(true);
     expect(crs.name).toBe('WGS 84 (EPSG:4326)');
+  });
+});
+
+/**
+ * GTCitationGeoKey (1026) is free text. It is documented to describe the CRS
+ * the file is in, and nothing in the format guarantees the text names the
+ * PROJECTED CRS or carries its datum, so it must not outrank a name the EPSG
+ * code itself determines. Two ways that goes wrong in the field:
+ *
+ *   - a 32615 file whose 1026 reads "NAD83" (the base geographic datum) would
+ *     display "NAD83 (EPSG:32615)", which reads as a lat/lon CRS in degrees;
+ *   - a 26915 file whose 1026 reads "UTM Zone 15, Northern Hemisphere" would
+ *     display a zone with no datum, and zone 15N exists on NAD83, WGS 84 and
+ *     NAD27 alike, each metres apart.
+ *
+ * The curated CRS registry names both codes with their datum, so it sits above
+ * 1026 and below ProjectedCSCitationGeoKey (3073), which by definition names
+ * the projected CRS.
+ */
+describe('crsFromGeoTiff — code-derived names outrank GTCitationGeoKey (1026)', () => {
+  it('names 32615 from the registry, not from a 1026 that reads "NAD83"', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 6], [3072, 32615]]);
+    const crs = crsFromGeoTiff(bytes, ascii('NAD83|'), null);
+    expect(crs.epsg).toBe(32615);
+    expect(crs.isGeographic).toBe(false);
+    expect(crs.name).toBe('WGS 84 / UTM zone 15N (EPSG:32615)');
+    expect(crs.name).not.toContain('NAD83');
+  });
+
+  it('names 26915 with its datum, which a bare zone name does not carry', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 33], [3072, 26915]]);
+    const crs = crsFromGeoTiff(bytes, ascii('UTM Zone 15, Northern Hemisphere|'), null);
+    expect(crs.name).toBe('NAD83 / UTM zone 15N (EPSG:26915)');
+    expect(crs.name).toContain('NAD83');
+  });
+
+  it('uses the systematic WGS 84 UTM name for a zone the registry does not list', () => {
+    // 32629 is outside the registry's curated zone list, so the name comes from
+    // the systematic 326zz rule, which still outranks the free-text 1026.
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 6], [3072, 32629]]);
+    const crs = crsFromGeoTiff(bytes, ascii('NAD83|'), null);
+    expect(crs.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
+  });
+
+  it('still uses 1026 when the code is known to neither registry', () => {
+    // 3414 (SVY21, Singapore) has no curated label and is outside 326zz/327zz,
+    // so the writer's free text is the only name available and is used.
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 11], [3072, 3414]]);
+    const crs = crsFromGeoTiff(bytes, ascii('SVY21 / TM|'), null);
+    expect(crs.name).toBe('SVY21 / TM (EPSG:3414)');
+  });
+
+  it('leaves a geographic CRS with a registered code naming unchanged', () => {
+    // 4326 is a registered GEOGRAPHIC entry. The projected-only registry lookup
+    // must not reach it, so the geographic citation still names the CRS.
+    const bytes = geoKeyBytesWithAscii([[1024, 2], [2048, 4326], [2049, 0, 34737, 7]]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84|'), null);
+    expect(crs.isGeographic).toBe(true);
+    expect(crs.name).toBe('WGS 84 (EPSG:4326)');
+  });
+
+  it('leaves a geographic CRS with no citation on its bare code', () => {
+    const crs = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 2], [2048, 4326]]), null, null);
+    expect(crs.isGeographic).toBe(true);
+    expect(crs.name).toBe('EPSG:4326');
   });
 });

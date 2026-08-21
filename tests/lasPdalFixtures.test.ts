@@ -106,15 +106,17 @@ describe('utm15.las — CRS resolved from GeoTIFF keys', () => {
     expect(isLinearUnitKnown(header.crs)).toBe(true);
   });
 
-  test('GTCitationGeoKey (1026) names the CRS: the file carries no 3073 citation', () => {
+  test('the curated registry names the CRS, not the free-text GTCitationGeoKey', () => {
     // The two ASCII citations this file carries are GTCitationGeoKey (1026,
     // "UTM Zone 15, Northern Hemisphere") and GeogCitationGeoKey (2049,
-    // "NAD83"), both stored in 34737 with a `|` terminator. 1026 names the CRS
-    // the file is in, which here is the projected one. 2049 names the geographic
-    // base and is not used as the projected name.
-    expect(header.crs!.name).toBe('UTM Zone 15, Northern Hemisphere (EPSG:26915)');
+    // "NAD83"), both stored in 34737 with a `|` terminator. Neither is used as
+    // the name: 1026 is free text and its zone name carries no datum, and zone
+    // 15N exists on NAD83, WGS 84 and NAD27 alike. The code 26915 determines
+    // the datum, so the registry's label is what the file is named by, and the
+    // name must CONTAIN "NAD83" rather than omit it.
+    expect(header.crs!.name).toBe('NAD83 / UTM zone 15N (EPSG:26915)');
     expect(header.crs!.name).not.toContain('|');
-    expect(header.crs!.name).not.toContain('NAD83');
+    expect(header.crs!.name).toContain('NAD83');
   });
 
   test('the spatial context permits metric claims', () => {
