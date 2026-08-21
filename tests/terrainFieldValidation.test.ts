@@ -141,6 +141,7 @@ describe('OLV DTM vs real USGS 3DEP ground (White Sands dune crop)', () => {
 
 const SL_BIN = resolve(DIR, 'crops/sl-field.bin');
 const SL_REF_BINCELL = resolve(DIR, 'references/sl-field__bincell-dtm.asc');
+const SL_REF_PUBLISHED = resolve(DIR, 'references/sl-field__published-dtm.asc');
 const SL_GRID = { originH1: 549240, originH2: 4118390, cols: 40, rows: 40, cellSizeM: 1 } as const;
 
 /** Decode the packed SL crop: [xyz f32 n*3][rgb u16 n*3][rn u8 n][nr u8 n][cls u8 n]. */
@@ -226,6 +227,80 @@ function decimate(pts: TerrainPoint[], k: number): TerrainPoint[] {
   for (let i = 0; i < pts.length; i += k) out.push(pts[i]);
   return out;
 }
+
+/**
+ * OLV's DTM against the SURVEY'S OWN published product.
+ *
+ * The bin-cell check above is an implementation check: scipy and OLV compute
+ * the same statistic, so they agree to millimetres. This one is different in
+ * kind. The reference is the 0.1 m DTM the survey team published alongside the
+ * point cloud (OpenTopography DOI 10.5069/G9NZ85W7), aggregated by mean onto
+ * the crop's 1 m grid. Nothing about it shares a line of code or a method with
+ * OLV.
+ *
+ * Three asymmetries make this a product-agreement bound and NOT an accuracy
+ * figure, and the tolerance is set for them rather than against them:
+ *
+ *   1. Density. The committed crop is decimated 1:160, about 8 pts/m2 against
+ *      the survey's 1,295 pts/m2. The published product saw 160 times more
+ *      ground.
+ *   2. Method. Theirs interpolates a continuous surface at 0.1 m; OLV takes
+ *      the mean of the ground returns that actually fall in each 1 m cell.
+ *   3. Fill. Their DTM covers all 1,600 cells because voids and the stream
+ *      channel are interpolated (the channel carries interpolated bathymetry,
+ *      not measured bed). OLV leaves a cell empty when no ground return lands
+ *      in it. Only cells where BOTH carry a value are compared, so OLV is
+ *      never scored against an invented elevation.
+ *
+ * What it establishes: on real riparian terrain, OLV's ground surface tracks
+ * the surveyors' own product to within roughly a decimetre from a fraction of
+ * the data. What it does not establish: accuracy against surveyed ground.
+ * Neither surface here is a check shot, and agreement between two derived
+ * products is not truth.
+ */
+describe('OLV DTM vs the survey team\'s published 0.1 m DTM (StREAM Lab)', () => {
+  const has = existsSync(SL_BIN);
+  (has ? it : it.skip)(
+    'tracks the published product to within a decimetre on co-measured ground',
+    () => {
+      const { n, xyz, cls } = readSl();
+      const pts: TerrainPoint[] = [];
+      for (let i = 0; i < n; i++) {
+        if (cls[i] !== 2) continue;
+        pts.push({ x: xyz[i * 3] + SL_GRID.originH1, y: xyz[i * 3 + 1] + SL_GRID.originH2, z: xyz[i * 3 + 2] });
+      }
+      const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), {
+        grid: SL_GRID,
+        aggregation: 'mean',
+      });
+      const ref = readAsciiSouthUp(SL_REF_PUBLISHED);
+      const ours = Array.from(raster.z, (v) => (Number.isFinite(v) ? v : NaN));
+      const theirs = Array.from(ref.z, (v) => (v === ref.nodata ? NaN : v));
+
+      const diffs: number[] = [];
+      for (let i = 0; i < ours.length; i++) {
+        if (!Number.isFinite(ours[i]) || !Number.isFinite(theirs[i])) continue;
+        diffs.push(ours[i] - theirs[i]);
+      }
+      expect(diffs.length, 'cells measured by both').toBeGreaterThan(500);
+
+      const rmse = Math.sqrt(diffs.reduce((a, d) => a + d * d, 0) / diffs.length);
+      const mean = diffs.reduce((a, d) => a + d, 0) / diffs.length;
+      const within10cm = diffs.filter((d) => Math.abs(d) <= 0.1).length / diffs.length;
+
+      // eslint-disable-next-line no-console
+      console.log(
+        `[terrain-field] StREAM DTM vs published product: cells=${diffs.length} ` +
+          `mean=${mean.toFixed(4)} rmse=${rmse.toFixed(4)} within10cm=${(within10cm * 100).toFixed(1)}%`,
+      );
+
+      // Bounds chosen for the three asymmetries above, not fitted to the run.
+      expect(rmse, 'RMSE against the published product').toBeLessThan(0.15);
+      expect(Math.abs(mean), 'systematic offset').toBeLessThan(0.05);
+      expect(within10cm, 'fraction within a decimetre').toBeGreaterThan(0.85);
+    },
+  );
+});
 
 describe('perturbation — density reduction degrades coverage and accuracy together', () => {
   const hasGround = existsSync(GROUND);
