@@ -36,6 +36,25 @@ describe('tileset.json perimeter', () => {
     expect(() => parseTileset(tileset({}, { boundingVolume: { sphere: [1, 2, 3, 4, 5] } }))).toThrow(/4 components/);
   });
 
+  it('refuses a boundingVolume that declares more than one shape', () => {
+    const box = [0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 5];
+    const region = [0, 0, 0.1, 0.1, 0, 10];
+    const sphere = [0, 0, 0, 5];
+    expect(() => parseTileset(tileset({}, { boundingVolume: { box, sphere } }))).toThrow(/exactly one/);
+    expect(() => parseTileset(tileset({}, { boundingVolume: { box, region } }))).toThrow(/exactly one/);
+    expect(() => parseTileset(tileset({}, { boundingVolume: { region, sphere } }))).toThrow(/exactly one/);
+    expect(() => parseTileset(tileset({}, { boundingVolume: { box, region, sphere } }))).toThrow(/exactly one/);
+  });
+
+  it('accepts a single bounding volume of each kind', () => {
+    const box = [0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 5];
+    const region = [0, 0, 0.1, 0.1, 0, 10];
+    const sphere = [0, 0, 0, 5];
+    expect(parseTileset(tileset({}, { boundingVolume: { box } })).root.boundingVolume.box).toEqual(box);
+    expect(parseTileset(tileset({}, { boundingVolume: { region } })).root.boundingVolume.region).toEqual(region);
+    expect(parseTileset(tileset({}, { boundingVolume: { sphere } })).root.boundingVolume.sphere).toEqual(sphere);
+  });
+
   it('refuses a non-finite bounding-volume component', () => {
     const box = [0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, Number.NaN];
     expect(() => parseTileset(tileset({}, { boundingVolume: { box } }))).toThrow(/non-finite/);
@@ -56,6 +75,36 @@ describe('tileset.json perimeter', () => {
   it('refuses a content URI that is not a non-empty string', () => {
     expect(() => parseTileset(tileset({}, { content: { uri: 123 } }))).toThrow(/not a non-empty string/);
     expect(() => parseTileset(tileset({}, { content: { uri: '' } }))).toThrow(/not a non-empty string/);
+  });
+
+  it('refuses an explicit refine that is neither ADD nor REPLACE', () => {
+    const child = { geometricError: 5, boundingVolume: { sphere: [0, 0, 0, 1] } };
+    // A child that declares an undefined strategy is not a child that omitted
+    // one, so it does not fall back to the parent's.
+    expect(() => parseTileset(tileset({}, { children: [{ ...child, refine: 'BOGUS' }] }))).toThrow(/not ADD or REPLACE/);
+    expect(() => parseTileset(tileset({}, { children: [{ ...child, refine: '' }] }))).toThrow(/not ADD or REPLACE/);
+    expect(() => parseTileset(tileset({}, { refine: 'BOGUS' }))).toThrow(/not ADD or REPLACE/);
+  });
+
+  it('refuses a refine that is not a string', () => {
+    const child = { geometricError: 5, boundingVolume: { sphere: [0, 0, 0, 1] } };
+    // The message is the parser's own. A TypeError raised by calling
+    // `.toUpperCase()` on a number would read differently.
+    for (const refine of [5, true, ['ADD'], { mode: 'ADD' }]) {
+      expect(() => parseTileset(tileset({}, { refine }))).toThrow(/refine is not a string/);
+      expect(() => parseTileset(tileset({}, { children: [{ ...child, refine }] }))).toThrow(/refine is not a string/);
+    }
+  });
+
+  it('inherits refine into a child that omits it', () => {
+    const child = { geometricError: 5, boundingVolume: { sphere: [0, 0, 0, 1] } };
+    const parsed = parseTileset(tileset({}, {
+      refine: 'REPLACE',
+      children: [child, { ...child, refine: 'ADD' }, { ...child, refine: 'replace' }],
+    }));
+    expect(parsed.root.children[0].refine).toBe('REPLACE'); // inherited
+    expect(parsed.root.children[1].refine).toBe('ADD'); // explicit override
+    expect(parsed.root.children[2].refine).toBe('REPLACE'); // case-insensitive
   });
 
   it('refuses a children field that is not an array', () => {
@@ -122,9 +171,26 @@ describe('PNTS perimeter', () => {
     expect(() => parsePnts(pnts({ positionByteOffset: -4 }))).toThrow(/non-negative whole number/);
   });
 
-  it('ignores a non-finite RTC_CENTER rather than carrying NaN into placement', () => {
-    const tile = parsePnts(pnts({ rtc: [1, 2, Number.NaN] }));
-    expect(tile.rtcCenter).toBeNull();
+  it('refuses a malformed RTC_CENTER rather than dropping it', () => {
+    // The positions RTC_CENTER offsets are tile-local, so dropping a present
+    // center places the tile at the local origin instead of refusing it.
+    expect(() => parsePnts(pnts({ rtc: [1, 2] }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: [1, 2, 3, 4] }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: [] }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: 'nope' }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: 12 }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: null }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: { x: 1, y: 2, z: 3 } }))).toThrow(/RTC_CENTER must have 3 components/);
+    expect(() => parsePnts(pnts({ rtc: [1, 2, '3'] }))).toThrow(/not a finite number/);
+    // JSON carries no NaN or Infinity literal: `JSON.stringify` writes both as
+    // null, which is the form a real feature table would hold.
+    expect(() => parsePnts(pnts({ rtc: [1, 2, Number.NaN] }))).toThrow(/not a finite number/);
+    expect(() => parsePnts(pnts({ rtc: [Number.POSITIVE_INFINITY, 2, 3] }))).toThrow(/not a finite number/);
+  });
+
+  it('accepts a 3-element RTC_CENTER and an absent one', () => {
     expect(parsePnts(pnts({ rtc: [1, 2, 3] })).rtcCenter).toEqual([1, 2, 3]);
+    expect(parsePnts(pnts({ rtc: [0, 0, 0] })).rtcCenter).toEqual([0, 0, 0]);
+    expect(parsePnts(pnts()).rtcCenter).toBeNull();
   });
 });

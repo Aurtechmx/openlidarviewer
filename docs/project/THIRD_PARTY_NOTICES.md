@@ -118,9 +118,18 @@ test suite; they are not part of the published web app.
   `scripts/make-e57-fixture.mjs` (deterministic, no third-party data). It
   exercises the reader's exact-decode paths — a single named scan, a Float +
   1-bit Integer prototype, single-precision cartesian decode, and a bit-packed
-  invalid-state column. It replaces a former reliance on the non-redistributable
-  "Stanford Bunny", so those decode assertions now run in CI with no licensing
-  question.
+  invalid-state column. It carries no third-party data, so its assertions run in
+  CI independently of any external corpus.
+- `tests/bunnyFloat.e57` — the BunnyFloat conformance file from the libE57
+  example/test data (http://www.libe57.org/data.html), a single-precision Float
+  cartesian profile of 30,571 points. The corpus lists it under "Cartesian
+  Points" with no per-file copyright holder; the site notice is © 2010 E57.04
+  3D Imaging System File Format project. Released under the libE57 Test Data
+  License: free use, reproduction, display, distribution, publication, and
+  transmission, with the copyright notice required in copies that are not solely
+  in binary form, and the data provided "as is". Full text at
+  http://www.libe57.org/data.html (section 17). Used to check the Float decode
+  path against the extent the writer declared; not shipped in the deployed app.
 - `tests/pumpARowColumnIndexNoInvalidPoints.e57` — a pump-room laser scan
   (gridded, XYZ + intensity + RGB) from the libE57 example/test data
   (http://www.libe57.org/data.html). © 2008 Carnahan-Proctor and Cross, Inc.

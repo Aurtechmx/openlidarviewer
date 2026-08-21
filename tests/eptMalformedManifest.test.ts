@@ -13,6 +13,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { parseEptMetadata } from '../src/io/ept/eptDetect';
+import { computeSchemaLayout } from '../src/io/ept/eptBinaryDecode';
 import { parseHierarchyFile } from '../src/io/ept/eptHierarchy';
 import { eptStringToKey } from '../src/io/ept/eptTypes';
 
@@ -21,6 +22,18 @@ const XYZ = [
   { name: 'Y', size: 4, type: 'signed' },
   { name: 'Z', size: 4, type: 'signed' },
 ];
+
+/**
+ * A manifest carrying `extra` as raw JSON text inside the X attribute.
+ *
+ * `JSON.stringify` cannot emit NaN or Infinity (both serialise to `null`), so
+ * a manifest that reaches the parser holding one has to be built as text.
+ * `1e999` is valid JSON number syntax and `JSON.parse` returns Infinity for it.
+ */
+function manifestWithXExtras(extra: string): string {
+  const marker = JSON.stringify(XYZ[0]);
+  return manifest().replace(marker, `${marker.slice(0, -1)},${extra}}`);
+}
 
 /** A manifest that parses, with `over` applied on top. */
 function manifest(over: Record<string, unknown> = {}): string {
@@ -62,6 +75,75 @@ describe('EPT manifest perimeter', () => {
       const schema = [{ name: 'X', size, type: 'signed' }, XYZ[1], XYZ[2]];
       expect(parseEptMetadata(manifest({ schema })).isEpt).toBe(true);
     }
+  });
+
+  it('refuses a float at a width IEEE-754 has no format for', () => {
+    // readAttr switches on size before type: a float declared at size 1 lands
+    // on getUint8 and a float at size 2 lands on getUint16. Both return an
+    // in-range number, so an X/Y/Z attribute decodes to a coordinate that
+    // looks valid and is wrong.
+    for (const size of [1, 2]) {
+      const schema = [{ name: 'X', size, type: 'float' }, XYZ[1], XYZ[2]];
+      expect(parseEptMetadata(manifest({ schema })).isEpt).toBe(false);
+    }
+  });
+
+  it('accepts every type and width combination the decoder reads', () => {
+    for (const size of [4, 8]) {
+      const schema = [{ name: 'X', size, type: 'float' }, XYZ[1], XYZ[2]];
+      expect(parseEptMetadata(manifest({ schema })).isEpt).toBe(true);
+    }
+    for (const type of ['signed', 'unsigned']) {
+      for (const size of [1, 2, 4, 8]) {
+        const schema = [{ name: 'X', size, type }, XYZ[1], XYZ[2]];
+        expect(parseEptMetadata(manifest({ schema })).isEpt).toBe(true);
+      }
+    }
+    // The 1-byte signed case spelled out, since the float rule shares its width.
+    const oneByteSigned = [{ name: 'X', size: 1, type: 'signed' }, XYZ[1], XYZ[2]];
+    expect(parseEptMetadata(manifest({ schema: oneByteSigned })).isEpt).toBe(true);
+  });
+
+  it('refuses a scale or offset that is present and not a finite number', () => {
+    // A present-but-malformed value used to read as absent, which applied the
+    // decoder default of scale 1 to an axis whose manifest declared 0.01.
+    expect(parseEptMetadata(manifestWithXExtras('"scale":"0.01"')).isEpt).toBe(false);
+    expect(parseEptMetadata(manifestWithXExtras('"offset":"5"')).isEpt).toBe(false);
+    // NaN reaches the parser as the `null` JSON.stringify writes for it.
+    expect(parseEptMetadata(manifestWithXExtras('"scale":null')).isEpt).toBe(false);
+    expect(parseEptMetadata(manifestWithXExtras('"offset":null')).isEpt).toBe(false);
+    // A literal NaN token is not JSON at all and is refused one step earlier.
+    expect(parseEptMetadata(manifestWithXExtras('"scale":NaN')).isEpt).toBe(false);
+    // 1e999 is valid JSON number syntax that parses to Infinity.
+    expect(parseEptMetadata(manifestWithXExtras('"offset":1e999')).isEpt).toBe(false);
+    expect(parseEptMetadata(manifestWithXExtras('"scale":1e999')).isEpt).toBe(false);
+    expect(parseEptMetadata(manifestWithXExtras('"offset":-1e999')).isEpt).toBe(false);
+    // Other shapes a writer can produce for a numeric field.
+    expect(parseEptMetadata(manifestWithXExtras('"scale":true')).isEpt).toBe(false);
+    expect(parseEptMetadata(manifestWithXExtras('"offset":[0.01]')).isEpt).toBe(false);
+  });
+
+  it('keeps a scale and offset that are present and finite', () => {
+    const result = parseEptMetadata(manifestWithXExtras('"scale":0.01,"offset":500000'));
+    expect(result.isEpt).toBe(true);
+    if (!result.isEpt) return;
+    const x = result.metadata.schema.find((f) => f.name === 'X');
+    expect(x?.scale).toBe(0.01);
+    expect(x?.offset).toBe(500_000);
+  });
+
+  it('takes the decoder default when scale and offset are absent', () => {
+    const result = parseEptMetadata(manifest());
+    expect(result.isEpt).toBe(true);
+    if (!result.isEpt) return;
+    const x = result.metadata.schema.find((f) => f.name === 'X');
+    expect(x?.scale).toBeUndefined();
+    expect(x?.offset).toBeUndefined();
+    // computeSchemaLayout is what turns the absent keys into 1 and 0.
+    const layout = computeSchemaLayout(result.metadata.schema);
+    const attr = layout.attrs.find((a) => a.name === 'X');
+    expect(attr?.scale).toBe(1);
+    expect(attr?.offsetVal).toBe(0);
   });
 
   it('refuses a duplicated attribute name', () => {

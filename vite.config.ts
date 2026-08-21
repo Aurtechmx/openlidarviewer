@@ -494,6 +494,16 @@ export default defineConfig(({ mode }) => ({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_IDENTITY__: JSON.stringify(resolveBuildIdentity(mode)),
+    // The Playwright seam in src/main.ts (`?test=1` mounts
+    // `window.__OLV_TEST_API__`) is compiled in only for the dev server and
+    // for a build that opts in with OLV_TEST_SEAM=1, which is what the
+    // playwright.config.ts webServer sets. Every other build, plain or live,
+    // substitutes `false` here and the minifier drops the block, so no
+    // artifact a user can be served carries the API surface. `?test=1` in
+    // such a build parses as before and mounts nothing.
+    __OLV_TEST_SEAM__: JSON.stringify(
+      mode === 'development' || process.env.OLV_TEST_SEAM === '1',
+    ),
   },
   // The chunk-emission guard runs on every build; the live source transform only on `live`.
   plugins: [

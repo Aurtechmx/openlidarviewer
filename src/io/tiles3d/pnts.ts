@@ -26,7 +26,7 @@ export interface PntsTile {
 
 interface FeatureTableJson {
   POINTS_LENGTH?: number;
-  RTC_CENTER?: number[];
+  RTC_CENTER?: unknown;
   POSITION?: { byteOffset?: number };
   POSITION_QUANTIZED?: unknown;
 }
@@ -84,11 +84,23 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
     throw new Error('PNTS: POSITION.byteOffset is not a non-negative whole number.');
   }
 
-  const rtc = ft.RTC_CENTER;
-  const rtcCenter: [number, number, number] | null =
-    Array.isArray(rtc) && rtc.length === 3 && rtc.every((n) => typeof n === 'number' && Number.isFinite(n))
-      ? [rtc[0], rtc[1], rtc[2]]
-      : null;
+  // RTC_CENTER is optional, but a present one cannot be dropped when it is
+  // malformed. POSITION holds tile-local coordinates, so a tile that keeps its
+  // positions and loses its center renders at the local origin, which for a
+  // georeferenced tile is a silent relocation rather than a missing offset.
+  // JSON writes NaN and Infinity as null, so a component is checked for being
+  // a number as well as for being finite.
+  const rtc: unknown = ft.RTC_CENTER;
+  let rtcCenter: [number, number, number] | null = null;
+  if (rtc !== undefined) {
+    if (!Array.isArray(rtc) || rtc.length !== 3) {
+      throw new Error('PNTS: RTC_CENTER must have 3 components.');
+    }
+    if (!rtc.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      throw new Error('PNTS: RTC_CENTER has a component that is not a finite number.');
+    }
+    rtcCenter = [rtc[0] as number, rtc[1] as number, rtc[2] as number];
+  }
 
   const posOffset = ftBinStart + ft.POSITION.byteOffset;
   const need = pointsLength * 3 * 4;
