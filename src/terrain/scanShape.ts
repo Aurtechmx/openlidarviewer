@@ -12,8 +12,11 @@
  * with an OPTIONAL index-aligned per-point ASPRS classification.
  *
  * The signals (all cheap, grid-based on the detected up frame):
- *   - aspect = vertical extent / horizontal footprint. Terrain is flat-ish
- *     (low aspect); objects are compact or tall (higher aspect).
+ *   - aspect = vertical extent / horizontal footprint size. Terrain is flat-ish
+ *     (low aspect); objects are compact or tall (higher aspect). The footprint
+ *     size is the longer side of the minimum-area rectangle around the
+ *     horizontal outline, so it does not depend on how the scan is oriented in
+ *     its source CRS (see footprintSize).
  *   - overhangFraction = fraction of occupied footprint cells whose returns
  *     span a large VERTICAL range (more than one surface stacked over the same
  *     footprint). Terrain ≈ 0; interiors AND forests are high.
@@ -76,7 +79,13 @@ export interface ScanShape {
   readonly spaceKind: SpaceKind;
   /** 0..1 confidence in the routing verdict. */
   readonly confidence: number;
-  /** Vertical extent / horizontal footprint, in the detected up frame. */
+  /**
+   * Vertical extent / horizontal footprint size, in the detected up frame.
+   * Invariant under rotation about the up axis: the denominator is the longer
+   * side of the minimum-area rectangle around the horizontal outline, NOT the
+   * larger side of `extent`, so this is not `extent[2] / max(extent[0],
+   * extent[1])`. See footprintSize.
+   */
   readonly aspect: number;
   /** Fraction of occupied footprint cells carrying more than one surface. */
   readonly overhangFraction: number;
@@ -100,7 +109,9 @@ export interface ScanShape {
    * 3/4/5). 0 when no classification is supplied. Drives the forest tiebreaker.
    */
   readonly topVegFraction: number;
-  /** AABB extents [horizontal1, horizontal2, vertical], source units. */
+  /** AABB extents [horizontal1, horizontal2, vertical], source units. The two
+   *  horizontal entries stay axis-aligned and so still depend on the source CRS
+   *  axes; `aspect` does not. */
   readonly extent: readonly [number, number, number];
   /** The detected (or supplied) up axis. */
   readonly up: Axis;
@@ -372,6 +383,128 @@ function enclosureForAxis(
   return { score: total > 0 ? bandPts / total : 0 };
 }
 
+// ── Frame-independent horizontal footprint. ──────────────────────────────────
+/**
+ * `aspect` divides the vertical extent by a horizontal SIZE. That size used to
+ * be the larger side of the AXIS-ALIGNED horizontal bounding box, which is a
+ * property of the source CRS axes and not of the scan: rotating one scene about
+ * the vertical axis moved aspect from 0.17454 to 0.12821 at 31 degrees and
+ * 0.12446 at 45 degrees, a swing of about 29 per cent, so ASPECT_OBJECT and
+ * ASPECT_SOLID were being applied to a number that depended on how the scan
+ * happened to be oriented on disk.
+ *
+ * The replacement is the longer side of the MINIMUM-AREA rectangle enclosing
+ * the horizontal footprint. It is defined by the point set alone, so it is
+ * invariant under rotation about the vertical axis, translation and input
+ * order.
+ *
+ * SAME SCALE AND SAME ORIENTATION as the value it replaces: still a length in
+ * source units, still small-for-wide and large-for-compact, and it reproduces
+ * the axis-aligned max extent exactly on the footprint shapes the thresholds
+ * were tuned against. An axis-aligned rectangle a x b gives a, a square of
+ * side s gives s, a disc of radius r gives 2r (both statue fixtures are discs).
+ * ASPECT_OBJECT and ASPECT_SOLID therefore keep their meaning unchanged.
+ *
+ * Covariance principal extents were the other candidate and were rejected: they
+ * are weighted by point density rather than by the outline, so a uniformly
+ * sampled disc reads sqrt(3)*r instead of 2r (13 per cent narrow, which lifts
+ * the compact-solid fixture from 0.606 across the 0.65 object bar), and the
+ * eigenvectors of a square footprint are degenerate, which would leave the
+ * projected extents rotation-dependent on exactly the square synthetic scenes
+ * the suite is built from.
+ */
+function footprintSize(hx: Float64Array, hy: Float64Array, k: number): number {
+  if (k < 2) return 0;
+  return minAreaRectLongSide(hx, hy, convexHull(hx, hy, k));
+}
+
+/**
+ * Convex hull of `k` planar points held in (hx, hy), returned as vertex indices
+ * in counter-clockwise order with no repeated endpoint. Andrew monotone chain.
+ * Collinear vertices are dropped, so every hull edge has non-zero length.
+ */
+function convexHull(hx: Float64Array, hy: Float64Array, k: number): Int32Array {
+  if (k < 3) {
+    const all = new Int32Array(k);
+    for (let i = 0; i < k; i++) all[i] = i;
+    return all;
+  }
+  const order = new Int32Array(k);
+  for (let i = 0; i < k; i++) order[i] = i;
+  order.sort((a, b) => (hx[a] - hx[b]) || (hy[a] - hy[b]));
+  const turn = (o: number, a: number, b: number): number =>
+    (hx[a] - hx[o]) * (hy[b] - hy[o]) - (hy[a] - hy[o]) * (hx[b] - hx[o]);
+
+  const stack = new Int32Array(2 * k);
+  let m = 0;
+  for (let i = 0; i < k; i++) {
+    const p = order[i];
+    while (m >= 2 && turn(stack[m - 2], stack[m - 1], p) <= 0) m--;
+    stack[m++] = p;
+  }
+  const lowerEnd = m + 1;
+  for (let i = k - 2; i >= 0; i--) {
+    const p = order[i];
+    while (m >= lowerEnd && turn(stack[m - 2], stack[m - 1], p) <= 0) m--;
+    stack[m++] = p;
+  }
+  // The last entry repeats the first vertex.
+  return stack.slice(0, Math.max(1, m - 1));
+}
+
+/**
+ * Longer side of the MINIMUM-AREA rectangle enclosing the hull. The minimum
+ * always has a side flush with a hull edge (Freeman and Shapira 1975), so it is
+ * enough to measure the rectangle aligned with each edge in turn and keep the
+ * smallest.
+ *
+ * Cost is quadratic in the HULL vertex count, not in the point count: the hull
+ * is the footprint outline, tens of vertices for a scan whose sample fills an
+ * area.
+ *
+ * The tie-break is on the value, not on which edge the loop reached first. An
+ * exact quarter turn reproduces every per-edge area bit for bit but visits the
+ * edges from a different starting vertex, so first-edge-wins would return a
+ * different side of two equal-area rectangles for the same scan.
+ */
+function minAreaRectLongSide(hx: Float64Array, hy: Float64Array, hull: Int32Array): number {
+  const h = hull.length;
+  if (h < 2) return 0;
+  const vx = (t: number): number => hx[hull[t % h]];
+  const vy = (t: number): number => hy[hull[t % h]];
+  if (h === 2) return Math.hypot(vx(1) - vx(0), vy(1) - vy(0));
+
+  let bestArea = Infinity;
+  let bestLong = 0;
+  for (let i = 0; i < h; i++) {
+    const ox = vx(i), oy = vy(i);
+    const ex = vx(i + 1) - ox, ey = vy(i + 1) - oy;
+    const len = Math.hypot(ex, ey);
+    if (!(len > 0)) continue;
+    // Distance from the edge line and projection along it, both scaled by
+    // |edge| while they are compared, then divided out once at the end. The
+    // edge origin itself scores zero on all three, which seeds the extremes.
+    let maxOff = 0, maxAlong = 0, minAlong = 0;
+    for (let t = 0; t < h; t++) {
+      const dx = vx(t) - ox, dy = vy(t) - oy;
+      const off = ex * dy - ey * dx;
+      const along = ex * dx + ey * dy;
+      if (off > maxOff) maxOff = off;
+      if (along > maxAlong) maxAlong = along;
+      if (along < minAlong) minAlong = along;
+    }
+    const width = (maxAlong - minAlong) / len;
+    const height = maxOff / len;
+    const area = width * height;
+    const long = Math.max(width, height);
+    if (area < bestArea || (area === bestArea && long < bestLong)) {
+      bestArea = area;
+      bestLong = long;
+    }
+  }
+  return bestLong;
+}
+
 interface AxisMetrics {
   aspect: number;
   overhangFraction: number;
@@ -398,10 +531,17 @@ function axisMetrics(
   h2Off: number,
 ): AxisMetrics {
   let minH1 = Infinity, maxH1 = -Infinity, minH2 = Infinity, maxH2 = -Infinity, minV = Infinity, maxV = -Infinity;
+  const sampled = Math.ceil(n / stride);
+  const hx = new Float64Array(sampled);
+  const hy = new Float64Array(sampled);
+  let k = 0;
   for (let i = 0; i < n; i += stride) {
     const b = i * 3;
     const h1 = positions[b + h1Off], h2 = positions[b + h2Off], v = positions[b + vOff];
     if (!Number.isFinite(h1) || !Number.isFinite(h2) || !Number.isFinite(v)) continue;
+    hx[k] = h1;
+    hy[k] = h2;
+    k++;
     if (h1 < minH1) minH1 = h1;
     if (h1 > maxH1) maxH1 = h1;
     if (h2 < minH2) minH2 = h2;
@@ -412,7 +552,10 @@ function axisMetrics(
   const ex1 = Math.max(0, maxH1 - minH1);
   const ex2 = Math.max(0, maxH2 - minH2);
   const exV = Math.max(0, maxV - minV);
-  const footprint = Math.max(ex1, ex2, 1e-9);
+  // Frame-independent footprint (see footprintSize). A footprint too degenerate
+  // to hull (fewer than two distinct points) falls back to the axis-aligned box.
+  const invariantFootprint = footprintSize(hx, hy, k);
+  const footprint = invariantFootprint > 0 ? invariantFootprint : Math.max(ex1, ex2, 1e-9);
   const aspect = exV / footprint;
   if (exV <= 0) {
     return { aspect, overhangFraction: 0, wallCoverage: 0, floorCoverage: 0, ceilingCoverage: 0, topVegFraction: 0, ex1, ex2, exV };

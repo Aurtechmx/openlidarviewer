@@ -529,19 +529,20 @@ describe('classifyScanShape — metamorphic invariance', () => {
     }
   });
 
-  it('keeps the verdict but not `aspect` under an arbitrary rotation', () => {
-    // PINNED NON-INVARIANCE. `aspect` is vertical extent over horizontal
-    // footprint taken from the AXIS-ALIGNED bounding box (scanShape.ts, the
-    // `extent` field), and rotating a square footprint grows that box, so aspect
-    // shrinks: 0.17454 at rest, 0.12821 at 31 degrees, 0.12446 at 45 degrees.
-    // The routing verdict is unaffected because the terrain decision has ample
-    // margin at this aspect, but a scan sitting near an aspect threshold would
-    // route differently depending on its orientation in the source CRS.
+  it('HOLDS: the verdict AND `aspect` survive an arbitrary rotation', () => {
+    // PINNED INVARIANCE, and previously a pinned NON-invariance. `aspect` used
+    // to divide by the horizontal side of the AXIS-ALIGNED bounding box, which
+    // a rotation grows on a square footprint: 0.17454 at rest, 0.12821 at 31
+    // degrees, 0.12446 at 45 degrees. The denominator is now the longer side of
+    // the minimum-area rectangle around the footprint (scanShape.ts,
+    // footprintSize), a property of the point set rather than of the source CRS
+    // axes, so a scan sitting near an aspect threshold no longer routes on its
+    // orientation. What remains is float32 rounding in the rotated coordinates.
     for (const deg of [31, 45]) {
       const rad = (deg * Math.PI) / 180;
       const s = classifyScanShape(rotatedZ(scene.positions, Math.cos(rad), Math.sin(rad)));
       expect(verdict(s)).toEqual(verdict(baseShape));
-      expect(s.aspect).toBeLessThan(baseShape.aspect * 0.9);
+      expect(Math.abs(s.aspect - baseShape.aspect) / baseShape.aspect).toBeLessThan(1e-6);
     }
   });
 
