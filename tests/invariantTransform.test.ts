@@ -16,6 +16,10 @@
  * Relation 6 is a negative control: the assertions used for the positive cases
  * are re-run against a non-rotation and against a Float32 evaluation of the
  * same arithmetic, and are required to reject both.
+ *
+ * Relation 7 covers the reading path rather than the arithmetic: place()
+ * evaluates from a cached copy of the current placement, which is required to
+ * be bitwise the same as evaluating the placement itself.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -385,5 +389,39 @@ describe('relation 6: negative control', () => {
     expect(worst32).toBeGreaterThan(R5_UTM_TOL);
     expect(worst64).toBeLessThan(R5_UTM_TOL);
     expect(worst32 / worst64).toBeGreaterThan(1e5);
+  });
+});
+
+/**
+ * place() does not read R and t off the current placement on every call; it
+ * reads a flattened copy refreshed when the top of the stack becomes a different
+ * object. That copy is Float64, so the two evaluations must agree bitwise and
+ * not merely to a tolerance. This drives them apart over randomised placements,
+ * at UTM magnitude as well as near the origin, and requires Object.is on every
+ * component.
+ */
+describe('relation 7: place() agrees bitwise with the current placement', () => {
+  it('matches a direct evaluation of current() over randomised placements', () => {
+    const r = rng(SEED ^ 0x9);
+    const s = new TransformStore();
+    const pts: Vec3[] = [];
+    for (let i = 0; i < 64; i++) {
+      pts.push([(r() - 0.5) * 100, (r() - 0.5) * 100, (r() - 0.5) * 20]);
+      pts.push([500000 + r() * 1000, 4600000 + r() * 1000, 1200 + r() * 50]);
+    }
+    const check = (): void => {
+      for (const p of pts) {
+        const placed = s.place(p);
+        const direct = applyTo(s.current(), p);
+        for (let a = 0; a < 3; a++) expect(Object.is(placed[a], direct[a])).toBe(true);
+      }
+    };
+    check(); // depth 0, where the placement is IDENTITY
+    for (let i = 0; i < 8; i++) { s.apply(randomTransform(r)); check(); }
+    for (let i = 0; i < 8; i++) { s.undo(); check(); }
+    s.apply(randomTransform(r));
+    s.reset();
+    check();
+    expect(s.depth).toBe(0);
   });
 });
