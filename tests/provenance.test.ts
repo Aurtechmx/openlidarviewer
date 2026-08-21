@@ -274,3 +274,58 @@ describe('provenance — the phone density band is bounded above', () => {
     expect(classify(station(20_473)).confidence).toBe('medium');
   });
 });
+
+describe('provenance — vendor tokens match however the producer punctuates', () => {
+  const scan = (softwareString: string): ScanSignals => ({
+    sourceFormat: 'e57',
+    pointCount: 8_484_455,
+    extent: [314.7, 321.5, 109.7],
+    densityPerSqM: 84,
+    softwareString,
+  });
+
+  it('reads a hyphenated Trimble RealWorks string as terrestrial', () => {
+    // 84 pts/m2 over 10.12 ha is the drone density band, so without the
+    // software match this scan classified as drone LiDAR. The token is written
+    // with a space and the producer writes hyphens.
+    const f = classify(scan('Trimble-RealWorks-8.1-E57RefImpl-1.0.224-x86-windows'));
+    expect(f.captureType).toBe('terrestrial');
+    expect(f.confidence).toBe('high');
+  });
+
+  it('matches the same token across space, hyphen, underscore and dot', () => {
+    for (const sw of ['FARO SCENE', 'FARO-SCENE', 'FARO_SCENE_2021', 'FARO.SCENE']) {
+      expect(classify(scan(sw)).captureType).toBe('terrestrial');
+    }
+  });
+
+  it('still matches a plainly spaced string, which already worked', () => {
+    expect(classify(scan('Leica Cyclone 9.1')).captureType).toBe('terrestrial');
+  });
+
+  it('does not let normalisation turn a phone producer into a scanner', () => {
+    expect(classify(scan('Polycam')).captureType).toBe('iphone-lidar');
+    expect(classify(scan('3D-Scanner-App')).captureType).toBe('iphone-lidar');
+  });
+
+  it('leaves an unrecognised producer to the density bands', () => {
+    // Normalisation must not invent a match. This string names no known vendor,
+    // so the density signature is still the honest answer.
+    expect(classify(scan('SomeUnknownExporter-2.0')).captureType).toBe('drone-lidar');
+  });
+
+  it('names the evidence that ruled airborne out, not just that it was ruled out', () => {
+    // `declaredGroundInstrument` carries the reason, so the panel can show what
+    // in the file contradicted the density guess.
+    const f = classify({
+      sourceFormat: 'e57',
+      pointCount: 8_484_455,
+      extent: [314.7, 321.5, 109.7],
+      densityPerSqM: 84,
+      declaredGroundInstrument: '5 registered scan stations',
+    });
+    const line = f.signals.join(' ');
+    expect(line).toContain('ground-based instrument set-up');
+    expect(line).toContain('5 registered scan stations');
+  });
+});
