@@ -357,15 +357,15 @@ const debug = urlParams.has('debug');
 /** `?benchmark=1` emits a structured benchmark result for each file load. */
 const benchmark = urlParams.has('benchmark');
 /**
- * `?test=1` opens `window.__OLV_TEST_API__` — a programmatic seam for
- * Playwright. v0.3.10 trust-pass — the canvas → raycast → measurement
+ * `?test=1` opens `window.__OLV_TEST_API__`, a programmatic seam for
+ * Playwright. v0.3.10 trust-pass: the canvas → raycast → measurement
  * commit path is flaky in headless CI (WebGL 2 fallback, no real
  * picking precision), which is why `measure.spec.ts` has had a
  * `test.fixme` annotation for several releases. The seam exposes a
  * minimal API that bypasses the raycast and pushes a world-space
- * point directly into `MeasureController.addPoint`. Gated on a URL
- * flag so production traffic never sees the API surface; the e2e
- * runner sets the flag in its baseURL.
+ * point directly into `MeasureController.addPoint`. The URL flag only
+ * arms a seam the `__OLV_TEST_SEAM__` build constant compiled in; a
+ * shipped build has no seam for the flag to arm.
  */
 const testApi = urlParams.has('test');
 
@@ -3604,14 +3604,14 @@ void viewerLoaded.then(() => {
 const dropZone = new DropZone(document.body, (file) => void handleFile(file), prewarmLoaders);
 stage.overlay.append(dropZone.toast);
 
-// v0.3.10 trust-pass — install the Playwright seam under `?test=1`.
-// The flag is gated so production traffic NEVER sees the surface; the
-// e2e suite explicitly opens `/?test=1` to enable it. The API
-// exposes the minimum needed to drive a measurement programmatically
-// (set kind → arm → place points → finish / clear), bypassing the
-// canvas raycast that headless CI can't reliably pretend at. The
-// `measure.spec.ts` `test.fixme` documented exactly this need.
-if (testApi) {
+// v0.3.10 trust-pass: install the Playwright seam under `?test=1`.
+// `__OLV_TEST_SEAM__` is a build-time constant (see vite.config.ts). It is
+// true for the dev server and for a build run with OLV_TEST_SEAM=1, which is
+// what playwright.config.ts sets for its webServer build. Any other build
+// substitutes `false` and the minifier drops this whole block, so a shipped
+// artifact contains no API surface. The seam drives a measurement
+// programmatically, bypassing the raycast headless CI cannot pretend at.
+if (__OLV_TEST_SEAM__ && testApi) {
   void viewerLoaded.then((v) => {
     const placePoint = (x: number, y: number, z: number): void => {
       if (![x, y, z].every((c) => typeof c === 'number' && Number.isFinite(c))) {

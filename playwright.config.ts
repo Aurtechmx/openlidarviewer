@@ -99,6 +99,13 @@ export default defineConfig({
     command: process.env.SMOKE_LIVE
       ? 'npm run build:live && npm run preview'
       : 'npm run build && npm run preview',
+    // The `?test=1` seam (`window.__OLV_TEST_API__`) is compiled in only when
+    // OLV_TEST_SEAM=1 is set at build time; without it the block is dropped by
+    // the minifier and every spec that drives the viewer programmatically
+    // fails. The SMOKE_LIVE build is deliberately left without it: that leg
+    // boots the artifact users are served, and its two specs never use the
+    // seam. Playwright merges this over process.env for the spawned command.
+    env: process.env.SMOKE_LIVE ? {} : { OLV_TEST_SEAM: '1' },
     url: 'http://localhost:4173',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
