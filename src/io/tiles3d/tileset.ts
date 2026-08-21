@@ -41,7 +41,7 @@ export interface Tileset {
 interface RawTile {
   boundingVolume?: Record<string, unknown>;
   geometricError?: number;
-  refine?: string;
+  refine?: unknown;
   transform?: number[];
   content?: { uri?: string; url?: string };
   children?: RawTile[];
@@ -53,6 +53,16 @@ const BOUNDING_VOLUME_LENGTH = { box: 12, region: 6, sphere: 4 } as const;
 
 function boundingVolume(raw: Record<string, unknown> | undefined): BoundingVolume {
   if (!raw) throw new Error('3D Tiles: a tile has no boundingVolume.');
+  // The spec allows one form per tile. Two of them state two different volumes
+  // for the same tile, and with no rule for reconciling them the answer would
+  // be whichever form the code below happened to read first.
+  const kinds = Object.keys(BOUNDING_VOLUME_LENGTH) as (keyof typeof BOUNDING_VOLUME_LENGTH)[];
+  const declared = kinds.filter((kind) => raw[kind] !== undefined);
+  if (declared.length > 1) {
+    throw new Error(
+      `3D Tiles: boundingVolume declares ${declared.join(' and ')}; it must declare exactly one of box, region, or sphere.`,
+    );
+  }
   // Each form has a fixed length and every component must be a real number.
   // `parseTileset` also accepts an already-parsed object, and an object can
   // carry NaN where JSON text cannot, so finiteness is checked rather than
@@ -92,6 +102,27 @@ function tileTransform(v: unknown): readonly number[] | null {
   return v as number[];
 }
 
+/**
+ * The refine a tile declares, or null when it declares none.
+ *
+ * `refine` is optional on a child tile, which takes its parent's value. A value
+ * that is present but names no strategy the spec defines is a different case:
+ * it is refused here instead of falling through to the inherited value. The
+ * string check keeps a non-string value from reaching `.toUpperCase()`, where
+ * it would raise a TypeError instead of a parse error.
+ */
+function explicitRefine(v: unknown): Refine | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v !== 'string') {
+    throw new Error(`3D Tiles: a tile refine is not a string (${typeof v}).`);
+  }
+  const upper = v.toUpperCase();
+  if (upper !== 'ADD' && upper !== 'REPLACE') {
+    throw new Error(`3D Tiles: a tile declares refine "${v}", which is not ADD or REPLACE.`);
+  }
+  return upper;
+}
+
 function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
   if (raw.implicitTiling !== undefined) {
     throw new Error('3D Tiles: implicit tiling is not supported yet — only an explicit tile hierarchy.');
@@ -103,8 +134,7 @@ function parseTile(raw: RawTile, inheritedRefine: Refine): Tile {
   if (raw.geometricError < 0) {
     throw new Error(`3D Tiles: a tile has a negative geometricError (${raw.geometricError}).`);
   }
-  const refineRaw = (raw.refine ?? '').toUpperCase();
-  const refine: Refine = refineRaw === 'ADD' || refineRaw === 'REPLACE' ? refineRaw : inheritedRefine;
+  const refine: Refine = explicitRefine(raw.refine) ?? inheritedRefine;
   // TypeScript types content.uri as a string, but the runtime accepts whatever
   // the document held. A non-string here would flow out as a URI and be fetched.
   const rawUri = raw.content?.uri ?? raw.content?.url;
@@ -145,13 +175,13 @@ export function parseTileset(input: string | object): Tileset {
   }
   if (!doc.root) throw new Error('3D Tiles: tileset.json has no root tile.');
   // The root must declare its own refine; children inherit it when they omit one.
-  const rootRefine = (doc.root.refine ?? '').toUpperCase();
-  if (rootRefine !== 'ADD' && rootRefine !== 'REPLACE') {
+  const rootRefine = explicitRefine(doc.root.refine);
+  if (!rootRefine) {
     throw new Error('3D Tiles: the root tile must declare refine ADD or REPLACE.');
   }
   return {
     assetVersion,
     geometricError: doc.geometricError,
-    root: parseTile(doc.root, rootRefine as Refine),
+    root: parseTile(doc.root, rootRefine),
   };
 }

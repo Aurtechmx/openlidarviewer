@@ -257,8 +257,21 @@ function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);
 }
 
-/** Attribute widths `decodeEptBinaryTile` can actually read. */
-const EPT_ATTRIBUTE_SIZES: ReadonlySet<number> = new Set([1, 2, 4, 8]);
+/**
+ * Attribute widths `decodeEptBinaryTile` can actually read, per declared type.
+ *
+ * IEEE-754 has no 1-byte or 2-byte binary format, so `float` is legal only at
+ * 4 and 8 bytes. `readAttr` in `src/io/ept/eptBinaryDecode.ts` switches on the
+ * size first: a float declared at size 1 reaches `getUint8` and a float at
+ * size 2 reaches `getUint16`, which read the bytes as unsigned integers and
+ * return a number in range for the attribute. On X/Y/Z that is a coordinate
+ * that looks valid and is wrong.
+ */
+const EPT_ATTRIBUTE_SIZES: Readonly<Record<EptSchemaField['type'], ReadonlySet<number>>> = {
+  signed: new Set([1, 2, 4, 8]),
+  unsigned: new Set([1, 2, 4, 8]),
+  float: new Set([4, 8]),
+};
 
 function parseSchemaField(raw: unknown): EptSchemaField | null {
   if (!isPlainObject(raw)) return null;
@@ -266,22 +279,32 @@ function parseSchemaField(raw: unknown): EptSchemaField | null {
   const size = raw['size'];
   const type = raw['type'];
   if (typeof name !== 'string' || name.length === 0) return null;
+  if (type !== 'signed' && type !== 'unsigned' && type !== 'float') return null;
   // The binary decoder reads 1, 2, 4 and 8 byte attributes and nothing else.
   // Accepting any positive number here let a size of 3, or a fractional size,
   // past the perimeter and into stride and byte-offset arithmetic, where it
-  // fails far from the manifest that caused it.
-  if (typeof size !== 'number' || !EPT_ATTRIBUTE_SIZES.has(size)) return null;
-  if (type !== 'signed' && type !== 'unsigned' && type !== 'float') return null;
+  // fails far from the manifest that caused it. The width is checked against
+  // the declared type, so a size the type cannot have is refused here too.
+  if (typeof size !== 'number' || !EPT_ATTRIBUTE_SIZES[type].has(size)) return null;
   const out: { -readonly [K in keyof EptSchemaField]: EptSchemaField[K] } = {
     name,
     size,
     type,
   };
-  if (typeof raw['scale'] === 'number' && Number.isFinite(raw['scale'])) {
-    out.scale = raw['scale'] as number;
+  // `scale` and `offset` are optional. An absent key takes the decoder default
+  // (scale 1, offset 0 in `computeSchemaLayout`). A key that is present must
+  // hold a finite number: treating a string, NaN or Infinity as absent applies
+  // scale 1 to a dimension whose manifest declared 0.01, which scales every
+  // coordinate on that axis by 100.
+  const scale = raw['scale'];
+  if (scale !== undefined) {
+    if (!isFiniteNumber(scale)) return null;
+    out.scale = scale;
   }
-  if (typeof raw['offset'] === 'number' && Number.isFinite(raw['offset'])) {
-    out.offset = raw['offset'] as number;
+  const offset = raw['offset'];
+  if (offset !== undefined) {
+    if (!isFiniteNumber(offset)) return null;
+    out.offset = offset;
   }
   return out;
 }

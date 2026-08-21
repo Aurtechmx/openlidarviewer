@@ -457,17 +457,27 @@ if (isMain()) {
   const problems = collectDatasetRegisterProblems(doc, schema, fileAt);
 
   if (problems.length === 0) {
-    const records = doc.datasets;
+    // An EXAMPLE- record is a worked template carrying placeholder values, not
+    // data this project has used. The rules above check it like any other
+    // record; the counts below hold it apart, so the total is the number of
+    // datasets a study can cite rather than the number of records in the file.
+    const isTemplate = (r) => typeof r.datasetId === 'string' && r.datasetId.startsWith('EXAMPLE-');
+    const records = doc.datasets.filter((r) => !isTemplate(r));
+    const templates = doc.datasets.filter(isTemplate);
     const byStorage = { committed: 0, acquired: 0, restricted: 0 };
     for (const r of records) byStorage[r.storage]++;
     const withCheckpoints = records.filter((r) => r.containsIndependentCheckpoints === true).length;
     const licences = new Set(records.map((r) => r.licence));
+    // Every committed file is checksummed, template or not, so this count reads
+    // the whole register.
+    const committedFiles = doc.datasets.filter((r) => r.storage === 'committed').length;
     console.log(
       `verify:dataset-register OK — ${records.length} dataset(s) ` +
-        `(${byStorage.committed} committed, ${byStorage.acquired} acquired, ${byStorage.restricted} restricted); ` +
+        `(${byStorage.committed} committed, ${byStorage.acquired} acquired, ${byStorage.restricted} restricted) ` +
+        `plus ${templates.length} EXAMPLE template record(s), counted separately; ` +
         `${licences.size} distinct licence(s), all named; every CRS and unit pair agrees; ` +
-        `${withCheckpoints} record(s) declare independent checkpoints with no id shared with processing control; ` +
-        `all ${byStorage.committed} committed file(s) match their recorded sha256.`,
+        `${withCheckpoints} dataset(s) declare independent checkpoints with no id shared with processing control; ` +
+        `all ${committedFiles} committed file(s) match their recorded sha256.`,
     );
     process.exit(0);
   }

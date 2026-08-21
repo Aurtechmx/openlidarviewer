@@ -22,6 +22,14 @@ declare const __BUILD_IDENTITY__: {
 };
 
 /**
+ * `__OLV_TEST_SEAM__` is replaced by Vite's `define` with a boolean literal:
+ * true for the dev server and for a build run with OLV_TEST_SEAM=1 (the
+ * Playwright webServer), false everywhere else. It guards the `?test=1`
+ * seam in src/main.ts so the minifier removes it from shipped builds.
+ */
+declare const __OLV_TEST_SEAM__: boolean;
+
+/**
  * Inter is not part of the shipped bundle — the interface face is Manrope
  * (`--font` in style.css) with JetBrains Mono for monospace. The package is
  * kept for `scripts/make-brand-rasters.py`, which instances its variable woff2

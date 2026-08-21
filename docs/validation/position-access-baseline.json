@@ -1,5 +1,5 @@
 {
-  "total": 157,
+  "total": 154,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/floorPlanPositions.ts": 4,
@@ -35,7 +35,7 @@
     "src/render/measure/lassoVolume.ts": 10,
     "src/render/measure/profileSampler.ts": 1,
     "src/render/measure/stockpileVolume.ts": 5,
-    "src/render/measure/volume.ts": 4,
+    "src/render/measure/volume.ts": 1,
     "src/render/patchView.ts": 9,
     "src/terrain/change/alignEpochs.ts": 3,
     "src/terrain/change/compareEpochs.ts": 3,

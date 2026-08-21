@@ -12,6 +12,9 @@
  * million times too large and every one of them finite. The declared bounds
  * catch exactly that.
  *
+ * Both files state a separate range per axis, so the comparison is per axis
+ * and a decoder that swapped two of them fails it.
+ *
  * Files are from the libE57 Example/Test Data corpus, whose licence permits
  * use and reproduction. See validation/datasets/dataset-register.yaml
  * (OLV-DS-041) and http://libe57.org/data.html.
@@ -28,44 +31,63 @@ function bufferOf(path: string): ArrayBuffer {
 }
 
 /**
- * The extent the file declares, read straight from the XML section and
- * deliberately independent of `parseE57`: if the parser grew a bounds reader,
- * this check would start grading the decoder against itself.
+ * The XML section, reassembled from the physical file.
  *
- * Two forms appear in the corpus. A `cartesianBounds` element states a real
- * per-axis extent; where it is absent the prototype's own `minimum`/`maximum`
- * attributes state the envelope the writer encoded within. The pump carries
- * the first, the bunny only the second, so both are read.
+ * E57 stores the file in 1024-byte physical pages whose last four bytes are a
+ * CRC, so the XML is not one contiguous run of bytes: a slice of
+ * `xmlPhysicalOffset` through `xmlLogicalLength` interleaves checksum bytes
+ * into the markup and truncates the tail. On `bunnyFloat.e57` that split lands
+ * inside `</cartesianBounds>`, and a reader that skips the paging silently
+ * fails to find bounds the file does carry.
+ *
+ * This is a second implementation of the page walk rather than a call into
+ * `src/io/e57`. Sharing the production depager would make the oracle depend on
+ * the code it grades.
  */
-function declaredExtent(buf: ArrayBuffer): { source: string; x: [number, number]; y: [number, number]; z: [number, number] } | null {
+function depagedXml(buf: ArrayBuffer): string {
   const head = new DataView(buf);
   const xmlOffset = Number(head.getBigUint64(24, true));
   const xmlLength = Number(head.getBigUint64(32, true));
-  const xml = new TextDecoder().decode(new Uint8Array(buf, xmlOffset, xmlLength));
+  const PAGE = 1024;
+  const PAYLOAD = PAGE - 4;
 
-  const block = /<cartesianBounds[\s\S]*?<\/cartesianBounds>/.exec(xml);
-  if (block) {
-    const v: Record<string, number> = {};
-    for (const m of block[0].matchAll(/<(\w+)[^>]*>([^<]+)<\/\1>/g)) v[m[1]] = Number(m[2]);
-    return {
-      source: 'cartesianBounds',
-      x: [v.xMinimum, v.xMaximum],
-      y: [v.yMinimum, v.yMaximum],
-      z: [v.zMinimum, v.zMaximum],
-    };
+  const out = new Uint8Array(xmlLength);
+  const src = new Uint8Array(buf);
+  let written = 0;
+  let pos = xmlOffset;
+  while (written < xmlLength) {
+    const pageStart = Math.floor(pos / PAGE) * PAGE;
+    const take = Math.min(PAYLOAD - (pos - pageStart), xmlLength - written);
+    out.set(src.subarray(pos, pos + take), written);
+    written += take;
+    pos = pageStart + PAGE;
   }
+  return new TextDecoder().decode(out);
+}
 
-  const axis = (name: string): [number, number] | null => {
-    const m = new RegExp(`<${name}\\b[^>]*?minimum="([^"]+)"[^>]*?maximum="([^"]+)"`).exec(xml);
-    return m ? [Number(m[1]), Number(m[2])] : null;
+/**
+ * The per-axis extent the file declares, independent of `parseE57`: if the
+ * parser grew a bounds reader, this check would start grading the decoder
+ * against itself.
+ *
+ * Only `cartesianBounds` counts as an extent. A prototype's own
+ * `minimum`/`maximum` attributes state one envelope covering all three axes,
+ * so a decoder that swapped X for Y would still sit inside them.
+ */
+function declaredExtent(buf: ArrayBuffer): { source: string; x: [number, number]; y: [number, number]; z: [number, number] } | null {
+  const xml = depagedXml(buf);
+  const block = /<cartesianBounds[\s\S]*?<\/cartesianBounds>/.exec(xml);
+  if (!block) return null;
+  const v: Record<string, number> = {};
+  for (const m of block[0].matchAll(/<(\w+)[^>]*>([^<]+)<\/\1>/g)) v[m[1]] = Number(m[2]);
+  const axes = ['xMinimum', 'xMaximum', 'yMinimum', 'yMaximum', 'zMinimum', 'zMaximum'];
+  if (axes.some((k) => !Number.isFinite(v[k]))) return null;
+  return {
+    source: 'cartesianBounds',
+    x: [v.xMinimum, v.xMaximum],
+    y: [v.yMinimum, v.yMaximum],
+    z: [v.zMinimum, v.zMaximum],
   };
-  const x = axis('cartesianX');
-  const y = axis('cartesianY');
-  const z = axis('cartesianZ');
-  // A ScaledInteger prototype states RAW integer limits, not metres, so it is
-  // not an extent; only a Float prototype's bounds mean what they say here.
-  if (!x || !y || !z || /<cartesianX[^>]*ScaledInteger/.test(xml)) return null;
-  return { source: 'prototype', x, y, z };
 }
 
 function extent(a: ArrayLike<number>): [number, number] {
@@ -120,6 +142,19 @@ describe('E57 decode against the writer-declared bounds', () => {
     }
   });
 
+  it('grades each axis against its own declared range, not one shared envelope', () => {
+    // A union envelope would pass a decoder that swapped two axes. Both files
+    // state three separate ranges, and on the pump the Y range does not even
+    // overlap zero while X and Z straddle it, so a swap breaks containment.
+    for (const path of [PUMP, BUNNY]) {
+      const d = declaredExtent(bufferOf(path));
+      expect(d, `${path} declares cartesianBounds`).not.toBeNull();
+      expect(d!.source).toBe('cartesianBounds');
+      const ranges = [d!.x, d!.y, d!.z].map((r) => `${r[0]},${r[1]}`);
+      expect(new Set(ranges).size, 'the three axis ranges are distinct').toBe(3);
+    }
+  });
+
   it('the structured-scan columns stay inside their declared ranges', () => {
     const s = parseE57(bufferOf(PUMP)).scans[0];
     const c = s.columns;
@@ -143,8 +178,18 @@ describe('E57 decode against the writer-declared bounds', () => {
  * Its construction is the oracle: the same pump recorded three times, each
  * return one step further along its own ray. That is a RADIAL offset, not a
  * translation, which is why the three copies share a centroid to within a few
- * centimetres while the declared bounds grow by the full span on every axis.
+ * centimetres while the declared bounds widen at both ends of every axis.
+ *
+ * The two figures below are read off the file, not off the catalogue prose.
+ * The libE57 catalogue describes the fixture as offset by 20 cm; that 20 cm is
+ * the distance from the first return to the third, so adjacent returns sit
+ * half that apart. PDAL 2.9 reading all 155,201 pixel triples reports an
+ * adjacent step of 0.100000 m (min 0.099999, max 0.100001) and a
+ * first-to-third span of 0.200000 m, and the declared bounds of this file
+ * exceed the base pump's by 0.400000 m of span on each of the three axes.
  */
+const RETURN_STEP_M = 0.1;
+const RETURN_SPAN_M = 0.2;
 const PUMP3 = process.env.OLV_E57_PUMP3 ?? '';
 const withPump3 = PUMP3 && existsSync(PUMP3) ? describe : describe.skip;
 
@@ -163,6 +208,22 @@ withPump3('E57 multiple returns (libE57 pumpARowColumnIndex3ReturnIndex)', () =>
     expect(extent(three.columns.returnCount)).toEqual([3, 3]);
   });
 
+  it('widens the declared bounds by the full return span on both sides of every axis', () => {
+    // The catalogue states a 20 cm multiple-return offset. That 0.20 m is the
+    // span from the first return to the third, so the envelope grows 0.20 m at
+    // each end and the declared span grows 0.40 m per axis. This reads the
+    // figure off the two files instead of off the catalogue text.
+    const three = declaredExtent(bufferOf(PUMP3))!;
+    const base = declaredExtent(bufferOf(PUMP))!;
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const span = (r: [number, number]): number => r[1] - r[0];
+      expect(span(three[axis]) - span(base[axis]), `${axis} span growth`).toBeCloseTo(
+        RETURN_SPAN_M * 2,
+        6,
+      );
+    }
+  });
+
   it('steps each return one tenth of a metre further along the same ray', () => {
     const s = parseE57(bufferOf(PUMP3)).scans[0];
     const c = s.columns;
@@ -178,16 +239,20 @@ withPump3('E57 multiple returns (libE57 pumpARowColumnIndex3ReturnIndex)', () =>
       arr.push({ ri: c.returnIndex[i], d: Math.hypot(c.cartesianX[i], c.cartesianY[i], c.cartesianZ[i]) });
     }
     const steps: number[] = [];
+    const spans: number[] = [];
     for (const v of byPixel.values()) {
       if (v.length < 3) continue;
       v.sort((a, b) => a.ri - b.ri);
       steps.push(v[1].d - v[0].d, v[2].d - v[1].d);
+      spans.push(v[2].d - v[0].d);
     }
     expect(steps.length, 'pixels carrying all three returns').toBeGreaterThan(1000);
-    // Every step is 0.1 m to within the file's own 1e-6 ScaledInteger quantum.
-    // Getting this right needs the returns, the row/column indices and the
-    // scale factor all decoded correctly at once.
-    for (const step of steps) expect(step).toBeCloseTo(0.1, 5);
+    // Every adjacent step is RETURN_STEP_M to within the file's own 1e-6
+    // ScaledInteger quantum. Getting this right needs the returns, the
+    // row/column indices and the scale factor all decoded correctly at once.
+    for (const step of steps) expect(step).toBeCloseTo(RETURN_STEP_M, 5);
+    // The first-to-third span is the 20 cm the catalogue quotes.
+    for (const s of spans) expect(s).toBeCloseTo(RETURN_SPAN_M, 5);
   });
 });
 

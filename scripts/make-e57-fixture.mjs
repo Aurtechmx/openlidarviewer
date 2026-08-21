@@ -2,12 +2,12 @@
 /**
  * make-e57-fixture.mjs — a project-owned SYNTHETIC E57 fixture generator.
  *
- * WHY THIS EXISTS. The E57 reader's exact-decode assertions used to run against
- * the Stanford Bunny (`tests/bunnyFloat.e57`), which carries no redistribution
- * grant — so the file was never committed, never on disk in CI, and its
- * assertions were permanently skipped. This script emits a small, deterministic,
- * project-owned E57 that exercises the SAME decode paths the bunny block covered,
- * so those assertions can run for real in CI:
+ * WHY THIS EXISTS. The E57 reader's exact-decode assertions need a fixture whose
+ * every byte is known and reproducible from source. This script emits a small,
+ * deterministic, project-owned E57 covering those decode paths, so the
+ * assertions hold without depending on any external corpus. The libE57
+ * BunnyFloat file is committed alongside it at `tests/bunnyFloat.e57` and covers
+ * the same Float profile as a third-party writer produced it:
  *
  *   1. a single named scan ("synthetic-grid");
  *   2. a prototype of three Float (single-precision, 4-byte) cartesian fields

@@ -113,6 +113,14 @@ export function decodeCompressedVector(
     const packetLength = view.getUint16(packetAt + 2, true) + 1;
     const bytestreamCount = view.getUint16(packetAt + 4, true);
     if (bytestreamCount !== fieldCount) {
+      // A CompressedVector may hold zero records: the standard sets no lower
+      // bound on `recordCount`, and libE57Format closes such a section with an
+      // 8-byte data packet that declares no bytestreams and carries no length
+      // table. Nothing in that packet is readable, so the walk ends here and
+      // every prototype column decodes to length 0. The condition is narrow: a
+      // packet that declares bytestreams still has to declare one per prototype
+      // field, and a file that declares records still has to supply them.
+      if (count === 0 && bytestreamCount === 0) break;
       throw new Error('E57: packet bytestream count does not match the prototype.');
     }
     // The packet must lie wholly inside this section AND the real buffer — a

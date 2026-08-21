@@ -205,7 +205,7 @@ claims:
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/e57PdalCrossDecode.test.ts, tests/e57*.test.ts]
-    supportingDatasets: ["Finestrat_2016.e57 (Zenodo 10.5281/zenodo.7576524, CC-BY-4.0, Abellan and Riquelme), 1788994 points, referenced by sha256 and not redistributed"]
+    supportingDatasets: ["OLV-DS-040 Finestrat_2016.e57 (Zenodo 10.5281/zenodo.7576524, CC-BY-4.0, Abellan and Riquelme), 1788994 points, referenced by sha256 and not redistributed; the committed PDAL reference outputs are checked on every run, and the comparison against the source file is read from OLV_E57_FINESTRAT and skipped when that variable is unset", "OLV-DS-041 libE57 BunnyFloat.e57, committed at tests/bunnyFloat.e57 and read on every run by tests/e57DeclaredBounds.test.ts", "OLV-DS-042 libE57 pumpARowColumnIndex3ReturnIndex.e57, not vendored; read from OLV_E57_PUMP3 and skipped when that variable is unset", "OLV-DS-043 libE57 Pump.e57, not vendored; read from OLV_E57_PUMP_MULTI and skipped when that variable is unset", "OLV-DS-044 libE57 openpitmine.e57, not vendored; read from OLV_E57_OPENPITMINE and skipped when that variable is unset"]
     supportingStudies: [E57-INGEST-PDAL-CROSS-DECODE]
     units: [metres, source-units]
     crsDatum: "The file declares no coordinate metadata; coordinates are read in the file's own local frame."
@@ -224,9 +224,9 @@ claims:
         - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
         - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
         - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
-        - "Whether a multi-station pose is CORRECT. The libE57 Pump decodes five registered stations and every quaternion is already a unit quaternion, but the file carries no independent registration truth."
+        - "Whether a multi-station pose is CORRECT. The libE57 Pump decodes five registered stations and every quaternion is already a unit quaternion, measured by a suite that reads OLV_E57_PUMP_MULTI and skips when that variable is unset, and the file carries no independent registration truth."
         - "Spherical coordinate storage, which none of the files held here uses."
-        - "Extension SEMANTICS. An unknown vendor namespace is carried through with its prefix intact and refused nothing (libE57 openpitmine, Riegl rlms), but no meaning is assigned to an extension field."
+        - "Extension SEMANTICS. An unknown vendor namespace is carried through with its prefix intact and refused nothing (libE57 openpitmine, Riegl rlms), measured by a suite that reads OLV_E57_OPENPITMINE and skips when that variable is unset, and no meaning is assigned to an extension field."
 
   - claimId: MEAS-HEIGHT
     product: Height / vertical measurement
@@ -320,7 +320,7 @@ claims:
     claim: "Approximate cut/fill volume from a uniform-density point sample against a base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/clipVolume*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Refuses on geographic degrees; local metric only."
@@ -347,7 +347,7 @@ claims:
     claim: "Stockpile volume above a reference base."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts]
+    supportingTests: [tests/volume*.test.ts, tests/stockpile*.test.ts, tests/volumeSyntheticTruth.test.ts, tests/analyticVolumeOracle.test.ts]
     supportingDatasets: []
     units: [cubic-metres]
     crsDatum: "Local metric; refuses geographic degrees."

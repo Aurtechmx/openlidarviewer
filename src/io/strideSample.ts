@@ -37,7 +37,16 @@ export function makePrng(seed: number): () => number {
 
 /**
  * The record index chosen within bucket `b` — a jittered offset inside the
- * bucket's `[b*step, (b+1)*step)` range, clamped to the last valid record.
+ * bucket's `[b*step, (b+1)*step)` range.
+ *
+ * The offset is drawn across the records the bucket actually holds, not across
+ * `step`. When `count` is not a multiple of `step` the final bucket is short,
+ * and drawing across the full `step` would land past the end for every
+ * overshoot. Clamping those back onto the last record gives it
+ * `(step - size + 1) / step` of the bucket's probability instead of `1 / size`:
+ * at count 11, step 3 that is two thirds rather than one third, and at
+ * count 10, step 100 the last record is drawn about nine times in ten. Drawing
+ * across `size` makes every record in every bucket equally likely.
  *
  * Consumes exactly one value from `rand`, so a caller must invoke it once per
  * bucket, in ascending bucket order, for the sampling to be reproducible.
@@ -48,8 +57,13 @@ export function pickInBucket(
   count: number,
   rand: () => number,
 ): number {
-  const offset = Math.floor(rand() * step);
-  return Math.min(count - 1, b * step + offset);
+  // Two independent guards. `size` narrows the draw to the records the bucket
+  // holds, which is what makes the pick uniform. The clamp keeps the return
+  // inside the file for every argument, including a bucket at or past the end,
+  // which no caller walks but which this exported function must still answer
+  // safely: without it, b*step alone lands beyond the last record.
+  const size = Math.max(1, Math.min(step, count - b * step));
+  return Math.min(count - 1, b * step + Math.floor(rand() * size));
 }
 
 /**
