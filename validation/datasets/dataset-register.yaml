@@ -988,6 +988,39 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  - datasetId: OLV-DS-044-LIBE57-OPENPITMINE-RLMS
+    title: "libE57 openpitmine, multi-station Riegl scan carrying the rlms vendor extension"
+    sourceUrl: http://libe57.org/data.html
+    landingPage: http://libe57.org/data.html
+    licence: libE57-test-data
+    licenceUrl: http://libe57.org/data.html
+    redistribution: permitted
+    acquisitionDate: 2026-08-20
+    sourceSha256: 4b0e3ce2398d958ac9bbc0e94ded34472d785cf3797be61101960aa1f3014b55
+    sourceBytes: 616108032
+    format: e57
+    pointCount: 4438419
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: 2011-06-13
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-recorded
+    terrainClasses: [open-pit-mine]
+    landCoverClasses: [bare-rock]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Riegl LMS GmbH (copyright 2011), published by the libE57 project"
+    citation: "libE57 E57 Example/Test Data, openpitmine.e57. http://libe57.org/data.html"
+    knownLimitations: "Held for its declared rlms extension namespace and its station count, not for terrain accuracy: it carries no survey control and no independent registration truth. The pointCount recorded is the first station only. Not vendored at 587 MB; read from OLV_E57_OPENPITMINE."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────
   - datasetId: OLV-DS-023-ANALYTIC-PROFILE-RAMP
     title: "Analytic corridor transect, 257 stations at 1 m with a cross-line elevation ramp"

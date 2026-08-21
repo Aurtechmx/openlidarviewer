@@ -224,8 +224,9 @@ claims:
         - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
         - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
         - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
-      - "Multi-scan registration. The libE57 return-index file is one structured scan, so pose composition across stations stays untested."
-        - "Scaled-integer cartesian encodings, where the declared per-field limits ARE decode parameters."
+        - "Whether a multi-station pose is CORRECT. The libE57 Pump decodes five registered stations and every quaternion is already a unit quaternion, but the file carries no independent registration truth."
+        - "Spherical coordinate storage, which none of the files held here uses."
+        - "Extension SEMANTICS. An unknown vendor namespace is carried through with its prefix intact and refused nothing (libE57 openpitmine, Riegl rlms), but no meaning is assigned to an extension field."
 
   - claimId: MEAS-HEIGHT
     product: Height / vertical measurement
