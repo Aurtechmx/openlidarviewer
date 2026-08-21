@@ -406,6 +406,14 @@ function matchFormat(signals: ScanSignals): ProvenanceFingerprint | null {
 // Numeric fingerprints (density-driven)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The most a phone's VCSEL flash pattern lays down, in points per square metre.
+ * Luetzenburg 2021 measures 7,225 pts/m² at 25 cm, its closest working range,
+ * falling to 150 pts/m² at 2.5 m. Density above this at station scale is a
+ * ranging scanner rather than a phone.
+ */
+const PHONE_LIDAR_MAX_DENSITY_PER_SQM = 7225;
+
 function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
   // High density on a small extent is the iPhone-LiDAR signature. Luetzenburg
   // 2021 reports 7,225 pts/m² at 25 cm down to 150 pts/m² at 2.5 m for the
@@ -417,6 +425,24 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       signals.densityPerSqM > 1000 &&
       footprintArea < 500 // < 500 m² extent — small room, façade, outcrop
     ) {
+      // The band above is bounded on both sides. 7,225 pts/m² is the density
+      // the same Luetzenburg figures put at the phone's closest working range,
+      // so it is the most the flash pattern lays down anywhere; a scan denser
+      // than that at station scale is a ranging instrument, and a terrestrial
+      // station in a small room is exactly the case that lands here. Without
+      // the ceiling the rule contradicted the source it cites, and every dense
+      // TLS station under 100 m² read as a phone, because the terrestrial band
+      // below starts at a footprint larger than a room.
+      //
+      // Density alone cannot separate the two inside the band: a phone and a
+      // station can both produce 3,000 pts/m². This narrows a rule that was
+      // unbounded, it does not claim to resolve the overlap.
+      if (signals.densityPerSqM > PHONE_LIDAR_MAX_DENSITY_PER_SQM) {
+        return terrestrialFingerprint('medium', [
+          `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
+          `Above the ${PHONE_LIDAR_MAX_DENSITY_PER_SQM} pts/m² a phone flash pattern reaches at its closest range`,
+        ]);
+      }
       return phoneLidarFingerprint('medium', [
         `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
       ]);
