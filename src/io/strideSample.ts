@@ -57,6 +57,9 @@ export function pickInBucket(
   count: number,
   rand: () => number,
 ): number {
+  // `count - b * step` is at least 1 for every bucket a caller walks, since all
+  // of them stop at `ceil(count / step)`. The floor is there so a bucket past
+  // the end returns its own first index rather than reading backwards.
   const size = Math.max(1, Math.min(step, count - b * step));
   return b * step + Math.floor(rand() * size);
 }
