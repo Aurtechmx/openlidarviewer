@@ -153,6 +153,7 @@ const RECORD_ID_GEO_ASCII_PARAMS = 34737;
 
 /** GeoTIFF GeoKey IDs we care about. */
 const GEOKEY_GT_MODEL_TYPE = 1024;       // projected (1) / geographic (2) / geocentric (3)
+const GEOKEY_GT_CITATION = 1026;         // ASCII citation naming the CRS the file is in
 const GEOKEY_GEODETIC_CRS = 2048;        // EPSG of a geographic CRS
 const GEOKEY_GEODETIC_CITATION = 2049;   // ASCII citation
 const GEOKEY_GEOGRAPHIC_LINEAR_UNITS = 2052;  // linear units of a geographic CRS
@@ -571,6 +572,8 @@ export function crsFromGeoTiff(
   let modelType: number | undefined;
   let projectedCrs: number | undefined;
   let geodeticCrs: number | undefined;
+  let gtCitationOffset: number | undefined;
+  let gtCitationCount: number | undefined;
   let projectedCitationOffset: number | undefined;
   let projectedCitationCount: number | undefined;
   let geodeticCitationOffset: number | undefined;
@@ -592,6 +595,12 @@ export function crsFromGeoTiff(
       case GEOKEY_GT_MODEL_TYPE:           modelType = value; break;
       case GEOKEY_PROJECTED_CRS:           projectedCrs = value; break;
       case GEOKEY_GEODETIC_CRS:            geodeticCrs = value; break;
+      case GEOKEY_GT_CITATION:
+        if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
+          gtCitationOffset = value;
+          gtCitationCount = count;
+        }
+        break;
       case GEOKEY_PROJECTED_CITATION:
         if (tiffTag === RECORD_ID_GEO_ASCII_PARAMS) {
           projectedCitationOffset = value;
@@ -656,6 +665,17 @@ export function crsFromGeoTiff(
     projectedCitationOffset,
     projectedCitationCount,
   );
+  // GTCitationGeoKey (1026) is the citation for the CRS the file is in, so on a
+  // projected file it names the projected CRS. libLAS 1.2 writes the name there
+  // and leaves 3073 unset, which is the whole of the name a file like utm15.las
+  // carries. readGeoTiffCitation stops at the `|` GeoTIFF terminator and returns
+  // undefined for an empty or whitespace-only run, so a blank 1026 falls through
+  // to the code-derived name below.
+  const gtCitation = readGeoTiffCitation(
+    geoAsciiBytes,
+    gtCitationOffset,
+    gtCitationCount,
+  );
   const citation = projectedCitation ?? readGeoTiffCitation(
     geoAsciiBytes,
     geodeticCitationOffset,
@@ -681,7 +701,11 @@ export function crsFromGeoTiff(
   // zone 29N survey displayed as "WGS 84 (EPSG:32629)", which a reader is
   // entitled to read as EPSG:4326 and degrees. A geographic CRS is still free
   // to use its geographic citation, because there it does describe the CRS.
-  const ownCitation = isGeographic ? citation : projectedCitation;
+  // Projected name precedence: 3073 (names this projected CRS specifically),
+  // then 1026 (names the CRS the file is in), then the code-derived name. A WKT
+  // VLR outranks both: `parseCrsFromVlrs` takes the WKT name and reads the
+  // GeoKeys only for vertical fields.
+  const ownCitation = isGeographic ? citation : (projectedCitation ?? gtCitation);
   const baseName = ownCitation ?? wellKnownCrsName(epsg) ?? (epsg ? `EPSG:${epsg}` : 'Unknown CRS');
   let name: string;
   if (epsg && !ownCitation && !wellKnownCrsName(epsg)) {

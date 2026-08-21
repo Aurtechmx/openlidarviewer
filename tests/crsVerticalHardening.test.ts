@@ -338,3 +338,76 @@ describe('crsFromGeoTiff — projected CRS naming', () => {
     expect(crs.name).toContain('WGS 84');
   });
 });
+
+/**
+ * GTCitationGeoKey (1026) carries the CRS name in GeoTIFF-keyed files whose
+ * writer sets no ProjectedCSCitationGeoKey (3073). libLAS 1.2 is one such
+ * writer, so a projected file could state its name and still be reported by
+ * its bare EPSG code. The ASCII lives in 34737 with a `|` terminator.
+ */
+describe('crsFromGeoTiff — GTCitationGeoKey (1026)', () => {
+  // "UTM Zone 15, Northern Hemisphere|NAD83|" — the layout utm15.las carries:
+  // 1026 at offset 0 (33 chars, terminator included), 2049 at offset 33.
+  const UTM15_ASCII = ascii('UTM Zone 15, Northern Hemisphere|NAD83|');
+
+  it('names a projected CRS from 1026 when no 3073 is present', () => {
+    const bytes = geoKeyBytesWithAscii([
+      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, 26915],
+    ]);
+    const crs = crsFromGeoTiff(bytes, UTM15_ASCII, null);
+    expect(crs.epsg).toBe(26915);
+    expect(crs.isGeographic).toBe(false);
+    expect(crs.name).toBe('UTM Zone 15, Northern Hemisphere (EPSG:26915)');
+  });
+
+  it('strips the `|` terminator and everything after it', () => {
+    const bytes = geoKeyBytesWithAscii([
+      [1024, 1], [1026, 0, 34737, 33], [2049, 33, 34737, 6], [3072, 26915],
+    ]);
+    const crs = crsFromGeoTiff(bytes, UTM15_ASCII, null);
+    expect(crs.name).not.toContain('|');
+    expect(crs.name).not.toContain('NAD83');
+  });
+
+  it('does not use GeogCitationGeoKey (2049) as the projected name when 1026 is absent', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [3072, 26915], [2049, 0, 34737, 6]]);
+    const crs = crsFromGeoTiff(bytes, ascii('NAD83|'), null);
+    expect(crs.name).toBe('EPSG:26915');
+    expect(crs.name).not.toContain('NAD83');
+  });
+
+  it('falls back to the EPSG code when no 1026 is present', () => {
+    const crs = crsFromGeoTiff(geoKeyBytesWithAscii([[1024, 1], [3072, 26915]]), null, null);
+    expect(crs.name).toBe('EPSG:26915');
+  });
+
+  it('falls back to the EPSG code for an empty 1026', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 0], [3072, 26915]]);
+    expect(crsFromGeoTiff(bytes, ascii('|'), null).name).toBe('EPSG:26915');
+  });
+
+  it('falls back to the EPSG code for a whitespace-only 1026', () => {
+    const bytes = geoKeyBytesWithAscii([[1024, 1], [1026, 0, 34737, 5], [3072, 26915]]);
+    const crs = crsFromGeoTiff(bytes, ascii('    |'), null);
+    expect(crs.name).toBe('EPSG:26915');
+    expect(crs.name.trim()).toBe(crs.name);
+  });
+
+  it('yields to 3073, which names the projected CRS specifically', () => {
+    // ASCII: 3073 at offset 0 (22 chars), 1026 at offset 22 (14 chars).
+    const bytes = geoKeyBytesWithAscii([
+      [1024, 1], [1026, 22, 34737, 12], [3072, 32629], [3073, 0, 34737, 22],
+    ]);
+    const crs = crsFromGeoTiff(bytes, ascii('WGS 84 / UTM zone 29N|Survey grid|'), null);
+    expect(crs.name).toBe('WGS 84 / UTM zone 29N (EPSG:32629)');
+  });
+
+  it('leaves a geographic CRS naming unchanged', () => {
+    const bytes = geoKeyBytesWithAscii([
+      [1024, 2], [1026, 0, 34737, 8], [2048, 4326], [2049, 8, 34737, 7],
+    ]);
+    const crs = crsFromGeoTiff(bytes, ascii('GeoTIFF|WGS 84|'), null);
+    expect(crs.isGeographic).toBe(true);
+    expect(crs.name).toBe('WGS 84 (EPSG:4326)');
+  });
+});

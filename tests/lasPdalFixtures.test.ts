@@ -106,12 +106,15 @@ describe('utm15.las — CRS resolved from GeoTIFF keys', () => {
     expect(isLinearUnitKnown(header.crs)).toBe(true);
   });
 
-  test('the name falls back to the EPSG code: the file carries no 3073 citation', () => {
-    // The two ASCII citations this file does carry are GTCitationGeoKey (1026,
+  test('GTCitationGeoKey (1026) names the CRS: the file carries no 3073 citation', () => {
+    // The two ASCII citations this file carries are GTCitationGeoKey (1026,
     // "UTM Zone 15, Northern Hemisphere") and GeogCitationGeoKey (2049,
-    // "NAD83"). Neither is read as the projected CRS name: 2049 names the
-    // geographic base, and 1026 is not among the keys the parser collects.
-    expect(header.crs!.name).toBe('EPSG:26915');
+    // "NAD83"), both stored in 34737 with a `|` terminator. 1026 names the CRS
+    // the file is in, which here is the projected one. 2049 names the geographic
+    // base and is not used as the projected name.
+    expect(header.crs!.name).toBe('UTM Zone 15, Northern Hemisphere (EPSG:26915)');
+    expect(header.crs!.name).not.toContain('|');
+    expect(header.crs!.name).not.toContain('NAD83');
   });
 
   test('the spatial context permits metric claims', () => {
