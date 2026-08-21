@@ -210,7 +210,7 @@ claims:
     units: [metres, source-units]
     crsDatum: "The file declares no coordinate metadata; coordinates are read in the file's own local frame."
     assumptions: ["the reference reader implements the same standard independently", "both readers consume the CompressedVector in file order"]
-    failureModes: ["scaled-integer cartesian fields, where per-field limits are decode parameters and are not exercised here", "scanner-native writers, not represented by this file"]
+    failureModes: ["scanner-native writers, not represented by this file", "multi-scan registration and pose composition, which the return-index file does not carry"]
     exportAllowed: true
     userLabel: "Cross-implementation validated E57 decode"
     softwareStatus: shipping
@@ -224,6 +224,7 @@ claims:
         - "Intensity, excluded because PDAL scales it by 65535/(max-min) without subtracting the minimum, so a tolerance would measure that transform rather than either reader."
         - "Any writer other than the one that produced this file (CloudCompare 2.12.4 via E57Format 2.3.0). One file is one profile, not the format."
         - "Scanner-native acquisition metadata. This file is a re-export and carries no sensor vendor, model, serial or acquisition time."
+      - "Multi-scan registration. The libE57 return-index file is one structured scan, so pose composition across stations stays untested."
         - "Scaled-integer cartesian encodings, where the declared per-field limits ARE decode parameters."
 
   - claimId: MEAS-HEIGHT
