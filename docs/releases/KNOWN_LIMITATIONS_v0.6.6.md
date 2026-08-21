@@ -93,3 +93,23 @@ Agreement across an 18-angle sweep stays at or above 0.968, and an exact quarter
 ## The volume median that qualifies a cut/fill figure depends on point order
 
 Cut and fill are invariant to the order the points arrive in, to 3.4e-15 relative. The median absolute height difference reported alongside them is not, once more than 10000 points fall inside the footprint. That median comes from a 10000-slot reservoir sample, which bounds allocation on a very large chunk and keeps the sample spread across the whole footprint rather than the first corner of it, and the draw is keyed to the order points are encountered. Supplying the same points in a different order selects a different sample: measured at 1.7e-2 relative on 24080 inside points. Below the cap every inside point is kept and the median is order-invariant. The volume itself is unaffected either way. `tests/invariantMeasurement.test.ts` pins both sides.
+
+## LAS support targets 1.4, and 1.5 is read through the 1.4 path
+
+ASPRS published LAS 1.4 R16 on 25 August 2025 and LAS 1.5 R00 on 26 August 2025. This release was written against 1.4. Export writes 1.2 or 1.4 and nothing else.
+
+For import the reader branches on a minor version of 4 or above, so a file declaring 1.5 takes the 1.4 path. That path holds up for the fields the reader uses, because it locates the variable-length records from the header's own size field rather than from a constant, and 1.5 lengthens the public header by appending Max and Min GPS Time. `tests/lasVersionConformance.test.ts` reshapes a file the project's own writer produced into that longer form and checks the point count, scale, offset, bounding box and CRS all survive, with a control confirming a fixed-layout reader would lose the CRS instead.
+
+What is not covered: no file written by a 1.5 producer has been read, the two GPS-time fields the version adds are not surfaced, and the reader still accepts point data record formats 0 to 5 and GeoTIFF CRS encoding, both of which 1.5 removes. Accepting them is what lets older files keep opening, and it means a file can be read here that a 1.5 reader would reject.
+
+## A density gradient shifts a volume figure, and more points do not fix it
+
+The cut/fill estimator multiplies the footprint area by the mean height of the points inside it, so it returns the area times the height at the SAMPLE centroid rather than at the polygon centroid. Where sampling density varies across the footprint those two points separate, and the figure moves by the area times the height gradient times that separation.
+
+Measured on a tilted plane whose true volume is 2 m3, with one half of the footprint sampled twice as densely as the other: 2.075 m3, an overstatement of 3.75 per cent. Raising the sample count from 5000 to 320000 returned 2.075 m3 at every step, identical to six decimals. This is the one volume error in the suite that does not shrink as sampling improves, because it is a property of where the points sit rather than how many there are. The same one-sided doubling on a shape symmetric about its centroid costs 0.0031 per cent, which is what identifies the height gradient as the cause.
+
+Everything else measured converges. Against exactly integrable solids the estimator reproduces the closed-form volume to 1.25e-3 per cent or better at 160000 samples, improving by a factor of four each time the sample spacing halves. `tests/analyticVolumeOracle.test.ts` holds the figures.
+
+## Volume accuracy depends on the render-local position contract
+
+Positions reach the estimator as Float32, so a large vertical offset spends mantissa bits that the heights need. On a square pyramid the volume error against the unshifted run is 6.7e-7 at 1 m, 9.8e-5 at 1024 m, 0.101 per cent at 1048576 m and 4.94 per cent at 4194304 m. Loading subtracts an integer source origin first, so a file in a projected CRS is measured render-local and does not reach those offsets. The figures describe what the contract is buying.
