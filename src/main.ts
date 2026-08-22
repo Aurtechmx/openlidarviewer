@@ -5416,7 +5416,6 @@ function resetToEmptyState(): void {
   // Cancel any pending scan-type re-route + reset its state so a timer can't
   // fire against the now-closed scan, and the next open routes from scratch.
   routing.cancelScheduled();
-  captureProvenance.setVerdict(null);
   routing.reset();
   streamingSettledRouted = false;
   settleAttempts = 0;
@@ -5594,6 +5593,7 @@ function removeCloud(id: string): void {
   layerVisible.delete(id);
   if (layers.solo === id) layers.solo = null;
   scans.clearIf(id);
+  captureProvenance.clearIf(id);
   if (viewer.clouds().length === 0) resetToEmptyState();
   else {
     layerService.refreshCrsFlags();

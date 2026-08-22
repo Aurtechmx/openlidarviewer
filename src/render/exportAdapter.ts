@@ -435,14 +435,35 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       // showing, read from the shared store rather than re-classified here.
       // Re-classifying from the cloud alone dropped both the shape router's
       // verdict and the user's capture-type override, so an exported image could
-      // stamp a capture type the panel and the PDF both contradicted. Wrapped
-      // because a throw must not sink the export: null is a clean no-op in the
-      // renderer and renders as no Capture row.
+      // stamp a capture type the panel and the PDF both contradicted.
+      //
+      // The store describes the ACTIVE scan; this row describes the pixels. The
+      // two diverge because static layers are additive and the newest open
+      // becomes active: hiding the active layer, or removing it while an older
+      // one stays, leaves the store describing a scan the image does not show.
+      // So the row is emitted only when the scene has exactly one visible source
+      // AND the store describes that source. Several visible sources, a hidden
+      // owner, or a removed owner all emit nothing, which renders as no Capture
+      // row (the same path a null fingerprint takes). Per-source capture rows
+      // are a separate feature; this returns to the file's own rule that scene
+      // questions are answered over the visible entries.
+      //
+      // Wrapped because a throw must not sink the export.
       try {
+        const streamingSource = host.streaming();
+        const visible = [...host.clouds()].filter(([, c]) => c.visible);
+        if (streamingSource) {
+          // A streaming open closes the static layers, so a static layer still
+          // visible beside the streaming source is a second source. The
+          // streaming source itself owns the store under a null layer id.
+          if (visible.length > 0 || !captureProvenance.ownedBy(null)) return null;
+        } else if (visible.length !== 1 || !captureProvenance.ownedBy(visible[0]![0])) {
+          return null;
+        }
         const f = captureProvenance.fingerprint();
         if (f) return { label: f.label, confidence: f.confidence };
       } catch {
-        /* defensive — null falls back to "no Capture row" */
+        /* defensive: null falls back to "no Capture row" */
       }
       return null;
     },

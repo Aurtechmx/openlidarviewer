@@ -312,7 +312,7 @@ export function buildTerrainReportContent(
       { label: 'Interpolated (of grid)', value: fmtPct(q?.interpolatedCellRatio) },
       { label: 'Empty (of grid)', value: fmtPct(q?.emptyCellRatio) },
       {
-        label: 'Interpolated (of measured surface)',
+        label: 'Interpolated (of covered surface)',
         value: fmtPct(q?.interpolatedOfSurfaceRatio),
       },
       { label: 'Edge risk', value: fmtPct(q?.edgeRiskRatio) },
