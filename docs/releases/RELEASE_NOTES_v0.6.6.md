@@ -1,6 +1,6 @@
 # OpenLiDARViewer v0.6.6
 
-v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence, two more than at v0.6.5, and the E57 reader is checked point for point against PDAL. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
+v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence against v0.6.5's five, and the E57 reader is checked point for point against PDAL. The seven added are `E57-INGEST`, `MEAS-PROFILE`, `DSM`, `DTM`, `CHM`, `TPI` and `VRM`. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
