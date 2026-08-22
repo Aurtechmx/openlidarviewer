@@ -27,14 +27,10 @@ import type { LayerSpatialTransform } from '../geo/ProjectSpatialFrame';
 import { placeAabb } from './layerPlacement';
 import type { ExportSceneAdapter, FigureViewContext, ExportColorModeSnapshot } from '../export/types';
 import { linearUnitLabel } from '../io/crs';
-// Provenance classifier for `captureLabel` — surfaces capture-type + confidence
-// into every exported image's scan-report card. Same path the Inspector and the
-// PDF report use.
-import { classify as classifyProvenance } from '../diagnostics/provenance';
-import {
-  signalsForStaticCloud,
-  signalsForStreamingCloud,
-} from '../diagnostics/provenanceSignals';
+// The shared capture verdict for `captureLabel`. It surfaces capture-type plus
+// confidence into every exported image's scan-report card, from the same store
+// the Inspector card and the PDF report read.
+import { captureProvenance } from '../diagnostics/captureProvenance';
 import { classificationCoverage } from './class/classificationCoverage';
 
 /**
@@ -435,26 +431,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       return null;
     },
     captureLabel(): { label: string; confidence: 'low' | 'medium' | 'high' } | null {
-      // Compute the same provenance fingerprint the Inspector + PDF
-      // Provenance section surface. Auto-computed, varies per scan;
-      // exporters get it via `baseReportRows` without any per-mode
-      // code. Wrapped because a malformed cloud shape shouldn't sink
-      // the export — null is a clean no-op in the renderer.
+      // The verdict the Inspector card and the PDF Provenance section are
+      // showing, read from the shared store rather than re-classified here.
+      // Re-classifying from the cloud alone dropped both the shape router's
+      // verdict and the user's capture-type override, so an exported image could
+      // stamp a capture type the panel and the PDF both contradicted. Wrapped
+      // because a throw must not sink the export: null is a clean no-op in the
+      // renderer and renders as no Capture row.
       try {
-        const streaming = host.streaming();
-        if (streaming) {
-          const f = classifyProvenance(
-            signalsForStreamingCloud(streaming.cloud as never),
-          );
-          return { label: f.label, confidence: f.confidence };
-        }
-        const first = visibleEntries()[0];
-        if (first) {
-          const f = classifyProvenance(
-            signalsForStaticCloud(first.cloud as never),
-          );
-          return { label: f.label, confidence: f.confidence };
-        }
+        const f = captureProvenance.fingerprint();
+        if (f) return { label: f.label, confidence: f.confidence };
       } catch {
         /* defensive — null falls back to "no Capture row" */
       }

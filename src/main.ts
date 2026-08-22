@@ -253,10 +253,8 @@ import {
   increment as recordUsage,
   isSuppressed as usageIsSuppressed,
 } from './diagnostics/usageCounters';
-import {
-  fingerprintFor as provenanceFor,
-  type CaptureType,
-} from './diagnostics/provenance';
+import { captureProvenance } from './diagnostics/captureProvenance';
+import type { CaptureType } from './diagnostics/provenance';
 // CatalogPanel renders the empty-state "verified public LiDAR" picker.
 // The picker carries a curated dropdown of direct EPT URLs (each probed
 // at build time) and routes the selected URL into the existing streaming
@@ -1003,7 +1001,7 @@ let _lastInstantScanLabel: string | undefined;
 function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
     cloudCount: viewer.clouds().length,
-    scanShape: lastScanVerdict,
+    scanShape: captureProvenance.verdict(),
     scanLabel,
     priorScanLabel: _lastInstantScanLabel,
   });
@@ -3059,12 +3057,14 @@ const clipPanel = new ClipPanel({
 });
 
 // ── Scan-type routing state ─────────────────────────────────────────────────
+// The verdict itself lives in `captureProvenance`, which composes it with the
+// scan's metadata signals into the one capture-type fingerprint the Inspector,
+// the PDF report and the image exports all state.
 // `revealAnalysePanel` runs once at open, when a streaming cloud may have only
 // a sparse coarse level resident — a misread is likely. `applyScanRoute` is
 // re-run as the cloud fills in (debounced, growth-gated) and only flips panels
 // when the verdict actually changes, so it never thrashes. Once the user forces
 // a panel ("Run terrain anyway" / Analyse toggle) `routing.overridden` pins it.
-let lastScanVerdict: SpaceKind | null = null;
 let lastRouteResident = 0;
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
 const SCAN_REROUTE_GROWTH = 1.4;
@@ -3202,7 +3202,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     detected,
     override: routing.typeOverride,
     initial,
-    lastVerdict: lastScanVerdict,
+    lastVerdict: captureProvenance.verdict(),
     pinned: routing.overridden,
     settled,
   });
@@ -3240,7 +3240,7 @@ function applyScanRoute(initial: boolean, settled = false): boolean {
     return oneShotSpent;
   }
   const effective = plan.effective;
-  lastScanVerdict = effective;
+  captureProvenance.setVerdict(effective);
 
   const isNonTerrain = plan.showObjectPanel;
   if (isNonTerrain && shape && gathered) {
@@ -3418,7 +3418,7 @@ function revealAnalysePanel(name: string, settled = true): void {
   lastSettleResident = -1;
   lastSettleUndecided = false;
   scanDetectionCommitted = false;
-  lastScanVerdict = null;
+  captureProvenance.setVerdict(null);
   lastRouteResident = viewer.residentPointTotal();
   // `settled` = the geometry is fully loaded at open time (every static path).
   // Streaming callers pass false: their open-time verdict runs on a sparse
@@ -3535,12 +3535,12 @@ void viewerLoaded.then(() => {
     noteEdit('annotation');
   });
 
-  // Provenance override — when the user picks a capture type from the
-  // dropdown in the Inspector's Provenance section, rebuild the
-  // fingerprint for that explicit type. The signals row records that
-  // it's a user override so the surfacing stays honest.
+  // Provenance override: when the user picks a capture type from the dropdown
+  // in the Inspector's Provenance section, record it on the shared store. The
+  // panel re-renders through the store's listener, and the report PDF and the
+  // image exports read the same override, so a correction reaches every surface.
   inspector.setOnProvenanceOverride((type: CaptureType) => {
-    inspector.setProvenance(provenanceFor(type));
+    captureProvenance.setOverride(type);
   });
   // CRS override picker — persists to localStorage via CrsOverrideStore,
   // re-resolves against the active scan, and refreshes the Inspector
@@ -4971,9 +4971,10 @@ const openStreamingDeps: OpenStreamingDeps = {
 /**
  * Report / geo-context export — thin callers over the extracted
  * `src/app/reportExport.ts`. `reportExportDeps` binds the shell's running state
- * (the lazy Viewer, the active-scan seam, the resolved CRS, the scan verdict and
- * the class-scope stamp) to the module's accessors; the PDF assembly and the
- * origin/CRS resolution, plus the pure `effectiveCrsName` / `reportPointCount` /
+ * (the lazy Viewer, the active-scan seam, the resolved CRS and the class-scope
+ * stamp) to the module's accessors, and the capture fingerprint comes from the
+ * shared `captureProvenance` store. The PDF assembly and the origin/CRS
+ * resolution, plus the pure `effectiveCrsName` / `reportPointCount` /
  * `isNonTerrainVerdict` decisions, live in that module.
  */
 const reportExportDeps: ReportExportDeps = {
@@ -4981,7 +4982,6 @@ const reportExportDeps: ReportExportDeps = {
   getViewer: () => viewer,
   scans,
   crsCurrent: () => crsService.current(),
-  lastScanVerdict: () => lastScanVerdict,
   classScopeStamp: currentClassScopeStamp,
   baseName,
   loadReportEngine,
@@ -5416,7 +5416,7 @@ function resetToEmptyState(): void {
   // Cancel any pending scan-type re-route + reset its state so a timer can't
   // fire against the now-closed scan, and the next open routes from scratch.
   routing.cancelScheduled();
-  lastScanVerdict = null;
+  captureProvenance.setVerdict(null);
   routing.reset();
   streamingSettledRouted = false;
   settleAttempts = 0;
@@ -5438,7 +5438,7 @@ function resetToEmptyState(): void {
   dock.setEmpty(true);
   inspector.setEmpty(true);
   inspector.clear();
-  inspector.clearProvenance();
+  captureProvenance.clear();
   // `crsService.clear()` broadcasts `null` to the inspector via its
   // subscription, which restores the CRS placeholder.
   crsCoordinator.clearDatasetKey();

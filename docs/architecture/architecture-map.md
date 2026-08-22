@@ -142,8 +142,12 @@ delegates that bind its running state to the deps.
 
 Done: `generateReportPdf` / `exportGeoContext` (~402 lines) — the report / geo-context
 export orchestration — now live in `src/app/reportExport.ts`, driven through a
-`ReportExportDeps` object of accessor functions closing over the shell's services,
-its resolved CRS and its mutable scan verdict rather than the Viewer class. The
+`ReportExportDeps` object of accessor functions closing over the shell's services
+and its resolved CRS rather than the Viewer class. The capture-type fingerprint
+comes from `src/diagnostics/captureProvenance.ts`, the one store the Inspector
+card, the report PDF and the image exports all read, so the three surfaces cannot
+state different capture types for the same scan; it also carries the user's
+capture-type override into the deliverables. The
 report engine (which pulls pdf-lib) is passed as a lazy loader so the module stays
 free of the boot graph. The pure decisions the extraction exposes are Node-tested —
 `effectiveCrsName` (the CRS-label honesty rule: only a projected / geographic CRS
@@ -151,7 +155,8 @@ names the export frame, so a post-override label can't confidently place an expo
 in the CRS the user rejected), `reportPointCount` (the file-scale honesty rule the
 PDF's Point Count follows, the same declared-total-over-strided-subset rule as the
 Layers chip's `layerChipCount`) and `isNonTerrainVerdict` (the capture-lens
-predicate that rules out an aerial density guess for a compact object / interior),
+predicate that rules out an aerial density guess for a compact object / interior,
+re-exported from `src/diagnostics/captureProvenance.ts`),
 alongside `exportGeoContext`'s static → streaming → zero frame resolution
 (`tests/reportExport.test.ts`). `main.ts` keeps thin `generateReportPdf` /
 `exportGeoContext` delegates that bind its running state to the deps.

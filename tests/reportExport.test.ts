@@ -247,7 +247,6 @@ function makeReportDeps(opts: {
   staticCloud?: typeof staticCloud;
   streamingCloud?: typeof streamingCloud;
   classScopeStamp?: string;
-  verdict?: SpaceKind | null;
   failedSections?: string[];
   generateReject?: boolean;
   normalizeToNull?: boolean;
@@ -280,7 +279,6 @@ function makeReportDeps(opts: {
       activeCloud: () => opts.staticCloud ?? null,
     },
     crsCurrent: () => null,
-    lastScanVerdict: () => opts.verdict ?? null,
     classScopeStamp: () => opts.classScopeStamp ?? '',
     baseName: (n: string) => n.replace(/\.[^.]+$/, ''),
     loadReportEngine: vi.fn(async () => reportStub),
@@ -295,7 +293,6 @@ describe('generateReportPdf — the report assembly body', () => {
     const { deps, composeReportInputs, generateReport, setError } = makeReportDeps({
       staticCloud,
       classScopeStamp: 'ground only',
-      verdict: 'terrain',
     });
     await generateReportPdf('survey-summary', deps);
     expect(composeReportInputs).toHaveBeenCalledTimes(1);
@@ -306,7 +303,6 @@ describe('generateReportPdf — the report assembly body', () => {
     // A non-empty class-scope stamp is disclosed on the metadata.
     expect(inputs.metadata.classScopeNote).toBe('ground only');
     expect(inputs.subtitle).toBe('survey.las');
-    // A terrain verdict is provenance-classified without throwing.
     expect(inputs.metadata).toBeDefined();
     expect(generateReport).toHaveBeenCalledTimes(1);
     expect(setError).not.toHaveBeenCalled();
@@ -316,7 +312,6 @@ describe('generateReportPdf — the report assembly body', () => {
     const { deps, composeReportInputs } = makeReportDeps({
       streamingCloud,
       classScopeStamp: '',
-      verdict: 'object',
     });
     await generateReportPdf('technical-report', deps);
     const inputs = composeReportInputs.mock.calls[0]![0] as ReportInputs;
