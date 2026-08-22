@@ -42,6 +42,7 @@ import type {
 import type { WorkOwnership } from '../model/workOwnership';
 import {
   loadSessionOwnership,
+  loadVerifySessionManifest,
 } from '../lazyChunks';
 
 /**
@@ -555,9 +556,7 @@ export async function importSession(
     // still restores every measurement) — it only appends to the disclosure.
     // Lazily loaded so the hash-chain verifier (canonicalize + sha256) stays
     // out of the eager boot shell — session import is already an async action.
-    const { verifySessionManifest, sessionManifestNote } = await import(
-      '../science/verifySessionManifest'
-    );
+    const { verifySessionManifest, sessionManifestNote } = await loadVerifySessionManifest();
     const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
     const manifestSuffix = manifestNote ? ` ${manifestNote}` : '';
     if (wantFile && !haveCloud) {

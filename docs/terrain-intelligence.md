@@ -114,7 +114,7 @@ composed by the `analyseContours` orchestrator
   sidecar (when WKT is available) and a README that records coverage, the
   quality-gate outcome, and provenance. Empty cells are written as NODATA;
   CRS/datum warnings travel with the package.
-- **Cross-section profiles** (`render/measure/`). A bare-earth percentile
+- **Cross-section profiles** (`render/measure/`). A lower-percentile corridor
   estimator (`profileSampler.ts`) and a full-page **PDF profile sheet**
   (`profilePdf.ts`) with a scaled chart, station/elevation/grade table, and
   civil summary.

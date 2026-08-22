@@ -476,3 +476,8 @@ export const loadDerivedLayerReceipt = () => import('./science/derivedLayerRecei
  */
 export const loadSessionOwnership = () => import('./io/sessionOwnership');
 
+/**
+ * The session processing-manifest verifier, reached only while restoring a
+ * session that carries one. Same hazard as the loaders above.
+ */
+export const loadVerifySessionManifest = () => import('./science/verifySessionManifest');

@@ -195,7 +195,7 @@ describe('sampleProfile — height-vs-distance along a transect', () => {
   it('rejects the high (vegetation) return in favour of bare earth', () => {
     // Two candidates for the middle bin: a ground return at z=10 and a
     // higher (canopy) return at z=20, both inside the corridor. The
-    // default bare-earth percentile leans toward the LOWER ground value,
+    // default corridor percentile leans toward the LOWER ground value,
     // not the proximity winner — this is the de-noising contract.
     const positions = pack([
       [5, 0.4, 10], // ground
@@ -231,7 +231,7 @@ describe('sampleProfile — height-vs-distance along a transect', () => {
 
   it('de-noises a spiky corridor: ground dominates over scattered high returns', () => {
     // One bin's corridor: mostly ground near z=5 with a few tall spikes.
-    // The default bare-earth percentile should land near the ground, not
+    // The default corridor percentile should land near the ground, not
     // get dragged up by the spikes (the whole point of the estimator).
     const positions = pack([
       [5, 0.0, 5.0],
