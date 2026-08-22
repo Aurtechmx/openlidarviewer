@@ -1065,9 +1065,16 @@ function drawTitleBlock(
     ? `${Math.round(interpFraction * 100)}% interpolated (by length)`
     : 'Interpolated fraction — not measured (no contours)';
   text(interpLine, mxx, topY - 88, 6.5, font, DIM);
-  // Honest stamp of the shape style applied to the plotted contours (sourced
-  // from the unified provenance when present, so it matches every other export).
-  const styleLabel = prov ? prov.contourStyleLabel : contourShapeStyleLabel(input.model.contourStyle);
+  // Honest stamp of the shape style applied to the plotted contours, sourced
+  // from the unified provenance so it matches every other export of the same
+  // run. Without provenance the only style available is the one the view holds
+  // now, which is not necessarily the one this geometry was produced with: a
+  // sheet plotting cartographic contours read "Generalized" while the terrain
+  // report for the same run recorded "Smooth". The fallback therefore says
+  // where its value came from rather than presenting it as the recorded style.
+  const styleLabel = prov
+    ? prov.contourStyleLabel
+    : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
   text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
 
   // Right column — accuracy + readiness + provenance.

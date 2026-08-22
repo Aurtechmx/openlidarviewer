@@ -1,10 +1,10 @@
 # OpenLiDARViewer v0.6.6
 
-v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence against v0.6.5's five, and the E57 reader is checked point for point against PDAL. The seven added are `E57-INGEST`, `MEAS-PROFILE`, `DSM`, `DTM`, `CHM`, `TPI` and `VRM`. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
+v0.6.6 is a feature and evidence release with a substantial correctness pass underneath. Twelve registered claims now carry E4 cross-implementation evidence, against v0.6.5's five. The seven added are `E57-INGEST`, `MEAS-PROFILE`, `DSM`, `DTM`, `CHM`, `TPI` and `VRM`. On the public E57 validation scan, cartesian coordinates, surface normals and colour are checked point for point against PDAL; intensity is outside that comparison. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
-## Corrected calculations and declarations
+## Corrected calculations and behaviour
 
 - the USGS 3DEP Quality Level table read a QL3 density floor of 0.25 pts/m² where the published floor is 0.5, so a survey between the two was awarded QL3 at half the required density; the other three levels were already correct, and datasets in that band now read below-QL3;
 - WKT2 `LENGTHUNIT` is parsed for linear and vertical units;
@@ -21,8 +21,12 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 - an unsupported E57 major version is refused, and every section offset is bounded by the declared physical length;
 - the EPT and 3D Tiles parsers are strict at their format boundary rather than failing open, and the declared-bounds oracle reads the file's pages instead of raw bytes;
 - pointer lock delivered every mouse event to the canvas, so the navigation dock stopped receiving clicks and no mode could be reached with the mouse once walk or fly began; a click while locked now returns the cursor;
-- the live probe ran a pick across every point of every visible cloud on each pointer-move frame in walk and fly, and during both custom drags, because only an OrbitControls drag sets the flag its gate reads;
-- provenance reads the file's own declarations ahead of a density guess, and the phone-LiDAR density band is bounded above, so a tripod station carrying dense returns is not reported as a phone.
+- the live probe ran a pick across every point of every visible cloud on each pointer-move frame in walk and fly, and during both custom drags, because only an OrbitControls drag set the flag its gate reads. NavController now reports every way the camera is being driven, so the gate suspends the pick through all four;
+- provenance reads the file's own declarations ahead of a density guess, and the phone-LiDAR density band is bounded above, so a tripod station carrying dense returns is not reported as a phone;
+- every deployed terrain analysis ended by reloading the page. Five `import()` calls sat in modules the live source transform rewrites, so their specifiers became string-array lookups, their chunks were never emitted, and the browser fetched `/model/DerivedLayer` and got a 404. Vite raised `vite:preloadError`, the stale-chunk handler treated it as a swept-away deploy and reloaded, and a finished run looked like a crash back to the start screen. The five are routed through the module the transform excludes, and the release lint that guards this now parses every transformed module rather than matching lines in one file, so a relative runtime dynamic import cannot reach a deployed build again;
+- the terrain report printed one figure as "43% of the surface is interpolated" and another as "Interpolated 37%" for the same run. Both are right and they answer different questions, one over the covered surface and one over the whole grid, so the table now carries both and names the basis of each. The map sheet already did this for its own figure, "63% interpolated (by length)";
+- "Ground visibility" labelled a categorical bucket in one section of the terrain report and the classifier's ground share of all returns in another, printing a dash for one and a percentage for the other. The second reads "Ground returns (of all returns)";
+- the map sheet stamps the contour style from the export's provenance, and without provenance it fell back to the style the view holds now, which need not be the style that geometry was produced with. One sheet read Generalized while the terrain report for the same run recorded Smooth. The fallback says where its value came from.
 
 ## Section profile corrections
 
@@ -52,16 +56,21 @@ The performance control is display and streaming only. It drives the streaming p
 ## Reading more data
 
 - Krovák (EPSG:5514) ingest and iPhone PDRF7 reading;
-- footprint reprojection for any proj4-defined projected CRS rather than UTM alone;
-- parsers for 3D Tiles `tileset.json` and PNTS;
-- a local out-of-core read planner, and a cross-CRS project placement planner;
-- tie-point rigid registration with control-network validation, and a single planar ICP solver the registration model now selects directly instead of refusing the planar case.
+- footprint reprojection for any proj4-defined projected CRS rather than UTM alone.
 
 The Krovák definition uses a seven-parameter Bursa-Wolf shift. It agrees with authoritative PROJ to about 5 cm on the surveyed reference points, where the naive three-parameter shift is roughly 10 m out.
 
+### Foundations added for a later release, not reachable in v0.6.6
+
+Each of these is implemented and tested, and nothing in the running application passes through it. They are listed so the source is not mistaken for dead code, and they are not features of this release.
+
+- parsers for 3D Tiles `tileset.json` and PNTS;
+- a local out-of-core read planner, and a cross-CRS project placement planner;
+- tie-point rigid registration with control-network validation, and a single planar ICP solver the registration model selects directly instead of refusing the planar case.
+
 ## Also in this release
 
-Several items below are foundations: implemented and tested, but not yet reached by the normal loading or analysis routes. They are `ProductExecutorRegistry`, the feature-extraction service, the 3D Tiles and PNTS parsers, the out-of-core read planner, the cross-CRS placement planner, and the registration model. Nothing in the running application passes through them in this release, so treat them as groundwork rather than as behaviour you can exercise.
+Two more foundations appear below, alongside those listed under Reading more data: `ProductExecutorRegistry` and the feature-extraction service. Nothing in the running application passes through either, so treat them as groundwork rather than as behaviour you can exercise.
 
 - a project-wide elevation colour scale, opt-in, applied per frame, so two scans in one project can share a range instead of each stretching its own;
 - classifier v3: a structural-verticality cue and a wall-rescue pass;
@@ -78,7 +87,7 @@ The DSM (top surface, max return per cell) and the DTM (bare-earth grid, min ret
 
 The canopy height model (`CHM`) is promoted alongside them. CHM is DSM minus DTM, clamped at zero, and with both parents at E4 it was compared against the PDAL max grid minus the PDAL min grid on the same structure clouds, agreeing over 7,500 cells to a maximum difference under 8×10⁻⁶ m, within a 0.1 m registered tolerance (study `CHM-PDAL-WRITERS-GDAL-DIFFERENCE`, test `tests/chmCrossCheck.test.ts`).
 
-Twelve products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture, and two more promoted in this release.
+Twelve registered claims are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA` against GDAL, `DSM`, `DTM` and `CHM` against PDAL, the terrain descriptors `TPI` (against gdaldem 3.13.1) and `VRM` (against SAGA 7.8.2), each also checked against the closed form on a controlled analytic fixture, and two more promoted in this release.
 
 `MEAS-PROFILE`, the corridor section profile, reaches its required level. No single tool exposes a corridor percentile over a point cloud, so the reference is assembled from two: OGR/SpatiaLite 5.1.0 places every point on the section line and R 4.4.1 `quantile(type = 7)` reduces each station. Over 751 stations the largest difference is 3.6e-15 m, against a 1e-6 m tolerance registered before the reference existed. Per-station corridor counts match exactly, and the four deliberately empty stations read as gaps on both sides. Both fixtures are synthetic and hold every point clear of a bin boundary and of the corridor edge, so the tie-breaking there is untested and none of this is accuracy against a surveyed section.
 
@@ -116,7 +125,7 @@ The complete list is in `KNOWN_LIMITATIONS_v0.6.6.md`. It carries the v0.6.5 lim
 
 ## Compatibility
 
-Unchanged from v0.6.5. Modern Chromium browsers use WebGPU, with WebGL 2 fallback in Firefox and Safari, and existing sessions remain compatible. Session files are unaffected: a session saved before this release loads with generalization in its uniform default.
+Unchanged from v0.6.5. Modern Chromium browsers prefer WebGPU where the platform and adapter provide it and fall back to WebGL 2 otherwise; Firefox and Safari take the WebGL 2 path. Existing sessions remain compatible. Session files are unaffected: a session saved before this release loads with generalization in its uniform default.
 
 ## Verifying this release
 
