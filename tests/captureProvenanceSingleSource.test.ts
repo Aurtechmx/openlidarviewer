@@ -23,6 +23,11 @@
  * Inspector through `createInspectorCardRefreshers`, the PDF through
  * `generateReportPdf` with a recording report-engine stub, and the exported
  * image's scan-report card through `buildExportAdapter().captureLabel()`.
+ *
+ * One store, two scopes. The Inspector and the PDF describe the active scan;
+ * the exported image describes the visible scene. The last describe block below
+ * covers the scenes where those differ, which the single-source cases cannot
+ * reach because they load one layer at a time.
  */
 
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
@@ -139,18 +144,35 @@ async function reportProvenance(cloud: typeof templeCloud) {
   return inputs.provenance;
 }
 
+/** A static layer in the exported scene: its id, its cloud, and whether it renders. */
+interface SceneLayer {
+  readonly id: string;
+  readonly cloud: typeof templeCloud;
+  readonly visible?: boolean;
+}
+
 /**
- * The scan-report card stamped into an exported image. The host carries the same
- * cloud the panel and the report describe, so a surface that classifies the cloud
+ * The scan-report card stamped into an exported image, over a scene of static
+ * layers plus an optional streaming source. Each layer carries the id the
+ * provenance store records as the owner, so a case can hide the owning layer,
+ * remove it, or leave two layers visible at once. The host carries the same
+ * clouds the panel and the report describe, so a surface that classifies a cloud
  * itself has everything it needs to produce its own answer.
  */
-function exportedImageCapture(cloud: typeof templeCloud | null = null) {
+function exportedImageCapture(
+  layers: readonly SceneLayer[] = [],
+  streamingCloud: { readonly kind: string; readonly sourcePointCount?: number } | null = null,
+) {
   const entries = new Map(
-    cloud ? [['a', { cloud, mode: 'rgb', visible: true, placement: null }]] : [],
+    layers.map((l) => [
+      l.id,
+      { cloud: l.cloud, mode: 'rgb', visible: l.visible ?? true, placement: null },
+    ]),
   );
   const host = {
     clouds: () => entries,
-    streaming: () => null,
+    streaming: () =>
+      streamingCloud ? { cloud: streamingCloud, renderer: { colorMode: 'rgb' } } : null,
     setColorMode: vi.fn(),
     setStreamingColorMode: vi.fn(),
     setVisible: vi.fn(),
@@ -162,6 +184,9 @@ function exportedImageCapture(cloud: typeof templeCloud | null = null) {
   return buildExportAdapter(host).captureLabel?.() ?? null;
 }
 
+/** The one-layer scene: layer `id` is loaded, visible, and owns the store. */
+const onlyLayer = (id: string, cloud: typeof templeCloud): SceneLayer[] => [{ id, cloud }];
+
 beforeEach(() => {
   captureProvenance.clear();
 });
@@ -170,12 +195,12 @@ describe('capture type: one verdict, every surface', () => {
   it('states ground-based on all three surfaces for a compact object', async () => {
     const p = panel();
     // Open order: the panel refreshes first, the shape router decides after.
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     expect(p.label()).toBe('Drone-mounted LiDAR (UAV ALS)');
     captureProvenance.setVerdict('object');
 
     const report = await reportProvenance(templeCloud);
-    const image = exportedImageCapture(templeCloud);
+    const image = exportedImageCapture(onlyLayer('a', templeCloud));
 
     expect(p.label()).toBe('Ground-based scan — capture method not determined');
     expect(report?.label).toBe(p.label());
@@ -189,11 +214,11 @@ describe('capture type: one verdict, every surface', () => {
 
   it('states ground-based on all three surfaces for an interior', async () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setVerdict('interior');
 
     const report = await reportProvenance(templeCloud);
-    const image = exportedImageCapture(templeCloud);
+    const image = exportedImageCapture(onlyLayer('a', templeCloud));
 
     expect(p.label()).toBe('Ground-based scan — capture method not determined');
     expect(report?.label).toBe(p.label());
@@ -202,11 +227,11 @@ describe('capture type: one verdict, every surface', () => {
 
   it('keeps the aerial verdict on all three surfaces for a terrain scan', async () => {
     const p = panel();
-    p.cards.refreshProvenance(terrainCloud);
+    p.cards.refreshProvenance(terrainCloud, 'a');
     captureProvenance.setVerdict('terrain');
 
     const report = await reportProvenance(terrainCloud);
-    const image = exportedImageCapture(terrainCloud);
+    const image = exportedImageCapture(onlyLayer('a', terrainCloud));
 
     // The same density band as the temple, so this is the control that the
     // shape guard is applied by verdict rather than to every scan.
@@ -218,7 +243,7 @@ describe('capture type: one verdict, every surface', () => {
 
   it('follows a verdict that lands after the panel already rendered', () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     const atOpen = p.label();
     captureProvenance.setVerdict('object');
     expect(atOpen).toBe('Drone-mounted LiDAR (UAV ALS)');
@@ -227,7 +252,7 @@ describe('capture type: one verdict, every surface', () => {
 
   it('follows a streaming re-route that changes the verdict mid-session', () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setVerdict('terrain');
     expect(p.label()).toBe('Drone-mounted LiDAR (UAV ALS)');
     captureProvenance.setVerdict('object');
@@ -238,12 +263,12 @@ describe('capture type: one verdict, every surface', () => {
 describe('capture type: a user override reaches the deliverables', () => {
   it('carries the override into the report PDF and the exported image', async () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setVerdict('object');
     captureProvenance.setOverride('terrestrial');
 
     const report = await reportProvenance(templeCloud);
-    const image = exportedImageCapture(templeCloud);
+    const image = exportedImageCapture(onlyLayer('a', templeCloud));
 
     expect(p.label()).toBe('Terrestrial Laser Scan (TLS)');
     expect(report?.label).toBe(p.label());
@@ -251,38 +276,127 @@ describe('capture type: a user override reaches the deliverables', () => {
     expect(report?.signals).toContain('User-overridden capture type');
   });
 
-  it('drops the override when the next scan opens', () => {
+  it('drops the override when the next scan opens, and rebinds the owner', () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setOverride('spaceborne');
     expect(p.label()).toBe('Spaceborne LiDAR');
-    p.cards.refreshProvenance(terrainCloud);
+    p.cards.refreshProvenance(terrainCloud, 'b');
     expect(captureProvenance.override()).toBeNull();
     expect(p.label()).toBe('Drone-mounted LiDAR (UAV ALS)');
+    // The store now describes layer 'b', so an image of 'b' carries the new
+    // verdict and an image of 'a' carries none.
+    expect(exportedImageCapture(onlyLayer('b', terrainCloud))?.label).toBe(p.label());
+    expect(exportedImageCapture(onlyLayer('a', templeCloud))).toBeNull();
   });
 
   it('drops the previous scan verdict when the next scan opens', () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     captureProvenance.setVerdict('object');
-    p.cards.refreshProvenance(terrainCloud);
+    p.cards.refreshProvenance(terrainCloud, 'b');
     expect(captureProvenance.verdict()).toBeNull();
     expect(p.label()).toBe('Drone-mounted LiDAR (UAV ALS)');
+    expect(exportedImageCapture(onlyLayer('a', templeCloud))).toBeNull();
+  });
+});
+
+/**
+ * Scope. The Inspector card and the report PDF describe the ACTIVE scan, which
+ * is what they are for. The exported image describes the PIXELS, and
+ * `exportAdapter` answers every other scene question (capabilities, counts,
+ * bounds) over `visibleEntries()` for that reason.
+ *
+ * The two scopes come apart because static layers are additive
+ * (`app/openScan.ts`) and the newest open becomes the active scan. Load a
+ * terrain scan, then a temple: the store describes the temple. Hide the temple
+ * and the image shows only terrain pixels while the store still answers
+ * "ground-based". Remove the temple with its layer close control and the store
+ * describes a scan that is no longer in the scene at all.
+ *
+ * The cases below drive scenes the single-source cases above cannot reach: two
+ * layers, one of them hidden, and a layer removed. The rule under test is
+ * conservative on purpose. Exactly one visible source that owns the stored
+ * verdict states the capture type; anything else states nothing, which renders
+ * as no Capture row. A per-source capture row is a separate feature.
+ */
+describe('capture type: the exported image is scene scoped', () => {
+  /** Terrain opens first as layer 'a', the temple second as layer 'b' and active. */
+  function twoLayerSession() {
+    const p = panel();
+    p.cards.refreshProvenance(terrainCloud, 'a');
+    p.cards.refreshProvenance(templeCloud, 'b');
+    captureProvenance.setVerdict('object');
+    return p;
+  }
+
+  it('states nothing when the owning scan is hidden and an older scan shows', () => {
+    const p = twoLayerSession();
+    const image = exportedImageCapture([
+      { id: 'a', cloud: terrainCloud },
+      { id: 'b', cloud: templeCloud, visible: false },
+    ]);
+    // The panel keeps describing the active scan, which is correct for it.
+    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    // The image carries only terrain pixels, so it must not stamp the temple's
+    // capture type.
+    expect(image).toBeNull();
+  });
+
+  it('states nothing when two static scans are both visible', () => {
+    const p = twoLayerSession();
+    const image = exportedImageCapture([
+      { id: 'a', cloud: terrainCloud },
+      { id: 'b', cloud: templeCloud },
+    ]);
+    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(image).toBeNull();
+  });
+
+  it('drops a removed scan from every surface at once', () => {
+    const p = twoLayerSession();
+    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    // The layer close control: `removeCloud` clears the store for the layer it
+    // frees, so the freed scan cannot keep describing the session.
+    captureProvenance.clearIf('b');
+    expect(captureProvenance.fingerprint()).toBeNull();
+    expect(p.label()).toBeNull();
+    expect(exportedImageCapture(onlyLayer('a', terrainCloud))).toBeNull();
+  });
+
+  it('keeps the verdict when a layer that does not own it is removed', () => {
+    const p = twoLayerSession();
+    captureProvenance.clearIf('a');
+    expect(p.label()).toBe('Ground-based scan — capture method not determined');
+    expect(exportedImageCapture(onlyLayer('b', templeCloud))?.label).toBe(p.label());
+  });
+
+  it('states the capture type for a streaming source, which is the whole scene', () => {
+    const p = panel();
+    const streamingCloud = {
+      kind: 'copc' as const,
+      name: 'tile.copc.laz',
+      sourcePointCount: 8_000_000,
+    };
+    p.cards.refreshProvenanceFromStreaming(streamingCloud);
+    const image = exportedImageCapture([], streamingCloud);
+    expect(p.label()).not.toBeNull();
+    expect(image?.label).toBe(p.label());
   });
 });
 
 describe('capture type: no scan states nothing', () => {
   it('reports no fingerprint to any surface before a scan opens', () => {
     expect(captureProvenance.fingerprint()).toBeNull();
-    expect(exportedImageCapture(templeCloud)).toBeNull();
+    expect(exportedImageCapture(onlyLayer('a', templeCloud))).toBeNull();
   });
 
   it('clears every surface when the scan closes', () => {
     const p = panel();
-    p.cards.refreshProvenance(templeCloud);
+    p.cards.refreshProvenance(templeCloud, 'a');
     expect(p.label()).not.toBeNull();
     captureProvenance.clear();
     expect(p.label()).toBeNull();
-    expect(exportedImageCapture(templeCloud)).toBeNull();
+    expect(exportedImageCapture(onlyLayer('a', templeCloud))).toBeNull();
   });
 });

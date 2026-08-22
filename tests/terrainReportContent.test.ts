@@ -492,7 +492,7 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
       const rows = coverage(r)?.rows ?? [];
       const label = (l: string) => rows.find((x) => x.label === l)?.value;
       expect(label('Interpolated (of grid)')).toBe('37%');
-      expect(label('Interpolated (of measured surface)')).toBe('43%');
+      expect(label('Interpolated (of covered surface)')).toBe('43%');
       // No bare "Interpolated" survives, which is what made the two look like
       // one contradictory figure.
       expect(rows.some((x) => x.label === 'Interpolated')).toBe(false);

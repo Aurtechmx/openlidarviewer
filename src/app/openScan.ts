@@ -335,7 +335,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // the Inspector's "Provenance" section. Wrapped because a malformed
     // input shape would have aborted the rest of the post-load setup
     // (including the navBar reveal further down).
-    try { deps.inspectorCards.refreshProvenance(result.cloud); }
+    try { deps.inspectorCards.refreshProvenance(result.cloud, id); }
     catch (err) { if (deps.debug) console.warn('[provenance] refreshProvenance threw', err); }
     // CRS — detected from the loaded cloud's metadata, merged with any
     // persisted user override. Wrapped because a malformed cloud
