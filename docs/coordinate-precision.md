@@ -43,6 +43,32 @@ the largest residual is 10,000 m — well within Float32's sub-mm sweet spot.
 - **Invariant:** `world = local + origin` is exact to within Float32
   precision of the local residual.
 
+#### The frame behind that invariant
+
+The addition above is one case of a general conversion, and every streaming
+source now carries it explicitly as a `SpatialFrame`
+(`src/geo/frame/spatialFrame.ts`). COPC, EPT and the OLV tile store build a
+`translated-cartesian` frame from their own `renderOrigin`, so their arithmetic
+is unchanged and `frame.isTranslationOnly` is true.
+
+An offset is not enough for a source whose coordinates are geocentric. On a
+globe the source +Z is the polar axis, not up, so a scene drawn without rotating
+into a tangent frame is wrong about which way is down, and a Float32 buffer
+holding a coordinate near the Earth's radius has lost the millimetre before the
+first frame is drawn. `createLocalEnuFrame` covers that case: it subtracts the
+anchor in Float64, then rotates into east-north-up, so render up is `[0, 0, 1]`
+and the residual reaching Float32 is metre-scale.
+
+Nothing ships on the rotating path yet, because no format OLV reads today
+declares a geocentric frame. A consumer that still performs `local + origin`
+directly should test `frame.isTranslationOnly` and refuse rather than report a
+coordinate that a rotation would have moved by hundreds of metres.
+
+Note what the frame will not do: decide that a source is geocentric. A tileset
+whose coordinates sit near the Earth's radius may be EPSG:4978, or a local
+model that happens to be large, and the numbers do not separate the two. The
+frame is built from a declaration, never from the magnitude of a coordinate.
+
 ### 3. Camera/view space (Float32 on the GPU)
 
 Three.js's standard space. Camera position + projection matrices operate

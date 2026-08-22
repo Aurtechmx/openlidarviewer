@@ -102,6 +102,7 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
     kind: 'ept', // pretending to be an EPT source
     name: 'stub.ept',
     renderOrigin: realCloud.renderOrigin,
+    frame: realCloud.frame,
     octree: realCloud.octree,
     sourcePointCount: realCloud.sourcePointCount,
     get residentPointCount(): number { return realCloud.residentPointCount; },
@@ -129,4 +130,39 @@ test('the scheduler accepts any StreamingSource conforming object — EPT will p
   );
   expect(scheduler).toBeDefined();
   scheduler.stop();
+});
+
+/**
+ * The frame and the render origin must describe the same conversion. Every
+ * consumer that reconstructs a source coordinate does it one way or the other,
+ * and a disagreement would put two different answers in the same report.
+ */
+function assertFrameMatchesOrigin(source: {
+  readonly renderOrigin: readonly [number, number, number];
+  readonly frame: import('../src/geo/frame/spatialFrame').SpatialFrame;
+}): void {
+  const o = source.renderOrigin;
+  expect(source.frame.kind).toBe('translated-cartesian');
+  expect(source.frame.isTranslationOnly).toBe(true);
+  expect(source.frame.renderOrigin).toEqual([o[0], o[1], o[2]]);
+  expect(source.frame.renderWorldUp()).toEqual([0, 0, 1]);
+  for (const p of [[0, 0, 0], [1.5, -2.25, 30.125], [1e6, -1e6, 0]] as const) {
+    expect(source.frame.renderToSourcePoint(p))
+      .toEqual([p[0] + o[0], p[1] + o[1], p[2] + o[2]]);
+    expect(source.frame.sourceToRenderPoint(p))
+      .toEqual([p[0] - o[0], p[1] - o[1], p[2] - o[2]]);
+  }
+}
+
+test('a COPC source reports a frame that agrees with its render origin', async () => {
+  const fixture = buildSyntheticCopc({
+    center: [512345, 4207891, 137],
+    halfsize: 128,
+    nodes: [{ key: [0, 0, 0, 0], pointCount: 100 }],
+  });
+  const cloud = await StreamingPointCloud.open(
+    new ArrayBufferRangeSource(fixture.buffer),
+    'frame.copc.laz',
+  );
+  assertFrameMatchesOrigin(cloud);
 });

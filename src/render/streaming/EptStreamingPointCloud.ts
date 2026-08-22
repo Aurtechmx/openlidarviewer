@@ -53,6 +53,7 @@ import { EptOctree } from './EptOctree';
 import { nextStreamingScanId } from './streamingScanId';
 import type { CrsInfo } from '../../io/crs';
 import { resolveEptCrs } from './eptCrs';
+import { createTranslatedFrame, type SpatialFrame } from '../../geo/frame/spatialFrame';
 
 /**
  * Hierarchy files to load before a streaming EPT scan attaches. The root file
@@ -109,6 +110,12 @@ export class EptStreamingPointCloud implements StreamingSource {
   readonly kind: StreamingSourceKind = 'ept';
   readonly name: string;
   readonly renderOrigin: [number, number, number];
+  /**
+   * The source-to-render conversion. A recentring with no rotation: this format
+   * is LAS-derived and Z-up, so render up is the source's own +Z.
+   */
+  readonly frame: SpatialFrame;
+
   readonly octree: EptOctree;
   readonly metadata: EptMetadata;
   /** Dataset base URL — every tile + hierarchy URL builds from this. */
@@ -148,6 +155,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     this.baseUrl = baseUrl;
     this.name = name;
     this.renderOrigin = renderOrigin;
+    this.frame = createTranslatedFrame(renderOrigin);
     this.octree = octree;
     this._transport = transport;
     this._search = search;
