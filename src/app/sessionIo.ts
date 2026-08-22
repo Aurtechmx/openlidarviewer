@@ -40,6 +40,9 @@ import type {
   SessionSpatialVerdict,
 } from '../io/session';
 import type { WorkOwnership } from '../model/workOwnership';
+import {
+  loadSessionOwnership,
+} from '../lazyChunks';
 
 /**
  * Whole-file byte ceiling for a `.olvsession`, checked on the File's size BEFORE
@@ -476,7 +479,7 @@ export async function importSession(
     // left unattributed rather than given a guessed owner (fail closed).
     // Lazy: the ownership migrator lives off the index chunk — session restore is
     // on-demand, so its cost belongs on the restore path, not the initial load.
-    const { migrateSessionOwnership } = await import('../io/sessionOwnership');
+    const { migrateSessionOwnership } = await loadSessionOwnership();
     const ownership = migrateSessionOwnership(session, {
       loadedLayerId: deps.getActiveLayerId() ?? undefined,
     });

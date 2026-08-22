@@ -449,3 +449,30 @@ export const loadPlanViewController = () => import('./render/camera/planViewCont
  */
 export const loadContourDownload = () => import('./terrain/contour/contourDownload');
 export const loadExportProvenance = () => import('./terrain/export/exportProvenance');
+
+/**
+ * v0.6.6 — the derived-layer path a terrain analysis takes once it has a
+ * result: the contour layer service, the layer store, the scene overlay and
+ * the receipt builder. Reached only after an analysis completes, so they stay
+ * off the startup shell.
+ *
+ * These four shipped as inline `import()` calls in `terrainAnalysisRunner.ts`,
+ * which the live source transform rewrites. The specifiers became string-array
+ * lookups, their chunks were never emitted, and every deployed terrain analysis
+ * ended with "Failed to fetch dynamically imported module" for
+ * `model/DerivedLayer`. The preload failure reached the stale-chunk handler,
+ * which reloaded the page, so the run looked like a crash back to the start
+ * screen. Held here for the reason the module exists.
+ */
+export const loadContourLayerService = () => import('./app/contourLayerService');
+export const loadDerivedLayer = () => import('./model/DerivedLayer');
+export const loadContourOverlay = () => import('./render/ContourOverlay');
+export const loadDerivedLayerReceipt = () => import('./science/derivedLayerReceipt');
+
+/**
+ * The session ownership migrator, reached only when a restored session needs
+ * its work re-attributed. Same hazard as the derived-layer loaders above: it
+ * was an inline `import()` in `sessionIo.ts`, which the transform rewrites.
+ */
+export const loadSessionOwnership = () => import('./io/sessionOwnership');
+
