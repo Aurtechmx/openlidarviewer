@@ -15,6 +15,7 @@
 
 import type { ColorMode } from './colorModes';
 import { cloudSupportsColorMode, type ColorModeCloudFacts } from './colorModeSupport';
+import { readRgbReadability } from './rgbReadability';
 
 /** A colour-mode suggestion with a short, modest rationale. */
 export interface ColorModeRecommendation {
@@ -46,6 +47,18 @@ const FALLBACK: ColorModeRecommendation = {
 };
 
 /**
+ * The fallback when RGB is present but too uniform to read.
+ *
+ * A distinct reason from {@link FALLBACK}, because "this scan has no colour" and
+ * "this scan's colour is a blank sheet" are different facts, and only the second
+ * leaves a channel the user may still want to select.
+ */
+const UNIFORM_RGB_FALLBACK: ColorModeRecommendation = {
+  mode: 'elevation',
+  reason: 'coloured by height — the scan carries RGB, but too uniform to read',
+};
+
+/**
  * Recommend a colour mode for a scan from the attributes it carries (`facts`
  * are the cloud's own attribute arrays — RGB, classification, intensity, …).
  * Deterministic and conservative: prefer RGB, then classification, then
@@ -57,8 +70,17 @@ const FALLBACK: ColorModeRecommendation = {
  * rather than as absent data.
  */
 export function recommendColorMode(facts: ColorModeCloudFacts): ColorModeRecommendation {
+  // RGB is measured, not merely counted: a colour array in which every point is
+  // within a few levels of white is present, renderable and unreadable, and
+  // opening a scan into it shows a blank sheet. The mode stays selectable; it
+  // just stops being the opening choice.
+  const rgbUniform =
+    cloudSupportsColorMode(facts, 'rgb') &&
+    readRgbReadability(facts.colors).verdict === 'uniform';
+
   for (const candidate of CANDIDATES) {
+    if (candidate.mode === 'rgb' && rgbUniform) continue;
     if (cloudSupportsColorMode(facts, candidate.mode)) return candidate;
   }
-  return FALLBACK;
+  return rgbUniform ? UNIFORM_RGB_FALLBACK : FALLBACK;
 }

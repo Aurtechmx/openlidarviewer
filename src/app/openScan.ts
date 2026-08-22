@@ -359,8 +359,8 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
 
     // Colour the fresh scan by the mode its attributes best support (RGB →
     // classification → intensity → elevation), gated so it never picks a mode
-    // the cloud can't render. The rail syncs off `mode` below, so this single
-    // seam keeps the render and the COLOR BY chips in step.
+    // the cloud can't render, nor an RGB array too uniform to read. The rail
+    // syncs off `mode` below, so this seam keeps render and chips in step.
     const mode = recommendColorMode(result.cloud).mode;
     deps.setCurrentColorMode(mode);
     viewer.setColorMode(id, mode);
