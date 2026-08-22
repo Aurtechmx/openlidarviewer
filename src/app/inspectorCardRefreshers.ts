@@ -13,7 +13,7 @@
 // returned object and otherwise behave exactly as before.
 import type { Inspector } from '../ui/Inspector';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
-import { classify as classifyProvenance } from '../diagnostics/provenance';
+import { captureProvenance } from '../diagnostics/captureProvenance';
 import {
   signalsForStaticCloud,
   signalsForStreamingCloud,
@@ -25,12 +25,12 @@ import {
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 export interface InspectorCardRefreshers {
-  /** Refresh the Inspector's provenance panel from a freshly attached static cloud. */
+  /** Record a freshly attached static cloud as the scan the provenance store describes. */
   refreshProvenance(cloud: {
     readonly sourceFormat: string;
     readonly pointCount: number;
   }): void;
-  /** Refresh the Inspector's provenance panel from a freshly attached streaming cloud. */
+  /** Record a freshly attached streaming cloud as the scan the provenance store describes. */
   refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
     readonly sourcePointCount?: number;
@@ -137,22 +137,29 @@ export function createInspectorCardRefreshers(
   // every attach-time refresh, so derived numbers never survive a scan swap.
   let lastSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
 
+  // The panel renders whatever the shared store says, including a verdict that
+  // arrives after the refresher below already ran: the shape router only decides
+  // in `revealAnalysePanel`, which both open paths call after their provenance
+  // refresh, and a streaming re-route or a manual "Treat as" pick moves it again
+  // later in the session. Pushing from here keeps the card in step with the
+  // report PDF and the exported images, which read the same store.
+  captureProvenance.onChange((f) => {
+    if (f) inspector.setProvenance(f);
+    else inspector.clearProvenance();
+  });
+
   function refreshProvenance(cloud: {
     readonly sourceFormat: string;
     readonly pointCount: number;
   }): void {
-    const signals = signalsForStaticCloud(cloud as never);
-    const f = classifyProvenance(signals);
-    inspector.setProvenance(f);
+    captureProvenance.setScan(signalsForStaticCloud(cloud as never));
   }
 
   function refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
     readonly sourcePointCount?: number;
   }): void {
-    const signals = signalsForStreamingCloud(cloud as never);
-    const f = classifyProvenance(signals);
-    inspector.setProvenance(f);
+    captureProvenance.setScan(signalsForStreamingCloud(cloud as never));
   }
 
   /**
