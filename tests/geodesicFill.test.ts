@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { geodesicFill } from '../src/terrain/ground/geodesicFill';
+import {
+  geodesicFill,
+  geodesicFillWithReport,
+  GEODESIC_PROBE_VOIDS,
+} from '../src/terrain/ground/geodesicFill';
 import { idwFill } from '../src/terrain/ground/idwFill';
 
 describe('geodesicFill', () => {
@@ -90,5 +94,110 @@ describe('geodesicFill', () => {
       2, 1, {},
     );
     expect(empty.every((v) => Number.isNaN(v))).toBe(true);
+  });
+});
+
+/**
+ * A grid of alternating measured and void tiles, the shape that makes the pass
+ * expensive: a void in the middle of a tile has to expand most of its search
+ * window before it reaches twelve measured cells, while a void beside measured
+ * ground reaches them in a step.
+ */
+function tiledGrid(cols: number, rows: number, tile: number): {
+  z: Float32Array; had: Uint8Array;
+} {
+  const n = cols * rows;
+  const z = new Float32Array(n);
+  const had = new Uint8Array(n).fill(1);
+  for (let i = 0; i < n; i++) {
+    const r = (i / cols) | 0, c = i - r * cols;
+    z[i] = 40 * Math.sin(c / 60) + 25 * Math.cos(r / 45);
+    if ((((r / tile) | 0) + ((c / tile) | 0)) % 2 === 1) { had[i] = 0; z[i] = Number.NaN; }
+  }
+  return { z, had };
+}
+
+describe('geodesicFill cost bound', () => {
+  it('reports what it spent and what it projected', () => {
+    const { z, had } = tiledGrid(64, 64, 8);
+    const { report } = geodesicFillWithReport(z, had, 64, 64, { cellMetresX: 1 });
+    expect(report.voids).toBeGreaterThan(0);
+    expect(report.abandoned).toBe(false);
+    expect(report.nodesExpanded).toBeGreaterThan(0);
+    expect(report.projectedNodes).toBeGreaterThan(0);
+  });
+
+  it('projects the whole pass to within a few per cent of what it costs', () => {
+    // The projection is the decision, so a probe that misread the grid would
+    // abandon a cheap pass or run an expensive one.
+    const { z, had } = tiledGrid(160, 160, 16);
+    const { report } = geodesicFillWithReport(z, had, 160, 160, {
+      cellMetresX: 1, nodeBudget: 1e15,
+    });
+    const ratio = report.projectedNodes / report.nodesExpanded;
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
+  });
+
+  it('abandons the geodesic pass when the projection exceeds the budget', () => {
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { report } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    expect(report.abandoned).toBe(true);
+    expect(report.projectedNodes).toBeGreaterThan(1);
+  });
+
+  it('leaves every void at the Euclidean prefill when it abandons', () => {
+    // All or nothing: the probe's geodesic values are discarded so the surface
+    // is one interpolant throughout, not geodesic in the cells sampled first.
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { z: out } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    const euclidean = idwFill(z, had, 96, 96, { power: 2, kNearest: 12, maxRadiusCells: 24 });
+    for (let i = 0; i < out.length; i++) {
+      if (had[i] === 1) continue;
+      if (!Number.isFinite(euclidean[i])) continue;
+      expect(out[i]).toBe(euclidean[i]);
+    }
+  });
+
+  it('keeps measured cells verbatim on the abandoned path too', () => {
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { z: out } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    for (let i = 0; i < out.length; i++) if (had[i] === 1) expect(out[i]).toBe(z[i]);
+  });
+
+  it('gives the same answer every run, probe included', () => {
+    const a = tiledGrid(80, 80, 10);
+    const b = tiledGrid(80, 80, 10);
+    const ra = geodesicFillWithReport(a.z, a.had, 80, 80, { cellMetresX: 1 });
+    const rb = geodesicFillWithReport(b.z, b.had, 80, 80, { cellMetresX: 1 });
+    expect([...rb.z]).toEqual([...ra.z]);
+    expect(rb.report).toEqual(ra.report);
+  });
+
+  it('solves every void exactly once, so the probe is not repeated work', () => {
+    // A void solved twice would double the pops for no change in the answer.
+    const { z, had } = tiledGrid(40, 40, 5);
+    const strided = geodesicFillWithReport(z, had, 40, 40, { cellMetresX: 1 });
+    const unstrided = geodesicFillWithReport(z, had, 40, 40, {
+      cellMetresX: 1,
+      // One probe void, so nearly every void is solved in the second loop.
+      nodeBudget: 1e15,
+    });
+    expect([...strided.z]).toEqual([...unstrided.z]);
+    expect(strided.report.voids).toBeLessThanOrEqual(GEODESIC_PROBE_VOIDS * 1000);
+  });
+
+  it('is unchanged for a grid small enough that the probe covers it', () => {
+    // Under GEODESIC_PROBE_VOIDS voids the stride is 1 and the probe solves
+    // everything, which must still equal what the plain entry point returns.
+    const { z, had } = tiledGrid(30, 30, 6);
+    const viaReport = geodesicFillWithReport(z, had, 30, 30, { cellMetresX: 1 }).z;
+    expect([...geodesicFill(z, had, 30, 30, { cellMetresX: 1 })]).toEqual([...viaReport]);
   });
 });

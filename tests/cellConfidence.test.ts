@@ -382,3 +382,53 @@ describe('buildDtmGrid vertical unit propagation', () => {
     expect(buildDtmGrid(nonEmpty(), params).verticalUnitToMetres).toBe(empty.verticalUnitToMetres);
   });
 });
+
+describe('buildDtmGrid geodesic cost ceiling', () => {
+  /** A 24x24 grid of alternating 4-cell measured and void tiles. */
+  function tiled(): { z: number[]; counts: number[]; cols: number; rows: number } {
+    const cols = 24, rows = 24;
+    const z: number[] = [], counts: number[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isVoid = ((((r / 4) | 0) + ((c / 4) | 0)) % 2) === 1;
+        z.push(isVoid ? Number.NaN : 10 + r * 0.5 + c * 0.25);
+        counts.push(isVoid ? 0 : 8);
+      }
+    }
+    return { z, counts, cols, rows };
+  }
+
+  it('says so in the warnings when it falls back to Euclidean IDW', () => {
+    const g = buildDtmGrid(raster(tiled()), {
+      interpolation: 'geodesic',
+      geodesicNodeBudget: 1,
+    });
+    const warning = g.warnings.find((w) => w.includes('Euclidean IDW'));
+    expect(warning).toBeDefined();
+    expect(warning).toMatch(/void cells/);
+    expect(warning).toMatch(/ceiling/);
+  });
+
+  it('says nothing when the pass fits inside the ceiling', () => {
+    const g = buildDtmGrid(raster(tiled()), { interpolation: 'geodesic' });
+    expect(g.warnings.some((w) => w.includes('Euclidean IDW'))).toBe(false);
+  });
+
+  it('says nothing when the caller never asked for a geodesic fill', () => {
+    const g = buildDtmGrid(raster(tiled()), {
+      interpolation: 'idw',
+      geodesicNodeBudget: 1,
+    });
+    expect(g.warnings.some((w) => w.includes('Euclidean IDW'))).toBe(false);
+  });
+
+  it('still produces a height for every void it can reach after falling back', () => {
+    const g = buildDtmGrid(raster(tiled()), {
+      interpolation: 'geodesic',
+      geodesicNodeBudget: 1,
+    });
+    let heights = 0;
+    for (let i = 0; i < g.z.length; i++) if (g.coverage[i] > 0) heights++;
+    expect(heights).toBeGreaterThan(g.cols * g.rows * 0.5);
+  });
+});

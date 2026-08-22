@@ -39,7 +39,7 @@ import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { DemRaster } from './rasterizeDtm';
 import { inpaintNearest } from './groundFilter';
 import { idwFill } from './idwFill';
-import { geodesicFill } from './geodesicFill';
+import { geodesicFillWithReport, GEODESIC_NODE_BUDGET } from './geodesicFill';
 import { hornSlope } from './terrainDerivatives';
 import { horizontalCellMetresXY } from './horizontalScale';
 
@@ -209,6 +209,13 @@ export interface CellConfidenceParams {
    */
   readonly interpolation?: 'idw' | 'geodesic';
   /**
+   * Ceiling on the geodesic pass's search steps, defaulting to
+   * {@link GEODESIC_NODE_BUDGET}. Above it the whole grid keeps the Euclidean
+   * prefill and a warning says so. A caller willing to wait longer for a better
+   * surface across large data gaps raises it; one on a slow device lowers it.
+   */
+  readonly geodesicNodeBudget?: number;
+  /**
    * DTM hardening — extrapolation guard. An interpolated cell whose
    * supporting data lies only on one side is an *extrapolation*, not an
    * interpolation, and is the least trustworthy filled surface: there is no
@@ -293,17 +300,34 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   );
 
   const nearest = inpaintNearest(raster.z, hadData, cols, rows);
-  const idw =
-    params.interpolation === 'geodesic'
-      ? geodesicFill(raster.z, hadData, cols, rows, {
-          // The geodesic cost adds a horizontal step to a vertical rise, so
-          // both must be metres. Passing the raw cell size collapsed the cost
-          // to vertical-only on a degree grid (~1e-5 beside metre heights).
-          cellMetresX: cellM.x,
-          cellMetresY: cellM.y,
-          verticalUnitToMetres: params.verticalUnitToMetres,
-        })
-      : idwFill(raster.z, hadData, cols, rows, {});
+  let idw: Float32Array;
+  if (params.interpolation === 'geodesic') {
+    const filled = geodesicFillWithReport(raster.z, hadData, cols, rows, {
+      // The geodesic cost adds a horizontal step to a vertical rise, so
+      // both must be metres. Passing the raw cell size collapsed the cost
+      // to vertical-only on a degree grid (~1e-5 beside metre heights).
+      cellMetresX: cellM.x,
+      cellMetresY: cellM.y,
+      verticalUnitToMetres: params.verticalUnitToMetres,
+      nodeBudget: params.geodesicNodeBudget,
+    });
+    idw = filled.z;
+    if (filled.report.abandoned) {
+      // The grid's voids are large enough that walking them would have cost
+      // more than the pass allows, so every void carries the Euclidean fill.
+      // Said here because the method name promises geodesic distance, and a
+      // report that names a method the run did not use is the overclaim.
+      warnings.push(
+        `void fill fell back to Euclidean IDW — the geodesic pass over ` +
+          `${filled.report.voids.toLocaleString('en-US')} void cells was projected ` +
+          `to cost ${Math.round(filled.report.projectedNodes / 1e6).toLocaleString('en-US')}M ` +
+          `search steps, above the ${Math.round((params.geodesicNodeBudget ?? GEODESIC_NODE_BUDGET) / 1e6)}M ceiling; ` +
+          `heights across data gaps are less reliable than a geodesic fill would give`,
+      );
+    }
+  } else {
+    idw = idwFill(raster.z, hadData, cols, rows, {});
+  }
 
   // Distance-to-data in cells (multi-source BFS, 8-connectivity).
   const interpDistanceCells = distanceToData(hadData, cols, rows);

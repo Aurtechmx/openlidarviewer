@@ -61,6 +61,51 @@ export interface GeodesicParams {
    * unit; a foot-vertical grid measured against metre steps overstates the climb.
    */
   readonly verticalUnitToMetres?: number;
+  /**
+   * Heap pops the whole fill may spend. Default {@link GEODESIC_NODE_BUDGET}.
+   * Exposed so a test can drive the abandon path without building a grid large
+   * enough to reach the real ceiling.
+   */
+  readonly nodeBudget?: number;
+}
+
+/**
+ * Heap pops the whole fill may spend before it abandons the geodesic pass.
+ *
+ * `maxRadiusCells` bounds the work for ONE void, and nothing bounded the total.
+ * A scan of scattered single-cell voids is cheap because each Dijkstra finds
+ * its twelve measured cells within a step or two, and a scan with large
+ * contiguous gaps is not: every void inside a blob has to expand most of its
+ * radius-24 window first. The only thing separating the two cases is void
+ * shape, which no existing cap looked at.
+ *
+ * Measured, at roughly 8 million pops per second:
+ *
+ *   2000x2000, 35% scattered voids     28M pops     2.2 s
+ *   500x500, 32-cell void tiles        35M pops     4.4 s
+ *   1000x1000, 32-cell void tiles     137M pops    17.1 s
+ *   1500x1500, 64-cell void tiles     629M pops    82.7 s
+ *
+ * Sixty million sits above every scattered case and above the smallest blobby
+ * one, and below the grids that run for a minute or more. A device slower than
+ * the one measured spends longer at the same budget, so the ceiling is a bound
+ * on work rather than a promise about seconds.
+ */
+export const GEODESIC_NODE_BUDGET = 60_000_000;
+
+/** Voids sampled to project the cost of the whole pass. */
+export const GEODESIC_PROBE_VOIDS = 2_000;
+
+/** What the fill actually did, so a caller can say which method built a cell. */
+export interface GeodesicFillReport {
+  /** Void cells the pass was asked to fill. */
+  readonly voids: number;
+  /** True when the projected cost exceeded the budget and no void got a geodesic value. */
+  readonly abandoned: boolean;
+  /** Heap pops spent, including the probe. */
+  readonly nodesExpanded: number;
+  /** Pops the projection expected for the whole grid, from the probe. */
+  readonly projectedNodes: number;
 }
 
 /** Positive-and-finite guard, or the fallback. Never a silent 0 step. */
@@ -84,10 +129,37 @@ export function geodesicFill(
   rows: number,
   params: GeodesicParams = {},
 ): Float32Array {
+  return geodesicFillWithReport(z, hadData, cols, rows, params).z;
+}
+
+/**
+ * {@link geodesicFill}, plus what it did.
+ *
+ * The pass is costed before it is committed to. A strided sample of voids is
+ * solved first and its pops per void projected over the whole void set; if the
+ * projection exceeds the budget the geodesic values are discarded and every
+ * void keeps its Euclidean prefill. All or nothing, deliberately: a surface
+ * built by one interpolant in the north and another in the south is harder to
+ * defend than one built throughout by the weaker of the two and labelled as
+ * such, and the seam between them would be visible in the contours.
+ *
+ * The sample strides through the voids in index order, so it spans the grid and
+ * the same grid always yields the same answer.
+ */
+export function geodesicFillWithReport(
+  z: Float32Array,
+  hadData: Uint8Array,
+  cols: number,
+  rows: number,
+  params: GeodesicParams = {},
+): { z: Float32Array; report: GeodesicFillReport } {
   const n = cols * rows;
   const out = new Float32Array(n);
   out.set(z);
-  if (n === 0) return out;
+  const empty: GeodesicFillReport = {
+    voids: 0, abandoned: false, nodesExpanded: 0, projectedNodes: 0,
+  };
+  if (n === 0) return { z: out, report: empty };
 
   const power = Number.isFinite(params.power) && (params.power as number) > 0 ? (params.power as number) : 2;
   const kNearest = Math.max(1, Math.floor(params.kNearest ?? 12));
@@ -147,60 +219,99 @@ export function geodesicFill(
     return top;
   };
 
-  for (let srow = 0; srow < rows; srow++) {
-    for (let scol = 0; scol < cols; scol++) {
-      const src = srow * cols + scol;
-      if (hadData[src] === 1) continue; // measured — keep verbatim
-      if (!Number.isFinite(surface[src])) { out[src] = Number.NaN; continue; } // unreachable gap
+  // Pops spent so far, the unit the budget is denominated in.
+  let pops = 0;
 
-      const iter = src; // unique per void; stamps scratch arrays
-      heapLen = 0;
-      dist[src] = 0; seen[src] = iter;
-      heapPush(0, src);
+  /** Solve one void by geodesic-distance IDW, writing `out[src]`. */
+  const solve = (src: number): void => {
+    const srow = (src / cols) | 0;
+    const scol = src - srow * cols;
+    const iter = src; // unique per void; stamps scratch arrays
+    heapLen = 0;
+    dist[src] = 0; seen[src] = iter;
+    heapPush(0, src);
 
-      let wSum = 0;
-      let vSum = 0;
-      let collected = 0;
+    let wSum = 0;
+    let vSum = 0;
+    let collected = 0;
 
-      while (heapLen > 0 && collected < kNearest) {
-        const c = heapPop();
-        const cost = dist[c];
-        if (hadData[c] === 1) {
-          // Nearest measured cell by geodesic cost — absorb into the blend and
-          // do not expand through it. Skip a stale duplicate pop so each measured
-          // cell contributes exactly once (its first, lowest-cost pop).
-          if (absorbed[c] === iter) continue;
-          absorbed[c] = iter;
-          const w = 1 / Math.pow(cost, power);
-          wSum += w; vSum += w * z[c];
-          collected++;
-          continue;
-        }
-        const cr = (c / cols) | 0;
-        const cc = c - cr * cols;
-        for (let k = 0; k < 8; k++) {
-          const nr = cr + DR[k];
-          const nc = cc + DC[k];
-          if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-          // Stay within the window around the source so the search is bounded.
-          if (Math.abs(nr - srow) > maxRadius || Math.abs(nc - scol) > maxRadius) continue;
-          const nb = nr * cols + nc;
-          if (!Number.isFinite(surface[nb])) continue; // can't walk over unknown ground
-          let stepXY: number;
-          if (DR[k] !== 0 && DC[k] !== 0) stepXY = cellDiag;
-          else if (DC[k] !== 0) stepXY = cellX;
-          else stepXY = cellY;
-          const dz = (surface[nb] - surface[c]) * zScale;
-          const nd = cost + Math.sqrt(stepXY * stepXY + dz * dz);
-          if (seen[nb] !== iter || nd < dist[nb]) {
-            dist[nb] = nd; seen[nb] = iter;
-            heapPush(nd, nb);
-          }
+    while (heapLen > 0 && collected < kNearest) {
+      const c = heapPop();
+      pops++;
+      const cost = dist[c];
+      if (hadData[c] === 1) {
+        // Nearest measured cell by geodesic cost — absorb into the blend and
+        // do not expand through it. Skip a stale duplicate pop so each measured
+        // cell contributes exactly once (its first, lowest-cost pop).
+        if (absorbed[c] === iter) continue;
+        absorbed[c] = iter;
+        const w = 1 / Math.pow(cost, power);
+        wSum += w; vSum += w * z[c];
+        collected++;
+        continue;
+      }
+      const cr = (c / cols) | 0;
+      const cc = c - cr * cols;
+      for (let k = 0; k < 8; k++) {
+        const nr = cr + DR[k];
+        const nc = cc + DC[k];
+        if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+        // Stay within the window around the source so the search is bounded.
+        if (Math.abs(nr - srow) > maxRadius || Math.abs(nc - scol) > maxRadius) continue;
+        const nb = nr * cols + nc;
+        if (!Number.isFinite(surface[nb])) continue; // can't walk over unknown ground
+        let stepXY: number;
+        if (DR[k] !== 0 && DC[k] !== 0) stepXY = cellDiag;
+        else if (DC[k] !== 0) stepXY = cellX;
+        else stepXY = cellY;
+        const dz = (surface[nb] - surface[c]) * zScale;
+        const nd = cost + Math.sqrt(stepXY * stepXY + dz * dz);
+        if (seen[nb] !== iter || nd < dist[nb]) {
+          dist[nb] = nd; seen[nb] = iter;
+          heapPush(nd, nb);
         }
       }
-
-      out[src] = wSum > 0 ? vSum / wSum : surface[src];
     }
+
+    out[src] = wSum > 0 ? vSum / wSum : surface[src];
+  };
+
+  // The voids to fill, in index order. A cell the prefill could not reach has
+  // no provisional height to walk from, so it stays NaN and the caller decides.
+  const voids: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (hadData[i] === 1) continue; // measured — keep verbatim
+    if (!Number.isFinite(surface[i])) { out[i] = Number.NaN; continue; } // unreachable gap
+    voids.push(i);
   }
-  return out;
+  if (voids.length === 0) return { z: out, report: empty };
+
+  // Probe: solve a strided sample, then project its pops per void over the
+  // whole set. Striding through the void list rather than taking its head
+  // spreads the sample across the grid, where the expensive voids are: one
+  // inside a large gap has to expand most of its window before it collects
+  // kNearest measured cells, and one beside a measured cell does not.
+  const probeStride = Math.max(1, Math.ceil(voids.length / GEODESIC_PROBE_VOIDS));
+  let probed = 0;
+  for (let i = 0; i < voids.length; i += probeStride) { solve(voids[i]); probed++; }
+  const projectedNodes = Math.round((pops / probed) * voids.length);
+
+  const nodeBudget = positiveOr(params.nodeBudget, GEODESIC_NODE_BUDGET);
+  if (projectedNodes > nodeBudget) {
+    // Discard the probe's geodesic values so the whole grid is one interpolant.
+    for (const src of voids) out[src] = surface[src];
+    return {
+      z: out,
+      report: { voids: voids.length, abandoned: true, nodesExpanded: pops, projectedNodes },
+    };
+  }
+
+  for (let i = 0; i < voids.length; i++) {
+    if (i % probeStride === 0) continue; // solved by the probe
+    solve(voids[i]);
+  }
+  return {
+    z: out,
+    report: { voids: voids.length, abandoned: false, nodesExpanded: pops, projectedNodes },
+  };
 }
