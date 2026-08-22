@@ -196,6 +196,54 @@ describe('capture type — what counts as declared ground-based evidence', () =>
       }
     }
   });
+
+  it('bounds that invariant: a recognised airborne instrument still decides', () => {
+    // The guard is built at the seam where the indirect guesses start, after
+    // the software-string and sensor-string steps have returned. Declared
+    // set-up evidence therefore never reaches a recognised instrument match,
+    // in either direction.
+    const setUp = '10 registered scan stations, per-scan temperature';
+    const byDrone = classify({
+      sourceFormat: 'e57',
+      pointCount: 4_320_000,
+      extent: [120, 90, 40],
+      densityPerSqM: 400,
+      sensorString: 'DJI L2',
+      declaredGroundInstrument: setUp,
+    });
+    expect(byDrone.captureType).toBe('drone-lidar');
+    expect(byDrone.confidence).toBe('high');
+    expect(byDrone.signals).toContain('Sensor: DJI L2');
+    expect(byDrone.signals.join(' ')).not.toMatch(/ruled out/i);
+
+    const bySpaceborne = classify({
+      sourceFormat: 'e57',
+      pointCount: 12_000,
+      extent: [30_000, 30_000, 400],
+      densityPerSqM: 0.00001,
+      sensorString: 'GEDI L2A',
+      declaredGroundInstrument: setUp,
+    });
+    expect(bySpaceborne.captureType).toBe('spaceborne');
+    expect(bySpaceborne.confidence).toBe('high');
+  });
+
+  it('a recognised terrestrial instrument decides against an airborne density', () => {
+    // 1,788,994 points over 135.4 m x 165.6 m is 79.8 pts/m² across 2.24 ha,
+    // which is the drone band at provenance.ts. A declared RIEGL VZ model is
+    // matched a step earlier and carries no ground set-up evidence with it.
+    const slope = {
+      sourceFormat: 'e57',
+      pointCount: 1_788_994,
+      extent: [135.351, 165.609, 49.931] as const,
+      densityPerSqM: 79.81,
+    };
+    expect(classify(slope).captureType).toBe('drone-lidar');
+    const named = classify({ ...slope, sensorString: 'RIEGL VZ-2000' });
+    expect(named.captureType).toBe('terrestrial');
+    expect(named.confidence).toBe('high');
+    expect(named.signals).toContain('Sensor: RIEGL VZ-2000');
+  });
 });
 
 describe('capture type — the other bands are unchanged', () => {
