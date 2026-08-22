@@ -23,6 +23,10 @@ import {
   slopeGradesPerSegment,
   summariseSlopes,
 } from '../render/measure/profileStations';
+// The section frame the sampler and the live station dots use, so the report's
+// station interval is derived from the same horizontal length the headline
+// (measurementMetrics) prints.
+import { buildProfileFrame } from '../render/measure/profileGeometry';
 // Area formatting is single-sourced from the live measurement formatter so a
 // polygon reads the same units in the PDF report as on the overlay — the same
 // surface that produced it. Length and volume keep this module's own
@@ -181,11 +185,12 @@ function buildProfileExtras(
   // METRES, so pick the interval against the metre-converted length and
   // convert it back into render units for the geometric station walk — the
   // chainages then scale ×f once at the formatting boundary like every
-  // other length here.
-  const horizontalLen = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  // other length here. The length itself is the up-axis-correct horizontal
+  // span, matching `mm.horizontal_m` below and the sampler's x-axis.
+  const horizontalLen = buildProfileFrame(a, b, up).horizontalLength;
   if (!Number.isFinite(horizontalLen) || horizontalLen <= 0) return undefined;
   const interval = autoStationIntervalForReport(horizontalLen * f) / f;
-  const stations = stationsAlongLine({ a, b, intervalM: interval });
+  const stations = stationsAlongLine({ a, b, up, intervalM: interval });
   if (stations.length === 0) return undefined;
   // Slope grades: use profile samples if the measurement carries them.
   const samples = m.profileChart && m.profileChart.length >= 2 ? m.profileChart : undefined;

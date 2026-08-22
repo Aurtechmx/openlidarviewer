@@ -54,6 +54,7 @@ import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
+import { buildProfileFrame, DEGENERATE_HORIZONTAL_LENGTH } from './profileGeometry';
 
 /** A placed source buffer contributing to a combined profile walk. */
 export interface ProfileSourceBuffer {
@@ -99,26 +100,11 @@ export function assembleProfileBuffers(
   return { positions, classification };
 }
 
-// Inline vector helpers — duplicated from `geometry.ts` where they are
-// also module-local. Cheap, branch-free, no allocations beyond return
-// values. Keeping them here lets the module ship as a pure leaf unit.
+// The section frame (normalised up, horizontal direction, chainage origin)
+// comes from `profileGeometry`, shared with the station walk and the report
+// so all three project against the same geometry.
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-function sub(minuend: Vec3, subtrahend: Vec3): Vec3 {
-  return [
-    minuend[0] - subtrahend[0],
-    minuend[1] - subtrahend[1],
-    minuend[2] - subtrahend[2],
-  ];
-}
-function length(v: Vec3): number {
-  return Math.hypot(v[0], v[1], v[2]);
-}
-function normalize(v: Vec3): Vec3 {
-  const len = length(v);
-  if (len === 0) return [0, 0, 0];
-  return [v[0] / len, v[1] / len, v[2] / len];
 }
 
 /** A single profile sample — distance along the line and elevation. */
@@ -151,8 +137,11 @@ export interface SampleProfileInput {
   samples: number;
   /**
    * Horizontal band width on each side of the line, metres. A point further
-   * than this from the line in the horizontal plane is ignored. The default
-   * `null` means "auto" — use 5 % of the horizontal line length.
+   * than this from the SEGMENT a → b in the horizontal plane is ignored, so
+   * the corridor is a capsule: a rectangle between the endpoints closed by a
+   * half-disc of radius `bandWidth` at each end. Points past an end are held
+   * to their distance from that endpoint, not to their perpendicular offset.
+   * The default `null` means "auto" — use 5 % of the horizontal line length.
    */
   bandWidth?: number | null;
   /**
@@ -324,11 +313,7 @@ export const AUTO_CORRIDOR_FRACTION = 0.05;
  * learning what width actually shaped the estimate.
  */
 export function autoCorridorWidth(a: Vec3, b: Vec3, up: Vec3): number {
-  const u = normalize(up);
-  const ab = sub(b, a);
-  const v = dot(ab, u);
-  const h: Vec3 = [ab[0] - u[0] * v, ab[1] - u[1] * v, ab[2] - u[2] * v];
-  return length(h) * AUTO_CORRIDOR_FRACTION;
+  return buildProfileFrame(a, b, up).horizontalLength * AUTO_CORRIDOR_FRACTION;
 }
 
 /**
@@ -356,26 +341,20 @@ function percentileSorted(sorted: Float64Array, count: number, p: number): numbe
  * chart's X-axis matches what an engineer would draw on paper.
  *
  * Algorithm: for each cloud point, project it onto the horizontal line,
- * compute the perpendicular distance, and (if within `bandWidth`) update
- * the bin's nearest-point record. After the linear pass, walk the bins
- * and emit `(distance, nearestHeight)` for each.
+ * compute its distance to the SEGMENT (perpendicular between the endpoints,
+ * radial past either end), and (if within `bandWidth`) update the bin's
+ * nearest-point record. After the linear pass, walk the bins and emit
+ * `(distance, nearestHeight)` for each.
  */
 export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const samples = Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, input.samples | 0));
-  const u = normalize(input.up);
-
-  // Horizontal projection of the line a → b.
-  const ab = sub(input.b, input.a);
-  const verticalAB = dot(ab, u);
-  const hAB: Vec3 = [
-    ab[0] - u[0] * verticalAB,
-    ab[1] - u[1] * verticalAB,
-    ab[2] - u[2] * verticalAB,
-  ];
-  const horizontalLen = length(hAB);
+  // Horizontal projection of the line a → b, from the shared section frame.
+  const frame = buildProfileFrame(input.a, input.b, input.up);
+  const u = frame.up;
+  const horizontalLen = frame.horizontalLength;
 
   // Degenerate line (a == b in plan) — return two samples at a's elevation.
-  if (horizontalLen < 1e-9) {
+  if (horizontalLen < DEGENERATE_HORIZONTAL_LENGTH) {
     const aH = dot(input.a, u);
     // Degenerate line: the heights are the endpoint's own elevation, not a
     // corridor statistic — count 0 keeps the evidence column honest.
@@ -385,7 +364,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     ];
   }
 
-  const hDir: Vec3 = [hAB[0] / horizontalLen, hAB[1] / horizontalLen, hAB[2] / horizontalLen];
+  const hDir: Vec3 = frame.along;
 
   // Per-bin corridor collection. Every point within the band contributes
   // its elevation to its bin; the bin is later reduced to one height via
@@ -403,11 +382,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const binStep = horizontalLen / (samples - 1);
 
   // a's horizontal anchor.
-  const aH: Vec3 = [
-    input.a[0] - u[0] * dot(input.a, u),
-    input.a[1] - u[1] * dot(input.a, u),
-    input.a[2] - u[2] * dot(input.a, u),
-  ];
+  const aH: Vec3 = frame.horizontalAnchor;
 
   const positions = input.positions;
   const n = positions.length / 3;
@@ -436,16 +411,23 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     // this gate it would reach the bin array with a NaN index. No
     // elevation can be read off such a point — drop it.
     if (!Number.isFinite(along)) continue;
+    // Cheap scalar reject before the three multiplies below. A point whose
+    // chainage is further than `band` past either end is further than `band`
+    // from the segment, because |d| >= |along| for a projection.
     if (along < -band || along > horizontalLen + band) continue;
 
-    // Perpendicular distance (horizontal-plane, squared).
-    const pdx = dx - hDir[0] * along;
-    const pdy = dy - hDir[1] * along;
-    const pdz = dz - hDir[2] * along;
-    const perpSq = pdx * pdx + pdy * pdy + pdz * pdz;
-    if (perpSq > bandSq) continue;
+    // Distance to the FINITE segment, squared, in the horizontal plane:
+    // measured from the nearest point ON the segment, which is an endpoint
+    // once `along` runs past that end. Between the endpoints `nearest`
+    // equals `along` and this is the perpendicular distance.
+    const nearest = along < 0 ? 0 : along > horizontalLen ? horizontalLen : along;
+    const pdx = dx - hDir[0] * nearest;
+    const pdy = dy - hDir[1] * nearest;
+    const pdz = dz - hDir[2] * nearest;
+    const nearSq = pdx * pdx + pdy * pdy + pdz * pdz;
+    if (nearSq > bandSq) continue;
 
-    // Bin index (clamped so band-extension hits the end bins).
+    // Bin index (clamped so the end caps hit the end bins).
     let binIndex = Math.round(along / binStep);
     if (binIndex < 0) binIndex = 0;
     if (binIndex > samples - 1) binIndex = samples - 1;

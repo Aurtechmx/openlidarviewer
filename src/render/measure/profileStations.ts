@@ -36,23 +36,35 @@
 
 import type { Vec3 } from '../navMath';
 import type { ProfileChartSample } from './types';
+import {
+  buildProfileFrame,
+  positionAtProfileChainage,
+  DEFAULT_PROFILE_UP,
+  DEGENERATE_HORIZONTAL_LENGTH,
+} from './profileGeometry';
 
 /** One station along the section line. */
 export interface ProfileStation {
   /**
-   * Cumulative distance from the start of the section, in metres,
-   * measured horizontally (XY-plane projection of the line — the same
-   * convention `profileSampler` uses for its `distance` field).
+   * Cumulative distance from the start of the section, in metres, measured in
+   * the plane perpendicular to the scene `up` axis. Same convention and same
+   * frame as `profileSampler`'s `distance` field.
    */
   readonly chainage: number;
   /**
-   * The 3D world-space position at this chainage. Z is interpolated
-   * linearly between the two endpoint Z values — this is intentional
-   * (the station marker sits on the straight line between the
-   * picked endpoints, not on the cloud surface). A future overlay
+   * The 3D world-space position at this chainage: `a + t * (b - a)` for
+   * `t = chainage / horizontalLength`. The marker sits on the straight line
+   * between the picked endpoints, not on the cloud surface. A future overlay
    * can drop a sphere here and project it onto the cloud if needed.
    */
   readonly position: Vec3;
+  /**
+   * Height at this station, measured along the scene `up` axis. Present on
+   * every station `stationsAlongLine` emits. Optional so hand-built station
+   * records stay valid; `slopeGradesPerSegment` falls back to `position[2]`
+   * when it is absent, which is only correct for a Z-up scene.
+   */
+  readonly height?: number;
   /**
    * `true` when this station is the terminal one — the section's
    * actual endpoint, which may not fall on an `intervalM` boundary.
@@ -74,52 +86,60 @@ export interface StationsAlongLineInput {
    * values: 5, 10, 25, 50, 100. Must be > 0.
    */
   readonly intervalM: number;
+  /**
+   * Scene up axis. Chainage is measured in the plane perpendicular to it and
+   * height along it, matching `sampleProfile`. Defaults to `[0, 0, 1]`.
+   */
+  readonly up?: Vec3;
 }
 
 /**
  * Emit station markers along the section line at the given interval.
  *
- * Returns a non-empty list when the horizontal length of the section
- * is > 0. Returns an empty list when the section is degenerate (both
- * endpoints coincide horizontally) — the consumer should suppress
- * the station overlay entirely in that case.
+ * Returns a non-empty list when the section has plan extent. Returns an empty
+ * list when the section is degenerate (the endpoints coincide in the plane
+ * perpendicular to `up`, so the horizontal length is below
+ * `DEGENERATE_HORIZONTAL_LENGTH`). The consumer should suppress the station
+ * overlay entirely in that case.
  *
  * NaN-safe: returns `[]` when any input coordinate is non-finite or
  * the interval is non-positive.
  */
 export function stationsAlongLine(input: StationsAlongLineInput): ProfileStation[] {
   const { a, b, intervalM } = input;
+  const up = input.up ?? DEFAULT_PROFILE_UP;
   if (!Number.isFinite(intervalM) || intervalM <= 0) return [];
-  for (const v of [a[0], a[1], a[2], b[0], b[1], b[2]]) {
+  for (const v of [a[0], a[1], a[2], b[0], b[1], b[2], up[0], up[1], up[2]]) {
     if (!Number.isFinite(v)) return [];
   }
-  // Horizontal length only — survey chainage is measured in the
-  // ground plane, not along the 3D vector. This matches how
-  // `profileSampler` emits distances.
-  const dx = b[0] - a[0];
-  const dy = b[1] - a[1];
-  const horizontalLen = Math.hypot(dx, dy);
-  if (horizontalLen === 0) return [];
+  // Horizontal length only: survey chainage is measured in the plane
+  // perpendicular to `up`, not along the 3D vector. The frame is the one
+  // `sampleProfile` walks, so the chainages here index the same x-axis.
+  const frame = buildProfileFrame(a, b, up);
+  const horizontalLen = frame.horizontalLength;
+  // Same degeneracy call `sampleProfile` makes, so a section the sampler
+  // refuses to walk carries no stations either.
+  if (!(horizontalLen >= DEGENERATE_HORIZONTAL_LENGTH)) return [];
 
+  const aHeight = a[0] * frame.up[0] + a[1] * frame.up[1] + a[2] * frame.up[2];
   const stations: ProfileStation[] = [];
   // Walk by interval. Use a tiny epsilon to avoid emitting a station
   // at-or-just-past the endpoint due to float drift.
   const eps = horizontalLen * 1e-9;
-  // The unit vector in horizontal XY space — we lerp position along
-  // this; Z is interpolated linearly between a.z and b.z based on
-  // chainage fraction.
-  const ux = dx / horizontalLen;
-  const uy = dy / horizontalLen;
-  const dz = b[2] - a[2];
 
   // First station: chainage 0 (the start).
-  stations.push({ chainage: 0, position: [a[0], a[1], a[2]], isEndpoint: false });
+  stations.push({
+    chainage: 0,
+    position: [a[0], a[1], a[2]],
+    height: aHeight,
+    isEndpoint: false,
+  });
   let chainage = intervalM;
   while (chainage < horizontalLen - eps) {
-    const t = chainage / horizontalLen;
     stations.push({
       chainage,
-      position: [a[0] + ux * chainage, a[1] + uy * chainage, a[2] + dz * t],
+      position: positionAtProfileChainage(frame, chainage),
+      height: aHeight + (chainage / horizontalLen) * frame.verticalDelta,
       isEndpoint: false,
     });
     chainage += intervalM;
@@ -130,6 +150,7 @@ export function stationsAlongLine(input: StationsAlongLineInput): ProfileStation
   stations.push({
     chainage: horizontalLen,
     position: [b[0], b[1], b[2]],
+    height: b[0] * frame.up[0] + b[1] * frame.up[1] + b[2] * frame.up[2],
     isEndpoint: true,
   });
   return stations;
@@ -166,12 +187,12 @@ export interface SlopeGradesInput {
   /** Stations from `stationsAlongLine`. */
   readonly stations: ReadonlyArray<ProfileStation>;
   /**
-   * Optional elevation samples from `profileSampler`. When provided,
-   * each station's elevation is taken from the nearest sample
-   * (linear interpolation between the two bracketing samples). When
-   * absent or empty, falls back to the linear Z interpolation between
-   * the section endpoints (which equals zero grade everywhere if the
-   * endpoints are at the same elevation — honest for a "no cloud
+   * Optional elevation samples from `profileSampler`. When provided, each
+   * station's elevation comes from linear interpolation between the two
+   * bracketing samples, and is NaN where either bracket is a coverage gap.
+   * When absent or empty, falls back to the station's own up-axis height,
+   * linearly interpolated between the section endpoints (zero grade
+   * everywhere if the endpoints share an elevation, honest for a "no cloud
    * data" state).
    */
   readonly samples?: ReadonlyArray<ProfileChartSample>;
@@ -189,13 +210,13 @@ export interface SlopeGradesInput {
 export function slopeGradesPerSegment(input: SlopeGradesInput): SlopeGrade[] {
   const { stations, samples } = input;
   if (stations.length < 2) return [];
-  // Resolve each station's elevation: from cloud samples when
-  // available, else from the linear Z baked into the station's
-  // position by `stationsAlongLine`.
+  // Resolve each station's elevation: from cloud samples when available, else
+  // from the up-axis height `stationsAlongLine` recorded. `position[2]` is the
+  // fallback for hand-built station records that carry no `height`.
   const stationZ = stations.map((s) =>
     samples && samples.length > 0
       ? elevationAtChainage(samples, s.chainage)
-      : s.position[2],
+      : (s.height ?? s.position[2]),
   );
   const grades: SlopeGrade[] = [];
   for (let i = 0; i < stations.length - 1; i++) {
@@ -251,10 +272,14 @@ export function summariseSlopes(grades: ReadonlyArray<SlopeGrade>): SlopeSummary
 }
 
 /**
- * Interpolate the elevation at a target chainage from a sorted
- * sample series. Returns NaN when neither of the bracketing samples
- * carries a finite height (the gap is real — no points were near the
- * section line at that chainage).
+ * Interpolate the elevation at a target chainage from a sorted sample series.
+ *
+ * Gap rule, the same one `profileSummary` and `civilProfileStats` apply: a
+ * chainage that lands exactly on a sample takes that sample's height, gap or
+ * not; a chainage strictly between two samples interpolates only when BOTH
+ * brackets are finite, and returns NaN otherwise. A single finite bracket is
+ * never spread across the gap beside it, so a station inside a no-coverage
+ * span reads as unknown rather than as a measured elevation.
  */
 function elevationAtChainage(
   samples: ReadonlyArray<ProfileChartSample>,
@@ -274,16 +299,12 @@ function elevationAtChainage(
     if (samples[i].distance >= chainage) {
       const lo = samples[i - 1];
       const hi = samples[i];
+      // Exact hit on the upper bracket: that sample IS the station's reading.
+      if (chainage === hi.distance) return hi.height;
       const span = hi.distance - lo.distance;
       if (span <= 0) return hi.height;
+      if (!Number.isFinite(lo.height) || !Number.isFinite(hi.height)) return Number.NaN;
       const t = (chainage - lo.distance) / span;
-      // If either bracketing sample is NaN, prefer the other; if
-      // both are NaN, the result is NaN — caller renders "—".
-      const loFinite = Number.isFinite(lo.height);
-      const hiFinite = Number.isFinite(hi.height);
-      if (!loFinite && !hiFinite) return Number.NaN;
-      if (!loFinite) return hi.height;
-      if (!hiFinite) return lo.height;
       return lo.height + t * (hi.height - lo.height);
     }
   }
