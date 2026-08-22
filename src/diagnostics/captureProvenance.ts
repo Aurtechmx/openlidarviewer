@@ -24,8 +24,14 @@
  * This store holds the inputs and derives the verdict on read, so the three
  * surfaces state one answer:
  *
- *   - `setScan` records the scan's signals, and drops the previous scan's
- *     verdict and override so neither leaks across a load;
+ *   - `setScan` records the scan's signals AND the layer they were read from,
+ *     and drops the previous scan's verdict and override so neither leaks
+ *     across a load;
+ *   - `ownedBy` answers whether the stored scan is a given layer, and `clearIf`
+ *     drops the store when that layer goes. Static layers are additive
+ *     (`app/openScan.ts`) and the newest open becomes the active scan, so the
+ *     store can describe a layer that is hidden or no longer in the scene. A
+ *     scene-scoped surface asks `ownedBy` before it states the verdict;
  *   - `setVerdict` records the shape router's decision whenever it changes;
  *   - `setOverride` records the user's capture-type pick, which is part of the
  *     shared verdict and therefore reaches the PDF and the exported images
@@ -59,13 +65,31 @@ export function isNonTerrainVerdict(verdict: SpaceKind | null): boolean {
   return verdict === 'object' || verdict === 'interior';
 }
 
+/**
+ * The scan the store describes: its classifier signals plus the identity of the
+ * source they were read from. `layerId` is the static layer's id, or `null` for
+ * a streaming source, which has no static layer id and is the whole scene while
+ * it is open.
+ */
+export interface CaptureProvenanceScan {
+  readonly layerId: string | null;
+  readonly signals: ScanSignals;
+}
+
 /** The shared capture-type verdict for the active scan. */
 export interface CaptureProvenanceStore {
   /**
-   * Record the signals for the scan now loaded, or `null` for none. Resets the
-   * shape verdict and any user override, which describe the scan being replaced.
+   * Record the scan now loaded, or `null` for none. Resets the shape verdict
+   * and any user override, which describe the scan being replaced.
    */
-  setScan(signals: ScanSignals | null): void;
+  setScan(scan: CaptureProvenanceScan | null): void;
+  /**
+   * Whether the stored scan is `layerId` (`null` for the streaming source).
+   * False whenever no scan is stored, so an empty store owns nothing.
+   */
+  ownedBy(layerId: string | null): boolean;
+  /** Drop the scan, the verdict and the override when `layerId` owns them. */
+  clearIf(layerId: string): void;
   /** Record the shape router's latest verdict for the active scan. */
   setVerdict(verdict: SpaceKind | null): void;
   /** The shape router's latest verdict for the active scan. */
@@ -94,7 +118,7 @@ function key(f: ProvenanceFingerprint | null): string {
 
 /** An isolated store. The application uses the shared {@link captureProvenance}. */
 export function createCaptureProvenance(): CaptureProvenanceStore {
-  let signals: ScanSignals | null = null;
+  let scan: CaptureProvenanceScan | null = null;
   let verdict: SpaceKind | null = null;
   let override: CaptureType | null = null;
   let listener: ((f: ProvenanceFingerprint | null) => void) | null = null;
@@ -102,8 +126,19 @@ export function createCaptureProvenance(): CaptureProvenanceStore {
 
   function fingerprint(): ProvenanceFingerprint | null {
     if (override) return fingerprintFor(override);
-    if (!signals) return null;
-    return classify({ ...signals, isNonTerrain: isNonTerrainVerdict(verdict) });
+    if (!scan) return null;
+    return classify({ ...scan.signals, isNonTerrain: isNonTerrainVerdict(verdict) });
+  }
+
+  function clearAll(): void {
+    scan = null;
+    verdict = null;
+    override = null;
+    // Unconditional, unlike the mutators: closing a scan restores the panel's
+    // placeholder even when the store was already empty, and resetting
+    // `lastKey` lets the next scan notify from a clean slate.
+    lastKey = '';
+    listener?.(null);
   }
 
   function notify(): void {
@@ -116,10 +151,14 @@ export function createCaptureProvenance(): CaptureProvenanceStore {
 
   return {
     setScan(next) {
-      signals = next;
+      scan = next;
       verdict = null;
       override = null;
       notify();
+    },
+    ownedBy: (layerId) => scan !== null && scan.layerId === layerId,
+    clearIf(layerId) {
+      if (scan !== null && scan.layerId === layerId) clearAll();
     },
     setVerdict(next) {
       verdict = next;
@@ -135,16 +174,7 @@ export function createCaptureProvenance(): CaptureProvenanceStore {
     onChange(fn) {
       listener = fn;
     },
-    clear() {
-      signals = null;
-      verdict = null;
-      override = null;
-      // Unconditional, unlike the mutators: closing a scan restores the panel's
-      // placeholder even when the store was already empty, and resetting
-      // `lastKey` lets the next scan notify from a clean slate.
-      lastKey = '';
-      listener?.(null);
-    },
+    clear: clearAll,
   };
 }
 

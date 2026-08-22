@@ -25,11 +25,20 @@ import {
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 export interface InspectorCardRefreshers {
-  /** Record a freshly attached static cloud as the scan the provenance store describes. */
-  refreshProvenance(cloud: {
-    readonly sourceFormat: string;
-    readonly pointCount: number;
-  }): void;
+  /**
+   * Record a freshly attached static cloud as the scan the provenance store
+   * describes, owned by the layer id it was added under. The id is what lets a
+   * scene-scoped surface tell whether the stored verdict belongs to the layer
+   * it is describing, since static layers are additive and only the newest open
+   * becomes the active scan.
+   */
+  refreshProvenance(
+    cloud: {
+      readonly sourceFormat: string;
+      readonly pointCount: number;
+    },
+    layerId: string,
+  ): void;
   /** Record a freshly attached streaming cloud as the scan the provenance store describes. */
   refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
@@ -148,18 +157,23 @@ export function createInspectorCardRefreshers(
     else inspector.clearProvenance();
   });
 
-  function refreshProvenance(cloud: {
-    readonly sourceFormat: string;
-    readonly pointCount: number;
-  }): void {
-    captureProvenance.setScan(signalsForStaticCloud(cloud as never));
+  function refreshProvenance(
+    cloud: {
+      readonly sourceFormat: string;
+      readonly pointCount: number;
+    },
+    layerId: string,
+  ): void {
+    captureProvenance.setScan({ layerId, signals: signalsForStaticCloud(cloud as never) });
   }
 
   function refreshProvenanceFromStreaming(cloud: {
     readonly kind: StreamingSourceKind;
     readonly sourcePointCount?: number;
   }): void {
-    captureProvenance.setScan(signalsForStreamingCloud(cloud as never));
+    // A streaming open closes the static layers, so the streaming source is the
+    // whole scene and carries no static layer id.
+    captureProvenance.setScan({ layerId: null, signals: signalsForStreamingCloud(cloud as never) });
   }
 
   /**
