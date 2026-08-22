@@ -26,7 +26,7 @@
  *
  * Why a percentile, not the nearest point (the scientific core):
  *
- *   A LiDAR corridor over real ground contains bare-earth returns AND
+ *   A LiDAR corridor over real ground contains ground returns AND
  *   higher returns from vegetation, wires, vehicles, and noise. Picking
  *   the single nearest point per bin makes the chosen surface jump
  *   between canopy and ground from one bin to the next — a spiky line
@@ -34,7 +34,7 @@
  *   corrupts any slope read off it. Instead each bin takes a low
  *   percentile of its corridor elevations (`groundPercentile`, default
  *   25). Because non-ground returns sit ABOVE the ground, a low
- *   percentile rejects them and recovers the bare-earth transect using
+ *   percentile favours the lower returns in each bin, using
  *   MORE data, not less — de-noising by aggregation, never by inventing
  *   values between samples. The percentile is the standard type-7
  *   quantile (linear interpolation between order statistics), so the
@@ -146,17 +146,21 @@ export interface SampleProfileInput {
   bandWidth?: number | null;
   /**
    * Per-bin elevation percentile (0..100) used to reduce the corridor
-   * points to one height. Default 25 — a bare-earth estimate that
-   * rejects vegetation/noise (which sit above the ground). 50 = median,
-   * 0 = strict floor, 100 = canopy top. `null` falls back to the default.
+   * points to one height. Default 25 gives a lower-percentile surface,
+   * which favours the lower returns in each bin. It is not a bare-earth
+   * product: only the classes in `excludeClasses` are dropped, and only
+   * where a source supplies classification. 50 = median, 0 = strict floor,
+   * 100 = highest return. `null` falls back to the default.
    */
   groundPercentile?: number | null;
   /**
    * Per-point ASPRS classification, index-aligned with `positions`. When
    * present, vegetation / building / noise returns are dropped from each
-   * corridor BEFORE the percentile, so trees can't pull the bare-earth line
-   * up — the profile is computed over classified ground returns. Omit when
-   * the cloud carries no classification (the percentile alone is used).
+   * corridor BEFORE the percentile, so trees cannot pull the surface up.
+   * Everything else reaches the percentile, including unclassified returns
+   * and the sentinel a merged source without a class channel carries, so the
+   * accepted set is not ground-only. Omit when the cloud carries no
+   * classification (the percentile alone is used).
    */
   classification?: Uint8Array | ReadonlyArray<number> | null;
   /** ASPRS classes to drop when classification is supplied. Default veg/building/noise. */
@@ -166,7 +170,7 @@ export interface SampleProfileInput {
 const MIN_SAMPLES = 2;
 const MAX_SAMPLES = 512;
 /**
- * Default bare-earth percentile. Exported (v0.4.5) so the Viewer can pass the
+ * Default corridor percentile. Exported (v0.4.5) so the Viewer can pass the
  * value it actually sampled with into the measurement record for PDF/CSV
  * provenance, instead of the provenance layer hard-coding a second "25".
  */
@@ -180,8 +184,9 @@ export const DEFAULT_GROUND_PERCENTILE = 25;
 export const DEFAULT_PROFILE_SAMPLE_COUNT = 64;
 /**
  * Sample-count choices the panel offers. The ceiling matches the sampler's
- * own MAX_SAMPLES clamp; the floor (32) keeps a chart readable — below that
- * the Catmull-Rom rendering over-smooths real relief.
+ * own MAX_SAMPLES clamp; the floor (32) keeps a chart readable, since the
+ * renderer joins adjacent stations with straight segments and a coarse count
+ * reads as a chain of long chords.
  */
 export const PROFILE_SAMPLE_COUNT_OPTIONS = [32, 64, 128, 256, 512] as const;
 /**

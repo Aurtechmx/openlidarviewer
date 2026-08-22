@@ -308,7 +308,7 @@ claims:
       supported: []
       unsupported:
         - "Vertical fidelity between samples. The profile is what the sampling density can see."
-        - "Sections crossing gaps, where the line is interpolated rather than measured."
+        - "Elevation inside a coverage gap. Intervals with no defensible return are preserved as missing; the sampler emits no value, station interpolation refuses a bracket that is a gap, and neither the chart nor the PDF draws across one."
         - "Real terrain and real returns. All three fixtures are synthetic and noise-free."
         - "Any survey-grade longitudinal section."
         - "The section ends AT THE STRENGTH OF THE PREREGISTERED STUDY. The end-cap comparison is real and independent, run through the same SpatiaLite and R pipeline, but its fixture and its result were written in the same change, so its tolerance is carried over from PROTO-PROFILE-OGR-R-CORRIDOR rather than frozen ahead of it. It also has no study manifest under validation/cross-implementation/studies/, because an honest freeze record needs the commit that landed it."

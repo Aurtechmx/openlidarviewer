@@ -290,7 +290,7 @@ export interface MeasurementSummary {
    * true value is known. Optional: pre-v0.4.5 measurements never stored it.
    */
   profileCorridorWidthM?: number;
-  /** Profile only — the sampler's bare-earth percentile (dimensionless). */
+  /** Profile only — the sampler's corridor percentile (dimensionless). */
   profileGroundPercentile?: number;
   /**
    * Profile only — the cumulative chainages (in METRES, through the same B2
@@ -1065,7 +1065,7 @@ export class MeasureController {
 
   /**
    * Re-sample one profile measurement with user-set sampler parameters
-   * (B7/B8, v0.4.5): corridor half-width (metres), bare-earth percentile and
+   * (B7/B8, v0.4.5): corridor half-width (metres), corridor percentile and
    * sample count. Null/absent fields reset to the defaults (auto corridor,
    * p25, 64 bins). Inputs are clamped to the shared bounds, never rejected.
    * Returns true when the measurement was re-sampled and a change emitted;
