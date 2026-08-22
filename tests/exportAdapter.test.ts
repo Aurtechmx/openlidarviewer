@@ -484,3 +484,58 @@ describe('export adapter — excludeUnsupported (pass-7 #3)', () => {
     expect(a.excludeUnsupported('classification')).toEqual([]);
   });
 });
+
+describe('the scan-report card names what its figures cover', () => {
+  /**
+   * Every other figure on the card is answered over the visible entries: Points
+   * sums them, the extent is their union, the CRS is the first that declares
+   * one. The name was the exception and reported only the first visible layer,
+   * so a card whose Points and extent covered three scans read as a card about
+   * one of them.
+   */
+  /** An adapter over the given visible/hidden named layers. */
+  function named(entries: readonly { id: string; name: string; visible?: boolean }[]) {
+    return buildExportAdapter(
+      host({
+        clouds: () =>
+          new Map(entries.map((e) => [e.id, cloud({ name: e.name, visible: e.visible ?? true })])),
+      }),
+    );
+  }
+
+  it('names the layer when one is visible', () => {
+    expect(named([{ id: 'a', name: 'north.las' }]).sourceName()).toBe('north.las');
+  });
+
+  it('says how many more when several are visible', () => {
+    const adapter = named([
+      { id: 'a', name: 'north.las' },
+      { id: 'b', name: 'south.las' },
+      { id: 'c', name: 'east.las' },
+    ]);
+    expect(adapter.sourceName()).toBe('north.las + 2 more');
+  });
+
+  it('counts only the visible layers, which is what the figures cover', () => {
+    const adapter = named([
+      { id: 'a', name: 'north.las' },
+      { id: 'b', name: 'south.las', visible: false },
+    ]);
+    expect(adapter.sourceName()).toBe('north.las');
+  });
+
+  it('agrees with the point total, which sums the same set', () => {
+    // The two answers describe one scene, so a card that names one layer beside
+    // a total for three is the defect this pins.
+    const adapter = named([
+      { id: 'a', name: 'north.las' },
+      { id: 'b', name: 'south.las' },
+    ]);
+    expect(adapter.sourceName()).toMatch(/\+ 1 more$/);
+    expect(adapter.sourcePointCount()).toBe(200);
+  });
+
+  it('falls back to a placeholder with nothing visible', () => {
+    expect(named([]).sourceName()).toBe('scan');
+  });
+});
