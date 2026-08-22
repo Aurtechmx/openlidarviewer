@@ -22,11 +22,11 @@ import {
   stationsAlongLine,
   slopeGradesPerSegment,
   summariseSlopes,
+  // The length the sampler and the live station dots walk, so the report's
+  // station interval comes from the same horizontal span the headline
+  // (measurementMetrics) prints.
+  profileHorizontalLength,
 } from '../render/measure/profileStations';
-// The section frame the sampler and the live station dots use, so the report's
-// station interval is derived from the same horizontal length the headline
-// (measurementMetrics) prints.
-import { buildProfileFrame } from '../render/measure/profileGeometry';
 // Area formatting is single-sourced from the live measurement formatter so a
 // polygon reads the same units in the PDF report as on the overlay — the same
 // surface that produced it. Length and volume keep this module's own
@@ -187,7 +187,7 @@ function buildProfileExtras(
   // chainages then scale ×f once at the formatting boundary like every
   // other length here. The length itself is the up-axis-correct horizontal
   // span, matching `mm.horizontal_m` below and the sampler's x-axis.
-  const horizontalLen = buildProfileFrame(a, b, up).horizontalLength;
+  const horizontalLen = profileHorizontalLength(a, b, up);
   if (!Number.isFinite(horizontalLen) || horizontalLen <= 0) return undefined;
   const interval = autoStationIntervalForReport(horizontalLen * f) / f;
   const stations = stationsAlongLine({ a, b, up, intervalM: interval });

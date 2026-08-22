@@ -105,6 +105,17 @@ export interface StationsAlongLineInput {
  * NaN-safe: returns `[]` when any input coordinate is non-finite or
  * the interval is non-positive.
  */
+/**
+ * Horizontal length of the section a to b, measured perpendicular to `up`.
+ *
+ * The same figure `stationsAlongLine` walks and `measurementMetrics` prints, so
+ * a caller choosing a station interval derives it from the length the profile
+ * itself reports rather than from a second reading of the endpoints.
+ */
+export function profileHorizontalLength(a: Vec3, b: Vec3, up: Vec3): number {
+  return buildProfileFrame(a, b, up).horizontalLength;
+}
+
 export function stationsAlongLine(input: StationsAlongLineInput): ProfileStation[] {
   const { a, b, intervalM } = input;
   const up = input.up ?? DEFAULT_PROFILE_UP;
