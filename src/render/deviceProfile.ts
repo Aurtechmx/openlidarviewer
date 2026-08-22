@@ -5,10 +5,10 @@
  * safely render, from signals available before any GPU work — reported memory,
  * logical-core count, and whether this is a phone.
  *
- * The budget is the GPU-memory safeguard: a weak device loads fewer
- * points, so a large survey degrades gracefully instead of crashing the GPU.
- * Capable devices are unaffected — the `high`/`medium` budgets match the
- * canonical desktop and mobile budgets.
+ * The budget is the GPU-memory safeguard and the frame-time safeguard: a
+ * weaker device loads fewer points, so a large survey degrades gracefully
+ * instead of crashing the GPU or dropping below an interactive frame rate.
+ * The desktop rungs are sized from a measured per-point frame cost, below.
  *
  * Pure — no DOM, no three.js — so the tier logic is unit-tested in Node.
  */
@@ -34,20 +34,55 @@ export interface DeviceCaps {
 }
 
 /**
- * Per-tier point budgets — desktop. The `high` tier (≥6–8 GB RAM *and* ≥6–8
- * cores) gets a larger budget so capable desktops show more of a dense survey
- * before voxel reduction kicks in; `medium`/`low` stay conservative for broad
- * safety. The `high` value tracks `GPU_HARD_POINT_CEILING` in Viewer.ts — raise
- * them together. Verify the `high` budget on real high-end hardware (watch the
- * frame rate on a >6 M-point cloud) before raising it further.
+ * The measurement the desktop ladder is derived from.
+ *
+ * Measured on an M3 Max with a 30-core GPU, headed Chromium on the WebGPU
+ * backend, over a 4,898,193-point synthetic cloud spanning 159.6 x 202.4 x
+ * 93.4 m: frame time is linear in point count at 5.6 ns per point per frame
+ * (1.22 M = 6.6 ms, 2.45 M = 13.4 ms, 4.90 M = 27.7 ms, 6.00 M = 37.5 ms).
+ * The former `high` of 6_000_000 measured 37.5 ms, about 27 fps, on the
+ * fastest laptop GPU in the target class. A confirmation run at the 3 M rung,
+ * 1600 x 1000 CSS pixels at device-pixel-ratio 2, measured 16.6 to 17.4 ms.
+ *
+ * Exported so `tests/deviceProfile.test.ts` pins the ladder's arithmetic
+ * instead of the numbers being asserted in prose alone.
  */
-const DESKTOP_BUDGET: Record<DeviceTier, number> = {
-  high: 6_000_000,
-  medium: 4_000_000,
-  low: 2_000_000,
+export const RENDER_BUDGET_BASIS = {
+  /** Frame cost of one rendered point on the reference GPU, in nanoseconds. */
+  nsPerPointPerFrame: 5.6,
+  /** The frame time every rung is sized to. 16.8 ms is 59.5 fps. */
+  frameMs: 16.8,
+} as const;
+
+/**
+ * Per-point slowdown each desktop tier is sized for, against the reference
+ * GPU. A `high` machine is the reference; `medium` and `low` are graded from
+ * the same memory and core signals `deviceTier` reads, so the factors stand in
+ * for the GPU those signals imply.
+ */
+export const TIER_SLOWDOWN: Record<DeviceTier, number> = {
+  high: 1,
+  medium: 1.5,
+  low: 2.5,
 };
 
-/** Per-tier point budgets — mobile, tighter throughout. */
+/**
+ * Per-tier point budgets, desktop. Each rung is the point count that holds
+ * `RENDER_BUDGET_BASIS.frameMs` on a device of that class, so on the reference
+ * GPU they cost 16.8 ms, 11.2 ms and 6.7 ms. `GPU_HARD_POINT_CEILING` in
+ * Viewer.ts sits above every rung and stays the out-of-memory backstop.
+ */
+const DESKTOP_BUDGET: Record<DeviceTier, number> = {
+  high: 3_000_000,
+  medium: 2_000_000,
+  low: 1_200_000,
+};
+
+/**
+ * Per-tier point budgets, mobile, tighter throughout. These are not derived
+ * from the desktop measurement: no phone-class per-point frame cost has been
+ * measured, so they stay at the values field use settled on.
+ */
 const MOBILE_BUDGET: Record<DeviceTier, number> = {
   high: 1_500_000,
   medium: 1_500_000,

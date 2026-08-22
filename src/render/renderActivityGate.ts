@@ -75,3 +75,12 @@ export class RenderActivityGate {
     this._idleHeartbeat++;
   }
 }
+
+/**
+ * The damping-settle gate travels with this module because it decides whether a
+ * change event should arm the gate above at all. Viewer reaches both through
+ * the one import: the module-graph ratchet counts a second edge from Viewer to
+ * a module the activity cluster already owns, and the two are one concern.
+ */
+export { DampingSettleGate, decayRemaining, hasDampingSettled, SETTLED_REMAINING_PX } from './dampingSettle';
+
