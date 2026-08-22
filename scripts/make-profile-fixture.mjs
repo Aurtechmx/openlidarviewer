@@ -20,6 +20,13 @@
  *                        the corridor, which is what gives the type-7 quantile
  *                        a closed form (see scripts/profile-fixture-params.mjs).
  *
+ *   profile-caps.csv     a short section whose returns sit in the region where
+ *                        a distance-to-segment corridor and a rectangle with
+ *                        square ends disagree: past an end, within the band of
+ *                        the line, and further than the band from the endpoint.
+ *                        The other two fixtures keep their beyond-the-end
+ *                        returns far enough out that both rules agree.
+ *
  *   profile-scatter.csv  an oblique section line, irregular corridor
  *                        populations including single-point and empty stations,
  *                        classified vegetation / building / noise returns above
@@ -38,6 +45,9 @@ import {
   RAMP_DECOY_T, RAMP_DECOY_LIFT, RAMP_END_DECOYS, rampGround,
   SCATTER_A, SCATTER_B, SCATTER_SAMPLES, SCATTER_BAND, SCATTER_BIN_STEP,
   SCATTER_EDGE_MARGIN, SCATTER_EMPTY_BINS, SCATTER_SEED,
+  CAPS_A, CAPS_B, CAPS_SAMPLES, CAPS_BAND, CAPS_BIN_STEP,
+  CAPS_T_START, CAPS_T_STEP, CAPS_T_COUNT, CAPS_CROSS,
+  CAPS_DECOY_T, CAPS_DECOY_LIFT, CAPS_REJECT_LIFT, CAPS_PROBES, capsGround,
   EXCLUDED_CLASSES,
 } from './profile-fixture-params.mjs';
 
@@ -193,13 +203,70 @@ function writeScatter() {
   return { path, points: lines.length - 1 };
 }
 
+
+// ── CAPS ────────────────────────────────────────────────────────────────────
+
+/** Horizontal distance from a cap probe to the endpoint it was placed against. */
+const probeRadius = (past, t) => Math.hypot(past, t);
+
+/**
+ * z(s, t) = capsGround(s) + CAPS_CROSS·t over the interior, so each interior
+ * station's elevations are an arithmetic progression and carry a closed form.
+ * Stations 0 and CAPS_SAMPLES−1 also collect the admitted cap probes, which is
+ * what takes them out of the closed form's reach.
+ */
+export function capsRows() {
+  const rows = [];
+  const len = CAPS_B[0] - CAPS_A[0];
+  for (let i = 0; i < CAPS_SAMPLES; i++) {
+    const s = i * CAPS_BIN_STEP;
+    const g = capsGround(s);
+    for (let k = 0; k < CAPS_T_COUNT; k++) {
+      const t = CAPS_T_START + CAPS_T_STEP * k;
+      rows.push([s, t, g + CAPS_CROSS * t]);
+    }
+    rows.push([s, -CAPS_DECOY_T, g + CAPS_DECOY_LIFT]);
+    rows.push([s, CAPS_DECOY_T, g + CAPS_DECOY_LIFT]);
+  }
+
+  // The cap probes, at both ends. `admitted` is asserted against the distance
+  // to the endpoint rather than trusted, and every probe is held clear of the
+  // cap boundary so no probe is decided by rounding.
+  for (const [past, t, admitted] of CAPS_PROBES) {
+    const r = probeRadius(past, t);
+    if (admitted !== r <= CAPS_BAND) {
+      throw new Error(`cap probe (${past}, ${t}) is ${r} from the endpoint; admitted is declared ${admitted}`);
+    }
+    if (Math.abs(r - CAPS_BAND) < 0.125) {
+      throw new Error(`cap probe (${past}, ${t}) sits ${Math.abs(r - CAPS_BAND)} from the cap boundary`);
+    }
+    if (past <= 0) throw new Error(`cap probe (${past}, ${t}) is not past an end`);
+    for (const [end, sign] of [[0, -1], [len, 1]]) {
+      const g = capsGround(end);
+      const z = admitted ? g + CAPS_CROSS * t : g + CAPS_REJECT_LIFT;
+      rows.push([end + sign * past, t, z]);
+    }
+  }
+  return rows;
+}
+
+function writeCaps() {
+  const lines = ['x,y,z'];
+  for (const [x, y, z] of capsRows()) lines.push(`${f(x)},${f(y)},${f(z)}`);
+  const path = resolve(OUT_DIR, 'profile-caps.csv');
+  writeFileSync(path, `${lines.join('\n')}\n`);
+  return { path, points: lines.length - 1 };
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   mkdirSync(OUT_DIR, { recursive: true });
   const ramp = writeRamp();
   const scatter = writeScatter();
+  const caps = writeCaps();
   console.log(`profile fixtures written`);
   console.log(`  ${ramp.path}  ${ramp.points} points, ${RAMP_SAMPLES} stations, corridor ±${RAMP_BAND} m`);
   console.log(`  ${scatter.path}  ${scatter.points} points, ${SCATTER_SAMPLES} stations, corridor ±${SCATTER_BAND} m`);
+  console.log(`  ${caps.path}  ${caps.points} points, ${CAPS_SAMPLES} stations, corridor ±${CAPS_BAND} m`);
 }

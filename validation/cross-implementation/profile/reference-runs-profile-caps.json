@@ -1,0 +1,44 @@
+{
+  "generatedBy": "scripts/run-profile-reference.mjs",
+  "runs": {
+    "caps": {
+      "status": "ok",
+      "corridorSql": "SELECT CAST(ST_Line_Locate_Point(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) * ST_Length(GeomFromText('LINESTRING(0 0,32 0)')) / 1 + 0.5 AS INTEGER) AS bin, z AS z FROM \"profile-caps\" WHERE ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) <= 2",
+      "corridorCommandLine": "ogr2ogr -f CSV validation/cross-implementation/profile/profile-caps__corridor.csv validation/cross-implementation/profile/profile-caps.csv -lco STRING_QUOTING=IF_NEEDED -dialect SQLITE -sql SELECT CAST(ST_Line_Locate_Point(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) * ST_Length(GeomFromText('LINESTRING(0 0,32 0)')) / 1 + 0.5 AS INTEGER) AS bin, z AS z FROM \"profile-caps\" WHERE ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) <= 2",
+      "quantileCommandLine": "Rscript validation/cross-implementation/profile/profile-quantile.R validation/cross-implementation/profile/profile-caps__corridor.csv validation/cross-implementation/profile/profile-caps__profile.csv 33 25,50",
+      "corridorOutput": "validation/cross-implementation/profile/profile-caps__corridor.csv",
+      "seriesOutput": "validation/cross-implementation/profile/profile-caps__profile.csv",
+      "percentiles": [
+        25,
+        50
+      ],
+      "exitCodes": {
+        "ogr2ogr": 0,
+        "Rscript": 0
+      },
+      "stderr": null
+    }
+  },
+  "geometry": {
+    "tool": "GDAL/OGR SQLite dialect with SpatiaLite",
+    "gdal": "GDAL 3.13.1 \"Iowa City\", released 2026/06/01",
+    "spatialite": "5.1.0",
+    "resolvedPath": "/opt/homebrew/Cellar/gdal/3.13.1_4/bin/ogr2ogr",
+    "functions": [
+      "ST_Line_Locate_Point",
+      "ST_Length",
+      "ST_Distance",
+      "MakePoint"
+    ]
+  },
+  "statistic": {
+    "tool": "R quantile(type = 7)",
+    "version": "R version 4.4.1 (2024-06-14)",
+    "resolvedPath": "/Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/bin/Rscript",
+    "script": "validation/cross-implementation/profile/profile-quantile.R"
+  },
+  "containerPinning": "not-executed",
+  "containerPinningNote": "No containerised GDAL or R was used; the resolved executable paths, the reported versions and the exact command lines stand in for an image digest.",
+  "platform": "darwin-arm64",
+  "node": "v26.0.0"
+}
