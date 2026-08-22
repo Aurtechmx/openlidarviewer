@@ -22,7 +22,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets are best handled through streaming formats such as COPC or EPT — opened progressively through their octree hierarchies so only what the current view needs is fetched, decoded, and uploaded to the GPU. Non-streaming formats above the point budget are downsampled on load to stay responsive; browser memory limits can still affect extremely large scans regardless of format.
 
-Clouds above a point budget of roughly 4M points are downsampled on load to stay responsive — see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
+Clouds above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) are downsampled on load to stay responsive — see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
 
 ## Loading large files
 

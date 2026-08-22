@@ -234,6 +234,7 @@ import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
 import { RenderActivityGate } from './renderActivityGate';
+import { DampingSettleGate } from './dampingSettle';
 import { resolveStreamingCompatibility } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
@@ -817,6 +818,8 @@ export class Viewer {
    * Past this point, the loop falls back to a heartbeat render.
    */
   private readonly _renderGate = new RenderActivityGate();
+  /** Damping-tail measure behind the OrbitControls 'change' activity bump. */
+  private readonly _settleGate = new DampingSettleGate();
   /**
    * Counter for the idle-render heartbeat. Increments when the loop
    * skips a render; reaches `IDLE_HEARTBEAT_FRAMES` and forces a
@@ -1302,19 +1305,16 @@ export class Viewer {
       TWO: undefined as unknown as THREE.TOUCH,
     };
     // OrbitControls fires 'start' on first drag / touch / wheel and 'end' on
-    // release. The Viewer subscribes here so the per-frame orbit-centre
-    // maintenance can suspend itself while the user is actively driving the
-    // camera — no lerp competes with live input, no clamp judders mid-pan.
-    // 'end' also stamps `_lastInteractMs` so the orbit-centre maintenance
-    // can wait through OrbitControls' post-release damping tail before
-    // engaging — without that grace period, the soft-clamp lerp races
-    // damping and the camera rotates around a sliding target.
-    // OrbitControls fires 'change' for every camera-affecting input
-    // (wheel zoom, drag, pan, programmatic camera moves) AND for every
-    // damping tick after release. Bumping render-activity here keeps
-    // the idle-render throttle out of the way while the camera is
-    // actually moving, including the post-gesture damping tail.
-    this._controls.addEventListener('change', () => { this._bumpRenderActivity(); });
+    // release. The orbit-centre maintenance pass suspends itself while the user
+    // drives the camera; 'end' stamps `_lastInteractMs` so the soft-clamp lerp
+    // waits out the damping tail instead of racing it. 'change' fires for every
+    // camera-affecting input and for every damping tick after release, and
+    // `DampingSettleGate` withholds the bump once that tail is under a pixel.
+    this._controls.addEventListener('change', () => {
+      if (this._settleGate.arms(this._camera, this._controls, canvas.clientHeight || 600)) {
+        this._bumpRenderActivity();
+      }
+    });
     this._controls.addEventListener('start', () => { this._userInteracting = true; });
     this._controls.addEventListener('end', () => {
       this._userInteracting = false;
