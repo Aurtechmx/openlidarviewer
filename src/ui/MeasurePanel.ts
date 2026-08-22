@@ -37,6 +37,9 @@ import {
   profileSummaryRows,
   type ProfileStationRow,
 } from '../render/measure/profileSummary';
+// Straight-polyline path builder shared with the profile PDF so the chart and
+// the sheet draw the same geometry. Pure string assembly, no dependencies.
+import { profilePolylinePath } from '../render/measure/profilePath';
 // Δh in the chart tooltip goes through the shared formatter so it carries
 // its unit in BOTH systems (B9 — it used to print a hardcoded "m" even in
 // imperial mode).
@@ -199,40 +202,9 @@ export function niceElevationTicks(min: number, max: number, target = 4): number
   return ticks;
 }
 
-/**
- * Build an SVG path that passes through every point using a uniform
- * Catmull-Rom spline expressed as cubic Béziers. The curve is
- * interpolating — it never moves a sample, it only rounds the joins —
- * so the smoothed line is an honest rendering of the (already
- * percentile-de-noised) profile, not an approximation that invents a
- * surface. End segments clamp their phantom neighbour to the endpoint so
- * the curve starts and ends cleanly. A 2-point run is a straight line.
- * v0.4.0 Profile-as-Deliverable.
- */
 /** Sanitise a measurement name into a safe download file stem. */
 function safeFileName(name: string): string {
   return name.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'measurement';
-}
-
-export function catmullRomPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
-  const n = pts.length;
-  if (n === 0) return '';
-  const f = (v: number) => v.toFixed(2);
-  if (n === 1) return `M${f(pts[0].x)} ${f(pts[0].y)}`;
-  if (n === 2) return `M${f(pts[0].x)} ${f(pts[0].y)} L${f(pts[1].x)} ${f(pts[1].y)}`;
-  let d = `M${f(pts[0].x)} ${f(pts[0].y)}`;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = pts[i === 0 ? 0 : i - 1];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2 < n ? i + 2 : n - 1];
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C${f(c1x)} ${f(c1y)} ${f(c2x)} ${f(c2y)} ${f(p2.x)} ${f(p2.y)}`;
-  }
-  return d;
 }
 
 /** Hooks the panel calls back into. */
@@ -277,7 +249,7 @@ export interface MeasurePanelCallbacks {
   };
   /**
    * Re-sample one profile with user-set sampler parameters (B7/B8, v0.4.5):
-   * corridor half-width in METRES, bare-earth percentile, sample count. Null
+   * corridor half-width in METRES, elevation percentile, sample count. Null
    * fields reset that parameter to its default (auto corridor / p25 / 64).
    * The controller re-samples and emits a change; the panel re-renders with
    * the values that actually shaped the new chart. Optional — without it the
@@ -906,8 +878,9 @@ export class MeasurePanel {
 
   /**
    * The profile sampler controls (B7/B8, v0.4.5): a `<details>` whose summary
-   * is the live caption — "Corridor ±… · ground p… · N samples" — and whose
-   * body holds the corridor / percentile / sample-count inputs plus a Reset.
+   * is the live caption — "Corridor ±… · p… of corridor · N samples" — and
+   * whose body holds the corridor / percentile / sample-count inputs plus a
+   * Reset.
    * Corridor is entered in the display unit (m or ft) and converted to metres
    * before it reaches the controller, which clamps to the shared bounds.
    * Returns null when the host wired no resample callback or the row carries
@@ -928,7 +901,7 @@ export class MeasurePanel {
     // pre-v0.4.5 measurements whose record never stored the corridor.
     const caption =
       `Corridor ±${corrM != null ? formatLength(corrM, system) : 'auto'} · ` +
-      `ground p${pct} · ${nSamples} samples`;
+      `p${pct} of corridor · ${nSamples} samples`;
 
     const unitLabel = imperial ? 'ft' : 'm';
     const toDisplay = (m: number): number => (imperial ? m * FT_PER_M : m);
@@ -949,9 +922,12 @@ export class MeasurePanel {
     const pctInput = el('input', {
       className: 'olv-mp-sampler-input',
       title:
-        'Per-bin elevation percentile: 25 estimates bare earth (rejects ' +
-        'vegetation above), 50 is the median, 100 follows the canopy top.',
-      ariaLabel: 'Ground percentile (0–100)',
+        'Per-bin elevation percentile over the corridor returns: 25 is a ' +
+        'lower-percentile surface, 50 the median, 100 the highest return. ' +
+        'Known non-ground classes (vegetation, building, noise) are excluded ' +
+        'only where a source supplies a classification; unclassified returns ' +
+        'still count towards the percentile.',
+      ariaLabel: 'Elevation percentile (0–100)',
     }) as HTMLInputElement;
     pctInput.type = 'number';
     pctInput.min = '0';
@@ -1040,7 +1016,7 @@ export class MeasurePanel {
 
     const body = el('div', { className: 'olv-mp-sampler-body' }, [
       field(`Corridor ± (${unitLabel})`, corrInput),
-      field('Ground percentile', pctInput),
+      field('Elevation percentile', pctInput),
       field('Samples', cntSelect),
       resetBtn,
     ]);
@@ -1786,13 +1762,11 @@ function renderProfileChart(
   }
   if (run.length) runs.push(run);
 
-  // Render each run as a Catmull-Rom curve that PASSES THROUGH every
-  // sample (it interpolates, it never moves a measured point), so the
-  // line reads as organic terrain rather than a jagged staircase while
-  // staying honest — the de-noising already happened in the sampler's
-  // percentile estimator; this is purely how the through-points are
-  // joined. Gaps are never bridged.
-  const paths = runs.map((pts) => catmullRomPath(pts));
+  // Render each run as a straight polyline between adjacent samples. Every
+  // point on a segment lies between that segment's two endpoints, so the
+  // chart cannot draw an elevation the corridor never reported. Gaps are
+  // never bridged: a non-finite sample already ended the run above.
+  const paths = runs.map((pts) => profilePolylinePath(pts));
 
   // Station spacing — civil convention. The walks are iteration-capped
   // (v0.4.5 crash guard): `xSpan` is finite by the bounds scan above, but a
