@@ -479,6 +479,21 @@ export class NavController {
   }
 
   /**
+   * Whether the user is driving the camera by any route OrbitControls does not
+   * report: walk and fly, which steer from the keys and a locked pointer, and
+   * the custom orbit and hand-pan drags, which bypass OrbitControls entirely.
+   *
+   * The Viewer folds this into the flag the live-probe gate reads. Without it
+   * the gate sees only OrbitControls drags, so a probe pick runs on every
+   * pointer-move frame while the camera is moving, scanning every point of
+   * every visible cloud for a readout that is not being read.
+   */
+  get isDriving(): boolean {
+    return this._mode === 'walk' || this._mode === 'fly'
+      || this.orbitDragging || this.panDragging;
+  }
+
+  /**
    * Smoothly move the camera to `toPos`, looking at `toTarget`, over
    * `duration` seconds with an eased curve. Used for the Frame button,
    * double-click focus, and share-link pose restoration.
@@ -932,11 +947,26 @@ export class NavController {
     this._endOrbitDrag();
   }
 
+  /**
+   * Canvas click in walk / fly: take mouse-look, or hand the cursor back.
+   *
+   * While the canvas holds pointer lock the browser delivers every mouse event
+   * to the canvas and hides the cursor, so the navigation dock receives no
+   * clicks and Orbit, Pan, Walk and Fly are all unreachable with the mouse. A
+   * click while locked ends the capture, which restores the cursor and makes
+   * the dock clickable again; Esc and the 1/2/3/4 keys are the other ways out.
+   * No other handler wants a walk/fly click: a picking tool disables navigation
+   * input, and the live probe reads hover rather than clicks.
+   *
+   * The lock cannot be traded for the button press in one click: a locked
+   * pointer reports the position it was locked at, never where the user has
+   * moved to, so which control they aimed at is not knowable from the event.
+   */
   private _handleCanvasClick(): void {
     if (!this._inputEnabled) return;
-    if ((this._mode === 'walk' || this._mode === 'fly') && !this._locked) {
-      void this._canvas.requestPointerLock();
-    }
+    if (this._mode !== 'walk' && this._mode !== 'fly') return;
+    if (this._locked) this._exitPointerLock();
+    else void this._canvas.requestPointerLock();
   }
 
   private _handlePointerLockChange(): void {

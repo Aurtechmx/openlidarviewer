@@ -26,7 +26,7 @@
  *
  * Why a percentile, not the nearest point (the scientific core):
  *
- *   A LiDAR corridor over real ground contains bare-earth returns AND
+ *   A LiDAR corridor over real ground contains ground returns AND
  *   higher returns from vegetation, wires, vehicles, and noise. Picking
  *   the single nearest point per bin makes the chosen surface jump
  *   between canopy and ground from one bin to the next — a spiky line
@@ -34,7 +34,7 @@
  *   corrupts any slope read off it. Instead each bin takes a low
  *   percentile of its corridor elevations (`groundPercentile`, default
  *   25). Because non-ground returns sit ABOVE the ground, a low
- *   percentile rejects them and recovers the bare-earth transect using
+ *   percentile favours the lower returns in each bin, using
  *   MORE data, not less — de-noising by aggregation, never by inventing
  *   values between samples. The percentile is the standard type-7
  *   quantile (linear interpolation between order statistics), so the
@@ -54,6 +54,7 @@ import type { Vec3 } from '../navMath';
 import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import { placeBufferInto } from '../layerPlacement';
 import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
+import { buildProfileFrame, DEGENERATE_HORIZONTAL_LENGTH } from './profileGeometry';
 
 /** A placed source buffer contributing to a combined profile walk. */
 export interface ProfileSourceBuffer {
@@ -99,26 +100,11 @@ export function assembleProfileBuffers(
   return { positions, classification };
 }
 
-// Inline vector helpers — duplicated from `geometry.ts` where they are
-// also module-local. Cheap, branch-free, no allocations beyond return
-// values. Keeping them here lets the module ship as a pure leaf unit.
+// The section frame (normalised up, horizontal direction, chainage origin)
+// comes from `profileGeometry`, shared with the station walk and the report
+// so all three project against the same geometry.
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-}
-function sub(minuend: Vec3, subtrahend: Vec3): Vec3 {
-  return [
-    minuend[0] - subtrahend[0],
-    minuend[1] - subtrahend[1],
-    minuend[2] - subtrahend[2],
-  ];
-}
-function length(v: Vec3): number {
-  return Math.hypot(v[0], v[1], v[2]);
-}
-function normalize(v: Vec3): Vec3 {
-  const len = length(v);
-  if (len === 0) return [0, 0, 0];
-  return [v[0] / len, v[1] / len, v[2] / len];
 }
 
 /** A single profile sample — distance along the line and elevation. */
@@ -151,23 +137,30 @@ export interface SampleProfileInput {
   samples: number;
   /**
    * Horizontal band width on each side of the line, metres. A point further
-   * than this from the line in the horizontal plane is ignored. The default
-   * `null` means "auto" — use 5 % of the horizontal line length.
+   * than this from the SEGMENT a → b in the horizontal plane is ignored, so
+   * the corridor is a capsule: a rectangle between the endpoints closed by a
+   * half-disc of radius `bandWidth` at each end. Points past an end are held
+   * to their distance from that endpoint, not to their perpendicular offset.
+   * The default `null` means "auto" — use 5 % of the horizontal line length.
    */
   bandWidth?: number | null;
   /**
    * Per-bin elevation percentile (0..100) used to reduce the corridor
-   * points to one height. Default 25 — a bare-earth estimate that
-   * rejects vegetation/noise (which sit above the ground). 50 = median,
-   * 0 = strict floor, 100 = canopy top. `null` falls back to the default.
+   * points to one height. Default 25 gives a lower-percentile surface,
+   * which favours the lower returns in each bin. It is not a bare-earth
+   * product: only the classes in `excludeClasses` are dropped, and only
+   * where a source supplies classification. 50 = median, 0 = strict floor,
+   * 100 = highest return. `null` falls back to the default.
    */
   groundPercentile?: number | null;
   /**
    * Per-point ASPRS classification, index-aligned with `positions`. When
    * present, vegetation / building / noise returns are dropped from each
-   * corridor BEFORE the percentile, so trees can't pull the bare-earth line
-   * up — the profile is computed over classified ground returns. Omit when
-   * the cloud carries no classification (the percentile alone is used).
+   * corridor BEFORE the percentile, so trees cannot pull the surface up.
+   * Everything else reaches the percentile, including unclassified returns
+   * and the sentinel a merged source without a class channel carries, so the
+   * accepted set is not ground-only. Omit when the cloud carries no
+   * classification (the percentile alone is used).
    */
   classification?: Uint8Array | ReadonlyArray<number> | null;
   /** ASPRS classes to drop when classification is supplied. Default veg/building/noise. */
@@ -177,7 +170,7 @@ export interface SampleProfileInput {
 const MIN_SAMPLES = 2;
 const MAX_SAMPLES = 512;
 /**
- * Default bare-earth percentile. Exported (v0.4.5) so the Viewer can pass the
+ * Default corridor percentile. Exported (v0.4.5) so the Viewer can pass the
  * value it actually sampled with into the measurement record for PDF/CSV
  * provenance, instead of the provenance layer hard-coding a second "25".
  */
@@ -191,8 +184,9 @@ export const DEFAULT_GROUND_PERCENTILE = 25;
 export const DEFAULT_PROFILE_SAMPLE_COUNT = 64;
 /**
  * Sample-count choices the panel offers. The ceiling matches the sampler's
- * own MAX_SAMPLES clamp; the floor (32) keeps a chart readable — below that
- * the Catmull-Rom rendering over-smooths real relief.
+ * own MAX_SAMPLES clamp; the floor (32) keeps a chart readable, since the
+ * renderer joins adjacent stations with straight segments and a coarse count
+ * reads as a chain of long chords.
  */
 export const PROFILE_SAMPLE_COUNT_OPTIONS = [32, 64, 128, 256, 512] as const;
 /**
@@ -324,11 +318,7 @@ export const AUTO_CORRIDOR_FRACTION = 0.05;
  * learning what width actually shaped the estimate.
  */
 export function autoCorridorWidth(a: Vec3, b: Vec3, up: Vec3): number {
-  const u = normalize(up);
-  const ab = sub(b, a);
-  const v = dot(ab, u);
-  const h: Vec3 = [ab[0] - u[0] * v, ab[1] - u[1] * v, ab[2] - u[2] * v];
-  return length(h) * AUTO_CORRIDOR_FRACTION;
+  return buildProfileFrame(a, b, up).horizontalLength * AUTO_CORRIDOR_FRACTION;
 }
 
 /**
@@ -356,26 +346,20 @@ function percentileSorted(sorted: Float64Array, count: number, p: number): numbe
  * chart's X-axis matches what an engineer would draw on paper.
  *
  * Algorithm: for each cloud point, project it onto the horizontal line,
- * compute the perpendicular distance, and (if within `bandWidth`) update
- * the bin's nearest-point record. After the linear pass, walk the bins
- * and emit `(distance, nearestHeight)` for each.
+ * compute its distance to the SEGMENT (perpendicular between the endpoints,
+ * radial past either end), and (if within `bandWidth`) update the bin's
+ * nearest-point record. After the linear pass, walk the bins and emit
+ * `(distance, nearestHeight)` for each.
  */
 export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const samples = Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, input.samples | 0));
-  const u = normalize(input.up);
-
-  // Horizontal projection of the line a → b.
-  const ab = sub(input.b, input.a);
-  const verticalAB = dot(ab, u);
-  const hAB: Vec3 = [
-    ab[0] - u[0] * verticalAB,
-    ab[1] - u[1] * verticalAB,
-    ab[2] - u[2] * verticalAB,
-  ];
-  const horizontalLen = length(hAB);
+  // Horizontal projection of the line a → b, from the shared section frame.
+  const frame = buildProfileFrame(input.a, input.b, input.up);
+  const u = frame.up;
+  const horizontalLen = frame.horizontalLength;
 
   // Degenerate line (a == b in plan) — return two samples at a's elevation.
-  if (horizontalLen < 1e-9) {
+  if (horizontalLen < DEGENERATE_HORIZONTAL_LENGTH) {
     const aH = dot(input.a, u);
     // Degenerate line: the heights are the endpoint's own elevation, not a
     // corridor statistic — count 0 keeps the evidence column honest.
@@ -385,7 +369,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     ];
   }
 
-  const hDir: Vec3 = [hAB[0] / horizontalLen, hAB[1] / horizontalLen, hAB[2] / horizontalLen];
+  const hDir: Vec3 = frame.along;
 
   // Per-bin corridor collection. Every point within the band contributes
   // its elevation to its bin; the bin is later reduced to one height via
@@ -403,11 +387,7 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const binStep = horizontalLen / (samples - 1);
 
   // a's horizontal anchor.
-  const aH: Vec3 = [
-    input.a[0] - u[0] * dot(input.a, u),
-    input.a[1] - u[1] * dot(input.a, u),
-    input.a[2] - u[2] * dot(input.a, u),
-  ];
+  const aH: Vec3 = frame.horizontalAnchor;
 
   const positions = input.positions;
   const n = positions.length / 3;
@@ -436,16 +416,23 @@ export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
     // this gate it would reach the bin array with a NaN index. No
     // elevation can be read off such a point — drop it.
     if (!Number.isFinite(along)) continue;
+    // Cheap scalar reject before the three multiplies below. A point whose
+    // chainage is further than `band` past either end is further than `band`
+    // from the segment, because |d| >= |along| for a projection.
     if (along < -band || along > horizontalLen + band) continue;
 
-    // Perpendicular distance (horizontal-plane, squared).
-    const pdx = dx - hDir[0] * along;
-    const pdy = dy - hDir[1] * along;
-    const pdz = dz - hDir[2] * along;
-    const perpSq = pdx * pdx + pdy * pdy + pdz * pdz;
-    if (perpSq > bandSq) continue;
+    // Distance to the FINITE segment, squared, in the horizontal plane:
+    // measured from the nearest point ON the segment, which is an endpoint
+    // once `along` runs past that end. Between the endpoints `nearest`
+    // equals `along` and this is the perpendicular distance.
+    const nearest = along < 0 ? 0 : along > horizontalLen ? horizontalLen : along;
+    const pdx = dx - hDir[0] * nearest;
+    const pdy = dy - hDir[1] * nearest;
+    const pdz = dz - hDir[2] * nearest;
+    const nearSq = pdx * pdx + pdy * pdy + pdz * pdz;
+    if (nearSq > bandSq) continue;
 
-    // Bin index (clamped so band-extension hits the end bins).
+    // Bin index (clamped so the end caps hit the end bins).
     let binIndex = Math.round(along / binStep);
     if (binIndex < 0) binIndex = 0;
     if (binIndex > samples - 1) binIndex = samples - 1;

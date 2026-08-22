@@ -19,6 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { E57ScanData, E57ParseResult } from '../src/io/e57/parseE57';
 import { parseE57 } from '../src/io/e57/parseE57';
 import { loadE57 } from '../src/io/loadE57';
+import type { E57DecodePlan } from '../src/io/loadPlan';
 import { toCsv } from '../src/io/exporters';
 
 vi.mock('../src/io/e57/parseE57', () => ({
@@ -26,6 +27,25 @@ vi.mock('../src/io/e57/parseE57', () => ({
 }));
 
 const mockedParse = vi.mocked(parseE57);
+
+/**
+ * A decode plan that reads every record. `parseE57` is mocked here, so the
+ * buffer these tests pass carries no declaration for the loader to preflight;
+ * handing it the plan directly keeps the subject of each test the merge and
+ * attribute logic. The loader refuses an E57 whose plan cannot be established,
+ * which is what `tests/e57PreflightGuard.test.ts` covers.
+ */
+const READ_EVERY_RECORD: E57DecodePlan = {
+  mode: 'all',
+  stride: 1,
+  sourceCount: 0,
+  decodedCount: 0,
+  memoryEstimateBytes: 0,
+  fullDecodeEstimateBytes: 0,
+  ceilingBytes: 0,
+  fits: true,
+};
+
 
 function scan(
   recordCount: number,
@@ -36,6 +56,7 @@ function scan(
     name: 'scan',
     guid: 'guid',
     recordCount,
+    declaredRecordCount: recordCount,
     columns: {
       cartesianX: Float64Array.from(intensityVals.map((_, i) => 10.5 + i)),
       cartesianY: Float64Array.from(intensityVals.map(() => 20.5)),
@@ -76,32 +97,32 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
         scan(3, [0.2800008952617645, 0.5, 0.738064706325531], 0.738064706325531),
       ]),
     );
-    const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57', { plan: READ_EVERY_RECORD });
     // Pre-fix this read [0, 1, 1] — the whole channel collapsed to two values.
     expect([...cloud.intensity!]).toEqual([18350, 32768, 48369]);
   });
 
   it('rescales by an OBSERVED unit-range maximum when the file declares no limits', async () => {
     mockedParse.mockReturnValue(parseResult([scan(2, [0.25, 0.75], null)]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'nolimits.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'nolimits.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([16384, 49151]);
   });
 
   it('stores a wider-than-unit range raw (declared limits)', async () => {
     mockedParse.mockReturnValue(parseResult([scan(3, [5, 1000, 65535], 65535)]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'raw16.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'raw16.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([5, 1000, 65535]);
   });
 
   it('stores a wider-than-unit range raw (no declared limits, observed max > 1)', async () => {
     mockedParse.mockReturnValue(parseResult([scan(2, [12, 300], null)]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'raw-observed.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'raw-observed.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([12, 300]);
   });
 
   it('still clamps out-of-declared-range values into the Uint16 domain', async () => {
     mockedParse.mockReturnValue(parseResult([scan(2, [-0.25, 1.5], 1)]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'clamped.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'clamped.e57', { plan: READ_EVERY_RECORD });
     expect([...cloud.intensity!]).toEqual([0, 65535]);
   });
 
@@ -113,7 +134,7 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
         scan(3, [0.2800008952617645, 0.5, 0.738064706325531], 0.738064706325531),
       ]),
     );
-    const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'sample.e57', { plan: READ_EVERY_RECORD });
     const rows = toCsv(cloud).trim().split('\n');
     expect(rows[0]).toBe('x,y,z,intensity');
     const written = rows.slice(1).map((r) => Number(r.split(',')[3]));

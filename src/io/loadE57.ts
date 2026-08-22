@@ -14,6 +14,11 @@
 import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
 import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
+import { preflightE57, e57FieldIsConsumed, e57LocalFieldName } from './e57/preflight';
+import { planE57Decode, e57TooLargeMessage, e57NoPlanMessage } from './loadPlan';
+import type { E57DecodePlan } from './loadPlan';
+import { formatByteSize } from './formatByteSize';
+import { LoadError } from './loadErrors';
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
@@ -102,7 +107,7 @@ function e57Metadata(
 ): CloudMetadata | undefined {
   const out: CloudMetadata = {};
   if (meta.library) out.sourceSoftware = meta.library;
-  if (mergedScanCount > 1) out.captureSensor = `${mergedScanCount} merged scans`;
+  if (mergedScanCount > 1) out.captureSensor = `${sourceMetadata?.standard.find((f) => (f.name === 'sensorModel' || f.name.endsWith(' sensorModel')) && f.value.trim().length > 0)?.value.trim() ?? 'sensor not declared'} (${mergedScanCount} merged scans)`;
   if (warnings.length > 0) out.loadWarnings = [...warnings];
   // Declared-only source metadata (standard + extension-namespace fields).
   // Carried as-declared; every surface that renders it must qualify it as
@@ -121,35 +126,144 @@ function e57Metadata(
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/** Per-device tuning for the E57 decode plan. */
+export interface LoadE57Options {
+  /** True on phones — tightens the memory ceiling. */
+  isMobile?: boolean;
+  /** `navigator.deviceMemory` in GB, when the runtime reports it. */
+  deviceMemoryGB?: number;
+  /**
+   * The decode plan the caller has already built from this file's declaration.
+   * Supplied, it is used as given and nothing is re-planned: the stride applied
+   * is the stride the caller's preload summary named.
+   *
+   * `loadFile` builds this on the main thread and posts it to the parse worker.
+   * The plan is device-dependent (`memoryCeilingBytes` halves the ceiling on a
+   * phone) and the mobile signal is a `matchMedia` query, which exists on
+   * `Window` and not on a worker global scope. A worker that planned for itself
+   * would therefore plan as a desktop for a phone user, applying a stride, or a
+   * full decode, that the main thread had ruled out.
+   */
+  plan?: E57DecodePlan;
+}
+
+/**
+ * Device signals for the decode plan, read from whatever runtime the loader
+ * finds itself in.
+ *
+ * The touch-first mobile test is spelled out here rather than imported from the
+ * UI layer, for the reason `io/workerPool/decodePoolSize.ts` gives for the same
+ * duplication: `src/io` must not depend on `src/ui` for a decision this small.
+ * Never throws. A DOM-free environment (a Node test, a worker global scope,
+ * neither of which has `matchMedia`) reports no mobile signal and lands on the
+ * desktop defaults. Those defaults are a LARGER ceiling than a phone's
+ * (`memoryCeilingBytes` takes 0.6 of reported memory against mobile's 0.4, and
+ * falls back to 1.5 GB against mobile's 600 MB), so this is not a safe place to
+ * decide for a phone user. `LoadE57Options.plan` is how the main thread's
+ * verdict reaches a worker.
+ */
+function readDeviceHints(): Required<Pick<LoadE57Options, 'isMobile'>> & LoadE57Options {
+  let deviceMemoryGB: number | undefined;
+  try {
+    const mem = (globalThis as { navigator?: { deviceMemory?: number } }).navigator?.deviceMemory;
+    deviceMemoryGB = typeof mem === 'number' && mem > 0 ? mem : undefined;
+  } catch {
+    /* no navigator — the fallback ceiling covers it */
+  }
+  let isMobile = false;
+  try {
+    const mm = (globalThis as { matchMedia?: (q: string) => { matches: boolean } }).matchMedia;
+    if (typeof mm === 'function') {
+      isMobile = mm.call(globalThis, '(pointer: coarse) and (hover: none)').matches;
+    }
+  } catch {
+    /* matchMedia unavailable — treat as desktop, clamped anyway */
+  }
+  return { isMobile, deviceMemoryGB };
+}
+
+/**
+ * Read the file's own declaration and plan the decode from it. The fallback for
+ * a caller with no plan of its own: the batch converter's full-resolution
+ * decode, and any direct `loadE57` call.
+ *
+ * FAILS CLOSED. A file that reaches here carries the E57 signature, so the
+ * memory guard applies to it, and a declaration that will not parse leaves no
+ * stride, no estimate and no ceiling to check against. The previous code caught
+ * this and left `plan` undefined, which `plan?.stride ?? 1` then read as a full
+ * decode: a preflight failure turned the guard off on exactly the files it
+ * exists for. The same shape `isLinearUnitKnown()` fixed for CRS units.
+ */
+function planFromDeclaration(
+  buffer: ArrayBuffer,
+  name: string,
+  options?: LoadE57Options,
+): E57DecodePlan {
+  const hints = { ...readDeviceHints(), ...options };
+  try {
+    const declared = preflightE57(buffer);
+    return planE57Decode({
+      sourceCount: declared.recordCount,
+      fileBytes: buffer.byteLength,
+      columnsPerRecord: declared.columnsPerRecord,
+      attributes: declared.attributes,
+      isMobile: hints.isMobile ?? false,
+      deviceMemoryGB: hints.deviceMemoryGB,
+    });
+  } catch (err) {
+    throw new LoadError(
+      'malformed-file',
+      e57NoPlanMessage(name, err instanceof Error ? err.message : String(err)),
+    );
+  }
+}
+
 /**
  * Load an `.e57` file into a `PointCloud`. Every scan is merged; invalid
  * points are dropped; positions are recentred about a floored-min origin.
+ *
+ * Before any of that, the file's own XML declaration is read (a few KB, no
+ * point decode) and turned into a decode plan: read every record, read one
+ * record per bucket at the smallest stride that fits memory, or refuse. A
+ * strided load is a SAMPLE, and it says so — `loadStride` and the declared
+ * source count travel with the cloud, so the Health Check, the export scope
+ * note and the density disclosures all describe what was actually read.
  */
-export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<PointCloud> {
+export async function loadE57(
+  buffer: ArrayBuffer,
+  name = 'cloud.e57',
+  options?: LoadE57Options,
+): Promise<PointCloud> {
   // A field's LOCAL name, after any extension `prefix:` (so `nor:normalX` →
   // `normalX`). Used both to resolve namespaced normals and to decide which
   // columns are worth decoding at all.
-  const localName = (key: string): string => key.slice(key.indexOf(':') + 1);
+  const localName = e57LocalFieldName;
+
+  // How this file will be decoded, before a point is read. This is the whole
+  // reason E57 can have a budget plan at all: LAS/LAZ expose a point count in
+  // their public header, and E57 exposes the same facts in its XML section,
+  // which the preflight reaches with two small reads.
+  //
+  // A caller that already read that declaration passes its plan in, and it is
+  // used as given. `loadFile` does exactly that, so the decode applies the
+  // stride its preload summary named. Everything else plans here.
+  const plan = options?.plan ?? planFromDeclaration(buffer, name, options);
+  // Refuse BEFORE decoding. Starting a read already known not to fit is how the
+  // tab died: nothing in the app can close a scan that killed the process it
+  // was loading in, so the user just loses the session.
+  if (!plan.fits) {
+    throw new LoadError('memory-constraint', e57TooLargeMessage(name, plan));
+  }
+  const stride = plan.stride;
+
   // Decode only the columns this loader consumes. Anything else a file declares
   // — a structured scan's rowIndex / columnIndex, spherical coordinates this
   // loader does not project — would otherwise be expanded into a full Float64
   // column and then immediately dropped: hundreds of MB of allocation and
-  // per-value conversion on a tens-of-millions-of-points scan.
-  const consumed = new Set([
-    'cartesianX',
-    'cartesianY',
-    'cartesianZ',
-    'cartesianInvalidState',
-    'colorRed',
-    'colorGreen',
-    'colorBlue',
-    'intensity',
-    'classification',
-    'normalX',
-    'normalY',
-    'normalZ',
-  ]);
-  const parsed = parseE57(buffer, { keepField: (n) => consumed.has(localName(n)) });
+  // per-value conversion on a tens-of-millions-of-points scan. The predicate is
+  // shared with the preflight so the plan's column count and the decode's can
+  // never disagree.
+  const parsed = parseE57(buffer, { keepField: e57FieldIsConsumed, stride });
 
   // Partition the scans FIRST: a scan without Cartesian X/Y/Z (spherical-only,
   // for example) contributes no points, so it must contribute nothing to the
@@ -168,7 +282,7 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     } else {
       warnings.push(
         `Scan "${scan.name}" carries no Cartesian X/Y/Z (spherical-only scans ` +
-          `are not supported) — skipped ${scan.recordCount.toLocaleString('en-US')} ` +
+          `are not supported) — skipped ${scan.declaredRecordCount.toLocaleString('en-US')} ` +
           `point record(s).`,
       );
     }
@@ -287,6 +401,31 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
   const clean = sanitizeAndRecenter(global, { colors, intensity, classification, normals });
   if (clean.warning) warnings.push(clean.warning);
 
+  // A strided load is a SAMPLE of the scan, and this project does not let a
+  // sample pass as the whole. Three things carry that:
+  //
+  //   - `loadStride` and a `declaredPointCount` that stays the FILE's declared
+  //     total, which is what the Health Check's declared-vs-decoded row and the
+  //     exporters' SUBSET scope line both read;
+  //   - the load warning below, which states the sampling in words on every
+  //     surface that renders `loadWarnings`;
+  //   - nothing else. In particular no count is scaled back up to pretend the
+  //     missing records were read.
+  //
+  // At stride 1 every one of these is the no-op it was before: the declared and
+  // decoded counts stay equal and no warning is added.
+  if (stride > 1) {
+    warnings.push(
+      `Read as a sample: one record per ${stride} (stride ${stride}) — ` +
+        `${total.toLocaleString('en-US')} of ${plan.sourceCount.toLocaleString('en-US')} ` +
+        `declared point records. Reading every record needs about ` +
+        `${formatByteSize(plan.fullDecodeEstimateBytes)}, above the ` +
+        `${formatByteSize(plan.ceilingBytes)} budget for this device. Point counts, ` +
+        `densities and anything derived from them describe this sample, not the whole ` +
+        `scan. Convert to COPC or EPT (PDAL or untwine) to work with all of it.`,
+    );
+  }
+
   return new PointCloud({
     positions: clean.positions,
     colors: clean.attributes.colors,
@@ -296,8 +435,9 @@ export async function loadE57(buffer: ArrayBuffer, name = 'cloud.e57'): Promise<
     origin: clean.origin,
     sourceFormat: 'e57',
     name,
-    declaredPointCount: total,
+    declaredPointCount: stride > 1 ? plan.sourceCount : total,
     decodedPointCount: total,
+    loadStride: stride,
     metadata: e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),
   });
 }

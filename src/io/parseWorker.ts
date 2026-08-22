@@ -8,7 +8,7 @@ import type { DetectedFormat } from './sniffFormat';
 import { parseBuffer } from './parseBuffer';
 import { LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
-import type { LoadPlan } from './loadPlan';
+import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 
@@ -20,12 +20,20 @@ interface ParseRequest {
   budget?: number;
   /** Optional budget-aware load plan — present for LAS/LAZ (see `loadPlan`). */
   plan?: LoadPlan;
+  /**
+   * Optional E57 decode plan, built on the main thread from the file's own
+   * declaration (see `planE57Decode`). It has to cross the thread boundary
+   * because this scope has no `matchMedia`: a plan recomputed inside the worker
+   * reads every device as a desktop and can apply a stride the user was never
+   * shown.
+   */
+  e57Plan?: E57DecodePlan;
 }
 
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent): void => {
-  const { buffer, format, name, budget, plan } = event.data as ParseRequest;
+  const { buffer, format, name, budget, plan, e57Plan } = event.data as ParseRequest;
 
   void (async (): Promise<void> => {
     try {
@@ -45,6 +53,7 @@ ctx.onmessage = (event: MessageEvent): void => {
           // Forward each staged-progress update to the main thread.
           ctx.postMessage({ type: 'progress', ...update });
         },
+        e57Plan,
       );
 
       const endedAt = performance.now();

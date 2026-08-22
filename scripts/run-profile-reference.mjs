@@ -21,6 +21,12 @@
  * NOTHING IS INFERRED. A failing stage is recorded with its exit code and its
  * stderr and no output file is written.
  *
+ * TWO RECORDS, NOT ONE. The ramp and scatter runs write
+ * reference-runs-profile.json, which the MEAS-PROFILE-OGR-R-CORRIDOR study
+ * lists as an artifact with its sha256. The supplementary caps run writes
+ * reference-runs-profile-caps.json instead, so a third run cannot alter a file
+ * that an existing study record is checked against.
+ *
  * Usage: node scripts/run-profile-reference.mjs
  */
 import { spawnSync } from 'node:child_process';
@@ -32,6 +38,7 @@ import { binaryOnPath } from './lib/binaryOnPath.mjs';
 import {
   RAMP_A, RAMP_B, RAMP_SAMPLES, RAMP_BAND, RAMP_BIN_STEP,
   SCATTER_A, SCATTER_B, SCATTER_SAMPLES, SCATTER_BAND, SCATTER_BIN_STEP,
+  CAPS_A, CAPS_B, CAPS_SAMPLES, CAPS_BAND, CAPS_BIN_STEP,
   PERCENTILE_PRIMARY, PERCENTILE_SECONDARY, EXCLUDED_CLASSES,
 } from './profile-fixture-params.mjs';
 
@@ -124,84 +131,111 @@ const JOBS = [
   },
 ];
 
-const record = { generatedBy: 'scripts/run-profile-reference.mjs', runs: {} };
+/**
+ * The caps job writes a SEPARATE record. `reference-runs-profile.json` is a
+ * recorded artifact of the MEAS-PROFILE-OGR-R-CORRIDOR study, listed there with
+ * its sha256; folding a third run into it would change that file and the study
+ * would no longer verify against its own record.
+ */
+const CAPS_JOBS = [
+  {
+    id: 'caps',
+    layer: 'profile-caps',
+    fixture: resolve(DIR, 'profile-caps.csv'),
+    corridor: resolve(DIR, 'profile-caps__corridor.csv'),
+    series: resolve(DIR, 'profile-caps__profile.csv'),
+    line: wkt(CAPS_A, CAPS_B),
+    band: CAPS_BAND,
+    binStep: CAPS_BIN_STEP,
+    stations: CAPS_SAMPLES,
+    classFilter: false,
+    percentiles: [PERCENTILE_PRIMARY, PERCENTILE_SECONDARY],
+  },
+];
+
 let failed = 0;
 
-for (const job of JOBS) {
-  if (!existsSync(job.fixture)) {
-    record.runs[job.id] = { status: 'unavailable', detail: `${rel(job.fixture)} is missing; run scripts/make-profile-fixture.mjs` };
-    failed++;
-    continue;
-  }
-  const sql = corridorSql(job.layer, job.line, job.band, job.binStep, job.classFilter);
-  for (const p of [job.corridor, job.series]) if (existsSync(p)) rmSync(p);
+function runAll(jobs) {
+  const record = { generatedBy: 'scripts/run-profile-reference.mjs', runs: {} };
+  for (const job of jobs) {
+    if (!existsSync(job.fixture)) {
+      record.runs[job.id] = { status: 'unavailable', detail: `${rel(job.fixture)} is missing; run scripts/make-profile-fixture.mjs` };
+      failed++;
+      continue;
+    }
+    const sql = corridorSql(job.layer, job.line, job.band, job.binStep, job.classFilter);
+    for (const p of [job.corridor, job.series]) if (existsSync(p)) rmSync(p);
 
-  // STRING_QUOTING=IF_NEEDED keeps the passed-through elevation unquoted. The
-  // default quotes a string field that looks like a number, which is exactly
-  // what this one is, and R then refuses to read the column as numeric.
-  const ogrArgs = [
-    '-f', 'CSV', rel(job.corridor), rel(job.fixture),
-    '-lco', 'STRING_QUOTING=IF_NEEDED',
-    '-dialect', 'SQLITE', '-sql', sql,
-  ];
-  const ogr = run(OGR2OGR, ogrArgs);
-  if (ogr.code !== 0 || !existsSync(job.corridor)) {
-    record.runs[job.id] = { status: 'failed', stage: 'ogr2ogr', exitCode: ogr.code, stderr: ogr.stderr.trim() || null };
-    failed++;
-    continue;
+    // STRING_QUOTING=IF_NEEDED keeps the passed-through elevation unquoted. The
+    // default quotes a string field that looks like a number, which is exactly
+    // what this one is, and R then refuses to read the column as numeric.
+    const ogrArgs = [
+      '-f', 'CSV', rel(job.corridor), rel(job.fixture),
+      '-lco', 'STRING_QUOTING=IF_NEEDED',
+      '-dialect', 'SQLITE', '-sql', sql,
+    ];
+    const ogr = run(OGR2OGR, ogrArgs);
+    if (ogr.code !== 0 || !existsSync(job.corridor)) {
+      record.runs[job.id] = { status: 'failed', stage: 'ogr2ogr', exitCode: ogr.code, stderr: ogr.stderr.trim() || null };
+      failed++;
+      continue;
+    }
+
+    const rArgs = [
+      rel(resolve(DIR, 'profile-quantile.R')),
+      rel(job.corridor),
+      rel(job.series),
+      String(job.stations),
+      job.percentiles.join(','),
+    ];
+    const r = run(RSCRIPT, rArgs);
+    if (r.code !== 0 || !existsSync(job.series)) {
+      record.runs[job.id] = { status: 'failed', stage: 'Rscript', exitCode: r.code, stderr: r.stderr.trim() || null };
+      failed++;
+      continue;
+    }
+
+    record.runs[job.id] = {
+      status: 'ok',
+      corridorSql: sql,
+      corridorCommandLine: `${OGR2OGR} ${ogrArgs.join(' ')}`,
+      quantileCommandLine: `${RSCRIPT} ${rArgs.join(' ')}`,
+      corridorOutput: rel(job.corridor),
+      seriesOutput: rel(job.series),
+      percentiles: job.percentiles,
+      exitCodes: { ogr2ogr: ogr.code, Rscript: r.code },
+      stderr: [ogr.stderr.trim(), r.stderr.trim()].filter(Boolean).join('\n') || null,
+    };
   }
 
-  const rArgs = [
-    rel(resolve(DIR, 'profile-quantile.R')),
-    rel(job.corridor),
-    rel(job.series),
-    String(job.stations),
-    job.percentiles.join(','),
-  ];
-  const r = run(RSCRIPT, rArgs);
-  if (r.code !== 0 || !existsSync(job.series)) {
-    record.runs[job.id] = { status: 'failed', stage: 'Rscript', exitCode: r.code, stderr: r.stderr.trim() || null };
-    failed++;
-    continue;
-  }
-
-  record.runs[job.id] = {
-    status: 'ok',
-    corridorSql: sql,
-    corridorCommandLine: `${OGR2OGR} ${ogrArgs.join(' ')}`,
-    quantileCommandLine: `${RSCRIPT} ${rArgs.join(' ')}`,
-    corridorOutput: rel(job.corridor),
-    seriesOutput: rel(job.series),
-    percentiles: job.percentiles,
-    exitCodes: { ogr2ogr: ogr.code, Rscript: r.code },
-    stderr: [ogr.stderr.trim(), r.stderr.trim()].filter(Boolean).join('\n') || null,
+  record.geometry = {
+    tool: 'GDAL/OGR SQLite dialect with SpatiaLite',
+    gdal: version('ogr2ogr', ['--version']),
+    spatialite: run('ogrinfo', ['-q', '-dialect', 'SQLITE', '-sql', 'SELECT spatialite_version()', rel(jobs[0].fixture)])
+      .stdout.split('=').pop().trim() || 'unavailable',
+    resolvedPath: resolvedPathOf(OGR2OGR),
+    functions: ['ST_Line_Locate_Point', 'ST_Length', 'ST_Distance', 'MakePoint'],
   };
+  record.statistic = {
+    tool: 'R quantile(type = 7)',
+    version: version('Rscript', ['-e', 'cat(R.version.string)']),
+    resolvedPath: resolvedPathOf(RSCRIPT),
+    script: 'validation/cross-implementation/profile/profile-quantile.R',
+  };
+  record.containerPinning = 'not-executed';
+  record.containerPinningNote =
+    'No containerised GDAL or R was used; the resolved executable paths, the reported versions and the exact command lines stand in for an image digest.';
+  record.platform = `${platform}-${arch}`;
+  record.node = process.version;
+  return record;
 }
 
 const version = (cmd, args) => run(cmd, args).stdout.split('\n')[0].trim() || 'unavailable';
 
-record.geometry = {
-  tool: 'GDAL/OGR SQLite dialect with SpatiaLite',
-  gdal: version('ogr2ogr', ['--version']),
-  spatialite: run('ogrinfo', ['-q', '-dialect', 'SQLITE', '-sql', 'SELECT spatialite_version()', rel(JOBS[0].fixture)])
-    .stdout.split('=').pop().trim() || 'unavailable',
-  resolvedPath: resolvedPathOf(OGR2OGR),
-  functions: ['ST_Line_Locate_Point', 'ST_Length', 'ST_Distance', 'MakePoint'],
-};
-record.statistic = {
-  tool: 'R quantile(type = 7)',
-  version: version('Rscript', ['-e', 'cat(R.version.string)']),
-  resolvedPath: resolvedPathOf(RSCRIPT),
-  script: 'validation/cross-implementation/profile/profile-quantile.R',
-};
-record.containerPinning = 'not-executed';
-record.containerPinningNote =
-  'No containerised GDAL or R was used; the resolved executable paths, the reported versions and the exact command lines stand in for an image digest.';
-record.platform = `${platform}-${arch}`;
-record.node = process.version;
-
-writeFileSync(resolve(DIR, 'reference-runs-profile.json'), `${JSON.stringify(record, null, 2)}\n`);
-
-for (const [id, r] of Object.entries(record.runs)) console.log(`${id}: ${r.status}`);
-console.log(`record written to ${rel(resolve(DIR, 'reference-runs-profile.json'))}`);
+for (const [jobs, out] of [[JOBS, 'reference-runs-profile.json'], [CAPS_JOBS, 'reference-runs-profile-caps.json']]) {
+  const record = runAll(jobs);
+  writeFileSync(resolve(DIR, out), `${JSON.stringify(record, null, 2)}\n`);
+  for (const [id, r] of Object.entries(record.runs)) console.log(`${id}: ${r.status}`);
+  console.log(`record written to ${rel(resolve(DIR, out))}`);
+}
 if (failed > 0) process.exitCode = 1;

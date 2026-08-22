@@ -77,6 +77,7 @@ import {
 // labels and raw numerals can never drift apart.
 import { scaleProfileSamples } from './profileSummary';
 import { stationsAlongLine, type ProfileStation } from './profileStations';
+import { buildProfileFrame } from './profileGeometry';
 // B7/B8 (v0.4.5) — pure clamp + unit conversion for the resample path, read
 // from the sampler module so panel inputs, clamp and tests share one rule.
 // The encode/decode pair is the persistence seam: the user's last-applied
@@ -289,7 +290,7 @@ export interface MeasurementSummary {
    * true value is known. Optional: pre-v0.4.5 measurements never stored it.
    */
   profileCorridorWidthM?: number;
-  /** Profile only — the sampler's bare-earth percentile (dimensionless). */
+  /** Profile only — the sampler's corridor percentile (dimensionless). */
   profileGroundPercentile?: number;
   /**
    * Profile only — the cumulative chainages (in METRES, through the same B2
@@ -1064,7 +1065,7 @@ export class MeasureController {
 
   /**
    * Re-sample one profile measurement with user-set sampler parameters
-   * (B7/B8, v0.4.5): corridor half-width (metres), bare-earth percentile and
+   * (B7/B8, v0.4.5): corridor half-width (metres), corridor percentile and
    * sample count. Null/absent fields reset to the defaults (auto corridor,
    * p25, 64 bins). Inputs are clamped to the shared bounds, never rejected.
    * Returns true when the measurement was re-sampled and a change emitted;
@@ -1879,13 +1880,18 @@ export class MeasureController {
    * disagree on how many stations exist or where they sit. The endpoints carry
    * their own vertices, so they are dropped (`slice(1, -1)`). Empty for a
    * non-profile or horizontally-degenerate measurement.
+   *
+   * The horizontal span comes from the shared section frame under the scene's
+   * real up axis, so the dot chainages index the same x-axis `sampleProfile`
+   * emits and the same horizontal length `measurementMetrics` reports.
    */
   private _profileStations(m: Measurement): ProfileStation[] {
     if (m.kind !== 'profile' || m.points.length < 2) return [];
     const [a, b] = m.points;
-    const horizontal = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    if (horizontal <= 0) return [];
-    return stationsAlongLine({ a, b, intervalM: horizontal / 7 }).slice(1, -1);
+    const up = this._worldUp;
+    const horizontal = buildProfileFrame(a, b, up).horizontalLength;
+    if (!(horizontal > 0)) return [];
+    return stationsAlongLine({ a, b, up, intervalM: horizontal / 7 }).slice(1, -1);
   }
 
   private _buildModel(): OverlayModel {

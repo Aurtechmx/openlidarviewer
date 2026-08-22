@@ -23,6 +23,9 @@ function ramp(n: number): ProfileChartSample[] {
 }
 
 const PDF_MAGIC = '%PDF-';
+// Injected, fixed generation date. `buildProfilePdf` defaults `generatedAt` to
+// `new Date()`, which puts a moving timestamp in the page content stream.
+const FIXED_DATE = new Date('2026-01-01T00:00:00.000Z');
 
 describe('buildProfilePdf', () => {
   it('produces a non-empty PDF for a normal profile', async () => {
@@ -104,9 +107,33 @@ describe('provenance metadata (v0.4.5, B4)', () => {
     expect(text).toContain('EPSG:2225'); // header line + summary row
     expect(text).toContain('NAVD88');
     expect(text).toContain('12.500 m'); // the real corridor, not "auto" (5 sig figs)
-    expect(text).toContain('ground p25'); // header provenance line
+    expect(text).toContain('p25 of corridor'); // header provenance line
     expect(text).not.toContain('auto (5% of length)');
     expect(text).not.toContain('not georeferenced');
+  });
+
+  /**
+   * The sampler reduces each corridor bin to a percentile of the returns that
+   * survived the class gate. That gate drops NON_GROUND_CLASSES
+   * ([3, 4, 5, 6, 7, 18]) and only when an index-aligned classification
+   * channel exists; classes 0, 1, 2, 9 and the 255 "no class channel"
+   * sentinel all reach the percentile. The sheet therefore states the
+   * estimator and the class gate, and never calls p25 a bare-earth surface.
+   */
+  it('states the percentile estimator and the class gate without claiming bare earth', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Levee section A',
+      samples: ramp(16),
+      groundPercentile: 25,
+      generatedAt: FIXED_DATE,
+    });
+    const text = drawnPdfText(bytes);
+    expect(text).toContain('p25 of corridor returns');
+    expect(text).toContain('Non-ground classes');
+    expect(text).toContain('Excluded where a source classifies');
+    expect(text).not.toContain('bare-earth');
+    expect(text).not.toContain('bare earth');
+    expect(text).not.toContain('ground p25');
   });
 
   it('keeps the honest fallbacks when nothing is known', async () => {
@@ -114,6 +141,79 @@ describe('provenance metadata (v0.4.5, B4)', () => {
     const text = drawnPdfText(bytes);
     expect(text).toContain('auto (5% of length)');
     expect(text).toContain('not georeferenced');
+  });
+});
+
+/**
+ * PDF path operators, one per line: `x y m` moveto, `x y l` lineto,
+ * `x1 y1 x2 y2 x3 y3 c` curveto. pdf-lib's `drawSvgPath` emits `c` for every
+ * cubic segment of an SVG path, so counting them measures the drawn geometry.
+ */
+const MOVE_OP = /^\s*-?[\d.]+ -?[\d.]+ m\s*$/;
+const LINE_OP = /^\s*-?[\d.]+ -?[\d.]+ l\s*$/;
+const CURVE_OP = /^\s*-?[\d.]+ -?[\d.]+ -?[\d.]+ -?[\d.]+ -?[\d.]+ -?[\d.]+ c\s*$/;
+
+describe('profile geometry — the sheet draws only what the samples say', () => {
+  /**
+   * The four-sample plateau. A uniform Catmull-Rom spline through these
+   * stations peaks at 1.1275 between the two that both read exactly 1, so the
+   * sheet must not contain a cubic segment at all.
+   */
+  const plateau: ProfileChartSample[] = [0, 1, 1, 0].map((height, i) => ({
+    distance: i * 10,
+    height,
+    count: 8,
+  }));
+
+  it('emits no curve operator, and draws the profile as one connected polyline', async () => {
+    const bytes = await buildProfilePdf({
+      name: 'Plateau',
+      samples: plateau,
+      generatedAt: FIXED_DATE,
+    });
+    const lines = drawnPdfText(bytes).split('\n');
+    expect(lines.filter((l) => CURVE_OP.test(l))).toHaveLength(0);
+    // Longest run of consecutive linetos after a moveto: the grid draws
+    // moveto/lineto pairs, the profile draws one moveto and three linetos.
+    let longest = 0;
+    let run = 0;
+    for (const l of lines) {
+      if (LINE_OP.test(l)) run++;
+      else if (MOVE_OP.test(l)) run = 0;
+      if (run > longest) longest = run;
+    }
+    expect(longest).toBe(plateau.length - 1);
+  });
+
+  it('breaks the drawn line at a coverage gap', async () => {
+    // Three samples each side of the gap: a spline renderer would emit curve
+    // operators here, and a renderer that bridged the gap would emit a single
+    // run of four linetos.
+    const gapped: ProfileChartSample[] = [
+      { distance: 0, height: 1, count: 4 },
+      { distance: 10, height: 2, count: 4 },
+      { distance: 20, height: 3, count: 4 },
+      { distance: 30, height: Number.NaN, count: 0 },
+      { distance: 40, height: 3, count: 4 },
+      { distance: 50, height: 2, count: 4 },
+      { distance: 60, height: 1, count: 4 },
+    ];
+    const bytes = await buildProfilePdf({
+      name: 'Gapped',
+      samples: gapped,
+      generatedAt: FIXED_DATE,
+    });
+    const lines = drawnPdfText(bytes).split('\n');
+    expect(lines.filter((l) => CURVE_OP.test(l))).toHaveLength(0);
+    // Two runs of two linetos each, never a single run that bridges the gap.
+    let longest = 0;
+    let run = 0;
+    for (const l of lines) {
+      if (LINE_OP.test(l)) run++;
+      else if (MOVE_OP.test(l)) run = 0;
+      if (run > longest) longest = run;
+    }
+    expect(longest).toBe(2);
   });
 });
 

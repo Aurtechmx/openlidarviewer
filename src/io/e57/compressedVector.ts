@@ -15,6 +15,7 @@
 import type { E57Field } from './schema';
 import { physicalToLogical } from './depage';
 import { validateDeclaredPointCount } from '../validateCount';
+import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from '../strideSample';
 
 /** Decoded point data — one Float64 column per prototype field, by field name. */
 export type DecodedColumns = Record<string, Float64Array>;
@@ -37,16 +38,33 @@ function safeUint64(view: DataView, offset: number, what: string): number {
   return Number(raw);
 }
 
+/** Per-call decode controls for {@link decodeCompressedVector}. */
+export interface DecodeCompressedVectorOptions {
+  /**
+   * Decode only the prototype fields this accepts (by name). The bytestream
+   * walk still visits every field — the per-packet stream lengths that position
+   * each column are interleaved — but a rejected field is never concatenated or
+   * expanded into a Float64Array. The loader passes this to skip prototype
+   * columns it does not consume (a structured scan's row/column index, say),
+   * which on a tens-of-millions-of-points file is hundreds of MB of allocation
+   * and per-value conversion avoided. Omitted → every field decodes.
+   */
+  keepField?: (name: string) => boolean;
+  /**
+   * Read one record per bucket of `stride` instead of every record, so the
+   * columns come out `ceil(recordCount / stride)` long. 1 (the default) reads
+   * every record. Every field samples the SAME record indices — the picker is
+   * re-seeded per field from the one fixed seed — so the columns stay aligned
+   * with each other.
+   */
+  stride?: number;
+}
+
 /**
  * Decode a scan's CompressedVector into per-field columns.
  *
- * `keepField`, when given, decodes only the prototype fields it accepts (by
- * name). The bytestream walk still visits every field — the per-packet stream
- * lengths that position each column are interleaved — but a rejected field is
- * never concatenated or expanded into a Float64Array. The loader passes this to
- * skip prototype columns it does not consume (a structured scan's row/column
- * index, say), which on a tens-of-millions-of-points file is hundreds of MB of
- * allocation and per-value conversion avoided. Omitted → every field decodes.
+ * With `options.stride > 1` the columns hold a stratified sample of the records
+ * rather than all of them; see {@link DecodeCompressedVectorOptions}.
  */
 export function decodeCompressedVector(
   logical: Uint8Array,
@@ -54,8 +72,10 @@ export function decodeCompressedVector(
   recordCount: number,
   prototype: E57Field[],
   pageSize: number,
-  keepField?: (name: string) => boolean,
+  options?: DecodeCompressedVectorOptions,
 ): DecodedColumns {
+  const keepField = options?.keepField;
+  const stride = Math.max(1, Math.floor(options?.stride ?? 1));
   const view = new DataView(logical.buffer, logical.byteOffset, logical.byteLength);
 
   const sectionStart = physicalToLogical(fileOffset, pageSize);
@@ -155,7 +175,7 @@ export function decodeCompressedVector(
   const columns: DecodedColumns = {};
   prototype.forEach((field, f) => {
     if (keepField && !keepField(field.name)) return; // unconsumed column — skip decode
-    columns[field.name] = decodeField(concat(chunks[f]), field, count);
+    columns[field.name] = decodeField(concat(chunks[f]), field, count, stride);
   });
   return columns;
 }
@@ -173,9 +193,32 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-/** Decode one field's continuous bytestream into `count` values. */
-function decodeField(buffer: Uint8Array, field: E57Field, count: number): Float64Array {
-  const out = new Float64Array(count);
+/**
+ * Decode one field's continuous bytestream.
+ *
+ * `stride` 1 decodes all `count` values in order. A larger stride splits the
+ * records into buckets of `stride` and decodes ONE record per bucket, at a
+ * jittered offset drawn from a fixed seed (`strideSample.ts`) — the same
+ * stratified sampling the LAS fast-load path uses, so the sample carries no
+ * scan-line phase. Restarting the picker from the one seed on every field makes
+ * all of a scan's columns land on the same records.
+ *
+ * The truncation guards below always check the bytes the FULL record count
+ * needs, stride or not: a strided read touches records near the end of the
+ * stream, so a short stream has to fail whether or not the sample happens to
+ * skip the missing tail.
+ */
+function decodeField(
+  buffer: Uint8Array,
+  field: E57Field,
+  count: number,
+  stride = 1,
+): Float64Array {
+  const step = Math.max(1, Math.floor(stride));
+  const outCount = step === 1 ? count : Math.ceil(count / step);
+  const out = new Float64Array(outCount);
+  const rand = step === 1 ? null : makePrng(STRIDE_SAMPLE_SEED);
+  const recordAt = (b: number): number => (rand ? pickInBucket(b, step, count, rand) : b);
 
   if (field.type === 'float') {
     const bytes = field.floatBytes ?? 8;
@@ -183,8 +226,9 @@ function decodeField(buffer: Uint8Array, field: E57Field, count: number): Float6
       throw new Error('E57: truncated float bytestream.');
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    for (let i = 0; i < count; i++) {
-      out[i] = bytes === 4 ? view.getFloat32(i * 4, true) : view.getFloat64(i * 8, true);
+    for (let b = 0; b < outCount; b++) {
+      const i = recordAt(b);
+      out[b] = bytes === 4 ? view.getFloat32(i * 4, true) : view.getFloat64(i * 8, true);
     }
     return out;
   }
@@ -209,17 +253,25 @@ function decodeField(buffer: Uint8Array, field: E57Field, count: number): Float6
         `have ${buffer.length * 8}.`,
     );
   }
-  let bitPos = 0;
-  for (let i = 0; i < count; i++) {
+  // The bit cursor is seeked per record rather than run continuously, because a
+  // strided read jumps between buckets. It is also tracked as a byte index plus
+  // a bit-in-byte instead of one bit offset: `count * bitWidth` passes 2^31 on a
+  // large scan with a wide field, where `>> 3` would wrap to a negative index.
+  for (let b = 0; b < outCount; b++) {
+    const bitPos = recordAt(b) * bitWidth;
+    let byteIndex = Math.floor(bitPos / 8);
+    let bitInByte = bitPos - byteIndex * 8;
     let packed = 0;
     for (let k = 0; k < bitWidth; k++) {
-      const byteIndex = bitPos >> 3;
-      const bit = (buffer[byteIndex] >> (bitPos & 7)) & 1;
-      packed += bit * 2 ** k;
-      bitPos++;
+      packed += ((buffer[byteIndex] >> bitInByte) & 1) * 2 ** k;
+      bitInByte++;
+      if (bitInByte === 8) {
+        bitInByte = 0;
+        byteIndex++;
+      }
     }
     const value = packed + minimum;
-    out[i] = field.type === 'scaledInteger' ? value * scale + offset : value;
+    out[b] = field.type === 'scaledInteger' ? value * scale + offset : value;
   }
   return out;
 }

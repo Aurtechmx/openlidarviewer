@@ -6391,7 +6391,7 @@ export class Viewer {
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
       pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
       setMeasureCursor: (point) => this._measure.setCursor(point),
-      userInteracting: () => this._userInteracting,
+      userInteracting: () => this._userInteracting || this._nav.isDriving,
       probePickStatic: (ndcX, ndcY) => {
         const hit = this._pickDetailed(ndcX, ndcY);
         return hit ? this._infoForHit(hit) : null;

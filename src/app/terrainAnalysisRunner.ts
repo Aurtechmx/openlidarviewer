@@ -48,6 +48,10 @@ import type { ContourLayerService } from './contourLayerService';
 import {
   loadTerrainCoreCache,
   loadComputeTerrainCoreAsync,
+  loadContourLayerService,
+  loadContourOverlay,
+  loadDerivedLayer,
+  loadDerivedLayerReceipt,
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
@@ -307,9 +311,9 @@ export function createTerrainAnalysisRunner(
       if (!contourLayers) {
         const [{ createContourLayerService }, { DerivedLayerStore }, { ContourOverlay }] =
           await Promise.all([
-            import('./contourLayerService'),
-            import('../model/DerivedLayer'),
-            import('../render/ContourOverlay'),
+            loadContourLayerService(),
+            loadDerivedLayer(),
+            loadContourOverlay(),
           ]);
         contourLayers = createContourLayerService({
           host: viewer.derivedLayerHost(),
@@ -325,7 +329,7 @@ export function createTerrainAnalysisRunner(
       // layer, so it degrades to no digest rather than throwing.
       let receiptDigest: string | null = null;
       try {
-        const { buildDerivedLayerReceipt } = await import('../science/derivedLayerReceipt');
+        const { buildDerivedLayerReceipt } = await loadDerivedLayerReceipt();
         receiptDigest = buildDerivedLayerReceipt({
           result,
           generatedAt: new Date(),

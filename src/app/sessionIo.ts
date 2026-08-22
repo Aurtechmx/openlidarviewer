@@ -40,6 +40,10 @@ import type {
   SessionSpatialVerdict,
 } from '../io/session';
 import type { WorkOwnership } from '../model/workOwnership';
+import {
+  loadSessionOwnership,
+  loadVerifySessionManifest,
+} from '../lazyChunks';
 
 /**
  * Whole-file byte ceiling for a `.olvsession`, checked on the File's size BEFORE
@@ -476,7 +480,7 @@ export async function importSession(
     // left unattributed rather than given a guessed owner (fail closed).
     // Lazy: the ownership migrator lives off the index chunk — session restore is
     // on-demand, so its cost belongs on the restore path, not the initial load.
-    const { migrateSessionOwnership } = await import('../io/sessionOwnership');
+    const { migrateSessionOwnership } = await loadSessionOwnership();
     const ownership = migrateSessionOwnership(session, {
       loadedLayerId: deps.getActiveLayerId() ?? undefined,
     });
@@ -552,9 +556,7 @@ export async function importSession(
     // still restores every measurement) — it only appends to the disclosure.
     // Lazily loaded so the hash-chain verifier (canonicalize + sha256) stays
     // out of the eager boot shell — session import is already an async action.
-    const { verifySessionManifest, sessionManifestNote } = await import(
-      '../science/verifySessionManifest'
-    );
+    const { verifySessionManifest, sessionManifestNote } = await loadVerifySessionManifest();
     const manifestNote = sessionManifestNote(verifySessionManifest(session.processingManifest));
     const manifestSuffix = manifestNote ? ` ${manifestNote}` : '';
     if (wantFile && !haveCloud) {

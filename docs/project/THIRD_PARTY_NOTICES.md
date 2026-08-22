@@ -40,8 +40,8 @@ here for transparency.
 | @types/three | ^0.184.1 | 0.184.1 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
 | @vitest/coverage-v8 | ^4.1.10 | 4.1.10 | MIT | https://github.com/vitest-dev/vitest |
-| @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
-| @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @stryker-mutator/core | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
+| @stryker-mutator/vitest-runner | ^9.6.1 | 9.6.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | @loaders.gl/las | ^4.4.4 | 4.4.4 | MIT | https://github.com/visgl/loaders.gl |
 

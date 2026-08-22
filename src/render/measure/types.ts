@@ -170,7 +170,7 @@ export interface Measurement {
    */
   profileCorridorWidth?: number;
   /**
-   * Profile only — the bare-earth percentile (0..100) the sampler reduced
+   * Profile only — the corridor percentile (0..100) the sampler reduced
    * each corridor with. Dimensionless, so no unit conversion. Optional, same
    * provenance rationale as `profileCorridorWidth`.
    */

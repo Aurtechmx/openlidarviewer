@@ -506,7 +506,10 @@ export class NavBar {
 
     this.prompt = el('div', { className: 'olv-nav-prompt' }, [
       el('span', { text: 'Click the scan to look around' }),
-      el('span', { className: 'olv-nav-prompt-sub', text: 'WASD to move · Esc to release' }),
+      // A click releases the cursor as well as taking it (NavController.
+      // _handleCanvasClick), which is the only mouse-driven way back to the
+      // dock while the pointer is locked. Both ways out are named here.
+      el('span', { className: 'olv-nav-prompt-sub', text: 'WASD to move · Esc or click to release' }),
     ]);
 
     // ── Touch-gesture hint (phones) ───────────────────────────────────────

@@ -25,6 +25,18 @@
 import type { ScanSignals } from './provenance';
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
+/** One declared metadata field, exactly as the file states it. */
+interface DeclaredField {
+  readonly name: string;
+  readonly value: string;
+}
+
+/** The declared-only source metadata block a scanner format carries (E57 today). */
+interface DeclaredSourceMetadata {
+  readonly standard: readonly DeclaredField[];
+  readonly extensions: readonly DeclaredField[];
+}
+
 /** The subset of `PointCloud` the static-cloud signal helper uses. */
 export interface StaticCloudShape {
   readonly sourceFormat: string;
@@ -45,6 +57,17 @@ export interface StaticCloudShape {
     readonly sourceSoftware?: string;
     /** Horizontal CRS unit → metres, for converting raw-unit extent/density. */
     readonly crs?: { readonly linearUnitToMetres?: number };
+    /**
+     * The scanner's registered set-up position, when the format records it
+     * (the PTX per-scan transform).
+     */
+    readonly scannerOrigin?: readonly [number, number, number];
+    /**
+     * Declared-only source metadata read from the file itself. Carries the
+     * instrument identity (`sensorVendor` / `sensorModel`) and the per-scan
+     * set-up fields the sensor-string matcher and the ground guard read.
+     */
+    readonly sourceMetadata?: DeclaredSourceMetadata;
     /**
      * The file's own capture declaration, precomputed AT LOAD TIME (in the
      * lazy loader chunk, via `diagnostics/declaredCapture.ts`) from the
@@ -76,6 +99,84 @@ export interface StreamingCloudShape {
   readonly localBounds?: () => readonly [number, number, number, number, number, number];
   /** Horizontal CRS, for converting raw-unit extent/density to metres / pts·m⁻². */
   readonly crs?: () => { readonly linearUnitToMetres?: number } | null | undefined;
+}
+
+/**
+ * A declared field by its local name. Multi-scan files prefix per-scan fields
+ * ("scan 2 sensorModel"), so the suffix match covers both shapes; standard
+ * fields win over extension-namespace ones of the same name. Blank values are
+ * treated as absent.
+ */
+function declaredValue(
+  meta: DeclaredSourceMetadata | undefined,
+  name: string,
+): string | undefined {
+  if (!meta) return undefined;
+  const match = (f: DeclaredField): boolean =>
+    (f.name === name || f.name.endsWith(` ${name}`)) && f.value.trim().length > 0;
+  return (meta.standard.find(match) ?? meta.extensions.find(match))?.value.trim();
+}
+
+/**
+ * The instrument identity the file declares, vendor first. The sensor-string
+ * matcher keys on make plus series ("riegl vz", "faro focus"), which a bare
+ * model ("VZ-1000") does not carry; the vendor is skipped when the model
+ * already names it. Undefined when the file declares no model.
+ */
+function declaredSensorString(meta: DeclaredSourceMetadata | undefined): string | undefined {
+  const model = declaredValue(meta, 'sensorModel');
+  if (!model) return undefined;
+  const vendor = declaredValue(meta, 'sensorVendor');
+  if (!vendor || model.toLowerCase().includes(vendor.toLowerCase())) return model;
+  return `${vendor} ${model}`;
+}
+
+/** Distinct per-scan blocks in the declared metadata ("scan 3 sensorModel" → 3). */
+function declaredStationCount(meta: DeclaredSourceMetadata | undefined): number {
+  if (!meta) return 0;
+  const ids = new Set<string>();
+  for (const f of [...meta.standard, ...meta.extensions]) {
+    const m = /^scan (\d+) /.exec(f.name);
+    if (m) ids.add(m[1]);
+  }
+  return ids.size;
+}
+
+/**
+ * Per-scan readings a static instrument records where it stands, for the
+ * range correction its ranging electronics apply.
+ */
+const STATION_SETUP_FIELDS = ['temperature', 'relativeHumidity', 'atmosphericPressure'];
+
+/**
+ * Declared evidence that the instrument stood on the ground, or undefined.
+ * Three facts qualify, none of which an airborne or spaceborne delivery
+ * states about itself:
+ *
+ *   - a recorded scanner set-up position (the PTX per-scan transform): a
+ *     moving platform is described by a trajectory, not by one occupied
+ *     station coordinate;
+ *   - two or more registered scan stations in the declared block: merging
+ *     station to station is the tripod workflow, an airborne delivery is
+ *     tiled or split by flight line;
+ *   - per-scan atmospheric readings taken at the set-up.
+ *
+ * A declared sensor model on its own is NOT on the list. When it names a known
+ * ground-based instrument, `matchSensorString` decides the verdict before this
+ * guard runs; counting an unrecognised model would rule out aerial for every
+ * instrument-tagged file, including a genuine airborne delivery. LAS / LAZ /
+ * COPC / EPT carry none of these fields, so airborne deliveries in those
+ * formats never reach the guard.
+ */
+function declaredGroundInstrument(cloud: StaticCloudShape): string | undefined {
+  const meta = cloud.metadata?.sourceMetadata;
+  const reasons: string[] = [];
+  if (cloud.metadata?.scannerOrigin) reasons.push('a recorded scanner set-up position');
+  const stations = declaredStationCount(meta);
+  if (stations > 1) reasons.push(`${stations} registered scan stations`);
+  const setup = STATION_SETUP_FIELDS.filter((n) => declaredValue(meta, n) !== undefined);
+  if (setup.length > 0) reasons.push(`per-scan ${setup.join(' / ')}`);
+  return reasons.length > 0 ? reasons.join(', ') : undefined;
 }
 
 /** A valid linear-unit → metres factor, or 1 (treat the source as metres). */
@@ -120,14 +221,21 @@ export function signalsForStaticCloud(cloud: StaticCloudShape): ScanSignals {
     extent && extent[0] > 0 && extent[1] > 0
       ? fileN / (extent[0] * extent[1])
       : undefined;
+  // Instrument identity: the file's own declaration first, `captureSensor`
+  // after it. A merged multi-scan file has no single header sensor field, so
+  // `captureSensor` carries a loader-composed summary; the declared
+  // sensorVendor + sensorModel is the instrument, and it is what the
+  // sensor-string matcher can key on.
   return {
     sourceFormat: cloud.sourceFormat,
     pointCount: fileN,
     extent,
     densityPerSqM: density,
-    sensorString: cloud.metadata?.captureSensor,
+    sensorString:
+      declaredSensorString(cloud.metadata?.sourceMetadata) ?? cloud.metadata?.captureSensor,
     softwareString: cloud.metadata?.sourceSoftware,
     declaredCapture: cloud.metadata?.declaredCapture,
+    declaredGroundInstrument: declaredGroundInstrument(cloud),
   };
 }
 

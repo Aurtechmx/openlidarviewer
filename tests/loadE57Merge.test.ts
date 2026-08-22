@@ -14,12 +14,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { E57ScanData, E57ParseResult } from '../src/io/e57/parseE57';
 import { parseE57 } from '../src/io/e57/parseE57';
 import { loadE57 } from '../src/io/loadE57';
+import type { E57DecodePlan } from '../src/io/loadPlan';
 
 vi.mock('../src/io/e57/parseE57', () => ({
   parseE57: vi.fn(),
 }));
 
 const mockedParse = vi.mocked(parseE57);
+
+/**
+ * A decode plan that reads every record. `parseE57` is mocked here, so the
+ * buffer these tests pass carries no declaration for the loader to preflight;
+ * handing it the plan directly keeps the subject of each test the merge and
+ * attribute logic. The loader refuses an E57 whose plan cannot be established,
+ * which is what `tests/e57PreflightGuard.test.ts` covers.
+ */
+const READ_EVERY_RECORD: E57DecodePlan = {
+  mode: 'all',
+  stride: 1,
+  sourceCount: 0,
+  decodedCount: 0,
+  memoryEstimateBytes: 0,
+  fullDecodeEstimateBytes: 0,
+  ceilingBytes: 0,
+  fits: true,
+};
+
 
 /** Minimal scan builder — only the fields the merge actually consumes. */
 function scan(
@@ -32,6 +52,7 @@ function scan(
     name,
     guid: `guid-${name}`,
     recordCount,
+    declaredRecordCount: recordCount,
     columns,
     fields: [],
     pose,
@@ -79,7 +100,7 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
 
   it('merges only the Cartesian scan — no phantom origin points', async () => {
     mockedParse.mockReturnValue(parseResult([front(), dome()]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57', { plan: READ_EVERY_RECORD });
 
     // 2 valid points, not 2 + 4 phantom records.
     expect(cloud.pointCount).toBe(2);
@@ -98,14 +119,14 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
 
   it('declares honest counts — the merged total, not the file record total', async () => {
     mockedParse.mockReturnValue(parseResult([front(), dome()]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.declaredPointCount).toBe(2);
     expect(cloud.decodedPointCount).toBe(2);
   });
 
   it('records a load warning that names the skipped scan and its record count', async () => {
     mockedParse.mockReturnValue(parseResult([front(), dome()]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57', { plan: READ_EVERY_RECORD });
     const warnings = cloud.metadata?.loadWarnings ?? [];
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/"dome"/);
@@ -115,7 +136,7 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
 
   it('does not let the skipped scan veto attributes the merged scans carry', async () => {
     mockedParse.mockReturnValue(parseResult([front(), dome()]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'two-scans.e57', { plan: READ_EVERY_RECORD });
     // "front" carries RGB; "dome" (skipped) does not — colours must survive.
     expect(cloud.colors).toBeDefined();
     expect([...cloud.colors!]).toEqual([10, 20, 30, 40, 50, 60]);
@@ -123,14 +144,14 @@ describe('loadE57 — merging a Cartesian scan with a spherical-only scan', () =
 
   it('still rejects a file where NO scan has Cartesian coordinates', async () => {
     mockedParse.mockReturnValue(parseResult([dome()]));
-    await expect(loadE57(new ArrayBuffer(0), 'dome-only.e57')).rejects.toThrow(
+    await expect(loadE57(new ArrayBuffer(0), 'dome-only.e57', { plan: READ_EVERY_RECORD })).rejects.toThrow(
       /no valid points/,
     );
   });
 
   it('emits no warnings for an all-Cartesian file', async () => {
     mockedParse.mockReturnValue(parseResult([front()]));
-    const cloud = await loadE57(new ArrayBuffer(0), 'one-scan.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'one-scan.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.metadata?.loadWarnings).toBeUndefined();
   });
 });
@@ -160,7 +181,7 @@ describe('loadE57 — pose rotation of normals', () => {
         ),
       ]),
     );
-    const cloud = await loadE57(new ArrayBuffer(0), 'posed.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'posed.e57', { plan: READ_EVERY_RECORD });
 
     // Geometry: (1,0,0) rotated to (0,1,0), then translated → (100, 201, 300).
     // The floored origin is (100, 201, 300), so the local position is ~0.
@@ -183,7 +204,7 @@ describe('loadE57 — pose rotation of normals', () => {
     ]);
     result.warnings.push('Scan "solo": pose rotation quaternion has norm 2.000000 (expected 1) — normalised before use.');
     mockedParse.mockReturnValue(result);
-    const cloud = await loadE57(new ArrayBuffer(0), 'solo.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'solo.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.metadata?.loadWarnings).toEqual([
       'Scan "solo": pose rotation quaternion has norm 2.000000 (expected 1) — normalised before use.',
     ]);
@@ -202,7 +223,7 @@ describe('loadE57 — pose rotation of normals', () => {
         }),
       ]),
     );
-    const cloud = await loadE57(new ArrayBuffer(0), 'unposed.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'unposed.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.normals![0]).toBeCloseTo(0.6, 6);
     expect(cloud.normals![1]).toBeCloseTo(0.8, 6);
     expect(cloud.normals![2]).toBeCloseTo(0, 6);
@@ -229,7 +250,7 @@ describe('loadE57 — declared source metadata attach (v0.5.4)', () => {
       ],
     };
     mockedParse.mockReturnValue(result);
-    const cloud = await loadE57(new ArrayBuffer(0), 'declared.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'declared.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.metadata?.sourceMetadata).toEqual(result.sourceMetadata);
     // The keyword scan runs at LOAD time (lazy chunk), so the classifier
     // wiring in the startup shell reads a plain precomputed field.
@@ -249,14 +270,14 @@ describe('loadE57 — declared source metadata attach (v0.5.4)', () => {
       extensions: [],
     };
     mockedParse.mockReturnValue(result);
-    const cloud = await loadE57(new ArrayBuffer(0), 'tls.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'tls.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.metadata?.sourceMetadata).toEqual(result.sourceMetadata);
     expect(cloud.metadata?.declaredCapture).toBeUndefined();
   });
 
   it('attaches neither when the file declares nothing', async () => {
     mockedParse.mockReturnValue(parseResult(onePoint()));
-    const cloud = await loadE57(new ArrayBuffer(0), 'bare.e57');
+    const cloud = await loadE57(new ArrayBuffer(0), 'bare.e57', { plan: READ_EVERY_RECORD });
     expect(cloud.metadata?.sourceMetadata).toBeUndefined();
     expect(cloud.metadata?.declaredCapture).toBeUndefined();
   });

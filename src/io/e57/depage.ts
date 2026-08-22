@@ -69,13 +69,25 @@ export interface Depaged {
  * ambiguity: the pass is one table-driven byte loop (~300 MB/s) over bytes
  * this function already copies.
  *
+ * `fileBytes` bounds the run at the length the file's own header declares,
+ * defaulting to the whole buffer. Content past that point is not part of the
+ * file the header describes, so it is left out of the logical buffer and every
+ * offset resolved against it (see `parseE57`).
+ *
  * @throws when the file is not a whole number of pages (truncated), or when a
  *   page's stored checksum does not match its bytes. The error names the page
  *   index so a corrupt region can be located in the file.
  */
-export function depage(buffer: ArrayBuffer, pageSize: number): Depaged {
+export function depage(buffer: ArrayBuffer, pageSize: number, fileBytes?: number): Depaged {
   const payload = pageSize - 4;
-  const src = new Uint8Array(buffer);
+  const bound = fileBytes ?? buffer.byteLength;
+  if (!Number.isSafeInteger(bound) || bound < 0 || bound > buffer.byteLength) {
+    throw new Error(
+      `E57 file is truncated: the header declares ${bound} bytes but only ` +
+        `${buffer.byteLength} are present.`,
+    );
+  }
+  const src = new Uint8Array(buffer, 0, bound);
   if (src.length % pageSize !== 0) {
     throw new Error(
       `E57 file is truncated: ${src.length} bytes is not a whole number of ` +
@@ -85,23 +97,56 @@ export function depage(buffer: ArrayBuffer, pageSize: number): Depaged {
     );
   }
   const pageCount = src.length / pageSize;
-  const logical = new Uint8Array(pageCount * payload);
-  const view = new DataView(buffer);
-  for (let p = 0; p < pageCount; p++) {
+  return { logical: depagePages(src, pageSize, 0, pageCount), pagePayload: payload };
+}
+
+/**
+ * Verify and strip the checksums from a page-aligned RUN of pages, rather than
+ * the whole file.
+ *
+ * `pages` must begin on a page boundary and hold a whole number of pages;
+ * `firstPageIndex` is the file page it starts at and `totalPageCount` the file's
+ * page total, so a checksum failure still names the page by its position in the
+ * FILE and not in the run.
+ *
+ * This exists for the E57 preflight, which needs only the XML section — a few
+ * KB near the end of the file. De-paging the whole file to reach it costs a
+ * second full-size copy of the file and a CRC pass over every byte, which is
+ * precisely the work the preflight exists to decide whether to do at all.
+ * Verification is not weakened: every page this run returns is checked, and the
+ * whole-file `depage` still checks every page before any point is decoded.
+ */
+export function depagePages(
+  pages: Uint8Array,
+  pageSize: number,
+  firstPageIndex: number,
+  totalPageCount: number,
+): Uint8Array {
+  const payload = pageSize - 4;
+  if (pages.length % pageSize !== 0) {
+    throw new Error(
+      `E57 file is truncated: a ${pages.length}-byte page run is not a whole ` +
+        `number of ${pageSize}-byte pages.`,
+    );
+  }
+  const runCount = pages.length / pageSize;
+  const logical = new Uint8Array(runCount * payload);
+  const view = new DataView(pages.buffer, pages.byteOffset, pages.byteLength);
+  for (let p = 0; p < runCount; p++) {
     const start = p * pageSize;
-    const computed = crc32c(src, start, start + payload);
+    const computed = crc32c(pages, start, start + payload);
     const stored = view.getUint32(start + payload, false);
     if (stored !== computed) {
       throw new Error(
-        `E57 file is corrupt: page ${p} of ${pageCount} failed its CRC-32C ` +
-          `checksum (stored 0x${stored.toString(16).padStart(8, '0')}, ` +
+        `E57 file is corrupt: page ${firstPageIndex + p} of ${totalPageCount} ` +
+          `failed its CRC-32C checksum (stored 0x${stored.toString(16).padStart(8, '0')}, ` +
           `computed 0x${computed.toString(16).padStart(8, '0')}). ` +
           'Refusing the file rather than reading damaged point data.',
       );
     }
-    logical.set(src.subarray(start, start + payload), p * payload);
+    logical.set(pages.subarray(start, start + payload), p * payload);
   }
-  return { logical, pagePayload: payload };
+  return logical;
 }
 
 /**

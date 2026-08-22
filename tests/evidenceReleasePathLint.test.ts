@@ -27,26 +27,37 @@ const runLint = () =>
   spawnSync('node', ['scripts/lint-evidence.mjs'], { cwd: ROOT, encoding: 'utf8' });
 
 describe('lint:evidence release-doc path', () => {
-  it('passes on the real, correct tree', () => {
-    expect(runLint().status).toBe(0);
-  });
-
-  it('refuses a false bucket total written into a real release document', () => {
-    // The validation report is one of the four versioned docs under docs/releases/.
+  it('names the release document only while a false bucket total is in it', () => {
+    // The guard is that the lint reads the versioned docs under docs/releases/
+    // rather than the root paths they moved from. Injecting a fault and
+    // watching the document appear in the output proves the path is read, and
+    // holds whether or not the tree is otherwise green: between a dependency
+    // change and the next "npm run evidence" the lint legitimately fails for an
+    // unrelated reason, and this test runs inside the gate that regeneration
+    // waits on.
     const doc = releaseDocsFor(VERSION).validationReport as string;
     const abs = resolve(ROOT, doc);
     const original = readFileSync(abs, 'utf8');
     // A bucket count that cannot be the real one (real unit passed is thousands).
     const bucket = Object.keys(evidence.buckets)[0];
+
+    const before = runLint();
+    expect(before.stderr + before.stdout).not.toContain(doc);
+
+    let during;
     try {
       writeFileSync(abs, `${original}\n${bucket} 1 passed\n`);
-      const r = runLint();
-      expect(r.status).not.toBe(0);
-      expect(r.stderr + r.stdout).toContain(doc);
+      during = runLint();
     } finally {
       writeFileSync(abs, original);
     }
-    // The tree is restored, so a follow-up run is green again.
-    expect(runLint().status).toBe(0);
+    expect(during.status).not.toBe(0);
+    expect(during.stderr + during.stdout).toContain(doc);
+
+    // Removing the fault removes the complaint, and the verdict returns to
+    // whatever the tree's own state was.
+    const after = runLint();
+    expect(after.stderr + after.stdout).not.toContain(doc);
+    expect(after.status).toBe(before.status);
   });
 });

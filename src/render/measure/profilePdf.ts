@@ -5,9 +5,9 @@
  * engineer can print and take measurements off. It renders:
  *
  *   - A large, box-filling section chart with a survey grid, labelled
- *     chainage (X) and elevation (Y) axes, and the curve drawn as a
- *     Catmull-Rom spline THROUGH every sample (interpolating, never
- *     moving a measured point; gaps stay breaks).
+ *     chainage (X) and elevation (Y) axes, and the profile drawn as a
+ *     straight polyline between adjacent samples, so no plotted height
+ *     falls outside the two stations bracketing it (gaps stay breaks).
  *   - The stated horizontal and vertical scales (1:N each) and the
  *     resulting vertical exaggeration, so distances/grades read off the
  *     print are unambiguous — a true civil section convention.
@@ -45,6 +45,9 @@ import {
   formatElevation,
   formatLength,
 } from './format';
+// Straight-polyline path builder shared with the panel chart so the sheet and
+// the screen draw the same geometry from the same samples.
+import { profilePolylinePath } from './profilePath';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -56,7 +59,7 @@ export interface ProfilePdfInput {
   readonly samples: ReadonlyArray<ProfileChartSample>;
   /** Corridor half-width used by the sampler, metres (for provenance). */
   readonly corridorWidthM?: number | null;
-  /** Bare-earth percentile used by the sampler (for provenance). */
+  /** Per-bin elevation percentile used by the sampler (for provenance). */
   readonly groundPercentile?: number | null;
   /** Horizontal CRS string, if known. */
   readonly crs?: string | null;
@@ -106,28 +109,6 @@ function winAnsiSafe(s: string): string {
     '’': "'", '‘': "'", '“': '"', '”': '"', '…': '...',
   };
   return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, (ch) => map[ch] ?? '?');
-}
-
-/** Minimal Catmull-Rom → cubic-Bézier SVG path (y-down local coords). */
-function curvePath(pts: ReadonlyArray<{ x: number; y: number }>): string {
-  const n = pts.length;
-  if (n === 0) return '';
-  const f = (v: number) => v.toFixed(2);
-  if (n === 1) return `M ${f(pts[0].x)} ${f(pts[0].y)}`;
-  if (n === 2) return `M ${f(pts[0].x)} ${f(pts[0].y)} L ${f(pts[1].x)} ${f(pts[1].y)}`;
-  let d = `M ${f(pts[0].x)} ${f(pts[0].y)}`;
-  for (let i = 0; i < n - 1; i++) {
-    const p0 = pts[i === 0 ? 0 : i - 1];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2 < n ? i + 2 : n - 1];
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${f(c1x)} ${f(c1y)} ${f(c2x)} ${f(c2y)} ${f(p2.x)} ${f(p2.y)}`;
-  }
-  return d;
 }
 
 /** "Nice" station interval keeping ≤ ~12 gridlines across the span. */
@@ -206,7 +187,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     INK_DIM,
   );
   // Provenance header line (v0.4.5, B4) — the CRS, corridor width and
-  // ground percentile the section was actually computed with, right-aligned
+  // elevation percentile the section was actually computed with, right-aligned
   // under the timestamp so a printed sheet is self-describing at a glance
   // (the summary block repeats them in full lower down). Omitted entirely
   // when the caller knows none of them — no row of dashes.
@@ -217,7 +198,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         ? `corridor +/-${lenStr(input.corridorWidthM)}`
         : null,
       input.groundPercentile != null
-        ? `ground p${Math.round(input.groundPercentile)}`
+        ? `p${Math.round(input.groundPercentile)} of corridor`
         : null,
     ].filter((s): s is string => s !== null);
     if (meta.length > 0) {
@@ -299,11 +280,13 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       INK_DIM,
     );
 
-    // Curve runs (break on gaps), drawn through every sample.
+    // Profile runs (break on gaps), drawn as straight segments between
+    // adjacent samples so no plotted height falls outside the two stations
+    // that bracket it.
     let run: Array<{ x: number; y: number }> = [];
     const drawRun = () => {
       if (run.length >= 1) {
-        page.drawSvgPath(curvePath(run), {
+        page.drawSvgPath(profilePolylinePath(run), {
           x: plotLeft,
           y: plotTopY,
           borderColor: CURVE,
@@ -381,8 +364,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ],
     [
       'Estimator',
-      `bare-earth p${input.groundPercentile != null ? Math.round(input.groundPercentile) : 25} of corridor`,
+      `p${input.groundPercentile != null ? Math.round(input.groundPercentile) : 25} of corridor returns`,
     ],
+    ['Non-ground classes', 'Excluded where a source classifies'],
     ['Horizontal CRS', input.crs ?? '— (not georeferenced)'],
     [
       'Vertical datum',

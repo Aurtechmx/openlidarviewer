@@ -227,3 +227,105 @@ describe('provenance — purity', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe('provenance — the phone density band is bounded above', () => {
+  const station = (densityPerSqM: number): ScanSignals => ({
+    sourceFormat: 'e57',
+    pointCount: 465_603,
+    extent: [4.83, 4.71, 3.92],
+    densityPerSqM,
+  });
+
+  it('reads a dense small-footprint scan as a terrestrial station, not a phone', () => {
+    // A terrestrial scanner in a pump room: 20473 pts/m² over 22.7 m². The band
+    // used to have no upper bound, so every dense station under 100 m² read as
+    // a phone and the panel then quoted walking-drift figures for a tripod.
+    expect(classify(station(20_473)).captureType).toBe('terrestrial');
+  });
+
+  it('keeps a genuine phone scan inside the band', () => {
+    expect(classify(station(3000)).captureType).toBe('iphone-lidar');
+  });
+
+  it('puts the boundary at the density the cited figures reach, inclusive', () => {
+    // Luetzenburg 2021 measures 7,225 pts/m² at 25 cm, the phone's closest
+    // working range. At the figure it is still a phone; above it, it is not.
+    expect(classify(station(7225)).captureType).toBe('iphone-lidar');
+    expect(classify(station(7226)).captureType).toBe('terrestrial');
+  });
+
+  it('names the ceiling in the signals, so the verdict shows its own reasoning', () => {
+    const f = classify(station(20_473));
+    expect(f.signals.join(' ')).toContain('7225');
+  });
+
+  it('leaves the aerial and drone bands where they were', () => {
+    const aerial = classify({ sourceFormat: 'laz', pointCount: 1_280_000, extent: [400, 400, 60], densityPerSqM: 8 });
+    const drone = classify({ sourceFormat: 'laz', pointCount: 4_320_000, extent: [120, 90, 40], densityPerSqM: 400 });
+    expect(aerial.captureType).toBe('aerial-als');
+    expect(drone.captureType).toBe('drone-lidar');
+  });
+
+  it('does not claim to separate the two inside the band', () => {
+    // A phone and a station can both produce 3000 pts/m². The ceiling narrows an
+    // unbounded rule; it does not resolve the overlap, and the confidence stays
+    // medium on both sides so the override remains the answer for that case.
+    expect(classify(station(3000)).confidence).toBe('medium');
+    expect(classify(station(20_473)).confidence).toBe('medium');
+  });
+});
+
+describe('provenance — vendor tokens match however the producer punctuates', () => {
+  const scan = (softwareString: string): ScanSignals => ({
+    sourceFormat: 'e57',
+    pointCount: 8_484_455,
+    extent: [314.7, 321.5, 109.7],
+    densityPerSqM: 84,
+    softwareString,
+  });
+
+  it('reads a hyphenated Trimble RealWorks string as terrestrial', () => {
+    // 84 pts/m2 over 10.12 ha is the drone density band, so without the
+    // software match this scan classified as drone LiDAR. The token is written
+    // with a space and the producer writes hyphens.
+    const f = classify(scan('Trimble-RealWorks-8.1-E57RefImpl-1.0.224-x86-windows'));
+    expect(f.captureType).toBe('terrestrial');
+    expect(f.confidence).toBe('high');
+  });
+
+  it('matches the same token across space, hyphen, underscore and dot', () => {
+    for (const sw of ['FARO SCENE', 'FARO-SCENE', 'FARO_SCENE_2021', 'FARO.SCENE']) {
+      expect(classify(scan(sw)).captureType).toBe('terrestrial');
+    }
+  });
+
+  it('still matches a plainly spaced string, which already worked', () => {
+    expect(classify(scan('Leica Cyclone 9.1')).captureType).toBe('terrestrial');
+  });
+
+  it('does not let normalisation turn a phone producer into a scanner', () => {
+    expect(classify(scan('Polycam')).captureType).toBe('iphone-lidar');
+    expect(classify(scan('3D-Scanner-App')).captureType).toBe('iphone-lidar');
+  });
+
+  it('leaves an unrecognised producer to the density bands', () => {
+    // Normalisation must not invent a match. This string names no known vendor,
+    // so the density signature is still the honest answer.
+    expect(classify(scan('SomeUnknownExporter-2.0')).captureType).toBe('drone-lidar');
+  });
+
+  it('names the evidence that ruled airborne out, not just that it was ruled out', () => {
+    // `declaredGroundInstrument` carries the reason, so the panel can show what
+    // in the file contradicted the density guess.
+    const f = classify({
+      sourceFormat: 'e57',
+      pointCount: 8_484_455,
+      extent: [314.7, 321.5, 109.7],
+      densityPerSqM: 84,
+      declaredGroundInstrument: '5 registered scan stations',
+    });
+    const line = f.signals.join(' ');
+    expect(line).toContain('ground-based instrument set-up');
+    expect(line).toContain('5 registered scan stations');
+  });
+});

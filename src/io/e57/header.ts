@@ -28,6 +28,23 @@ export interface E57Header {
 const SIGNATURE = 'ASTM-E57';
 
 /**
+ * Major format version this reader implements.
+ *
+ * ASTM E2807 defines E57 version 1.0, and every file in circulation declares
+ * it. The version pair was read and carried but never checked, so a file
+ * declaring a future major version was parsed as though its layout were the
+ * 1.x one: the same fixed 48-byte header fields, the same page/checksum
+ * geometry, the same XML schema. A major revision is where those are free to
+ * change, so the bytes would be read as something they are not and the result
+ * would be coordinates with no error attached.
+ *
+ * The minor version is not gated. The standard's own compatibility rule makes
+ * a higher minor readable by a 1.0 reader, and this reader ignores what it does
+ * not recognise in the XML.
+ */
+const SUPPORTED_VERSION_MAJOR = 1;
+
+/**
  * Page-size bounds. The floor keeps a page large enough to be meaningful at
  * all (the 4-byte checksum plus a usable payload). The ceiling exists because
  * `pageSize` is a declared number that sizes real work: `depage` allocates
@@ -57,8 +74,17 @@ function readUint64(view: DataView, offset: number, field: string): number {
   return value;
 }
 
-/** Parse and validate the 48-byte E57 header. Throws on a non-E57 file. */
-export function parseE57Header(buffer: ArrayBuffer): E57Header {
+/**
+ * Parse and validate the 48-byte E57 header. Throws on a non-E57 file.
+ *
+ * `fileBytes` is the length of the file the header came from. It defaults to
+ * `buffer.byteLength`, which is what a whole-file caller passes implicitly. The
+ * preflight reads the header out of a small HEAD SLICE, where the buffer is
+ * shorter than the file by design, so it passes the real file length and the
+ * truncation check below keeps its meaning instead of firing on every large
+ * file.
+ */
+export function parseE57Header(buffer: ArrayBuffer, fileBytes = buffer.byteLength): E57Header {
   if (buffer.byteLength < 48) {
     throw new Error('Not an E57 file: shorter than the 48-byte header.');
   }
@@ -68,6 +94,18 @@ export function parseE57Header(buffer: ArrayBuffer): E57Header {
   if (signature !== SIGNATURE) {
     throw new Error('Not an E57 file: the "ASTM-E57" signature is missing.');
   }
+
+  const versionMajor = view.getUint32(8, true);
+  const versionMinor = view.getUint32(12, true);
+  if (versionMajor !== SUPPORTED_VERSION_MAJOR) {
+    throw new Error(
+      `E57 version ${versionMajor}.${versionMinor} is not supported: this reader ` +
+        `implements version ${SUPPORTED_VERSION_MAJOR}.x (ASTM E2807), and a different ` +
+        'major version may lay its header, pages and XML schema out differently. ' +
+        'The file is refused instead of being read under the wrong layout.',
+    );
+  }
+
   const pageSize = readUint64(view, 40, 'the page size');
   if (pageSize < MIN_PAGE_SIZE || pageSize > MAX_PAGE_SIZE) {
     throw new Error(
@@ -86,16 +124,16 @@ export function parseE57Header(buffer: ArrayBuffer): E57Header {
   // loss, whereas trailing extra bytes are left to `depage`, which checksums
   // every page present and will reject junk on its own terms.
   const filePhysicalLength = readUint64(view, 16, 'the file length');
-  if (filePhysicalLength > buffer.byteLength) {
+  if (filePhysicalLength > fileBytes) {
     throw new Error(
       `E57 file is truncated: the header declares ${filePhysicalLength} bytes ` +
-        `but only ${buffer.byteLength} are present.`,
+        `but only ${fileBytes} are present.`,
     );
   }
 
   return {
-    versionMajor: view.getUint32(8, true),
-    versionMinor: view.getUint32(12, true),
+    versionMajor,
+    versionMinor,
     filePhysicalLength,
     xmlPhysicalOffset: readUint64(view, 24, 'the XML section offset'),
     xmlLogicalLength: readUint64(view, 32, 'the XML section length'),

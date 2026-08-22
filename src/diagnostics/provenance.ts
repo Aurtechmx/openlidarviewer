@@ -129,6 +129,17 @@ export interface ScanSignals {
    * still wins; only the indirect density heuristic is ruled out.
    */
   readonly isNonTerrain?: boolean;
+  /**
+   * Declared evidence that the instrument stood on the ground, phrased by the
+   * signal wiring (`provenanceSignals.declaredGroundInstrument`) and quoted
+   * here, e.g. "10 registered scan stations". When present, the INDIRECT
+   * heuristics (format bias, density signature) may not assert an airborne /
+   * aerial / spaceborne capture type: a mine surveyed from ten tripod
+   * stations is not an ALS delivery because 1.9 pts/m² over 1434 ha resembles
+   * one. Direct evidence (software / sensor strings, the file's own
+   * declaration) is matched before this guard and is unaffected.
+   */
+  readonly declaredGroundInstrument?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,8 +164,15 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
   // The heuristic chain, with a shape guard: a scan the shape router flagged as
   // a compact object / interior can never be asserted as airborne from density
   // alone. Direct evidence inside `classifyHeuristic` (software / sensor
-  // strings) has already won by this point if present.
-  const heuristic = ruleOutAerialForObject(classifyHeuristic(signals), signals.isNonTerrain === true);
+  // strings) has already won by this point if present. The second guard, over
+  // the file's own ground-instrument declarations, sits inside
+  // `classifyHeuristic` at the seam where the indirect guesses start.
+  const heuristic = ruleOutAerialCapture(
+    classifyHeuristic(signals),
+    signals.isNonTerrain === true
+      ? ['Shape reads as a compact object / interior — airborne capture ruled out by geometry.']
+      : [],
+  );
   // 0. The file's own declaration outranks every heuristic. When the loader
   //    found a declared synthetic / procedural / reconstruction / reference
   //    statement in the source metadata, the verdict quotes it verbatim and
@@ -166,7 +184,7 @@ export function classify(signals: ScanSignals): ProvenanceFingerprint {
   return heuristic;
 }
 
-/** Airborne capture types the shape guard rules out for a compact object. */
+/** Airborne capture types the ground guards rule out. */
 const AERIAL_CAPTURE_TYPES: ReadonlySet<CaptureType> = new Set<CaptureType>([
   'drone-lidar',
   'aerial-als',
@@ -174,29 +192,42 @@ const AERIAL_CAPTURE_TYPES: ReadonlySet<CaptureType> = new Set<CaptureType>([
 ]);
 
 /**
- * When the scan reads as a compact object / interior, an aerial density guess
- * is factually wrong: airborne capture is ruled out by the geometry. Demote it
- * to an honest "ground-based, method not determined" verdict — we know it is
- * NOT aerial, but density alone can't say which ground-based method it is, so we
- * don't fabricate TLS/SLAM. Non-aerial guesses (terrestrial, iPhone, mobile
- * SLAM) and any direct-evidence match pass through unchanged.
+ * When something rules airborne capture out — the scan reads as a compact
+ * object / interior, or the file declares a ground-based instrument set-up —
+ * an aerial guess is factually wrong. Demote it to an honest "ground-based,
+ * method not determined" verdict: we know it is NOT aerial, but the indirect
+ * signal can't say which ground-based method it is, so we don't fabricate
+ * TLS/SLAM. Each `reasons` line is appended to the signals so the panel shows
+ * what ruled airborne out. An empty `reasons` list, a non-aerial verdict
+ * (terrestrial, iPhone, mobile SLAM) and every direct-evidence match pass
+ * through unchanged.
  */
-function ruleOutAerialForObject(
+function ruleOutAerialCapture(
   fp: ProvenanceFingerprint,
-  isNonTerrain: boolean,
+  reasons: readonly string[],
 ): ProvenanceFingerprint {
-  if (!isNonTerrain || !AERIAL_CAPTURE_TYPES.has(fp.captureType)) return fp;
+  if (reasons.length === 0 || !AERIAL_CAPTURE_TYPES.has(fp.captureType)) return fp;
   return {
     captureType: 'unknown',
     confidence: 'low',
     label: 'Ground-based scan — capture method not determined',
-    signals: [
-      ...fp.signals,
-      'Shape reads as a compact object / interior — airborne capture ruled out by geometry.',
-    ],
+    signals: [...fp.signals, ...reasons],
     bounds: [],
     disclaimer: fp.disclaimer,
   };
+}
+
+/**
+ * The guard lines for a file that declares a ground-based instrument set-up,
+ * or an empty list. Applied to the indirect branches of the heuristic chain
+ * only, so a declared instrument identity keeps deciding the verdict.
+ */
+function declaredGroundReasons(signals: ScanSignals): readonly string[] {
+  if (!signals.declaredGroundInstrument) return [];
+  return [
+    `File declares a ground-based instrument set-up (${signals.declaredGroundInstrument}) — ` +
+      'airborne capture ruled out by the file\'s own declarations.',
+  ];
 }
 
 /** The pre-declaration heuristic chain — unchanged when no metadata declares. */
@@ -205,19 +236,26 @@ function classifyHeuristic(signals: ScanSignals): ProvenanceFingerprint {
   const swMatch = matchSoftwareString(signals.softwareString);
   if (swMatch) return swMatch;
 
-  // 2. Sensor-string fingerprints (LAS VLR `System Identifier`).
+  // 2. Sensor-string fingerprints (LAS VLR `System Identifier`, or the
+  //    declared sensorVendor + sensorModel a scanner format states).
   const sensorMatch = matchSensorString(signals.sensorString);
   if (sensorMatch) return sensorMatch;
+
+  // Everything below is INDIRECT: a format bias and a density signature are
+  // guesses about the file, not statements the file makes. A file that
+  // declares a ground-based instrument set-up contradicts an airborne guess,
+  // so the guard applies from here down and not to steps 1 and 2.
+  const ground = declaredGroundReasons(signals);
 
   // 3. Format-driven defaults — COPC and EPT carry well-known provenance
   //    biases (USGS 3DEP COPC tiles are airborne ALS by overwhelming
   //    majority, etc.).
   const formatMatch = matchFormat(signals);
-  if (formatMatch) return formatMatch;
+  if (formatMatch) return ruleOutAerialCapture(formatMatch, ground);
 
   // 4. Numeric signatures — point count + density + extent.
   const numericMatch = matchNumeric(signals);
-  if (numericMatch) return numericMatch;
+  if (numericMatch) return ruleOutAerialCapture(numericMatch, ground);
 
   // 5. Honest fallback.
   return {
@@ -312,13 +350,33 @@ const PHONE_LIDAR_SOFTWARE = [
   'recon3d',
 ];
 
-const TLS_SOFTWARE = ['faro scene', 'leica cyclone', 'riegl riscan', 'z+f laser control'];
+const TLS_SOFTWARE = [
+  'faro scene',
+  'leica cyclone',
+  'riegl riscan',
+  'z+f laser control',
+  // Trimble is already a recognised terrestrial vendor in TLS_SENSORS ('trimble x').
+  // Its processing suite belongs here for the same reason the other four do.
+  'trimble realworks',
+];
 
 const SLAM_SOFTWARE = ['navvis', 'geoslam', 'lixel', 'emesent', 'kaarta'];
 
+/**
+ * Lower-case a vendor string and flatten every run of non-alphanumerics to one
+ * space, so a token written with spaces matches however the producer separated
+ * the words. Writers punctuate these freely: "Trimble-RealWorks-8.1",
+ * "FARO_SCENE", "Leica.Cyclone". Matching the raw string would find only the
+ * spaced spelling and miss the rest, which is what let a Trimble RealWorks scan
+ * fall through the terrestrial tokens and be classified from density instead.
+ */
+function normaliseVendorString(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function matchSoftwareString(sw: string | undefined): ProvenanceFingerprint | null {
   if (!sw) return null;
-  const lower = sw.toLowerCase();
+  const lower = normaliseVendorString(sw);
 
   for (const tag of PHONE_LIDAR_SOFTWARE) {
     if (lower.includes(tag)) {
@@ -349,7 +407,7 @@ const SPACEBORNE_SENSORS = ['gedi', 'icesat', 'atlas', 'calipso', 'atlid'];
 
 function matchSensorString(sensor: string | undefined): ProvenanceFingerprint | null {
   if (!sensor) return null;
-  const lower = sensor.toLowerCase();
+  const lower = normaliseVendorString(sensor);
 
   for (const tag of PHONE_LIDAR_SENSORS) {
     if (lower.includes(tag)) {
@@ -406,6 +464,14 @@ function matchFormat(signals: ScanSignals): ProvenanceFingerprint | null {
 // Numeric fingerprints (density-driven)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * The most a phone's VCSEL flash pattern lays down, in points per square metre.
+ * Luetzenburg 2021 measures 7,225 pts/m² at 25 cm, its closest working range,
+ * falling to 150 pts/m² at 2.5 m. Density above this at station scale is a
+ * ranging scanner rather than a phone.
+ */
+const PHONE_LIDAR_MAX_DENSITY_PER_SQM = 7225;
+
 function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
   // High density on a small extent is the iPhone-LiDAR signature. Luetzenburg
   // 2021 reports 7,225 pts/m² at 25 cm down to 150 pts/m² at 2.5 m for the
@@ -417,6 +483,24 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       signals.densityPerSqM > 1000 &&
       footprintArea < 500 // < 500 m² extent — small room, façade, outcrop
     ) {
+      // The band above is bounded on both sides. 7,225 pts/m² is the density
+      // the same Luetzenburg figures put at the phone's closest working range,
+      // so it is the most the flash pattern lays down anywhere; a scan denser
+      // than that at station scale is a ranging instrument, and a terrestrial
+      // station in a small room is exactly the case that lands here. Without
+      // the ceiling the rule contradicted the source it cites, and every dense
+      // TLS station under 100 m² read as a phone, because the terrestrial band
+      // below starts at a footprint larger than a room.
+      //
+      // Density alone cannot separate the two inside the band: a phone and a
+      // station can both produce 3,000 pts/m². This narrows a rule that was
+      // unbounded, it does not claim to resolve the overlap.
+      if (signals.densityPerSqM > PHONE_LIDAR_MAX_DENSITY_PER_SQM) {
+        return terrestrialFingerprint('medium', [
+          `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
+          `Above the ${PHONE_LIDAR_MAX_DENSITY_PER_SQM} pts/m² a phone flash pattern reaches at its closest range`,
+        ]);
+      }
       return phoneLidarFingerprint('medium', [
         `Density: ${signals.densityPerSqM.toFixed(0)} pts/m² over a ${footprintArea.toFixed(0)} m² footprint`,
       ]);

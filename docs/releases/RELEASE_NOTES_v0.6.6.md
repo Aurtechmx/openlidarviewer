@@ -1,6 +1,6 @@
 # OpenLiDARViewer v0.6.6
 
-v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence, two more than at v0.6.5, and the E57 reader is checked point for point against PDAL. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
+v0.6.6 is a feature and evidence release. Twelve products now carry independent cross-implementation evidence against v0.6.5's five, and the E57 reader is checked point for point against PDAL. The seven added are `E57-INGEST`, `MEAS-PROFILE`, `DSM`, `DTM`, `CHM`, `TPI` and `VRM`. Around that, the workspace gained a Work mode for the scene-work tools and an Output panel that consolidates exports. Layer groups arrived in the Layers panel, annotations gained an inspection issue workflow, and one Speed to Quality control now covers display and streaming. A long run of unit-correctness fixes runs underneath all of it, and those are listed first because several of them changed reported numbers.
 
 OpenLiDARViewer remains browser-native and local-first: local files stay on the user's device, and no account is required.
 
@@ -14,7 +14,27 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 - a two-epoch change volume with no error budget in it is no longer reported as certain: a level of detection of 0 with no co-registration RMSE collapsed the band to plus or minus zero, which cleared every threshold and graded the least supported result available as detectable at 0% relative error and high confidence; an empty budget now reports as unquantified;
 - a surface ICP fit with too little overlap is refused rather than reported, and a net volume is qualified with an uncertainty band;
 - classification reads review rather than ready when the source unit is unknown, and a resident-only surface reads review rather than blocked;
-- hiding the navigation legend no longer takes the view controls with it; the standard views and the orthographic toggle exist nowhere else in the app and the dismissal is persisted, so the old behaviour removed them permanently and across sessions.
+- hiding the navigation legend no longer takes the view controls with it; the standard views and the orthographic toggle exist nowhere else in the app and the dismissal is persisted, so the old behaviour removed them permanently and across sessions;
+- an E57 the preflight had already judged too large for the device was still read whole into memory, because the only refusal lived in the decode worker; the refusal now runs before the read;
+- the decode worker planned again instead of using the main thread's plan; `matchMedia` does not exist in a worker, so the mobile flag read false and the memory fraction moved from 0.4 to 0.6, letting the worker accept a file the main thread had refused and apply a stride other than the one the preload stated; the plan now travels with the request;
+- a preflight that threw left the decode unguarded at stride 1, so a fault inside the memory guard switched the guard off; an E57 whose plan cannot be established is now refused;
+- an unsupported E57 major version is refused, and every section offset is bounded by the declared physical length;
+- the EPT and 3D Tiles parsers are strict at their format boundary rather than failing open, and the declared-bounds oracle reads the file's pages instead of raw bytes;
+- pointer lock delivered every mouse event to the canvas, so the navigation dock stopped receiving clicks and no mode could be reached with the mouse once walk or fly began; a click while locked now returns the cursor;
+- the live probe ran a pick across every point of every visible cloud on each pointer-move frame in walk and fly, and during both custom drags, because only an OrbitControls drag sets the flag its gate reads;
+- provenance reads the file's own declarations ahead of a density guess, and the phone-LiDAR density band is bounded above, so a tripod station carrying dense returns is not reported as a phone.
+
+## Section profile corrections
+
+The corridor profile is now one method from geometry through stationing to the drawn line.
+
+- station geometry was hard-coded to XY with Z as the vertical axis while the sampler already honoured an arbitrary up axis, so a Y-up scan produced correct sampled heights beside wrong station positions, wrong chainages and a report interval that disagreed with the profile's own headline figure; one shared transect frame now serves the sampler, the corridor auto-width, the stations, the controller and the report;
+- a station bracketed by one measured sample and one gap took the measured neighbour's elevation, which produced a grade across ground the profile records as unmeasured; interpolation now requires both brackets and returns a gap otherwise;
+- the chart and the PDF drew a Catmull-Rom spline, which passes through every station and still overshoots between them: on the plateau [0, 1, 1, 0] the emitted path peaks at 1.1275 with both bracketing stations at exactly 1, and in chart space that plateau is drawn 32 px above the plot top edge; both now draw straight segments between adjacent samples, with gaps left disconnected;
+- corridor membership tested distance along the line and distance across it separately, which admitted a square-ended region: a point one band before the start and one band to the side sat 1.41 bands from the line, while the parameter is documented as excluding anything further than one band. Distance is now measured from the nearest point on the segment, which is what the OGR reference has always done. Between the endpoints the arithmetic is bit-identical, and the recorded 751-station cross-implementation result reproduces station for station;
+- the percentile was labelled a bare-earth estimate; the sampler drops classes 3 to 7 and 18 where a source classifies, and keeps 0, 1, 2, 9 plus the 255 sentinel a merged source without a class channel carries, so unclassified returns reach the percentile and the wording now says so.
+
+Z-up station positions move by at most 6.8e-13 and station counts are unchanged. The gap and Y-up corrections change reported values where they apply. A 33-station fixture now probes both end caps, including the exact corners, and agrees with the reference over 66 station comparisons with no difference at all.
 
 ## Workspace and tools
 
@@ -48,7 +68,9 @@ Several items below are foundations: implemented and tested, but not yet reached
 - a derived-layer model and store, a feature-extraction service over the building and conductor cores, and a scientific receipt serializer over the analysis record;
 - a product executor registry foundation that invokes a registered compute core through `ProcessService.runIfAuthorized`, preparing one fail-closed execution seam; production product routes do not pass through it yet;
 - streaming corrections: in-flight decodes get eviction hysteresis and the budget counts decoded-pending nodes, while a partial stream stays resident-only beside a static cloud;
-- the Clip panel is reachable on mobile, and one font policy now covers every panel, enforced by a lint.
+- the Clip panel is reachable on mobile, and one font policy now covers every panel, enforced by a lint;
+- the evidence record's `packageLockSha256` and `sbom.sha256` are checked against the files on disk. Both were written and never read back, so any value passed. A record describing a different commit than the checkout now says so;
+- Stryker returns to 9.6.1: Stryker 10 pulls Babel 8, whose packages declare a Node floor above the 22.17.1 the canonical toolchain pins.
 
 ## DSM, DTM and CHM reach cross-implementation evidence
 
@@ -60,7 +82,7 @@ Twelve products are now at E4: `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CO
 
 `MEAS-PROFILE`, the corridor section profile, reaches its required level. No single tool exposes a corridor percentile over a point cloud, so the reference is assembled from two: OGR/SpatiaLite 5.1.0 places every point on the section line and R 4.4.1 `quantile(type = 7)` reduces each station. Over 751 stations the largest difference is 3.6e-15 m, against a 1e-6 m tolerance registered before the reference existed. Per-station corridor counts match exactly, and the four deliberately empty stations read as gaps on both sides. Both fixtures are synthetic and hold every point clear of a bin boundary and of the corridor edge, so the tie-breaking there is untested and none of this is accuracy against a surveyed section.
 
-`E57-INGEST` reaches E4 against PDAL 2.10.2 `readers.e57`. Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly over all 1,788,994 points of a public CC-BY terrestrial scan across nine dimensions, compared as an exact quantised integer sum at a 1e-6 quantum rather than as a summary statistic, so one point wrong by a micrometre fails the comparison. Intensity is outside it: PDAL rescales intensity by 65535/(max - min) without subtracting the minimum, so the two sides report different numbers for the same file. The scan is a CloudCompare re-export rather than a scanner-native write, so vendor extension blocks, multi-scan files and spherical coordinates are untested.
+`E57-INGEST` reaches E4 against PDAL 2.10.2 `readers.e57`. Decoded cartesian coordinates, namespaced surface normals and colour agreed exactly over all 1,788,994 points of a public CC-BY terrestrial scan across nine dimensions, compared as an exact quantised integer sum at a 1e-6 quantum rather than as a summary statistic, so one point wrong by a micrometre fails the comparison. Intensity is outside it: PDAL rescales intensity by 65535/(max - min) without subtracting the minimum, so the two sides report different numbers for the same file. The scan is a CloudCompare re-export rather than a scanner-native write. Three further files are read by tests of their own. One is a five-scan registered file with its per-scan poses, one carries multiple returns, and the third is 587 MB with an unknown Riegl extension that stays namespaced rather than being read as part of the standard prototype. Those three are too large to commit, so each test reads a path from an environment variable and skips when it is unset. No workflow sets them, so they do not run in the release gate and none of them supports the E4 grade. Spherical coordinates remain untested.
 
 ## What the DSM, DTM and CHM evidence covers, and what it does not
 

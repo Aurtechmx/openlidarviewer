@@ -1,8 +1,12 @@
 /**
  * hoverPickGate.test.ts — the pure gate behind "suspend the live probe pick
  * while the user is interacting or the camera is tweening". Pins the full truth
- * table, and pins that the gate runs during a plain hover (neither flag set) —
- * the case a debounced `moving` flag would have wrongly frozen.
+ * table, and pins that the gate runs during a plain hover (no flag set) — the
+ * case a debounced `moving` flag would have wrongly frozen.
+ *
+ * The gate trusts its caller to report every way the camera is driven in
+ * `userInteracting`. `NavController.isDriving` supplies the four modes
+ * OrbitControls cannot see; navModeTransitions.test.ts pins that half.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -24,4 +28,5 @@ describe('shouldRunProbePick', () => {
   it('suspends when both interacting and tweening', () => {
     expect(shouldRunProbePick({ userInteracting: true, tweening: true })).toBe(false);
   });
+
 });

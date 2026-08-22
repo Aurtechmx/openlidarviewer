@@ -108,3 +108,86 @@ export const EXCLUDED_CLASSES = [3, 4, 5, 6, 7, 18];
 
 /** World up. Both fixtures are Z-up, so the sampled height is the point's z. */
 export const UP = [0, 0, 1];
+
+// ── CAPS: the corridor ends, where the segment rule and a rectangle differ ───
+//
+// The band is a distance from the SEGMENT a to b, so the corridor closes with a
+// half-disc of radius `band` at each end. A rectangle with square ends admits a
+// corner point sitting sqrt(2)·band from the line. RAMP and SCATTER cannot tell
+// the two apart: their beyond-the-end returns are 10 m and 8 m out against bands
+// of 2.5 m and 1.75 m, so both rules reject them. This fixture puts points in
+// the region where the two rules differ and lets the reference decide.
+//
+// Every coordinate is a multiple of 1/8 and under 40 in magnitude, so it is
+// exact in Float32 and in double, as with the other two fixtures.
+
+/** Section line, local render space. Axis-aligned, so chainage is x. */
+export const CAPS_A = [0, 0, 0];
+export const CAPS_B = [32, 0, 0];
+/** 33 stations over 32 m = a 1 m bin step. */
+export const CAPS_SAMPLES = 33;
+/** Corridor half-width, metres. */
+export const CAPS_BAND = 2;
+/** Bin step, metres. Exact: 32 / 32. */
+export const CAPS_BIN_STEP = (CAPS_B[0] - CAPS_A[0]) / (CAPS_SAMPLES - 1);
+/** Cross-line offsets of the interior corridor: CAPS_T_START + k·CAPS_T_STEP. */
+export const CAPS_T_START = -1.75;
+export const CAPS_T_STEP = 0.5;
+export const CAPS_T_COUNT = 8;
+/** Cross-line gradient, metres of elevation per metre of offset. */
+export const CAPS_CROSS = 0.25;
+/** Off-corridor decoy offset (outside CAPS_BAND) and its elevation lift. */
+export const CAPS_DECOY_T = 3.5;
+export const CAPS_DECOY_LIFT = 40;
+/**
+ * Elevation offset carried by every cap point the segment rule rejects. It is
+ * NEGATIVE because the comparison runs at low percentiles: a rejected point
+ * that leaked in would pull p25 down by tens of metres, which no rounding
+ * difference can imitate.
+ */
+export const CAPS_REJECT_LIFT = -40;
+
+/** Ground along the section: dyadic, so g(s) is exact for integer s. */
+export const capsGround = (s) => 10 + s / 8 - (s * s) / 4096;
+
+/**
+ * Cap probes, as [distance PAST the end, cross-line offset, admitted]. Each is
+ * placed at both ends, mirrored through the section's midpoint. `admitted` is
+ * declared here rather than derived, and scripts/make-profile-fixture.mjs
+ * asserts it against the distance to the endpoint before writing a byte.
+ *
+ * The first five sit inside the cap. The next six are the disputed region: a
+ * cross-line offset no greater than the band and a chainage no further past the
+ * end than the band, which a rectangle admits, but more than `band` from the
+ * segment. Two of them are the rectangle's own corners at exactly (band, band).
+ * The last two are outside on either rule.
+ *
+ * No probe is closer than 0.125 m to the cap boundary. Two projection
+ * implementations agree to about 1e-15 relative, so nothing here is decided by
+ * which one ran.
+ */
+export const CAPS_PROBES = [
+  [0.5, 0.25, true],
+  [1, 0.75, true],
+  [1.5, 0.5, true],
+  [0.25, -1.5, true],
+  [1.25, -1, true],
+  [1.5, 1.75, false],
+  [2, 2, false],
+  [2, -2, false],
+  [1.75, -1.5, false],
+  [0.75, 2, false],
+  [1, -1.875, false],
+  [3, 0.5, false],
+  [2.5, -1, false],
+];
+
+/**
+ * Closed-form profile height at an INTERIOR station of the caps fixture, from
+ * the surface equation and the type-7 definition. Stations 0 and CAPS_SAMPLES−1
+ * are outside its reach: the admitted cap points join their corridors, so those
+ * two are no longer an arithmetic progression.
+ */
+export const capsExpected = (i, p) =>
+  capsGround(i * CAPS_BIN_STEP)
+  + CAPS_CROSS * (CAPS_T_START + CAPS_T_STEP * (p / 100) * (CAPS_T_COUNT - 1));
