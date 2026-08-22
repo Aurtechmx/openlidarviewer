@@ -2213,7 +2213,7 @@ export class Viewer {
     const w = b[3] - b[0];
     const d = b[4] - b[1];
     const footprint = Math.max(1, w * d);
-    this._currentDensityPtsPerM2 = cloud.sourcePointCount / footprint;
+    this._currentDensityPtsPerM2 = (cloud.sourcePointCount ?? 0) / footprint;
   }
 
   /**
@@ -3653,7 +3653,7 @@ export class Viewer {
       origin: s.cloud.renderOrigin,
       name: s.cloud.name,
       sourceFormat: 'laz', // COPC and EPT both decode LAZ point records
-      sourcePointCount: s.cloud.sourcePointCount,
+      sourcePointCount: s.cloud.sourcePointCount ?? undefined,
       ...(crs ? { metadata: { crs } } : {}),
     });
   }
@@ -4631,7 +4631,7 @@ export class Viewer {
     if (this._streaming) {
       const resident = this._streaming.cloud.residentPointCount;
       displayedPoints += resident;
-      totalPoints += this._streaming.cloud.sourcePointCount;
+      totalPoints += this._streaming.cloud.sourcePointCount ?? resident;
       gpuBytesEstimate += estimateGpuBytes(resident);
     }
 

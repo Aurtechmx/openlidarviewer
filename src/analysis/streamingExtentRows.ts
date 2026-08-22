@@ -47,7 +47,7 @@ export interface StreamingExtentResult {
 export function streamingExtentRows(
   header: { readonly min: readonly [number, number, number]; readonly max: readonly [number, number, number] },
   ctx: SpatialContext,
-  sourcePointCount: number,
+  sourcePointCount: number | null,
 ): StreamingExtentResult {
   const unitConfirmed = ctx.linearUnitKnown;
 
@@ -68,7 +68,9 @@ export function streamingExtentRows(
   ];
 
   const footprintArea = w * d;
-  if (footprintArea > 0 && sourcePointCount > 0) {
+  // A source that cannot state its total has no nominal density or spacing.
+  // Absent rows, not zeroed ones: a density of zero reads as a measurement.
+  if (footprintArea > 0 && sourcePointCount !== null && sourcePointCount > 0) {
     const density = sourcePointCount / footprintArea;
     const spacing = Math.sqrt(footprintArea / sourcePointCount);
     const densityUnit = unitConfirmed ? ' pts/m²' : ' pts/unit²';

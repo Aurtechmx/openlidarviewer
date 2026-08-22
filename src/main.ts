@@ -1782,7 +1782,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       // area (and understates density) for a partial-footprint scan.
       const lb = streaming.dataBounds();
       areaM2 = footprintAreaM2(lb[3] - lb[0], lb[4] - lb[1], areaCrs);
-      pointCount = streaming.sourcePointCount;
+      pointCount = streaming.sourcePointCount ?? undefined;
       const sCrs = streaming.crs();
       metaCrsKnown = !!sCrs?.name;
       // Read the datum from the streamed source's own CRS (COPC VLRs / EPT srs)
@@ -2995,7 +2995,7 @@ const exportPanel = new ExportPanel({
     // cloud, so nothing is a reduced view yet. (An explicit `viewer == null`
     // check would trip TS2367 since `viewer` is typed non-null via a cast.)
     const sc = viewer?.streamingCloud;
-    return sc != null && sc.residentPointCount < sc.sourcePointCount;
+    return sc != null && (sc.sourcePointCount === null || sc.residentPointCount < sc.sourcePointCount);
   },
   getFullCloud: async () => {
     const f = scans.activeId ? sourceFileById.get(scans.activeId) : null;
@@ -4729,8 +4729,8 @@ async function exportSession(): Promise<void> {
       const exportFileName = streamingCloud?.name ?? (cloud ? cloud.name : null);
 
       let scanSummary: import('./io/session').SessionScanSummary | undefined;
-      if (streamingCloud) {
-        // Tight data AABB, not the octree cube — see the dataBounds() note above.
+      if (streamingCloud && streamingCloud.sourcePointCount !== null) {
+        // Tight data AABB, not the octree cube. No summary without a source total.
         const b = streamingCloud.dataBounds();
         const crs = streamingCloud.crs();
         scanSummary = {

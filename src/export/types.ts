@@ -174,7 +174,7 @@ export interface ExportSceneAdapter {
    * not the GPU-resident count). For streaming COPC, this is the full source
    * cloud's point total.
    */
-  sourcePointCount(): number;
+  sourcePointCount(): number | null;
   /** Currently displayed point count (resident on GPU). */
   residentPointCount(): number;
   /**

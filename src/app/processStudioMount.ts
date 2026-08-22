@@ -201,7 +201,7 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
  */
 export interface StudioViewer {
   /** The mounted streaming source, or null for a static / empty scene. */
-  readonly streamingCloud: { readonly sourcePointCount: number } | null;
+  readonly streamingCloud: { readonly sourcePointCount: number | null } | null;
   /** Every loaded static layer's id. */
   clouds(): readonly string[];
   getCloud(id: string):

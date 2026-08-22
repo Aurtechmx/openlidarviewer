@@ -42,7 +42,8 @@ export interface MetricsStreamingInput {
   loadingNodes: number;
   residentNodes: number;
   displayedPoints: number;
-  sourcePoints: number;
+  /** Total in the source, or null when the source cannot state one. */
+  sourcePoints: number | null;
   cacheBytes: number;
   decodedBytes?: number;
   gpuBytes: number;

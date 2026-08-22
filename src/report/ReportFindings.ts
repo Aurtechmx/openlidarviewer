@@ -205,7 +205,11 @@ export function buildInspectionSummary(
 
   // Headline: capture type (if classified) + scale.
   const captureLabel = provenance?.label ?? 'Point cloud';
-  const headline = `${captureLabel} — ${formatArea(area)}, ${formatCount(metadata.sourcePointCount)}.`;
+  const totalText =
+    metadata.sourcePointCount === null
+      ? 'point count unknown from source metadata'
+      : formatCount(metadata.sourcePointCount);
+  const headline = `${captureLabel} — ${formatArea(area)}, ${totalText}.`;
 
   const findings: ReportFinding[] = [];
 
@@ -214,7 +218,10 @@ export function buildInspectionSummary(
     {
       label: 'Coverage',
       value: formatArea(area),
-      detail: `${formatCount(metadata.sourcePointCount)} captured.`,
+      detail:
+        metadata.sourcePointCount === null
+          ? 'Point count unknown from source metadata.'
+          : `${formatCount(metadata.sourcePointCount)} captured.`,
       tier: 'info',
     },
     // 2. Point density — the one genuinely quantitative finding.

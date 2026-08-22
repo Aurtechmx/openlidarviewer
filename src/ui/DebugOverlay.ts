@@ -29,7 +29,8 @@ export interface StreamingDebugStats {
   loadingNodes: number;
   residentNodes: number;
   displayedPoints: number;
-  sourcePoints: number;
+  /** Total in the source, or null when the source cannot state one. */
+  sourcePoints: number | null;
   /** Compressed-cache LRU current bytes. */
   cacheBytes: number;
   /**
@@ -352,7 +353,9 @@ export class DebugOverlay {
         `nodes         ${streaming.residentNodes} resident / ${streaming.knownNodes} known`,
         `visible       ${streaming.visibleNodes}`,
         `queue         ${streaming.queuedNodes} queued / ${streaming.loadingNodes} decoding`,
-        `points        ${formatInt(streaming.displayedPoints)} / ${formatInt(streaming.sourcePoints)}`,
+        `points        ${formatInt(streaming.displayedPoints)} / ${
+          streaming.sourcePoints === null ? '?' : formatInt(streaming.sourcePoints)
+        }`,
       ];
       // Memory accounting — three-tier memory readout. Compressed (LRU bytes + cache
       // outcomes); decoded (CPU-side, sized from the decoded attribute set);

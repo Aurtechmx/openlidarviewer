@@ -377,7 +377,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       const first = visible[0]!.cloud.name;
       return visible.length === 1 ? first : `${first} + ${visible.length - 1} more`;
     },
-    sourcePointCount(): number {
+    sourcePointCount(): number | null {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.sourcePointCount;
       // The file's declared total, back-scaled when the loader strided a huge

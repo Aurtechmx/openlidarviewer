@@ -39,7 +39,8 @@ export interface StreamingStatus {
   loadedNodes: number;
   knownNodes: number;
   displayedPoints: number;
-  sourcePoints: number;
+  /** Total in the source, or null when the source cannot state one. */
+  sourcePoints: number | null;
   cacheBytes: number;
 }
 
@@ -55,7 +56,8 @@ export interface StreamingStatus {
 export interface StreamingScanSummary {
   fileName: string;
   pointFormat: number;
-  sourcePoints: number;
+  /** Total in the source, or null when the source cannot state one. */
+  sourcePoints: number | null;
   width: number;
   depth: number;
   height: number;
@@ -230,9 +232,9 @@ export function streamingProgress(status: StreamingStatus): StreamingProgress {
     fraction,
     determinate,
     nodesLabel: `${status.loadedNodes} / ${determinate ? known : '?'} nodes resident`,
-    pointsLabel: `${pointsMillions(status.displayedPoints)} / ${pointsMillions(
-      status.sourcePoints,
-    )} pts`,
+    pointsLabel: `${pointsMillions(status.displayedPoints)} / ${
+      status.sourcePoints === null ? '?' : pointsMillions(status.sourcePoints)
+    } pts`,
   };
 }
 
@@ -467,7 +469,11 @@ export class StreamingPanel {
     this._summary.replaceChildren(
       file,
       this._statRow('Format', this._value(formatText)),
-      this._statRow('Source', this._value(`${formatCount(summary.sourcePoints)} points`)),
+      this._statRow('Source', this._value(
+        summary.sourcePoints === null
+          ? 'Unknown from source metadata'
+          : `${formatCount(summary.sourcePoints)} points`,
+      )),
       this._statRow(
         'Extent',
         this._value(
@@ -569,9 +575,9 @@ export class StreamingPanel {
   /** Update the live status numbers + the determinate progress treatment. */
   setStatus(status: StreamingStatus): void {
     this._nodes.textContent = `${status.loadedNodes} / ${status.knownNodes}`;
-    this._points.textContent = `${formatCount(status.displayedPoints)} / ${formatCount(
-      status.sourcePoints,
-    )}`;
+    this._points.textContent = `${formatCount(status.displayedPoints)} / ${
+      status.sourcePoints === null ? 'Unknown' : formatCount(status.sourcePoints)
+    }`;
     this._cache.textContent = formatBytes(status.cacheBytes);
     this._updateProgress(status);
   }
