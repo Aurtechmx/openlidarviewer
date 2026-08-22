@@ -41,7 +41,10 @@
 
 import { parseLasHeader } from '../lasHeader';
 import { getLazPerf } from '../loadLas';
-import { validateDeclaredPointCount } from '../validateCount';
+import {
+  validateDeclaredPointCount,
+  compressedBytesPerPointFloor,
+} from '../validateCount';
 import { assertFiniteNodeTransform, assertFinitePositions } from '../streamingFiniteGuard';
 import type { DecodedChunk } from '../copc/copcChunkDecode';
 
@@ -193,12 +196,12 @@ export function decodeEptLaszipTileWith(
   const ctx = buildContext(buffer);
   // Bound the per-tile declared count by the tile's own bytes BEFORE the
   // seven typed-array allocations below. EPT tiles arrive from remote
-  // URLs; 1 byte/point compressed is far below any genuine LAZ stream,
-  // so this only trips on a header lying by orders of magnitude.
+  // URLs, and the floor comes from the record length, so this only trips
+  // on a header lying by orders of magnitude.
   const n = validateDeclaredPointCount(
     ctx.pointCount,
     buffer.byteLength,
-    1,
+    compressedBytesPerPointFloor(ctx.recordLength),
     'EPT laszip tile',
   );
   // Fail before decoding a whole tile when its transform is outright non-finite
