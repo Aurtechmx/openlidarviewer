@@ -302,12 +302,25 @@ export function buildTerrainReportContent(
     title: 'Coverage Analysis',
     rows: [
       { label: 'Coverage mode', value: provenance.coverageMode },
-      { label: 'Measured', value: fmtPct(q?.measuredCellRatio) },
-      { label: 'Interpolated', value: fmtPct(q?.interpolatedCellRatio) },
-      { label: 'Empty', value: fmtPct(q?.emptyCellRatio) },
+      // These three are shares of the WHOLE grid and sum to 100%. The verdict
+      // and the gate reasons quote interpolatedOfSurfaceRatio instead, which
+      // excludes empty cells, so both bases appear here and each says which one
+      // it is. dtmQualityGate documents that the two are not interchangeable,
+      // and a reader comparing an unlabelled 37% against an unlabelled 43%
+      // cannot tell that they are different questions.
+      { label: 'Measured (of grid)', value: fmtPct(q?.measuredCellRatio) },
+      { label: 'Interpolated (of grid)', value: fmtPct(q?.interpolatedCellRatio) },
+      { label: 'Empty (of grid)', value: fmtPct(q?.emptyCellRatio) },
+      {
+        label: 'Interpolated (of measured surface)',
+        value: fmtPct(q?.interpolatedOfSurfaceRatio),
+      },
       { label: 'Edge risk', value: fmtPct(q?.edgeRiskRatio) },
       {
-        label: 'Ground visibility',
+        // Not the same quantity as the "Ground visibility" bucket in Dataset
+        // Statistics, which is a categorical read. This is the classifier's
+        // ground share of all returns.
+        label: 'Ground returns (of all returns)',
         value: fmtPct(q?.groundPointRatio),
       },
       {

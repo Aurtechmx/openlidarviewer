@@ -467,4 +467,47 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
     expect(c.provenance.exportPermit).toBeNull();
     expect(c.provenanceLines.some((l) => /Export permit/.test(l))).toBe(false);
   });
+
+  /**
+   * Reported from a real 151M-point survey: the verdict said 43% of the surface
+   * was interpolated while the Coverage table said 37%, and both said only
+   * "interpolated". The two are different questions, one over the whole grid
+   * and one over the covered surface, and dtmQualityGate documents that they
+   * are not interchangeable. A reader could not reconcile the numbers because
+   * neither carried its basis. The same report used one label, "Ground
+   * visibility", for a categorical bucket and for the classifier's ground
+   * share, printing "-" for one and a percentage for the other.
+   */
+  describe('coverage figures name the basis they are measured against', () => {
+    const coverage = (r: ReturnType<typeof readyResult>) =>
+      buildTerrainReportContent(r, OPTS).sections.find((s) => s.title === 'Coverage Analysis');
+
+    it('separates the grid share from the covered-surface share', () => {
+      const r = readyResult();
+      // Distinct on purpose: with empty cells present the two never agree.
+      r.quality.interpolatedCellRatio = 0.37;
+      r.quality.interpolatedOfSurfaceRatio = 0.43;
+      const rows = coverage(r)?.rows ?? [];
+      const label = (l: string) => rows.find((x) => x.label === l)?.value;
+      expect(label('Interpolated (of grid)')).toBe('37%');
+      expect(label('Interpolated (of measured surface)')).toBe('43%');
+      // No bare "Interpolated" survives, which is what made the two look like
+      // one contradictory figure.
+      expect(rows.some((x) => x.label === 'Interpolated')).toBe(false);
+    });
+
+    it('states the basis of every share that sums over the grid', () => {
+      const rows = coverage(readyResult())?.rows ?? [];
+      for (const l of ['Measured (of grid)', 'Empty (of grid)']) {
+        expect(rows.some((x) => x.label === l)).toBe(true);
+      }
+    });
+
+    it('does not reuse the Ground visibility label for the ground return share', () => {
+      const c = buildTerrainReportContent(readyResult(), OPTS);
+      const cov = c.sections.find((s) => s.title === 'Coverage Analysis');
+      expect(cov?.rows.some((x) => x.label === 'Ground returns (of all returns)')).toBe(true);
+      expect(cov?.rows.some((x) => x.label === 'Ground visibility')).toBe(false);
+    });
+  });
 });
