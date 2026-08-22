@@ -18,14 +18,17 @@
  * honesty rule the PDF's Point Count follows — the declared total over the strided
  * display subset, the same rule as the Layers chip's `layerChipCount`) and
  * {@link isNonTerrainVerdict} (the capture-lens predicate that rules out an aerial
- * density guess for a compact object / interior). Everything else is imperative
- * orchestration, driven through a structural {@link ReportExportDeps} of accessor
- * functions closing over the shell's services and its mutable scan verdict rather
- * than the Viewer class — the same seam `openScan` and `openStreaming` use. The
- * heavy report engine (which pulls pdf-lib) is passed in as a lazy loader so this
- * module stays free of the boot graph. `main.ts` keeps thin `generateReportPdf` /
- * `exportGeoContext` delegates that bind its running state to these deps. Part of
- * the v0.6 decomposition (see `docs/architecture/architecture-map.md`).
+ * density guess for a compact object / interior, re-exported from
+ * `diagnostics/captureProvenance`). Everything else is imperative orchestration,
+ * driven through a structural {@link ReportExportDeps} of accessor functions
+ * closing over the shell's services rather than the Viewer class — the same seam
+ * `openScan` and `openStreaming` use. The heavy report engine (pdf-lib) is passed
+ * in as a lazy loader so this module stays free of the boot graph, and the capture
+ * fingerprint is read from the shared `diagnostics/captureProvenance` store so the
+ * PDF cannot state a capture type the Inspector contradicts. `main.ts` keeps thin
+ * `generateReportPdf` / `exportGeoContext` delegates that bind its running state
+ * to these deps. Part of the v0.6 decomposition
+ * (see `docs/architecture/architecture-map.md`).
  */
 
 import { footprintMetres } from '../report/reportFootprint';
@@ -33,13 +36,11 @@ import type { Footprint } from '../report/reportFootprint';
 import { spatialContextFrom } from '../geo/SpatialContext';
 import { isZUpFormat } from '../io/sniffFormat';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
-import { classify as classifyProvenance } from '../diagnostics/provenance';
-import { signalsForStaticCloud, signalsForStreamingCloud } from '../diagnostics/provenanceSignals';
+import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/captureProvenance';
 import { triggerDownload } from '../io/download';
 
 import type { MetadataInputs, ReportProvenanceFingerprint } from '../report';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import type { SpaceKind } from '../terrain/scanShape';
 import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
 import type { ScanService } from './ScanService';
@@ -87,13 +88,11 @@ export function reportPointCount(
 }
 
 /**
- * True for a compact object / interior scan — the capture-lens verdict that rules
- * out an aerial density guess in the provenance fingerprint (v0.5.7). A temple is
- * not drone LiDAR just because its density resembles a UAV survey.
+ * Re-exported from `diagnostics/captureProvenance`, which owns the shared capture
+ * verdict and applies this predicate to it. Kept on this module's surface because
+ * the capture lens is one of the pure decisions the report extraction exposes.
  */
-export function isNonTerrainVerdict(verdict: SpaceKind | null): boolean {
-  return verdict === 'object' || verdict === 'interior';
-}
+export { isNonTerrainVerdict };
 
 /**
  * The extent-carrying subset of {@link MetadataInputs}, mapped from a
@@ -136,9 +135,10 @@ export interface GeoExportContext {
 
 /**
  * The running-app seam the report / geo-context exports write through. Accessors
- * are functions, not snapshots, so the lazily-bound Viewer, the resolved CRS and
- * the mutable scan verdict are read at call time — exactly as the inline versions
- * read the shell's `viewer` / `crsService` / `lastScanVerdict`. The report engine
+ * are functions, not snapshots, so the lazily-bound Viewer and the resolved CRS
+ * are read at call time — exactly as the inline versions read the shell's
+ * `viewer` / `crsService`. The capture fingerprint comes from the shared
+ * `diagnostics/captureProvenance` store instead of a dep. The report engine
  * (which pulls pdf-lib) is passed as a lazy loader so this module stays free of the
  * boot graph and the pure decisions above can be tested without it.
  */
@@ -151,8 +151,6 @@ export interface ReportExportDeps {
   scans: Pick<ScanService, 'activeId' | 'activeCloud'>;
   /** The resolved CRS for the active scan (the shell's `crsService.current()`), or null. */
   crsCurrent: () => ResolvedCrs | null;
-  /** The shape router's latest verdict for the active scan (the shell's `lastScanVerdict`). */
-  lastScanVerdict: () => SpaceKind | null;
   /** The current class-scope stamp — disclosed on the PDF when a filter narrows the view. */
   classScopeStamp: () => string;
   /** A file name without its extension (the shell's `baseName`). */
@@ -345,35 +343,20 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
   const template = report.getReportTemplate(validatedTemplateId);
   const coverTitle = template?.label ?? 'Scan Report';
-  // Compute the same provenance fingerprint the Inspector's Provenance
-  // section already shows, and feed it to the report. Templates that
-  // include the `provenance` section get a real capture-type +
-  // confidence + cited accuracy bounds — auto-computed, varies per
-  // scan, gives every export per-template differentiation without
-  // requiring the user to take measurements or annotate first.
+  // The capture-type fingerprint the Inspector's Provenance card is showing,
+  // read from the shared store rather than re-classified here. Re-classifying
+  // let the PDF and the panel state opposite capture types for the same scan:
+  // only this site passed the shape router's verdict, so a compact object read
+  // "Ground-based scan" here and "Drone-mounted LiDAR" in the panel. The store
+  // also carries the user's capture-type override, so a corrected type reaches
+  // the deliverable instead of stopping at the panel.
   //
-  // Wrapped because a malformed cloud shape shouldn't sink the whole
-  // PDF — the section gracefully renders "No provenance fingerprint
-  // available" when the fingerprint is undefined.
+  // Wrapped because a throw must not sink the whole PDF. The section renders
+  // "No provenance fingerprint available" when the fingerprint is undefined.
   let provenanceFp: ReportProvenanceFingerprint | undefined;
   try {
-    const activeCloud = deps.scans.activeCloud();
-    const streamingCloud = viewer.streamingCloud;
-    // The shape router's verdict rules out an aerial density guess for a
-    // compact object / interior (v0.5.7 capture lens) — a temple is not drone
-    // LiDAR just because its density resembles a UAV survey.
-    const isNonTerrain = isNonTerrainVerdict(deps.lastScanVerdict());
-    if (activeCloud) {
-      const f = classifyProvenance({ ...signalsForStaticCloud(activeCloud as never), isNonTerrain });
-      provenanceFp = {
-        label: f.label,
-        confidence: f.confidence,
-        signals: f.signals,
-        bounds: f.bounds.map((b) => ({ label: b.label, value: b.value, source: b.source })),
-        disclaimer: f.disclaimer,
-      };
-    } else if (streamingCloud) {
-      const f = classifyProvenance({ ...signalsForStreamingCloud(streamingCloud as never), isNonTerrain });
+    const f = captureProvenance.fingerprint();
+    if (f) {
       provenanceFp = {
         label: f.label,
         confidence: f.confidence,
@@ -383,7 +366,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       };
     }
   } catch (err) {
-    if (deps.debug) console.warn('[report] classifyProvenance threw', err);
+    if (deps.debug) console.warn('[report] captureProvenance.fingerprint threw', err);
   }
   const inputs = report.composeReportInputs({
     templateId: validatedTemplateId,

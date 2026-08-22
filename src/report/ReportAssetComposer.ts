@@ -71,9 +71,9 @@ export interface ComposeReportInputs {
    * Provenance fingerprint from the classifier. When supplied AND the
    * selected template includes the `provenance` section, the PDF
    * renders a capture-type label + confidence badge + signals list +
-   * literature-cited accuracy bounds. Auto-computed by main.ts via
-   * `classifyProvenance(signalsFor…(cloud))` — the report module never
-   * sees the diagnostics types.
+   * literature-cited accuracy bounds. Read from the shared
+   * `diagnostics/captureProvenance` store by `app/reportExport.ts`, so the
+   * report module never sees the diagnostics types.
    */
   readonly provenance?: ReportProvenanceFingerprint;
   /**
