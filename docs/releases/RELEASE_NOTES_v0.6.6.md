@@ -49,6 +49,7 @@ Z-up station positions move by at most 6.8e-13 and station counts are unchanged.
 - an inspection issue workflow on annotations, carrying a severity, an open or resolved status and an observation date, with an issue list ordered worst first and a roll-up of what is still open;
 - one Speed to Quality performance control with an Auto position and an Advanced disclosure that keeps every underlying knob individually settable;
 - a top-down orthographic Plan view, reachable from the navigation bar and the command palette, which restores the scene you left rather than the one it drew;
+- vertical orbit is inverted by default, so dragging down raises the viewpoint. The Nira preset selects no inversion on either axis, and a stored preference of either sign is kept;
 - tool preflight in Process Studio: a blocked or review-only tool states the condition that limits it and offers the shortest action that lifts it, and the measurement tools gained a readiness surface they did not have.
 
 The performance control is display and streaming only. It drives the streaming preset, the resident point budget, concurrent decodes, the device-pixel-ratio ceiling, Eye Dome Lighting and antialiasing. It does not touch the static load budget, which voxel-reduces the decoded cloud that terrain analysis reads, along with measurement and export, so no slider position can change a measured number, a terrain product or a reported claim. The panel says so where the control is.

@@ -22,11 +22,15 @@
  * A named starting point for the invert signs. The invert flags are the source
  * of truth for behaviour; a preset is just a convenience that sets them.
  *
- *  - **default** — OLV's shipped convention (no inversion).
- *  - **recap** — Autodesk ReCap-style: vertical orbit inverted. This is the
- *    common "feels inverted vs CAD" case a validator hits.
- *  - **nira** — Nira is a browser point-cloud viewer whose orbit already
- *    matches OLV's convention, so it maps to no inversion too.
+ *  - **default** — OLV's shipped convention: vertical orbit inverted,
+ *    horizontal not. Dragging down raises the viewpoint, which is what
+ *    Autodesk ReCap does and what most people reaching for this app expect.
+ *  - **recap** — Autodesk ReCap-style. It now selects the same signs as
+ *    `default`, and is kept as a name a user can recognise rather than merged
+ *    away, because the two answer different questions: one is what OLV ships,
+ *    the other is what ReCap does.
+ *  - **nira** — Nira is a browser point-cloud viewer that inverts neither
+ *    axis, so it is the preset to pick for no inversion at all.
  */
 export type NavigationPreset = 'default' | 'recap' | 'nira';
 
@@ -40,10 +44,16 @@ export interface NavigationPreferences {
   preset: NavigationPreset;
 }
 
-/** The shipped defaults — no inversion, default preset. */
+/**
+ * The shipped defaults: vertical orbit inverted, horizontal not.
+ *
+ * `parseNavigationPreferences` falls back to these field by field, so a user
+ * who has never touched the setting gets the inverted vertical axis, while a
+ * stored preference of either sign is preserved exactly as written.
+ */
 export const DEFAULT_NAVIGATION_PREFERENCES: NavigationPreferences = {
   invertOrbitX: false,
-  invertOrbitY: false,
+  invertOrbitY: true,
   preset: 'default',
 };
 
@@ -53,8 +63,8 @@ const NAV_PRESETS: ReadonlySet<NavigationPreset> = new Set(['default', 'recap', 
 /**
  * The invert signs each preset selects. These sign combos are the ADJUSTABLE
  * product choice — the one place to retune what "ReCap" or "Nira" should feel
- * like without touching the handler. `recap` inverts the vertical axis only;
- * `default` and `nira` match OLV's current convention.
+ * like without touching the handler. `default` and `recap` both invert the
+ * vertical axis only; `nira` inverts neither.
  */
 export function navPresetSigns(
   preset: NavigationPreset,
@@ -66,7 +76,7 @@ export function navPresetSigns(
       return { invertOrbitX: false, invertOrbitY: false };
     case 'default':
     default:
-      return { invertOrbitX: false, invertOrbitY: false };
+      return { invertOrbitX: false, invertOrbitY: true };
   }
 }
 
