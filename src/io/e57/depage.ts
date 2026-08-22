@@ -69,13 +69,25 @@ export interface Depaged {
  * ambiguity: the pass is one table-driven byte loop (~300 MB/s) over bytes
  * this function already copies.
  *
+ * `fileBytes` bounds the run at the length the file's own header declares,
+ * defaulting to the whole buffer. Content past that point is not part of the
+ * file the header describes, so it is left out of the logical buffer and every
+ * offset resolved against it (see `parseE57`).
+ *
  * @throws when the file is not a whole number of pages (truncated), or when a
  *   page's stored checksum does not match its bytes. The error names the page
  *   index so a corrupt region can be located in the file.
  */
-export function depage(buffer: ArrayBuffer, pageSize: number): Depaged {
+export function depage(buffer: ArrayBuffer, pageSize: number, fileBytes?: number): Depaged {
   const payload = pageSize - 4;
-  const src = new Uint8Array(buffer);
+  const bound = fileBytes ?? buffer.byteLength;
+  if (!Number.isSafeInteger(bound) || bound < 0 || bound > buffer.byteLength) {
+    throw new Error(
+      `E57 file is truncated: the header declares ${bound} bytes but only ` +
+        `${buffer.byteLength} are present.`,
+    );
+  }
+  const src = new Uint8Array(buffer, 0, bound);
   if (src.length % pageSize !== 0) {
     throw new Error(
       `E57 file is truncated: ${src.length} bytes is not a whole number of ` +

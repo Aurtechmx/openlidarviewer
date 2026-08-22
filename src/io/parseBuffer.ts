@@ -5,7 +5,7 @@ import type { LoaderFn } from './loaderRegistry';
 import { isRegisteredFormat } from './formatInfo';
 import { downsampleToBudget } from '../process/voxelDownsample';
 import { LoadError } from './loadErrors';
-import type { LoadPlan } from './loadPlan';
+import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
 
@@ -70,6 +70,11 @@ function assertNonEmptyCloud(cloud: PointCloud): void {
  * decoded in full, decoded-then-voxel-reduced, or stride-decoded, per the
  * plan's mode. Every other format keeps the decode-then-downsample path.
  *
+ * `e57Plan` is the E57 equivalent, read from that format's XML declaration. It
+ * is handed to `loadE57` so the decode applies the caller's plan; without it
+ * the loader plans from the device signals of whatever thread it runs on, and
+ * inside a worker those are always the desktop ones.
+ *
  * `onProgress` receives staged-progress updates (`decoding`, `optimizing`).
  */
 export async function parseBuffer(
@@ -79,6 +84,7 @@ export async function parseBuffer(
   budget = POINT_BUDGET,
   plan?: LoadPlan,
   onProgress?: (u: ProgressUpdate) => void,
+  e57Plan?: E57DecodePlan,
 ): Promise<LoadResult> {
   // --- Budget-aware fast load: LAS/LAZ with a preflight plan. ---
   if (plan && (format === 'las' || format === 'laz')) {
@@ -112,7 +118,13 @@ export async function parseBuffer(
 
   // --- Every other format: decode fully, then voxel-downsample to budget. ---
   onProgress?.({ stage: 'decoding' });
-  const loader = pickLoader(format);
+  // The registry's E57 entry calls `loadE57(buffer, name)`, which leaves the
+  // loader to plan for itself. With a plan from the caller, route around it so
+  // the plan reaches the decode.
+  const loader: LoaderFn =
+    e57Plan && format === 'e57'
+      ? async (buf, nm) => (await import('./loadE57')).loadE57(buf, nm, { plan: e57Plan })
+      : pickLoader(format);
   // The chunked text loaders (XYZ/CSV, PTS) report decode progress; binary
   // loaders ignore the callback.
   const cloud = await loader(buffer, name, onProgress);

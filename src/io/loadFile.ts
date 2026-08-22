@@ -10,6 +10,8 @@ import {
   planLoad,
   planE57Decode,
   formatPointCount,
+  e57TooLargeMessage,
+  e57NoPlanMessage,
   NON_STREAMING_FORMATS,
   LARGE_NON_LAS_THRESHOLD_BYTES,
   LARGE_STATIC_LAS_THRESHOLD_BYTES,
@@ -151,32 +153,30 @@ export interface E57FilePreflight {
  * The E57 reader is dynamically imported so it stays in its own lazily-fetched
  * chunk; opening a `.las` must not download the E57 parser.
  *
- * Returns `undefined` when anything about the declaration will not read. The
- * preflight is informational and never load-blocking: the loader re-reads the
- * same header during the decode and reports a proper error there.
+ * Throws when anything about the declaration will not read. `preflightFile`
+ * catches that and records the reason: `fileMetadata` stays non-throwing and
+ * describes the file as unopenable, while `loadFile` refuses it, because a file
+ * identified as E57 with no established memory plan is not a file to start
+ * reading (see `e57Refusal`).
  */
 async function buildE57Preflight(
   file: File,
   headSlice: ArrayBuffer,
   options: LoadOptions,
-): Promise<E57FilePreflight | undefined> {
-  try {
-    const { e57XmlPageRunFromHead, preflightE57FromXmlPages } = await import('./e57/preflight');
-    const run = e57XmlPageRunFromHead(headSlice, file.size);
-    const pages = await file.slice(run.physicalStart, run.physicalEnd).arrayBuffer();
-    const declared = preflightE57FromXmlPages(new Uint8Array(pages), run);
-    const plan = planE57Decode({
-      sourceCount: declared.recordCount,
-      fileBytes: file.size,
-      columnsPerRecord: declared.columnsPerRecord,
-      attributes: declared.attributes,
-      isMobile: options.isMobile ?? false,
-      deviceMemoryGB: options.deviceMemoryGB,
-    });
-    return { declared, plan };
-  } catch {
-    return undefined;
-  }
+): Promise<E57FilePreflight> {
+  const { e57XmlPageRunFromHead, preflightE57FromXmlPages } = await import('./e57/preflight');
+  const run = e57XmlPageRunFromHead(headSlice, file.size);
+  const pages = await file.slice(run.physicalStart, run.physicalEnd).arrayBuffer();
+  const declared = preflightE57FromXmlPages(new Uint8Array(pages), run);
+  const plan = planE57Decode({
+    sourceCount: declared.recordCount,
+    fileBytes: file.size,
+    columnsPerRecord: declared.columnsPerRecord,
+    attributes: declared.attributes,
+    isMobile: options.isMobile ?? false,
+    deviceMemoryGB: options.deviceMemoryGB,
+  });
+  return { declared, plan };
 }
 
 /**
@@ -189,6 +189,11 @@ interface FilePreflight {
   plan?: LoadPlan;
   /** E57 only — the declaration and decode plan `buildE57Preflight` produced. */
   e57?: E57FilePreflight;
+  /**
+   * E57 only. Why `e57` is absent: set exactly when the declaration would not
+   * read, so the refusal can name the reason instead of a bare failure.
+   */
+  e57PreflightError?: string;
   /** Point count from a header that exposes one without a plan (PTS). */
   headerPointCount?: number;
   /**
@@ -253,7 +258,11 @@ async function preflightFile(
   if (format === 'las' || format === 'laz') {
     preflight.plan = buildLasPlan(headSlice, format, file.size, budget, options);
   } else if (format === 'e57') {
-    preflight.e57 = await buildE57Preflight(file, headSlice, options);
+    try {
+      preflight.e57 = await buildE57Preflight(file, headSlice, options);
+    } catch (err) {
+      preflight.e57PreflightError = err instanceof Error ? err.message : String(err);
+    }
   } else if (format === 'pts') {
     preflight.headerPointCount = readPtsHeaderCount(headSlice);
   }
@@ -269,6 +278,33 @@ async function preflightFile(
     preflight.largeStaticLas = true;
   }
   return preflight;
+}
+
+/**
+ * The refusal a finished preflight already justifies, or `undefined` when the
+ * file may be read.
+ *
+ * E57 is the one static format whose header states the memory an open needs
+ * before the file is read, and `preflightFile` has that verdict in hand two
+ * small slices in. Both outcomes below are refusals BEFORE the whole-file read:
+ * a plan that does not fit, and a declaration that would not parse. The second
+ * is the fail-closed half. An E57 with no plan has no stride and no ceiling
+ * check, so reading it is reading unguarded, which is what the guard exists to
+ * stop (compare `isLinearUnitKnown()`: a missing value must not read as a
+ * known-good one).
+ */
+function e57Refusal(file: File, preflight: FilePreflight): LoadError | undefined {
+  if (preflight.format !== 'e57') return undefined;
+  if (!preflight.e57) {
+    return new LoadError(
+      'malformed-file',
+      e57NoPlanMessage(file.name, preflight.e57PreflightError ?? 'no reason recorded'),
+    );
+  }
+  if (!preflight.e57.plan.fits) {
+    return new LoadError('memory-constraint', e57TooLargeMessage(file.name, preflight.e57.plan));
+  }
+  return undefined;
 }
 
 /**
@@ -306,7 +342,15 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
   // heap) exceed it on their own. No reshape of the point budget can fix that,
   // so the honest line is that the open may fail, not that it may be slow.
   // Reporting only the ordinary size note here implied the file fits.
-  if (plan?.mayExceedCeiling) {
+  if (preflight.e57PreflightError !== undefined) {
+    // The declaration did not read, so there is no plan to describe and the
+    // open will be refused. Stating it here is what the user sees before the
+    // refusal, and it costs the same two small slices the plan would have.
+    meta.warning =
+      `${formatInfo(format).label} declaration unreadable — the file header and XML ` +
+      `section did not parse, so the memory an open would need cannot be established ` +
+      `and the open will be refused. The file may be corrupt or truncated.`;
+  } else if (plan?.mayExceedCeiling) {
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — the estimated ` +
       `memory needed is above what this device can be expected to give the tab, even at ` +
@@ -469,6 +513,14 @@ export async function loadFile(
   onPreload?.(buildPreloadSummary(buildSourceMetadata(file, preflight)));
   const sniffMs = performance.now() - startedAt;
 
+  // --- Refuse here, before a byte of the body is read. ---
+  // The E57 memory verdict is knowable from two small slices, and the read
+  // below materialises the WHOLE file in one ArrayBuffer. Leaving the refusal
+  // to the worker meant a 600 MB file already known not to fit was pulled into
+  // memory first, on the device least able to hold it, and only then rejected.
+  const refusal = e57Refusal(file, preflight);
+  if (refusal) throw refusal;
+
   // --- Now read the whole file — only once the format is known. ---
   onProgress?.({ stage: 'reading-file' });
   const readStartedAt = performance.now();
@@ -564,7 +616,14 @@ export async function loadFile(
     // The ArrayBuffer is transferred (not copied) into the worker.
     postedAt = performance.now();
     try {
-      worker.postMessage({ buffer, format, name: file.name, budget, plan }, [buffer]);
+      // `e57Plan` travels with the request so the worker decodes to the plan
+      // this thread built and the preload summary named. The worker global
+      // scope has no `matchMedia`, so a worker planning for itself reads a
+      // phone as a desktop and can pick a different stride, or none.
+      worker.postMessage(
+        { buffer, format, name: file.name, budget, plan, e57Plan: preflight.e57?.plan },
+        [buffer],
+      );
     } catch (err) {
       // A synchronous post failure — a DataCloneError on an unclonable or
       // already-detached buffer. Left unguarded the throw escapes this executor

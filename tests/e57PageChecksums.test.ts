@@ -217,6 +217,8 @@ describe('parseE57 — corruption inside a real E57 file', () => {
 /** A minimal valid 48-byte header, patchable per case. */
 function header48(
   fields: Partial<{
+    versionMajor: number;
+    versionMinor: number;
     filePhysicalLength: bigint;
     xmlPhysicalOffset: bigint;
     xmlLogicalLength: bigint;
@@ -226,8 +228,8 @@ function header48(
   const bytes = new Uint8Array(48);
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < SIGNATURE.length; i++) bytes[i] = SIGNATURE.charCodeAt(i);
-  view.setUint32(8, 1, true);
-  view.setUint32(12, 0, true);
+  view.setUint32(8, fields.versionMajor ?? 1, true);
+  view.setUint32(12, fields.versionMinor ?? 0, true);
   view.setBigUint64(16, fields.filePhysicalLength ?? 0n, true);
   view.setBigUint64(24, fields.xmlPhysicalOffset ?? 48n, true);
   view.setBigUint64(32, fields.xmlLogicalLength ?? 100n, true);
@@ -310,5 +312,99 @@ describe('physicalToLogical — checksum-offset alias (M7)', () => {
     }
     // The genuine page-1 payload byte still resolves cleanly.
     expect(physicalToLogical(1024, PAGE)).toBe(1020);
+  });
+});
+
+// ── Format version ───────────────────────────────────────────────────────────
+// The header carries a major and a minor version, and both were read and then
+// ignored. A file declaring a future major version was parsed under the 1.x
+// layout: same fixed header fields, same page geometry, same XML schema. Those
+// are exactly what a major revision is free to change, so the decode would
+// produce coordinates with nothing attached to say they came from a layout this
+// reader does not implement.
+describe('parseE57Header — format version', () => {
+  it('reads the committed fixture as version 1.0', () => {
+    const h = parseE57Header(bufferOf(syntheticBytes));
+    expect(h.versionMajor).toBe(1);
+    expect(h.versionMinor).toBe(0);
+  });
+
+  it('refuses a future major version', () => {
+    expect(() => parseE57Header(header48({ versionMajor: 2 }))).toThrow(
+      /version 2\.0 is not supported/,
+    );
+  });
+
+  it('refuses a major version below 1', () => {
+    expect(() => parseE57Header(header48({ versionMajor: 0 }))).toThrow(/not supported/);
+  });
+
+  it('accepts a higher MINOR version, which the standard keeps compatible', () => {
+    const h = parseE57Header(header48({ versionMinor: 7 }));
+    expect(h.versionMajor).toBe(1);
+    expect(h.versionMinor).toBe(7);
+  });
+});
+
+// ── Content past the declared file length ────────────────────────────────────
+// `filePhysicalLength` was checked in one direction only: a buffer SHORTER than
+// the declared length was refused as truncated, and a longer one was de-paged
+// whole. Every offset in the file then resolved against a logical buffer that
+// included bytes past the end of the file the header describes, so a section
+// offset could point outside the declared file and still decode.
+describe('parseE57 — content past the declared file length', () => {
+  /** Where the fixture's XML states its point-section offset. */
+  const OFFSET_ATTRIBUTE = 'fileOffset="1168"';
+
+  /**
+   * The committed fixture with a copy of its point-section page appended after
+   * the length its header declares, and its XML offset moved onto that copy.
+   * The appended page carries a correct CRC-32C, and the declared length is
+   * left at the original 2048, so the appended bytes are the only thing outside
+   * the declared file.
+   */
+  function sectionPastDeclaredEnd(): Uint8Array {
+    const patched = syntheticBytes.slice();
+    const at = Buffer.from(patched).toString('latin1').indexOf(OFFSET_ATTRIBUTE);
+    expect(at).toBeGreaterThan(0);
+    expect(Math.floor((at + OFFSET_ATTRIBUTE.length) / 1024)).toBe(0);
+    // Same digit count, so the XML length and every offset after it are unmoved.
+    const moved = '2192';
+    for (let i = 0; i < moved.length; i++) {
+      patched[at + 'fileOffset="'.length + i] = moved.charCodeAt(i);
+    }
+    // Page 0 changed, so its checksum has to be rewritten or the file reads as
+    // corrupt for a reason that has nothing to do with this case.
+    new DataView(patched.buffer, patched.byteOffset, patched.byteLength).setUint32(
+      1020,
+      crc32c(patched, 0, 1020),
+      false,
+    );
+    const out = new Uint8Array(patched.length + 1024);
+    out.set(patched, 0);
+    out.set(patched.subarray(1024, 2048), 2048);
+    return out;
+  }
+
+  it('leaves the declared length at the original file size', () => {
+    const bytes = sectionPastDeclaredEnd();
+    expect(bytes).toHaveLength(3072);
+    expect(parseE57Header(bufferOf(bytes)).filePhysicalLength).toBe(2048);
+  });
+
+  it('the appended page passes every check except the declared length', () => {
+    // The premise: nothing but the bound rejects these bytes. All three pages
+    // checksum, so a refusal below is the declared length doing the work.
+    expect(() => depage(bufferOf(sectionPastDeclaredEnd()), 1024)).not.toThrow();
+  });
+
+  it('refuses a point section placed past the declared end', () => {
+    expect(() => parseE57(bufferOf(sectionPastDeclaredEnd()))).toThrow(
+      /past the 2048-byte file/,
+    );
+  });
+
+  it('still parses the fixture whose section is inside the declared length', () => {
+    expect(() => parseE57(bufferOf(syntheticBytes))).not.toThrow();
   });
 });

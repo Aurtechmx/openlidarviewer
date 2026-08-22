@@ -11,6 +11,7 @@
  */
 
 import { clamp } from '../numeric';
+import { formatByteSize } from './formatByteSize';
 import type { SourceFormat } from './sniffFormat';
 
 /** How a cloud is turned into the on-screen point set. */
@@ -641,4 +642,40 @@ export function planE57Decode(input: E57DecodePlanInput): E57DecodePlan {
     memoryEstimateBytes: estimate(decodedCount),
     fits: true,
   };
+}
+
+// --- E57 refusal wording ---------------------------------------------------
+//
+// Two places refuse an E57: `loadFile`, which holds the preflight plan before
+// the whole-file read, and `loadE57`, which holds it before the decode. Both
+// name the same numbers from the same functions here, so the message a user
+// gets does not depend on which guard fired.
+
+/** The refusal for a file no stride brings under the memory ceiling. */
+export function e57TooLargeMessage(name: string, plan: E57DecodePlan): string {
+  return (
+    `${name} is too large for this device's memory. Reading it needs about ` +
+    `${formatByteSize(plan.fullDecodeEstimateBytes)} — an E57 decode holds the file, a ` +
+    `checksum-stripped copy of it, and one Float64 column per attribute per scan all at ` +
+    `once — against a ${formatByteSize(plan.ceilingBytes)} budget for this device. ` +
+    `Sampling it down far enough to fit would leave too few points to be worth showing. ` +
+    `Convert it to COPC or EPT (PDAL or untwine) and open that instead: those stream ` +
+    `rather than decoding the whole file.`
+  );
+}
+
+/**
+ * The refusal for a file identified as E57 whose declaration will not read.
+ *
+ * A file that reached this point carries the E57 signature, so the memory guard
+ * applies to it. Without a plan there is no stride, no estimate and no ceiling
+ * check, so the load is refused with the reason attached.
+ */
+export function e57NoPlanMessage(name: string, reason: string): string {
+  return (
+    `${name} could not be read: its E57 declaration (the file header and the XML ` +
+    `section that states the scan record counts) did not parse, so the memory an open ` +
+    `would need cannot be established and the open is refused. The file may be corrupt ` +
+    `or truncated. Reported: ${reason}`
+  );
 }

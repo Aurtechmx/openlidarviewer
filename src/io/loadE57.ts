@@ -15,7 +15,7 @@ import { parseE57 } from './e57/parseE57';
 import type { E57ScanData } from './e57/parseE57';
 import type { E57Metadata, E57Pose, E57SourceMetadata } from './e57/schema';
 import { preflightE57, e57FieldIsConsumed, e57LocalFieldName } from './e57/preflight';
-import { planE57Decode } from './loadPlan';
+import { planE57Decode, e57TooLargeMessage, e57NoPlanMessage } from './loadPlan';
 import type { E57DecodePlan } from './loadPlan';
 import { formatByteSize } from './formatByteSize';
 import { LoadError } from './loadErrors';
@@ -132,6 +132,19 @@ export interface LoadE57Options {
   isMobile?: boolean;
   /** `navigator.deviceMemory` in GB, when the runtime reports it. */
   deviceMemoryGB?: number;
+  /**
+   * The decode plan the caller has already built from this file's declaration.
+   * Supplied, it is used as given and nothing is re-planned: the stride applied
+   * is the stride the caller's preload summary named.
+   *
+   * `loadFile` builds this on the main thread and posts it to the parse worker.
+   * The plan is device-dependent (`memoryCeilingBytes` halves the ceiling on a
+   * phone) and the mobile signal is a `matchMedia` query, which exists on
+   * `Window` and not on a worker global scope. A worker that planned for itself
+   * would therefore plan as a desktop for a phone user, applying a stride, or a
+   * full decode, that the main thread had ruled out.
+   */
+  plan?: E57DecodePlan;
 }
 
 /**
@@ -141,9 +154,13 @@ export interface LoadE57Options {
  * The touch-first mobile test is spelled out here rather than imported from the
  * UI layer, for the reason `io/workerPool/decodePoolSize.ts` gives for the same
  * duplication: `src/io` must not depend on `src/ui` for a decision this small.
- * Never throws — a DOM-free environment (a Node test, a worker with no
- * `matchMedia`) reports nothing and lands on the desktop defaults, which the
- * E57 ceiling clamps anyway.
+ * Never throws. A DOM-free environment (a Node test, a worker global scope,
+ * neither of which has `matchMedia`) reports no mobile signal and lands on the
+ * desktop defaults. Those defaults are a LARGER ceiling than a phone's
+ * (`memoryCeilingBytes` takes 0.6 of reported memory against mobile's 0.4, and
+ * falls back to 1.5 GB against mobile's 600 MB), so this is not a safe place to
+ * decide for a phone user. `LoadE57Options.plan` is how the main thread's
+ * verdict reaches a worker.
  */
 function readDeviceHints(): Required<Pick<LoadE57Options, 'isMobile'>> & LoadE57Options {
   let deviceMemoryGB: number | undefined;
@@ -165,17 +182,40 @@ function readDeviceHints(): Required<Pick<LoadE57Options, 'isMobile'>> & LoadE57
   return { isMobile, deviceMemoryGB };
 }
 
-/** The refusal message for a file no stride can bring under the ceiling. */
-function tooLargeMessage(name: string, plan: E57DecodePlan): string {
-  return (
-    `${name} is too large for this device's memory. Reading it needs about ` +
-    `${formatByteSize(plan.fullDecodeEstimateBytes)} — an E57 decode holds the file, a ` +
-    `checksum-stripped copy of it, and one Float64 column per attribute per scan all at ` +
-    `once — against a ${formatByteSize(plan.ceilingBytes)} budget for this device. ` +
-    `Sampling it down far enough to fit would leave too few points to be worth showing. ` +
-    `Convert it to COPC or EPT (PDAL or untwine) and open that instead: those stream ` +
-    `rather than decoding the whole file.`
-  );
+/**
+ * Read the file's own declaration and plan the decode from it. The fallback for
+ * a caller with no plan of its own: the batch converter's full-resolution
+ * decode, and any direct `loadE57` call.
+ *
+ * FAILS CLOSED. A file that reaches here carries the E57 signature, so the
+ * memory guard applies to it, and a declaration that will not parse leaves no
+ * stride, no estimate and no ceiling to check against. The previous code caught
+ * this and left `plan` undefined, which `plan?.stride ?? 1` then read as a full
+ * decode: a preflight failure turned the guard off on exactly the files it
+ * exists for. The same shape `isLinearUnitKnown()` fixed for CRS units.
+ */
+function planFromDeclaration(
+  buffer: ArrayBuffer,
+  name: string,
+  options?: LoadE57Options,
+): E57DecodePlan {
+  const hints = { ...readDeviceHints(), ...options };
+  try {
+    const declared = preflightE57(buffer);
+    return planE57Decode({
+      sourceCount: declared.recordCount,
+      fileBytes: buffer.byteLength,
+      columnsPerRecord: declared.columnsPerRecord,
+      attributes: declared.attributes,
+      isMobile: hints.isMobile ?? false,
+      deviceMemoryGB: hints.deviceMemoryGB,
+    });
+  } catch (err) {
+    throw new LoadError(
+      'malformed-file',
+      e57NoPlanMessage(name, err instanceof Error ? err.message : String(err)),
+    );
+  }
 }
 
 /**
@@ -199,39 +239,22 @@ export async function loadE57(
   // columns are worth decoding at all.
   const localName = e57LocalFieldName;
 
-  // What the file declares about itself, before a point is read. This is the
-  // whole reason E57 can have a budget plan at all: LAS/LAZ expose a point
-  // count in their public header, and E57 exposes the same facts in its XML
-  // section, which the preflight reaches with two small reads.
+  // How this file will be decoded, before a point is read. This is the whole
+  // reason E57 can have a budget plan at all: LAS/LAZ expose a point count in
+  // their public header, and E57 exposes the same facts in its XML section,
+  // which the preflight reaches with two small reads.
   //
-  // A preflight failure is not a load failure. It reads the same header, the
-  // same page checksums and the same XML `parseE57` is about to read, so
-  // anything it refuses the decode refuses too, in its own words and with its
-  // own error category. Continuing here therefore cannot smuggle an unplanned
-  // full decode past the guard: the only files that get past this catch are
-  // files the decode is itself about to reject.
-  const hints = { ...readDeviceHints(), ...options };
-  let plan: E57DecodePlan | undefined;
-  try {
-    const declared = preflightE57(buffer);
-    plan = planE57Decode({
-      sourceCount: declared.recordCount,
-      fileBytes: buffer.byteLength,
-      columnsPerRecord: declared.columnsPerRecord,
-      attributes: declared.attributes,
-      isMobile: hints.isMobile ?? false,
-      deviceMemoryGB: hints.deviceMemoryGB,
-    });
-  } catch {
-    plan = undefined;
-  }
+  // A caller that already read that declaration passes its plan in, and it is
+  // used as given. `loadFile` does exactly that, so the decode applies the
+  // stride its preload summary named. Everything else plans here.
+  const plan = options?.plan ?? planFromDeclaration(buffer, name, options);
   // Refuse BEFORE decoding. Starting a read already known not to fit is how the
   // tab died: nothing in the app can close a scan that killed the process it
   // was loading in, so the user just loses the session.
-  if (plan && !plan.fits) {
-    throw new LoadError('memory-constraint', tooLargeMessage(name, plan));
+  if (!plan.fits) {
+    throw new LoadError('memory-constraint', e57TooLargeMessage(name, plan));
   }
-  const stride = plan?.stride ?? 1;
+  const stride = plan.stride;
 
   // Decode only the columns this loader consumes. Anything else a file declares
   // — a structured scan's rowIndex / columnIndex, spherical coordinates this
@@ -391,7 +414,7 @@ export async function loadE57(
   //
   // At stride 1 every one of these is the no-op it was before: the declared and
   // decoded counts stay equal and no warning is added.
-  if (plan && stride > 1) {
+  if (stride > 1) {
     warnings.push(
       `Read as a sample: one record per ${stride} (stride ${stride}) — ` +
         `${total.toLocaleString('en-US')} of ${plan.sourceCount.toLocaleString('en-US')} ` +
@@ -412,7 +435,7 @@ export async function loadE57(
     origin: clean.origin,
     sourceFormat: 'e57',
     name,
-    declaredPointCount: plan && stride > 1 ? plan.sourceCount : total,
+    declaredPointCount: stride > 1 ? plan.sourceCount : total,
     decodedPointCount: total,
     loadStride: stride,
     metadata: e57Metadata(parsed.metadata, parsed.sourceMetadata, scans.length, warnings),

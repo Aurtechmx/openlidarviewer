@@ -84,7 +84,13 @@ export interface ParseE57Options {
 /** Parse an E57 file into decoded scans and file metadata. */
 export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseResult {
   const header = parseE57Header(buffer);
-  const { logical } = depage(buffer, header.pageSize);
+  // De-page only the bytes the header declares. `parseE57Header` refuses a
+  // buffer SHORTER than the declared length; a longer one carries content past
+  // the end of the file its own header describes, and de-paging that content
+  // would put it inside the logical buffer every offset below is resolved and
+  // bounds-checked against. Bounding here is what keeps the XML range, the
+  // section offsets and the packet walk inside the declared file.
+  const { logical } = depage(buffer, header.pageSize, header.filePhysicalLength);
 
   const xmlStart = physicalToLogical(header.xmlPhysicalOffset, header.pageSize);
   // Prove the declared XML range fits the de-paged buffer before slicing it.
@@ -100,6 +106,19 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
 
   if (document.scans.length === 0) {
     throw new Error('E57: the file contains no 3D scans.');
+  }
+
+  // Each scan's point section must start inside the declared file. Without
+  // this the offset lands in whatever the de-paged buffer happens to hold and
+  // is reported as a missing section id, which names the wrong fault.
+  for (const scan of document.scans) {
+    if (physicalToLogical(scan.fileOffset, header.pageSize) >= logical.length) {
+      throw new Error(
+        `E57: scan "${scan.name}" places its point section at physical offset ` +
+          `${scan.fileOffset}, past the ${header.filePhysicalLength}-byte file its ` +
+          'header declares.',
+      );
+    }
   }
 
   const stride = Math.max(1, Math.floor(opts?.stride ?? 1));
