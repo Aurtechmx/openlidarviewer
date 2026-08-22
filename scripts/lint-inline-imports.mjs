@@ -25,11 +25,12 @@
  *   - exempting type positions by a trailing `.` also exempted
  *     `import('./x').then(…)`, the very form the original caught, and a
  *     specifier split across lines defeated all three.
- * The parser here is the one the bundler itself uses, so the question the lint
- * asks is the question the build answers: an `ImportExpression` with a literal
- * source is a runtime import, while `typeof import('./x')` and
- * `import('./x').Foo` parse as `TSImportType`, are erased before emit, and are
- * skipped with their subtree.
+ * The parser is the one Vite re-exports, so the question the lint asks is the
+ * question the build answers: an `ImportExpression` with a literal source is a
+ * runtime import, while `typeof import('./x')` and `import('./x').Foo` parse as
+ * `TSImportType`, are erased before emit, and are skipped with their subtree.
+ * It comes from `vite` rather than `rolldown` because the archive must import
+ * only declared dependencies, and `rolldown` reaches this tree through Vite.
  *
  * Usage: `node scripts/lint-inline-imports.mjs`
  * (also wired as `npm run lint:inline-imports` and into `test:release` + CI).
@@ -38,7 +39,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join, relative } from 'node:path';
-import { parseSync } from 'rolldown/experimental';
+import { parseSync } from 'vite';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SRC = resolve(HERE, '..', 'src');
