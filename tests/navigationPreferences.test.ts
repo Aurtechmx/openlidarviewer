@@ -18,10 +18,12 @@ describe('parseNavigationPreferences', () => {
     }
   });
 
-  test('an empty object yields the all-false / default-preset defaults', () => {
+  test('an empty object yields the shipped defaults', () => {
+    // Vertical inverted, horizontal not: what a user who has never opened the
+    // setting gets.
     expect(parseNavigationPreferences({})).toEqual({
       invertOrbitX: false,
-      invertOrbitY: false,
+      invertOrbitY: true,
       preset: 'default',
     });
   });
@@ -39,10 +41,12 @@ describe('parseNavigationPreferences', () => {
     ).toEqual({ invertOrbitX: false, invertOrbitY: true, preset: 'nira' });
   });
 
-  test('a malformed boolean becomes false, not true', () => {
+  test('a malformed boolean falls back to that field default, not to false', () => {
+    // Both values are the wrong type, so each takes its own default rather than
+    // a blanket false: X defaults false, Y defaults true.
     expect(parseNavigationPreferences({ invertOrbitX: 1, invertOrbitY: 'true' })).toEqual({
       invertOrbitX: false,
-      invertOrbitY: false,
+      invertOrbitY: true,
       preset: 'default',
     });
   });
@@ -66,15 +70,21 @@ describe('parseNavigationPreferences', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('navPresetSigns', () => {
-  test('default maps to no inversion', () => {
-    expect(navPresetSigns('default')).toEqual({ invertOrbitX: false, invertOrbitY: false });
+  test('default inverts the vertical orbit, matching the shipped preferences', () => {
+    // The preset named default has to agree with DEFAULT_NAVIGATION_PREFERENCES,
+    // or selecting it would undo the shipped behaviour.
+    expect(navPresetSigns('default')).toEqual({ invertOrbitX: false, invertOrbitY: true });
+    expect(navPresetSigns('default')).toEqual({
+      invertOrbitX: DEFAULT_NAVIGATION_PREFERENCES.invertOrbitX,
+      invertOrbitY: DEFAULT_NAVIGATION_PREFERENCES.invertOrbitY,
+    });
   });
 
   test('recap inverts the vertical orbit only', () => {
     expect(navPresetSigns('recap')).toEqual({ invertOrbitX: false, invertOrbitY: true });
   });
 
-  test('nira matches the current convention (no inversion)', () => {
+  test('nira inverts neither axis, so it is the no-inversion preset', () => {
     expect(navPresetSigns('nira')).toEqual({ invertOrbitX: false, invertOrbitY: false });
   });
 });

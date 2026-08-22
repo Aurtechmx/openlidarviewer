@@ -49,9 +49,12 @@ describe('navPrefsWiring external toggles', () => {
 
   it('toggling the same axis twice returns to the original state', () => {
     const f = fakes();
+    const start = navigationPrefs().invertOrbitY;
     toggleNavInvert('y', f.viewer, f.inspector, f.persist);
     const back = toggleNavInvert('y', f.viewer, f.inspector, f.persist);
-    expect(back.invertOrbitY).toBe(false);
+    // Asserted against where it started rather than a literal, so the round
+    // trip is what is pinned and not the shipped default's current value.
+    expect(back.invertOrbitY).toBe(start);
   });
 
   it('resetNavPrefs restores the shipped defaults and notifies all surfaces', () => {
