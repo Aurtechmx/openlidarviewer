@@ -22,7 +22,10 @@ OpenLiDARViewer remains browser-native and local-first: local files stay on the 
 - the EPT and 3D Tiles parsers are strict at their format boundary rather than failing open, and the declared-bounds oracle reads the file's pages instead of raw bytes;
 - pointer lock delivered every mouse event to the canvas, so the navigation dock stopped receiving clicks and no mode could be reached with the mouse once walk or fly began; a click while locked now returns the cursor;
 - the live probe ran a pick across every point of every visible cloud on each pointer-move frame in walk and fly, and during both custom drags, because only an OrbitControls drag sets the flag its gate reads;
-- provenance reads the file's own declarations ahead of a density guess, and the phone-LiDAR density band is bounded above, so a tripod station carrying dense returns is not reported as a phone.
+- provenance reads the file's own declarations ahead of a density guess, and the phone-LiDAR density band is bounded above, so a tripod station carrying dense returns is not reported as a phone;
+- the terrain report printed one figure as "43% of the surface is interpolated" and another as "Interpolated 37%" for the same run. Both are right and they answer different questions, one over the covered surface and one over the whole grid, so the table now carries both and names the basis of each. The map sheet already did this for its own figure, "63% interpolated (by length)";
+- "Ground visibility" labelled a categorical bucket in one section of the terrain report and the classifier's ground share of all returns in another, printing a dash for one and a percentage for the other. The second reads "Ground returns (of all returns)";
+- the map sheet stamps the contour style from the export's provenance, and without provenance it fell back to the style the view holds now, which need not be the style that geometry was produced with. One sheet read Generalized while the terrain report for the same run recorded Smooth. The fallback says where its value came from.
 
 ## Section profile corrections
 

@@ -483,10 +483,12 @@ describe('buildTerrainReportContent — §19 permit stamp in provenance', () => 
       buildTerrainReportContent(r, OPTS).sections.find((s) => s.title === 'Coverage Analysis');
 
     it('separates the grid share from the covered-surface share', () => {
-      const r = readyResult();
+      const base = readyResult();
       // Distinct on purpose: with empty cells present the two never agree.
-      r.quality.interpolatedCellRatio = 0.37;
-      r.quality.interpolatedOfSurfaceRatio = 0.43;
+      const r = {
+        ...base,
+        quality: { ...base.quality, interpolatedCellRatio: 0.37, interpolatedOfSurfaceRatio: 0.43 },
+      } as ReturnType<typeof readyResult>;
       const rows = coverage(r)?.rows ?? [];
       const label = (l: string) => rows.find((x) => x.label === l)?.value;
       expect(label('Interpolated (of grid)')).toBe('37%');
