@@ -20,12 +20,23 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 import { releaseDocsFor } from './lib/releaseDocs.mjs';
+import { collectArtifactHashProblems } from './lib/evidenceArtifactHashes.mjs';
+import { commitDriftNote, resolveHeadCommit } from './lib/evidenceCommitNote.mjs';
 
 const GIT = requireBinaryOnPath('git');
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(resolve(ROOT, p), 'utf8');
+/** Bytes of a repo-relative file, or null when it is absent or unreadable. */
+const readBytes = (p) => {
+  try {
+    return readFileSync(resolve(ROOT, p));
+  } catch {
+    return null;
+  }
+};
 const problems = [];
+const notes = [];
 
 const EVIDENCE = 'docs/validation/test-evidence.json';
 if (!existsSync(resolve(ROOT, EVIDENCE))) {
@@ -88,6 +99,12 @@ if (evidence.releaseAuthoritative === true) {
   }
 }
 
+// Which commit the record describes, stated rather than implied. The ancestry
+// check above runs only for an authoritative record, so a development record
+// naming an older commit and one naming this exact checkout printed the same
+// green line. This is a note in both directions and never an exit code.
+notes.push(commitDriftNote({ evidence, head: resolveHeadCommit({ gitPath: GIT, cwd: ROOT }) }));
+
 // The arithmetic, checked independently of the documents. This is the exact
 // failure that shipped: components that did not sum to the published total.
 const summed = Object.values(evidence.buckets).reduce((a, b) => a + b.passed, 0);
@@ -136,6 +153,13 @@ for (const k of ['liveEntryKiB', 'ceilingKiB']) {
   const v = evidence.bundle?.[k];
   if (!Number.isFinite(v) || v <= 0) problems.push(`${EVIDENCE}: bundle.${k} is ${v}, expected a positive number.`);
 }
+
+// The record names the dependency tree and the SBOM it ran against. Until now
+// nothing read those digests back, so a record could name one lockfile while
+// the repository shipped another and this lint still printed OK.
+const artefacts = collectArtifactHashProblems({ evidence, readBytes, evidencePath: EVIDENCE });
+problems.push(...artefacts.problems);
+notes.push(...artefacts.notes);
 
 /**
  * Documents that quote the figures, and the bucket each label refers to.
@@ -255,6 +279,15 @@ if (problems.length > 0) {
   process.exit(1);
 }
 
+// What was NOT verified is printed on a green run too. An artefact that exists
+// nowhere is silent otherwise, and a green line that covers fewer things than
+// the reader assumes is the failure this file exists to prevent. These notes
+// are informational: they are printed on a passing run and carry no exit code.
+for (const note of notes) console.log(`lint:evidence note — ${note}`);
+
 console.log(
   `lint:evidence OK — documents match ${EVIDENCE} (${n(evidence.total.passed)} passed / ${evidence.total.skipped} skipped at ${evidence.commit?.slice(0, 7) ?? 'unknown commit'}).`,
 );
+if (artefacts.checked.length > 0) {
+  console.log(`lint:evidence OK — artefact digests match: ${artefacts.checked.join(', ')}.`);
+}
