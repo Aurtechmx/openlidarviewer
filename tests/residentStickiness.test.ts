@@ -17,6 +17,18 @@ import { selectWithinBudget } from '../src/render/streaming/streamingBudget';
 import type { StreamingNode } from '../src/render/streaming/StreamingNode';
 import type { ScoredCandidate } from '../src/render/streaming/streamingBudget';
 
+/**
+ * The octree parent of a `depth/x/y/z` id — the relationship the scheduler used
+ * to derive by shifting the key, supplied explicitly now that it reads ancestry
+ * from parent identity. Every expectation below is unchanged, which is what
+ * makes these the fixtures that prove the two agree on an octree.
+ */
+function octreeParentOf(id: string): string | undefined {
+  const [depth, x, y, z] = id.split('/').map(Number);
+  if (depth === 0) return undefined;
+  return `${depth - 1}/${x >> 1}/${y >> 1}/${z >> 1}`;
+}
+
 /** A candidate at an octree key, with the shape the scheduler passes. */
 function cand(
   depth: number, x: number, y: number, z: number, score: number, pointCount = 100,
@@ -31,14 +43,14 @@ function cand(
 describe('buildRefiningCandidateIds — the LOD-freeze guard', () => {
   it('marks a parent whose CHILD is also a candidate', () => {
     const scored = [cand(0, 0, 0, 0, 10), cand(1, 0, 0, 0, 9)];
-    const refining = buildRefiningCandidateIds(scored);
+    const refining = buildRefiningCandidateIds(scored, octreeParentOf);
     expect(refining.has('0/0/0/0')).toBe(true);   // the parent is being refined away
     expect(refining.has('1/0/0/0')).toBe(false);  // the child is the refinement
   });
 
   it('marks EVERY ancestor in the chain, not just the immediate parent', () => {
     const scored = [cand(0, 0, 0, 0, 10), cand(1, 0, 0, 0, 9), cand(2, 0, 0, 0, 8)];
-    const refining = buildRefiningCandidateIds(scored);
+    const refining = buildRefiningCandidateIds(scored, octreeParentOf);
     expect(refining.has('0/0/0/0')).toBe(true);
     expect(refining.has('1/0/0/0')).toBe(true);
     expect(refining.has('2/0/0/0')).toBe(false);
@@ -46,7 +58,7 @@ describe('buildRefiningCandidateIds — the LOD-freeze guard', () => {
 
   it('marks nothing when candidates are siblings with no descendant among them', () => {
     const scored = [cand(1, 0, 0, 0, 10), cand(1, 1, 0, 0, 9), cand(1, 0, 1, 0, 8)];
-    expect(buildRefiningCandidateIds(scored).size).toBe(0);
+    expect(buildRefiningCandidateIds(scored, octreeParentOf).size).toBe(0);
   });
 
   it('does not mark a parent whose candidate descendant is in a DIFFERENT subtree', () => {
@@ -54,13 +66,13 @@ describe('buildRefiningCandidateIds — the LOD-freeze guard', () => {
     // only true ancestor chain is by bit-shift, so an unrelated deep node in
     // another octant must not exempt a coarse node it does not refine.
     const scored = [cand(1, 0, 0, 0, 10), cand(2, 2, 0, 0, 9)];
-    const refining = buildRefiningCandidateIds(scored);
+    const refining = buildRefiningCandidateIds(scored, octreeParentOf);
     // 2/2/0/0 shifts to 1/1/0/0, which is NOT a candidate, so nothing is marked.
     expect(refining.size).toBe(0);
   });
 
   it('an empty candidate list marks nothing and does not throw', () => {
-    expect(buildRefiningCandidateIds([]).size).toBe(0);
+    expect(buildRefiningCandidateIds([], octreeParentOf).size).toBe(0);
   });
 });
 
@@ -95,7 +107,7 @@ describe('resident stickiness composed with the exemption', () => {
     // would overtake it with stickiness (1.00 x 1.15 = 1.15 > 1.05). The
     // exemption must strip that bonus because the child is right here.
     const scored = [cand(0, 0, 0, 0, 1.0), cand(1, 0, 0, 0, 1.05)];
-    const refining = buildRefiningCandidateIds(scored);
+    const refining = buildRefiningCandidateIds(scored, octreeParentOf);
     const picked = selectWithinBudget(
       scored.map((s) => s.candidate),
       budget,
@@ -120,7 +132,7 @@ describe('resident stickiness composed with the exemption', () => {
     // Same shape as above, but the child is NOT a candidate this tick, so the
     // parent is not refinement's target and stickiness legitimately applies.
     const scored = [cand(0, 0, 0, 0, 1.0), cand(1, 5, 5, 5, 1.05)];
-    const refining = buildRefiningCandidateIds(scored);
+    const refining = buildRefiningCandidateIds(scored, octreeParentOf);
     expect(refining.size).toBe(0);
     const picked = selectWithinBudget(
       scored.map((s) => s.candidate),

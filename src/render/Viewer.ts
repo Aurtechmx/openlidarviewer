@@ -86,7 +86,6 @@ import {
   type GpuDeviceLike,
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
-import { keyFromId } from '../io/copc/voxelKey';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { isZUpFormat, sceneUpAxisPolicy } from '../io/sniffFormat';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -3655,17 +3654,18 @@ export class Viewer {
     if (!s) return [];
     const entries = s.renderer.residentFrontierEntries();
     if (entries.length === 0) return [];
-    const frontierNodes: FrontierNode[] = [];
-    for (const e of entries) {
-      const key = keyFromId(e.id);
-      if (key) frontierNodes.push({ id: e.id, key, fadingOut: e.fadingOut });
-    }
-    const keep = computeExportFrontier(frontierNodes);
-    // An unparseable id can't be reasoned about; keep it rather than silently
-    // dropping its points. Parseable ids obey the frontier keep-set.
-    const parseable = new Set(frontierNodes.map((n) => n.id));
+    const store = s.cloud.octree.store;
+    const frontierNodes: FrontierNode[] = entries.map((e) => ({
+      id: e.id,
+      fadingOut: e.fadingOut,
+    }));
+    const parentOf = (id: string): string | undefined => store.get(id)?.record.parentId;
+    const keep = computeExportFrontier(frontierNodes, parentOf);
+    // A node the hierarchy no longer holds can't be reasoned about; keep it
+    // rather than silently dropping its points. A node it does hold obeys the
+    // frontier keep-set.
     return entries
-      .filter((e) => (parseable.has(e.id) ? keep.has(e.id) : true))
+      .filter((e) => (store.has(e.id) ? keep.has(e.id) : true))
       .map((e) => e.decoded);
   }
 

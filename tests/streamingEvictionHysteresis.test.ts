@@ -17,7 +17,7 @@
 import { describe, test, expect } from 'vitest';
 import {
   StreamingScheduler,
-  buildRefinedAwayKeys,
+  buildRefinedAwayIds,
 } from '../src/render/streaming/StreamingScheduler';
 import { StreamingPointCloud } from '../src/render/streaming/StreamingPointCloud';
 import { streamingBudgets } from '../src/render/streaming/streamingBudget';
@@ -121,7 +121,7 @@ const VIEW_B = windowViewProjection(CAM_B, HALF * 0.47);
 
 // --- The seam: does the scheduler actually compute the refined-away flag? ----
 
-describe('buildRefinedAwayKeys marks the nodes finer detail is arriving under', () => {
+describe('buildRefinedAwayIds marks the nodes finer detail is arriving under', () => {
   test('marks every ancestor of a wanted node that has not arrived yet', async () => {
     const cloud = await openTwoRegionCloud();
     const store = cloud.octree.store;
@@ -133,11 +133,11 @@ describe('buildRefinedAwayKeys marks the nodes finer detail is arriving under', 
       expect(node).toBeDefined();
       store.setState(node as StreamingNode, 'resident', 400);
     }
-    const keys = buildRefinedAwayKeys(wanted, cloud);
-    expect(keys.has('0/0/0/0')).toBe(true);
-    expect(keys.has('1/0/0/0')).toBe(true);
+    const ids = buildRefinedAwayIds(wanted, cloud);
+    expect(ids.has('0-0-0-0')).toBe(true);
+    expect(ids.has('1-0-0-0')).toBe(true);
     // Region B is untouched — nothing is arriving under it.
-    expect(keys.has('1/1/0/0')).toBe(false);
+    expect(ids.has('1-1-0-0')).toBe(false);
   });
 
   test('marks nothing once every wanted node has arrived', async () => {
@@ -150,7 +150,7 @@ describe('buildRefinedAwayKeys marks the nodes finer detail is arriving under', 
     }
     // Fully refined and fully resident: no node is being replaced, so the
     // exemption must not fire and hysteresis holds normally.
-    expect(buildRefinedAwayKeys(wanted, cloud).size).toBe(0);
+    expect(buildRefinedAwayIds(wanted, cloud).size).toBe(0);
   });
 
   test('marks an ancestor the selector dropped while a finer node stayed', async () => {
@@ -163,11 +163,11 @@ describe('buildRefinedAwayKeys marks the nodes finer detail is arriving under', 
     for (const id of ['0-0-0-0', '1-0-0-0', '2-0-0-0']) {
       store.setState(store.get(id) as StreamingNode, 'resident', 400);
     }
-    const keys = buildRefinedAwayKeys(wanted, cloud);
-    expect(keys.has('1/0/0/0')).toBe(true);
+    const ids = buildRefinedAwayIds(wanted, cloud);
+    expect(ids.has('1-0-0-0')).toBe(true);
     // The root is still wanted and its wanted descendant has arrived, so it is
     // not being replaced by anything.
-    expect(keys.has('0/0/0/0')).toBe(false);
+    expect(ids.has('0-0-0-0')).toBe(false);
   });
 });
 
