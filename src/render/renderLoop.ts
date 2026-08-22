@@ -104,13 +104,12 @@ export interface RenderLoopHost {
   /** Set (or clear) the live measurement cursor. */
   setMeasureCursor(point: [number, number, number] | null): void;
 
-  /** Is the user actively driving the camera (OrbitControls drag)? */
-  userInteracting(): boolean;
   /**
-   * Is the camera being driven by a mode OrbitControls does not report: walk,
-   * fly, the custom orbit drag or the hand-pan drag?
+   * Is the user driving the camera? Covers an OrbitControls drag and every mode
+   * OrbitControls does not report (walk, fly, the custom orbit and hand-pan
+   * drags); the host folds those together.
    */
-  cameraDriven(): boolean;
+  userInteracting(): boolean;
   /** Detailed probe pick against the static clouds, as display info, or null. */
   probePickStatic(ndcX: number, ndcY: number): PointInfo | null;
   /** Detailed probe pick against resident streaming nodes, or null. */
@@ -200,11 +199,7 @@ export function runRenderFrame(host: RenderLoopHost): void {
   if (
     host.toolMode() === 'probe' &&
     host.pointerMoved() &&
-    shouldRunProbePick({
-      userInteracting: host.userInteracting(),
-      tweening: false,
-      navigating: host.cameraDriven(),
-    })
+    shouldRunProbePick({ userInteracting: host.userInteracting(), tweening: false })
   ) {
     host.clearPointerMoved();
     let info: PointInfo | null = null;

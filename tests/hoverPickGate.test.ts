@@ -4,10 +4,9 @@
  * table, and pins that the gate runs during a plain hover (no flag set) — the
  * case a debounced `moving` flag would have wrongly frozen.
  *
- * `navigating` is pinned separately because only an OrbitControls drag sets
- * `userInteracting`: walk, fly, the custom orbit drag and the hand-pan drag are
- * invisible to it, and the pick they let through scans every point in every
- * visible cloud once per pointer-move frame.
+ * The gate trusts its caller to report every way the camera is driven in
+ * `userInteracting`. `NavController.isDriving` supplies the four modes
+ * OrbitControls cannot see; navModeTransitions.test.ts pins that half.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -30,29 +29,4 @@ describe('shouldRunProbePick', () => {
     expect(shouldRunProbePick({ userInteracting: true, tweening: true })).toBe(false);
   });
 
-  it('suspends while the camera is driven by a mode OrbitControls misses', () => {
-    // Walk, fly, the custom orbit drag and the hand-pan drag all report here.
-    expect(
-      shouldRunProbePick({ userInteracting: false, tweening: false, navigating: true }),
-    ).toBe(false);
-  });
-
-  it('runs on a plain hover when navigating is explicitly false', () => {
-    expect(
-      shouldRunProbePick({ userInteracting: false, tweening: false, navigating: false }),
-    ).toBe(true);
-  });
-
-  it('treats an omitted navigating as not navigating, so old callers are unchanged', () => {
-    expect(shouldRunProbePick({ userInteracting: false, tweening: false })).toBe(true);
-  });
-
-  it('stays suspended when navigating combines with either other flag', () => {
-    expect(
-      shouldRunProbePick({ userInteracting: true, tweening: false, navigating: true }),
-    ).toBe(false);
-    expect(
-      shouldRunProbePick({ userInteracting: false, tweening: true, navigating: true }),
-    ).toBe(false);
-  });
 });

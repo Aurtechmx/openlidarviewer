@@ -6391,14 +6391,7 @@ export class Viewer {
       pointerClient: () => ({ x: this._pointerClientX, y: this._pointerClientY }),
       pickPoint: (ndcX, ndcY) => this._pickPoint(ndcX, ndcY),
       setMeasureCursor: (point) => this._measure.setCursor(point),
-      userInteracting: () => this._userInteracting,
-      // Only OrbitControls sets `_userInteracting`. Walk and fly drive the
-      // camera from the keys and a locked pointer, and the custom orbit and
-      // hand-pan drags bypass OrbitControls entirely, so each is reported here.
-      cameraDriven: () => this._nav.mode === 'walk'
-        || this._nav.mode === 'fly'
-        || this._nav.orbitDragging
-        || this._nav.panDragging,
+      userInteracting: () => this._userInteracting || this._nav.isDriving,
       probePickStatic: (ndcX, ndcY) => {
         const hit = this._pickDetailed(ndcX, ndcY);
         return hit ? this._infoForHit(hit) : null;

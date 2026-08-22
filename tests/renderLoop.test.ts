@@ -51,7 +51,6 @@ function makeHost(over: Partial<RenderLoopHost> = {}): RenderLoopHost {
     pickPoint: () => null,
     setMeasureCursor: vi.fn(),
     userInteracting: () => false,
-    cameraDriven: () => false,
     probePickStatic: () => null,
     probePickStreaming: () => null,
     updateProbe: vi.fn(),

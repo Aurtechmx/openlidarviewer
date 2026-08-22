@@ -253,4 +253,42 @@ describe('navigation mode transitions', () => {
       expect(nav.pointerLocked).toBe(false);
     });
   });
+
+  /**
+   * The half of the live-probe gate OrbitControls cannot see. The Viewer folds
+   * `isDriving` into the flag `shouldRunProbePick` reads, so a false here means
+   * a full-cloud pick runs on every pointer-move frame while the camera moves.
+   */
+  describe('isDriving', () => {
+    it('is false at rest in orbit, so an ordinary hover still picks', () => {
+      nav.setMode('orbit');
+      expect(nav.isDriving).toBe(false);
+    });
+
+    for (const mode of ['walk', 'fly'] as const) {
+      it(`is true in ${mode}, which steers from the keys and a locked pointer`, () => {
+        nav.setMode(mode);
+        expect(nav.isDriving).toBe(true);
+      });
+    }
+
+    it('is false in pan at rest', () => {
+      nav.setMode('pan');
+      expect(nav.isDriving).toBe(false);
+    });
+
+    it('stays true through a walk click that takes the lock', () => {
+      nav.setMode('walk');
+      clickCanvas();
+      expect(nav.pointerLocked).toBe(true);
+      expect(nav.isDriving).toBe(true);
+    });
+
+    it('follows the custom orbit and hand-pan drags, which bypass OrbitControls', () => {
+      nav.setMode('orbit');
+      // Both getters read a live pointer id, so the drag state is what moves.
+      expect(nav.orbitDragging || nav.panDragging).toBe(false);
+      expect(nav.isDriving).toBe(nav.orbitDragging || nav.panDragging);
+    });
+  });
 });

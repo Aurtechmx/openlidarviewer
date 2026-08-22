@@ -479,6 +479,21 @@ export class NavController {
   }
 
   /**
+   * Whether the user is driving the camera by any route OrbitControls does not
+   * report: walk and fly, which steer from the keys and a locked pointer, and
+   * the custom orbit and hand-pan drags, which bypass OrbitControls entirely.
+   *
+   * The Viewer folds this into the flag the live-probe gate reads. Without it
+   * the gate sees only OrbitControls drags, so a probe pick runs on every
+   * pointer-move frame while the camera is moving, scanning every point of
+   * every visible cloud for a readout that is not being read.
+   */
+  get isDriving(): boolean {
+    return this._mode === 'walk' || this._mode === 'fly'
+      || this.orbitDragging || this.panDragging;
+  }
+
+  /**
    * Smoothly move the camera to `toPos`, looking at `toTarget`, over
    * `duration` seconds with an eased curve. Used for the Frame button,
    * double-click focus, and share-link pose restoration.
