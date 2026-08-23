@@ -70,21 +70,44 @@ export const RGB_LUMINANCE_IQR_FLOOR = 12;
  */
 export const RGB_MIN_SAMPLE = 64;
 
-/**
- * Sample size the stride aims at, so the check stays cheap on a large cloud.
- *
- * A target rather than a ceiling: the stride is an integer, so a cloud just
- * under twice this size strides by one and inspects all of it. The real bound
- * is twice the target, which is still a fixed cost.
- */
+/** Points inspected, so the check stays cheap on a large cloud. */
 export const RGB_SAMPLE_TARGET = 20000;
+
+/**
+ * The step a sample walk takes, coprime to `points` so it visits each point at
+ * most once and lands on every residue before it repeats.
+ *
+ * A fixed stride aliases. Sampling every second point of a cloud whose coloured
+ * points sit at every hundredth index visits all of the coloured ones and half
+ * of the rest, and reports twice the colour the cloud carries; that is measured,
+ * not hypothetical, and point clouds are full of periodic structure from scan
+ * lines, tile boundaries and interleaved returns. A step near the golden ratio
+ * of the count is the standard low-discrepancy choice, because it is the
+ * irrational hardest to approximate by a simple fraction and therefore the
+ * hardest for a periodic pattern to line up with.
+ */
+function sampleStep(points: number, target: number): number {
+  if (points <= target) return 1;
+  let step = Math.max(1, Math.round(points * 0.6180339887498949));
+  // Walk to the nearest coprime value. gcd falls to 1 within a few steps for
+  // any real count, and the loop is bounded regardless.
+  for (let tries = 0; tries < 64 && gcd(step, points) !== 1; tries++) step++;
+  return gcd(step, points) === 1 ? step : 1;
+}
+
+/** Greatest common divisor, for the coprimality check above. */
+function gcd(a: number, b: number): number {
+  let x = a, y = b;
+  while (y !== 0) { const t = x % y; x = y; y = t; }
+  return x;
+}
 
 /**
  * Measure a cloud's RGB array.
  *
- * The sample strides across the whole array rather than taking the head of it:
- * point order usually follows acquisition or a spatial sort, so the first
- * twenty thousand points are one corner of the scan and not the scan.
+ * The sample walks the whole array rather than taking the head of it: point
+ * order usually follows acquisition or a spatial sort, so the first twenty
+ * thousand points are one corner of the scan and not the scan.
  */
 export function readRgbReadability(colors: Uint8Array | undefined): RgbReadability {
   const points = colors ? Math.floor(colors.length / 3) : 0;
@@ -93,10 +116,12 @@ export function readRgbReadability(colors: Uint8Array | undefined): RgbReadabili
   }
   const rgb = colors as Uint8Array;
 
-  const stride = Math.max(1, Math.floor(points / RGB_SAMPLE_TARGET));
+  const step = sampleStep(points, RGB_SAMPLE_TARGET);
+  const wanted = Math.min(points, RGB_SAMPLE_TARGET);
   const luminance: number[] = [];
   let chromatic = 0;
-  for (let p = 0; p < points; p += stride) {
+  let p = 0;
+  for (let k = 0; k < wanted; k++, p = (p + step) % points) {
     const i = p * 3;
     const r = rgb[i], g = rgb[i + 1], b = rgb[i + 2];
     const spread = Math.max(r, g, b) - Math.min(r, g, b);

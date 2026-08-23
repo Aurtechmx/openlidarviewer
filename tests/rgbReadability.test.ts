@@ -130,20 +130,53 @@ describe('readRgbReadability', () => {
     expect(r.chromaticFraction).toBeLessThan(0.25);
   });
 
-  it('costs a bounded number of samples on a large cloud', () => {
-    expect(readRgbReadability(cloud(2_000_000, () => [10, 200, 30])).sampled)
-      .toBeLessThanOrEqual(20_001);
+  it('does not alias against periodic structure in point order', () => {
+    // The defect this replaced a fixed stride to fix. One million points with
+    // colour on every fiftieth, and a stride of fifty, put the sampler on a
+    // coloured point every single time: it reported the cloud as 100 per cent
+    // chromatic when 2 per cent of it carries colour, a 4,900 per cent error.
+    // Point clouds are full of periodic order from scan lines, tile boundaries
+    // and interleaved returns, so this is a shape real data has.
+    const n = 1_000_000;
+    const c = cloud(n, (i) => (i % 50 === 0 ? [200, 40, 40] : [250, 250, 250]));
+    const r = readRgbReadability(c);
+    expect(r.chromaticFraction).toBeGreaterThan(0.015);
+    expect(r.chromaticFraction).toBeLessThan(0.025);
   });
 
-  it('bounds the sample at twice the target, which the integer stride allows', () => {
-    // Just under twice the target strides by one and inspects every point, so
-    // the bound is 2x rather than 1x. Still fixed, and worth stating rather
-    // than implying the target is a ceiling.
-    const justUnderDouble = readRgbReadability(cloud(39_999, () => [10, 200, 30]));
-    expect(justUnderDouble.sampled).toBe(39_999);
-    expect(justUnderDouble.sampled).toBeLessThan(2 * 20_000);
-    // One more point flips the stride to two and halves the sample.
-    expect(readRgbReadability(cloud(40_000, () => [10, 200, 30])).sampled).toBe(20_000);
+  it('holds that accuracy across a range of periods and cloud sizes', () => {
+    // Any fixed step aliases with SOME period; a step near the golden ratio of
+    // the count minimises the worst case rather than removing it. Measured
+    // worst relative error over these combinations is 11 per cent, against
+    // 4,900 for the fixed stride.
+    for (const n of [50_000, 250_000, 1_000_000]) {
+      for (const every of [8, 25, 50, 64, 128, 250]) {
+        const r = readRgbReadability(
+          cloud(n, (i) => (i % every === 0 ? [200, 40, 40] : [250, 250, 250])),
+        );
+        const truth = 1 / every;
+        expect(Math.abs(r.chromaticFraction - truth) / truth).toBeLessThan(0.2);
+      }
+    }
+  });
+
+  it('costs exactly the target on a large cloud', () => {
+    // The walk takes a fixed number of steps rather than striding to the end,
+    // so the sample size is the target and not a multiple of it.
+    expect(readRgbReadability(cloud(2_000_000, () => [10, 200, 30])).sampled).toBe(20_000);
+    expect(readRgbReadability(cloud(39_999, () => [10, 200, 30])).sampled).toBe(20_000);
+  });
+
+  it('inspects every point of a cloud smaller than the target', () => {
+    expect(readRgbReadability(cloud(500, () => [10, 200, 30])).sampled).toBe(500);
+  });
+
+  it('visits each point at most once, so no point is double counted', () => {
+    // The step is coprime to the count, which is what makes the walk a
+    // permutation rather than a cycle over a subset.
+    const n = 12_345;
+    const r = readRgbReadability(cloud(n, (i) => (i === 0 ? [200, 40, 40] : [250, 250, 250])));
+    expect(r.chromaticFraction).toBeCloseTo(1 / n, 6);
   });
 });
 
@@ -177,5 +210,72 @@ describe('recommendColorMode with a uniform colour array', () => {
     ]);
     expect(recommendColorMode({ colors: colourful, classification: new Uint8Array([2]) }).mode)
       .toBe('rgb');
+  });
+});
+
+describe('where the decision boundary actually sits', () => {
+  /**
+   * The three thresholds were chosen, not derived, and the file that motivated
+   * them is not in this repository. What can be pinned instead is where the
+   * boundary falls, so a reader can compare a real scan's two numbers against
+   * it rather than trusting the constants.
+   *
+   * These also make the constants load-bearing. Moving one without meaning to
+   * moves a boundary below, which is the failure a set of hand-picked numbers
+   * is otherwise wide open to.
+   */
+
+  /** A greyscale cloud whose luminance spans `span` levels around mid grey. */
+  function greysSpanning(span: number): Uint8Array {
+    return cloud(50_000, (i) => {
+      const v = Math.round(128 - span / 2 + (i % (span + 1)));
+      return [v, v, v];
+    });
+  }
+
+  /** A cloud where `fraction` of points carry strong chroma and the rest are flat. */
+  function chromaticFraction(fraction: number): Uint8Array {
+    const every = Math.max(1, Math.round(1 / fraction));
+    return cloud(50_000, (i) => (i % every === 0 ? [200, 40, 40] : [250, 250, 250]));
+  }
+
+  it('flips on luminance range within a few levels of the stated floor', () => {
+    // Below the floor the greys are a wash; above it they read as shape.
+    expect(readRgbReadability(greysSpanning(RGB_LUMINANCE_IQR_FLOOR * 2 - 4)).verdict)
+      .toBe('uniform');
+    expect(readRgbReadability(greysSpanning(RGB_LUMINANCE_IQR_FLOOR * 2 + 8)).verdict)
+      .toBe('readable');
+  });
+
+  it('flips on chromatic fraction within a factor of two of the stated floor', () => {
+    expect(readRgbReadability(chromaticFraction(RGB_CHROMATIC_FRACTION_FLOOR / 2)).verdict)
+      .toBe('uniform');
+    expect(readRgbReadability(chromaticFraction(RGB_CHROMATIC_FRACTION_FLOOR * 2)).verdict)
+      .toBe('readable');
+  });
+
+  it('reports the two numbers a reader can check a real scan against', () => {
+    // The verdict is a threshold applied to these, so a scan that lands near a
+    // boundary is visible as a figure rather than only as a yes or no.
+    const r = readRgbReadability(greysSpanning(6));
+    expect(r.luminanceIqr).toBeGreaterThan(0);
+    expect(r.chromaticFraction).toBe(0);
+    expect(r.sampled).toBeGreaterThan(RGB_MIN_SAMPLE);
+  });
+
+  it('calls the reported LA03mapry distribution uniform', () => {
+    // The scan that motivated this is not in the repository, so this
+    // reconstructs it from what was measured on it: greyscale throughout, mean
+    // 242 of 255, and 96 per cent of points near white. If a real file with
+    // those statistics did NOT land on `uniform`, the thresholds would be wrong
+    // for the only case anyone has actually seen.
+    const reconstructed = cloud(200_000, (i) => {
+      const nearWhite = i % 100 < 96;
+      const v = nearWhite ? 236 + (i % 9) : 200 + (i % 30);
+      return [v, v, v];
+    });
+    const r = readRgbReadability(reconstructed);
+    expect(r.chromaticFraction).toBe(0);
+    expect(r.verdict).toBe('uniform');
   });
 });
