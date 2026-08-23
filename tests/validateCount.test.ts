@@ -19,6 +19,7 @@ import {
   compressedBytesPerPointFloor,
   MIN_BYTES_PER_POINT_FLOOR,
   MAX_LAZ_COMPRESSION_RATIO,
+  UNKNOWN_RECORD_BYTES_PER_POINT,
 } from '../src/io/validateCount';
 import { LoadError } from '../src/io/loadErrors';
 
@@ -37,10 +38,25 @@ describe('compressedBytesPerPointFloor', () => {
     }
   });
 
-  it('falls back to the hard floor for a missing or nonsense record length', () => {
+  it('falls back to one byte per point for a missing or nonsense record length', () => {
+    // Not to MIN_BYTES_PER_POINT_FLOOR. A header can declare a zero record
+    // length and nothing upstream rejects it, so falling back to a hundredth of
+    // a byte would leave the guard a hundred times weaker than the flat byte it
+    // replaced, on precisely the malformed input it exists for.
     for (const bad of [0, -30, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(compressedBytesPerPointFloor(bad)).toBe(MIN_BYTES_PER_POINT_FLOOR);
+      expect(compressedBytesPerPointFloor(bad)).toBe(UNKNOWN_RECORD_BYTES_PER_POINT);
+      expect(compressedBytesPerPointFloor(bad)).toBeGreaterThan(MIN_BYTES_PER_POINT_FLOOR);
     }
+  });
+
+  it('is never looser than the flat byte it replaced, for a malformed header', () => {
+    // 10^9 points behind a kilobyte, with the record length a malformed file
+    // declared as zero.
+    const floor = compressedBytesPerPointFloor(0);
+    expect(() => validateDeclaredPointCount(1e9, 1024, floor, 'COPC node'))
+      .toThrow(LoadError);
+    expect(() => validateDeclaredPointCount(1025, 1024, floor, 'COPC node'))
+      .toThrow(LoadError);
   });
 });
 

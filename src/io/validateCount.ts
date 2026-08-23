@@ -62,6 +62,18 @@ export const MIN_BYTES_PER_POINT_FLOOR = 0.01;
 export const MAX_LAZ_COMPRESSION_RATIO = 50;
 
 /**
+ * Floor used when a record length is missing or nonsense.
+ *
+ * One byte per point, which is what every LAZ caller passed before the floor
+ * was derived from the record. A header can declare a zero record length,
+ * nothing upstream rejects it, and falling back to
+ * {@link MIN_BYTES_PER_POINT_FLOOR} there would leave the guard a hundred times
+ * weaker than the flat byte it replaced, on exactly the malformed input it
+ * exists for. This change must never be looser than what it replaced.
+ */
+export const UNKNOWN_RECORD_BYTES_PER_POINT = 1;
+
+/**
  * The bytes-per-point floor for a LAZ stream of the given record length.
  *
  * Callers pass the uncompressed point record length from the LAS header, so the
@@ -69,7 +81,7 @@ export const MAX_LAZ_COMPRESSION_RATIO = 50;
  */
 export function compressedBytesPerPointFloor(pointRecordLength: number): number {
   if (!Number.isFinite(pointRecordLength) || pointRecordLength <= 0) {
-    return MIN_BYTES_PER_POINT_FLOOR;
+    return UNKNOWN_RECORD_BYTES_PER_POINT;
   }
   return pointRecordLength / MAX_LAZ_COMPRESSION_RATIO;
 }
