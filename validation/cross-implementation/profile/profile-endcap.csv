@@ -1,0 +1,9 @@
+id,x,y,z
+c1-start-cap-inside,-1,0.5,10
+c2-start-cap-boundary,-1.5,2,10
+c3-square-corner,-2.5,2.5,10
+c4-start-cap-outside,-1.5,2.03125,10
+c5a-end-cap-inside,33,-0.5,10
+c5b-end-cap-outside,33.5,-2.03125,10
+c6-body-inside,16,2.46875,10
+c7-body-boundary,16,2.5,10

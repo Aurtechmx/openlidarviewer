@@ -191,3 +191,80 @@ export const CAPS_PROBES = [
 export const capsExpected = (i, p) =>
   capsGround(i * CAPS_BIN_STEP)
   + CAPS_CROSS * (CAPS_T_START + CAPS_T_STEP * (p / 100) * (CAPS_T_COUNT - 1));
+
+// ── ENDCAP: one probe per decisive case, membership only ────────────────────
+//
+// CAPS answers "does the corridor close with a half-disc" through the p25 of
+// two stations. It cannot answer what happens ON the threshold: every one of
+// its probes is held at least 0.125 m clear of the cap boundary, and the
+// MEAS-PROFILE-OGR-R-CORRIDOR study lists the exact-boundary tie-break in its
+// own scope.unsupported. This fixture is the membership-level reference for
+// that gap: eight probes, each decisive for one case, compared point by point
+// rather than through a percentile.
+//
+// The band is 2.5 m so a 3-4-5 triangle scaled by 1/2 lands a probe EXACTLY on
+// the cap boundary: 1.5² + 2² = 6.25 = 2.5². All three legs are dyadic and the
+// squares and their sum are exact in Float32 and in double, so the boundary
+// case is a true tie and not a value that happens to round onto one side. The
+// sampler compares squared distance against squared band, SpatiaLite compares
+// the distance itself against the band; on this probe both comparisons see
+// equality, which is what makes the tie-break observable at all.
+
+/** Section line, local render space. Axis-aligned, so chainage is x. */
+export const ENDCAP_A = [0, 0, 0];
+export const ENDCAP_B = [32, 0, 0];
+/** 33 stations over 32 m = a 1 m bin step. */
+export const ENDCAP_SAMPLES = 33;
+/** Corridor half-width, metres. 2.5 makes the 1.5/2/2.5 boundary probe exact. */
+export const ENDCAP_BAND = 2.5;
+/** Bin step, metres. Exact: 32 / 32. */
+export const ENDCAP_BIN_STEP = (ENDCAP_B[0] - ENDCAP_A[0]) / (ENDCAP_SAMPLES - 1);
+/** Elevation every probe carries. Membership is the measurement, not height. */
+export const ENDCAP_Z = 10;
+
+/**
+ * The eight probes, one per decisive case. `x` and `y` are absolute, in the
+ * same local frame as the section line, so nothing has to be reconstructed from
+ * a chainage convention. `admitted` is the HAND-DERIVED verdict for a corridor
+ * whose membership is "distance to the finite segment <= band". It is written
+ * here and asserted against exact arithmetic by scripts/make-profile-fixture.mjs
+ * before a byte is written.
+ *
+ * `caseNo` is the case number in the end-cap reference. `rectangle` is what a
+ * corridor with square ends would say about the same probe, which is what makes
+ * case 3 the discriminating one: it is the only probe the two rules disagree
+ * about while sitting nowhere near either threshold, so its verdict reports
+ * which shape the implementation has rather than how it rounds.
+ *
+ * Every coordinate is a multiple of 1/32 and under 40 in magnitude, so it is
+ * exact in the Float32Array the sampler reads and in the double the reference
+ * tools work in.
+ */
+export const ENDCAP_PROBES = [
+  { id: 'c1-start-cap-inside', caseNo: 1, x: -1, y: 0.5, admitted: true },
+  { id: 'c2-start-cap-boundary', caseNo: 2, x: -1.5, y: 2, admitted: true },
+  { id: 'c3-square-corner', caseNo: 3, x: -2.5, y: 2.5, admitted: false },
+  { id: 'c4-start-cap-outside', caseNo: 4, x: -1.5, y: 2.03125, admitted: false },
+  { id: 'c5a-end-cap-inside', caseNo: 5, x: 33, y: -0.5, admitted: true },
+  { id: 'c5b-end-cap-outside', caseNo: 5, x: 33.5, y: -2.03125, admitted: false },
+  { id: 'c6-body-inside', caseNo: 6, x: 16, y: 2.46875, admitted: true },
+  { id: 'c7-body-boundary', caseNo: 7, x: 16, y: 2.5, admitted: true },
+];
+
+/**
+ * Horizontal distance from a probe to the nearest point ON the segment: the
+ * perpendicular offset between the endpoints, the radius to the endpoint past
+ * either end. This is the definition the `admitted` flags are checked against,
+ * and it is deliberately not the sampler's expression.
+ */
+export const endcapDistance = ({ x, y }) => {
+  const len = ENDCAP_B[0] - ENDCAP_A[0];
+  const s = x < 0 ? 0 : x > len ? len : x;
+  return Math.hypot(x - s, y);
+};
+
+/** The rectangle rule, for the same probe: square ends, band past either end. */
+export const endcapRectangle = ({ x, y }) =>
+  Math.abs(y) <= ENDCAP_BAND
+  && x >= -ENDCAP_BAND
+  && x <= ENDCAP_B[0] - ENDCAP_A[0] + ENDCAP_BAND;
