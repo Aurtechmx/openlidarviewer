@@ -45,7 +45,8 @@
  *
  * The cost model is a single linear pass to bin the points, O(N), then a
  * per-bin sort, O(Σ b log b). For a 1 M-point cloud and 64 bins that is
- * tens of ms. The Measurements panel samples asynchronously.
+ * tens of ms. The walk is synchronous on the caller's thread, and it runs
+ * once per profile commit or resample, never per rendered frame.
  *
  * Streaming clouds sample only the resident points. This matches the live
  * inspector contract — what the user sees on screen is what gets sampled.
