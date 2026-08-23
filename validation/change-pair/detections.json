@@ -1,0 +1,237 @@
+{
+ "exclusions": {
+  "tankBottomM2": 19471.6,
+  "keptWithEnoughPointsM2": 16835.2,
+  "droppedSparseOrSingleEpochM2": 2636.5,
+  "searchableAtRelief035M2": 7846.2
+ },
+ "noiseByEpoch1Relief": [
+  {
+   "reliefLoM": 0,
+   "reliefHiM": 0.15,
+   "areaM2": 1089.4,
+   "medianM": -0.0131,
+   "nmadM": 0.0168,
+   "fiveNmadM": 0.084
+  },
+  {
+   "reliefLoM": 0.15,
+   "reliefHiM": 0.25,
+   "areaM2": 4001.7,
+   "medianM": -0.0158,
+   "nmadM": 0.0206,
+   "fiveNmadM": 0.103
+  },
+  {
+   "reliefLoM": 0.25,
+   "reliefHiM": 0.35,
+   "areaM2": 2755.2,
+   "medianM": -0.0156,
+   "nmadM": 0.0293,
+   "fiveNmadM": 0.147
+  },
+  {
+   "reliefLoM": 0.35,
+   "reliefHiM": 0.5,
+   "areaM2": 2901.4,
+   "medianM": -0.0156,
+   "nmadM": 0.0369,
+   "fiveNmadM": 0.185
+  },
+  {
+   "reliefLoM": 0.5,
+   "reliefHiM": 1.0,
+   "areaM2": 2454.4,
+   "medianM": -0.0139,
+   "nmadM": 0.0683,
+   "fiveNmadM": 0.342
+  },
+  {
+   "reliefLoM": 1.0,
+   "reliefHiM": 3.0,
+   "areaM2": 1915.6,
+   "medianM": -0.0079,
+   "nmadM": 0.1333,
+   "fiveNmadM": 0.667
+  },
+  {
+   "reliefLoM": 3.0,
+   "reliefHiM": 99.0,
+   "areaM2": 1717.6,
+   "medianM": -0.0062,
+   "nmadM": 0.2436,
+   "fiveNmadM": 1.218
+  }
+ ],
+ "counts": {
+  "tank-rise": {
+   "candidates": 139,
+   "pointVerified": 134,
+   "passing": 3
+  },
+  "tank-fall": {
+   "candidates": 425,
+   "pointVerified": 414,
+   "passing": 1
+  },
+  "outside-rise": {
+   "candidates": 8,
+   "pointVerified": 8,
+   "passing": 1
+  },
+  "outside-fall": {
+   "candidates": 34,
+   "pointVerified": 34,
+   "passing": 4
+  }
+ },
+ "confirmed": [
+  {
+   "group": "tank-rise",
+   "E": 852222.75,
+   "N": 6517048.5,
+   "cells": 20,
+   "groundRmsEpoch1M": 0.041,
+   "groundRmsEpoch2M": 0.044,
+   "pointsAbove015Epoch1": 0,
+   "pointsAbove015Epoch2": 193,
+   "maxHeightEpoch1M": 0.086,
+   "maxHeightEpoch2M": 0.256,
+   "footprintM2": 0.135,
+   "bboxM": [
+    0.4,
+    0.5
+   ],
+   "volumeM3": 0.0207
+  },
+  {
+   "group": "tank-rise",
+   "E": 852224.6,
+   "N": 6517049.85,
+   "cells": 26,
+   "groundRmsEpoch1M": 0.026,
+   "groundRmsEpoch2M": 0.027,
+   "pointsAbove015Epoch1": 0,
+   "pointsAbove015Epoch2": 223,
+   "maxHeightEpoch1M": 0.096,
+   "maxHeightEpoch2M": 0.41,
+   "footprintM2": 0.17,
+   "bboxM": [
+    0.45,
+    0.6
+   ],
+   "volumeM3": 0.0357
+  },
+  {
+   "group": "tank-rise",
+   "E": 852222.35,
+   "N": 6517052.0,
+   "cells": 5,
+   "groundRmsEpoch1M": 0.025,
+   "groundRmsEpoch2M": 0.027,
+   "pointsAbove015Epoch1": 0,
+   "pointsAbove015Epoch2": 72,
+   "maxHeightEpoch1M": 0.087,
+   "maxHeightEpoch2M": 0.197,
+   "footprintM2": 0.135,
+   "bboxM": [
+    0.6,
+    0.35
+   ],
+   "volumeM3": 0.0125
+  },
+  {
+   "group": "tank-fall",
+   "E": 852227.0,
+   "N": 6517009.45,
+   "cells": 44,
+   "groundRmsEpoch1M": 0.054,
+   "groundRmsEpoch2M": 0.058,
+   "pointsAbove015Epoch1": 117,
+   "pointsAbove015Epoch2": 3,
+   "maxHeightEpoch1M": 0.243,
+   "maxHeightEpoch2M": 0.171,
+   "footprintM2": null,
+   "bboxM": null,
+   "volumeM3": null
+  },
+  {
+   "group": "outside-rise",
+   "E": 852291.2,
+   "N": 6517040.35,
+   "cells": 13,
+   "groundRmsEpoch1M": 0.035,
+   "groundRmsEpoch2M": 0.033,
+   "pointsAbove015Epoch1": 1,
+   "pointsAbove015Epoch2": 66,
+   "maxHeightEpoch1M": 0.151,
+   "maxHeightEpoch2M": 0.337,
+   "footprintM2": 0.085,
+   "bboxM": [
+    0.45,
+    0.6
+   ],
+   "volumeM3": 0.0161
+  },
+  {
+   "group": "outside-fall",
+   "E": 852239.25,
+   "N": 6517068.4,
+   "cells": 22,
+   "groundRmsEpoch1M": 0.038,
+   "groundRmsEpoch2M": 0.04,
+   "pointsAbove015Epoch1": 96,
+   "pointsAbove015Epoch2": 0,
+   "maxHeightEpoch1M": 0.401,
+   "maxHeightEpoch2M": 0.094,
+   "footprintM2": null,
+   "bboxM": null,
+   "volumeM3": null
+  },
+  {
+   "group": "outside-fall",
+   "E": 852239.75,
+   "N": 6517069.8,
+   "cells": 27,
+   "groundRmsEpoch1M": 0.032,
+   "groundRmsEpoch2M": 0.035,
+   "pointsAbove015Epoch1": 142,
+   "pointsAbove015Epoch2": 0,
+   "maxHeightEpoch1M": 0.396,
+   "maxHeightEpoch2M": 0.07,
+   "footprintM2": null,
+   "bboxM": null,
+   "volumeM3": null
+  },
+  {
+   "group": "outside-fall",
+   "E": 852221.65,
+   "N": 6517079.25,
+   "cells": 52,
+   "groundRmsEpoch1M": 0.045,
+   "groundRmsEpoch2M": 0.046,
+   "pointsAbove015Epoch1": 110,
+   "pointsAbove015Epoch2": 8,
+   "maxHeightEpoch1M": 0.252,
+   "maxHeightEpoch2M": 0.253,
+   "footprintM2": null,
+   "bboxM": null,
+   "volumeM3": null
+  },
+  {
+   "group": "outside-fall",
+   "E": 852220.3,
+   "N": 6517080.15,
+   "cells": 73,
+   "groundRmsEpoch1M": 0.047,
+   "groundRmsEpoch2M": 0.047,
+   "pointsAbove015Epoch1": 132,
+   "pointsAbove015Epoch2": 0,
+   "maxHeightEpoch1M": 0.221,
+   "maxHeightEpoch2M": 0.072,
+   "footprintM2": null,
+   "bboxM": null,
+   "volumeM3": null
+  }
+ ]
+}

@@ -1,0 +1,186 @@
+{
+ "generatedBy": "validation/change-pair/scripts/run-change-pair.py",
+ "reference": "PDAL, GDAL, laspy, numpy, scipy",
+ "evidenceNote": "A record of one investigation of an external two-epoch dataset. It moves no claim and sets no evidence level: docs/validation/claim-register.yaml is untouched, no cross-implementation study manifest was written, and none of OLV's acceptance thresholds were run. The numbers here are measurements of the dataset, not of any OpenLiDARViewer product.",
+ "environment": {
+  "pdalVersion": "pdal 2.10.2 (git-version: Release)",
+  "pdalResolvedPath": "/opt/homebrew/bin/pdal",
+  "gdalTranslateVersion": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+  "gdalTranslateResolvedPath": "/opt/homebrew/bin/gdal_translate",
+  "pdftotextVersion": "pdftotext version 26.08.0",
+  "pdftotextResolvedPath": "/opt/homebrew/bin/pdftotext",
+  "pythonVersion": "Python 3.11.15",
+  "pythonResolvedPath": "/opt/homebrew/opt/python@3.11/bin/python3.11",
+  "numpyVersion": "2.4.6",
+  "scipyVersion": "1.17.1",
+  "laspyVersion": "2.7.0",
+  "containerPinning": "not-executed",
+  "containerPinningReason": "The Docker daemon is not running on this host, so no pinned image was pulled and no digest exists to record; every tool was invoked from the host PATH.",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "node": "v26.7.0"
+ },
+ "pathPlaceholders": {
+  "DATASET_DIR": "the directory holding the two LAS files and the PDF, supplied at run time",
+  "OUTPUT_DIR": "a scratch directory for the intermediate GeoTIFF and XYZ dumps, supplied at run time",
+  "note": "Absolute paths are not recorded, so no committed file names the machine the analysis ran on."
+ },
+ "parameters": {
+  "grid": {
+   "firstPassBinM": 0.05,
+   "analysisCellM": 0.1,
+   "originX": 852115.0,
+   "originY": 6516819.0,
+   "columns": 2060,
+   "rows": 3330,
+   "minPointsPerCellPerEpoch": 4
+  },
+  "masks": {
+   "tankBottomEpoch1MinZBelowM": 198.0,
+   "outsideEpoch1MinZAtLeastM": 200.5,
+   "stableGroundWithinCellReliefAtMostM": 0.1,
+   "epoch1ReliefWindowCells": 5
+  },
+  "detector": {
+   "surface": "per-cell max-Z difference, epoch 2 minus epoch 1, minus the stable-ground plane",
+   "thresholdM": 0.1,
+   "minCells": 4,
+   "maxCells": 200,
+   "minFillFraction": 0.45,
+   "maxBboxAspect": 4,
+   "maxEpoch1ReliefM": 0.6,
+   "maxRingP90AbsDiffM": 0.15
+  },
+  "pointTest": {
+   "annulusInnerM": 0.6,
+   "annulusOuterM": 1.35,
+   "coreRadiusM": 0.55,
+   "heightThresholdM": 0.15,
+   "maxPointsBeforeChange": 10,
+   "minPointsAfterChange": 60,
+   "minPeakHeightM": 0.18,
+   "maxGroundPlaneRmsM": 0.06
+  },
+  "seed": 20230516
+ },
+ "datasets": [
+  {
+   "file": "chassieu_vol1.las",
+   "role": "reference epoch, flight #1",
+   "bytes": 1644256079,
+   "sha256": "beba5d447b1080893466e1566fcf0bd74d9a901569f08ecce936e50094e4391b"
+  },
+  {
+   "file": "chassieu_vol2.las",
+   "role": "second epoch, flight #2, flown after the solids were laid",
+   "bytes": 1628383417,
+   "sha256": "5dbd261fe664724d8f0ab02b3631d28e8dbfdb5c1f1edf51b38f1a6d2f2374bd"
+  },
+  {
+   "file": "Co-UDlabs Lidar data set description VF 2025 04 04.pdf",
+   "role": "dataset description",
+   "bytes": 1134263,
+   "sha256": "9334b72a108390a04f0b20ac15a666f0ab98f2cfccc01ff2c8a74136cdb4d01e"
+  }
+ ],
+ "datasetSource": {
+  "project": "Co-UDlabs (H2020 grant 101008626), WP6 Task 6.1, INSA Lyon",
+  "doi": "10.5281/zenodo.15175591",
+  "licence": "CC BY 4.0",
+  "site": "Django Reinhardt stormwater infiltration tank, Chassieu, Lyon, France",
+  "sensor": "DJI Zenmuse L1 on a drone",
+  "acquired": "16 May 2023",
+  "crs": "EPSG:2154 RGF93 v1 / Lambert-93 + EPSG:5720 NGF-IGN69 height",
+  "producedBy": "DJI TERRA 3.11.13.0"
+ },
+ "runs": [
+  {
+   "runId": "pdf-text",
+   "kind": "document",
+   "reference": "pdftotext",
+   "argv": [
+    "-layout",
+    "DATASET_DIR/Co-UDlabs Lidar data set description VF 2025 04 04.pdf",
+    "OUTPUT_DIR/desc.txt"
+   ],
+   "commandLine": "pdftotext -layout 'DATASET_DIR/Co-UDlabs Lidar data set description VF 2025 04 04.pdf' OUTPUT_DIR/desc.txt",
+   "exitCode": 0,
+   "stderr": "",
+   "status": "ok",
+   "output": "validation/change-pair/table1.json",
+   "note": "The text layer carries the narrative but not Table 1. Table 1 is a raster image on page 7 with no text behind it, so pdftotext returns only its caption. The values in table1.json were read off the rendered page image and are marked as such; no OCR engine was available on this host to corroborate them.",
+   "sha256": "8c2e52a949ca4f2b5913ec2ab678cd35db42c96781c84e2483116649cee1458d"
+  },
+  {
+   "runId": "analysis",
+   "kind": "coregistration-and-change",
+   "reference": "laspy + numpy + scipy",
+   "script": "validation/change-pair/scripts/run-change-pair.py",
+   "argv": [
+    "validation/change-pair/scripts/run-change-pair.py",
+    "DATASET_DIR",
+    "validation/change-pair"
+   ],
+   "commandLine": "python3 validation/change-pair/scripts/run-change-pair.py DATASET_DIR validation/change-pair",
+   "exitCode": 0,
+   "stderr": "",
+   "status": "ok",
+   "outputs": [
+    "validation/change-pair/coregistration.json",
+    "validation/change-pair/detections.json"
+   ],
+   "scriptSha256": "b62bf793708bc341e6d8fa3aa5ca5f49a8947657abb271b0168eca98e569926d",
+   "sha256": {
+    "validation/change-pair/coregistration.json": "4826c90a7c301d33904dee376c1394a8ee27172899b0ef0dfd4483c42f32a17b",
+    "validation/change-pair/detections.json": "78021857359d8421666de3dd8bc79d6c46a448f4013147f04a2c1c001d6608f1"
+   }
+  },
+  {
+   "runId": "pdal-dsm-epoch1",
+   "kind": "cross-check",
+   "reference": "PDAL",
+   "pipeline": "validation/change-pair/pdal/dsm-epoch1.json",
+   "argv": [
+    "pipeline",
+    "OUTPUT_DIR/dsm-epoch1.json"
+   ],
+   "commandLine": "sed -e 's#DATASET_DIR#<dataset dir>#' -e 's#OUTPUT_DIR#<output dir>#' validation/change-pair/pdal/dsm-epoch1.json > OUTPUT_DIR/dsm-epoch1.json && pdal pipeline OUTPUT_DIR/dsm-epoch1.json",
+   "exitCode": 0,
+   "stderr": "",
+   "status": "ok",
+   "pipelineSha256": "d5ab93a5e40321a8ff1bd3b1ada5b5496dc3568fb6aae87932a87334bc650642"
+  },
+  {
+   "runId": "pdal-dsm-epoch2",
+   "kind": "cross-check",
+   "reference": "PDAL",
+   "pipeline": "validation/change-pair/pdal/dsm-epoch2.json",
+   "argv": [
+    "pipeline",
+    "OUTPUT_DIR/dsm-epoch2.json"
+   ],
+   "commandLine": "sed -e 's#DATASET_DIR#<dataset dir>#' -e 's#OUTPUT_DIR#<output dir>#' validation/change-pair/pdal/dsm-epoch2.json > OUTPUT_DIR/dsm-epoch2.json && pdal pipeline OUTPUT_DIR/dsm-epoch2.json",
+   "exitCode": 0,
+   "stderr": "",
+   "status": "ok",
+   "pipelineSha256": "181d5b723dabfece48e6921d543618d4d382bb8a4d5be0222ee7180974683c49"
+  },
+  {
+   "runId": "pdal-dsm-dump",
+   "kind": "cross-check",
+   "reference": "GDAL",
+   "argv": [
+    "-of",
+    "XYZ",
+    "OUTPUT_DIR/dsm-epochN.tif",
+    "OUTPUT_DIR/dsm-epochN.xyz"
+   ],
+   "commandLine": "gdal_translate -of XYZ OUTPUT_DIR/dsm-epochN.tif OUTPUT_DIR/dsm-epochN.xyz  (N = 1, 2)",
+   "exitCode": 0,
+   "stderr": "",
+   "status": "ok",
+   "output": "validation/change-pair/pdal-crosscheck.json",
+   "sha256": "f1224aa623c7732eb318846a2088e3541b93f109ef9a087eb3e348fda06dd848"
+  }
+ ]
+}
