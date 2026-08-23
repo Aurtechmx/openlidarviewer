@@ -27,6 +27,11 @@
  *                        The other two fixtures keep their beyond-the-end
  *                        returns far enough out that both rules agree.
  *
+ *   profile-endcap.csv   eight probes, one per decisive end-cap case, two of
+ *                        them EXACTLY on a threshold. Compared point by point
+ *                        rather than through a percentile, so the verdict it
+ *                        carries is membership itself.
+ *
  *   profile-scatter.csv  an oblique section line, irregular corridor
  *                        populations including single-point and empty stations,
  *                        classified vegetation / building / noise returns above
@@ -48,6 +53,7 @@ import {
   CAPS_A, CAPS_B, CAPS_SAMPLES, CAPS_BAND, CAPS_BIN_STEP,
   CAPS_T_START, CAPS_T_STEP, CAPS_T_COUNT, CAPS_CROSS,
   CAPS_DECOY_T, CAPS_DECOY_LIFT, CAPS_REJECT_LIFT, CAPS_PROBES, capsGround,
+  ENDCAP_BAND, ENDCAP_PROBES, ENDCAP_Z, endcapDistance,
   EXCLUDED_CLASSES,
 } from './profile-fixture-params.mjs';
 
@@ -258,6 +264,41 @@ function writeCaps() {
   return { path, points: lines.length - 1 };
 }
 
+
+// ── ENDCAP ──────────────────────────────────────────────────────────────────
+
+/**
+ * Eight probes, one per decisive case, carrying an `id` column so a per-point
+ * verdict can be joined back to the case it answers. Two of them sit EXACTLY on
+ * a threshold, so unlike the other fixtures this one does not hold its points
+ * clear of the boundary; that is the whole measurement.
+ *
+ * Each probe's declared verdict is checked here against `endcapDistance`, an
+ * expression written from the definition rather than from the sampler, and the
+ * coordinates are checked for Float32 exactness so neither side reads a
+ * rounded number on a case decided by equality.
+ */
+export function endcapRows() {
+  return ENDCAP_PROBES.map((probe) => {
+    const d = endcapDistance(probe);
+    if (probe.admitted !== d <= ENDCAP_BAND) {
+      throw new Error(`endcap probe ${probe.id} is ${d} from the segment; admitted is declared ${probe.admitted}`);
+    }
+    for (const [name, v] of [['x', probe.x], ['y', probe.y], ['z', ENDCAP_Z]]) {
+      if (Math.fround(v) !== v) throw new Error(`endcap probe ${probe.id}: ${name} = ${v} is not exact in Float32`);
+    }
+    return [probe.id, probe.x, probe.y, ENDCAP_Z];
+  });
+}
+
+function writeEndcap() {
+  const lines = ['id,x,y,z'];
+  for (const [id, x, y, z] of endcapRows()) lines.push(`${id},${f(x)},${f(y)},${f(z)}`);
+  const path = resolve(OUT_DIR, 'profile-endcap.csv');
+  writeFileSync(path, `${lines.join('\n')}\n`);
+  return { path, points: lines.length - 1 };
+}
+
 // ── CLI ─────────────────────────────────────────────────────────────────────
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -265,8 +306,10 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const ramp = writeRamp();
   const scatter = writeScatter();
   const caps = writeCaps();
+  const endcap = writeEndcap();
   console.log(`profile fixtures written`);
   console.log(`  ${ramp.path}  ${ramp.points} points, ${RAMP_SAMPLES} stations, corridor ±${RAMP_BAND} m`);
   console.log(`  ${scatter.path}  ${scatter.points} points, ${SCATTER_SAMPLES} stations, corridor ±${SCATTER_BAND} m`);
   console.log(`  ${caps.path}  ${caps.points} points, ${CAPS_SAMPLES} stations, corridor ±${CAPS_BAND} m`);
+  console.log(`  ${endcap.path}  ${endcap.points} probes, corridor ±${ENDCAP_BAND} m`);
 }

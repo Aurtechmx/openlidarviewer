@@ -1,0 +1,33 @@
+{
+  "generatedBy": "scripts/run-profile-endcap-reference.mjs",
+  "runs": {
+    "endcap": {
+      "status": "ok",
+      "membershipSql": "SELECT id AS id, ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) AS dist, CASE WHEN ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) <= 2.5 THEN 1 ELSE 0 END AS capsule, CASE WHEN ST_Intersects(GeomFromText('POLYGON((-2.5 -2.5,34.5 -2.5,34.5 2.5,-2.5 2.5,-2.5 -2.5))'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) THEN 1 ELSE 0 END AS rect, CASE WHEN ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) = 2.5 THEN 1 ELSE 0 END AS onBoundary FROM \"profile-endcap\"",
+      "membershipCommandLine": "ogrinfo -q -dialect SQLITE -sql SELECT id AS id, ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) AS dist, CASE WHEN ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) <= 2.5 THEN 1 ELSE 0 END AS capsule, CASE WHEN ST_Intersects(GeomFromText('POLYGON((-2.5 -2.5,34.5 -2.5,34.5 2.5,-2.5 2.5,-2.5 -2.5))'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) THEN 1 ELSE 0 END AS rect, CASE WHEN ST_Distance(GeomFromText('LINESTRING(0 0,32 0)'), MakePoint(CAST(x AS REAL), CAST(y AS REAL))) = 2.5 THEN 1 ELSE 0 END AS onBoundary FROM \"profile-endcap\" validation/cross-implementation/profile/profile-endcap.csv",
+      "membershipOutput": "validation/cross-implementation/profile/profile-endcap__membership.csv",
+      "probes": 8,
+      "band": 2.5,
+      "exitCodes": {
+        "ogrinfo": 0
+      },
+      "stderr": null
+    }
+  },
+  "geometry": {
+    "tool": "GDAL/OGR SQLite dialect with SpatiaLite",
+    "gdal": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+    "spatialite": "5.1.0",
+    "resolvedPath": "/opt/homebrew/Cellar/gdal/3.13.3/bin/ogrinfo",
+    "functions": [
+      "ST_Distance",
+      "ST_Intersects",
+      "MakePoint",
+      "GeomFromText"
+    ]
+  },
+  "containerPinning": "not-executed",
+  "containerPinningNote": "No containerised GDAL was used; the resolved executable path, the reported version and the exact command line stand in for an image digest.",
+  "platform": "darwin-arm64",
+  "node": "v26.7.0"
+}
