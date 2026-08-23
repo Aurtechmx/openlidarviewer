@@ -134,6 +134,17 @@ describe('readRgbReadability', () => {
     expect(readRgbReadability(cloud(2_000_000, () => [10, 200, 30])).sampled)
       .toBeLessThanOrEqual(20_001);
   });
+
+  it('bounds the sample at twice the target, which the integer stride allows', () => {
+    // Just under twice the target strides by one and inspects every point, so
+    // the bound is 2x rather than 1x. Still fixed, and worth stating rather
+    // than implying the target is a ceiling.
+    const justUnderDouble = readRgbReadability(cloud(39_999, () => [10, 200, 30]));
+    expect(justUnderDouble.sampled).toBe(39_999);
+    expect(justUnderDouble.sampled).toBeLessThan(2 * 20_000);
+    // One more point flips the stride to two and halves the sample.
+    expect(readRgbReadability(cloud(40_000, () => [10, 200, 30])).sampled).toBe(20_000);
+  });
 });
 
 describe('recommendColorMode with a uniform colour array', () => {
