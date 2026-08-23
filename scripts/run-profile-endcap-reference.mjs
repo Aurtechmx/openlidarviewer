@@ -146,7 +146,9 @@ if (!existsSync(FIXTURE)) {
   };
 } else {
   const sql = membershipSql();
-  if (existsSync(OUTPUT)) rmSync(OUTPUT);
+  // force: a stale output is removed without first asking whether it is
+  // there, so nothing can create the file between the question and the answer.
+  rmSync(OUTPUT, { force: true });
   // -q drops the layer banner; the feature blocks carry every value at the
   // precision ogrinfo prints them, which is what gets copied through.
   const args = ['-q', '-dialect', 'SQLITE', '-sql', sql, rel(FIXTURE)];
