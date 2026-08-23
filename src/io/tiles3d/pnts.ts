@@ -5,11 +5,23 @@
  * batch-table JSON + binary. This reads the header, the feature table's
  * POINTS_LENGTH and optional RTC_CENTER, the positions (uncompressed float32
  * POSITION, or uint16 POSITION_QUANTIZED against its quantised volume), the
- * colours (RGBA, RGB, RGB565, CONSTANT_RGBA) and the normals (float32 NORMAL or
- * oct-encoded NORMAL_OCT16P). It refuses the encodings this subset does not
- * handle — Draco compression, batch ids — with a clear error rather than
- * mis-decoding. Positions are tile-local; a caller adds RTC_CENTER (and the tile
- * transform) to place them. Pure: takes an ArrayBuffer, returns typed arrays.
+ * colours (RGBA, RGB, RGB565, CONSTANT_RGBA), the normals (float32 NORMAL or
+ * oct-encoded NORMAL_OCT16P), and the per-point BATCH_ID at each of its three
+ * legal component widths, range-checked against BATCH_LENGTH. Positions are
+ * tile-local; a caller adds RTC_CENTER (and the tile transform) to place them.
+ * Pure: takes an ArrayBuffer, returns typed arrays.
+ *
+ * What it does not do, stated so the guard and the claim stay the same size.
+ * Draco-compressed content — the 3DTILES_draco_point_compression extension, in
+ * either JSON section — is refused before a single binary byte is read: the
+ * feature-table binary of such a tile is a compressed stream, and reading it as
+ * uncompressed arrays returns coordinates rather than an error. Batch-table
+ * properties are carried through verbatim, as the JSON object and a copy of the
+ * binary section, and are not interpreted: their typed accessors and the
+ * hierarchy extension belong to a caller that knows which properties it wants.
+ * Nothing here manufactures LAS channels. No PNTS semantic supplies intensity,
+ * classification or return number, so the result carries none of them; a caller
+ * that wants such a channel maps it from a batch-table property it names.
  *
  * Colour leaves here as sRGB-encoded bytes, three channels per point, which is
  * what `PointCloud.colors` holds and what every other loader in this viewer
@@ -39,6 +51,20 @@ const RGB565_5BIT_MAX = 31;
 const RGB565_6BIT_MAX = 63;
 /** The widest value one oct16p component can carry before it is decoded. */
 const OCT16P_MAX = 255;
+/**
+ * The component widths a BATCH_ID array may use, and the bytes each one costs.
+ * A Map rather than an object literal, so a componentType of `toString` or
+ * `constructor` is an unknown width rather than an inherited property.
+ */
+const BATCH_ID_COMPONENT_BYTES = new Map<string, number>([
+  ['UNSIGNED_BYTE', 1],
+  ['UNSIGNED_SHORT', 2],
+  ['UNSIGNED_INT', 4],
+]);
+/** The width a BATCH_ID accessor carries when it names no componentType. */
+const DEFAULT_BATCH_ID_COMPONENT_TYPE = 'UNSIGNED_SHORT';
+/** The tile extension that replaces the feature-table binary with a codec stream. */
+const DRACO_EXTENSION = '3DTILES_draco_point_compression';
 
 export interface PntsTile {
   readonly version: number;
@@ -57,6 +83,32 @@ export interface PntsTile {
    * tile carries no normals.
    */
   readonly normals: Float32Array | null;
+  /**
+   * One batch id per point, length `pointsLength`, or null when the tile
+   * carries no BATCH_ID. Widened to uint32 whichever of the three component
+   * widths the tile stored, which is lossless in all three and spares a caller
+   * from branching on a width the file has already been checked against.
+   */
+  readonly batchIds: Uint32Array | null;
+  /** The tile's batch table, or null when it carries no batch-table JSON. */
+  readonly batchTable: PntsBatchTable | null;
+}
+
+/**
+ * A batch table as the tile wrote it. Retained rather than decoded: the ids in
+ * `PntsTile.batchIds` index its properties, so discarding it would leave those
+ * ids pointing at nothing and make this decoder's support for batch ids a
+ * support for the numbers alone.
+ */
+export interface PntsBatchTable {
+  /** The batch-table JSON object, uninterpreted. */
+  readonly json: Readonly<Record<string, unknown>>;
+  /**
+   * A copy of the batch-table binary section, empty when the tile has none.
+   * Copied rather than viewed: a view would hold the whole tile buffer alive
+   * for as long as any caller kept the properties.
+   */
+  readonly binary: Uint8Array;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -330,7 +382,87 @@ function decodeNormals(
   return null;
 }
 
-/** Decode a PNTS tile's header, feature table, positions, colours, and normals. */
+/**
+ * Refuse a JSON section that declares Draco point compression.
+ *
+ * The extension moves POSITION, colour, normals and BATCH_ID into a compressed
+ * buffer, leaving the feature-table accessors describing the codec stream
+ * rather than the arrays. Every range check in this module would still pass on
+ * such a tile, so without this the decoder answers a compressed buffer with
+ * plausible float32 garbage and no complaint. The check reads only the JSON,
+ * and runs before any binary byte is touched.
+ */
+function refuseDraco(section: JsonObject): void {
+  const extensions = section.extensions;
+  if (typeof extensions !== 'object' || extensions === null || Array.isArray(extensions)) return;
+  if ((extensions as JsonObject)[DRACO_EXTENSION] !== undefined) {
+    throw new Error('PNTS Draco point compression is not supported in this build');
+  }
+}
+
+/**
+ * Decode BATCH_ID, one id per point, against the batch count BATCH_LENGTH.
+ *
+ * The three legal component widths are read at their own widths, and the
+ * default when the accessor names none is UNSIGNED_SHORT — reading a
+ * short-width array as bytes would halve the stride and give every point an id
+ * belonging to another point, silently and within range.
+ *
+ * An id at or above BATCH_LENGTH names a batch the table does not have. That is
+ * refused rather than clamped: clamping folds two batches into one and reports
+ * properties of the wrong feature, which is a worse answer than no answer.
+ */
+function decodeBatchIds(
+  ft: JsonObject,
+  view: DataView,
+  pointsLength: number,
+  binStart: number,
+  binLength: number,
+): Uint32Array | null {
+  if (ft.BATCH_ID === undefined) return null;
+  const byteOffset = accessorByteOffset(ft.BATCH_ID, 'BATCH_ID');
+  const declared = (ft.BATCH_ID as { componentType?: unknown }).componentType;
+  const componentType = declared === undefined ? DEFAULT_BATCH_ID_COMPONENT_TYPE : declared;
+  const bytesPerComponent =
+    typeof componentType === 'string' ? BATCH_ID_COMPONENT_BYTES.get(componentType) : undefined;
+  if (bytesPerComponent === undefined) {
+    throw new Error(
+      'PNTS: BATCH_ID.componentType must be UNSIGNED_BYTE, UNSIGNED_SHORT, or UNSIGNED_INT.',
+    );
+  }
+
+  // Checked before the array is read: an id can only be range-checked against a
+  // batch count, and a tile with ids and no count has no count to check them
+  // against.
+  const batchLength = ft.BATCH_LENGTH;
+  if (
+    typeof batchLength !== 'number' ||
+    !Number.isInteger(batchLength) ||
+    batchLength <= 0 ||
+    batchLength > UINT32_MAX
+  ) {
+    throw new Error('PNTS: BATCH_ID requires a BATCH_LENGTH that is a positive uint32.');
+  }
+
+  const start = arrayStart('BATCH_ID', byteOffset, pointsLength, bytesPerComponent, binStart, binLength);
+  const batchIds = new Uint32Array(pointsLength);
+  for (let i = 0; i < pointsLength; i++) {
+    const at = start + i * bytesPerComponent;
+    let id: number;
+    if (bytesPerComponent === 1) id = view.getUint8(at);
+    else if (bytesPerComponent === 2) id = view.getUint16(at, true);
+    else id = view.getUint32(at, true);
+    if (id >= batchLength) {
+      throw new Error(
+        `PNTS: BATCH_ID ${id} at point ${i} is not below BATCH_LENGTH ${batchLength}.`,
+      );
+    }
+    batchIds[i] = id;
+  }
+  return batchIds;
+}
+
+/** Decode a PNTS tile's header, feature table, positions, and per-point attributes. */
 export function parsePnts(buffer: ArrayBuffer): PntsTile {
   if (buffer.byteLength < HEADER_BYTES) {
     throw new Error('PNTS: buffer shorter than the 28-byte header.');
@@ -371,10 +503,23 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
   const ftBinStart = ftJsonStart + ftJsonLength;
   const btJsonStart = ftBinStart + ftBinLength;
 
+  const btBinStart = btJsonStart + btJsonLength;
+
   const ft = decodeJsonSection(buffer, ftJsonStart, ftJsonLength, 'feature table');
-  // The batch table is read for well-formedness only; its properties belong to
-  // a caller this decoder does not have yet.
-  if (btJsonLength > 0) decodeJsonSection(buffer, btJsonStart, btJsonLength, 'batch table');
+  // Kept, not just checked: BATCH_ID indexes these properties, so the ids and
+  // the table they index have to leave this function together.
+  const batchTable =
+    btJsonLength > 0
+      ? {
+          json: decodeJsonSection(buffer, btJsonStart, btJsonLength, 'batch table'),
+          binary: new Uint8Array(buffer, btBinStart, btBinLength).slice(),
+        }
+      : null;
+
+  // Before POINTS_LENGTH, before any accessor, before any binary read: on a
+  // Draco tile none of what follows is describing the bytes it thinks it is.
+  refuseDraco(ft);
+  if (batchTable !== null) refuseDraco(batchTable.json);
 
   const pointsLength = ft.POINTS_LENGTH;
   if (
@@ -394,11 +539,12 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
 
   const components = pointsLength * 3;
 
-  // Colour and normals are resolved before the positions branch, so a tile
-  // whose colour array overruns its section is refused whichever position
-  // encoding it happens to carry.
+  // Colour, normals and batch ids are resolved before the positions branch, so
+  // a tile whose colour or batch-id array overruns its section is refused
+  // whichever position encoding it happens to carry.
   const colors = decodeColors(ft, view, pointsLength, ftBinStart, ftBinLength);
   const normals = decodeNormals(ft, view, pointsLength, ftBinStart, ftBinLength);
+  const batchIds = decodeBatchIds(ft, view, pointsLength, ftBinStart, ftBinLength);
 
   // A tile carrying both encodings is decoded from POSITION: the format gives
   // the uncompressed array precedence over the quantised one.
@@ -411,7 +557,7 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
     // reserving the memory before it is refused.
     const positions = new Float32Array(components);
     for (let i = 0; i < components; i++) positions[i] = view.getFloat32(start + i * 4, true);
-    return { version, pointsLength, rtcCenter, positions, colors, normals };
+    return { version, pointsLength, rtcCenter, positions, colors, normals, batchIds, batchTable };
   }
 
   if (ft.POSITION_QUANTIZED !== undefined) {
@@ -443,7 +589,7 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
       // offset is added rounds twice and loses a step the format still carries.
       positions[i] = (code * volumeScale[axis]) / QUANTIZED_FULL_SCALE + volumeOffset[axis];
     }
-    return { version, pointsLength, rtcCenter, positions, colors, normals };
+    return { version, pointsLength, rtcCenter, positions, colors, normals, batchIds, batchTable };
   }
 
   throw new Error('PNTS: feature table has neither POSITION nor POSITION_QUANTIZED.');

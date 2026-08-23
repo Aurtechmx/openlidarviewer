@@ -452,3 +452,178 @@ describe('parsePnts normals', () => {
     expect([...(t.normals as Float32Array)]).toEqual([0, 0, 1]);
   });
 });
+
+/** Bytes per id for each BATCH_ID component width the format allows. */
+const BATCH_ID_WIDTHS: Record<string, number> = {
+  UNSIGNED_BYTE: 1,
+  UNSIGNED_SHORT: 2,
+  UNSIGNED_INT: 4,
+};
+
+/**
+ * Build a PNTS tile carrying a zeroed float32 POSITION, a BATCH_ID array, and a
+ * batch table. `componentType` is written into the accessor only when given, so
+ * omitting it is the case that pins the format's default width; `writeWidth`
+ * separates the width the bytes were written at from the width the accessor
+ * names, which is what a stride mistake looks like from outside.
+ */
+function makeBatchPnts(
+  opts: {
+    pointsLength?: number;
+    batchIds?: number[];
+    componentType?: string;
+    writeWidth?: number;
+    batchLength?: number;
+    batchTable?: Record<string, unknown>;
+    batchTableBinary?: number[];
+  } = {},
+): ArrayBuffer {
+  const ids = opts.batchIds;
+  const pointsLength = opts.pointsLength ?? ids?.length ?? 1;
+  const width = opts.writeWidth ?? BATCH_ID_WIDTHS[opts.componentType ?? 'UNSIGNED_SHORT'];
+  const ft: Record<string, unknown> = { POINTS_LENGTH: pointsLength, POSITION: { byteOffset: 0 } };
+  const idsAt = pointsLength * 3 * 4;
+  let binBytes = idsAt;
+  if (ids) {
+    const accessor: Record<string, unknown> = { byteOffset: idsAt };
+    if (opts.componentType !== undefined) accessor.componentType = opts.componentType;
+    ft.BATCH_ID = accessor;
+    ft.BATCH_LENGTH = opts.batchLength ?? Math.max(...ids) + 1;
+    binBytes += pointsLength * width;
+  } else if (opts.batchLength !== undefined) {
+    ft.BATCH_LENGTH = opts.batchLength;
+  }
+
+  let json = JSON.stringify(ft);
+  while (json.length % 8 !== 0) json += ' ';
+  const jsonBytes = new TextEncoder().encode(json);
+
+  let btJsonBytes = new Uint8Array(0);
+  if (opts.batchTable) {
+    let btJson = JSON.stringify(opts.batchTable);
+    while (btJson.length % 8 !== 0) btJson += ' ';
+    btJsonBytes = new TextEncoder().encode(btJson);
+  }
+  const btBin = new Uint8Array(opts.batchTableBinary ?? []);
+
+  const total = 28 + jsonBytes.length + binBytes + btJsonBytes.length + btBin.length;
+  const buf = new ArrayBuffer(total);
+  const view = new DataView(buf);
+  view.setUint32(0, 0x73746e70, true);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, total, true);
+  view.setUint32(12, jsonBytes.length, true);
+  view.setUint32(16, binBytes, true);
+  view.setUint32(20, btJsonBytes.length, true);
+  view.setUint32(24, btBin.length, true);
+  new Uint8Array(buf, 28, jsonBytes.length).set(jsonBytes);
+  const binStart = 28 + jsonBytes.length;
+  if (ids) {
+    ids.forEach((id, i) => {
+      const at = binStart + idsAt + i * width;
+      if (width === 1) view.setUint8(at, id);
+      else if (width === 2) view.setUint16(at, id, true);
+      else view.setUint32(at, id, true);
+    });
+  }
+  new Uint8Array(buf, binStart + binBytes, btJsonBytes.length).set(btJsonBytes);
+  new Uint8Array(buf, binStart + binBytes + btJsonBytes.length, btBin.length).set(btBin);
+  return buf;
+}
+
+describe('parsePnts batch ids', () => {
+  it('reports no ids and no batch table when the tile carries neither', () => {
+    const t = parsePnts(makeAttributePnts({}));
+    expect(t.batchIds).toBeNull();
+    expect(t.batchTable).toBeNull();
+  });
+
+  it('reads a componentType-less BATCH_ID at the default UNSIGNED_SHORT width', () => {
+    // Written as little-endian uint16, so the bytes are 02 01 04 03. Read a byte
+    // at a time the same array gives 2 and 1, which are ids the tile never wrote
+    // and which are still inside BATCH_LENGTH, so nothing else would notice.
+    const t = parsePnts(makeBatchPnts({ batchIds: [0x0102, 0x0304], batchLength: 1000 }));
+    expect([...(t.batchIds as Uint32Array)]).toEqual([258, 772]);
+  });
+
+  it('reads each of the three legal component widths', () => {
+    const byWidth = (componentType: string, batchIds: number[], batchLength: number) => [
+      ...(parsePnts(makeBatchPnts({ componentType, batchIds, batchLength })).batchIds as Uint32Array),
+    ];
+    expect(byWidth('UNSIGNED_BYTE', [0, 7, 255], 256)).toEqual([0, 7, 255]);
+    expect(byWidth('UNSIGNED_SHORT', [0, 258, 65535], 65536)).toEqual([0, 258, 65535]);
+    // Above the uint16 ceiling, so a short read of this array cannot produce it.
+    expect(byWidth('UNSIGNED_INT', [0, 70000, 4294967294], 4294967295)).toEqual([
+      0, 70000, 4294967294,
+    ]);
+  });
+
+  it('accepts an id one below BATCH_LENGTH', () => {
+    // The bound is exclusive, so the refusal of an id equal to BATCH_LENGTH is
+    // about that value and not about large ids generally.
+    const t = parsePnts(makeBatchPnts({ batchIds: [3, 0], batchLength: 4 }));
+    expect([...(t.batchIds as Uint32Array)]).toEqual([3, 0]);
+  });
+
+  it('gives one id per point, whatever the batch count is', () => {
+    const t = parsePnts(makeBatchPnts({ batchIds: [1, 1, 1, 1, 1], batchLength: 2 }));
+    expect(t.pointsLength).toBe(5);
+    expect(t.batchIds).toHaveLength(5);
+    expect(t.positions).toHaveLength(15);
+  });
+
+  it('carries the batch table JSON and binary through unchanged', () => {
+    const t = parsePnts(
+      makeBatchPnts({
+        batchIds: [0, 1],
+        batchLength: 2,
+        batchTable: { name: ['a', 'b'], height: { byteOffset: 0, componentType: 'FLOAT', type: 'SCALAR' } },
+        batchTableBinary: [1, 2, 3, 4, 5, 6, 7, 8],
+      }),
+    );
+    expect(t.batchTable?.json).toEqual({
+      name: ['a', 'b'],
+      height: { byteOffset: 0, componentType: 'FLOAT', type: 'SCALAR' },
+    });
+    expect([...(t.batchTable?.binary as Uint8Array)]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('copies the batch-table binary instead of viewing the tile buffer', () => {
+    // A view would keep the whole tile alive for as long as a caller held the
+    // properties, and would change under a caller that reused the buffer.
+    const t = parsePnts(
+      makeBatchPnts({ batchIds: [0], batchLength: 1, batchTable: { n: [1] }, batchTableBinary: [9, 9] }),
+    );
+    const binary = t.batchTable?.binary as Uint8Array;
+    expect(binary.buffer.byteLength).toBe(binary.length);
+  });
+
+  it('keeps a batch table that has no BATCH_ID pointing into it', () => {
+    // Per-point batch-table properties are legal without ids; discarding the
+    // table here would drop them.
+    const t = parsePnts(makeBatchPnts({ batchTable: { intensity: [1, 2] } }));
+    expect(t.batchIds).toBeNull();
+    expect(t.batchTable?.json).toEqual({ intensity: [1, 2] });
+  });
+
+  it('carries no LAS-style channel the format never supplied', () => {
+    // Intensity, classification and return number have no PNTS semantic. A
+    // decoder that invented them would report the same constant for every point
+    // of every tile, and a caller would have no way to tell it from data.
+    const t = parsePnts(
+      makeBatchPnts({ batchIds: [0], batchLength: 1, batchTable: { classification: [2] } }),
+    );
+    expect(Object.keys(t).sort()).toEqual([
+      'batchIds',
+      'batchTable',
+      'colors',
+      'normals',
+      'pointsLength',
+      'positions',
+      'rtcCenter',
+      'version',
+    ]);
+    // The batch table names one, and it stays inside the batch table.
+    expect(t.batchTable?.json.classification).toEqual([2]);
+  });
+});
