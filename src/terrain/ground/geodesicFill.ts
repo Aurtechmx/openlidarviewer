@@ -79,17 +79,18 @@ export interface GeodesicParams {
  * radius-24 window first. The only thing separating the two cases is void
  * shape, which no existing cap looked at.
  *
- * Measured, at roughly 8 million pops per second:
+ * Pops are the unit because they are the reproducible measurement: the same
+ * grid yields the same count on every run and every machine, while the seconds
+ * below moved 40% between two runs on one loaded laptop.
  *
- *   2000x2000, 35% scattered voids     28M pops     2.2 s
- *   500x500, 32-cell void tiles        35M pops     4.4 s
- *   1000x1000, 32-cell void tiles     137M pops    17.1 s
- *   1500x1500, 64-cell void tiles     629M pops    82.7 s
+ *   2000x2000, 35% scattered voids     28M pops     2.3 to 2.8 s
+ *   500x500, 32-cell void tiles        35M pops     6.1 s
+ *   1000x1000, 32-cell void tiles     137M pops    23.5 to 23.8 s
+ *   1500x1500, 64-cell void tiles     629M pops    83 s
  *
  * Sixty million sits above every scattered case and above the smallest blobby
- * one, and below the grids that run for a minute or more. A device slower than
- * the one measured spends longer at the same budget, so the ceiling is a bound
- * on work rather than a promise about seconds.
+ * one, and below the grids that run for tens of seconds. What it bounds is
+ * work; how long that work takes is the device's business.
  */
 export const GEODESIC_NODE_BUDGET = 60_000_000;
 
@@ -100,8 +101,17 @@ export const GEODESIC_PROBE_VOIDS = 2_000;
 export interface GeodesicFillReport {
   /** Void cells the pass was asked to fill. */
   readonly voids: number;
-  /** True when the projected cost exceeded the budget and no void got a geodesic value. */
+  /** True when the pass was given up and no void got a geodesic value. */
   readonly abandoned: boolean;
+  /**
+   * Which check gave the pass up.
+   *
+   * `'projection'` means it never started, because the probe's estimate was
+   * already above the ceiling. `'ceiling'` means it started and ran out, which
+   * happens when the estimate was low. The two need different words in a
+   * report: only the first can say the cost was projected above the ceiling.
+   */
+  readonly stoppedBy: 'projection' | 'ceiling' | null;
   /** Heap pops spent, including the probe. */
   readonly nodesExpanded: number;
   /** Pops the projection expected for the whole grid, from the probe. */
@@ -157,7 +167,7 @@ export function geodesicFillWithReport(
   const out = new Float32Array(n);
   out.set(z);
   const empty: GeodesicFillReport = {
-    voids: 0, abandoned: false, nodesExpanded: 0, projectedNodes: 0,
+    voids: 0, abandoned: false, stoppedBy: null, nodesExpanded: 0, projectedNodes: 0,
   };
   if (n === 0) return { z: out, report: empty };
 
@@ -302,16 +312,38 @@ export function geodesicFillWithReport(
     for (const src of voids) out[src] = surface[src];
     return {
       z: out,
-      report: { voids: voids.length, abandoned: true, nodesExpanded: pops, projectedNodes },
+      report: {
+        voids: voids.length, abandoned: true, stoppedBy: 'projection',
+        nodesExpanded: pops, projectedNodes,
+      },
     };
   }
 
   for (let i = 0; i < voids.length; i++) {
     if (i % probeStride === 0) continue; // solved by the probe
     solve(voids[i]);
+    // The projection decides whether to start; this decides whether to finish.
+    // Cost per void varies by two orders of magnitude between a void beside
+    // measured ground and one deep inside a gap, and a strided sample of that
+    // distribution can be well out: measured across 24 void morphologies the
+    // median error is 0.5% and the worst is 36%. Without this the ceiling would
+    // bound a projection rather than the work, which is not what it is for.
+    if (pops > nodeBudget) {
+      for (const src of voids) out[src] = surface[src];
+      return {
+        z: out,
+        report: {
+          voids: voids.length, abandoned: true, stoppedBy: 'ceiling',
+          nodesExpanded: pops, projectedNodes,
+        },
+      };
+    }
   }
   return {
     z: out,
-    report: { voids: voids.length, abandoned: false, nodesExpanded: pops, projectedNodes },
+    report: {
+      voids: voids.length, abandoned: false, stoppedBy: null,
+      nodesExpanded: pops, projectedNodes,
+    },
   };
 }

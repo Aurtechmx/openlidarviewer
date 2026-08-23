@@ -407,6 +407,9 @@ describe('buildDtmGrid geodesic cost ceiling', () => {
     expect(warning).toBeDefined();
     expect(warning).toMatch(/void cells/);
     expect(warning).toMatch(/ceiling/);
+    // A ceiling of one stops the pass before it starts, so the wording is the
+    // projection's, which is the only one entitled to quote a projected cost.
+    expect(warning).toMatch(/was projected to cost/);
   });
 
   it('says nothing when the pass fits inside the ceiling', () => {

@@ -317,11 +317,20 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       // more than the pass allows, so every void carries the Euclidean fill.
       // Said here because the method name promises geodesic distance, and a
       // report that names a method the run did not use is the overclaim.
+      const ceilingM = Math.round(
+        (params.geodesicNodeBudget ?? GEODESIC_NODE_BUDGET) / 1e6,
+      );
+      // The two stops need different words. Only the projection can say the
+      // cost was estimated above the ceiling; the ceiling itself fires when the
+      // estimate was below it and the real pass ran out.
+      const cause =
+        filled.report.stoppedBy === 'projection'
+          ? `was projected to cost ${Math.round(filled.report.projectedNodes / 1e6).toLocaleString('en-US')}M ` +
+            `search steps, above the ${ceilingM}M ceiling`
+          : `reached the ${ceilingM}M search-step ceiling before it finished`;
       warnings.push(
         `void fill fell back to Euclidean IDW — the geodesic pass over ` +
-          `${filled.report.voids.toLocaleString('en-US')} void cells was projected ` +
-          `to cost ${Math.round(filled.report.projectedNodes / 1e6).toLocaleString('en-US')}M ` +
-          `search steps, above the ${Math.round((params.geodesicNodeBudget ?? GEODESIC_NODE_BUDGET) / 1e6)}M ceiling; ` +
+          `${filled.report.voids.toLocaleString('en-US')} void cells ${cause}; ` +
           `heights across data gaps are less reliable than a geodesic fill would give`,
       );
     }
