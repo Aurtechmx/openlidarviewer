@@ -70,7 +70,13 @@ export const RGB_LUMINANCE_IQR_FLOOR = 12;
  */
 export const RGB_MIN_SAMPLE = 64;
 
-/** Points inspected at most, so the check stays cheap on a large cloud. */
+/**
+ * Sample size the stride aims at, so the check stays cheap on a large cloud.
+ *
+ * A target rather than a ceiling: the stride is an integer, so a cloud just
+ * under twice this size strides by one and inspects all of it. The real bound
+ * is twice the target, which is still a fixed cost.
+ */
 export const RGB_SAMPLE_TARGET = 20000;
 
 /**
