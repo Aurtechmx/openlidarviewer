@@ -26,19 +26,43 @@
  *      a spring-metaphor inpaint; nearest-finite is a deterministic,
  *      dependency-free stand-in that is honest about being simpler).
  *   3. Progressive morphological opening — open the surface with a flat
- *      square structuring element of growing radius; at each radius a
- *      cell is cut to the opened height when the drop exceeds a
- *      slope-scaled threshold `dh = elevationThresholdM + slope · b ·
- *      cellSize` (the cell run in z's unit — see
+ *      structuring element of growing radius and compare the drop
+ *      against a slope-scaled threshold `dh = elevationThresholdM +
+ *      slope · b · cellSize` (the cell run in z's unit — see
  *      `GroundFilterParams.cellSizeZUnits`). This is the heart shared by
  *      SMRF and Zhang's PMF.
  *   4. Point classification — a return is ground when it sits within a
  *      slope-scaled tolerance of the final opened surface beneath it.
  *
- *   It does NOT (yet) implement SMRF's net-cutting refinement pass or
- *   its image-processing-grade inpaint. Those are accuracy refinements,
- *   not correctness gaps; they belong in a later cycle and would be
- *   documented when they land. Until then the docstring tells the truth.
+ *   TWO OPENING RULES, AND WHY BOTH ARE HERE. `openingMode` selects
+ *   between them and defaults to `'cut-surface'`, the rule this filter
+ *   has always run and the one every committed terrain product was
+ *   measured under. It carries a single work surface through the window
+ *   ladder and writes a cell down whenever the drop exceeds `dh`, so
+ *   radius `b + 1` opens a surface radius `b` already lowered and the
+ *   drops compound. On ground that genuinely falls away across the
+ *   ladder that compounding cuts bare earth: measured against
+ *   `filters.smrf` over the committed study scenes it marks 1599 of 2500
+ *   cells on the rolling scene where the published rule marks 218.
+ *
+ *   `'object-mask'` is the rule as published (Pingel, Clarke & McBride
+ *   2013) and as implemented in PDAL's `filters.smrf`. The surface is
+ *   never written down; each radius opens the original, the drop is
+ *   measured against the previous radius' opening, the result is a
+ *   sticky object mask, and the masked cells are interpolated from their
+ *   nearest unmasked neighbours before any point is classified.
+ *   `structuringElement` selects the element shape independently and
+ *   defaults to `'square'`; `'diamond'` is the L1 element the published
+ *   filter uses. `tests/groundFilterPdalAgreement.test.ts` carries the
+ *   measured agreement for the combination the study runs.
+ *
+ *   It does NOT implement SMRF's net-cutting refinement pass, its
+ *   low-point pre-pass, or its image-processing-grade inpaint (the
+ *   object-cell refill here is the same nearest-finite flood fill used
+ *   for empty cells, where the published filter interpolates from k
+ *   neighbours). The missing low-point pass is why a scene carrying
+ *   gross below-ground blunders is not helped by `'object-mask'` alone;
+ *   `floorPercentile` is this filter's separate answer to that.
  *
  *   LOW-OUTLIER DESPIKE. A gross below-ground blunder (multipath, water
  *   returns, sensor noise) can seed a false low surface, and grayscale
@@ -67,6 +91,50 @@ import type { TerrainPoint, TerrainCoverageMode } from '../TerrainContracts';
 
 /** Which axis is the vertical (elevation) axis in the source frame. */
 export type VerticalAxis = 'z' | 'y';
+
+/**
+ * How the progressive morphological opening decides which cells carry
+ * above-ground objects.
+ *
+ * `'cut-surface'` — the original OpenLiDARViewer behaviour. One work surface is
+ * carried through the window ladder and a cell is written down to the opened
+ * height whenever the drop exceeds the threshold, so radius `b + 1` opens a
+ * surface that radius `b` already lowered.
+ *
+ * `'object-mask'` — the behaviour published as SMRF (Pingel, Clarke & McBride
+ * 2013) and implemented in PDAL's `filters.smrf`. The minimum-elevation surface
+ * is never written down. Each radius opens the ORIGINAL surface, the drop is
+ * measured against the PREVIOUS radius' opening rather than against a lowered
+ * surface, and the outcome is a sticky per-cell object mask. Cells the mask
+ * marks are then interpolated from their nearest unmarked neighbours before any
+ * point is classified, so a cell that held a building contributes the
+ * surrounding bare earth instead of the roof-minus-window height.
+ *
+ * The difference is not cosmetic. Under `'cut-surface'` a cell on curved ground
+ * accumulates one drop per radius, so a scene whose ground genuinely falls away
+ * over 16 cells is cut as though it held structure. See
+ * `tests/groundFilterPdalAgreement.test.ts` for the measured size of that.
+ */
+export type GroundOpeningMode = 'cut-surface' | 'object-mask';
+
+/**
+ * Shape of the flat structuring element the progressive opening uses.
+ *
+ * `'square'` (default) — the 8-connected box OpenLiDARViewer has always used. It
+ * is separable, so a radius-`b` pass costs two 1-D sweeps.
+ *
+ * `'diamond'` — the 4-connected L1 element PDAL's `filters.smrf` uses
+ * (`erodeDiamond` / `dilateDiamond`). A radius-`b` diamond covers
+ * `2b² + 2b + 1` cells against the box's `(2b + 1)²`, so a gross below-ground
+ * blunder propagates through the erosion ladder far more slowly. On a scene
+ * carrying such blunders the box lets a handful of pits swallow the whole grid
+ * by the time the ladder reaches radius 16; the diamond does not.
+ *
+ * Both are decomposable, so eroding by radius 1 `b` times equals eroding by
+ * radius `b` for either shape, which is what makes the progressive ladder exact
+ * rather than an approximation.
+ */
+export type GroundStructuringElement = 'square' | 'diamond';
 
 /** Tunable parameters for {@link classifyGroundSmrf}. */
 export interface GroundFilterParams {
@@ -132,6 +200,18 @@ export interface GroundFilterParams {
   readonly floorPercentile?: number;
   /** Vertical axis of the source frame. Defaults to `'z'`. */
   readonly verticalAxis?: VerticalAxis;
+  /**
+   * Which progressive-opening rule to run. Defaults to `'cut-surface'`, the
+   * behaviour every committed terrain product was measured under. See
+   * {@link GroundOpeningMode}.
+   */
+  readonly openingMode?: GroundOpeningMode;
+  /**
+   * Structuring-element shape for the opening. Defaults to `'square'`, the
+   * shape every committed terrain product was measured under. See
+   * {@link GroundStructuringElement}.
+   */
+  readonly structuringElement?: GroundStructuringElement;
 }
 
 /** Result of {@link classifyGroundSmrf}. */
@@ -149,6 +229,18 @@ export interface GroundFilterResult {
   readonly groundSurface: Float32Array;
   /** `1` where the cell held at least one source point, else `0`. */
   readonly hadData: Uint8Array;
+  /**
+   * `1` where the progressive opening judged the cell to hold an above-ground
+   * object, else `0`. Row-major like {@link groundSurface}.
+   *
+   * Both opening modes report it, so the two are directly comparable: under
+   * `'object-mask'` it is the mask the ladder accumulated, and under
+   * `'cut-surface'` it is the set of cells the ladder wrote down. All zeroes on
+   * the trusted-classification path, which runs no opening.
+   */
+  readonly objectCells: Uint8Array;
+  /** How many cells {@link objectCells} marks. */
+  readonly objectCellCount: number;
   /** Grid width in cells. */
   readonly cols: number;
   /** Grid height in cells. */
@@ -230,6 +322,18 @@ export function classifyGroundSmrf(
   let floorPercentile = params.floorPercentile ?? 0;
   if (!Number.isFinite(floorPercentile) || floorPercentile < 0) floorPercentile = 0;
   if (floorPercentile > 50) floorPercentile = 50;
+  // An unrecognised mode falls back to the shipped one WITH a warning rather
+  // than silently picking a rule the caller did not ask for.
+  let openingMode: GroundOpeningMode = params.openingMode ?? 'cut-surface';
+  if (openingMode !== 'cut-surface' && openingMode !== 'object-mask') {
+    warnings.push(`openingMode invalid (${String(openingMode)}); using cut-surface`);
+    openingMode = 'cut-surface';
+  }
+  let structuringElement: GroundStructuringElement = params.structuringElement ?? 'square';
+  if (structuringElement !== 'square' && structuringElement !== 'diamond') {
+    warnings.push(`structuringElement invalid (${String(structuringElement)}); using square`);
+    structuringElement = 'square';
+  }
 
   const sourcePointCount = points.length;
   if (sourcePointCount === 0) {
@@ -318,21 +422,80 @@ export function classifyGroundSmrf(
   const surface = inpaintNearest(minGrid, hadData, cols, rows);
 
   // ── 4. progressive morphological opening ──────────────────────────
-  // Work surface is mutated each window radius; a cell is cut down to
-  // the opened height when the drop exceeds the slope-scaled threshold.
-  let work = surface.slice();
-  for (let b = 1; b <= maxWindowCells; b++) {
-    const opened = morphOpen(work, cols, rows, b);
-    // Cap the slope-scaled threshold so a large window on steep ground can't
-    // grow the tolerance high enough to admit low objects (SMRF hard cap).
-    // The growth term takes the z-unit cell run: slope · run compares against
-    // a Δz, so a degree-valued run would pin dh at the base threshold.
-    const dh = Math.min(maxElevationThresholdM, elevationThresholdM + slope * b * cellSizeZUnits);
-    for (let i = 0; i < nCells; i++) {
-      if (work[i] - opened[i] > dh) work[i] = opened[i];
+  // The threshold at radius `b`, shared by both modes. Capped so a large window
+  // on steep ground can't grow the tolerance high enough to admit low objects
+  // (SMRF hard cap). The growth term takes the z-unit cell run: slope · run
+  // compares against a Δz, so a degree-valued run would pin dh at the base.
+  const thresholdAt = (b: number): number =>
+    Math.min(maxElevationThresholdM, elevationThresholdM + slope * b * cellSizeZUnits);
+
+  const objectCells = new Uint8Array(nCells);
+  let groundSurface: Float32Array;
+
+  if (openingMode === 'object-mask') {
+    // Published SMRF. The surface is never written down, so the drop a cell can
+    // show at radius `b` is the drop from radius `b - 1`'s opening and not the
+    // sum of every drop the ladder has taken so far. `prevSurface` starts at the
+    // minimum-elevation surface and advances to each opening in turn.
+    //
+    // The erosion is progressive: radius `b`'s erosion is radius `b - 1`'s
+    // eroded one more cell. A flat square structuring element decomposes, so
+    // eroding by radius 1 `b` times is exactly eroding the ORIGINAL surface by
+    // radius `b` — which is the point, since the original is what stays intact.
+    let prevSurface = surface;
+    let erosion = surface;
+    for (let b = 1; b <= maxWindowCells; b++) {
+      erosion = erodeBy(erosion, cols, rows, 1, structuringElement);
+      const opened = dilateBy(erosion, cols, rows, b, structuringElement);
+      const dh = thresholdAt(b);
+      for (let i = 0; i < nCells; i++) {
+        if (prevSurface[i] - opened[i] > dh) objectCells[i] = 1;
+      }
+      prevSurface = opened;
     }
+    // Object cells hold a height nobody surveyed as bare earth, so they are
+    // dropped and refilled from the nearest cell the mask left standing rather
+    // than kept at their opened value. `inpaintNearest` is the same
+    // nearest-finite flood fill step 3 uses for cells that held no return; the
+    // published filter's `knnfill` differs in interpolating from k neighbours,
+    // which is an accuracy refinement over the same idea.
+    let objectFree = 0;
+    const keep = new Uint8Array(nCells);
+    for (let i = 0; i < nCells; i++) {
+      if (objectCells[i] === 0) {
+        keep[i] = 1;
+        objectFree++;
+      }
+    }
+    if (objectFree === 0) {
+      // Every cell marked. There is no bare earth left to interpolate FROM, and
+      // a flood fill would return zeros, so the surface is left as measured and
+      // the caller is told the scene carried no unmarked cell.
+      warnings.push('progressive opening marked every cell as object; ground surface left un-interpolated');
+      groundSurface = surface.slice();
+    } else {
+      groundSurface = inpaintNearest(surface, keep, cols, rows);
+    }
+  } else {
+    // Original behaviour. Work surface is mutated each window radius; a cell is
+    // cut down to the opened height when the drop exceeds the threshold, and
+    // radius b + 1 then opens the surface radius b already lowered.
+    const work = surface.slice();
+    for (let b = 1; b <= maxWindowCells; b++) {
+      const opened = morphOpen(work, cols, rows, b, structuringElement);
+      const dh = thresholdAt(b);
+      for (let i = 0; i < nCells; i++) {
+        if (work[i] - opened[i] > dh) {
+          work[i] = opened[i];
+          objectCells[i] = 1;
+        }
+      }
+    }
+    groundSurface = work;
   }
-  const groundSurface = work;
+
+  let objectCellCount = 0;
+  for (let i = 0; i < nCells; i++) objectCellCount += objectCells[i];
 
   // ── 5. classify points against the opened surface ─────────────────
   const slopeGrid = surfaceSlope(groundSurface, cols, rows, cellSizeZUnits);
@@ -359,6 +522,8 @@ export function classifyGroundSmrf(
     isGround,
     groundSurface,
     hadData,
+    objectCells,
+    objectCellCount,
     cols,
     rows,
     cellSizeM,
@@ -464,6 +629,9 @@ export function groundFromTrustedClassification(
     isGround,
     groundSurface,
     hadData,
+    // No opening runs on this path, so no cell is judged to hold an object.
+    objectCells: new Uint8Array(nCells),
+    objectCellCount: 0,
     cols,
     rows,
     cellSizeM,
@@ -538,9 +706,76 @@ export function morphOpen(
   cols: number,
   rows: number,
   b: number,
+  se: GroundStructuringElement = 'square',
 ): Float32Array {
-  const eroded = windowExtreme(grid, cols, rows, b, 'min');
-  return windowExtreme(eroded, cols, rows, b, 'max');
+  const eroded = erodeBy(grid, cols, rows, b, se);
+  return dilateBy(eroded, cols, rows, b, se);
+}
+
+/** Erosion by a flat radius-`b` element of the given shape. */
+function erodeBy(
+  grid: Float32Array,
+  cols: number,
+  rows: number,
+  b: number,
+  se: GroundStructuringElement,
+): Float32Array {
+  return se === 'diamond'
+    ? diamondExtreme(grid, cols, rows, b, 'min')
+    : windowExtreme(grid, cols, rows, b, 'min');
+}
+
+/** Dilation by a flat radius-`b` element of the given shape. */
+function dilateBy(
+  grid: Float32Array,
+  cols: number,
+  rows: number,
+  b: number,
+  se: GroundStructuringElement,
+): Float32Array {
+  return se === 'diamond'
+    ? diamondExtreme(grid, cols, rows, b, 'max')
+    : windowExtreme(grid, cols, rows, b, 'max');
+}
+
+/**
+ * Radius-`b` L1 (diamond) min/max, applied as `b` radius-1 passes. The diamond
+ * is decomposable, so the repeated pass IS the radius-`b` element and not an
+ * approximation of it. There is no separable form, which is why this costs `b`
+ * sweeps where the box costs two. NaN is ignored, matching
+ * {@link windowExtreme}.
+ */
+function diamondExtreme(
+  grid: Float32Array,
+  cols: number,
+  rows: number,
+  b: number,
+  mode: 'min' | 'max',
+): Float32Array {
+  const pick = mode === 'min' ? Math.min : Math.max;
+  let cur = grid;
+  for (let pass = 0; pass < b; pass++) {
+    const next = new Float32Array(grid.length);
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const i = row * cols + col;
+        let acc = cur[i];
+        if (col > 0) acc = merge(acc, cur[i - 1], pick);
+        if (col < cols - 1) acc = merge(acc, cur[i + 1], pick);
+        if (row > 0) acc = merge(acc, cur[i - cols], pick);
+        if (row < rows - 1) acc = merge(acc, cur[i + cols], pick);
+        next[i] = acc;
+      }
+    }
+    cur = next;
+  }
+  return cur;
+}
+
+/** Fold one neighbour into an accumulator, skipping non-finite values. */
+function merge(acc: number, val: number, pick: (a: number, b: number) => number): number {
+  if (!Number.isFinite(val)) return acc;
+  return Number.isFinite(acc) ? pick(acc, val) : val;
 }
 
 /** Separable 1-D windowed min/max over a flat square radius-`b` window. */
@@ -628,6 +863,8 @@ function emptyResult(cellSizeM: number, warnings: string[]): GroundFilterResult 
     isGround: new Uint8Array(0),
     groundSurface: new Float32Array(0),
     hadData: new Uint8Array(0),
+    objectCells: new Uint8Array(0),
+    objectCellCount: 0,
     cols: 0,
     rows: 0,
     cellSizeM,
