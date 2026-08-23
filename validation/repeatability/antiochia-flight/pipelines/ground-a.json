@@ -1,0 +1,33 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.las",
+      "filename": "<work>/overlap-a.laz"
+    },
+    {
+      "type": "filters.assign",
+      "value": "NumberOfReturns = ReturnNumber"
+    },
+    {
+      "type": "filters.outlier",
+      "method": "statistical",
+      "mean_k": 12,
+      "multiplier": 2.5
+    },
+    {
+      "type": "filters.smrf",
+      "cell": 1.0,
+      "window": 18.0,
+      "slope": 0.6,
+      "threshold": 0.45,
+      "scalar": 1.25,
+      "ignore": "Classification[7:7]"
+    },
+    {
+      "type": "writers.las",
+      "filename": "<work>/ground-a.laz",
+      "compression": "true",
+      "forward": "all"
+    }
+  ]
+}
