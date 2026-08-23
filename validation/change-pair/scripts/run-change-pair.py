@@ -73,8 +73,27 @@ def robust(v):
     return med, float(1.4826 * np.median(np.abs(v - med)))
 
 
+def resolved_dir(raw, *, must_exist):
+    """Resolve a command line path before anything reads or writes through it.
+
+    argv reaches the file system in this script. Resolving collapses any
+    parent segments, so the path that is checked is the path that is opened,
+    and a target that is not a directory stops the run instead of being
+    created somewhere unintended.
+    """
+    path = Path(raw).resolve(strict=False)
+    if must_exist and not path.is_dir():
+        raise SystemExit(f"not an existing directory: {path}")
+    if path.exists() and not path.is_dir():
+        raise SystemExit(f"not a directory: {path}")
+    return path
+
+
 def main():
-    ds, outdir = Path(sys.argv[1]), Path(sys.argv[2])
+    if len(sys.argv) < 3:
+        raise SystemExit("usage: run-change-pair.py <dataset-dir> <output-dir>")
+    ds = resolved_dir(sys.argv[1], must_exist=True)
+    outdir = resolved_dir(sys.argv[2], must_exist=False)
     outdir.mkdir(parents=True, exist_ok=True)
     e1 = bin_epoch(ds / "chassieu_vol1.las")
     e2 = bin_epoch(ds / "chassieu_vol2.las")
