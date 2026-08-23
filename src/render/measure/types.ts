@@ -13,6 +13,7 @@
 
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
+import type { ProfileProvenance } from './profileProvenance';
 import type { WorkOwnership } from '../../model/workOwnership';
 
 export type { Vec3 };
@@ -175,6 +176,21 @@ export interface Measurement {
    * provenance rationale as `profileCorridorWidth`.
    */
   profileGroundPercentile?: number;
+  /**
+   * Profile only — what shaped the sample: the method and corridor-definition
+   * version, the normalised `up`, every source read by STABLE layer id with
+   * its classification kind and streaming state, the class-exclusion policy,
+   * whether the read was resident-only, and the unit / vertical-reference
+   * context (see `profileProvenance.ts`).
+   *
+   * Counts and identity only — never the accepted returns themselves, which
+   * number in the millions and belong to the cloud, not to a session file.
+   *
+   * Optional: a measurement from a session written before the record existed
+   * carries none, and the panel falls back to the corridor width and
+   * percentile alone.
+   */
+  profileProvenance?: ProfileProvenance;
   /**
    * Volume only — the cut/fill record from `volumeCutFill`. Optional so
    * a volume measurement loaded from a session file that pre-dates the

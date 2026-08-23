@@ -23,6 +23,12 @@ import type {
   VolumeRecord,
 } from '../render/measure/types';
 import { MIN_POINTS } from '../render/measure/types';
+import type {
+  ProfileClassificationKind,
+  ProfileProvenance,
+  ProfileUnitContext,
+} from '../render/measure/profileProvenance';
+import type { ProfileSectionScope } from '../render/measure/profileSectionSnapshot';
 import type { MeasurementTrust, TrustGrade } from '../render/measure/measurementTrust';
 import type { Annotation, SavedCameraState, Vec3Object } from '../render/annotate/types';
 import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
@@ -84,6 +90,15 @@ import type { WorkOwnership } from '../model/workOwnership';
  * The Layers panel's groups (`layerGroups` — name, collapsed flag, and member
  * STABLE layer ids) are additive within v8 on the same terms, and are emitted
  * only when a group exists.
+ *
+ * A profile measurement's provenance record (`measurement.profileProvenance` —
+ * method, corridor version, sources by STABLE layer id, class policy, coverage,
+ * units; see `render/measure/profileProvenance.ts`) is additive within v8 on
+ * those same terms. It is one optional field on one measurement kind, emitted
+ * only for a profile that carries one, so a session without one keeps its
+ * byte-shape; a session that predates it parses with the field undefined and
+ * loses nothing. It holds counts and identity only, never the accepted returns,
+ * so it cannot grow with the size of the cloud it describes.
  *
  * Older v1..v7 files parse with no loss: the new optional fields just
  * read as undefined, and the Viewer falls back to its current state. A v7
@@ -1247,6 +1262,13 @@ function parseMeasurements(v: unknown): Measurement[] {
         // Percentile is dimensionless 0..100; clamp defensively.
         m.profileGroundPercentile = Math.min(100, Math.max(0, item.profileGroundPercentile));
       }
+      // Additive within v8 — the sample's provenance record (sources by stable
+      // layer id, classification kind, class policy, coverage, units). Absent
+      // in every session written before it existed, and read through the
+      // record's own tolerant parser, so a malformed one drops the record and
+      // keeps the measurement.
+      const provenance = parseProfileProvenance(item.profileProvenance);
+      if (provenance) m.profileProvenance = provenance;
     } else if (k === 'volume') {
       const volume = parseVolumeRecord(item.volume);
       if (volume) m.volume = volume;
@@ -1281,6 +1303,140 @@ function parseProfileChart(v: unknown): ProfileChartSample[] | undefined {
     out.push(sample);
   }
   return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Record version this reader understands, mirroring
+ * `PROFILE_PROVENANCE_VERSION` in `render/measure/profileProvenance.ts`.
+ *
+ * Mirrored rather than imported: the io layer takes no RUNTIME dependency on
+ * the render layer (`lint:module-graph` holds that coupling shrink-only), and
+ * the two are pinned equal by a test rather than by an import.
+ */
+const PROFILE_PROVENANCE_RECORD_VERSION = 1;
+
+/** Sources one persisted provenance record may carry. Untrusted-input ceiling. */
+export const MAX_PROVENANCE_SOURCES = 4096;
+
+const PROVENANCE_CLASS_KINDS: ReadonlySet<string> = new Set(['producer', 'derived', 'absent']);
+const PROVENANCE_SCOPES: ReadonlySet<string> = new Set([
+  'full-static-source',
+  'mixed-full-and-resident',
+  'resident-snapshot',
+  'empty',
+]);
+const PROVENANCE_LINEAR_UNITS: ReadonlySet<string> = new Set([
+  'metre',
+  'foot',
+  'us-survey-foot',
+  'unknown',
+]);
+const PROVENANCE_VERTICAL_REFERENCES: ReadonlySet<string> = new Set([
+  'ellipsoidal',
+  'orthometric',
+  'depth',
+  'local',
+  'unknown',
+]);
+
+/**
+ * Parse a persisted profile provenance record, or `undefined` when it is not
+ * usable — additive within v8, so a session that predates it simply has none.
+ *
+ * Tolerant on the same terms as the chart and volume readers above: anything
+ * malformed drops the RECORD and keeps the measurement, because a profile
+ * without provenance is still a profile, while a half-read provenance record
+ * is a claim nobody made. A record from a LATER version is dropped for the
+ * same reason: a reader that does not know what changed cannot vouch for it.
+ *
+ * The shape is `ProfileProvenance` by declaration, so a field added or renamed
+ * in that module fails to compile here rather than silently going unread.
+ */
+function parseProfileProvenance(v: unknown): ProfileProvenance | undefined {
+  if (!isRecord(v)) return undefined;
+  if (v.recordVersion !== PROFILE_PROVENANCE_RECORD_VERSION) return undefined;
+  if (typeof v.capturedAt !== 'string') return undefined;
+  if (typeof v.method !== 'string' || v.method === '') return undefined;
+  if (!isFiniteNum(v.corridorVersion)) return undefined;
+  const up = parseProvenanceUp(v.up);
+  if (!up) return undefined;
+  if (!Array.isArray(v.sources)) return undefined;
+  const units = parseProvenanceUnits(v.units);
+  if (!units) return undefined;
+  const policy = isRecord(v.classPolicy) ? v.classPolicy : null;
+  // The availability flag is load-bearing: absent, the record would read as
+  // "classification everywhere" by omission, which is the one thing it exists
+  // to stop. No default is honest, so the record is refused instead.
+  if (!policy || typeof policy.availableOnEverySource !== 'boolean') return undefined;
+  const sources: Array<ProfileProvenance['sources'][number]> = [];
+  for (const raw of v.sources.slice(0, MAX_PROVENANCE_SOURCES)) {
+    if (!isRecord(raw)) continue;
+    // Identity is the stable layer id. A row without one names no layer, and a
+    // display name would not stand in for it: it is renameable.
+    if (typeof raw.layerId !== 'string' || raw.layerId === '') continue;
+    if (typeof raw.classification !== 'string') continue;
+    if (!PROVENANCE_CLASS_KINDS.has(raw.classification)) continue;
+    if (!isFiniteNum(raw.acceptedCount) || raw.acceptedCount < 0) continue;
+    sources.push({
+      layerId: raw.layerId,
+      displayName: typeof raw.displayName === 'string' ? raw.displayName : '',
+      classification: raw.classification as ProfileClassificationKind,
+      streaming: raw.streaming === true,
+      acceptedCount: raw.acceptedCount,
+      contributed: raw.contributed === true,
+      // Unknown residency is null, never false: see `streamingIsComplete`.
+      residency: raw.residency === true ? true : raw.residency === false ? false : null,
+    });
+  }
+  return {
+    recordVersion: PROFILE_PROVENANCE_RECORD_VERSION,
+    method: v.method,
+    corridorVersion: v.corridorVersion,
+    capturedAt: v.capturedAt,
+    up,
+    upDegenerate: v.upDegenerate === true,
+    sources,
+    acceptedCount: isFiniteNum(v.acceptedCount) && v.acceptedCount >= 0 ? v.acceptedCount : 0,
+    scope:
+      typeof v.scope === 'string' && PROVENANCE_SCOPES.has(v.scope)
+        ? (v.scope as ProfileSectionScope)
+        : 'empty',
+    residentOnly: v.residentOnly === true,
+    // Same rule as residency, one level up: only an explicit boolean is a claim.
+    complete: v.complete === true ? true : v.complete === false ? false : null,
+    classPolicy: {
+      excludedClasses: sanitizeClassFilter(policy.excludedClasses),
+      availableOnEverySource: policy.availableOnEverySource,
+    },
+    units,
+  };
+}
+
+/** Three finite components, else the record is not usable. */
+function parseProvenanceUp(v: unknown): [number, number, number] | undefined {
+  if (!Array.isArray(v) || v.length !== 3) return undefined;
+  if (!v.every(isFiniteNum)) return undefined;
+  return [v[0] as number, v[1] as number, v[2] as number];
+}
+
+/**
+ * The unit context, falling back to `unknown` per field rather than to a
+ * default unit. An unreadable linear unit is not metres.
+ */
+function parseProvenanceUnits(v: unknown): ProfileUnitContext | undefined {
+  if (!isRecord(v)) return undefined;
+  return {
+    linearUnit:
+      typeof v.linearUnit === 'string' && PROVENANCE_LINEAR_UNITS.has(v.linearUnit)
+        ? (v.linearUnit as ProfileUnitContext['linearUnit'])
+        : 'unknown',
+    verticalReference:
+      typeof v.verticalReference === 'string' &&
+      PROVENANCE_VERTICAL_REFERENCES.has(v.verticalReference)
+        ? (v.verticalReference as ProfileUnitContext['verticalReference'])
+        : 'unknown',
+    verticalMetresPerUnit: isFiniteNum(v.verticalMetresPerUnit) ? v.verticalMetresPerUnit : null,
+  };
 }
 
 const VOLUME_CONFIDENCE: ReadonlySet<VolumeRecord['confidence']> = new Set(['high', 'medium', 'low']);
