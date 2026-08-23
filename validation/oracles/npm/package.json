@@ -1,0 +1,12 @@
+{
+  "name": "olv-oracle-node-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Node oracles installed into the pinned validation image. Deliberately a separate manifest from the project's own package.json: these are reference tools that must never enter the application's dependency tree, its SBOM or its lockfile.",
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "3d-tiles-validator": "0.6.1"
+  }
+}

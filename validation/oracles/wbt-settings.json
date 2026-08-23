@@ -1,0 +1,6 @@
+{
+  "working_directory": "",
+  "verbose_mode": false,
+  "compress_rasters": false,
+  "max_procs": 1
+}

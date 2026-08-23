@@ -1,0 +1,18 @@
+# The one oracle dependency that conda-forge does not package.
+#
+# laspy's LASzip backend needs the `laszip` Python bindings, which exist only on
+# PyPI; the conda-forge package of the same name is the C++ library, not the
+# bindings. laspy 2.7.0 constrains the extra to >=0.3.0,<0.4.0.
+#
+# Both backends are installed on purpose. lazrs and WhiteboxTools wrap laz-rs,
+# the same upstream decoder, so a laspy-with-lazrs run compared against
+# WhiteboxTools is one implementation compared against itself. LASzip is a
+# separate codebase, and only a run that used it can carry a cross-implementation
+# claim. record-oracle-versions.mjs records which backends were available and
+# which one laspy would pick, because that is what decides the question.
+#
+# Installed with --require-hashes --only-binary=:all: so pip refuses anything
+# but this exact wheel. The wheel is cp312 and manylinux x86_64, which is the
+# Python and the platform the conda lock pins.
+laszip==0.3.0 \
+    --hash=sha256:dd9dde83b24d6f51ff07d6c966d2e8eec5c99087aad5fddb50d9d759b0ae75d9
