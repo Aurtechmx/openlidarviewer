@@ -1,0 +1,9 @@
+id,dist,capsule,rect,onBoundary
+c1-start-cap-inside,1.11803398874989,1,1,0
+c2-start-cap-boundary,2.5,1,1,1
+c3-square-corner,3.53553390593274,0,1,0
+c4-start-cap-outside,2.52506961537697,0,1,0
+c5a-end-cap-inside,1.11803398874989,1,1,0
+c5b-end-cap-outside,2.52506961537697,0,1,0
+c6-body-inside,2.46875,1,1,0
+c7-body-boundary,2.5,1,1,1

@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "purpose": "The single machine-readable statement of what the pinned oracle image installs. scripts/verify-oracle-versions.mjs reads oracleVersions and fails when a validation record cites a version this image does not install, which is a check that needs no oracle present and therefore runs anywhere.",
+  "generatedBy": "validation/oracles/solve-lock.mjs",
+  "platform": "linux-64",
+  "platformReason": "conda-forge's PDAL stops at 2.7.2 for linux-aarch64. The version the corpus cites, 2.10.2, exists for linux-64 only, so the image is linux/amd64 and runs under emulation on an arm64 host.",
+  "virtualPackages": {
+    "glibc": "2.41",
+    "linux": "6.12"
+  },
+  "baseImage": {
+    "ref": "mambaorg/micromamba:2.9.0-debian13-slim",
+    "indexDigest": "sha256:b62ed0c54940e3c801642d72ba7d2462f06356c378eba92d603d39f2ce5e4a0d",
+    "amd64ManifestDigest": "sha256:1c1922d3417931f17fb45ec7306e83fcaf58c7af2324ffe242448557b78bdd9f",
+    "pinnedBy": "amd64ManifestDigest",
+    "note": "The Dockerfile pins the platform-specific manifest digest, not the tag and not the index."
+  },
+  "oracleVersions": {
+    "GDAL": "3.13.1",
+    "PDAL": "2.10.2"
+  },
+  "oracleVersionsNote": "Keyed by the oracle id scripts/verify-oracle-versions.mjs uses. GDAL is the version libgdal-core reports, which is what gdalinfo, gdaldem, gdal_translate, gdal_contour and ogrinfo all come from.",
+  "condaSpecs": [
+    "python=3.12.14",
+    "pdal=2.10.2",
+    "gdal=3.13.1",
+    "whitebox=2.3.6",
+    "whitebox_tools=2.4.0",
+    "laspy=2.7.0",
+    "lazrs-python=0.8.2",
+    "nodejs=22.23.2",
+    "pip"
+  ],
+  "condaPackageCount": 209,
+  "condaDownloadBytes": 284077797,
+  "condaLock": "validation/oracles/conda-linux-64.lock",
+  "condaPinned": {
+    "gdal": {
+      "version": "3.13.1",
+      "build": "np2py312h5ea7aba_8",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/gdal-3.13.1-np2py312h5ea7aba_8.conda",
+      "sha256": "a23c04232ecee836266c0d5d730c293cde60adb2794e1be4eabc69dd08dd8d78",
+      "sizeBytes": 2525512
+    },
+    "laspy": {
+      "version": "2.7.0",
+      "build": "np2py312hfce7c9f_1",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/laspy-2.7.0-np2py312hfce7c9f_1.conda",
+      "sha256": "97d60127bfd78c33fcb22f5add81987b27ba10b8e21fa4c42308940b64f523bf",
+      "sizeBytes": 1794596
+    },
+    "lazrs-python": {
+      "version": "0.8.2",
+      "build": "py312h868fb18_0",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/lazrs-python-0.8.2-py312h868fb18_0.conda",
+      "sha256": "cd55374f4dffa4cf6ac108fc2a2bdef27fc3f44bcdad8d21dad49c49795225ca",
+      "sizeBytes": 566636
+    },
+    "libgdal-core": {
+      "version": "3.13.1",
+      "build": "hd345f60_8",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/libgdal-core-3.13.1-hd345f60_8.conda",
+      "sha256": "7b66ac1b6410c7e85adca90f02e6bba9c42a0578bb8e456399b8251e70f525d5",
+      "sizeBytes": 15028669
+    },
+    "libpdal": {
+      "version": "2.10.2",
+      "build": "hfc2019e_4",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/libpdal-2.10.2-hfc2019e_4.conda",
+      "sha256": "4af51af4e81eccc457329799f9d32a576a7d973cbadf24a21df646ed138cf818",
+      "sizeBytes": 32437
+    },
+    "nodejs": {
+      "version": "22.23.2",
+      "build": "h273caaf_0",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/nodejs-22.23.2-h273caaf_0.conda",
+      "sha256": "3bbfd6f93d029df231782f5ddfec59d7d013331d41b66108860affa6d97fb992",
+      "sizeBytes": 24147385
+    },
+    "pdal": {
+      "version": "2.10.2",
+      "build": "hc364b38_0",
+      "url": "https://conda.anaconda.org/conda-forge/noarch/pdal-2.10.2-hc364b38_0.conda",
+      "sha256": "c3f53157e403c02f1bd2aa9063759404f1192dcb443c2909536b595b4ae2e04d",
+      "sizeBytes": 3597
+    },
+    "pip": {
+      "version": "26.2.1",
+      "build": "pyh8b19718_0",
+      "url": "https://conda.anaconda.org/conda-forge/noarch/pip-26.2.1-pyh8b19718_0.conda",
+      "sha256": "c205bae42eb11b364fe3663a817cbcbc20a8ef544c6b2ff6f391013487117259",
+      "sizeBytes": 1199593
+    },
+    "proj": {
+      "version": "9.8.1",
+      "build": "he0df7b0_0",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/proj-9.8.1-he0df7b0_0.conda",
+      "sha256": "dff6f355025b9a510d9093e29fd970fa1091e758b848c9dec814d96ae63a09ba",
+      "sizeBytes": 3652144
+    },
+    "python": {
+      "version": "3.12.14",
+      "build": "h8ab3286_0_cpython",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/python-3.12.14-h8ab3286_0_cpython.conda",
+      "sha256": "ceb9c724de53ee3560f121dbfcb00fe8acb22c08691158fce7b6c32425855626",
+      "sizeBytes": 31590137
+    },
+    "whitebox": {
+      "version": "2.3.6",
+      "build": "pyhd8ed1ab_0",
+      "url": "https://conda.anaconda.org/conda-forge/noarch/whitebox-2.3.6-pyhd8ed1ab_0.conda",
+      "sha256": "7329d045f1efb72236070c8b23afdc57bc5ef6a4b0961726e094df6d596f228c",
+      "sizeBytes": 64553
+    },
+    "whitebox_tools": {
+      "version": "2.4.0",
+      "build": "py312h0ccc70a_2",
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/whitebox_tools-2.4.0-py312h0ccc70a_2.conda",
+      "sha256": "e1fa4bb266d42d4a74ab8e9448f29386b5ae1c621505961b344e6cb42c65aea2",
+      "sizeBytes": 5332856
+    }
+  },
+  "pypi": {
+    "laszip": {
+      "version": "0.3.0",
+      "wheel": "laszip-0.3.0-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "dd9dde83b24d6f51ff07d6c966d2e8eec5c99087aad5fddb50d9d759b0ae75d9",
+      "reason": "laspy's LASzip backend needs these Python bindings, which conda-forge does not package; conda-forge's laszip is the C++ library. laspy 2.7.0 constrains the extra to >=0.3.0,<0.4.0."
+    }
+  },
+  "npm": {
+    "lockfile": "validation/oracles/npm/package-lock.json",
+    "packages": {
+      "3d-tiles-validator": "0.6.1"
+    },
+    "nodeVersion": "22.23.2",
+    "nodeVersionReason": "3d-tiles-validator@0.6.1 pulls better-sqlite3@11.10.0 transitively. That package has no prebuilt binary for Node 26 and falls back to a node-gyp build that fails, so Node is 22.",
+    "isolationReason": "A separate manifest from the project's own package.json. An oracle must never enter the application's dependency tree, its lockfile or its SBOM."
+  },
+  "whiteboxTools": {
+    "binaryFrom": "conda-forge whitebox_tools",
+    "binaryVersion": "2.4.0",
+    "wrapperPackage": "conda-forge whitebox",
+    "wrapperVersion": "2.3.6",
+    "versionsDisagree": "The wrapper is 2.3.6 and the binary reports 2.4.0. The binary is what computes, so its own --version string is the identity that belongs in a record.",
+    "avoidedDownload": {
+      "url": "https://www.whiteboxgeo.com/WBT_Linux/WhiteboxTools_linux_amd64.zip",
+      "why": "The whitebox wrapper fetches this on first import. The URL carries no version and no checksum, the downloader verifies no hash, and pinning whitebox==2.3.6 pins only the wrapper. The conda package is built from source and its sha256 is in the lock, so the image never reaches this URL.",
+      "observedHeaders": {
+        "contentLength": 24581859,
+        "lastModified": "Fri, 29 May 2026 16:21:04 GMT",
+        "etag": "\"d810e5-17716e3-652f73b351c00\"",
+        "observedAt": "2026-08-22",
+        "note": "Recorded from a HEAD request as evidence that the artifact behind the versionless URL does change. It is not a checksum and is not used to verify anything."
+      },
+      "upstreamReleasesHaveNoAssets": "github.com/jblindsay/whitebox-tools releases v2.0.0 through v2.4.0 carry no binary assets at all, so there is no versioned download to pin instead."
+    },
+    "settings": {
+      "file": "validation/oracles/wbt-settings.json",
+      "installedAs": "/opt/oracles/lib/python3.12/site-packages/whitebox/settings.json",
+      "mode": "0444",
+      "why": "settings.json lives beside the executable and persists compress_rasters (default true) and max_procs (default -1). Both change output bytes. The copy shipped inside the Python package carries the upstream author's own home directory as working_directory.",
+      "maxProcsCaveat": "WhiteboxTools applies --max_procs per tool rather than globally, so max_procs=1 has to be verified for each tool a study uses rather than assumed from this file.",
+      "wrapperCaveat": "The Python wrapper reads settings.json from the current working directory at construction time, not from beside the executable, and it coerces verbose_mode with str(), which makes the string \"False\" truthy. A reference run should leave no settings.json in its working directory."
+    },
+    "wbtPathCaveat": "WBT_PATH only makes the wrapper skip its download. It does not redirect execution: the wrapper sets its executable directory to its own package directory and chdirs there before running ./whitebox_tools, so the image also links the binary into that directory."
+  },
+  "lazBackends": {
+    "installed": [
+      "lazrs 0.8.2 (lazrs-python)",
+      "laszip 0.3.0 (PyPI bindings)"
+    ],
+    "independenceNote": "lazrs and WhiteboxTools both wrap laz-rs, the same upstream decoder, so a laspy-with-lazrs result compared against WhiteboxTools is one implementation compared against itself. Only a run that used the LASzip backend can carry a cross-implementation claim, which is why record-oracle-versions.mjs records which backend was available and which one laspy picked."
+  },
+  "notInstalled": {
+    "GRASS": {
+      "requested": "8.5.0",
+      "status": "excluded",
+      "reason": "conda-forge's grass 8.5.0 requires proj >=9.7.1,<9.8.0 and resolves against libgdal-core 3.12.3. The GDAL pin this corpus needs, 3.13.1, requires proj >=9.8.1,<9.9.0. The two cannot share one environment, so GRASS would have to be a second prefix or a second image.",
+      "sizeCost": "A GRASS-only linux-64 solve is 171 packages and 260 MB of downloads."
+    },
+    "CloudCompare": {
+      "status": "off by default, opt in with --build-arg WITH_CLOUDCOMPARE=1",
+      "debianPackage": "cloudcompare 2.13.2+git20240821+ds-1 from Debian trixie main",
+      "headlessVerified": "Tested in this image on 2026-08-22. CloudCompare -SILENT -AUTO_SAVE OFF -O a.txt -O b.txt -C2C_DIST over two 200-point clouds under QT_QPA_PLATFORM=offscreen, with no X server and no xvfb, exited 0 and reported a mean distance of 0.303472.",
+      "cost": "200 packages, 149 MiB of .debs. The installed size delta was not measured.",
+      "pinWeakness": "apt resolves against whatever trixie serves today, which is a weaker pin than the hash-verified conda, PyPI and npm installs. Pin the deb versions from snapshot.debian.org before a study depends on it.",
+      "wouldProvide": [
+        "M3C2",
+        "ICP",
+        "CSF",
+        "C2C",
+        "C2M"
+      ]
+    },
+    "SAGA": {
+      "status": "not installed",
+      "reason": "One study, VRM-SAGA-ANALYTIC, used SAGA 7.8.2 from a QGIS bundle. conda-forge has no saga package, so this image cannot reproduce that leg. The guard reports SAGA as absent rather than failing."
+    },
+    "R": {
+      "status": "not installed",
+      "reason": "MEAS-PROFILE-OGR-R-CORRIDOR used R 4.4.1 and SpatiaLite 5.1.0. Both are packaged by conda-forge and could be added, at the cost of a separate solve, because r-base pulls a large dependency set of its own."
+    }
+  }
+}

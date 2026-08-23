@@ -192,13 +192,9 @@ import { frameTopDownOrtho } from './export/orthoFraming';
 import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
-  sampleProfile,
-  assembleProfileBuffers,
-  autoCorridorWidth,
-  DEFAULT_GROUND_PERCENTILE,
-  DEFAULT_PROFILE_SAMPLE_COUNT,
-  type ProfileSourceBuffer,
-} from './measure/profileSampler';
+  createProfileSectionSeam,
+  type ProfileSectionSeam,
+} from './measure/profileSectionSeam';
 import { volumeCutFill, assembleVolumePositions, type PlacedVolumeBuffer, type VolumeResult } from './measure/volume';
 import {
   integrableClouds,
@@ -230,7 +226,7 @@ import {
   type RgbAppearancePresetId,
 } from './rgbAppearance';
 import { getEdlPreset, type EdlPresetId } from './edlPresets';
-import type { ProfileChartSample, Vec3, VolumeRecord } from './measure/types';
+import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import { TouchTapGate } from './touchTapGate';
 import { RenderActivityGate, DampingSettleGate } from './renderActivityGate';
@@ -836,6 +832,12 @@ export class Viewer {
 
   // ── Cloud registry ───────────────────────────────────────────────────────
   private readonly _clouds = new Map<string, CloudEntry>();
+  /**
+   * The profile seam: the derived height series a Profile measurement charts,
+   * and the raw returns inside the same corridor. Held here because the scene
+   * it reads is held here; requested from the app layer, not the render loop.
+   */
+  readonly profileSeam: ProfileSectionSeam;
   /** The active clip box (GPU clipping planes + CPU kept-count), or null. */
   private _clip: ClipBox | null = null;
   private _nextId = 0;
@@ -1340,96 +1342,57 @@ export class Viewer {
       const hit = this._pickPoint(ndcX, ndcY);
       return hit ? [hit.x, hit.y, hit.z] : null;
     });
-    // Profile sampler — feeds the chart half of a Profile measurement.
-    // Walks every cloud the Viewer currently holds (static + streaming
-    // resident), concatenates their local positions, and runs the
-    // pure-data `sampleProfile`. Returns null when no positions are
-    // available so the controller leaves the chart unset.
-    this._measure.setProfileSampler(
-      (
-        a,
-        b,
-        opts,
-      ): {
-        samples: ProfileChartSample[];
-        residentOnly: boolean;
-        corridorWidth: number;
-        groundPercentile: number;
-      } | null => {
-        // Track each buffer's classification alongside it so the profile can
-        // be computed over classified ground (vegetation / buildings dropped).
-        const buffers: ProfileSourceBuffer[] = [];
-        let total = 0;
-        let streamingPoints = 0;
-        let anyClass = false;
-        const aligned = (
-          c: ArrayLike<number> | null | undefined,
-          pos: Float32Array,
-        ): ArrayLike<number> | undefined => (c?.length === pos.length / 3 ? c : undefined);
-        // Only clouds the picker would place profile vertices on — visible and
-        // unlocked — feed the sample, so a hidden or locked layer can't skew it.
-        for (const { cloud, placement } of integrableClouds(this._clouds.values())) {
-          if (cloud.positions && cloud.positions.length > 0) {
-            const cls = aligned(cloud.classification, cloud.positions);
-            if (cls) anyClass = true;
-            buffers.push({ pos: cloud.positions, cls, placement });
-            total += cloud.positions.length;
-          }
-        }
-        // A stream joins the estimate only on the terms a static cloud would
-        // have to meet. Appending it unconditionally merged frames that were
-        // never shown to correspond.
-        const streamOk = this._streamingMayCombine(buffers.length);
-        for (const { decoded } of streamOk ? this._streamingPickData.values() : []) {
-          if (decoded.positions && decoded.positions.length > 0) {
-            const cls = aligned(decoded.classification, decoded.positions);
-            if (cls) anyClass = true;
-            buffers.push({ pos: decoded.positions, cls });
-            total += decoded.positions.length;
-            streamingPoints += decoded.positions.length;
-          }
-        }
-        if (total === 0) return null;
-        // Flatten — cheap because we only walk the resident set. The assembler
-        // folds each layer's Float64 placement into the project frame as it
-        // copies (identity while mounting is off = the same bytes as before).
-        const { positions, classification } = assembleProfileBuffers(buffers, total, anyClass);
-        // `up` is the configured world up — hardcoding [0,0,1] here cut Y-up
-        // phone scans along the wrong axis (v0.4.4 audit, B1). The same
-        // format-driven up the navigation/measure context already uses.
-        const up: Vec3 = [this._worldUp.x, this._worldUp.y, this._worldUp.z];
-        // Sampler parameters (B7/B8, v0.4.5): the controller's resample path
-        // passes user overrides; absent/null fields fall back to the standing
-        // defaults — the 5 %-of-length auto corridor, p25, 64 bins. Every
-        // value that ACTUALLY shaped the estimate is passed back so it lands
-        // on the measurement record and the PDF/CSV provenance prints the
-        // real numbers instead of "auto" (B4).
-        const corridorWidth = opts?.corridorWidth ?? autoCorridorWidth(a, b, up);
-        const groundPercentile = opts?.groundPercentile ?? DEFAULT_GROUND_PERCENTILE;
-        const sampleCount = opts?.sampleCount ?? DEFAULT_PROFILE_SAMPLE_COUNT;
-        const samples = sampleProfile({
-          a,
-          b,
-          up,
-          positions,
-          samples: sampleCount,
-          bandWidth: corridorWidth,
-          groundPercentile,
-          classification,
-        });
-        // "Resident-only" whenever any streaming bytes are in the walk: those
-        // nodes may still refine the profile as they stream in, and a fully-
-        // loaded static cloud beside them does not complete the streaming part
-        // (audit #8: gating on `staticPoints === 0` hid the caveat in mixed scenes).
-        const residentOnly = streamingPoints > 0;
-        return {
-          samples,
-          residentOnly,
-          corridorWidth,
-          groundPercentile,
-        };
-      },
-    );
+    // Profile seam — the chart half of a Profile measurement and the raw
+    // section behind it. Both read the scene through one eligibility decision,
+    // so a chart and the returns under it can never describe different scenes.
+    // The Viewer contributes accessors onto what it holds and nothing else.
+    this.profileSeam = createProfileSectionSeam({
+      layers: () =>
+        [...this._clouds.values()].map((e) => ({
+          mesh: e.mesh,
+          locked: e.locked,
+          compatibility: e.compatibility,
+          mounted: e.mounted,
+          placement: e.placement,
+          id: e.cloud.name,
+          positions: e.cloud.positions,
+          // Named field by field: `classification` is a getter on the class,
+          // so a spread of the cloud would drop the one channel the derived
+          // series reads, and the profile would quietly stop honouring it.
+          channels: {
+            rgb: e.cloud.colors,
+            intensity: e.cloud.intensity,
+            classification: e.cloud.classification,
+            returnNumber: e.cloud.returnNumber,
+            returnCount: e.cloud.returnCount,
+            pointSourceId: e.cloud.pointSourceId,
+            gpsTime: e.cloud.gpsTime,
+            normals: e.cloud.normals,
+          },
+          bounds: null,
+        })),
+      residentNodes: () =>
+        [...this._streamingPickData.values()].map((e) => ({
+          key: e.key,
+          positions: e.decoded.positions,
+          channels: e.decoded,
+        })),
+      streamingMayCombine: (staticCount) => this._streamingMayCombine(staticCount),
+      // The configured world up, not a hardcoded [0,0,1]: a Y-up phone scan
+      // gets cut along the wrong axis otherwise (v0.4.4 audit, B1).
+      worldUp: (): Vec3 => [this._worldUp.x, this._worldUp.y, this._worldUp.z],
+      streamingCoverage: () =>
+        this._streaming
+          ? {
+              // Zero known nodes is a hierarchy not yet read far enough to
+              // count, which `streamingIsComplete` reports as unknown rather
+              // than as coverage.
+              knownNodeCount: this._streaming.cloud.octree.nodes().length || null,
+              residentNodeCount: this._streamingPickData.size,
+            }
+          : null,
+    });
+    this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
     // Volume sampler — feeds the cut/fill record half of a Volume
     // measurement. Same residency-only contract as the profile sampler:
     // walks every static cloud + every resident streaming node, runs

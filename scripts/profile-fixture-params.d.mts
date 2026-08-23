@@ -42,3 +42,20 @@ export const CAPS_REJECT_LIFT: number;
 export const capsGround: (s: number) => number;
 export const CAPS_PROBES: Array<[number, number, boolean]>;
 export const capsExpected: (i: number, p: number) => number;
+
+export interface EndcapProbe {
+  id: string;
+  caseNo: number;
+  x: number;
+  y: number;
+  admitted: boolean;
+}
+export const ENDCAP_A: number[];
+export const ENDCAP_B: number[];
+export const ENDCAP_SAMPLES: number;
+export const ENDCAP_BAND: number;
+export const ENDCAP_BIN_STEP: number;
+export const ENDCAP_Z: number;
+export const ENDCAP_PROBES: EndcapProbe[];
+export const endcapDistance: (probe: { x: number; y: number }) => number;
+export const endcapRectangle: (probe: { x: number; y: number }) => boolean;

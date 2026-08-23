@@ -1,0 +1,53 @@
+{
+ "source": "Co-UDlabs Lidar data set description VF 2025 04 04.pdf, page 7, Table 1",
+ "provenance": "read-from-rendered-page-image",
+ "provenanceNote": [
+  "Table 1 is a raster image inside the PDF. pdftotext -layout returns the caption and nothing else, so the",
+  "cell values are not machine-extractable from this file. The values below were read off the rendered page",
+  "and have not been corroborated by an OCR engine, because none was installed on this host. Treat them as a",
+  "careful transcription, not as extracted data.",
+  "The document states no coordinates and no placement map. It says only that the solids were laid 'at various",
+  "locations on the bottom of the tank, sometimes in an easily visible position, sometimes partly hidden by or",
+  "under the vegetation'. Nothing in this dataset identifies where any individual item went."
+ ],
+ "columns": ["solid", "widthCm", "lengthCm", "heightCm", "diameterCm", "quantity", "comment"],
+ "rows": [
+  ["Iron cage", 24, 34.5, 23, null, 3, null],
+  ["Jerrican", 17, 30, 24, null, 1, null],
+  ["Brick", 10, 22, 5, null, 4, null],
+  ["Brick block", 20, 48.5, 19, null, 4, null],
+  ["Fine grid", 123, 76, null, 4, 1, "4 cm * 4 cm mesh"],
+  ["Wide grid", 90, 60, null, 5, 1, "3.5 cm * 3.5 cm mesh"],
+  ["PVC pipe", null, 106, null, 10, 1, null],
+  ["MF drain", null, 199, null, 10, 1, null],
+  ["MM drain", null, 198, null, 10, 1, null],
+  ["Construction cone", 28, 28, 50, 4.9, 4, null],
+  ["Wooden plank", 70, 60, 1, null, 1, null],
+  ["Tennis ball", null, null, null, 6, 2, null],
+  ["Plastic balls", null, null, null, 6, 20, null],
+  ["Ecocup", null, null, 11.5, "5.2 to 7", 1, null],
+  ["Concrete test tube", null, null, 19.6, 11, 2, null],
+  ["Plexiglas lid", null, null, 1, 30, 1, "transparent"],
+  ["Jar 1", null, null, 19.5, 21, 1, null],
+  ["Jar 2", null, null, 19.5, 21, 1, null],
+  ["Jar 3", null, null, 15.5, 17.5, 1, null],
+  ["Jar 4", null, null, 15.5, 17.5, 1, null],
+  ["Bag of sand", null, null, null, null, 5, "25 kg"],
+  ["Bucket of soil", null, null, null, null, 5, null]
+ ],
+ "derived": {
+  "itemTypes": 22,
+  "individualItems": 62,
+  "itemsWithNoStatedDimensions": 10,
+  "itemsWithNoStatedDimensionsNote": "the 5 bags of sand and the 5 buckets of soil carry a mass or nothing at all",
+  "itemsWithStatedHeightAtLeast15Cm": 18,
+  "itemsWithStatedHeightAtLeast15CmBreakdown": {
+   "Iron cage 23 cm": 3, "Jerrican 24 cm": 1, "Brick block 19 cm": 4,
+   "Construction cone 50 cm": 4, "Concrete test tube 19.6 cm": 2,
+   "Jar 1 19.5 cm": 1, "Jar 2 19.5 cm": 1, "Jar 3 15.5 cm": 1, "Jar 4 15.5 cm": 1
+  },
+  "tallestStatedItemCm": 50,
+  "flatItems": "wooden plank 1 cm, Plexiglas lid 1 cm, and the two grids, which are open mesh",
+  "openMeshItems": "iron cage, fine grid, wide grid: a lidar pulse passes through the openings"
+ }
+}

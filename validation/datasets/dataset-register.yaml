@@ -1153,3 +1153,213 @@ datasets:
     localPath: not-vendored
     controlPointIds: []
     checkpointIds: []
+
+  # ── Antiochia ad Cragum UAV LiDAR, north-south flight pair (2022-07-07) ────
+  # Two adjacent flights over an archaeological site on the south-central
+  # Turkish coast, flown with an OpenMMS build around a Livox Mid-40. Each
+  # flight ships a decimated `quick_pc.laz` and a full `verbose_pc.laz`, so all
+  # four processed clouds are registered separately: they are four distinct
+  # files with four distinct digests and point counts.
+  - datasetId: OLV-DS-046-ANTIOCHIA-NS-FLIGHT1-QUICK
+    title: "Antiochia ad Cragum north-south flight 1 quick_pc.laz, decimated OpenMMS product"
+    sourceUrl: https://zenodo.org/records/13864073
+    landingPage: https://doi.org/10.5281/zenodo.13864073
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: 2e9d877f14f9f29af531e9977a4edfbccdba658ad2b500221cef0be6610a0326
+    sourceBytes: 46885894
+    format: laz
+    pointCount: 6512459
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-07
+    horizontalCrs: "EPSG:32636 (WGS 84 / UTM zone 36N)"
+    verticalCrs: local-vertical-none-declared
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [steep-slope, hillside]
+    landCoverClasses: [unknown]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Stephen Rector"
+    citation: "Rector, S. (2024). UAV LiDAR and trajectory data from Antiochia ad Cragum (1.0.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13864073 (CC-BY-4.0)."
+    knownLimitations: "The digest covers this one LAZ file inside small_bath_area-north-south.zip, not the zip and not the record. The decimated product of the pair: 6,512,459 points against the 31,812,766 of the flight's verbose_pc.laz, so it fixes coverage and not full sampling. LAS 1.2 PDRF 3 written by las2las 220613, so it is a rewrite of the OpenMMS output rather than the writer's own bytes. Every point is classification 0, so no ground and non-ground separation ships with the file. PDRF 3 carries RGB and every value is zero, the sensor being a Livox Mid-40 with no camera behind those fields. return_number runs 1 to 3 while number_of_returns is 0 for every point, so the return structure is half written and cannot be read as a return count. The GeoKey directory declares EPSG:32636 and linear units 9001 with no VerticalCSType and no VerticalDatum, so heights are metres on an undeclared vertical reference. Bounds are 448603.156 to 449033.902 easting, 4000911.641 to 4001418.011 northing, 225.957 to 394.335 in Z. No survey control and no checkpoints ship with the record, and the trajectory files are the same PPK solution the cloud was built from, so nothing here is independent of processing. Land cover is not stated by the provider and is not guessed."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-047-ANTIOCHIA-NS-FLIGHT1-VERBOSE
+    title: "Antiochia ad Cragum north-south flight 1 verbose_pc.laz, full OpenMMS product"
+    sourceUrl: https://zenodo.org/records/13864073
+    landingPage: https://doi.org/10.5281/zenodo.13864073
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: 17a57ada086a7c0053ad20116619390f43d10224e0e03bd54c2e47d177dc2fbc
+    sourceBytes: 391900322
+    format: laz
+    pointCount: 31812766
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-07
+    horizontalCrs: "EPSG:32636 (WGS 84 / UTM zone 36N)"
+    verticalCrs: local-vertical-none-declared
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [steep-slope, hillside]
+    landCoverClasses: [unknown]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Stephen Rector"
+    citation: "Rector, S. (2024). UAV LiDAR and trajectory data from Antiochia ad Cragum (1.0.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13864073 (CC-BY-4.0)."
+    knownLimitations: "The digest covers this one LAZ file inside small_bath_area-north-south.zip, not the zip and not the record. LAS 1.2 PDRF 3 written by las2las 220613, a rewrite of the OpenMMS output rather than the writer's own bytes. It carries extra-byte scanner-frame fields (dist_socs, azi_socs, vert_socs, roll, pitch, heading, scanner position and scanner latitude and longitude) that the quick product does not, and those are the processor's own bookkeeping, not measurements anything here can check. Every point is classification 0, so no ground and non-ground separation ships with the file. Every RGB value is zero. Both return_number and number_of_returns are 0 for every point, so this product carries no usable return structure at all, unlike the quick product where return_number runs 1 to 3. The GeoKey directory declares EPSG:32636 and linear units 9001 with no VerticalCSType and no VerticalDatum, so heights are metres on an undeclared vertical reference. Bounds are 448603.156 to 449033.910 easting, 4000911.621 to 4001418.041 northing, 223.721 to 394.426 in Z, slightly wider than the quick product because decimation dropped the extremes. No survey control and no checkpoints ship with the record."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-048-ANTIOCHIA-NS-FLIGHT2-QUICK
+    title: "Antiochia ad Cragum north-south flight 2 quick_pc.laz, decimated OpenMMS product"
+    sourceUrl: https://zenodo.org/records/13864073
+    landingPage: https://doi.org/10.5281/zenodo.13864073
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: 86fcb4dccfd62a7b0cab9738c654a03e32e32db5afbd0426cd2219802c72489f
+    sourceBytes: 41549815
+    format: laz
+    pointCount: 6406010
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-07
+    horizontalCrs: "EPSG:32636 (WGS 84 / UTM zone 36N)"
+    verticalCrs: local-vertical-none-declared
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [steep-slope, hillside]
+    landCoverClasses: [unknown]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Stephen Rector"
+    citation: "Rector, S. (2024). UAV LiDAR and trajectory data from Antiochia ad Cragum (1.0.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13864073 (CC-BY-4.0)."
+    knownLimitations: "The digest covers this one LAZ file inside small_bath_area-north-south.zip, not the zip and not the record. The second of the two north-south flights, logged as 20220707_090803 against 20220707_085146 for the first: the two overlap but cover different ground, so they are two swaths of one site and not a repeat measurement of the same footprint. The decimated product of the pair: 6,406,010 points against the 31,181,172 of the flight's verbose_pc.laz. LAS 1.2 PDRF 3 written by las2las 220613. Every point is classification 0, every RGB value is zero, and return_number runs 1 to 3 while number_of_returns is 0 for every point. The GeoKey directory declares EPSG:32636 and linear units 9001 with no VerticalCSType and no VerticalDatum. Bounds are 448500.411 to 448917.303 easting, 4001034.882 to 4001495.695 northing, 227.963 to 406.687 in Z. No survey control and no checkpoints ship with the record."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-049-ANTIOCHIA-NS-FLIGHT2-VERBOSE
+    title: "Antiochia ad Cragum north-south flight 2 verbose_pc.laz, full OpenMMS product"
+    sourceUrl: https://zenodo.org/records/13864073
+    landingPage: https://doi.org/10.5281/zenodo.13864073
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: f296926157907fd6e16fb8064da384e5c88b8408ebdd0cce3838d5be43c532da
+    sourceBytes: 366237687
+    format: laz
+    pointCount: 31181172
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-07
+    horizontalCrs: "EPSG:32636 (WGS 84 / UTM zone 36N)"
+    verticalCrs: local-vertical-none-declared
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [steep-slope, hillside]
+    landCoverClasses: [unknown]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Stephen Rector"
+    citation: "Rector, S. (2024). UAV LiDAR and trajectory data from Antiochia ad Cragum (1.0.0) [Data set]. Zenodo. https://doi.org/10.5281/zenodo.13864073 (CC-BY-4.0)."
+    knownLimitations: "The digest covers this one LAZ file inside small_bath_area-north-south.zip, not the zip and not the record. LAS 1.2 PDRF 3 written by las2las 220613, carrying the same scanner-frame extra bytes as the first flight's verbose product, which are the processor's own bookkeeping. Every point is classification 0, every RGB value is zero, and both return_number and number_of_returns are 0 throughout, so this product carries no usable return structure. The GeoKey directory declares EPSG:32636 and linear units 9001 with no VerticalCSType and no VerticalDatum. Bounds are 448500.358 to 448917.303 easting, 4001034.587 to 4001495.710 northing, 227.560 to 406.688 in Z. The record also publishes an east-west flight pair in a second zip that was not fetched here, so the overlapping four-flight coverage the record describes is not held. No survey control and no checkpoints ship with the record."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  # ── Co-UDlabs Chassieu infiltration tank, two-epoch drone LiDAR (2023-05-16) ─
+  # Flight 1 is the reference epoch. Flight 2 was flown the same day after
+  # solids of assorted sizes were laid on the tank floor, some in the open and
+  # some under vegetation, so the pair carries a documented change between two
+  # epochs. Registered as two records because they are two files, two point
+  # counts and two states of the site.
+  - datasetId: OLV-DS-050-COUDLABS-CHASSIEU-FLIGHT1
+    title: "Chassieu Django Reinhardt infiltration tank, flight 1 reference epoch (chassieu_vol1.las)"
+    sourceUrl: https://zenodo.org/records/15175591
+    landingPage: https://doi.org/10.5281/zenodo.15175591
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: beba5d447b1080893466e1566fcf0bd74d9a901569f08ecce936e50094e4391b
+    sourceBytes: 1644256079
+    format: las
+    pointCount: 48360428
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2023-05-16
+    horizontalCrs: "EPSG:2154 (RGF93 / Lambert-93)"
+    verticalCrs: "EPSG:5720 (NGF-IGN69 height)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [infiltration-basin-floor, embankment]
+    landCoverClasses: [vegetation, stones-and-gravel, bare-earth]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Mathieu Lepot, Jean-Luc Bertrand-Krajewski and Richard Poncet (INSA Lyon), Co-UDlabs project (EU H2020 grant 101008626); flights by Air Images Consulting"
+    citation: "Lepot, M., Bertrand-Krajewski, J.-L., Poncet, R. (2025). Co-UDlabs_WP6_T61_INSA_002. Lidar testing data set [Data set]. Zenodo. https://doi.org/10.5281/zenodo.15175591 (CC-BY-4.0)."
+    knownLimitations: "The digest covers chassieu_vol1.las extracted from the record's zip, not the zip. Header facts read here: LAS 1.2 PDRF 3, 48,360,428 points, XYZ scales 0.0001, GeoKeys EPSG:2154 with VerticalCSType 5720 and VerticalDatum 5119, GeoAscii string RGF93 / Lambert-93 + NGF-IGN69 height, bounds 852115.9749 to 852320.4120 easting, 6516819.3608 to 6517151.2891 northing, 192.9656 to 215.7605 in Z. Every point is classification 0, so no ground and non-ground separation ships with the file; returns run 1 to 3 with number_of_returns set, and RGB is populated. Written by DJI Terra 3.11.13.0, so the vertical reference is the processor's declaration and no independent datum check ships with it. No ground control points, no survey checkpoints and no trajectory are published, so nothing in the record is independent of the flight's own processing. The manufacturer's published figures for the Zenmuse L1 (horizontal 10 cm and vertical 5 cm system accuracy at 50 m, ranging accuracy 3 cm at 100 m) are specifications, not measurements, and nothing here tests them. Zenodo record 10.5281/zenodo.15166413 (concept 10.5281/zenodo.15166412) is a deposit of the same two files made one day earlier and carries a byte-identical zip and description PDF; the record cited here is the one the project curated into its Co-UDlabs, OTHU and EU communities."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-051-COUDLABS-CHASSIEU-FLIGHT2
+    title: "Chassieu Django Reinhardt infiltration tank, flight 2 after solids were laid (chassieu_vol2.las)"
+    sourceUrl: https://zenodo.org/records/15175591
+    landingPage: https://doi.org/10.5281/zenodo.15175591
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-23
+    sourceSha256: 5dbd261fe664724d8f0ab02b3631d28e8dbfdb5c1f1edf51b38f1a6d2f2374bd
+    sourceBytes: 1628383417
+    format: las
+    pointCount: 47893585
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2023-05-16
+    horizontalCrs: "EPSG:2154 (RGF93 / Lambert-93)"
+    verticalCrs: "EPSG:5720 (NGF-IGN69 height)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [infiltration-basin-floor, embankment]
+    landCoverClasses: [vegetation, stones-and-gravel, bare-earth, laid-solids]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Mathieu Lepot, Jean-Luc Bertrand-Krajewski and Richard Poncet (INSA Lyon), Co-UDlabs project (EU H2020 grant 101008626); flights by Air Images Consulting"
+    citation: "Lepot, M., Bertrand-Krajewski, J.-L., Poncet, R. (2025). Co-UDlabs_WP6_T61_INSA_002. Lidar testing data set [Data set]. Zenodo. https://doi.org/10.5281/zenodo.15175591 (CC-BY-4.0)."
+    knownLimitations: "The digest covers chassieu_vol2.las extracted from the record's zip, not the zip. Header facts read here: LAS 1.2 PDRF 3, 47,893,585 points, XYZ scales 0.0001, GeoKeys EPSG:2154 with VerticalCSType 5720 and VerticalDatum 5119, bounds 852115.9695 to 852320.5454 easting, 6516819.5731 to 6517151.8979 northing, 192.9628 to 216.0132 in Z, written by DJI Terra 3.11.13.0. Every point is classification 0, returns run 1 to 3 with number_of_returns set, and RGB is populated. This is the second epoch, flown after solids of assorted sizes and shapes were laid on the tank floor, some in the open and some partly under vegetation. The published description lists what was laid but gives no surveyed position, dimension or height for any of it, so the change between the two epochs is documented in kind and not in measured quantity. The two flights are also separate acquisitions with their own trajectories and their own processing, so any difference between them mixes the laid solids with flight, vegetation and processing differences. No ground control, no checkpoints and no trajectory are published. Zenodo record 10.5281/zenodo.15166413 holds a byte-identical deposit of the same pair."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []

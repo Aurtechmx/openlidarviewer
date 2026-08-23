@@ -1,0 +1,119 @@
+{
+ "stableGround": {
+  "definition": "epoch-1 min-Z >= 200.5 m, within-cell relief <= 0.10 m in both epochs, >= 4 points per cell per epoch",
+  "cells": 231839,
+  "areaM2": 2318.4
+ },
+ "verticalOffsetM": {
+  "minZSurface": {
+   "median": -0.0188,
+   "nmad": 0.0326
+  },
+  "meanZSurface": {
+   "median": -0.021,
+   "nmad": 0.0278
+  }
+ },
+ "tilt": {
+  "interceptM": -0.00876,
+  "perMetreEast": 0.000247297,
+  "perMetreNorth": -3.49579e-05,
+  "magnitudeMmPerM": 0.2498,
+  "acrossEastExtentMm": 50.7,
+  "acrossNorthExtentMm": -11.61,
+  "residualNmadM": 0.025
+ },
+ "blockMediansM": {
+  "blockSizeM": 25,
+  "blocks": 53,
+  "min": -0.0505,
+  "p10": -0.0434,
+  "median": -0.026,
+  "p90": 0.0118,
+  "max": 0.0208
+ },
+ "horizontalShiftM": {
+  "nmadSearch": {
+   "sampleCells": 139795,
+   "gridBestEast": -0.025,
+   "gridBestNorth": 0.025,
+   "subCellEast": -0.017,
+   "subCellNorth": 0.0252,
+   "nmadAtBest": 0.02874,
+   "nmadAtZeroShift": 0.03054
+  },
+  "nuthKaab": {
+   "cells": 697058,
+   "amplitudeM": 0.0093,
+   "directionDeg": 63.8,
+   "eastM": -0.0041,
+   "northM": -0.0083
+  }
+ },
+ "density": {
+  "epoch1": {
+   "points": 48360428,
+   "coveredAreaM2": 34186.8,
+   "pointsPerM2": 1414.6
+  },
+  "epoch2": {
+   "points": 47893585,
+   "coveredAreaM2": 34185.4,
+   "pointsPerM2": 1401.0
+  },
+  "analysisCell": 0.1,
+  "cellsBothEpochs": 3132318,
+  "medianPointsPerCellEpoch1": 13.0,
+  "medianPointsPerCellEpoch2": 13.0,
+  "cellSizeStudy": [
+   {
+    "cellM": 0.05,
+    "cellsBothEpochs": 12037268,
+    "medianPointsPerCellEpoch1": 3.0,
+    "medianPointsPerCellEpoch2": 3.0,
+    "fractionWithAtLeast4InBoth": 0.279,
+    "fractionWithAtLeast10InBoth": 0.007
+   },
+   {
+    "cellM": 0.1,
+    "cellsBothEpochs": 3935602,
+    "medianPointsPerCellEpoch1": 11.0,
+    "medianPointsPerCellEpoch2": 11.0,
+    "fractionWithAtLeast4InBoth": 0.796,
+    "fractionWithAtLeast10InBoth": 0.492
+   },
+   {
+    "cellM": 0.2,
+    "cellsBothEpochs": 1039432,
+    "medianPointsPerCellEpoch1": 45.0,
+    "medianPointsPerCellEpoch2": 44.0,
+    "fractionWithAtLeast4InBoth": 0.961,
+    "fractionWithAtLeast10InBoth": 0.881
+   },
+   {
+    "cellM": 0.25,
+    "cellsBothEpochs": 671218,
+    "medianPointsPerCellEpoch1": 70.0,
+    "medianPointsPerCellEpoch2": 69.0,
+    "fractionWithAtLeast4InBoth": 0.969,
+    "fractionWithAtLeast10InBoth": 0.93
+   },
+   {
+    "cellM": 0.5,
+    "cellsBothEpochs": 170840,
+    "medianPointsPerCellEpoch1": 282.0,
+    "medianPointsPerCellEpoch2": 277.0,
+    "fractionWithAtLeast4InBoth": 0.985,
+    "fractionWithAtLeast10InBoth": 0.968
+   },
+   {
+    "cellM": 1.0,
+    "cellsBothEpochs": 43227,
+    "medianPointsPerCellEpoch1": 1131.0,
+    "medianPointsPerCellEpoch2": 1110.0,
+    "fractionWithAtLeast4InBoth": 0.995,
+    "fractionWithAtLeast10InBoth": 0.985
+   }
+  ]
+ }
+}

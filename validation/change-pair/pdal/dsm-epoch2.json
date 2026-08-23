@@ -1,0 +1,19 @@
+{
+  "pipeline": [
+    { "type": "readers.las", "filename": "DATASET_DIR/chassieu_vol2.las" },
+    { "type": "filters.crop", "bounds": "([852217,852233],[6517041,6517057])" },
+    {
+      "type": "writers.gdal",
+      "filename": "OUTPUT_DIR/dsm-epoch2.tif",
+      "output_type": "max",
+      "resolution": 0.1,
+      "origin_x": 852218,
+      "origin_y": 6517042,
+      "width": 140,
+      "height": 140,
+      "nodata": -9999,
+      "data_type": "float64",
+      "gdaldriver": "GTiff"
+    }
+  ]
+}

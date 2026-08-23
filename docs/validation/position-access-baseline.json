@@ -1,5 +1,5 @@
 {
-  "total": 154,
+  "total": 147,
   "files": {
     "src/app/epochFramePrep.ts": 2,
     "src/app/floorPlanPositions.ts": 4,
@@ -26,7 +26,7 @@
     "src/model/pointFrames.ts": 2,
     "src/render/ContourOverlay.ts": 1,
     "src/render/InspectTool.ts": 1,
-    "src/render/Viewer.ts": 46,
+    "src/render/Viewer.ts": 37,
     "src/render/densityColors.ts": 1,
     "src/render/elevationRange.ts": 2,
     "src/render/hillshadeColors.ts": 1,
@@ -34,6 +34,7 @@
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 10,
     "src/render/measure/profileSampler.ts": 1,
+    "src/render/measure/profileSectionSeam.ts": 2,
     "src/render/measure/stockpileVolume.ts": 5,
     "src/render/measure/volume.ts": 1,
     "src/render/patchView.ts": 9,
