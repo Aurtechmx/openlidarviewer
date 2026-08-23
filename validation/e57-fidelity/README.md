@@ -10,13 +10,15 @@ reconstruct the same world-space geometry. This leg checks that invariant.
 - `tests/e57LasCrossFormat.test.ts` — the committed, CI-runnable guard. It reads
   the project's own `synthetic-normals.e57` fixture through the E57 path, writes
   the same six points to LAS with the real LAS writer, reads them back through
-  the LAS path, and asserts the two agree within the LAS quantisation scale. No
-  private data; runs in CI on every change.
+  the LAS path, and asserts the two agree within the LAS quantisation scale.
+  Committed fixture; runs in CI on every change.
 - `tests/e57LasFidelityExternal.test.ts` — the real-data leg. It runs only when
   `OLV_E57_FIDELITY_DIR` points at a directory of paired `<stem>.e57` /
   `<stem>.las` exports, decoding each pair and comparing point count, bounds, and
-  centroid. The raw files are private and multi-gigabyte, so nothing is committed
-  and CI skips it; the synthetic guard covers the same invariant at fixture scale.
+  centroid. The raw files are public, CC BY 4.0, and registered as
+  `OLV-DS-051` to `054` (Zenodo 10.5281/zenodo.11518223). They run to 1.3 GB
+  each, so they are not vendored and CI skips this leg; the synthetic guard
+  covers the same invariant at fixture scale.
 
 ## Why this is not circular
 

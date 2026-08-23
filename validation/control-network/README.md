@@ -28,7 +28,9 @@ multi-layer mount cannot place them). The targets are the bridge:
   `OLV_CONTROL_NETWORK_DIR` holds `*_vertices.txt` target files, every pair of
   frames sharing ≥ 3 targets is checked for distance invariance (via OLV's
   `geometry.distance`) and frame-to-frame registration residual. The surveyed
-  coordinates are private, so nothing is committed and CI skips this.
+  coordinates are public, CC BY 4.0, and registered as `OLV-DS-055` (Zenodo
+  10.5281/zenodo.11518223); they arrive with the point clouds they belong to,
+  which are not vendored, so CI skips this leg.
 
 ## Real-data result
 
