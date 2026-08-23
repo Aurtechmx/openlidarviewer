@@ -77,7 +77,17 @@ export interface ProfileSourceChannels {
 export interface ProfileSectionPoints {
   readonly count: number;
   readonly chainage: Float32Array;
-  readonly height: Float32Array;
+  /**
+   * Height along `up`, float64.
+   *
+   * Chainage and lateral offset are section relative and bounded by the
+   * section length plus the corridor half width, where float32 resolves
+   * below a millimetre. Height is absolute in the project frame, so it
+   * carries whatever magnitude the frame has: float32 spacing is 3.2e-2 m at
+   * 1e6 and 6.4e-1 m at 1e7. The placement was resolved in float64 during
+   * the read, and storing the result narrower would discard that.
+   */
+  readonly height: Float64Array;
   readonly lateralOffset: Float32Array;
   readonly sourceSlot: Uint16Array;
   readonly pointIndex: Uint32Array;
@@ -117,7 +127,7 @@ export class ProfileSectionBuilder {
   private _capacity = INITIAL_CAPACITY;
 
   private _chainage = new Float32Array(INITIAL_CAPACITY);
-  private _height = new Float32Array(INITIAL_CAPACITY);
+  private _height = new Float64Array(INITIAL_CAPACITY);
   private _lateral = new Float32Array(INITIAL_CAPACITY);
   private _slot = new Uint16Array(INITIAL_CAPACITY);
   private _index = new Uint32Array(INITIAL_CAPACITY);
@@ -176,7 +186,7 @@ export class ProfileSectionBuilder {
     if (this._count < this._capacity) return;
     const next = this._capacity * 2;
     this._chainage = grow(this._chainage, next, (n) => new Float32Array(n), 1);
-    this._height = grow(this._height, next, (n) => new Float32Array(n), 1);
+    this._height = grow(this._height, next, (n) => new Float64Array(n), 1);
     this._lateral = grow(this._lateral, next, (n) => new Float32Array(n), 1);
     this._slot = grow(this._slot, next, (n) => new Uint16Array(n), 1);
     this._index = grow(this._index, next, (n) => new Uint32Array(n), 1);
