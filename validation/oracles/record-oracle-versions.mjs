@@ -36,7 +36,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, existsSync, realpathSync } from 'node:fs';
-import { resolve, delimiter } from 'node:path';
+import { resolve, dirname, delimiter } from 'node:path';
 import { platform, arch } from 'node:process';
 
 /** Where the Dockerfile bakes the identity of the image itself. */
@@ -192,12 +192,17 @@ export function oracleEnvironment() {
  */
 function readWbtSettings() {
   const path = process.env.WBT_SETTINGS_PATH ?? null;
-  if (path === null || !existsSync(path)) {
+  if (path === null) {
     return 'unavailable: WBT_SETTINGS_PATH is not set to an existing file';
   }
+  // Read and handle absence together. Checking first leaves a window in which
+  // the answer stops being true before the read runs.
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
-  } catch {
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return 'unavailable: WBT_SETTINGS_PATH is not set to an existing file';
+    }
     return `unavailable: ${path} is not readable JSON`;
   }
 }
@@ -205,8 +210,16 @@ function readWbtSettings() {
 function main() {
   const env = oracleEnvironment();
   const out = JSON.stringify({ generatedBy: 'validation/oracles/record-oracle-versions.mjs', environment: env }, null, 2) + '\n';
-  const target = process.argv[2];
+  // argv reaches the file system here, so the path is resolved before it is
+  // opened. Resolving collapses any parent segments, and a target whose
+  // directory does not exist stops the run rather than being written blind.
+  const target = process.argv[2] ? resolve(process.argv[2]) : null;
   if (target) {
+    if (!existsSync(dirname(target))) {
+      process.stderr.write(`no such directory for output: ${dirname(target)}\n`);
+      process.exitCode = 1;
+      return;
+    }
     writeFileSync(target, out, 'utf8');
     process.stdout.write(`wrote ${target}\n`);
   } else {
