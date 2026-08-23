@@ -60,8 +60,8 @@ export function forEachAncestorId(
 /**
  * A {@link ParentLookup} backed by a streaming node store.
  *
- * Kept here rather than inlined at each call site so the scheduler holds one
- * closure per tick instead of one per walk.
+ * Kept here rather than inlined at each call site so a caller holds one closure
+ * for a whole pass over the nodes instead of one per walk.
  */
 export function parentLookupFromStore(store: {
   get(id: string): { readonly record: { readonly parentId?: string } } | undefined;
