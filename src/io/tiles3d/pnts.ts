@@ -3,12 +3,20 @@
  *
  * A PNTS tile is a 28-byte header, a feature-table JSON + binary, and a
  * batch-table JSON + binary. This reads the header, the feature table's
- * POINTS_LENGTH and optional RTC_CENTER, and the positions: uncompressed
- * float32 POSITION, or uint16 POSITION_QUANTIZED against its quantised volume.
- * It refuses the encodings this subset does not handle — Draco compression,
- * colours, normals, batch ids — with a clear error rather than mis-decoding.
- * Positions are tile-local; a caller adds RTC_CENTER (and the tile transform) to
- * place them. Pure: takes an ArrayBuffer, returns typed arrays.
+ * POINTS_LENGTH and optional RTC_CENTER, the positions (uncompressed float32
+ * POSITION, or uint16 POSITION_QUANTIZED against its quantised volume), the
+ * colours (RGBA, RGB, RGB565, CONSTANT_RGBA) and the normals (float32 NORMAL or
+ * oct-encoded NORMAL_OCT16P). It refuses the encodings this subset does not
+ * handle — Draco compression, batch ids — with a clear error rather than
+ * mis-decoding. Positions are tile-local; a caller adds RTC_CENTER (and the tile
+ * transform) to place them. Pure: takes an ArrayBuffer, returns typed arrays.
+ *
+ * Colour leaves here as sRGB-encoded bytes, three channels per point, which is
+ * what `PointCloud.colors` holds and what every other loader in this viewer
+ * produces; the one sRGB-to-linear conversion lives at the render upload seam
+ * (src/render/colorEncode.ts) and is not this decoder's to apply. PNTS colour
+ * channels are already 8-bit, so none of the 16-bit narrowing the LAS path does
+ * applies here.
  *
  * The tile's own declared byteLength is the parse boundary, never the buffer's.
  * A tile arrives inside whatever the transport handed over, so a section that
@@ -23,6 +31,14 @@ const SUPPORTED_VERSION = 1;
 const UINT32_MAX = 0xffffffff;
 /** The divisor the point-cloud format specifies for a quantised component. */
 const QUANTIZED_FULL_SCALE = 65535;
+/** The widest value one colour channel can carry once decoded. */
+const UINT8_MAX = 255;
+/** Widest value of the 5-bit red and blue fields of an RGB565 word. */
+const RGB565_5BIT_MAX = 31;
+/** Widest value of the 6-bit green field of an RGB565 word. */
+const RGB565_6BIT_MAX = 63;
+/** The widest value one oct16p component can carry before it is decoded. */
+const OCT16P_MAX = 255;
 
 export interface PntsTile {
   readonly version: number;
@@ -31,6 +47,16 @@ export interface PntsTile {
   readonly rtcCenter: readonly [number, number, number] | null;
   /** Tile-local xyz, length `pointsLength * 3`. */
   readonly positions: Float32Array;
+  /**
+   * Interleaved sRGB rgb bytes, length `pointsLength * 3`, or null when the
+   * tile carries no colour at all.
+   */
+  readonly colors: Uint8Array | null;
+  /**
+   * Interleaved unit xyz normals, length `pointsLength * 3`, or null when the
+   * tile carries no normals.
+   */
+  readonly normals: Float32Array | null;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -121,7 +147,190 @@ function arrayStart(
   return start;
 }
 
-/** Decode a PNTS tile's header, feature table, and positions. */
+/**
+ * Rescale one packed colour field to the full 0-255 range. A field of `max`
+ * carries a fraction of full brightness, so the widest value it can hold has to
+ * arrive as 255. Shifting the field up to the top of the byte instead leaves
+ * the low bits clear and caps the channel at 248 (5-bit) or 252 (6-bit), so a
+ * tile that wrote white gets back an off-white it never stored, and the error
+ * grows with brightness rather than staying at the quantisation step.
+ */
+function expandColorField(value: number, max: number): number {
+  return Math.round((value * UINT8_MAX) / max);
+}
+
+/** Write one rgb triple into an interleaved colour buffer. */
+function setRgb(colors: Uint8Array, point: number, r: number, g: number, b: number): void {
+  const at = point * 3;
+  colors[at] = r;
+  colors[at + 1] = g;
+  colors[at + 2] = b;
+}
+
+/**
+ * Read CONSTANT_RGBA, which lives in the feature-table JSON rather than the
+ * binary: four bytes that colour every point of the tile the same.
+ */
+function constantRgba(value: unknown): [number, number, number, number] {
+  if (!Array.isArray(value) || value.length !== 4) {
+    throw new Error('PNTS: CONSTANT_RGBA must have 4 components.');
+  }
+  // JSON writes NaN and Infinity as null, so a component is checked for being a
+  // number as well as for being a byte.
+  const isByte = (n: unknown) =>
+    typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= UINT8_MAX;
+  if (!value.every(isByte)) {
+    throw new Error('PNTS: CONSTANT_RGBA has a component that is not a whole number in 0-255.');
+  }
+  return [value[0] as number, value[1] as number, value[2] as number, value[3] as number];
+}
+
+/**
+ * Decode whichever colour encoding the tile carries, as sRGB rgb bytes.
+ *
+ * The format ranks the encodings — RGBA, then RGB, then RGB565, then
+ * CONSTANT_RGBA — and a tile may legally carry more than one. The ranking is
+ * resolved before anything is read, so a tile with both RGBA and RGB565 is
+ * coloured from RGBA whatever the RGB565 array holds. A defect in the chosen
+ * encoding is refused: falling through to the next-ranked one would answer a
+ * corrupt tile with colours that are not the ones it asked for.
+ *
+ * The alpha byte of RGBA and CONSTANT_RGBA is validated and then dropped. The
+ * viewer's colour buffer is three channels wide, so there is nowhere to carry
+ * it; a caller that needs opacity needs a wider buffer first.
+ */
+function decodeColors(
+  ft: JsonObject,
+  view: DataView,
+  pointsLength: number,
+  binStart: number,
+  binLength: number,
+): Uint8Array | null {
+  if (ft.RGBA !== undefined) {
+    const byteOffset = accessorByteOffset(ft.RGBA, 'RGBA');
+    const start = arrayStart('RGBA', byteOffset, pointsLength * 4, 1, binStart, binLength);
+    const colors = new Uint8Array(pointsLength * 3);
+    for (let i = 0; i < pointsLength; i++) {
+      const at = start + i * 4;
+      setRgb(colors, i, view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2));
+    }
+    return colors;
+  }
+
+  if (ft.RGB !== undefined) {
+    const byteOffset = accessorByteOffset(ft.RGB, 'RGB');
+    const start = arrayStart('RGB', byteOffset, pointsLength * 3, 1, binStart, binLength);
+    const colors = new Uint8Array(pointsLength * 3);
+    for (let i = 0; i < pointsLength; i++) {
+      const at = start + i * 3;
+      setRgb(colors, i, view.getUint8(at), view.getUint8(at + 1), view.getUint8(at + 2));
+    }
+    return colors;
+  }
+
+  if (ft.RGB565 !== undefined) {
+    const byteOffset = accessorByteOffset(ft.RGB565, 'RGB565');
+    const start = arrayStart('RGB565', byteOffset, pointsLength, 2, binStart, binLength);
+    const colors = new Uint8Array(pointsLength * 3);
+    for (let i = 0; i < pointsLength; i++) {
+      // Read through the DataView rather than a Uint16Array view: byteOffset
+      // need not be 2-aligned within the buffer, and the word is little-endian
+      // whatever the host is. Red occupies the top 5 bits, green the middle 6,
+      // blue the bottom 5.
+      const packed = view.getUint16(start + i * 2, true);
+      setRgb(
+        colors,
+        i,
+        expandColorField((packed >> 11) & 0x1f, RGB565_5BIT_MAX),
+        expandColorField((packed >> 5) & 0x3f, RGB565_6BIT_MAX),
+        expandColorField(packed & 0x1f, RGB565_5BIT_MAX),
+      );
+    }
+    return colors;
+  }
+
+  if (ft.CONSTANT_RGBA !== undefined) {
+    const [r, g, b] = constantRgba(ft.CONSTANT_RGBA);
+    const colors = new Uint8Array(pointsLength * 3);
+    for (let i = 0; i < pointsLength; i++) setRgb(colors, i, r, g, b);
+    return colors;
+  }
+
+  return null;
+}
+
+/** The sign of a component, counting zero as positive, as oct encoding does. */
+function signNotZero(value: number): number {
+  return value < 0 ? -1 : 1;
+}
+
+/**
+ * Decode one oct16p pair into a unit normal.
+ *
+ * Oct encoding projects the unit sphere onto the octahedron |x| + |y| + |z| = 1
+ * and stores the two coordinates of that projection, folding the lower
+ * hemisphere outwards into the corners of the square. Decoding undoes the fold
+ * and then normalises: the point recovered on the octahedron is a direction but
+ * not a unit vector, and the two bytes rarely name a point that was on the
+ * sphere to begin with, so an unnormalised result is a normal whose length
+ * varies with direction by up to a factor of the square root of 3.
+ */
+function octDecodeInto(u: number, v: number, out: Float32Array, at: number): void {
+  const px = (u / OCT16P_MAX) * 2 - 1;
+  const py = (v / OCT16P_MAX) * 2 - 1;
+  const z = 1 - Math.abs(px) - Math.abs(py);
+  // The fold reads both original magnitudes, so neither is overwritten first.
+  const x = z < 0 ? (1 - Math.abs(py)) * signNotZero(px) : px;
+  const y = z < 0 ? (1 - Math.abs(px)) * signNotZero(py) : py;
+  // On the octahedron |x| + |y| + |z| = 1, so no decoded triple is the zero
+  // vector and the division below always has a positive divisor.
+  const length = Math.sqrt(x * x + y * y + z * z);
+  out[at] = x / length;
+  out[at + 1] = y / length;
+  out[at + 2] = z / length;
+}
+
+/**
+ * Decode whichever normal encoding the tile carries.
+ *
+ * NORMAL outranks NORMAL_OCT16P: the float32 array is the tile's own directions
+ * at full precision, and the oct-encoded one is a lossy alternative to it, so a
+ * tile carrying both is decoded from the exact array. A float32 NORMAL is
+ * copied as written rather than re-normalised — the file's own lengths are the
+ * data, and this decoder does not silently rewrite them.
+ */
+function decodeNormals(
+  ft: JsonObject,
+  view: DataView,
+  pointsLength: number,
+  binStart: number,
+  binLength: number,
+): Float32Array | null {
+  if (ft.NORMAL !== undefined) {
+    const byteOffset = accessorByteOffset(ft.NORMAL, 'NORMAL');
+    const components = pointsLength * 3;
+    const start = arrayStart('NORMAL', byteOffset, components, 4, binStart, binLength);
+    // Copied rather than viewed, for the alignment reason POSITION is copied.
+    const normals = new Float32Array(components);
+    for (let i = 0; i < components; i++) normals[i] = view.getFloat32(start + i * 4, true);
+    return normals;
+  }
+
+  if (ft.NORMAL_OCT16P !== undefined) {
+    const byteOffset = accessorByteOffset(ft.NORMAL_OCT16P, 'NORMAL_OCT16P');
+    const start = arrayStart('NORMAL_OCT16P', byteOffset, pointsLength * 2, 1, binStart, binLength);
+    const normals = new Float32Array(pointsLength * 3);
+    for (let i = 0; i < pointsLength; i++) {
+      const at = start + i * 2;
+      octDecodeInto(view.getUint8(at), view.getUint8(at + 1), normals, i * 3);
+    }
+    return normals;
+  }
+
+  return null;
+}
+
+/** Decode a PNTS tile's header, feature table, positions, colours, and normals. */
 export function parsePnts(buffer: ArrayBuffer): PntsTile {
   if (buffer.byteLength < HEADER_BYTES) {
     throw new Error('PNTS: buffer shorter than the 28-byte header.');
@@ -185,6 +394,12 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
 
   const components = pointsLength * 3;
 
+  // Colour and normals are resolved before the positions branch, so a tile
+  // whose colour array overruns its section is refused whichever position
+  // encoding it happens to carry.
+  const colors = decodeColors(ft, view, pointsLength, ftBinStart, ftBinLength);
+  const normals = decodeNormals(ft, view, pointsLength, ftBinStart, ftBinLength);
+
   // A tile carrying both encodings is decoded from POSITION: the format gives
   // the uncompressed array precedence over the quantised one.
   if (ft.POSITION !== undefined) {
@@ -196,7 +411,7 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
     // reserving the memory before it is refused.
     const positions = new Float32Array(components);
     for (let i = 0; i < components; i++) positions[i] = view.getFloat32(start + i * 4, true);
-    return { version, pointsLength, rtcCenter, positions };
+    return { version, pointsLength, rtcCenter, positions, colors, normals };
   }
 
   if (ft.POSITION_QUANTIZED !== undefined) {
@@ -228,7 +443,7 @@ export function parsePnts(buffer: ArrayBuffer): PntsTile {
       // offset is added rounds twice and loses a step the format still carries.
       positions[i] = (code * volumeScale[axis]) / QUANTIZED_FULL_SCALE + volumeOffset[axis];
     }
-    return { version, pointsLength, rtcCenter, positions };
+    return { version, pointsLength, rtcCenter, positions, colors, normals };
   }
 
   throw new Error('PNTS: feature table has neither POSITION nor POSITION_QUANTIZED.');
