@@ -79,7 +79,7 @@ function mixedSection(): ProfileSectionPoints {
   b.beginSource(0, rich, 2);
   b.push(0, 1, 100.25, -0.5);
   b.push(1, 2, 101.5, 0.25);
-  // Second layer carries positions only — no attribute channels at all.
+  // Second layer carries coordinates only, no attribute channels at all.
   b.beginSource(1, null, 2);
   b.push(0, 3, 102, 0.75);
   return b.finish();
@@ -91,7 +91,14 @@ const MIXED_SOURCES: ProfileReturnsSource[] = [
     layerId: 'L0',
     layerName: 'survey.laz',
     classificationSource: 'source',
-    positions: new Float64Array([500000.111, 4000000.222, 100.25, 500001, 4000001, 101.5]),
+    readXYZ: (index: number, out: Float64Array): boolean => {
+      const coords = [500000.111, 4000000.222, 100.25, 500001, 4000001, 101.5];
+      if ((index + 1) * 3 > coords.length) return false;
+      out[0] = coords[index * 3]!;
+      out[1] = coords[index * 3 + 1]!;
+      out[2] = coords[index * 3 + 2]!;
+      return true;
+    },
   },
   { slot: 1, layerId: 'L1', layerName: 'scan.e57', classificationSource: 'none' },
 ];
@@ -142,7 +149,7 @@ describe('profile returns CSV — absent channels', () => {
     }
   });
 
-  it('leaves x/y/z blank for a layer that supplied no positions', () => {
+  it('leaves x/y/z blank for a layer that supplied no coordinates', () => {
     const { csv } = buildProfileReturnsCsv(mixedSection(), baseOptions(MIXED_SOURCES));
     const { header, body } = rowsOf(csv);
     expect(col(header, body, 'x')).toEqual(['500000.111', '500001.000', '']);

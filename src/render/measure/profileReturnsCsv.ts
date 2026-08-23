@@ -68,12 +68,16 @@ export interface ProfileReturnsSource {
   /** Octree node id (`"depth-x-y-z"`) when the slot is a streaming node. */
   readonly streamingNodeKey?: string;
   /**
-   * xyz-interleaved world positions in this source's OWN index space, so a
-   * row's coordinates are read at its `source_point_index`. Absent means the
-   * caller did not supply coordinates for this layer, and the x/y/z cells
-   * stay blank rather than being reconstructed from the section frame.
+   * Reads this source's coordinate at its OWN point index into `out[0..2]`,
+   * returning false when the index carries no coordinate.
+   *
+   * A reader rather than an array, so the frame a row's x/y/z is written in
+   * is the one the caller resolved rather than whatever a raw buffer happens
+   * to hold. Absent means the caller supplied no coordinates for this layer,
+   * and the x/y/z cells stay blank rather than being reconstructed from the
+   * section frame.
    */
-  readonly positions?: Float64Array | Float32Array;
+  readonly readXYZ?: (index: number, out: Float64Array) => boolean;
 }
 
 export interface ProfileReturnsCsvOptions {
@@ -226,7 +230,9 @@ export function buildProfileReturnsCsv(
     options.verticalReference === 'orthometric' ? 'elevation' : 'height';
 
   const hasStation = metresPerUnit !== null;
-  const hasXyz = options.sources.some((s) => s.positions !== undefined);
+  const hasXyz = options.sources.some((s) => s.readXYZ !== undefined);
+  // Reused across every row, so a full export allocates nothing per point.
+  const xyzScratch = new Float64Array(3);
   const hasStreamingKey = options.sources.some((s) => s.streamingNodeKey !== undefined);
   const hasIntensity = points.intensity !== undefined;
   const hasClassification = points.classification !== undefined;
@@ -287,13 +293,12 @@ export function buildProfileReturnsCsv(
     if (hasStreamingKey) row.push(src?.streamingNodeKey ? csvText(src.streamingNodeKey) : '');
 
     if (hasXyz) {
-      const pos = src?.positions;
-      // A short/misaligned array writes blanks rather than reading a
+      // A reader that declines the index writes blanks rather than putting a
       // neighbouring point's coordinates into this row.
-      const ok = pos !== undefined && (idx + 1) * 3 <= pos.length;
-      row.push(ok ? csvNumber(pos[idx * 3]!, COORD_DECIMALS) : '');
-      row.push(ok ? csvNumber(pos[idx * 3 + 1]!, COORD_DECIMALS) : '');
-      row.push(ok ? csvNumber(pos[idx * 3 + 2]!, COORD_DECIMALS) : '');
+      const ok = src?.readXYZ !== undefined && src.readXYZ(idx, xyzScratch);
+      row.push(ok ? csvNumber(xyzScratch[0]!, COORD_DECIMALS) : '');
+      row.push(ok ? csvNumber(xyzScratch[1]!, COORD_DECIMALS) : '');
+      row.push(ok ? csvNumber(xyzScratch[2]!, COORD_DECIMALS) : '');
     }
 
     if (hasIntensity) {
