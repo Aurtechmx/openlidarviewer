@@ -1,0 +1,18 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.las",
+      "filename": "<dataset>/first_half/flight_data/quick_pc.laz"
+    },
+    {
+      "type": "filters.crop",
+      "bounds": "([448603.156,448917.303],[4001034.882,4001418.011])"
+    },
+    {
+      "type": "writers.las",
+      "filename": "<work>/overlap-a.laz",
+      "compression": "true",
+      "forward": "all"
+    }
+  ]
+}

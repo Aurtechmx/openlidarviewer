@@ -1,0 +1,341 @@
+{
+  "generatedBy": "scripts/repeatability/measure-antiochia-repeatability.py",
+  "reference": "PDAL + GDAL + laspy/numpy/scipy",
+  "measures": "capture repeatability between two independent UAV flights, not the accuracy of any implementation",
+  "environment": {
+    "pdalVersion": "--------------------------------------------------------------------------------\npdal 2.10.2 (git-version: Release)\n--------------------------------------------------------------------------------",
+    "pdalResolvedPath": "/opt/homebrew/Cellar/pdal/2.10.2_1/bin/pdal",
+    "gdalTranslateVersion": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+    "gdalTranslateResolvedPath": "/opt/homebrew/Cellar/gdal/3.13.3/bin/gdal_translate",
+    "python": "3.11.15",
+    "laspy": "2.7.0",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "containerPinning": "not-executed",
+    "containerPinningReason": "No containerised PDAL or GDAL was used; the resolved executable paths, the reported versions and the exact command lines stand in for an image digest.",
+    "platform": "darwin",
+    "architecture": "arm64"
+  },
+  "sources": {
+    "a": {
+      "path": "<dataset>/first_half/flight_data/quick_pc.laz",
+      "sha256": "2e9d877f14f9f29af531e9977a4edfbccdba658ad2b500221cef0be6610a0326"
+    },
+    "b": {
+      "path": "<dataset>/second_half/flight_data/quick_pc.laz",
+      "sha256": "86fcb4dccfd62a7b0cab9738c654a03e32e32db5afbd0426cd2219802c72489f"
+    }
+  },
+  "grid": {
+    "cell": 1.0,
+    "originX": 448603.0,
+    "originY": 4001034.0,
+    "width": 315,
+    "height": 385,
+    "epsg": 32636,
+    "overlapBoundingBox": {
+      "minx": 448603.156,
+      "maxx": 448917.303,
+      "miny": 4001034.882,
+      "maxy": 4001418.011
+    }
+  },
+  "parameters": {
+    "outlier": {
+      "method": "statistical",
+      "mean_k": 12,
+      "multiplier": 2.5
+    },
+    "smrf": {
+      "cell": 1.0,
+      "window": 18.0,
+      "slope": 0.6,
+      "threshold": 0.45,
+      "scalar": 1.25
+    },
+    "writersGdal": {
+      "outputType": "mean,min,max,count",
+      "resolution": 1.0,
+      "radius": 0.7072,
+      "nodata": -9999,
+      "dataType": "double"
+    },
+    "exclusion": {
+      "minGroundReturnsPerCell": 10,
+      "maxPlaneResidualRms": 0.3,
+      "overlapEdgeErosionCells": 2
+    }
+  },
+  "runs": [
+    {
+      "runId": "crop-a",
+      "kind": "crop",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "translate",
+        "<dataset>/first_half/flight_data/quick_pc.laz",
+        "<work>/overlap-a.laz",
+        "crop",
+        "--filters.crop.bounds=([448603.156,448917.303],[4001034.882,4001418.011])"
+      ],
+      "commandLine": "pdal translate <dataset>/first_half/flight_data/quick_pc.laz <work>/overlap-a.laz crop --filters.crop.bounds=([448603.156,448917.303],[4001034.882,4001418.011])",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/overlap-a.laz",
+          "sha256": "143b9f3a002b67a2637157e940e2402f4fa5128055096f9170fb96dd7fc84051"
+        }
+      ],
+      "pipeline": "validation/repeatability/antiochia-flight/pipelines/crop-a.json"
+    },
+    {
+      "runId": "crop-b",
+      "kind": "crop",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "translate",
+        "<dataset>/second_half/flight_data/quick_pc.laz",
+        "<work>/overlap-b.laz",
+        "crop",
+        "--filters.crop.bounds=([448603.156,448917.303],[4001034.882,4001418.011])"
+      ],
+      "commandLine": "pdal translate <dataset>/second_half/flight_data/quick_pc.laz <work>/overlap-b.laz crop --filters.crop.bounds=([448603.156,448917.303],[4001034.882,4001418.011])",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/overlap-b.laz",
+          "sha256": "884bcf95d4a990f7f7bb5bc01272f4bf5e162001884d144024d2f8ae421d87d5"
+        }
+      ],
+      "pipeline": "validation/repeatability/antiochia-flight/pipelines/crop-b.json"
+    },
+    {
+      "runId": "ground-a",
+      "kind": "ground-classification",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "pipeline",
+        "<work>/smrf-a.json"
+      ],
+      "commandLine": "pdal pipeline <work>/smrf-a.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/ground-a.laz",
+          "sha256": "4e5127f664bdaad30cd24671b6edd56d363dbd1682833b84faf03a7bcad2b880"
+        }
+      ]
+    },
+    {
+      "runId": "ground-b",
+      "kind": "ground-classification",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "pipeline",
+        "<work>/smrf-b.json"
+      ],
+      "commandLine": "pdal pipeline <work>/smrf-b.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/ground-b.laz",
+          "sha256": "c968f8ee3410cf48afc390cc29f1bbccb3aa8240edd631b515cc6f9fb9dc56fc"
+        }
+      ]
+    },
+    {
+      "runId": "grid-a",
+      "kind": "rasterise",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "pipeline",
+        "<work>/gdal-a.json"
+      ],
+      "commandLine": "pdal pipeline <work>/gdal-a.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-a.tif",
+          "sha256": "b22a7c4f78083ed7572664a81b75a88a431c47d511000b4514b2daa2d569f5c2"
+        }
+      ]
+    },
+    {
+      "runId": "transcode-a-mean",
+      "kind": "transcode",
+      "tool": "gdal_translate",
+      "argv": [
+        "gdal_translate",
+        "-q",
+        "-of",
+        "AAIGrid",
+        "-b",
+        "3",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "<work>/dtm-a.tif",
+        "<work>/dtm-a-mean.asc"
+      ],
+      "commandLine": "gdal_translate -q -of AAIGrid -b 3 -co DECIMAL_PRECISION=6 <work>/dtm-a.tif <work>/dtm-a-mean.asc",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-a-mean.asc",
+          "sha256": "100783db73f83c35e5c0332d0d94467a5de8b044dbc8fc18df68232a92589733"
+        }
+      ]
+    },
+    {
+      "runId": "transcode-a-count",
+      "kind": "transcode",
+      "tool": "gdal_translate",
+      "argv": [
+        "gdal_translate",
+        "-q",
+        "-of",
+        "AAIGrid",
+        "-b",
+        "4",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "<work>/dtm-a.tif",
+        "<work>/dtm-a-count.asc"
+      ],
+      "commandLine": "gdal_translate -q -of AAIGrid -b 4 -co DECIMAL_PRECISION=6 <work>/dtm-a.tif <work>/dtm-a-count.asc",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-a-count.asc",
+          "sha256": "56a952a8d16da4f6fed302a823319f5e95e9400888c33338644635fc5610fe9b"
+        }
+      ]
+    },
+    {
+      "runId": "grid-b",
+      "kind": "rasterise",
+      "tool": "pdal",
+      "argv": [
+        "pdal",
+        "pipeline",
+        "<work>/gdal-b.json"
+      ],
+      "commandLine": "pdal pipeline <work>/gdal-b.json",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-b.tif",
+          "sha256": "e95d4cd6fdb57612a4e449574a763ac16553d8b33791f2b9f297738bf8df9613"
+        }
+      ]
+    },
+    {
+      "runId": "transcode-b-mean",
+      "kind": "transcode",
+      "tool": "gdal_translate",
+      "argv": [
+        "gdal_translate",
+        "-q",
+        "-of",
+        "AAIGrid",
+        "-b",
+        "3",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "<work>/dtm-b.tif",
+        "<work>/dtm-b-mean.asc"
+      ],
+      "commandLine": "gdal_translate -q -of AAIGrid -b 3 -co DECIMAL_PRECISION=6 <work>/dtm-b.tif <work>/dtm-b-mean.asc",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-b-mean.asc",
+          "sha256": "6fdf941dfc2d42a8ccfa1196f671e763ffb4462a72cba1c12a8e8490a7acf156"
+        }
+      ]
+    },
+    {
+      "runId": "transcode-b-count",
+      "kind": "transcode",
+      "tool": "gdal_translate",
+      "argv": [
+        "gdal_translate",
+        "-q",
+        "-of",
+        "AAIGrid",
+        "-b",
+        "4",
+        "-co",
+        "DECIMAL_PRECISION=6",
+        "<work>/dtm-b.tif",
+        "<work>/dtm-b-count.asc"
+      ],
+      "commandLine": "gdal_translate -q -of AAIGrid -b 4 -co DECIMAL_PRECISION=6 <work>/dtm-b.tif <work>/dtm-b-count.asc",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": [
+        {
+          "path": "<work>/dtm-b-count.asc",
+          "sha256": "d4e94c8b2a8443f8d203e99aa4144d715e800d7415f2bd31ce3681d4d55e747d"
+        }
+      ]
+    },
+    {
+      "runId": "decode-check-a",
+      "kind": "decode-cross-check",
+      "tool": "pdal",
+      "argv": [
+        "info",
+        "--stats",
+        "--dimensions",
+        "X,Y,Z",
+        "<work>/ground-a.laz"
+      ],
+      "commandLine": "pdal info --stats --dimensions X,Y,Z <work>/ground-a.laz",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": []
+    },
+    {
+      "runId": "decode-check-b",
+      "kind": "decode-cross-check",
+      "tool": "pdal",
+      "argv": [
+        "info",
+        "--stats",
+        "--dimensions",
+        "X,Y,Z",
+        "<work>/ground-b.laz"
+      ],
+      "commandLine": "pdal info --stats --dimensions X,Y,Z <work>/ground-b.laz",
+      "exitCode": 0,
+      "stderr": null,
+      "status": "ok",
+      "outputs": []
+    }
+  ]
+}

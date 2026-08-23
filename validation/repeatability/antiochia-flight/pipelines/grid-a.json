@@ -1,0 +1,26 @@
+{
+  "pipeline": [
+    {
+      "type": "readers.las",
+      "filename": "<work>/ground-a.laz"
+    },
+    {
+      "type": "filters.range",
+      "limits": "Classification[2:2]"
+    },
+    {
+      "type": "writers.gdal",
+      "filename": "<work>/dtm-a.tif",
+      "gdaldriver": "GTiff",
+      "output_type": "mean,min,max,count",
+      "resolution": 1.0,
+      "radius": 0.7072,
+      "origin_x": 448603.0,
+      "origin_y": 4001034.0,
+      "width": 315,
+      "height": 385,
+      "nodata": -9999,
+      "data_type": "double"
+    }
+  ]
+}
