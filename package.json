@@ -188,5 +188,10 @@
     "@loaders.gl/las": {
       "laz-perf": "0.0.7"
     }
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
   }
 }

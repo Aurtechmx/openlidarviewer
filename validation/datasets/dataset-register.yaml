@@ -1241,7 +1241,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: unknown
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1274,7 +1274,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: unknown
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1307,7 +1307,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 2337.5
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1340,7 +1340,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 2799.0
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1373,7 +1373,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 1568.6
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1406,7 +1406,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 1351.2
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1439,7 +1439,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 2210.8
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1472,7 +1472,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 1827.4
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1505,7 +1505,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 1014.3
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1538,7 +1538,7 @@ datasets:
     horizontalUnits: metre
     verticalUnits: metre
     nominalDensity: 1238.3
-    terrainClasses: [agricultural-terrace]
+    terrainClasses: [uniform-hillslope]
     landCoverClasses: [vineyard, bare-earth, grass]
     containsIndependentCheckpoints: false
     checkpointSource: not-applicable
@@ -1546,6 +1546,106 @@ datasets:
     dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
     citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
     knownLimitations: "Completes the two-year, two-block, two-altitude grid."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  # -- Zenodo 15288281, Mrzezyno shoreline UAV LiDAR, three epochs (CC BY 4.0) --
+  - datasetId: OLV-DS-066-SHORE-2023-12-16
+    title: "UAV LiDAR over the Mrzezyno shoreline, 2023-12-16 epoch"
+    sourceUrl: https://zenodo.org/records/15288281/files/2023-12-16.las
+    landingPage: https://doi.org/10.5281/zenodo.15288281
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-22
+    sourceSha256: 6386f9cc5c4b656468f42402451ea9ab834af9da5199820febce92eb215fdf91
+    sourceBytes: 144750943
+    format: las
+    pointCount: 4257368
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2023-12-16
+    horizontalCrs: EPSG:2180
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 8.8
+    terrainClasses: [beach, coastal-dune]
+    landCoverClasses: [sand, dune-vegetation, water]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Sledziowski, J., Terefenko, P., Giza, A."
+    citation: "Sledziowski, J., Terefenko, P., & Giza, A. (2025). UAV LiDAR Point Clouds for Shoreline Extraction (Mrzezyno) - demo data to S-LiNE Toolbox (Version 1.0) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.15288281"
+    knownLimitations: "The first of three epochs over one coastal strip. Z spans 33.00 to 48.71 m; the later epochs both start higher, which is a property of the data and not a change measurement, since nothing here establishes that the three cover the same ground to the same completeness. Written by DJI TERRA 3.15.29.0 from a Zenmuse L1, and the dataset README states the heights are corrected for geoid undulations without naming the geoid model, so the vertical frame is recorded as unknown rather than assumed. No surveyed checkpoints accompany it, so it can support agreement between implementations and not accuracy."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-067-SHORE-2024-01-29
+    title: "UAV LiDAR over the Mrzezyno shoreline, 2024-01-29 epoch"
+    sourceUrl: https://zenodo.org/records/15288281/files/2024-01-29.las
+    landingPage: https://doi.org/10.5281/zenodo.15288281
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-22
+    sourceSha256: b4ac6c16aa42b87f37ebd4c8e2eecbfed244e455c1a0689304bb1de77a04da59
+    sourceBytes: 110827681
+    format: las
+    pointCount: 3259625
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2024-01-29
+    horizontalCrs: EPSG:2180
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 6.8
+    terrainClasses: [beach, coastal-dune]
+    landCoverClasses: [sand, dune-vegetation, water]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Sledziowski, J., Terefenko, P., Giza, A."
+    citation: "Sledziowski, J., Terefenko, P., & Giza, A. (2025). UAV LiDAR Point Clouds for Shoreline Extraction (Mrzezyno) - demo data to S-LiNE Toolbox (Version 1.0) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.15288281"
+    knownLimitations: "Six weeks after the first epoch and the sparsest of the three at 6.8 pts/m2, against 24.6 for the March flight. A change study across this pair carries a density ratio near four to one, which is a confound to state rather than to correct away. Written by DJI TERRA 3.15.29.0 from a Zenmuse L1, and the dataset README states the heights are corrected for geoid undulations without naming the geoid model, so the vertical frame is recorded as unknown rather than assumed. No surveyed checkpoints accompany it, so it can support agreement between implementations and not accuracy."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-068-SHORE-2024-03-27
+    title: "UAV LiDAR over the Mrzezyno shoreline, 2024-03-27 epoch"
+    sourceUrl: https://zenodo.org/records/15288281/files/2024-03-27.las
+    landingPage: https://doi.org/10.5281/zenodo.15288281
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-22
+    sourceSha256: 372b621c7f35fc0371d641a1a9979f3c26bcc400e261d4702c45a3a86cab4de2
+    sourceBytes: 403122689
+    format: las
+    pointCount: 11856537
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2024-03-27
+    horizontalCrs: EPSG:2180
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 24.6
+    terrainClasses: [beach, coastal-dune]
+    landCoverClasses: [sand, dune-vegetation, water]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Sledziowski, J., Terefenko, P., Giza, A."
+    citation: "Sledziowski, J., Terefenko, P., & Giza, A. (2025). UAV LiDAR Point Clouds for Shoreline Extraction (Mrzezyno) - demo data to S-LiNE Toolbox (Version 1.0) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.15288281"
+    knownLimitations: "The densest epoch, and the end of a winter season over a dune and beach system. Three epochs over one footprint make this the only multi-epoch data in the register. Written by DJI TERRA 3.15.29.0 from a Zenmuse L1, and the dataset README states the heights are corrected for geoid undulations without naming the geoid model, so the vertical frame is recorded as unknown rather than assumed. No surveyed checkpoints accompany it, so it can support agreement between implementations and not accuracy."
     storage: acquired
     localPath: not-vendored
     controlPointIds: []
