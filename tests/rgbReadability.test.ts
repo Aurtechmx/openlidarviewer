@@ -263,19 +263,33 @@ describe('where the decision boundary actually sits', () => {
     expect(r.sampled).toBeGreaterThan(RGB_MIN_SAMPLE);
   });
 
-  it('calls the reported LA03mapry distribution uniform', () => {
-    // The scan that motivated this is not in the repository, so this
-    // reconstructs it from what was measured on it: greyscale throughout, mean
-    // 242 of 255, and 96 per cent of points near white. If a real file with
-    // those statistics did NOT land on `uniform`, the thresholds would be wrong
-    // for the only case anyone has actually seen.
-    const reconstructed = cloud(200_000, (i) => {
-      const nearWhite = i % 100 < 96;
-      const v = nearWhite ? 236 + (i % 9) : 200 + (i % 30);
+  it('calls the measured LA03 distribution uniform, by a wide margin', () => {
+    /*
+     * The scan that motivated this work: `LA03mapry.laz` from Zenodo
+     * 15421291 (CC BY 4.0), registered as OLV-DS-054-SCANCMP-LA03. The file is
+     * 202 MB and not vendored, so this reproduces its colour distribution from
+     * a whole-file decode of the real bytes:
+     *
+     *   31,566,748 points, PDRF 2, 16-bit RGB narrowed by >> 8
+     *   exactly grey (R = G = B)   100.00%
+     *   chroma above 2 levels        0.00%
+     *   mean luminance             242.0 of 255
+     *   luminance quartiles        p25 253, p50 253, p75 253, so IQR 0
+     *
+     * The margin is the point. The floor is an interquartile range of 12 and
+     * this file's is zero, so the verdict does not depend on where the
+     * threshold sits within any plausible range. The thresholds were chosen
+     * rather than derived, and the only real case anyone has is nowhere near
+     * them.
+     */
+    const measured = cloud(200_000, (i) => {
+      // 95.64% at or above 230, the rest spread below, every point grey.
+      const v = i % 10_000 < 9_564 ? 253 : 180 + (i % 50);
       return [v, v, v];
     });
-    const r = readRgbReadability(reconstructed);
+    const r = readRgbReadability(measured);
     expect(r.chromaticFraction).toBe(0);
+    expect(r.luminanceIqr).toBe(0);
     expect(r.verdict).toBe('uniform');
   });
 });
