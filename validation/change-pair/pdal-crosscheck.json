@@ -1,0 +1,31 @@
+{
+ "tool": "PDAL writers.gdal output_type=max, resolution 0.1 m, then gdal_translate -of XYZ",
+ "windowBounds": "E 852218-852232, N 6517042-6517056",
+ "cells": 19600,
+ "objects": [
+  {
+   "E": 852222.75,
+   "N": 6517048.5,
+   "cells": 30,
+   "maxDsmRiseM": 0.193,
+   "p90DsmRiseM": 0.183,
+   "cellsAbove010M": 28
+  },
+  {
+   "E": 852224.6,
+   "N": 6517049.85,
+   "cells": 36,
+   "maxDsmRiseM": 0.306,
+   "p90DsmRiseM": 0.302,
+   "cellsAbove010M": 35
+  },
+  {
+   "E": 852222.35,
+   "N": 6517052.0,
+   "cells": 36,
+   "maxDsmRiseM": 0.111,
+   "p90DsmRiseM": 0.102,
+   "cellsAbove010M": 6
+  }
+ ]
+}
