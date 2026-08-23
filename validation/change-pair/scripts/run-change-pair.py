@@ -28,7 +28,7 @@ TANK_MAX_Z = 198.0   # epoch-1 min-Z below this is the tank bottom
 OUTSIDE_MIN_Z = 200.5
 FLAT_RANGE = 0.10    # within-cell relief for the stable hard-ground mask
 RELIEF_WINDOW = 5    # 0.5 m, in analysis cells
-SEED = 20230516
+MAX_FIT_CELLS = 250000
 
 
 def bin_epoch(path):
@@ -76,7 +76,6 @@ def robust(v):
 def main():
     ds, outdir = Path(sys.argv[1]), Path(sys.argv[2])
     outdir.mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(SEED)
     e1 = bin_epoch(ds / "chassieu_vol1.las")
     e2 = bin_epoch(ds / "chassieu_vol2.las")
 
@@ -158,7 +157,15 @@ def main():
     aspect = np.arctan2(-gy, gx)
     stable = enough & (z1 >= 199.0) & (h1 <= 0.30) & (h2 <= 0.30) & np.isfinite(slope)
     textured = np.flatnonzero(stable & (slope > np.radians(3)))
-    sel = rng.choice(textured, size=min(250000, textured.size), replace=False)
+    # Deterministic selection. This pair yields fewer textured cells than the
+    # cap, so every one is used; a larger set takes an even stride. The fit
+    # below is order independent, so a permutation of the same set cannot move
+    # the result.
+    sel = (
+        textured
+        if textured.size <= MAX_FIT_CELLS
+        else textured[:: max(1, textured.size // MAX_FIT_CELLS)][:MAX_FIT_CELLS]
+    )
     row = (sel // NX).astype(float)
     col = (sel % NX).astype(float)
     z1s = z1.ravel()[sel]
