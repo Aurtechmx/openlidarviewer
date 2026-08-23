@@ -165,11 +165,19 @@ single flight over the same cell:
 | Flight B, gap 90 to 200 s | 25 | | 0.212 | 0.174 |
 | Flight B, gap 200 to 400 s | 652 | | 0.267 | 0.228 |
 | Flight A | 41 | 665 s | 0.826 | 0.325 |
+| Flight A, gap 400 to 800 s | 26 | | 0.967 | 0.492 |
 
-One flight repeats itself to 0.23 m (NMAD) across four minutes. The two flights,
-sixteen minutes and one trajectory solution apart, disagree by 2.36 m. The
-machinery is not manufacturing the difference, and the disagreement grows with
-the time between the two looks.
+The control is not at the same separation as the comparison, and it grows with
+separation: 0.174 m at 90 to 200 s, 0.228 m at 200 to 400 s, 0.492 m at 400 to
+800 s. The two flights are 961.6 s apart, past the end of that range, so the
+matched figure is the last row rather than the first. Against 0.492 m the two
+flights disagree by roughly five times, not by the ten times a comparison
+against the 227 s figure would suggest.
+
+What the control does establish is that the machinery is not manufacturing the
+difference, and that a gap of this size within one flight does not reach 2.36 m.
+What separates the two cases is a second trajectory solution, which the
+within-flight pairs do not have.
 
 Four ways of turning points into a surface, over the identical 1,723 cells:
 
