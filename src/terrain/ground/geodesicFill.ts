@@ -67,6 +67,14 @@ export interface GeodesicParams {
    * enough to reach the real ceiling.
    */
   readonly nodeBudget?: number;
+  /**
+   * Voids sampled to project the cost. Default {@link GEODESIC_PROBE_VOIDS}.
+   *
+   * Exposed because the sample size sets the order voids are solved in, and a
+   * fill whose answer depended on that order would be a defect the default
+   * alone could not reveal.
+   */
+  readonly probeVoids?: number;
 }
 
 /**
@@ -301,7 +309,8 @@ export function geodesicFillWithReport(
   // spreads the sample across the grid, where the expensive voids are: one
   // inside a large gap has to expand most of its window before it collects
   // kNearest measured cells, and one beside a measured cell does not.
-  const probeStride = Math.max(1, Math.ceil(voids.length / GEODESIC_PROBE_VOIDS));
+  const probeVoids = Math.max(1, Math.floor(positiveOr(params.probeVoids, GEODESIC_PROBE_VOIDS)));
+  const probeStride = Math.max(1, Math.ceil(voids.length / probeVoids));
   let probed = 0;
   for (let i = 0; i < voids.length; i += probeStride) { solve(voids[i]); probed++; }
   const projectedNodes = Math.round((pops / probed) * voids.length);

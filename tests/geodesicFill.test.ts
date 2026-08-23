@@ -285,3 +285,34 @@ describe('geodesicFill runtime backstop', () => {
     expect(capped.report.nodesExpanded).toBeLessThanOrEqual(budget + oneVoidCeiling);
   });
 });
+
+describe('geodesicFill is independent of the order voids are solved in', () => {
+  /**
+   * The probe solves a strided sample before the rest, so the visit order now
+   * depends on the sample size. Each void reads the prefilled surface and
+   * writes only its own cell, so the order cannot matter, and this is the
+   * assertion that keeps it that way: a future change that let one void's
+   * result feed another would show up here and nowhere else.
+   */
+  it('gives the same surface at every probe size', () => {
+    const { z, had } = tiledGrid(70, 70, 7);
+    const reference = geodesicFillWithReport(z, had, 70, 70, {
+      cellMetresX: 1.3, cellMetresY: 0.7, verticalUnitToMetres: 1.1, probeVoids: 1,
+    });
+    for (const probeVoids of [2, 3, 17, 200, 5000]) {
+      const other = geodesicFillWithReport(z, had, 70, 70, {
+        cellMetresX: 1.3, cellMetresY: 0.7, verticalUnitToMetres: 1.1, probeVoids,
+      });
+      expect([...other.z]).toEqual([...reference.z]);
+      expect(other.report.nodesExpanded).toBe(reference.report.nodesExpanded);
+    }
+  });
+
+  it('gives the same surface when the probe covers every void', () => {
+    // Stride 1: the probe solves everything and the second loop does nothing.
+    const { z, had } = tiledGrid(50, 50, 5);
+    const strided = geodesicFillWithReport(z, had, 50, 50, { cellMetresX: 1, probeVoids: 9 });
+    const whole = geodesicFillWithReport(z, had, 50, 50, { cellMetresX: 1, probeVoids: 1e6 });
+    expect([...whole.z]).toEqual([...strided.z]);
+  });
+});
