@@ -14,9 +14,10 @@
  *     `samples` (≥ 2). Each sample's height is a robust statistic of the
  *     cloud points inside that bin's corridor, measured along `up`.
  *
- *   - The sampler walks the line in screen-perpendicular world-XY bins;
- *     each bin collects EVERY cloud point within `bandWidth` of the line
- *     and reduces them to one elevation with a percentile estimator (see
+ *   - Bins are laid out at equal chainage steps along the section line, and
+ *     each bin's corridor is evaluated in the plane perpendicular to `up`.
+ *     A bin collects EVERY cloud point within `bandWidth` of the segment and
+ *     reduces them to one elevation with a percentile estimator (see
  *     below). If a bin sees no points, the height is `NaN` — the consumer
  *     renders that gap as a discontinuity, never an interpolation.
  *
@@ -347,9 +348,9 @@ function percentileSorted(sorted: Float64Array, count: number, p: number): numbe
  *
  * Algorithm: for each cloud point, project it onto the horizontal line,
  * compute its distance to the SEGMENT (perpendicular between the endpoints,
- * radial past either end), and (if within `bandWidth`) update the bin's
- * nearest-point record. After the linear pass, walk the bins and emit
- * `(distance, nearestHeight)` for each.
+ * radial past either end), and (if within `bandWidth`) add its elevation to
+ * the bin its chainage falls in. After the linear pass, walk the bins and
+ * emit `(distance, percentileHeight)` for each.
  */
 export function sampleProfile(input: SampleProfileInput): ProfileSample[] {
   const samples = Math.max(MIN_SAMPLES, Math.min(MAX_SAMPLES, input.samples | 0));
