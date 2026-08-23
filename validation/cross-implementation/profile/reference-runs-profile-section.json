@@ -1,0 +1,40 @@
+{
+  "generatedBy": "scripts/run-profile-section-reference.mjs",
+  "runs": {
+    "projection": {
+      "status": "ok",
+      "sql": "SELECT id AS id, ST_Line_Locate_Point(GeomFromText('LINESTRING(-8 6,40 42)'), MakePoint(CAST(x AS REAL),CAST(y AS REAL))) AS frac, ST_Distance(GeomFromText('LINESTRING(-8 6,40 42)'), MakePoint(CAST(x AS REAL),CAST(y AS REAL))) AS dist FROM \"profile-section\"",
+      "commandLine": "ogrinfo -q -dialect SQLITE -sql SELECT id AS id, ST_Line_Locate_Point(GeomFromText('LINESTRING(-8 6,40 42)'), MakePoint(CAST(x AS REAL),CAST(y AS REAL))) AS frac, ST_Distance(GeomFromText('LINESTRING(-8 6,40 42)'), MakePoint(CAST(x AS REAL),CAST(y AS REAL))) AS dist FROM \"profile-section\" validation/cross-implementation/profile/profile-section.csv",
+      "output": "validation/cross-implementation/profile/profile-section__projection.csv",
+      "points": 508,
+      "band": 2.5,
+      "sectionA": [
+        -8,
+        6
+      ],
+      "sectionB": [
+        40,
+        42
+      ],
+      "exitCodes": {
+        "ogrinfo": 0
+      },
+      "stderr": null
+    }
+  },
+  "geometry": {
+    "tool": "GDAL/OGR SQLite dialect with SpatiaLite",
+    "gdal": "GDAL 3.13.3 \"Iowa City\", released 2026/08/13",
+    "spatialite": "5.1.0",
+    "functions": [
+      "ST_Line_Locate_Point",
+      "ST_Distance",
+      "MakePoint",
+      "GeomFromText"
+    ]
+  },
+  "clampNote": "ST_Line_Locate_Point clamps to [0, 1], so frac * length is the chainage beside the line and the nearer endpoint past an end.",
+  "containerPinning": "not-executed",
+  "platform": "darwin-arm64",
+  "node": "v26.7.0"
+}
