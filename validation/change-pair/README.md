@@ -15,7 +15,7 @@ The narrative says flight #1 is the reference, and flight #2 followed after "som
 shapes have been laid at various locations on the bottom of the tank, sometimes in an easily visible position,
 sometimes partly hidden by or under the vegetation".
 
-Table 1 lists them. **The table is a raster image inside the PDF with no text layer behind it.** `pdftotext
+Table 1 lists them. The table is a raster image inside the PDF with no text layer behind it. `pdftotext
 -layout` returns its caption and nothing else, so the dimensions are not machine-extractable from this file.
 The values in `table1.json` were read off the rendered page and are labelled `read-from-rendered-page-image`.
 No OCR engine was installed on this host to corroborate them, so they are a careful transcription rather than
@@ -26,7 +26,7 @@ As transcribed: 22 item types, 62 individual items. The tallest stated item is a
 soil, have no stated dimensions at all, only "25 kg" against the sand. Several items are flat (wooden plank
 1 cm, Plexiglas lid 1 cm) or open mesh that a lidar pulse passes through (iron cage, fine grid, wide grid).
 
-**The document gives no coordinates and no placement map.** Nothing in the dataset says where any individual
+The document gives no coordinates and no placement map. Nothing in the dataset says where any individual
 item went, so there is no ground truth to score a detection against, only a population to compare a count with.
 
 ## Co-registration, which comes first
@@ -37,12 +37,12 @@ DJI TERRA 3.11.13.0. GPS times put flight #1 at 13:12:50 to 13:18:13 UTC and fli
 ground labels to inherit.
 
 Stable ground was taken outside the tank: epoch-1 min-Z at or above 200.5 m, which is the embankment and the
-surrounding hard standing, restricted to cells whose within-cell relief is at most 0.10 m in **both** epochs.
+surrounding hard standing, restricted to cells whose within-cell relief is at most 0.10 m in both epochs.
 That is 231,839 cells, 2,318 m<sup>2</sup>.
 
 | Quantity | Value |
 |---|---|
-| Vertical offset, median of the min-Z difference | **-0.0188 m** (epoch 2 lower) |
+| Vertical offset, median of the min-Z difference | -0.0188 m (epoch 2 lower) |
 | Vertical offset, median of the mean-Z difference | -0.0210 m |
 | Scatter about that offset, NMAD | 0.0326 m (min-Z), 0.0278 m (mean-Z) |
 | Tilt, least-squares plane | 0.250 mm/m, +50.7 mm across the 205 m east-west extent, -11.6 mm across the 332 m north-south extent |
@@ -67,13 +67,13 @@ was measured in this work.
 
 ## Cell size
 
-Measured, not habitual. The two files hold 48,360,428 and 47,893,585 points. Occupied 5 cm bins give a covered
-area of 34,187 m<sup>2</sup> and 34,185 m<sup>2</sup>, so the density is **1,415 and 1,401 points/m<sup>2</sup>**.
+Taken from the data. The two files hold 48,360,428 and 47,893,585 points. Occupied 5 cm bins give a covered
+area of 34,187 m<sup>2</sup> and 34,185 m<sup>2</sup>, so the density is 1,415 and 1,401 points/m<sup>2</sup>.
 
 | Cell | Cells with data in both epochs | Median points/cell | Fraction with 4 or more points in both |
 |---|---|---|---|
 | 0.05 m | 12,037,268 | 3 | 0.279 |
-| **0.10 m** | **3,935,602** | **11** | **0.796** |
+| 0.10 m | 3,935,602 | 11 | 0.796 |
 | 0.20 m | 1,039,432 | 45 | 0.961 |
 | 0.50 m | 170,840 | 282 | 0.985 |
 
@@ -94,7 +94,7 @@ bottom area of "approx. 2.1 ha", which is an independent check that the mask is 
 |---|---|
 | Fewer than 4 points in either epoch | 2,636 m<sup>2</sup>, 13.5% of the tank floor |
 | Vegetation, via epoch-1 relief over a 0.5 m window above 0.35 m | a further 8,989 m<sup>2</sup> |
-| Remaining searchable floor | **7,846 m<sup>2</sup>, 40.3% of the tank floor** |
+| Remaining searchable floor | 7,846 m<sup>2</sup>, 40.3% of the tank floor |
 
 Vegetation is the binding constraint, and the epoch-1 relief threshold is the honest way to state it. The
 scatter of the surface difference scales directly with how vegetated the reference epoch was:
@@ -117,7 +117,7 @@ and the tank floor is described in the source document as progressively vegetate
 The other exclusion is a wet drainage channel. Cells with epoch-1 min-Z between 193.8 and 194.2 m form a
 narrow dendritic feature on the north part of the floor where the difference is several times more likely to
 exceed 0.10 m than on the surrounding floor, and almost always downward, which is not a physical surface
-change. It is 548 m<sup>2</sup> of the searchable floor. It was not masked out; it is left in and it is the main reason the
+change. It is 548 m<sup>2</sup> of the searchable floor. It is left in, and it is the main reason the
 falling-direction count below is as high as it is.
 
 ### Detector, and its own false-positive measure
@@ -138,8 +138,8 @@ have an RMS at or below 0.06 m.
 
 | Direction and area | Stage-1 candidates | Point-verified | Passing |
 |---|---|---|---|
-| Tank, rising | 139 | 134 | **3** |
-| Tank, falling (physically impossible) | 425 | 414 | **1** |
+| Tank, rising | 139 | 134 | 3 |
+| Tank, falling (physically impossible) | 425 | 414 | 1 |
 | Outside the tank, rising | 8 | 8 | 1 |
 | Outside the tank, falling | 34 | 34 | 4 |
 
@@ -150,20 +150,20 @@ it still leaves one impossible in-tank fall standing against three rises.
 
 | East | North | Returns above 0.15 m, epoch 1 | epoch 2 | Peak above local ground | Footprint | Volume |
 |---|---|---|---|---|---|---|
-| 852222.75 | 6517048.50 | **0** | 193 | 0.256 m | 0.135 m<sup>2</sup>, 0.40 x 0.50 m | 0.0207 m<sup>3</sup> |
-| 852224.60 | 6517049.85 | **0** | 223 | 0.410 m | 0.170 m<sup>2</sup>, 0.45 x 0.60 m | 0.0357 m<sup>3</sup> |
-| 852222.35 | 6517052.00 | **0** | 72 | 0.197 m | 0.135 m<sup>2</sup>, 0.60 x 0.35 m | 0.0125 m<sup>3</sup> |
+| 852222.75 | 6517048.50 | 0 | 193 | 0.256 m | 0.135 m<sup>2</sup>, 0.40 x 0.50 m | 0.0207 m<sup>3</sup> |
+| 852224.60 | 6517049.85 | 0 | 223 | 0.410 m | 0.170 m<sup>2</sup>, 0.45 x 0.60 m | 0.0357 m<sup>3</sup> |
+| 852222.35 | 6517052.00 | 0 | 72 | 0.197 m | 0.135 m<sup>2</sup>, 0.60 x 0.35 m | 0.0125 m<sup>3</sup> |
 
 Zero returns above 0.15 m in the reference epoch against 72 to 223 in the second, over ground whose plane fits
-to 0.025 to 0.044 m RMS. Volumes are integrated over the epoch-1 ground plane, so they are the volume standing
-proud of the floor, not a displacement. **0.069 m<sup>3</sup> in total.**
+to 0.025 to 0.044 m RMS. Volumes are integrated over the epoch-1 ground plane, so each is the volume standing
+proud of the floor. 0.069 m<sup>3</sup> in total.
 
 PDAL reproduces all three from its own rasteriser. `writers.gdal output_type=max` at 0.10 m over the same
 window, differenced and dumped through `gdal_translate -of XYZ`, gives peak rises of 0.193, 0.306 and 0.111 m
 before the 0.019 m offset correction, which lands within 0.02 m of the values above once the offset is added.
 See `pdal-crosscheck.json`.
 
-All three sit inside one 3 x 4 m patch. That is not a site-wide recovery of the placed set; it is one cluster.
+All three sit inside one 3 x 4 m patch. The recovered set is one cluster.
 
 ## Does it match the documentation
 
@@ -176,8 +176,8 @@ Table 1 describes. A 0.41 m peak is consistent with a 50 cm construction cone, w
 19 cm brick block, a 19.5 cm jar or a 19.6 cm concrete test tube. No single assignment can be made, because
 the document gives no locations.
 
-Not consistent: **3 of 62 placed items were recovered, and 3 of the 18 whose stated height clears the
-detection threshold.** At the same settings the detector also returned one in-tank fall that cannot be a laid
+Not consistent: 3 of 62 placed items were recovered, and 3 of the 18 whose stated height clears the
+detection threshold. At the same settings the detector also returned one in-tank fall that cannot be a laid
 solid, so even the three cannot be asserted individually at better than roughly 3:1 against the method's own
 false-positive rate. Most of the placed set was never recoverable by surface differencing: 10 items have no
 stated dimensions, several are flat to within a centimetre or are open mesh, 20 of the 62 are 6 cm plastic
@@ -185,10 +185,17 @@ balls, and the pipes and drains are 10 cm cylinders that never fill a 0.10 m cel
 
 ## What this pair does and does not support
 
-It supports a co-registration statement. Two flights, one sensor, one processing chain, 34 minutes apart,
-aligned to 1 to 3 cm horizontally and 1.9 to 2.1 cm vertically with a 0.25 mm/m tilt and a 7 cm block-to-block
-spread. Those numbers are measured on 2,318 m<sup>2</sup> of stable ground outside the changed area, and they
-are the kind of number a change product needs behind it.
+It supports a co-registration statement about the embankment and rim. Two flights, one sensor, one processing
+chain, 34 minutes apart, aligned to 1 to 3 cm horizontally and 1.9 to 2.1 cm vertically with a 0.25 mm/m tilt.
+
+Two limits sit on that number. The 7 cm block-to-block spread is larger than the 1.9 cm offset it varies
+around, so a single alignment figure is the median of a field that moves, and the field is what a per-cell
+difference meets. The 2,318 m<sup>2</sup> it was measured on also lies at or above 200.5 m while the floor it
+is applied to lies below 198 m, leaving the two surfaces disjoint in plan and by about 2.5 m in height.
+
+Carrying the alignment from one surface to the other is an assumption here. Nothing in this pair fixes the
+floor against an independent surface, and an error that varies with range to target would differ between the
+rim and the floor while leaving both figures above unchanged.
 
 It does not support a change-detection demonstration at the scale the source document implies. The controlled
 change is real and deliberate, but it is small relative to what a 1,400 points/m<sup>2</sup> survey can
