@@ -8,5 +8,8 @@
   },
   "dependencies": {
     "3d-tiles-validator": "0.6.1"
+  },
+  "overrides": {
+    "sharp": "^0.35.0"
   }
 }
