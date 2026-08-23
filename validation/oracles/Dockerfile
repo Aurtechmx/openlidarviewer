@@ -125,10 +125,11 @@ ENV WBT_PATH="${ORACLE_PREFIX}/bin"
 #
 # This is a separate manifest from the project's own package.json on purpose:
 # an oracle must never enter the application's dependency tree, its lockfile or
-# its SBOM.
+# its SBOM. --ignore-scripts: a package's install hooks are arbitrary code, and
+# nothing here needs one to run for the validator to work.
 COPY npm/package.json npm/package-lock.json /opt/node-oracles/
 RUN cd /opt/node-oracles \
- && npm ci --omit=dev --no-audit --no-fund \
+ && npm ci --omit=dev --no-audit --no-fund --ignore-scripts \
  && npm cache clean --force
 ENV PATH="/opt/node-oracles/node_modules/.bin:${PATH}"
 

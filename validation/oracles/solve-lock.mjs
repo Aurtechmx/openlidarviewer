@@ -27,7 +27,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, delimiter } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = resolve(dirname(fileURLToPath(import.meta.url)));
@@ -74,6 +74,22 @@ export const SPECS = [
 /** Which solved package supplies each oracle the validation records name. */
 const ORACLE_PACKAGES = { GDAL: 'libgdal-core', PDAL: 'pdal' };
 
+/**
+ * Absolute path to an executable found on PATH.
+ *
+ * The binary is invoked by this path rather than by name, so the process that
+ * runs is the one this lookup saw, and a directory added to PATH afterwards
+ * cannot substitute a different file for it.
+ */
+function resolveOnPath(name) {
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (dir === '') continue;
+    const candidate = resolve(dir, name);
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(`${name} was not found on PATH`);
+}
+
 function solve() {
   const args = [
     'create', '--yes', '--dry-run', '--json',
@@ -82,7 +98,8 @@ function solve() {
     '-n', 'olv-oracles',
     ...SPECS,
   ];
-  const r = spawnSync('micromamba', args, {
+  const micromamba = resolveOnPath('micromamba');
+  const r = spawnSync(micromamba, args, {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: {
