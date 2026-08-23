@@ -317,6 +317,15 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       // more than the pass allows, so every void carries the Euclidean fill.
       // Said here because the method name promises geodesic distance, and a
       // report that names a method the run did not use is the overclaim.
+      //
+      // The size of the loss is measured, not cited. `geodesicFillAccuracy`
+      // fills analytic surfaces both ways and compares against known truth: a
+      // void beside a softened scarp is 20% closer to truth under the geodesic
+      // fill, a void away from any contrast is unchanged, and on the flank of a
+      // symmetric ridge the geodesic fill is 10% WORSE, because crossing a
+      // crest whose far side sits at the same height costs nothing while the
+      // rise in the path cost still biases the estimate downhill. So the
+      // wording names the condition rather than claiming a general loss.
       const ceilingM = Math.round(
         (params.geodesicNodeBudget ?? GEODESIC_NODE_BUDGET) / 1e6,
       );
@@ -331,7 +340,9 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       warnings.push(
         `void fill fell back to Euclidean IDW — the geodesic pass over ` +
           `${filled.report.voids.toLocaleString('en-US')} void cells ${cause}; ` +
-          `heights across data gaps are less reliable than a geodesic fill would give`,
+          `heights in gaps beside a break in slope are the ones affected, ` +
+          `by around 20% of their error on a synthetic scarp, and gaps away ` +
+          `from one are unchanged`,
       );
     }
   } else {

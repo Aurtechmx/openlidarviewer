@@ -32,9 +32,22 @@
  * nearest" would no longer follow cell-ring order. Deliberately out of scope
  * here; the pass-2 unit bug it sat behind is the one being fixed.
  *
- * Honesty is unchanged: this only produces better interpolated HEIGHTS. Which
- * cells count as measured / interpolated / gap, and their confidence, is still
- * decided in cellConfidence.ts. No DOM, no I/O.
+ * The 13-17% figure is Duan et al.'s, on their data with their code, and it is
+ * not evidence about this implementation. `geodesicFillAccuracy.test.ts`
+ * measures this one against analytic surfaces where the truth is known at every
+ * cell, and the answer is conditional. A void whose neighbourhood reaches
+ * across an elevation CONTRAST is 20% closer to truth beside a softened scarp
+ * and 25% closer beside a hard one. A void with no contrast to cross is
+ * unchanged. On the flank of a SYMMETRIC ridge the geodesic fill is 10% worse,
+ * because the far side of a symmetric crest sits at the same height as the near
+ * side, so crossing it costs nothing while the rise in the path cost still
+ * biases the estimate downhill. A symmetric ridge is the case that looks like a
+ * barrier and is not one.
+ *
+ * Honesty is unchanged: this only produces better interpolated HEIGHTS, and
+ * only where the paragraph above says so. Which cells count as measured /
+ * interpolated / gap, and their confidence, is still decided in
+ * cellConfidence.ts. No DOM, no I/O.
  */
 
 import { idwFill } from './idwFill';
