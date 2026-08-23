@@ -21,8 +21,18 @@ export const DEFAULT_DOCK_FRACTION = 0.4;
 /** The dock never leaves the scene less than this many pixels. */
 export const MIN_SCENE_HEIGHT = 120;
 
-/** The dock is never shorter than this while open. */
+/** The dock's preferred minimum while open, on a stage that can afford it. */
 export const MIN_DOCK_HEIGHT = 140;
+
+/**
+ * The dock's share of a stage too short to give it {@link MIN_DOCK_HEIGHT}
+ * and the scene {@link MIN_SCENE_HEIGHT} at once.
+ *
+ * Below that size the minimums cannot both hold, and preferring the dock
+ * would leave the scene nothing at all. Splitting instead keeps both
+ * present, which is what lets the user drag back out.
+ */
+export const TIGHT_STAGE_DOCK_FRACTION = 0.5;
 
 /** Height of the collapsed dock, which shows its header only. */
 export const COLLAPSED_DOCK_HEIGHT = 36;
@@ -33,8 +43,15 @@ export interface DockLimits {
 }
 
 export interface DockState {
-  /** Open height in pixels. Retained while collapsed so restore returns to it. */
-  readonly heightPx: number;
+  /**
+   * The height the user asked for, in pixels.
+   *
+   * Retained exactly as expressed, including while collapsed and while the
+   * stage is too small to honour it. The height the dock actually occupies
+   * is derived on read by {@link dockOccupiedHeight}, so shrinking a window
+   * and growing it again returns this value rather than a clamped remnant.
+   */
+  readonly preferredHeightPx: number;
   readonly collapsed: boolean;
 }
 
@@ -45,40 +62,58 @@ function finite(v: number): boolean {
 /**
  * The largest open height that still leaves the scene {@link MIN_SCENE_HEIGHT}.
  *
- * Falls back to the minimum dock height when the stage is too short to
- * satisfy both, so a small window yields a cramped layout rather than a
- * negative one.
+ * A stage too short to satisfy both minimums splits instead, so the scene
+ * keeps a share at every stage size rather than being squeezed out by the
+ * dock's own minimum.
  */
 export function maxDockHeight(limits: DockLimits): number {
-  const stage = finite(limits.stageHeight) ? limits.stageHeight : 0;
+  const stage = finite(limits.stageHeight) && limits.stageHeight > 0 ? limits.stageHeight : 0;
+  if (stage <= 0) return 0;
   const room = stage - MIN_SCENE_HEIGHT;
-  return room < MIN_DOCK_HEIGHT ? MIN_DOCK_HEIGHT : room;
+  if (room >= MIN_DOCK_HEIGHT) return room;
+  return Math.floor(stage * TIGHT_STAGE_DOCK_FRACTION);
 }
 
-/** Clamp an open height into the range this stage allows. */
+/**
+ * Clamp an open height into the range this stage allows.
+ *
+ * The lower bound yields to the upper one, so a stage whose whole allowance
+ * is below {@link MIN_DOCK_HEIGHT} produces a height inside its allowance
+ * rather than one above it.
+ */
 export function clampDockHeight(heightPx: number, limits: DockLimits): number {
   const max = maxDockHeight(limits);
-  if (!finite(heightPx)) return Math.min(defaultDockHeight(limits), max);
-  return Math.min(max, Math.max(MIN_DOCK_HEIGHT, heightPx));
+  const min = Math.min(MIN_DOCK_HEIGHT, max);
+  if (!finite(heightPx)) return Math.min(Math.max(min, defaultDockHeight(limits)), max);
+  return Math.min(max, Math.max(min, heightPx));
 }
 
 /** The opening height for a stage the user has expressed no preference for. */
 export function defaultDockHeight(limits: DockLimits): number {
-  const stage = finite(limits.stageHeight) ? limits.stageHeight : 0;
+  const stage = finite(limits.stageHeight) && limits.stageHeight > 0 ? limits.stageHeight : 0;
   const max = maxDockHeight(limits);
-  return Math.min(max, Math.max(MIN_DOCK_HEIGHT, Math.round(stage * DEFAULT_DOCK_FRACTION)));
+  const min = Math.min(MIN_DOCK_HEIGHT, max);
+  return Math.min(max, Math.max(min, Math.round(stage * DEFAULT_DOCK_FRACTION)));
 }
 
-/** The height the dock actually occupies, collapsed or not. */
+/**
+ * The height the dock actually occupies on this stage.
+ *
+ * A collapsed dock shows its header, and even that yields to a stage too
+ * short to hold it beside a scene.
+ */
 export function dockOccupiedHeight(state: DockState, limits: DockLimits): number {
-  return state.collapsed ? COLLAPSED_DOCK_HEIGHT : clampDockHeight(state.heightPx, limits);
+  const max = maxDockHeight(limits);
+  return state.collapsed
+    ? Math.min(COLLAPSED_DOCK_HEIGHT, max)
+    : clampDockHeight(state.preferredHeightPx, limits);
 }
 
 /**
  * The height left for the 3D scene.
  *
- * Never returns a negative value, and never zero while the stage has any
- * height at all, because the scene stays interactive with the dock open.
+ * Positive whenever the stage has any height at all, since the scene stays
+ * interactive with the dock open. The dock's own minimum yields to this.
  */
 export function sceneHeightFor(state: DockState, limits: DockLimits): number {
   const stage = finite(limits.stageHeight) && limits.stageHeight > 0 ? limits.stageHeight : 0;
@@ -94,28 +129,27 @@ export function sceneHeightFor(state: DockState, limits: DockLimits): number {
  */
 export function resizeDock(state: DockState, dyPx: number, limits: DockLimits): DockState {
   const dy = finite(dyPx) ? dyPx : 0;
-  const from = state.collapsed ? COLLAPSED_DOCK_HEIGHT : state.heightPx;
-  return { heightPx: clampDockHeight(from - dy, limits), collapsed: false };
+  if (state.collapsed) {
+    // A collapsed dock shows only its header, so a downward drag has nothing
+    // to shrink. Reopening on one would move the dock opposite the gesture.
+    if (dy >= 0) return state;
+    return {
+      preferredHeightPx: clampDockHeight(COLLAPSED_DOCK_HEIGHT - dy, limits),
+      collapsed: false,
+    };
+  }
+  const from = dockOccupiedHeight(state, limits);
+  return { preferredHeightPx: clampDockHeight(from - dy, limits), collapsed: false };
 }
 
 /** Collapse to the header, or restore the retained open height. */
 export function toggleDockCollapsed(state: DockState): DockState {
-  return { heightPx: state.heightPx, collapsed: !state.collapsed };
+  return { preferredHeightPx: state.preferredHeightPx, collapsed: !state.collapsed };
 }
 
 /** The state a stage with no stored preference starts in. */
 export function initialDockState(limits: DockLimits): DockState {
-  return { heightPx: defaultDockHeight(limits), collapsed: false };
-}
-
-/**
- * Re-fit a state to a resized stage.
- *
- * The stored height is clamped rather than replaced, so shrinking a window
- * and growing it again returns the user's own height instead of the default.
- */
-export function refitDock(state: DockState, limits: DockLimits): DockState {
-  return { heightPx: clampDockHeight(state.heightPx, limits), collapsed: state.collapsed };
+  return { preferredHeightPx: defaultDockHeight(limits), collapsed: false };
 }
 
 export interface PersistedDock {
@@ -125,7 +159,7 @@ export interface PersistedDock {
 
 /** Serialise the preference. Stores the open height even while collapsed. */
 export function encodeDockPrefs(state: DockState): string {
-  return JSON.stringify({ heightPx: state.heightPx, collapsed: state.collapsed });
+  return JSON.stringify({ heightPx: state.preferredHeightPx, collapsed: state.collapsed });
 }
 
 /**
@@ -152,9 +186,15 @@ export function decodeDockPrefs(raw: string | null): PersistedDock | null {
   return { heightPx: h, collapsed: c };
 }
 
-/** Restore a state for this stage, falling back to the default. */
+/**
+ * Restore a state, falling back to this stage's default.
+ *
+ * The stored height is kept as expressed rather than clamped on the way in,
+ * so opening on a small screen and returning to a large one restores the
+ * height the user chose.
+ */
 export function restoreDockState(raw: string | null, limits: DockLimits): DockState {
   const stored = decodeDockPrefs(raw);
   if (!stored) return initialDockState(limits);
-  return { heightPx: clampDockHeight(stored.heightPx, limits), collapsed: stored.collapsed };
+  return { preferredHeightPx: stored.heightPx, collapsed: stored.collapsed };
 }
