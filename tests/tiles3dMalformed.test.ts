@@ -489,3 +489,174 @@ describe('PNTS quantised perimeter', () => {
     ).toThrow(/POSITION_QUANTIZED spans a byte range too large to address exactly/);
   });
 });
+
+/**
+ * A tile whose feature table is `ft`, over a feature-table binary of `binBytes`
+ * bytes. The default 24 bytes is a float32 POSITION for 2 points, so a colour
+ * or normal array added at any offset overruns the section and the fixtures
+ * below say by how much rather than by whether.
+ */
+const attributes = (ft: Record<string, unknown>, binBytes = 24) =>
+  assemble({ ftJson: ftJsonBytes(ft), ftBin: new Uint8Array(binBytes) });
+
+/** POINTS_LENGTH 2 with a POSITION that fits the default 24-byte binary. */
+const twoPoints = { POINTS_LENGTH: 2, POSITION: { byteOffset: 0 } };
+
+describe('PNTS colour perimeter', () => {
+  it('accepts the well-formed baseline of each encoding', () => {
+    // 8 bytes of RGBA, 6 of RGB, 4 of RGB565 all fit alongside the 24 bytes of
+    // POSITION when the binary is grown to hold them.
+    expect(parsePnts(attributes({ ...twoPoints, RGBA: { byteOffset: 24 } }, 32)).colors).toHaveLength(6);
+    expect(parsePnts(attributes({ ...twoPoints, RGB: { byteOffset: 24 } }, 30)).colors).toHaveLength(6);
+    expect(parsePnts(attributes({ ...twoPoints, RGB565: { byteOffset: 24 } }, 28)).colors).toHaveLength(6);
+    expect(parsePnts(attributes({ ...twoPoints, CONSTANT_RGBA: [1, 2, 3, 4] })).colors).toHaveLength(6);
+  });
+
+  it('refuses a colour array that runs past the feature-table binary', () => {
+    // Each array is one byte short of fitting: the section ends where POSITION
+    // does, so any colour byte at all is outside it.
+    expect(() => parsePnts(attributes({ ...twoPoints, RGBA: { byteOffset: 24 } }, 31))).toThrow(
+      /RGBA extends past the feature-table binary section/,
+    );
+    expect(() => parsePnts(attributes({ ...twoPoints, RGB: { byteOffset: 24 } }, 29))).toThrow(
+      /RGB extends past the feature-table binary section/,
+    );
+    expect(() => parsePnts(attributes({ ...twoPoints, RGB565: { byteOffset: 24 } }, 27))).toThrow(
+      /RGB565 extends past the feature-table binary section/,
+    );
+    // Wholly outside, rather than one byte over.
+    expect(() => parsePnts(attributes({ ...twoPoints, RGBA: { byteOffset: 1024 } }, 32))).toThrow(
+      /RGBA extends past the feature-table binary section/,
+    );
+  });
+
+  it('refuses a colour byte range whose arithmetic would not be exact', () => {
+    for (const key of ['RGBA', 'RGB', 'RGB565']) {
+      expect(() =>
+        parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: Number.MAX_SAFE_INTEGER - 8 } }, 32)),
+      ).toThrow(new RegExp(`${key} spans a byte range too large to address exactly`));
+    }
+  });
+
+  it('refuses a colour accessor that is not an accessor object', () => {
+    for (const key of ['RGBA', 'RGB', 'RGB565']) {
+      for (const value of [0, 'nope', [0], null, true]) {
+        expect(() => parsePnts(attributes({ ...twoPoints, [key]: value }, 32))).toThrow(
+          new RegExp(`${key} is not a feature-table accessor object`),
+        );
+      }
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: {} }, 32))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: -4 } }, 32))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: 1.5 } }, 32))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+    }
+  });
+
+  it('refuses a CONSTANT_RGBA that is not four bytes', () => {
+    const bad = (value: unknown) => () => parsePnts(attributes({ ...twoPoints, CONSTANT_RGBA: value }));
+    expect(bad([1, 2, 3])).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad([1, 2, 3, 4, 5])).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad([])).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad({ r: 1, g: 2, b: 3, a: 4 })).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad('white')).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad(255)).toThrow(/CONSTANT_RGBA must have 4 components/);
+    expect(bad(null)).toThrow(/CONSTANT_RGBA must have 4 components/);
+    for (const component of [-1, 256, 1.5, '255', true, null, Number.NaN]) {
+      expect(bad([1, 2, 3, component])).toThrow(
+        /CONSTANT_RGBA has a component that is not a whole number in 0-255/,
+      );
+    }
+    // The bounds are inclusive, so the refusals above are about the values.
+    expect(parsePnts(attributes({ ...twoPoints, CONSTANT_RGBA: [0, 255, 0, 255] })).colors).toEqual(
+      new Uint8Array([0, 255, 0, 0, 255, 0]),
+    );
+  });
+
+  it('refuses a malformed colour array instead of falling back to a lower-ranked one', () => {
+    // Every lower-ranked encoding is present and well-formed. A decoder that
+    // answered the defect by moving down the ranking would return a colour, and
+    // the colour it returned would not be the one the tile named.
+    const lower = { RGB: { byteOffset: 24 }, RGB565: { byteOffset: 30 }, CONSTANT_RGBA: [9, 9, 9, 255] };
+    expect(() =>
+      parsePnts(attributes({ ...twoPoints, RGBA: { byteOffset: 34 }, ...lower }, 34)),
+    ).toThrow(/RGBA extends past the feature-table binary section/);
+    expect(() =>
+      parsePnts(attributes({ ...twoPoints, RGB: { byteOffset: 34 }, RGB565: { byteOffset: 24 }, CONSTANT_RGBA: [9, 9, 9, 255] }, 34)),
+    ).toThrow(/RGB extends past the feature-table binary section/);
+    expect(() =>
+      parsePnts(attributes({ ...twoPoints, RGB565: { byteOffset: 34 }, CONSTANT_RGBA: [9, 9, 9, 255] }, 34)),
+    ).toThrow(/RGB565 extends past the feature-table binary section/);
+  });
+});
+
+describe('PNTS normal perimeter', () => {
+  it('accepts the well-formed baseline of each encoding', () => {
+    expect(parsePnts(attributes({ ...twoPoints, NORMAL: { byteOffset: 24 } }, 48)).normals).toHaveLength(6);
+    expect(parsePnts(attributes({ ...twoPoints, NORMAL_OCT16P: { byteOffset: 24 } }, 28)).normals).toHaveLength(6);
+  });
+
+  it('refuses a normal array that runs past the feature-table binary', () => {
+    expect(() => parsePnts(attributes({ ...twoPoints, NORMAL: { byteOffset: 24 } }, 47))).toThrow(
+      /NORMAL extends past the feature-table binary section/,
+    );
+    expect(() => parsePnts(attributes({ ...twoPoints, NORMAL_OCT16P: { byteOffset: 24 } }, 27))).toThrow(
+      /NORMAL_OCT16P extends past the feature-table binary section/,
+    );
+    expect(() => parsePnts(attributes({ ...twoPoints, NORMAL: { byteOffset: 4096 } }, 48))).toThrow(
+      /NORMAL extends past the feature-table binary section/,
+    );
+  });
+
+  it('refuses a normal byte range whose arithmetic would not be exact', () => {
+    for (const key of ['NORMAL', 'NORMAL_OCT16P']) {
+      expect(() =>
+        parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: Number.MAX_SAFE_INTEGER - 8 } }, 48)),
+      ).toThrow(new RegExp(`${key} spans a byte range too large to address exactly`));
+    }
+  });
+
+  it('refuses a normal accessor that is not an accessor object', () => {
+    for (const key of ['NORMAL', 'NORMAL_OCT16P']) {
+      for (const value of [0, 'nope', [0], null, true]) {
+        expect(() => parsePnts(attributes({ ...twoPoints, [key]: value }, 48))).toThrow(
+          new RegExp(`${key} is not a feature-table accessor object`),
+        );
+      }
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: {} }, 48))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: -2 } }, 48))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+      expect(() => parsePnts(attributes({ ...twoPoints, [key]: { byteOffset: 0.5 } }, 48))).toThrow(
+        new RegExp(`${key}\\.byteOffset is not a non-negative whole number`),
+      );
+    }
+  });
+
+  it('refuses a malformed NORMAL instead of falling back to NORMAL_OCT16P', () => {
+    expect(() =>
+      parsePnts(
+        attributes({ ...twoPoints, NORMAL: { byteOffset: 28 }, NORMAL_OCT16P: { byteOffset: 24 } }, 28),
+      ),
+    ).toThrow(/NORMAL extends past the feature-table binary section/);
+  });
+
+  it('refuses a colour or normal array on a quantised tile too', () => {
+    // The position encoding does not decide whether the other arrays are
+    // checked: the 12-byte binary holds the quantised positions and nothing else.
+    const volume = { QUANTIZED_VOLUME_OFFSET: [0, 0, 0], QUANTIZED_VOLUME_SCALE: [1, 1, 1] };
+    const base = { POINTS_LENGTH: 2, POSITION_QUANTIZED: { byteOffset: 0 }, ...volume };
+    expect(() => parsePnts(attributes({ ...base, RGB: { byteOffset: 12 } }, 12))).toThrow(
+      /RGB extends past the feature-table binary section/,
+    );
+    expect(() => parsePnts(attributes({ ...base, NORMAL_OCT16P: { byteOffset: 12 } }, 12))).toThrow(
+      /NORMAL_OCT16P extends past the feature-table binary section/,
+    );
+  });
+});
