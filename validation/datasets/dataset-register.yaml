@@ -1054,6 +1054,503 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  # -- Zenodo 11518223, University of Alicante terrestrial scans (CC BY 4.0) --
+  - datasetId: OLV-DS-051-MURCIA-SCAN01
+    title: "University of Alicante terrestrial scan, public square in Murcia, station 1"
+    sourceUrl: https://zenodo.org/records/11518223/files/Murcia_2015_Scan01.e57
+    landingPage: https://doi.org/10.5281/zenodo.11518223
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-14
+    sourceSha256: 83af8dda4c54f9f2b8ce5ccbd5991ff450875364b7a6ae5157950fa6c5beac56
+    sourceBytes: 1296657408
+    format: e57
+    pointCount: 37274709
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [not-applicable]
+    landCoverClasses: [built-environment]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Riquelme, A., Tomas, R., Cano Gonzalez, M., Pastor Navarro, J. L. (University of Alicante)"
+    citation: "Riquelme, A., Tomas, R., Cano Gonzalez, M., & Pastor Navarro, J. L. (2024). 3D Laser Scanning Data: Public Square in Murcia and Engineering Laboratory at the University of Alicante [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.11518223"
+    knownLimitations: "300 x 363 x 116 m. Paired with Murcia_2015_Scan01.las (969,142,661 bytes, sha256 70234ee10bd2bb4efdb1d335d6feb271d347dbefca6b736d41a4f463ce4ba556) under the same DOI, which is the other half of the cross-format E57-to-LAS check. Scanner-local frame with identity pose, so coordinates are metres from the instrument and no projection applies."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-052-MURCIA-SCAN02
+    title: "University of Alicante terrestrial scan, public square in Murcia, station 2"
+    sourceUrl: https://zenodo.org/records/11518223/files/Murcia_2015_Scan02.e57
+    landingPage: https://doi.org/10.5281/zenodo.11518223
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-14
+    sourceSha256: 0707ba6268d3d364557e5e1930d8c1450dc4b794818ec6a403d711fcabcbc9fd
+    sourceBytes: 1179747328
+    format: e57
+    pointCount: 33913724
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [not-applicable]
+    landCoverClasses: [built-environment]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Riquelme, A., Tomas, R., Cano Gonzalez, M., Pastor Navarro, J. L. (University of Alicante)"
+    citation: "Riquelme, A., Tomas, R., Cano Gonzalez, M., & Pastor Navarro, J. L. (2024). 3D Laser Scanning Data: Public Square in Murcia and Engineering Laboratory at the University of Alicante [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.11518223"
+    knownLimitations: "169 x 352 x 134 m. Paired with Murcia_2015_Scan02.las (881,757,051 bytes, sha256 c23e3405486440513c2f00f055a4c30265c222cbaa585495170dd7d8cbbba38c). Shares three surveyed targets with station 1, each station in its own scanner-local frame, so the two form a tie-point network and neither is georeferenced."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-053-TERRENO-SCAN01
+    title: "University of Alicante terrestrial scan, engineering laboratory at the University of Alicante, station 1"
+    sourceUrl: https://zenodo.org/records/11518223/files/Terreno_2023_Scan01.e57
+    landingPage: https://doi.org/10.5281/zenodo.11518223
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-14
+    sourceSha256: 3c95bae9279fda6be03d662f948c140def1e56ab5bcb77233f1d2e1952b05389
+    sourceBytes: 451619840
+    format: e57
+    pointCount: 14328664
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [not-applicable]
+    landCoverClasses: [built-environment]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Riquelme, A., Tomas, R., Cano Gonzalez, M., Pastor Navarro, J. L. (University of Alicante)"
+    citation: "Riquelme, A., Tomas, R., Cano Gonzalez, M., & Pastor Navarro, J. L. (2024). 3D Laser Scanning Data: Public Square in Murcia and Engineering Laboratory at the University of Alicante [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.11518223"
+    knownLimitations: "50 x 64 x 10 m, an interior. Paired with Terreno_2023_Scan01.las (286,573,507 bytes, sha256 8f15870ee7b6062fa383f9b8b9187fe9c250456427f20c7cbe867df815221fa0). Carries surface normals under the libE57 `nor:` extension namespace, which is the shape that exposed the namespaced-normal defect."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-054-TERRENO-SCAN02
+    title: "University of Alicante terrestrial scan, engineering laboratory at the University of Alicante, station 2"
+    sourceUrl: https://zenodo.org/records/11518223/files/Terreno_2023_Scan02.e57
+    landingPage: https://doi.org/10.5281/zenodo.11518223
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-14
+    sourceSha256: 70c055c8020f158a1acfab572ac10596af24f63dd19224aecb0f92b6b7aea8dd
+    sourceBytes: 451228672
+    format: e57
+    pointCount: unknown
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [not-applicable]
+    landCoverClasses: [built-environment]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Riquelme, A., Tomas, R., Cano Gonzalez, M., Pastor Navarro, J. L. (University of Alicante)"
+    citation: "Riquelme, A., Tomas, R., Cano Gonzalez, M., & Pastor Navarro, J. L. (2024). 3D Laser Scanning Data: Public Square in Murcia and Engineering Laboratory at the University of Alicante [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.11518223"
+    knownLimitations: "Point count not read; the paired Terreno_2023_Scan02.las the record publishes was not retrieved here, so the cross-format pair is incomplete locally while both halves remain available under the DOI."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-055-MURCIA-TIEPOINTS
+    title: "Murcia surveyed tie points, three shared targets per station"
+    sourceUrl: https://zenodo.org/records/11518223/files/Murcia_2015_Scan01_vertices.txt
+    landingPage: https://doi.org/10.5281/zenodo.11518223
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-14
+    sourceSha256: 042c43a2efb9ddab1c4e6abcd1bad5f59f77619e863802e6df3715d27547c0a0
+    sourceBytes: 123
+    format: csv
+    pointCount: not-applicable
+    sensorType: ground-survey
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [built-environment]
+    containsIndependentCheckpoints: true
+    checkpointSource: "target survey by the dataset authors, University of Alicante"
+    checkpointUseRestriction: none
+    dataOwner: "Riquelme, A., Tomas, R., Cano Gonzalez, M., Pastor Navarro, J. L. (University of Alicante)"
+    citation: "Riquelme, A., Tomas, R., Cano Gonzalez, M., & Pastor Navarro, J. L. (2024). 3D Laser Scanning Data: Public Square in Murcia and Engineering Laboratory at the University of Alicante, Murcia_2015_Scan01_vertices.txt [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.11518223"
+    knownLimitations: "Four rows of TargetID,X,Y,Z of which one is a blank id at the origin, so three usable targets. Coordinates are in the station's own scanner-local frame, not a projection, so they register two stations to each other and locate neither on the ground. The station 2 file is the same shape and is sha256 595a2fce3b63030109a5f6ef10b2f40a03d97182e23b75cd5f2adda9f690623c."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  # -- Zenodo 8113105, Tomino vineyard UAV LiDAR (CC BY 4.0) -----------------
+  - datasetId: OLV-DS-056-VINE-2021-30M-B9
+    title: "UAV LiDAR over a Tomino vineyard, 2021 block B9 at 30 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20210916_FLEXIGROBOTS_L1_PRO_30M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: bb1fe83566045ba3822e59f0073d8604f9d2bf8a9ff725cf0ae709393677746f
+    sourceBytes: 114726218
+    format: laz
+    pointCount: 15166707
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2021-09-16
+    horizontalCrs: unknown
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "LAS 1.4 PDRF 7, and its header declares an ALL-ZERO bounding box (min equals max on every axis) while carrying 15,166,707 points. Every extent, footprint area, density and spacing figure derived from that header is degenerate, so the file is a real-world case for header-derived honesty and not a source of extent truth. Point count read from the 64-bit field; the legacy 32-bit count is zero as the format requires for PDRF 7."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-057-VINE-2021-50M-B9
+    title: "UAV LiDAR over a Tomino vineyard, 2021 block B9 at 50 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20210916_FLEXIGROBOTS_L1_PRO_50M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: e8de74512b6343ae2a9d21425456a36b9ec5e93c28e4625e4ccc5c2a7d23bdd1
+    sourceBytes: 75736435
+    format: laz
+    pointCount: 9597830
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2021-09-16
+    horizontalCrs: unknown
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: unknown
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "The same all-zero header bounding box as the 30 m flight of the same block and day, so the defect is the producer's and not a single bad write. 9,597,830 points, LAS 1.4 PDRF 7."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-058-VINE-2022-07-20M-B7
+    title: "UAV LiDAR over a Tomino vineyard, July 2022 block B7 at 20 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220714_FLEXIGROBOTS_L1_PRO_20M_4MS_B7.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: 14e0eb1178f9519eb9ed334af115244649e6d0e241a1936755d367df170294cb
+    sourceBytes: 556991755
+    format: laz
+    pointCount: 71389912
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-14
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 2337.5
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "LAS 1.2 PDRF 3 with a sound header: 159 x 192 m at easting 517,085 and northing 4,645,003, which is UTM zone 29N. The densest of the ten."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-059-VINE-2022-07-20M-B9
+    title: "UAV LiDAR over a Tomino vineyard, July 2022 block B9 at 20 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220714_FLEXIGROBOTS_L1_PRO_20M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: 03f460489063608588d0a77f9208816ba355c8f09257357ebbf4cedbf8426d1b
+    sourceBytes: 373879451
+    format: laz
+    pointCount: 46787138
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-14
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 2799.0
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "117 x 143 m. Highest point density of the set."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-060-VINE-2022-07-30M-B7
+    title: "UAV LiDAR over a Tomino vineyard, July 2022 block B7 at 30 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220714_FLEXIGROBOTS_L1_PRO_30M_4MS_B7.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: e0b7d7651f2f966570ea150f67233d237dea3f0da924d123bc6ae759dcc41daa
+    sourceBytes: 388473049
+    format: laz
+    pointCount: 47893588
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-14
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1568.6
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "Same footprint as the 20 m flight of the same block and day at two thirds the density, which is the altitude pair a density-sensitivity study would use."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-061-VINE-2022-07-30M-B9
+    title: "UAV LiDAR over a Tomino vineyard, July 2022 block B9 at 30 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220714_FLEXIGROBOTS_L1_PRO_30M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: d8ace0fb3d71ca6ee583750df87cc5fc7e2e4f833a6071798e09e41822021b6e
+    sourceBytes: 132970099
+    format: laz
+    pointCount: 16058341
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-07-14
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1351.2
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "94 x 127 m, a smaller footprint than the other B9 flights, so a comparison against them is over the intersection."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-062-VINE-2022-09-20M-B7
+    title: "UAV LiDAR over a Tomino vineyard, September 2022 block B7 at 20 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220908_FLEXIGROBOTS_L1_PRO_20M_4MS_B7.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: 8be5b3a19b6fffb30c087409ffc99b5e3fec1ca641faea152bb73dcfc8b2e992
+    sourceBytes: 528666846
+    format: laz
+    pointCount: 67522231
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-09-08
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 2210.8
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "Same block and altitude as the July flight, eight weeks later, which is the change-detection pair."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-063-VINE-2022-09-20M-B9
+    title: "UAV LiDAR over a Tomino vineyard, September 2022 block B9 at 20 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220908_FLEXIGROBOTS_L1_PRO_20M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: aad3b9aceefe609d8fc3b74ba0358d5d66d4e2ba9ccad9680ee899320d63aecf
+    sourceBytes: 247164901
+    format: laz
+    pointCount: 30544937
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-09-08
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1827.4
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "Pairs with the July B9 20 m flight over the same footprint."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-064-VINE-2022-09-30M-B7
+    title: "UAV LiDAR over a Tomino vineyard, September 2022 block B7 at 30 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220908_FLEXIGROBOTS_L1_PRO_30M_4MS_B7.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: 141112cff7c31a0432ef6929e0097a60cfaef21a489b4d66db5fced603cc829f
+    sourceBytes: 250530696
+    format: laz
+    pointCount: 30973711
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-09-08
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1014.3
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "The sparsest of the eight sound-header files."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-065-VINE-2022-09-30M-B9
+    title: "UAV LiDAR over a Tomino vineyard, September 2022 block B9 at 30 m"
+    sourceUrl: https://zenodo.org/records/8113105/files/20220908_FLEXIGROBOTS_L1_PRO_30M_4MS_B9.laz
+    landingPage: https://doi.org/10.5281/zenodo.8113105
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-05-20
+    sourceSha256: 59471b32e4b49e3bf5267980e3e303ceb86650e29538205dc39708c079017939
+    sourceBytes: 172907373
+    format: laz
+    pointCount: 20699135
+    sensorType: uas-lidar
+    capturePlatform: uas
+    captureDate: 2022-09-08
+    horizontalCrs: EPSG:32629
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 1238.3
+    terrainClasses: [agricultural-terrace]
+    landCoverClasses: [vineyard, bare-earth, grass]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Velez, S., Ariza-Sentis, M., Valente, J."
+    citation: "Velez, S., Ariza-Sentis, M., & Valente, J. (2023). High resolution LiDAR dataset acquired using UAV (unmanned aerial vehicle) over two vineyards and two years located in 'Tomino', Pontevedra, Spain. (Version 1) [Dataset]. Zenodo. https://doi.org/10.5281/zenodo.8113105"
+    knownLimitations: "Completes the two-year, two-block, two-altitude grid."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
   # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────
   - datasetId: OLV-DS-023-ANALYTIC-PROFILE-RAMP
     title: "Analytic corridor transect, 257 stations at 1 m with a cross-line elevation ramp"
