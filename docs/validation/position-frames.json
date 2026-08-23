@@ -82,7 +82,7 @@
       "symbol": "packTileRecord",
       "frame": "source-local",
       "reads": 3,
-      "why": "Packs each decoded point into a tile-store record; raw.positions is the loader's source-local buffer (scaled value + header offset − load origin), copied into the tile verbatim with no reframing."
+      "why": "Packs each decoded point into a tile-store record; raw.positions is the loader's source-local buffer (scaled value + header offset \u2212 load origin), copied into the tile verbatim with no reframing."
     },
     {
       "file": "src/io/lasDecodeShared.ts",
@@ -208,7 +208,7 @@
       "symbol": "scanHullPositions",
       "frame": "source-local",
       "reads": 1,
-      "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY — the same frame the bounding-rectangle extent is read in."
+      "why": "The active static cloud's resident buffer feeds the KML footprint's convex-hull outline, which is traced in the cloud's own source-local XY \u2014 the same frame the bounding-rectangle extent is read in."
     },
     {
       "file": "src/main.ts",
@@ -271,7 +271,7 @@
       "symbol": "ContourOverlay._upload",
       "frame": "project-local",
       "reads": 1,
-      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin — the object carries no further offset."
+      "why": "Uploads the CONTOUR line-segment vertices (not cloud points) into a THREE.BufferGeometry. They arrive from buildContourOverlayBuffers over a model derived from gatherTerrainPositions, which folds every layer placement in, so the buffer is already in the project frame the scene draws at its origin \u2014 the object carries no further offset."
     },
     {
       "file": "src/render/densityColors.ts",
@@ -340,6 +340,16 @@
       "why": "assembleProfileBuffers folds each contributing layer placement while flattening, so the corridor walk reads project coordinates."
     },
     {
+      "file": "src/render/measure/profileSectionSeam.ts",
+      "symbol": "walkScene",
+      "frame": [
+        "source-local",
+        "render-local"
+      ],
+      "reads": 2,
+      "why": "Reads each candidate buffer only to learn whether it holds points; a static layer's is source-local and a resident node's is render-local, and the project-frame lift happens per point inside the source view."
+    },
+    {
       "file": "src/render/measure/stockpileVolume.ts",
       "symbol": "stockpileVolume",
       "frame": "project-local",
@@ -388,8 +398,22 @@
         "source-local",
         "render-local"
       ],
-      "reads": 25,
+      "reads": 14,
       "why": "The sampler callbacks registered here (profile, cut/fill volume, inspector patch) collect buffers from both sources: static layers contribute source-local buffers WITH their placement alongside, resident streaming nodes contribute render-local ones. Neither is lifted here; the assemblers fold placement as they copy."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor.layers",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "Hands the layer's own buffer to the profile seam untouched; the Float64 placement travels beside it and is folded at read time, never written into the array."
+    },
+    {
+      "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.constructor.residentNodes",
+      "frame": "render-local",
+      "reads": 1,
+      "why": "A decoded streaming node is local to the streaming render origin, and the terms it was admitted on are what say that origin is the project's."
     },
     {
       "file": "src/render/Viewer.ts",
