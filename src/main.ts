@@ -2026,9 +2026,9 @@ const measureMount = createMeasurePanelMount({
   getViewer: () => viewer,
   crsService,
   getExportPanel: () => exportPanel,
-  exportSession: () => exportSession(),
-  handleFile: (file) => handleFile(file),
+  exportSession, handleFile,
   recordUsage,
+  workbenchStage: stage,
 });
 /** Refresh the Measurements panel's contents and visibility (thin delegate). */
 const refreshMeasurePanel = (): void => measureMount.refresh();

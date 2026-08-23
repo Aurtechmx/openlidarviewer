@@ -482,16 +482,27 @@ export const loadSessionOwnership = () => import('./io/sessionOwnership');
  */
 export const loadVerifySessionManifest = () => import('./science/verifySessionManifest');
 
-/*
- * The docked Profile Workbench panel (`src/ui/ProfileWorkbench.ts`) belongs
- * here too, as
+/**
+ * The docked Profile Workbench panel, mounted the first time a profile
+ * measurement's Expand control is used. Nothing in the startup shell can reach
+ * it: a profile has to exist before there is a section to inspect, and the
+ * Measurements panel that carries the control is itself lazy.
  *
- *   export const loadProfileWorkbench = () => import('./ui/ProfileWorkbench');
- *
- * and the line lands with the first call site, not before it. A seam nobody
- * calls is shaken out of this module, no chunk is emitted, and the
- * chunk-emission guard in vite.config.ts — which derives its required list
- * from the seams written here — fails the build by name. The panel is
- * standalone and unreferenced until it is mounted, so the seam is the one part
- * of it that cannot precede its caller.
+ * Held here for the reason the module exists — the panel is reached from
+ * `MeasurePanel.ts`, which the live source transform rewrites, so an inline
+ * `import()` there would have its specifier scrambled and its chunk never
+ * emitted.
  */
+export const loadProfileWorkbench = () => import('./ui/ProfileWorkbench');
+
+/**
+ * The workbench's runtime — the stage adapter, the launcher, and the section
+ * composition that draws the returns.
+ *
+ * A separate seam from the panel because it is reached from
+ * `measurePanelMount.ts`, which the startup shell statically imports. Pulling
+ * it in eagerly would carry the colour pass, the fit and the section renderer
+ * into the shell, and the axis module reaches `profileSummary`, which the
+ * shell-isolation guard forbids there.
+ */
+export const loadProfileWorkbenchRuntime = () => import('./app/profileWorkbenchRuntime');
