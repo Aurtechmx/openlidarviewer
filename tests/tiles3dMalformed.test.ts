@@ -660,3 +660,221 @@ describe('PNTS normal perimeter', () => {
     );
   });
 });
+
+/**
+ * A 2-point tile whose feature table is `ft` and whose feature-table binary is
+ * 24 bytes of POSITION followed by `ids` written at `width` bytes each. The ids
+ * are written rather than left zeroed because the range rule is about values,
+ * and every zeroed fixture satisfies it.
+ */
+function batchIdTile(ids: readonly number[], ft: Record<string, unknown>, width = 2): ArrayBuffer {
+  const ftBin = new Uint8Array(24 + ids.length * width);
+  const view = new DataView(ftBin.buffer);
+  ids.forEach((id, i) => {
+    const at = 24 + i * width;
+    if (width === 1) view.setUint8(at, id);
+    else if (width === 2) view.setUint16(at, id, true);
+    else view.setUint32(at, id, true);
+  });
+  return assemble({ ftJson: ftJsonBytes(ft), ftBin });
+}
+
+/** A feature table with a BATCH_ID accessor placed just past POSITION. */
+const batchFt = (over: Record<string, unknown> = {}) => ({
+  ...twoPoints,
+  BATCH_LENGTH: 4,
+  BATCH_ID: { byteOffset: 24 },
+  ...over,
+});
+
+describe('PNTS batch-id perimeter', () => {
+  it('accepts the well-formed baseline of each component width', () => {
+    expect([...(parsePnts(batchIdTile([0, 3], batchFt())).batchIds as Uint32Array)]).toEqual([0, 3]);
+    expect([
+      ...(parsePnts(
+        batchIdTile([0, 3], batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_BYTE' } }), 1),
+      ).batchIds as Uint32Array),
+    ]).toEqual([0, 3]);
+    expect([
+      ...(parsePnts(
+        batchIdTile([0, 3], batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_INT' } }), 4),
+      ).batchIds as Uint32Array),
+    ]).toEqual([0, 3]);
+  });
+
+  it('refuses a BATCH_ID that is not an accessor object', () => {
+    for (const value of [0, 'nope', [0], null, true]) {
+      expect(() => parsePnts(batchIdTile([0, 0], batchFt({ BATCH_ID: value })))).toThrow(
+        /BATCH_ID is not a feature-table accessor object/,
+      );
+    }
+    expect(() => parsePnts(batchIdTile([0, 0], batchFt({ BATCH_ID: {} })))).toThrow(
+      /BATCH_ID\.byteOffset is not a non-negative whole number/,
+    );
+    expect(() => parsePnts(batchIdTile([0, 0], batchFt({ BATCH_ID: { byteOffset: -2 } })))).toThrow(
+      /BATCH_ID\.byteOffset is not a non-negative whole number/,
+    );
+    expect(() => parsePnts(batchIdTile([0, 0], batchFt({ BATCH_ID: { byteOffset: 1.5 } })))).toThrow(
+      /BATCH_ID\.byteOffset is not a non-negative whole number/,
+    );
+  });
+
+  it('refuses a componentType that is not one of the three legal widths', () => {
+    // `FLOAT` and `UNSIGNED_LONG` are component types of other 3D Tiles
+    // accessors; `toString` and `constructor` are the names a lookup through a
+    // plain object's prototype would answer with a function instead of a width.
+    for (const componentType of [
+      'FLOAT',
+      'UNSIGNED_LONG',
+      'unsigned_short',
+      'BYTE',
+      '',
+      'toString',
+      'constructor',
+      'valueOf',
+      2,
+      null,
+      true,
+      ['UNSIGNED_SHORT'],
+    ]) {
+      expect(() =>
+        parsePnts(batchIdTile([0, 0], batchFt({ BATCH_ID: { byteOffset: 24, componentType } }))),
+      ).toThrow(/BATCH_ID\.componentType must be UNSIGNED_BYTE, UNSIGNED_SHORT, or UNSIGNED_INT/);
+    }
+  });
+
+  it('refuses a BATCH_LENGTH that is not a positive uint32 when BATCH_ID is present', () => {
+    for (const value of [0, -1, -2.5, 1.5, 4294967296, 1e300, '4', true, null, [4], Number.NaN]) {
+      expect(() => parsePnts(batchIdTile([0, 0], batchFt({ BATCH_LENGTH: value })))).toThrow(
+        /BATCH_ID requires a BATCH_LENGTH that is a positive uint32/,
+      );
+    }
+    // Absent entirely: ids with no batch count are ids nothing can check.
+    expect(() =>
+      parsePnts(batchIdTile([0, 0], { ...twoPoints, BATCH_ID: { byteOffset: 24 } })),
+    ).toThrow(/BATCH_ID requires a BATCH_LENGTH that is a positive uint32/);
+  });
+
+  it('refuses an id at or above BATCH_LENGTH rather than clamping it', () => {
+    // Equal to the count: batches are numbered 0 to BATCH_LENGTH − 1, so this
+    // names one past the last. A clamp would report batch 3's properties for it.
+    expect(() => parsePnts(batchIdTile([0, 4], batchFt()))).toThrow(
+      'PNTS: BATCH_ID 4 at point 1 is not below BATCH_LENGTH 4.',
+    );
+    expect(() => parsePnts(batchIdTile([9, 0], batchFt()))).toThrow(
+      'PNTS: BATCH_ID 9 at point 0 is not below BATCH_LENGTH 4.',
+    );
+    // The same rule at each width, so the check is not tied to one read path.
+    expect(() =>
+      parsePnts(
+        batchIdTile([0, 200], batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_BYTE' } }), 1),
+      ),
+    ).toThrow('PNTS: BATCH_ID 200 at point 1 is not below BATCH_LENGTH 4.');
+    expect(() =>
+      parsePnts(
+        batchIdTile(
+          [0, 70000],
+          batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_INT' } }),
+          4,
+        ),
+      ),
+    ).toThrow('PNTS: BATCH_ID 70000 at point 1 is not below BATCH_LENGTH 4.');
+    // BATCH_LENGTH 1 admits only id 0, so the bound is exclusive at the bottom
+    // of its range too.
+    expect(() => parsePnts(batchIdTile([0, 1], batchFt({ BATCH_LENGTH: 1 })))).toThrow(
+      'PNTS: BATCH_ID 1 at point 1 is not below BATCH_LENGTH 1.',
+    );
+  });
+
+  it('refuses a BATCH_ID array that runs past the feature-table binary', () => {
+    // The section holds 24 bytes of POSITION and nothing more, so 2 ids at any
+    // width are outside it.
+    expect(() => parsePnts(attributes(batchFt(), 24))).toThrow(
+      /BATCH_ID extends past the feature-table binary section/,
+    );
+    // One byte short at each width: 2 ids need 2, 4 and 8 bytes past POSITION.
+    expect(() =>
+      parsePnts(attributes(batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_BYTE' } }), 25)),
+    ).toThrow(/BATCH_ID extends past the feature-table binary section/);
+    expect(() => parsePnts(attributes(batchFt(), 27))).toThrow(
+      /BATCH_ID extends past the feature-table binary section/,
+    );
+    expect(() =>
+      parsePnts(attributes(batchFt({ BATCH_ID: { byteOffset: 24, componentType: 'UNSIGNED_INT' } }), 31)),
+    ).toThrow(/BATCH_ID extends past the feature-table binary section/);
+    // Wholly outside rather than one byte over.
+    expect(() => parsePnts(attributes(batchFt({ BATCH_ID: { byteOffset: 4096 } }), 28))).toThrow(
+      /BATCH_ID extends past the feature-table binary section/,
+    );
+  });
+
+  it('refuses a batch-id byte range whose arithmetic would not be exact', () => {
+    expect(() =>
+      parsePnts(attributes(batchFt({ BATCH_ID: { byteOffset: Number.MAX_SAFE_INTEGER - 1 } }), 28)),
+    ).toThrow(/BATCH_ID spans a byte range too large to address exactly/);
+  });
+
+  it('ignores BATCH_LENGTH when the tile carries no ids to check against it', () => {
+    // No BATCH_ID, so nothing indexes the batches and a nonsense count indexes
+    // nothing. The tile still decodes.
+    expect(parsePnts(attributes({ ...twoPoints, BATCH_LENGTH: 0 })).batchIds).toBeNull();
+    expect(parsePnts(attributes({ ...twoPoints, BATCH_LENGTH: 'four' })).batchIds).toBeNull();
+  });
+});
+
+/** A tile whose feature table is `ft` and whose batch-table JSON is `btJson`. */
+const withBatchTableJson = (ft: Record<string, unknown>, btJson: Record<string, unknown>) =>
+  assemble({ ftJson: ftJsonBytes(ft), ftBin: new Uint8Array(24), btJson: ftJsonBytes(btJson) });
+
+const DRACO = '3DTILES_draco_point_compression';
+const DRACO_MESSAGE = 'PNTS Draco point compression is not supported in this build';
+
+describe('PNTS Draco refusal', () => {
+  it('refuses a feature table that declares the extension', () => {
+    expect(() =>
+      parsePnts(attributes({ ...twoPoints, extensions: { [DRACO]: { properties: {}, byteOffset: 0, byteLength: 24 } } })),
+    ).toThrow(DRACO_MESSAGE);
+  });
+
+  it('refuses a batch table that declares the extension', () => {
+    expect(() => parsePnts(withBatchTableJson(twoPoints, { extensions: { [DRACO]: {} } }))).toThrow(
+      DRACO_MESSAGE,
+    );
+  });
+
+  it('refuses the tile rather than decoding the compressed bytes as positions', () => {
+    // A tile whose accessors all fit and whose POSITION bytes would decode to
+    // three finite floats. Without the refusal this returns those numbers, and
+    // they are codec state rather than coordinates.
+    const ftBin = new Uint8Array(24);
+    new DataView(ftBin.buffer).setFloat32(0, 1.5, true);
+    const compressed = assemble({
+      ftJson: ftJsonBytes({
+        ...twoPoints,
+        extensions: { [DRACO]: { properties: { POSITION: 0 }, byteOffset: 0, byteLength: 24 } },
+      }),
+      ftBin,
+    });
+    expect(() => parsePnts(compressed)).toThrow(DRACO_MESSAGE);
+  });
+
+  it('refuses the extension before anything else in the feature table is read', () => {
+    // POINTS_LENGTH is nonsense and there is no position array at all, and the
+    // message is still about the compression: on a Draco tile the accessors do
+    // not describe the binary, so no complaint about them would be true.
+    expect(() =>
+      parsePnts(assemble({ ftJson: ftJsonBytes({ POINTS_LENGTH: 0, extensions: { [DRACO]: {} } }) })),
+    ).toThrow(DRACO_MESSAGE);
+  });
+
+  it('accepts an extensions object that does not declare it', () => {
+    expect(parsePnts(attributes({ ...twoPoints, extensions: {} })).pointsLength).toBe(2);
+    expect(
+      parsePnts(attributes({ ...twoPoints, extensions: { '3DTILES_batch_table_hierarchy': {} } })).pointsLength,
+    ).toBe(2);
+    // Not an object, so it declares nothing and is not the decoder's business.
+    expect(parsePnts(attributes({ ...twoPoints, extensions: 'none' })).pointsLength).toBe(2);
+    expect(parsePnts(attributes({ ...twoPoints, extensions: null })).pointsLength).toBe(2);
+    expect(parsePnts(attributes({ ...twoPoints, extensions: [DRACO] })).pointsLength).toBe(2);
+  });
+});
