@@ -591,3 +591,83 @@
   transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard);
 }
 
+
+/* ── Profile Workbench ──────────────────────────────────────────────────────
+   The docked cross-section workbench. It sits UNDER the stage and shares the
+   stage's height with the 3D canvas, so it is a block in the flow, not an
+   overlay: nothing here dims, blurs, or covers the scene, because the scene
+   stays interactive while the workbench is open. Its height is set inline from
+   `profileWorkbenchDock.ts`; the rules below own everything except that. */
+.olv-workbench {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--panel-raised);
+  border-top: 0.5px solid var(--hairline-strong);
+  box-shadow: var(--shadow-raised);
+}
+/* Motion is opt-in: the panel only carries this class when the host reports no
+   reduced-motion preference, and the media query is the second guard for a
+   preference that changes after mount. */
+.olv-workbench-animate { transition: height var(--dur-fast) var(--ease-standard); }
+@media (prefers-reduced-motion: reduce) {
+  .olv-workbench-animate { transition: none; }
+}
+/* The splitter is the top edge itself — a thin grab strip with a comfortable
+   hit area, keyboard-focusable because the arrow keys resize the dock too. */
+.olv-workbench-splitter {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 8px; cursor: row-resize;
+  touch-action: none;
+}
+.olv-workbench-splitter:hover,
+.olv-workbench-splitter:focus-visible { background: var(--hairline-strong); }
+.olv-workbench-dragging { user-select: none; }
+.olv-workbench-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md) var(--space-xs);
+  flex-shrink: 0;
+}
+.olv-workbench-titles { min-width: 0; }
+.olv-workbench-title { font-size: var(--text-sm); color: var(--text); }
+.olv-workbench-scope {
+  font-size: var(--text-xs); color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.olv-workbench-actions { display: flex; gap: var(--space-xs); flex-shrink: 0; }
+.olv-workbench-btn {
+  font-size: var(--text-xs); color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.04);
+  border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-sm); padding: var(--space-2xs) var(--space-sm);
+}
+.olv-workbench-btn:hover { color: var(--text); }
+.olv-workbench-status {
+  padding: 0 var(--space-md) var(--space-2xs);
+  font-size: var(--text-xs); color: var(--text-faint);
+}
+.olv-workbench-body {
+  display: flex; gap: var(--space-md); min-height: 0; flex: 1;
+  padding: 0 var(--space-md) var(--space-sm);
+}
+.olv-workbench-canvas { flex: 1; min-width: 0; display: block; }
+/* The exact figures for the selected return. A canvas is a picture; this is
+   the readable half of the same information, so it never collapses away. */
+.olv-workbench-detail {
+  width: 216px; flex-shrink: 0; overflow-y: auto;
+  font-size: var(--text-xs); font-variant-numeric: tabular-nums;
+}
+.olv-workbench-detail-row {
+  display: flex; justify-content: space-between; gap: var(--space-sm);
+  padding: var(--space-2xs) 0;
+  border-bottom: 0.5px solid var(--hairline);
+}
+.olv-workbench-detail-key { color: var(--text-faint); }
+.olv-workbench-detail-value { color: var(--text); }
+.olv-workbench-detail-empty { color: var(--text-faint); padding: var(--space-2xs) 0; }
+/* Collapsed shows the header strip only; the body is gone, not merely short. */
+.olv-workbench-collapsed .olv-workbench-body,
+.olv-workbench-collapsed .olv-workbench-status { display: none; }
