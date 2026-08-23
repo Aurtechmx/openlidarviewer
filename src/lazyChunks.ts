@@ -481,3 +481,17 @@ export const loadSessionOwnership = () => import('./io/sessionOwnership');
  * session that carries one. Same hazard as the loaders above.
  */
 export const loadVerifySessionManifest = () => import('./science/verifySessionManifest');
+
+/*
+ * The docked Profile Workbench panel (`src/ui/ProfileWorkbench.ts`) belongs
+ * here too, as
+ *
+ *   export const loadProfileWorkbench = () => import('./ui/ProfileWorkbench');
+ *
+ * and the line lands with the first call site, not before it. A seam nobody
+ * calls is shaken out of this module, no chunk is emitted, and the
+ * chunk-emission guard in vite.config.ts — which derives its required list
+ * from the seams written here — fails the build by name. The panel is
+ * standalone and unreferenced until it is mounted, so the seam is the one part
+ * of it that cannot precede its caller.
+ */
