@@ -186,18 +186,21 @@ that must touch nothing but the pose (`tests/viewStateCoordinator.test.ts`). The
 field order and the present/absent guards stay in `src/io/viewState.ts`.
 `main.ts` keeps five thin delegates and the deps object.
 
-**`src/render/Viewer.ts` (6,457)** — the constructor and a handful of large
+**`src/render/Viewer.ts` (6,420)** — the constructor and a handful of large
 methods dominate:
 
-The count ROSE by 20 in this cycle, the first deliberate growth since the
-shrink-only ratchet was restored, and the baseline was hand-raised to match. The
-Viewer owns the scene exclusively, so derived layers — analytical results drawn
-in 3D rather than only exported — had no way in. `derivedLayerHost()` is that
-way: a structural host (the same shape as the sky and snapshot hosts) that lends
-scene membership and a redraw request, so the overlay module owns its own
-objects and disposal and the Viewer never learns a product's lifecycle. Twenty
-lines to open a subsystem, rather than a per-product method each time. The next
-extraction below still pays it back several times over.
+The count fell by 37 with the profile seam. The constructor held the whole
+profile-sampler walk — eligibility, the streaming gate, the buffer
+concatenation and the sampler call — inline in a callback, where nothing could
+test it without a WebGL context. `src/render/measure/profileSectionSeam.ts`
+owns that walk now and serves the raw section over the same corridor from the
+same eligibility decision, so a chart and the returns under it cannot describe
+different scenes. The Viewer keeps accessors onto what it holds
+(`ProfileSectionSeamDeps`) and the `profileSeam` handle.
+
+An earlier cycle raised the count by 20 for `derivedLayerHost()`, a structural
+host that lends scene membership and a redraw request so an overlay module owns
+its own objects and disposal. That growth is now more than repaid.
 
 Spans below are the symbol's real extent, read from the TypeScript symbol graph
 rather than estimated by pattern-matching — an earlier revision of this table
