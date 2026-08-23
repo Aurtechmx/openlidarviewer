@@ -181,7 +181,14 @@ function main() {
   }
 
   writeFileSync(LOCK, lock, 'utf8');
-  const existing = existsSync(PINS) ? JSON.parse(readFileSync(PINS, 'utf8')) : {};
+  // Read and handle absence in one step. Asking whether the file is there and
+  // then reading it leaves a window in which the answer stops being true.
+  let existing = {};
+  try {
+    existing = JSON.parse(readFileSync(PINS, 'utf8'));
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
   const next = {
     ...existing,
     generatedBy: 'validation/oracles/solve-lock.mjs',
