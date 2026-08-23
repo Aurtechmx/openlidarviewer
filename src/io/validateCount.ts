@@ -51,13 +51,26 @@ export const MIN_BYTES_PER_POINT_FLOOR = 0.01;
 /**
  * Compression ratio above which a LAZ stream is treated as impossible.
  *
- * A committed 120,000-point PDRF 7 fixture compresses 14.8x, and published
- * ratios for airborne survey data sit between 5x and 20x. Degenerate content
- * goes far higher: a node whose points share one classification, one intensity
- * and a near-constant coordinate delta feeds the arithmetic coder almost no
- * entropy, and a bare-earth node on a plane can pass 30x without being
- * malformed in any way. Fifty leaves that headroom while keeping the allocation
- * this guard exists to bound at roughly what it was.
+ * A judgement, not a measurement, and worth saying so. The one figure available
+ * here is a committed 120,000-point PDRF 7 fixture at 14.8x, which is a single
+ * synthetic file. `laz-perf` ships a decoder only, so nothing in this tree can
+ * compress content and report what ratio LAZ actually reaches; settling the
+ * number would take a corpus of real files measured with an encoder.
+ *
+ * What the choice IS grounded in is the bound it leaves behind. This guard is a
+ * sanity check against a header lying by orders of magnitude, not a memory
+ * guarantee: the real ceilings are the per-node point cap and the preflight
+ * memory plan. At one byte per point the output arrays a header could force
+ * ranged from 19x the input bytes for PDRF 0 to 33x for PDRF 3, varying by
+ * format for no reason anyone chose. At `recordLength / 50` the multiple is
+ * 45x to 49x for every format. That is looser, by 1.4x to 2.5x depending on
+ * format, and it is uniform, and it buys back a class of legitimate
+ * high-compression LAZ the flat byte refused.
+ *
+ * Degenerate content is where that matters: a node whose points share one
+ * classification, one intensity and a near-constant coordinate delta feeds the
+ * arithmetic coder almost no entropy, and a bare-earth node on a plane can pass
+ * 30x without being malformed in any way.
  */
 export const MAX_LAZ_COMPRESSION_RATIO = 50;
 

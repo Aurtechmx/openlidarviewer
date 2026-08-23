@@ -125,3 +125,57 @@ describe('validateDeclaredPointCount with a fractional floor', () => {
     }
   });
 });
+
+describe('the allocation bound the ratio leaves behind', () => {
+  /**
+   * `MAX_LAZ_COMPRESSION_RATIO` is a judgement, so the property it was chosen
+   * for is pinned instead of the number. The guard's job is bounding what a
+   * lying header can allocate, and the point of deriving the floor from the
+   * record length is that the bound stops varying by point format.
+   *
+   * Bytes per point are `allocRawPoints`: positions Float32x3, intensity
+   * Uint16, classification, return number and return count Uint8, point source
+   * id Uint16, plus GPS time Float64 and 16-bit colour where the format carries
+   * them.
+   */
+  const FORMATS: readonly { name: string; recordLength: number; perPoint: number }[] = [
+    { name: 'PDRF 0', recordLength: 20, perPoint: 19 },
+    { name: 'PDRF 1', recordLength: 28, perPoint: 27 },
+    { name: 'PDRF 2', recordLength: 26, perPoint: 25 },
+    { name: 'PDRF 3', recordLength: 34, perPoint: 33 },
+    { name: 'PDRF 6', recordLength: 30, perPoint: 27 },
+    { name: 'PDRF 7', recordLength: 36, perPoint: 33 },
+  ];
+
+  /** Output bytes a header can force, as a multiple of the bytes backing it. */
+  function allocationMultiple(recordLength: number, perPoint: number): number {
+    return perPoint / compressedBytesPerPointFloor(recordLength);
+  }
+
+  it('admits the same multiple of the input bytes for every point format', () => {
+    // The flat byte gave 19x for PDRF 0 and 33x for PDRF 3, which is the same
+    // inconsistency as the compression ratio seen from the allocation side.
+    const multiples = FORMATS.map((f) => allocationMultiple(f.recordLength, f.perPoint));
+    const spread = Math.max(...multiples) / Math.min(...multiples);
+    expect(spread).toBeLessThan(1.15);
+  });
+
+  it('stays inside fifty times the bytes that back it', () => {
+    for (const f of FORMATS) {
+      expect(allocationMultiple(f.recordLength, f.perPoint)).toBeLessThan(50);
+    }
+  });
+
+  it('is looser than the flat byte it replaced, by under three times', () => {
+    // Stated rather than hidden. The guard is a sanity check against a header
+    // lying by orders of magnitude, not a memory guarantee, so trading this
+    // much of an already 19x to 33x bound to stop refusing legitimate files is
+    // the deliberate part of the change.
+    for (const f of FORMATS) {
+      const before = f.perPoint / 1;
+      const after = allocationMultiple(f.recordLength, f.perPoint);
+      expect(after).toBeGreaterThan(before);
+      expect(after / before).toBeLessThan(3);
+    }
+  });
+});
