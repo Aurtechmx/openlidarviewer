@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * make-fixtures.mjs — build the frozen point clouds for the rasterisation study.
+ * make-fixtures.mjs: build the frozen point clouds for the rasterisation study.
  *
  * Every scene comes from an explicit closed-form surface plus a deterministic
  * pseudo-random scatter, so the fixture is byte-identical on every machine and

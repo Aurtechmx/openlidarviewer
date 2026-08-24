@@ -38,6 +38,9 @@ geodesy/                 UTM against PROJ and GeographicLib
   fixtures.json          the frozen input matrix
   run-oracles.mjs        oracle-generation job, writes references/
   references/            what the oracles said, committed
+change/                  epoch differencing and change volume against GRASS
+rasterize/               DTM and DSM cell reduction against GRASS r.in.xyz
+statistics/              accuracy statistics recomputed in R
 ```
 
 ## Generation is separate from verification
@@ -77,3 +80,39 @@ and 9.5e-4 m in northing, both on Svalbard fixtures, and takes both signs.
 This is E4 evidence for coordinate conversion, which previously had none. It
 does not touch datum transformation or vertical reference, neither of which
 `latLonToUtm` performs.
+
+## What the rasterisation leg found
+
+The DTM and DSM claims already carried a PDAL `writers.gdal` comparison, and
+that comparison ran with `radius: 0.45` against `resolution: 1` over fixtures
+built one return per cell centre. A search radius below half a cell means each
+output cell sees the one return that belongs to it. The result is a real test
+of grid origin, cell indexing and row order, and the study record says exactly
+that. It is not a test of how a cell holding many returns is reduced to one
+elevation, because no cell ever held many returns.
+
+`rasterize/` asks GRASS `r.in.xyz` the same question with about nine returns in
+every cell. Four synthetic scenes on a 40 by 40 grid of 2 m cells: a plane
+falling in both axes, two incommensurate wavelengths, a ridge carrying a canopy
+on a third of the returns, and a scene whose density runs from a couple of
+returns per cell to thirty-six. Three reductions each: mean and min from
+`rasterizeDtm`, max from `buildDsm`.
+
+Over 19,020 comparable cells the largest single difference is 3.81e-6 m, the
+RMSE per scene and reduction runs from 7.6e-7 m to 2.2e-6 m, and the signed
+bias, candidate minus GRASS, stays between -8.6e-8 m and +6.2e-8 m and takes
+both signs. One float32 step at these elevations is 7.63e-6 m, so the whole
+residual is the candidate's float32 storage of a value GRASS reports in double.
+The tolerance of 5e-5 m was registered before anything was compared and was not
+touched afterwards.
+
+Per-cell return counts match exactly on all 6,400 cells, and both sides name
+the same 60 empty cells.
+
+What it does not show. Binning is not interpolation: agreement on a per-cell
+mean says nothing about an inverse-distance, spline or TIN surface, and nothing
+here touches inpainting or the confidence layer. Neither side applies a search
+radius, which is what makes them comparable and also what puts a radius-based
+estimator out of scope. Median, percentile and robust aggregation are not
+exercised. One cell size, one grid origin, one planar frame. And agreement with
+GRASS is not accuracy against surveyed ground.
