@@ -1363,3 +1363,165 @@ datasets:
     localPath: not-vendored
     controlPointIds: []
     checkpointIds: []
+  - datasetId: OLV-DS-052-SCANCMP-TLS
+    title: "Scanner comparison, terrestrial laser scan of a Czech forest plot"
+    sourceUrl: https://zenodo.org/records/15421291/files/TLS.laz
+    landingPage: https://doi.org/10.5281/zenodo.15421291
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-13
+    sourceSha256: ef0994b8a2ff55691a2df80b247c0ed2a2860be4d7c388d1c459466d462a5e1a
+    sourceBytes: 4823694098
+    format: laz
+    pointCount: 345519873
+    sensorType: tls
+    capturePlatform: tripod
+    captureDate: unknown
+    horizontalCrs: EPSG:5514
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 3430.0
+    terrainClasses: [forest-floor]
+    landCoverClasses: [deciduous-forest, understorey]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
+    citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, TLS.laz. Zenodo. https://doi.org/10.5281/zenodo.15421291"
+    knownLimitations: "The reference instrument of the comparison, so it anchors the other three and is not itself checked against anything but the benchmark table. Carries 16-bit greyscale RGB rather than colour. 4.8 GB, well past what a browser decodes whole, so any use here is a strided or streamed subset and the point count above is the file's, not the sample's."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-053-SCANCMP-ZEB
+    title: "Scanner comparison, handheld SLAM scan of the same plot"
+    sourceUrl: https://zenodo.org/records/15421291/files/ZEB.laz
+    landingPage: https://doi.org/10.5281/zenodo.15421291
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-13
+    sourceSha256: a8a3bc1060a0daaa3e9201537774d5692dbd08e922f64988a92b7509aa5d03a0
+    sourceBytes: 1352809595
+    format: laz
+    pointCount: 141464722
+    sensorType: mls
+    capturePlatform: handheld
+    captureDate: unknown
+    horizontalCrs: EPSG:5514
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 2130.7
+    terrainClasses: [forest-floor]
+    landCoverClasses: [deciduous-forest, understorey]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
+    citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, ZEB.laz. Zenodo. https://doi.org/10.5281/zenodo.15421291"
+    knownLimitations: "A SLAM trajectory, so drift is a property of the capture and the file carries no measure of it. Greyscale RGB. Extent exceeds the other three, so a comparison against them is over their intersection and not over this footprint."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-054-SCANCMP-LA03
+    title: "Scanner comparison, mapry LA03 scan of the same plot"
+    sourceUrl: https://zenodo.org/records/15421291/files/LA03mapry.laz
+    landingPage: https://doi.org/10.5281/zenodo.15421291
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-13
+    sourceSha256: 12a56908deea1b7462d8ca9d6fc7072fd04d1d8ac7eb616311f9c88ee0e2a4e9
+    sourceBytes: 202689686
+    format: laz
+    pointCount: 31566748
+    sensorType: mls
+    capturePlatform: handheld
+    captureDate: unknown
+    horizontalCrs: EPSG:5514
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 879.0
+    terrainClasses: [forest-floor]
+    landCoverClasses: [deciduous-forest, understorey]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
+    citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, LA03mapry.laz. Zenodo. https://doi.org/10.5281/zenodo.15421291"
+    knownLimitations: "The colour array is present and unusable: every one of its 31,566,748 points is exactly grey, mean luminance 242 of 255, and the middle half of the cloud sits at the single value 253, so the luminance interquartile range is zero. Measured on the file, not reported. That makes it a reference case for a colour channel that exists and carries nothing, and useless for anything that needs real colour."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-055-SCANCMP-IPHONE
+    title: "Scanner comparison, iPhone 14 Pro scan of the same plot"
+    sourceUrl: https://zenodo.org/records/15421291/files/iPhone.laz
+    landingPage: https://doi.org/10.5281/zenodo.15421291
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-13
+    sourceSha256: bfa58faa10fd3f8bc573fee8f03bbd8d5c6722bc24550fca550f21b696569e5d
+    sourceBytes: 11725514
+    format: laz
+    pointCount: 2207759
+    sensorType: mls
+    capturePlatform: handheld
+    captureDate: unknown
+    horizontalCrs: EPSG:5514
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: 316.2
+    terrainClasses: [forest-floor]
+    landCoverClasses: [deciduous-forest, understorey]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
+    citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, iPhone.laz. Zenodo. https://doi.org/10.5281/zenodo.15421291"
+    knownLimitations: "Recorded as `mls` because the register's vocabulary has no consumer-phone class, and a phone depth sensor is not a survey mobile scanner; the density and the height span below are the honest separation. The only one of the four in PDRF 7 with a WKT CRS record, and the only one small enough to open whole in a browser. A 4.3 m height span over a 119 m plot, against 93 m for the LA03 scan of the same ground, so it covers the floor and not the canopy."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-056-SCANCMP-GROUNDTRUTH
+    title: "Scanner comparison, surveyed benchmark table for the plot"
+    sourceUrl: https://zenodo.org/records/15421291/files/GroundTruth.xlsx
+    landingPage: https://doi.org/10.5281/zenodo.15421291
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/legalcode
+    redistribution: attribution-required
+    acquisitionDate: 2026-08-13
+    sourceSha256: 76bdc3760ff73a5583b329536cef1a91a1c24f4f1b9ec9b11766d95622ba2a6e
+    sourceBytes: 31392
+    format: other
+    pointCount: not-applicable
+    sensorType: ground-survey
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: EPSG:5514
+    verticalCrs: unknown
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [forest-floor]
+    landCoverClasses: [deciduous-forest]
+    containsIndependentCheckpoints: true
+    checkpointSource: "field survey by the dataset authors, Czech University of Life Sciences Prague"
+    checkpointUseRestriction: none
+    dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
+    citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, GroundTruth.xlsx. Zenodo. https://doi.org/10.5281/zenodo.15421291"
+    knownLimitations: "Two sheets of BM-prefixed benchmark identifiers. Independent of every point cloud above in the sense that a survey produced it, and not independent of the study design, since the same team collected both. Nothing here has been used to validate an OLV claim; it is registered so that a study which does can cite the bytes."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  # ── Committed section-profile set (MEAS-PROFILE corridor cross-check) ──────

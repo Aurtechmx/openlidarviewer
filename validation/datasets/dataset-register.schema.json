@@ -117,7 +117,7 @@
         },
         "capturePlatform": {
           "type": "string",
-          "enum": ["fixed-wing", "helicopter", "uas", "tripod", "vehicle", "backpack", "satellite", "none-synthetic"]
+          "enum": ["fixed-wing", "helicopter", "uas", "tripod", "vehicle", "handheld", "backpack", "satellite", "none-synthetic"]
         },
         "captureDate": {
           "description": "ISO date, an ISO range (`2020-03-01/2022-11-30`) for a multi-season programme, or `not-applicable` for synthetic data.",
