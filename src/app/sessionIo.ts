@@ -59,7 +59,7 @@ export const MAX_SESSION_BYTES = 256 * 1024 * 1024;
 /** The streaming-source slice `scanFactsFromStreaming` reads — a structural subset of {@link StreamingSource}. */
 export interface StreamingScanSource {
   readonly name: string;
-  readonly sourcePointCount: number;
+  readonly sourcePointCount: number | null;
   dataBounds(): readonly [number, number, number, number, number, number];
   crs():
     | { readonly name?: string; readonly epsg?: number; readonly linearUnit?: CrsLinearUnit }
@@ -104,7 +104,9 @@ export function scanFactsFromStreaming(cloud: StreamingScanSource): ScanFacts {
   const crs = cloud.crs();
   return {
     fileName: cloud.name,
-    sourcePoints: cloud.sourcePointCount,
+    // `sourcePoints` is optional in the session schema, so an unknown total
+    // is an absent field rather than a stored zero.
+    sourcePoints: cloud.sourcePointCount ?? undefined,
     width: b[3] - b[0],
     depth: b[4] - b[1],
     height: b[5] - b[2],

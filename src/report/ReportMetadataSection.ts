@@ -16,7 +16,7 @@ import type { ReportDatasetRow } from './types';
 export interface MetadataInputs {
   readonly fileName: string;
   readonly format: 'COPC' | 'EPT' | 'LAS' | 'LAZ' | 'PLY' | 'E57' | 'PCD' | 'PTX' | 'PTS' | 'OBJ' | 'GLTF' | 'XYZ' | (string & {});
-  readonly sourcePointCount: number;
+  readonly sourcePointCount: number | null;
   /** Bounds in metres: width × depth × height. Pass NaN when unknown. */
   readonly width: number;
   readonly depth: number;
@@ -124,7 +124,14 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   rows.push(
     { label: 'File',   value: inputs.fileName },
     { label: 'Format', value: inputs.format },
-    { label: 'Points', value: formatInt(inputs.sourcePointCount) },
+    {
+      label: 'Points',
+      // Unknown, not zero: a source that cannot state its total has not
+      // stated that it is empty.
+      value: inputs.sourcePointCount === null
+        ? 'Unknown from source metadata'
+        : formatInt(inputs.sourcePointCount),
+    },
   );
   // Streaming-preview disclosure — for a COPC / EPT scan exported mid-stream,
   // surface how much of the cloud is actually resident. Reads directly below
@@ -135,7 +142,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   if (sr && Number.isFinite(sr.points) && sr.points > 0) {
     const total = inputs.sourcePointCount;
     const pct =
-      Number.isFinite(total) && total > 0
+      total !== null && Number.isFinite(total) && total > 0
         ? Math.min(100, Math.round((sr.points / total) * 100))
         : Number.NaN;
     const nodePart =
@@ -145,7 +152,10 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     const pctPart = Number.isFinite(pct) ? ` (${pct}%${nodePart})` : '';
     rows.push({
       label: 'Loaded',
-      value: `${formatCompactCount(sr.points)} of ${formatCompactCount(total)} pts${pctPart} — streaming preview`,
+      value:
+        total === null
+          ? `${formatCompactCount(sr.points)} resident, source total unknown — streaming preview`
+          : `${formatCompactCount(sr.points)} of ${formatCompactCount(total)} pts${pctPart} — streaming preview`,
     });
   }
   // FAIL CLOSED on an unconfirmed linear unit. When the CRS declares no real

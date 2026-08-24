@@ -268,6 +268,10 @@ export function signalsForStreamingCloud(cloud: StreamingCloudShape): ScanSignal
   }
   return {
     sourceFormat: cloud.kind,
+    // Unknown collapses to 0 here, which is safe only because every reader of
+    // `pointCount` gates on `> 0` or `> 1_000_000`: an unknown total makes no
+    // claim, exactly as a genuinely empty source makes none. The density above
+    // is left undefined rather than zeroed for the same reason.
     pointCount: cloud.sourcePointCount ?? 0,
     extent,
     densityPerSqM: density,

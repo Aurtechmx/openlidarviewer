@@ -133,8 +133,22 @@ export interface StreamingSource {
   readonly renderOrigin: [number, number, number];
   /** The runtime octree — nodes, state, scoring inputs. */
   readonly octree: StreamingOctreeView;
-  /** Total points in the source — not the displayed (resident) count. */
-  readonly sourcePointCount: number;
+  /**
+   * Total points in the source, or `null` when the source cannot say.
+   *
+   * COPC reads it from the LAS header and EPT from `ept.json`, so both always
+   * know. A 3D Tiles tileset generally does not: the hierarchy names content
+   * URIs, not point totals, and the only way to a total is fetching every tile,
+   * which is the one thing a streaming source must not do to open.
+   *
+   * Null is not zero, and the difference is the whole reason this is nullable.
+   * Zero is a real answer meaning an empty source; null means the question has
+   * no answer yet. A consumer that coerces one to the other reports an empty
+   * scan, a density of zero, or a capture type inferred from a density that was
+   * never measured. {@link residentPointCount} stays a number, because what is
+   * on the GPU is always known.
+   */
+  readonly sourcePointCount: number | null;
   /** Points currently uploaded to the GPU. */
   readonly residentPointCount: number;
 

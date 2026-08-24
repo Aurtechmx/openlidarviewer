@@ -19,7 +19,7 @@ export interface FootprintInput {
   readonly extentY: number;
   readonly extentZ: number;
   /** Total point count the density should reflect (file-scale, not strided). */
-  readonly pointCount: number;
+  readonly pointCount: number | null;
   /** Horizontal CRS unit → metres (1 for a metre CRS, ~0.3048 for feet). */
   readonly linearUnitToMetres?: number;
   /** Vertical unit → metres, when the source declares one distinct from horizontal. */
@@ -125,6 +125,8 @@ export function footprintMetres(input: FootprintInput): Footprint {
   const depthMetres = spanDepth * uH;
   const heightMetres = spanHeight * uV;
   const densityPerM2 =
-    widthMetres > 0 && depthMetres > 0 ? input.pointCount / (widthMetres * depthMetres) : Number.NaN;
+    widthMetres > 0 && depthMetres > 0 && input.pointCount !== null
+      ? input.pointCount / (widthMetres * depthMetres)
+      : Number.NaN;
   return { unitStatus: 'confirmed', widthMetres, depthMetres, heightMetres, densityPerM2 };
 }

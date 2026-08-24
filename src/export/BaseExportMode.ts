@@ -192,7 +192,12 @@ export function baseReportRows(
   const unit = linearUnitOf(adapter.crsLabel()?.unit);
   const uLabel = linearUnitLabel(unit);
   const rows: ScanReportRow[] = [
-    { label: 'Points', value: formatInt(adapter.sourcePointCount()) },
+    {
+      label: 'Points',
+      value: adapter.sourcePointCount() === null
+        ? 'Unknown'
+        : formatInt(adapter.sourcePointCount() as number),
+    },
   ];
   // Extent/density use the TIGHT data AABB (streaming's octree cube inflates
   // height ~7× and deflates density); falls back to the passed AABB.
@@ -207,8 +212,11 @@ export function baseReportRows(
       { label: 'Height', value: formatLinear(h, unit) },
     );
     // Density — points per square unit on the XY footprint.
-    if (w > 0 && d > 0) {
-      const density = adapter.sourcePointCount() / (w * d);
+    const total = adapter.sourcePointCount();
+    // No total, no density. A stamped "0.0 pts/m²" reads as a measurement of an
+    // empty scan rather than as an unanswered question.
+    if (w > 0 && d > 0 && total !== null) {
+      const density = total / (w * d);
       // One decimal, matching the Scan Report panel (`toFixed(0)` rounded
       // 2.586 pts/m² up to "3", disagreeing with the panel's "2.6").
       rows.push({ label: 'Density', value: `${density.toFixed(1)} pts/${uLabel}²` });
