@@ -582,11 +582,14 @@ describe('the sheet prints the same source elevations as the panel', () => {
       await buildProfilePdf({ name: 'Datum section', samples, generatedAt: FIXED_DATE }),
     );
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(samples), 'metric').map((r) => [r.label, r.value]),
+      profileSummaryRows(computeProfileSummary(samples), 'metric', 'orthometric').map((r) => [
+        r.label,
+        r.value,
+      ]),
     );
-    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
-    expect(text).toContain(byLabel.get('Highest point'));
-    expect(text).toContain(byLabel.get('Lowest point'));
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
+    expect(text).toContain(byLabel.get('Highest elevation'));
+    expect(text).toContain(byLabel.get('Lowest elevation'));
     // The heights that reach the sheet are the header's, not the render
     // origin's — and never the centimetres a length formatter made of them.
     expect(text).toContain('348.93 m');
@@ -682,12 +685,12 @@ describe('the sheet refuses a datum it cannot assert', () => {
     expect(text).toContain('conflicting cloud origins');
     // And it agrees with the panel, refusal or not.
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(samples), 'metric', false).map((r) => [
+      profileSummaryRows(computeProfileSummary(samples), 'metric', 'local').map((r) => [
         r.label,
         r.value,
       ]),
     );
-    expect(text).toContain(byLabel.get('Highest point (local height)'));
+    expect(text).toContain(byLabel.get('Highest height (local frame)'));
   });
 
   it('a conflicting origin outranks an orthometric record', async () => {

@@ -153,7 +153,7 @@ describe('profileSummary — zero-length segments, gaps, and missing counts', ()
     ];
     const s = computeProfileSummary(samples);
     expect(Number.isFinite(s.lengthM)).toBe(true);
-    for (const row of profileSummaryRows(s, 'metric')) {
+    for (const row of profileSummaryRows(s, 'metric', 'orthometric')) {
       expect(row.value).not.toMatch(/NaN|Infinity/);
     }
     const rows = profileStationRows(samples, 'metric');
@@ -162,7 +162,7 @@ describe('profileSummary — zero-length segments, gaps, and missing counts', ()
     expect(rows[1].grade).toBe(''); // gap neighbour: blank
     expect(rows[2].elevation).toBe(''); // gap: blank elevation
     expect(rows[0].points).toBe(''); // pre-v0.4.5 series: no fabricated 0
-    const csv = buildProfileCsv(samples, 'imperial');
+    const csv = buildProfileCsv(samples, 'imperial', 'orthometric');
     expect(csv).not.toMatch(/NaN|Infinity/);
     expect(csv.trim().split('\n')).toHaveLength(5); // header + 4 stations
   });

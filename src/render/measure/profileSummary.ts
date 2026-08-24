@@ -2,8 +2,8 @@
  * profileSummary.ts
  *
  * Profile Intelligence — the civil headline numbers an engineer reads off a
- * section before anything else: length, elevation gain/loss, average and
- * maximum grade, the steepest station range, and the highest/lowest points.
+ * section before anything else: length, height gain/loss, average and maximum
+ * grade, the steepest station range, and the highest/lowest heights.
  * Pure data over the already-sampled height-vs-distance series; no DOM, no
  * three.js, unit-tested with hand-computed fixtures.
  *
@@ -22,6 +22,12 @@
 import type { ProfileChartSample, UnitSystem } from './types';
 import { formatStationing, formatGradePercent } from './civilProfileStats';
 import { formatElevation, formatLength } from './format';
+// Height headings come from one vocabulary, where "Elevation" is earned by an
+// orthometric reference and by nothing else. The panel, the station table, the
+// CSV and the sheet all label from here, so no two of them can name the same
+// number differently.
+import { heightLabel } from '../../geo/height';
+import type { VerticalReference } from '../../geo/height';
 
 const FEET_PER_METRE = 3.280839895013123;
 
@@ -233,24 +239,29 @@ export interface ProfileSummaryRow {
  * The summary as label/value display rows, honouring the unit system — the
  * single formatting source for the panel block and the PDF so the two can
  * never disagree on a number.
+ *
+ * `reference` is REQUIRED. It used to be a `datumKnown` boolean defaulting to
+ * `true`, which is fail-open in the worst direction: a caller that omitted it
+ * got the strongest claim on the page. Resolve it once with
+ * `resolveProfileVerticalReference` and pass it in.
  */
 export function profileSummaryRows(
   s: ProfileSummaryData,
   system: UnitSystem,
-  datumKnown = true,
+  reference: VerticalReference,
 ): ProfileSummaryRow[] {
-  // Without a datum the figure is a local render height, so the row says that
-  // rather than calling it an elevation. The number is unchanged and still
+  // The two absolute rows are the only ones that need a reference, and they
+  // take their word from `heightLabel`: an undeclared datum reads "height
+  // (datum unknown)", never "elevation". The numbers are unchanged and still
   // useful — every row above these two is a difference, and a difference never
-  // needed the datum.
-  const point = (which: string): string =>
-    datumKnown ? `${which} point` : `${which} point (local height)`;
+  // needed the datum, which is why the gain/loss row names no reference at all.
+  const heightWord = heightLabel(reference).toLowerCase();
   const len = (m: number | null): string => (m == null ? '—' : formatLength(m, system));
   const extreme = (e: ProfileExtreme | null): string => formatProfileExtreme(e, system);
   return [
     { label: 'Length', value: len(s.lengthM) },
     {
-      label: 'Elevation gain / loss',
+      label: 'Height gain / loss',
       value: s.gainM == null || s.lossM == null ? '—' : `+${len(s.gainM)} / −${len(s.lossM)}`,
     },
     { label: 'Avg grade', value: formatGradePercent(s.averageGrade) },
@@ -264,8 +275,8 @@ export function profileSummaryRows(
             `${formatStation(s.steepest.toChainage, system)} ` +
             `(${formatGradePercent(s.steepest.grade)})`,
     },
-    { label: point('Highest'), value: extreme(s.highest) },
-    { label: point('Lowest'), value: extreme(s.lowest) },
+    { label: `Highest ${heightWord}`, value: extreme(s.highest) },
+    { label: `Lowest ${heightWord}`, value: extreme(s.lowest) },
   ];
 }
 
@@ -322,28 +333,54 @@ export function profileStationRows(
 }
 
 /**
+ * The height column's name for a reference, as a spreadsheet-safe token.
+ *
+ * A machine reader keys on this string, so it is a stable identifier rather
+ * than a rendering of {@link heightLabel} — but it draws the same distinction:
+ * only an orthometric reference is named `elevation`, and an undeclared datum
+ * says so in the column name rather than borrowing one.
+ */
+function heightColumnToken(reference: VerticalReference): string {
+  switch (reference) {
+    case 'orthometric':
+      return 'elevation';
+    case 'ellipsoidal':
+      return 'ellipsoidal_height';
+    case 'depth':
+      return 'depth';
+    case 'local':
+      return 'local_height';
+    case 'unknown':
+      return 'height_datum_unknown';
+  }
+}
+
+/**
  * Build the profile station CSV — the data export the PDF-only station table
  * left missing. One row per station: civil station label, chainage, ground
- * elevation, the corridor point count behind the estimate (blank for samples
+ * height, the corridor point count behind the estimate (blank for samples
  * recorded before v0.4.5 stored counts), and the grade to the next station.
  * Gap stations keep their row with elevation/grade blank — the row count
  * always matches the sample count so downstream joins line up.
  *
- * Headers carry the unit (`_m` / `_ft`) so a spreadsheet never has to guess;
- * values are converted to that unit. Grade is dimensionless percent.
- * Row content comes from `profileStationRows` — the same model the in-panel
- * station table renders.
+ * Headers carry the unit (`_m` / `_ft`) so a spreadsheet never has to guess,
+ * and the height column carries its REFERENCE for the same reason — a machine
+ * reader must not have to assume `elevation_m` meant a sea-level datum.
+ * Values are converted to that unit; grade is dimensionless percent. Row
+ * content comes from `profileStationRows` — the same model the in-panel
+ * station table renders. `reference` is required, for the same fail-open
+ * reason as {@link profileSummaryRows}.
  */
 export function buildProfileCsv(
   samples: ReadonlyArray<ProfileChartSample>,
   system: UnitSystem,
-  datumKnown = true,
+  reference: VerticalReference,
 ): string {
   const unit = system === 'metric' ? 'm' : 'ft';
-  // A refused datum renames the column; it must NOT blank it. A blank already
-  // means "the corridor saw no points here", and spending that signal on a
-  // different problem would trade one silent wrong answer for another.
-  const heightCol = datumKnown ? `elevation_${unit}` : `local_height_${unit}`;
+  // An unearned reference renames the column; it must NOT blank it. A blank
+  // already means "the corridor saw no points here", and spending that signal
+  // on a different problem would trade one silent wrong answer for another.
+  const heightCol = `${heightColumnToken(reference)}_${unit}`;
   const lines: string[] = [
     `station,chainage_${unit},${heightCol},points,grade_to_next_pct`,
   ];
