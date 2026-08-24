@@ -5,7 +5,11 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { geodesicFill } from '../src/terrain/ground/geodesicFill';
+import {
+  geodesicFill,
+  geodesicFillWithReport,
+  GEODESIC_PROBE_VOIDS,
+} from '../src/terrain/ground/geodesicFill';
 import { idwFill } from '../src/terrain/ground/idwFill';
 
 describe('geodesicFill', () => {
@@ -90,5 +94,225 @@ describe('geodesicFill', () => {
       2, 1, {},
     );
     expect(empty.every((v) => Number.isNaN(v))).toBe(true);
+  });
+});
+
+/**
+ * A grid of alternating measured and void tiles, the shape that makes the pass
+ * expensive: a void in the middle of a tile has to expand most of its search
+ * window before it reaches twelve measured cells, while a void beside measured
+ * ground reaches them in a step.
+ */
+function tiledGrid(cols: number, rows: number, tile: number): {
+  z: Float32Array; had: Uint8Array;
+} {
+  const n = cols * rows;
+  const z = new Float32Array(n);
+  const had = new Uint8Array(n).fill(1);
+  for (let i = 0; i < n; i++) {
+    const r = (i / cols) | 0, c = i - r * cols;
+    z[i] = 40 * Math.sin(c / 60) + 25 * Math.cos(r / 45);
+    if ((((r / tile) | 0) + ((c / tile) | 0)) % 2 === 1) { had[i] = 0; z[i] = Number.NaN; }
+  }
+  return { z, had };
+}
+
+describe('geodesicFill cost bound', () => {
+  it('reports what it spent and what it projected', () => {
+    const { z, had } = tiledGrid(64, 64, 8);
+    const { report } = geodesicFillWithReport(z, had, 64, 64, { cellMetresX: 1 });
+    expect(report.voids).toBeGreaterThan(0);
+    expect(report.abandoned).toBe(false);
+    expect(report.stoppedBy).toBeNull();
+    expect(report.nodesExpanded).toBeGreaterThan(0);
+    expect(report.projectedNodes).toBeGreaterThan(0);
+  });
+
+  it('projects the whole pass to within a few per cent of what it costs', () => {
+    // The projection is the decision, so a probe that misread the grid would
+    // abandon a cheap pass or run an expensive one.
+    const { z, had } = tiledGrid(160, 160, 16);
+    const { report } = geodesicFillWithReport(z, had, 160, 160, {
+      cellMetresX: 1, nodeBudget: 1e15,
+    });
+    const ratio = report.projectedNodes / report.nodesExpanded;
+    expect(ratio).toBeGreaterThan(0.9);
+    expect(ratio).toBeLessThan(1.1);
+  });
+
+  it('abandons the geodesic pass when the projection exceeds the budget', () => {
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { report } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    expect(report.abandoned).toBe(true);
+    expect(report.stoppedBy).toBe('projection');
+    expect(report.projectedNodes).toBeGreaterThan(1);
+  });
+
+  it('leaves every void at the Euclidean prefill when it abandons', () => {
+    // All or nothing: the probe's geodesic values are discarded so the surface
+    // is one interpolant throughout, not geodesic in the cells sampled first.
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { z: out } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    const euclidean = idwFill(z, had, 96, 96, { power: 2, kNearest: 12, maxRadiusCells: 24 });
+    for (let i = 0; i < out.length; i++) {
+      if (had[i] === 1) continue;
+      if (!Number.isFinite(euclidean[i])) continue;
+      expect(out[i]).toBe(euclidean[i]);
+    }
+  });
+
+  it('keeps measured cells verbatim on the abandoned path too', () => {
+    const { z, had } = tiledGrid(96, 96, 12);
+    const { z: out } = geodesicFillWithReport(z, had, 96, 96, {
+      cellMetresX: 1, nodeBudget: 1,
+    });
+    for (let i = 0; i < out.length; i++) if (had[i] === 1) expect(out[i]).toBe(z[i]);
+  });
+
+  it('gives the same answer every run, probe included', () => {
+    const a = tiledGrid(80, 80, 10);
+    const b = tiledGrid(80, 80, 10);
+    const ra = geodesicFillWithReport(a.z, a.had, 80, 80, { cellMetresX: 1 });
+    const rb = geodesicFillWithReport(b.z, b.had, 80, 80, { cellMetresX: 1 });
+    expect([...rb.z]).toEqual([...ra.z]);
+    expect(rb.report).toEqual(ra.report);
+  });
+
+  it('solves every void exactly once, so the probe is not repeated work', () => {
+    // A void solved twice would double the pops for no change in the answer.
+    const { z, had } = tiledGrid(40, 40, 5);
+    const strided = geodesicFillWithReport(z, had, 40, 40, { cellMetresX: 1 });
+    const unstrided = geodesicFillWithReport(z, had, 40, 40, {
+      cellMetresX: 1,
+      // One probe void, so nearly every void is solved in the second loop.
+      nodeBudget: 1e15,
+    });
+    expect([...strided.z]).toEqual([...unstrided.z]);
+    expect(strided.report.voids).toBeLessThanOrEqual(GEODESIC_PROBE_VOIDS * 1000);
+  });
+
+  it('is unchanged for a grid small enough that the probe covers it', () => {
+    // Under GEODESIC_PROBE_VOIDS voids the stride is 1 and the probe solves
+    // everything, which must still equal what the plain entry point returns.
+    const { z, had } = tiledGrid(30, 30, 6);
+    const viaReport = geodesicFillWithReport(z, had, 30, 30, { cellMetresX: 1 }).z;
+    expect([...geodesicFill(z, had, 30, 30, { cellMetresX: 1 })]).toEqual([...viaReport]);
+  });
+});
+
+describe('geodesicFill runtime backstop', () => {
+  /**
+   * One contiguous gap covering the right of the grid. This is the shape the
+   * probe reads worst: cost per void spans two orders of magnitude between the
+   * gap edge and its interior, and a strided sample of that distribution comes
+   * out low. Measured across 24 void morphologies the median projection error
+   * is 0.5% and the worst is 36%, and every case that misses badly has this
+   * shape. It is therefore the only fixture in which the BACKSTOP, rather than
+   * the projection, is what stops the pass.
+   */
+  function oneGap(cols: number, rows: number, frac: number): {
+    z: Float32Array; had: Uint8Array;
+  } {
+    const n = cols * rows;
+    const z = new Float32Array(n);
+    const had = new Uint8Array(n).fill(1);
+    for (let i = 0; i < n; i++) {
+      const r = (i / cols) | 0, c = i - r * cols;
+      z[i] = 40 * Math.sin(c / 17) + 25 * Math.cos(r / 13);
+      if (c > cols * frac) { had[i] = 0; z[i] = Number.NaN; }
+    }
+    return { z, had };
+  }
+
+  const COLS = 200, ROWS = 200;
+  const grid = oneGap(COLS, ROWS, 0.6);
+  const uncapped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+    cellMetresX: 1, nodeBudget: 1e15,
+  });
+
+  it('under-estimates on this fixture, which is what the backstop is for', () => {
+    // If the projection ever became exact here the tests below would pass
+    // through the projection's own abandon path and stop testing anything.
+    expect(uncapped.report.projectedNodes).toBeLessThan(uncapped.report.nodesExpanded);
+  });
+
+  it('stops at the ceiling when the projection said the pass would fit', () => {
+    // Above the projection, below the real cost: the pass starts, and only the
+    // backstop can end it.
+    const budget = Math.floor(
+      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
+    );
+    expect(budget).toBeGreaterThan(uncapped.report.projectedNodes);
+    expect(budget).toBeLessThan(uncapped.report.nodesExpanded);
+    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+      cellMetresX: 1, nodeBudget: budget,
+    });
+    expect(capped.report.abandoned).toBe(true);
+    expect(capped.report.stoppedBy).toBe('ceiling');
+    expect(capped.report.nodesExpanded).toBeLessThan(uncapped.report.nodesExpanded);
+  });
+
+  it('leaves the Euclidean prefill everywhere when it fires', () => {
+    const budget = Math.floor(
+      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
+    );
+    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+      cellMetresX: 1, nodeBudget: budget,
+    });
+    // Not a partly geodesic surface: the fallback covers every void, so the
+    // grid is one interpolant and carries no seam.
+    const euclidean = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+      cellMetresX: 1, nodeBudget: 1,
+    }).z;
+    expect([...capped.z]).toEqual([...euclidean]);
+  });
+
+  it('overshoots by at most one void search, not by the rest of the grid', () => {
+    const budget = Math.floor(
+      (uncapped.report.projectedNodes + uncapped.report.nodesExpanded) / 2,
+    );
+    const capped = geodesicFillWithReport(grid.z, grid.had, COLS, ROWS, {
+      cellMetresX: 1, nodeBudget: budget,
+    });
+    // The check runs between voids, so the search in flight is the overshoot.
+    // One void expands at most its whole window, each cell pushed a bounded
+    // number of times.
+    const oneVoidCeiling = (2 * 24 + 1) ** 2 * 8;
+    expect(capped.report.nodesExpanded).toBeLessThanOrEqual(budget + oneVoidCeiling);
+  });
+});
+
+describe('geodesicFill is independent of the order voids are solved in', () => {
+  /**
+   * The probe solves a strided sample before the rest, so the visit order now
+   * depends on the sample size. Each void reads the prefilled surface and
+   * writes only its own cell, so the order cannot matter, and this is the
+   * assertion that keeps it that way: a future change that let one void's
+   * result feed another would show up here and nowhere else.
+   */
+  it('gives the same surface at every probe size', () => {
+    const { z, had } = tiledGrid(70, 70, 7);
+    const reference = geodesicFillWithReport(z, had, 70, 70, {
+      cellMetresX: 1.3, cellMetresY: 0.7, verticalUnitToMetres: 1.1, probeVoids: 1,
+    });
+    for (const probeVoids of [2, 3, 17, 200, 5000]) {
+      const other = geodesicFillWithReport(z, had, 70, 70, {
+        cellMetresX: 1.3, cellMetresY: 0.7, verticalUnitToMetres: 1.1, probeVoids,
+      });
+      expect([...other.z]).toEqual([...reference.z]);
+      expect(other.report.nodesExpanded).toBe(reference.report.nodesExpanded);
+    }
+  });
+
+  it('gives the same surface when the probe covers every void', () => {
+    // Stride 1: the probe solves everything and the second loop does nothing.
+    const { z, had } = tiledGrid(50, 50, 5);
+    const strided = geodesicFillWithReport(z, had, 50, 50, { cellMetresX: 1, probeVoids: 9 });
+    const whole = geodesicFillWithReport(z, had, 50, 50, { cellMetresX: 1, probeVoids: 1e6 });
+    expect([...whole.z]).toEqual([...strided.z]);
   });
 });
