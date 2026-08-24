@@ -43,9 +43,16 @@ function length(v: Vec3): number {
   return Math.hypot(v[0], v[1], v[2]);
 }
 function normalize(v: Vec3): Vec3 {
+  // One check covers every degenerate axis, because each divides to a
+  // non-finite component: a zero length gives 0/0, an infinite one gives
+  // Infinity/Infinity, and a NaN component stays NaN. The alternative is a
+  // NaN unit vector, which every dot product downstream carries silently into
+  // a height, a chainage and a corridor distance.
   const len = length(v);
-  if (len === 0) return [0, 0, 0];
-  return [v[0] / len, v[1] / len, v[2] / len];
+  const out: Vec3 = [v[0] / len, v[1] / len, v[2] / len];
+  return Number.isFinite(out[0]) && Number.isFinite(out[1]) && Number.isFinite(out[2])
+    ? out
+    : [0, 0, 0];
 }
 
 /** The resolved geometry of one section line. All vectors are in render space. */
