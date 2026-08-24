@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "RASTERIZE-GRASS-RINXYZ-2026-08",
+  "claims": ["DTM", "DSM"],
+  "quantity": "Per-cell reduction of a scattered point cloud onto a fixed grid: the mean and the minimum of the returns in a cell for the terrain side, and the maximum for the surface side, together with the number of returns each cell received.",
+  "whyThisStudyExists": "The DTM and DSM claims already carry a PDAL writers.gdal leg, and that leg was run with radius 0.45 against resolution 1. A search radius below half the cell size means each output cell sees essentially the one return that belongs to it, and the fixtures were built one return per cell centre to make that exact. That comparison is a real test of grid origin, cell indexing and row order, and its own record says so. It is not a test of how either side reduces MANY returns inside one cell, because there were never many. This study puts about nine returns in every cell and asks a rasteriser from a different lineage the same question.",
+  "candidate": [
+    {
+      "function": "rasterizeDtm",
+      "module": "src/terrain/ground/rasterizeDtm.ts",
+      "aggregations": ["mean", "min"],
+      "note": "The production function, given an all-ones ground mask so every return is offered. The harness serialises inputs and reads outputs; it reproduces no part of the binning or the reduction."
+    },
+    {
+      "function": "buildDsm",
+      "module": "src/terrain/surface/buildDsm.ts",
+      "aggregations": ["max"],
+      "note": "The production surface rasteriser, which takes the highest return per cell. rasterizeDtm has no max mode, so the surface side is the function that actually ships it."
+    }
+  ],
+  "oracles": [
+    {
+      "oracleId": "grass-8.5.0",
+      "role": "independent-same-quantity-implementation",
+      "invocation": "g.region pinned to the fixture grid; r.in.xyz method=mean|min|max|n, separator=comma, type=DCELL; r.out.ascii precision=12 null_value=nan",
+      "parameterEquivalence": "The same grid origin, cell size, column count and row count on both sides, and the same input file parsed to the same doubles. type=DCELL keeps the reference in double precision so the residual is the candidate's float32 storage rather than the reference's accumulation."
+    }
+  ],
+  "truth": {
+    "kind": "generator-truth",
+    "note": "Every scene is a closed-form surface sampled by a deterministic generator, so the per-cell occupancy is known from construction. Occupancy is checked against it. The per-cell mean, min and max are not independently derivable in closed form once the scatter is random, so for those quantities this study is cross-implementation evidence and nothing more."
+  },
+  "grid": {
+    "cols": 40,
+    "rows": 40,
+    "cellSizeM": 2,
+    "originH1": 0,
+    "originH2": 0,
+    "meanReturnsPerFilledCell": 9,
+    "whyThisDensity": "Nine returns per cell is where mean, min and max are three different numbers. At one return per cell they collapse into one number and the comparison silently degenerates into the indexing test this study was written to go beyond."
+  },
+  "metrics": {
+    "toleranceAbsM": 0.00005,
+    "toleranceUnit": "metre",
+    "toleranceBasis": "Derived from the candidate's storage, not from any observed residual. DemRaster.z and SurfaceGrid.z are Float32Array, so an elevation is held to a 24-bit mantissa. Every fixture elevation sits under 128 m, where one float32 step is 7.63e-6 m. The gate sits about six steps above that. GRASS computes and reports in double, so anything larger than a few float32 steps is a semantic difference rather than rounding.",
+    "cellCountsExact": true,
+    "cellCountsExactReason": "Returns per cell and which cells are empty are integers produced by the same binning rule on both sides. A disagreement there is a rule difference, not arithmetic, and must fail.",
+    "requiredWithinToleranceFraction": 1,
+    "minimumComparableCells": 6000,
+    "reported": ["maxAbsDiff", "rmse", "signedBias", "withinToleranceFraction"]
+  },
+  "decisionRule": "For each scene and each of mean, min and max, every comparable cell must lie within the registered tolerance, and the per-cell return counts and the empty-cell set must match exactly. One failure fails the study.",
+  "scopeLimits": [
+    "Binning is not interpolation. Agreement on a per-cell mean says nothing about an inverse-distance, spline or TIN surface. Nothing here touches the candidate's inpainting, its confidence layer, or any surface built from the raster.",
+    "No search radius is exercised on either side. r.in.xyz reduces the returns that fall inside a cell and nothing else, which is the same rule rasterizeDtm and buildDsm apply, so the two are comparable exactly because neither has a neighbourhood radius. A radius-based estimator such as PDAL writers.gdal computes a different quantity and this study says nothing about it.",
+    "Three reductions only. The candidate's median, percentile and robust modes are not exercised, and the quantile convention they use is a separate question with its own known divergence between implementations.",
+    "One cell size, one grid origin, one CRS-free planar frame. Nothing here says anything about rotated grids, geographic coordinates, or a cell size at which the candidate's grid budget intervenes.",
+    "Scattered returns are drawn away from cell boundaries only by chance, not by construction, so tie-breaking exactly on a boundary is untested. A point landing on a shared edge is a measure-zero event for these generators and neither side's convention for it is measured.",
+    "Agreement with GRASS is not accuracy against ground truth. No surveyed elevation is involved, so this cannot support field-grade evidence.",
+    "Synthetic fixtures generated from an explicit rule. No external dataset is cited and no licence is relied on."
+  ],
+  "freezeStatus": "preregistered",
+  "freezeStatusReason": "toleranceAbsM, the decision rule, the required fraction and the exact-count rule were written into this file and committed before any residual was computed. The reference JSON was generated first, but nothing compared it to the candidate until the tolerance was fixed."
+}
