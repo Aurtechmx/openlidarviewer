@@ -14,6 +14,7 @@
  * repository happens to contain today. The committed register is checked by the
  * CLI in the release gate; these cases are about the rules themselves.
  */
+// lint-dataset-citations: synthetic-ids — the ids below are fixtures, not records.
 
 import { describe, it, expect } from 'vitest';
 
