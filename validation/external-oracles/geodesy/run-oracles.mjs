@@ -73,11 +73,17 @@ const versionOf = {
  * would notice that a grid had silently entered the path.
  */
 const operationCache = new Map();
+/**
+ * Resolved through `which` once, so the spawn names an absolute path rather
+ * than leaning on whatever PATH happens to hold, and so the record says which
+ * binary actually answered.
+ */
+const PROJINFO = resolveExe('projinfo');
 function projOperationFor(sourceCrs, targetCrs) {
   const key = `${sourceCrs}->${targetCrs}`;
   if (operationCache.has(key)) return operationCache.get(key);
 
-  const r = spawnSync('projinfo', ['-s', sourceCrs, '-t', targetCrs, '-o', 'PROJ', '--summary'], {
+  const r = spawnSync(PROJINFO, ['-s', sourceCrs, '-t', targetCrs, '-o', 'PROJ', '--summary'], {
     encoding: 'utf8',
   });
   const text = r.stdout ?? '';
@@ -185,6 +191,7 @@ const record = {
       commandLine: `cs2cs -f %.${METRE_DIGITS}f EPSG:4326 EPSG:<326|327><zone>`,
       zoneSource: 'geographiclib-2.7',
       operationSource: 'projinfo -s EPSG:4326 -t EPSG:<zone> -o PROJ --summary',
+      operationExecutablePath: PROJINFO,
       operationsSelected: [...operationCache.entries()]
         .map(([pair, op]) => ({ pair, selected: op.selected, name: op.name, accuracy: op.accuracy, candidates: op.candidateCount }))
         .sort((a, b) => a.pair.localeCompare(b.pair)),

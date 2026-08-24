@@ -26,6 +26,7 @@
       "commandLine": "cs2cs -f %.9f EPSG:4326 EPSG:<326|327><zone>",
       "zoneSource": "geographiclib-2.7",
       "operationSource": "projinfo -s EPSG:4326 -t EPSG:<zone> -o PROJ --summary",
+      "operationExecutablePath": "/opt/homebrew/bin/projinfo",
       "operationsSelected": [
         {
           "pair": "EPSG:4326->EPSG:32601",
