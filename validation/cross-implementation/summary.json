@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 16,
-  "countedStudies": 15,
+  "studiesRead": 17,
+  "countedStudies": 16,
   "byStatus": {
-    "agree": 14,
+    "agree": 15,
     "partial": 1
   },
   "byClaim": {
@@ -87,6 +87,18 @@
       ],
       "parameterSetIds": [
         "PS-CONTOUR-GDAL-0P5M"
+      ]
+    },
+    "CRS-UTM-PROJECTION": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-076-GEODESY-UTM-FIXTURES"
+      ],
+      "parameterSetIds": [
+        "PS-UTM-WGS84-ZONE-AUTO"
       ]
     },
     "DSM": {
@@ -224,10 +236,10 @@
     }
   },
   "agreement": {
-    "denominator": 15,
+    "denominator": 16,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 14,
-    "fraction": 0.9333333333333333
+    "agree": 15,
+    "fraction": 0.9375
   },
   "excludedFromCounts": [
     {
