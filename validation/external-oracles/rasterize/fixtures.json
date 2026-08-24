@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "validation/external-oracles/rasterize/make-fixtures.mjs",
+  "grid": {
+    "originH1": 0,
+    "originH2": 0,
+    "cols": 40,
+    "rows": 40,
+    "cellSizeM": 2
+  },
+  "separator": "comma",
+  "columns": "x,y,z",
+  "note": "Grid origin is the south-west corner. Row 0 of a candidate raster is the SOUTHERNMOST row; GRASS ASCII output starts at the north, so one side is flipped when the two are compared.",
+  "cases": [
+    {
+      "id": "R01-tilted-plane",
+      "why": "A plane falling in both axes. Within one 2 m cell the surface spans 0.26 m, so mean, min and max are three different numbers and a grid shifted by one cell moves every value.",
+      "pointsFile": "points/R01-tilted-plane.xyz",
+      "pointCount": 14400,
+      "pointsSha256": "sha256:202cf71351edfd5290e2ba31f4a89495c2b74f137ab0cbfc3575be6db89b9603",
+      "filledCells": 1599,
+      "emptyCells": 1,
+      "meanPointsPerFilledCell": 9.00562851782364,
+      "maxPointsInOneCell": 18
+    },
+    {
+      "id": "R02-rolling-incommensurate",
+      "why": "Two wavelengths with no common period, so no translation of the grid maps the surface onto itself and a one-cell error cannot cancel.",
+      "pointsFile": "points/R02-rolling-incommensurate.xyz",
+      "pointCount": 14400,
+      "pointsSha256": "sha256:7fb074106909ede985649e2e5395666aa218677f26286f65a5711dfd393e2ef6",
+      "filledCells": 1600,
+      "emptyCells": 0,
+      "meanPointsPerFilledCell": 9,
+      "maxPointsInOneCell": 19
+    },
+    {
+      "id": "R03-ridge-with-canopy",
+      "why": "A V ridge carrying a canopy on roughly a third of the returns. The within-cell spread reaches several metres, which is where min and max stop being a restatement of the mean and start testing which return each side selected.",
+      "pointsFile": "points/R03-ridge-with-canopy.xyz",
+      "pointCount": 14400,
+      "pointsSha256": "sha256:4962ff324f2064b97fe3723be31bc6810eeb8e8c5b5637f693e64a201ca8c79f",
+      "filledCells": 1598,
+      "emptyCells": 2,
+      "meanPointsPerFilledCell": 9.011264080100124,
+      "maxPointsInOneCell": 22
+    },
+    {
+      "id": "R04-variable-density",
+      "why": "Returns concentrated toward one side so cell occupancy runs from a couple of returns to several dozen. A per-cell reduction that is right at nine returns and wrong at forty fails here and nowhere else.",
+      "pointsFile": "points/R04-variable-density.xyz",
+      "pointCount": 14400,
+      "pointsSha256": "sha256:971d1c14af53542ecae0925e027d984cfa10b0e61dc0ea3ab701e5fd88994363",
+      "filledCells": 1543,
+      "emptyCells": 57,
+      "meanPointsPerFilledCell": 9.33246921581335,
+      "maxPointsInOneCell": 36
+    }
+  ]
+}
