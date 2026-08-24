@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
+import { railChromeSettled, expectHittable } from './helpers';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
@@ -156,7 +157,10 @@ test('two georeferenced tiles mount into one frame at their real separation', as
 
   await dropBytes(page, bytesB, 'utm33-b.las');
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await page.waitForTimeout(500); // frame reconcile + health render
+  // Layer Health renders its own rows off the reconciled frame, so wait for
+  // both cards rather than for a duration.
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await railChromeSettled(page);
 
   const layers = await readLayerHealth(page);
 
@@ -208,7 +212,8 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
   await dropBytes(page, bytesB, 'utm33-b.las');
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await page.waitForTimeout(500);
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await railChromeSettled(page);
 
   const withBoth = await readLayerHealth(page);
   const aWithBoth = withBoth.find((l) => l.name.includes('utm33-a'));
@@ -219,10 +224,17 @@ test('the surviving layer does not move when a sibling is added or removed (#2)'
     `A offset after B added was "${aWithBoth!.offsetToProject}"`,
   ).toBe(true);
 
-  // Remove B from the scene.
-  await page.getByRole('button', { name: 'Remove utm33-b.las' }).click();
+  // Remove B from the scene. The rail entrance translates `.olv-ws-body` and
+  // everything in it, and this control clears the scroller's client edge by
+  // 4px, so the click waits for the entrance to finish and for the button to
+  // be the element actually hit at its own centre.
+  const removeB = page.getByRole('button', { name: 'Remove utm33-b.las' });
+  await railChromeSettled(page);
+  await expectHittable(removeB);
+  await removeB.click();
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
-  await page.waitForTimeout(300);
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(1, { timeout: 20_000 });
+  await railChromeSettled(page);
 
   const afterRemove = await readLayerHealth(page);
   const aAfter = afterRemove.find((l) => l.name.includes('utm33-a'));
@@ -273,7 +285,8 @@ test('a coordinate read from the mounted non-anchor layer is in the project fram
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
   await dropBytes(page, bytesB, 'utm33-b.las');
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await page.waitForTimeout(500); // frame reconcile
+  await expect(page.locator('.olv-layerhealth-layer')).toHaveCount(2, { timeout: 20_000 });
+  await railChromeSettled(page);
 
   // Point 0 of each tile is its own origin corner: tileAt puts i=0 at (ox, oy).
   const pts = await page.evaluate(() => {
