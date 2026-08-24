@@ -314,6 +314,41 @@ claims:
         - "The section ends AT THE STRENGTH OF THE PREREGISTERED STUDY. The end-cap comparison is real and independent, run through the same SpatiaLite and R pipeline, but its fixture and its result were written in the same change, so its tolerance is carried over from PROTO-PROFILE-OGR-R-CORRIDOR rather than frozen ahead of it. It also has no study manifest under validation/cross-implementation/studies/, because an honest freeze record needs the commit that landed it."
     scopeNote: "The profile samples the raw cloud along a corridor around the section line and reduces each bin to a type-7 percentile of the heights inside it (src/render/measure/profileSampler.ts). No single tool exposes that operation, but its two halves are each somebody else's implementation: OGR's SpatiaLite functions place every point on the line (ST_Line_Locate_Point, ST_Distance) and R's quantile(type = 7) reduces each station, so the reference is assembled from two independent tools rather than written here. On the analytic ramp the expected series also has a closed form, because ten corridor elevations in an exact arithmetic progression reduce to first + step·(p/100)·(n−1) with no sort and no order statistic, which is what keeps that leg from being a second copy of the reduction under test. The comparison covers the corridor gate AWAY FROM THE ENDS, the classification gate, the nearest-station binning, the type-7 reduction at two percentiles and the reporting of empty stations as gaps. ST_Distance measures to a finite segment, so the reference corridor has always closed with a half-disc at each end; through v0.6.5 the sampler's own gate was a rectangle with square ends, and the ramp and scatter fixtures could not tell the two apart because their beyond-the-end returns sit 10 m and 8 m out against bands of 2.5 m and 1.75 m. The study record named that gap in its own scope.unsupported and did not claim generic ST_Distance equivalence. v0.6.6 fixed the gate and added a supplementary end-cap fixture whose returns sit in the disputed region, where the sampler now matches the same reference exactly. The comparison still does not cover a point close enough to a bin boundary or the corridor edge that two projection implementations could place it differently, and it says nothing about accuracy against a surveyed section, which is E5."
 
+  # ── Coordinate reference frame ──────────────────────────────────────────────
+  - claimId: CRS-UTM-PROJECTION
+    product: UTM projection of a geodetic coordinate
+    algorithm: Transverse Mercator series with UTM zone selection, including the Norway and Svalbard exception zones
+    algorithmVersion: v0.6.6
+    claim: "A WGS-84 latitude and longitude converted to a WGS-84 UTM zone, hemisphere, easting and northing."
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
+    supportingTests: [tests/geodesyOracleAgreement.test.ts, tests/utmConverter.test.ts, tests/utmZone.test.ts]
+    supportingDatasets: ["36 geodetic fixtures (OLV-DS-076-GEODESY-UTM-FIXTURES) with PROJ 9.8.1 and GeographicLib 2.7 reference output committed alongside them"]
+    supportingStudies: [CRS-UTM-PROJ-GEOGRAPHICLIB-THIRTYSIX-FIXTURES]
+    units: [metres, degrees]
+    crsDatum: "WGS-84 geodetic in, WGS-84 UTM out. The same datum on both sides, so no datum transformation is performed."
+    assumptions: ["the input latitude and longitude are already on WGS 84", "latitude lies inside the UTM domain of 80S to 84N"]
+    failureModes: ["latitude outside the UTM domain, which is refused rather than extrapolated", "a coordinate on a datum other than WGS 84, which is projected as if it were WGS 84"]
+    exportAllowed: true
+    userLabel: "Cross-implementation validated UTM projection"
+    softwareStatus: shipping
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Zone and hemisphere matched GeographicLib 2.7 on all 36 fixtures, including the widened Norway zone 32V and the Svalbard zones 31X, 33X, 35X and 37X. Easting and northing agreed with both PROJ 9.8.1 and GeographicLib 2.7 under 1 mm, the largest differences being 4.531e-4 m in easting and 9.521e-4 m in northing, inside the registered 1.5 mm tolerance. The two oracles agree with each other to 2.0e-9 m, so the residual belongs to the candidate and not to the references."
+    prohibitedClaim: ["survey-grade coordinate transformation", "validated datum transformation", "validated vertical reference", "validated ECEF conversion"]
+    scope:
+      supported:
+        - "WGS-84 geodetic to WGS-84 UTM over 36 frozen fixtures spanning both hemispheres, both latitude limits, the antimeridian, a zone boundary, a central meridian and both microdegrees either side of the equator."
+        - "Zone and hemisphere selection, including the widened Norway zone 32V and the Svalbard zones 31X, 33X, 35X and 37X, and the cells just outside each of those bands where the exception must not apply."
+        - "Easting and northing against two implementations of separate lineage. PROJ and GeographicLib agree with each other to 2.0e-9 m over the same fixtures, which is what makes the candidate residual attributable to the candidate."
+      unsupported:
+        - "Datum transformation. The fixtures go from WGS 84 to WGS 84 UTM, so the same datum stands on both sides of the comparison and no datum shift is exercised."
+        - "PROJ transformation grids. None is involved in a same-datum projection, so nothing here says how a grid-shifted transformation would behave."
+        - "Vertical reference. latLonToUtm takes no height and returns none, so ellipsoidal against orthometric height is outside what was measured."
+        - "ECEF and any other geocentric conversion, which this function does not perform."
+        - "Latitudes outside 80S to 84N. Refusal there is covered by the domain tests and by no oracle."
+        - "Any accuracy against a surveyed monument. Agreement with two implementations is not a field measurement."
+    scopeNote: "The residual against both oracles takes both signs across the fixture set, which is what a truncated series expansion does; it is not an offset in one direction and must not be described as a bias. The two legs answer different questions. GeographicLib selects the zone itself, so that leg is the independent check on zone and hemisphere including the exception zones. cs2cs is told which EPSG code to project into, and that code is built from the GeographicLib zone rather than from the candidate, so the PROJ leg is a fixed target for the projection arithmetic and would not move if the candidate's zone rule changed. PROJ and GeographicLib share no transverse Mercator code, and their mutual agreement at 2.0e-9 m is six orders below the gate, which is what separates candidate error from oracle disagreement."
   # ── Volumes ─────────────────────────────────────────────────────────────────
   - claimId: VOL-POINT-SAMPLE
     product: Point-sample volume (preview)

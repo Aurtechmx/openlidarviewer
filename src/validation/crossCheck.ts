@@ -209,7 +209,7 @@ export interface ReferenceSlot {
    * browser bundle must never parse. A new label is added here only when a slot
    * actually ships, so the runtime carries no name it cannot show a result for.
    */
-  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R' | 'GRASS';
+  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R' | 'GRASS' | 'PROJ+GeographicLib';
   /** Absolute agreement tolerance in the product's unit. */
   readonly toleranceAbs: number;
   /** Unit label for the tolerance, for docs / reports. */
@@ -298,6 +298,16 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // beside its own result would be a freeze in name only.
   { claimId: 'CHANGE-RASTER', referenceTool: 'GRASS', toleranceAbs: 1e-5, unit: 'relative', status: 'pending' },
   { claimId: 'CHANGE-VOLUME', referenceTool: 'GRASS', toleranceAbs: 1e-5, unit: 'relative', status: 'pending' },
+  // WGS-84 geodetic to WGS-84 UTM against two geodesy stacks at once. One label
+  // holds both because a slot carries one, and the study manifest carries the
+  // pipeline: GeographicLib picks the zone and is the check on zone selection,
+  // while cs2cs is handed an EPSG code built from that zone and measures the
+  // projection arithmetic. The tolerance is a physical budget rather than an
+  // observed number: a grid coordinate a reader treats as exact must agree well
+  // inside the millimetre survey practice rounds to. The two references agree
+  // with each other to 2e-9 m, six orders under the gate, so what remains is the
+  // candidate's own series truncation, and it takes both signs.
+  { claimId: 'CRS-UTM-PROJECTION', referenceTool: 'PROJ+GeographicLib', toleranceAbs: 0.0015, unit: 'm', status: 'supplied' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

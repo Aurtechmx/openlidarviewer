@@ -1,0 +1,43 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-CRS-UTM-PROJ-GEOGRAPHICLIB",
+ "example": false,
+ "title": "WGS-84 geodetic to WGS-84 UTM against PROJ cs2cs and GeographicLib GeoConvert",
+ "question": "Does latLonToUtm agree with PROJ 9.8.1 and GeographicLib 2.7 on the UTM zone, hemisphere, easting and northing of 36 frozen WGS-84 coordinates that include the Norway and Svalbard exception zones?",
+ "recordWrittenOn": "2026-08-24",
+ "referenceTool": "PROJ and GeographicLib",
+ "referenceVersion": "PROJ 9.8.1, GeographicLib 2.7",
+ "claims": [
+  {
+   "claimId": "CRS-UTM-PROJECTION",
+   "datasetIds": [
+    "OLV-DS-076-GEODESY-UTM-FIXTURES"
+   ],
+   "parameterSetIds": [
+    "PS-UTM-WGS84-ZONE-AUTO"
+   ],
+   "metrics": {
+    "toleranceAbs": 0.0015,
+    "toleranceUnit": "metre, on easting and on northing, against each oracle separately",
+    "minimumComparableCells": 120,
+    "requiredWithinToleranceFraction": 1
+   },
+   "toleranceDerivation": "The tolerance comes from the physical question and not from the observed result. A UTM grid coordinate that a reader treats as exact has to agree with an independent implementation well inside the millimetre that survey practice rounds to, so the gate is 1.5 mm on easting and on northing. Two facts make that number attributable. PROJ and GeographicLib share no transverse Mercator code, and over these fixtures they agree with each other to 2.0e-9 m, which is six orders below the gate, so a residual at the gate cannot be oracle disagreement. The candidate evaluates a truncated series, and a truncation error of this size is what that series is expected to leave. Zone and hemisphere are integers and a letter produced by the same published rule on both sides, so they are held to exact equality; a difference there would be a rule difference and not arithmetic.",
+   "freeze": {
+    "status": "adopted-with-result",
+    "on": "2026-08-24",
+    "witnessCommit": "899716907d3375790450dd1d42d71f7956f66bba",
+    "witness": "That commit carries validation/external-oracles/geodesy/protocol.json, which states the fixture matrix, the 1.5 mm tolerance, its basis and the decision rule. It also carries the first oracle run, so the tolerance and the result landed together and this record does not claim preregistration.",
+    "resultCommit": "899716907d3375790450dd1d42d71f7956f66bba",
+    "resultLandedOn": "2026-08-24"
+   }
+  }
+ ],
+ "decisionRule": "Every fixture must match GeographicLib exactly on zone and hemisphere, and must agree with both PROJ and GeographicLib on easting and on northing within 1.5 mm. One failure fails the study. The agreement between the two oracles is reported first, because a residual only belongs to the candidate once the references are shown to agree with each other far inside the gate.",
+ "notes": [
+  "The residual takes both signs across the fixture set. That is what a truncated series expansion leaves, and it is not an offset in one direction.",
+  "The two legs answer different questions. GeoConvert picks the zone itself, so it is the independent check on zone selection. cs2cs is handed an EPSG code built from the GeographicLib zone rather than from the candidate, which keeps the projection arithmetic measured against a target that does not move when the candidate changes.",
+  "Scope is one datum on both sides. No datum transformation, no transformation grid, no vertical reference and no ECEF conversion is exercised, and latLonToUtm performs none of them."
+ ],
+ "digest": "sha256:0767e6512dce74853cedbbf86301f4923d3536ee52869f301d3da5a578a782e3"
+}

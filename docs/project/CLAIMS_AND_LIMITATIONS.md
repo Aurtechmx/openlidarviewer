@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Twelve products are at E4. Five are algorithm checks against GDAL:
+- Thirteen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -115,6 +115,19 @@ discrete properties a test pins (byte-identity, exact inverses).
   a scanner-native write, so vendor extension blocks, multi-scan files and
   spherical coordinates are untested. Intensity sits outside the comparison
   because PDAL rescales it by 65535/(max − min) without subtracting the minimum.
+- `CRS-UTM-PROJECTION` is the thirteenth, and it is a coordinate conversion. Over
+  36 frozen WGS-84 coordinates, `latLonToUtm` picked the same zone and hemisphere
+  as GeographicLib 2.7 every time, the widened Norway zone 32V and the Svalbard
+  zones 31X, 33X, 35X and 37X included. Easting and northing agreed with both
+  PROJ 9.8.1 and GeographicLib 2.7 to under a millimetre, the largest differences
+  being 4.531×10⁻⁴ m and 9.521×10⁻⁴ m, under a 1.5 mm tolerance set from the
+  physical question rather than from the result. The two references agree with
+  each other to 2×10⁻⁹ m, six orders below the gate, which is what makes the
+  remaining difference the candidate's own. It takes both signs across the
+  fixtures, so it is series truncation and not an offset in one direction. The
+  fixtures carry WGS 84 on both sides, so no datum transformation and no PROJ
+  transformation grid is exercised, and the function takes no height, so vertical
+  reference and ECEF are outside what was measured.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.
