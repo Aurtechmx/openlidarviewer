@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Fifteen products are at E4. Five are algorithm checks against GDAL:
+- Seventeen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -141,6 +141,19 @@ discrete properties a test pins (byte-identity, exact inverses).
   Median, NMAD and P95 are excluded because R interpolates at type 7 while
   `checkpointAccuracy` takes the nearest rank, a difference the study records
   rather than resolves.
+- `CHANGE-RASTER` and `CHANGE-VOLUME` are the sixteenth and seventeenth, and
+  they are the change pair. GRASS 8.5.0 `r.mapcalc` and `r.univar` recomputed
+  them over eight frozen synthetic epoch pairs at one metre. Every case agrees
+  with GRASS and with the closed-form volume the pair was built from, on gain
+  volume, loss volume, gained cells, lost cells and comparable cells: both sides
+  select the same 3007 comparable cells and the largest relative difference is
+  7×10⁻⁶ under a 1×10⁻⁵ gate derived from the candidate's Float32 storage. Truth
+  is scored first and implementation agreement second, because two programs
+  summing the same wrong cells agree perfectly. Only one-metre metre-CRS grids
+  were compared, agreement with GRASS on synthetic epoch pairs is not accuracy
+  against surveyed field change, and the protocol freeze is `adopted-with-result`
+  rather than a preregistration, because it landed in the same commit as the
+  first result.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

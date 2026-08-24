@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Fifteen products are at E4. Five are algorithm checks against GDAL:
+Seventeen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -60,6 +60,20 @@ Median, NMAD and P95 are excluded because R interpolates at type 7 while
 `checkpointAccuracy` takes the nearest rank, a difference the study records
 rather than resolves.
 
+The sixteenth and seventeenth are the change pair, `CHANGE-RASTER` and
+`CHANGE-VOLUME`, against GRASS 8.5.0 `r.mapcalc` and `r.univar` over eight
+frozen synthetic epoch pairs at one metre, under `PROTO-CHANGE-GRASS-MAPCALC`.
+Every case agrees with GRASS and with the closed-form volume each pair was built
+from, on gain volume, loss volume, gained cells, lost cells and comparable
+cells; both sides select the same 3007 comparable cells and the largest relative
+difference is 7×10⁻⁶ under a 1×10⁻⁵ gate derived from the candidate's Float32
+storage. Truth is scored first and implementation agreement second, because two
+programs summing the same wrong cells agree perfectly. Only one-metre metre-CRS
+grids were compared, agreement with GRASS on synthetic epoch pairs is not
+accuracy against surveyed field change, and the protocol freeze is
+`adopted-with-result` rather than a preregistration, because it landed in the
+same commit as the first result.
+
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
@@ -76,9 +90,15 @@ rather than resolves.
 | `CRS-UTM-PROJECTION` | PROJ 9.8.1 `cs2cs` + GeographicLib 2.7 `GeoConvert` | `tests/geodesyOracleAgreement.test.ts` | 36 fixtures × 2 coordinates × 2 oracles | 4.531×10⁻⁴ m easting, 9.521×10⁻⁴ m northing | 1.5×10⁻³ m |
 | `HOLDOUT-RMSE` | base R 4.6.1 (bias, RMSE, max absolute residual) | `tests/statisticsRAgreement.test.ts` | 18 comparisons over 6 residual vectors | 4.4×10⁻¹⁶ m | 1×10⁻¹² m |
 | `NVA-VVA` | base R 4.6.1 (1.96 × pooled RMSE) | `tests/statisticsRAgreement.test.ts` | 6 comparisons over 6 residual vectors | 8.9×10⁻¹⁶ m | 1×10⁻¹² m |
+| `CHANGE-RASTER` | GRASS 8.5.0 `r.mapcalc` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
+| `CHANGE-VOLUME` | GRASS 8.5.0 `r.univar` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
 
-Every tolerance above except the last three was registered in `REFERENCE_SLOTS`
-before the references were generated. The two R tolerances were written in the
+Every tolerance above except the last five was registered in `REFERENCE_SLOTS`
+before the references were generated. The two change tolerances were written in
+the same change as their first result, so `PROTO-CHANGE-GRASS-MAPCALC` records
+`adopted-with-result` rather than `preregistered`; the witness commit is named so
+a reader can check that the fixture matrix, the level of detection and the
+tolerance basis predate the GRASS run. The two R tolerances were written in the
 same change as their first result, so their protocol records
 `adopted-with-result` rather than `preregistered`. The UTM tolerance was written
 in the same change as its first result, so its protocol records `adopted-with-result` rather than

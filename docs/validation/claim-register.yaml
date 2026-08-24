@@ -889,10 +889,11 @@ claims:
     algorithm: Per-cell epoch difference with LoD
     algorithmVersion: v0.5.x
     claim: "Per-cell elevation change with a level-of-detection threshold."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/compareDtms*.test.ts, tests/changeRaster*.test.ts]
-    supportingDatasets: [synthetic epoch pairs]
+    supportingDatasets: [synthetic epoch pairs, eight frozen epoch pairs compared against GRASS 8.5.0]
+    supportingStudies: [CHANGE-RASTER-GRASS-MAPCALC-EIGHT-PAIRS]
     units: [metres]
     crsDatum: "Blocks cross-datum / unknown-datum comparison."
     assumptions: ["single global LoD today — per-cell LoD95 is Phase 10", "cells treated independently"]
@@ -900,26 +901,33 @@ claims:
     exportAllowed: true
     userLabel: "Change raster (single-LoD, exploratory uncertainty)"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
-    externalValidationStatus: pending
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
     approvedClaim: "Per-cell change vs a global LoD on synthetic pairs."
     prohibitedClaim: ["validated change accuracy", "per-cell LoD95 (pending)"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-075-CHANGE-EPOCH-PAIRS
+          parameterSetId: PS-CHANGE-LOD-005-CELL-1M
       unsupported:
         - "Per-cell LoD95. One global level of detection is applied and cells are treated independently."
         - "Real epoch pairs. The evidence is synthetic."
         - "Registration error, which propagates into every cell and is not quantified here."
+        - "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were compared."
+        - "Agreement with GRASS on synthetic epoch pairs is not accuracy against surveyed field change."
+        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run."
+    scopeNote: "CHANGE-RASTER-GRASS-MAPCALC-EIGHT-PAIRS compares detectChange against GRASS 8.5.0 r.mapcalc over eight synthetic epoch pairs under PROTO-CHANGE-GRASS-MAPCALC. Both sides select the same 3007 comparable cells, including the pair with holes in one epoch, and the largest relative difference is 7e-6 against a 1e-5 gate derived from the candidate's Float32Array storage rather than from the observed residual. requiredEvidence stays at E5 because no surveyed change is involved: the pairs are constructed, and co-registration error is absent by construction."
 
   - claimId: CHANGE-VOLUME
     product: Change volume (gain/loss/net)
     algorithm: Integrated change over the difference grid
     algorithmVersion: v0.5.x
     claim: "Gain / loss / net volume from the change raster."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/compareDtms*.test.ts, tests/changeVolumeAnalyticalOracle.test.ts]
-    supportingDatasets: [analytic surface pairs]
+    supportingDatasets: [analytic surface pairs, eight frozen epoch pairs compared against GRASS 8.5.0]
+    supportingStudies: [CHANGE-VOLUME-GRASS-MAPCALC-EIGHT-PAIRS]
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
     assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "volume is a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design"]
@@ -927,18 +935,24 @@ claims:
     exportAllowed: true
     userLabel: "Analytically-verified change volume (exploratory)"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
-    externalValidationStatus: pending
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
     approvedClaim: "Integrated change volume agreeing with closed-form integrals over analytic surface pairs; uncertainty remains exploratory."
     prohibitedClaim: ["validated change volume", "quantified spatially-correlated uncertainty"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-075-CHANGE-EPOCH-PAIRS
+          parameterSetId: PS-CHANGE-LOD-005-CELL-1M
       unsupported:
         - "Any validated change volume. The closed-form fixtures verify the integration, not the accuracy of the two surfaces fed into it."
         - "Spatially correlated uncertainty, which is not quantified."
         - "Anything the change raster underneath it does not support."
         - "Real epoch pairs, and the DTM build that produces them. The oracle enters at the grid pair, so nothing here bounds ground-classification or interpolation error."
         - "The sub-LoD mass the threshold removes. Its size is stated in closed form on the fixtures, not measured on any survey."
+        - "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were compared."
+        - "Agreement with GRASS on synthetic epoch pairs is not accuracy against a surveyed volume."
+        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run."
+    scopeNote: "CHANGE-VOLUME-GRASS-MAPCALC-EIGHT-PAIRS compares the gain and loss volumes against GRASS 8.5.0 r.univar and against the closed-form volume each of the eight pairs was built from, under PROTO-CHANGE-GRASS-MAPCALC. Truth is scored first and implementation agreement second. GRASS reproduces every closed-form volume to within 1e-6 m3, so the 7e-6 relative residual is the candidate's alone and sits inside the registered 1e-5. requiredEvidence stays at E5 because the oracle enters at the grid pair, so nothing here bounds the DTM build underneath it or the accuracy of any surveyed volume."
 
   - claimId: UNCERTAINTY-BAND
     product: Uncertainty band (on deltas / volumes)
