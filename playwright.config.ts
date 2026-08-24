@@ -85,6 +85,32 @@ export default defineConfig({
       testIgnore: /firefoxWebglPreflight/,
     },
     { name: 'webkit', use: { ...devices['Desktop Safari'] }, grepInvert: /@gpu/, testIgnore: /firefoxWebglPreflight/ },
+    // iPhone WebKit: the same engine family as Mobile Safari, with a phone
+    // viewport, a device pixel ratio of 3 and real touch events. It is the
+    // closest an install-free local gate gets to an iPhone, and it is NOT an
+    // iPhone: Playwright's WebKit is built from mainline rather than shipped as
+    // Safari, and it renders on this machine's GPU rather than a mobile one.
+    // So it gates layout, hit targets and touch, and it cannot speak to iOS
+    // WebGL 2 limits, memory pressure on a large cloud, or WebGPU availability
+    // on a real device. Those need a physical iPhone or a device farm.
+    //
+    // The failure mode is worse than missing coverage, and it was measured
+    // rather than assumed. Probed here, this project reports `webgl2: true`,
+    // `renderer: "WebKit WebGL"`, `navigator.gpu` present, `devicePixelRatio`
+    // 3 and an iPhone OS 17_5 user agent. The GPU answers come from this
+    // machine's adapter, so a capability check that passes here can still fail
+    // on the device: WebGPU in particular is version-gated in Mobile Safari.
+    // Treat a pass as evidence about layout and never as evidence about the
+    // renderer.
+    //
+    // Advisory like the other engine legs, and scoped to the mobile viewport
+    // contract rather than the whole deterministic set, so it stays a fast gate
+    // instead of a second full suite that has to be triaged.
+    {
+      name: 'webkit-mobile',
+      use: { ...devices['iPhone 15'] },
+      testMatch: /visualsStudioMobile|smoke\.spec/,
+    },
     // The graphics preflight is its own project so it can be run before the
     // suite without joining any project's default set. `deterministic` is a
     // required check, and an advisory leg must not move its test count.
