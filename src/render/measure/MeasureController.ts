@@ -32,6 +32,7 @@ import type {
 } from './types';
 import { MIN_POINTS, isFull } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
+import type { ProfileProvenance } from './profileProvenance';
 import {
   distance,
   bearingDegrees,
@@ -292,6 +293,15 @@ export interface MeasurementSummary {
   profileCorridorWidthM?: number;
   /** Profile only — the sampler's corridor percentile (dimensionless). */
   profileGroundPercentile?: number;
+  /**
+   * Profile only — the measurement's provenance record, forwarded unchanged.
+   *
+   * Counts and stable layer ids, so it does not grow with the cloud and needs
+   * no unit conversion at this seam. The PDF prints it because the reader of
+   * an exported file cannot see the app state that produced the estimate.
+   * Absent on a measurement recorded before the record existed.
+   */
+  profileProvenance?: ProfileProvenance;
   /**
    * Profile only — the cumulative chainages (in METRES, through the same B2
    * factor the chart/table read) of the intermediate station dots drawn on the
@@ -926,6 +936,7 @@ export class MeasureController {
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
       profileGroundPercentile: m.profileGroundPercentile,
+      profileProvenance: m.profileProvenance,
       // Station-dot chainages in metres (× the same B2 factor as the samples),
       // in dot order, so the panel can couple a hovered tick/row to the scene
       // dot at the matching index. Only meaningful for profiles.

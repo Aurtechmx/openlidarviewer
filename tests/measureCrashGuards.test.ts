@@ -271,7 +271,11 @@ describe('profilePdf — corrupt samples cannot hang the export', () => {
       { distance: 0, height: 10 },
       { distance: Infinity, height: 11 }, // corrupt — len becomes Infinity
     ];
-    const bytes = await buildProfilePdf({ name: 'corrupt', samples });
+    const bytes = await buildProfilePdf({
+      name: 'corrupt',
+      samples,
+      generatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
     expect(bytes.byteLength).toBeGreaterThan(0);
   }, 15000);
 
@@ -280,7 +284,12 @@ describe('profilePdf — corrupt samples cannot hang the export', () => {
       { distance: 0, height: Number.NaN },
       { distance: 4, height: Number.NaN },
     ];
-    const bytes = await buildProfilePdf({ name: 'gaps', samples, unitSystem: 'imperial' });
+    const bytes = await buildProfilePdf({
+      name: 'gaps',
+      samples,
+      unitSystem: 'imperial',
+      generatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
     expect(bytes.byteLength).toBeGreaterThan(0);
   }, 15000);
 });

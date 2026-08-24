@@ -755,6 +755,13 @@ export class MeasurePanel {
         // metric regardless of the toggle. Same source the chart/CSV read.
         unitSystem: this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric',
         datumKnown: s.profileDatumKnown !== false,
+        // What shaped the estimate. A reader of the exported file cannot see
+        // the app state that produced it, so the sources, the class policy and
+        // the read scope go on the page.
+        provenance: s.profileProvenance ?? null,
+        // The clock is read HERE, at the app boundary. The builder takes the
+        // stamp as a parameter so the same sheet is the same bytes.
+        generatedAt: new Date(),
       });
       triggerDownload(
         new Blob([bytes as BlobPart], { type: 'application/pdf' }),
