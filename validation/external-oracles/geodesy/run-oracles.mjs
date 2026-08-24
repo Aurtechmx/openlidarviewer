@@ -80,21 +80,18 @@ function projOperationFor(sourceCrs, targetCrs) {
   const r = spawnSync('projinfo', ['-s', sourceCrs, '-t', targetCrs, '-o', 'PROJ', '--summary'], {
     encoding: 'utf8',
   });
-  const text = `${r.stdout ?? ''}`;
+  const text = r.stdout ?? '';
   const candidates = text.split('\n').filter((l) => /^\s*EPSG:|^\s*unknown id/.test(l));
   const first = candidates[0]?.trim() ?? null;
+  const parts = first ? first.split(',').map((s) => s.trim()) : [];
 
-  let op = { selected: null, accuracy: null, candidateCount: candidates.length, raw: first };
-  if (first) {
-    const parts = first.split(',').map((s) => s.trim());
-    op = {
-      selected: parts[0] ?? null,
-      name: parts[1] ?? null,
-      accuracy: parts[2] ?? null,
-      candidateCount: candidates.length,
-      raw: first,
-    };
-  }
+  const op = {
+    selected: parts[0] ?? null,
+    name: parts[1] ?? null,
+    accuracy: parts[2] ?? null,
+    candidateCount: candidates.length,
+    raw: first,
+  };
   operationCache.set(key, op);
   return op;
 }
@@ -190,7 +187,7 @@ const record = {
       operationSource: 'projinfo -s EPSG:4326 -t EPSG:<zone> -o PROJ --summary',
       operationsSelected: [...operationCache.entries()]
         .map(([pair, op]) => ({ pair, selected: op.selected, name: op.name, accuracy: op.accuracy, candidates: op.candidateCount }))
-        .sort((a, b) => (a.pair < b.pair ? -1 : 1)),
+        .sort((a, b) => a.pair.localeCompare(b.pair)),
     },
   ],
   oracleAgreement: {
