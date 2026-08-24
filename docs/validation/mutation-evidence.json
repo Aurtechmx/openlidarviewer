@@ -1,30 +1,30 @@
 {
   "schemaVersion": 1,
   "project": "openlidarviewer",
-  "score": 98.32,
+  "score": 98.28,
   "break": 75,
   "mutants": {
-    "killed": 313,
-    "timeout": 39,
-    "survived": 5,
-    "noCoverage": 1,
+    "killed": 312,
+    "timeout": 30,
+    "survived": 6,
+    "noCoverage": 0,
     "ignored": 0,
     "errors": 0,
-    "detected": 352,
+    "detected": 342,
     "undetected": 6,
-    "scored": 358
+    "scored": 348
   },
   "mutate": [
     "src/process/numerics.ts",
     "src/terrain/quantile.ts",
     "src/terrain/ground/terrainDerivatives.ts"
   ],
-  "commit": "a537e7dc47059b55aef39ee02479a359e4ca8ca0",
-  "measuredAt": "2026-08-01T13:52:35.385Z",
+  "commit": "7e495763295e555404306b6a89359863d3559911",
+  "measuredAt": "2026-08-24T07:09:58.580Z",
   "ranInThisGate": false,
   "workflow": "Mutation",
-  "workflowRunId": "30697202511",
-  "workflowRunUrl": "https://github.com/Aurtechmx/openlidarviewer/actions/runs/30697202511",
+  "workflowRunId": "32690843886",
+  "workflowRunUrl": "https://github.com/Aurtechmx/openlidarviewer/actions/runs/32690843886",
   "nodeVersion": "v22.17.1",
   "platform": "linux-x64"
 }
