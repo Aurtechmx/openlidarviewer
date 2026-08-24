@@ -101,14 +101,28 @@ export type CompactionWitness =
 export const RECORD_DROPPED = -1;
 
 /**
- * Where source record `sourceIndex` ended up, or {@link RECORD_DROPPED}.
+ * The witness says nothing about this index, because it never covered it.
  *
- * An index outside the witnessed range is `RECORD_DROPPED` rather than a
- * throw or a wrapped read: a caller asking about a record the witness never
- * covered has no answer, and that is the same fact.
+ * Distinct from {@link RECORD_DROPPED} deliberately. "This record was removed"
+ * and "I was never asked about this record" are different facts, and a caller
+ * that conflates them reads a bookkeeping mismatch as a decoding outcome. The
+ * PTX loader treats this one as a reason to abandon the remap entirely rather
+ * than to mark a cell, which is only the right response because it is
+ * distinguishable.
+ */
+export const RECORD_NOT_WITNESSED = -2;
+
+/**
+ * Where source record `sourceIndex` ended up.
+ *
+ * Returns {@link RECORD_DROPPED} when the record was removed by sanitation and
+ * {@link RECORD_NOT_WITNESSED} when the index lies outside what this witness
+ * covers. Neither throws: an out-of-range index means the caller's bookkeeping
+ * disagrees with the witness, which the caller has to handle rather than
+ * having an exception decide for it.
  */
 export function outputRecordFor(witness: CompactionWitness, sourceIndex: number): number {
-  if (sourceIndex < 0 || sourceIndex >= witness.sourceCount) return RECORD_DROPPED;
+  if (sourceIndex < 0 || sourceIndex >= witness.sourceCount) return RECORD_NOT_WITNESSED;
   if (witness.kind === 'identity') return sourceIndex;
   return witness.sourceToOutput[sourceIndex];
 }

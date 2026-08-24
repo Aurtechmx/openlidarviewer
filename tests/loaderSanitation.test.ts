@@ -3,6 +3,7 @@ import {
   sanitizeLocalCloud,
   outputRecordFor,
   RECORD_DROPPED,
+  RECORD_NOT_WITNESSED,
 } from '../src/io/sanitizeCloud';
 import type { CloudAttributes } from '../src/io/sanitizeCloud';
 import { LoadError } from '../src/io/loadErrors';
@@ -365,5 +366,20 @@ describe('the compaction witness', () => {
     );
     expect(outputRecordFor(result.witness!, 1)).toBe(RECORD_DROPPED);
     expect(outputRecordFor(result.witness!, 2)).toBe(1);
+  });
+});
+
+describe('the witness distinguishes a dropped record from an unknown one', () => {
+  it('answers out of range with RECORD_NOT_WITNESSED, not RECORD_DROPPED', () => {
+    // These are different facts. "This record was removed" is a decoding
+    // outcome a caller can render as a cell state; "I was never asked about
+    // this index" is a bookkeeping mismatch that no cell state describes
+    // truthfully. Returning the same value for both let a caller mark a cell
+    // as discarded when the real problem was that two counts disagreed.
+    const witness = { kind: 'identity', sourceCount: 3 } as const;
+    expect(outputRecordFor(witness, 0)).toBe(0);
+    expect(outputRecordFor(witness, 3)).toBe(RECORD_NOT_WITNESSED);
+    expect(outputRecordFor(witness, -1)).toBe(RECORD_NOT_WITNESSED);
+    expect(RECORD_NOT_WITNESSED).not.toBe(RECORD_DROPPED);
   });
 });

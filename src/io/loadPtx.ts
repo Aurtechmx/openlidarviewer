@@ -21,6 +21,7 @@ import {
   withLoadWarning,
   outputRecordFor,
   RECORD_DROPPED,
+  RECORD_NOT_WITNESSED,
   type CompactionWitness,
 } from './sanitizeCloud';
 import {
@@ -58,8 +59,12 @@ function remapFrame(
   for (let ci = 0; ci < cellToRecord.length; ci++) {
     const source = cellToRecord[ci];
     if (source === NO_RECORD) continue;
-    if (source < 0 || source >= witness.sourceCount) return null;
     const output = outputRecordFor(witness, source);
+    // The witness does not cover this index, so the grid and the sanitiser
+    // disagree about how many records existed. That is a bookkeeping fault,
+    // not a decoding outcome, and no cell state describes it truthfully.
+    // Abandon the remap and let the caller degrade the whole set.
+    if (output === RECORD_NOT_WITNESSED) return null;
     if (output === RECORD_DROPPED) {
       cellToRecord[ci] = NO_RECORD;
       cellState[ci] = CellState.NOT_DECODED;

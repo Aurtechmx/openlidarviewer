@@ -28,8 +28,8 @@
  * because they carry different scientific weight. A NO_RETURN is evidence about
  * a ray the scanner actually fired: it looked along that direction and nothing
  * came back. A NOT_DECODED cell says nothing about the scene at all, only about
- * how much of the file this session chose to read. Collapsing the two would let
- * a sampling decision read as a property of the surface.
+ * what this session did with the file. Collapsing the two would let a decision
+ * taken inside the pipeline read as a property of the surface.
  */
 export const CellState = {
   /** The source carries a usable return for this cell. */
@@ -38,7 +38,15 @@ export const CellState = {
   NO_RETURN: 1,
   /** The source record exists but the source declares it unusable. */
   SOURCE_INVALID: 2,
-  /** A record exists in the file and this session did not decode it. */
+  /**
+   * A record exists in the file and this session did not deliver it.
+   *
+   * Covers two routes to the same shortfall: never read (a stride decoded a
+   * subset), and read but discarded (a coordinate that overflowed its
+   * transform, removed by sanitation). Both are decisions this pipeline took,
+   * and neither says anything about what the scanner observed. The distinction
+   * that matters here is against NO_RETURN, not between the two routes.
+   */
   NOT_DECODED: 3,
   /** The grid declares this cell and the file supplied no record for it. */
   SOURCE_RECORD_MISSING: 4,
