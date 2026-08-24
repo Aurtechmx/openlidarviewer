@@ -1,0 +1,28 @@
+{
+  "schema": "openlidarviewer.streaming-baseline-env/1",
+  "note": "Verbatim output of the repository checkers, not a hand count. The module graph figures are the ones lint-module-graph.mjs enforces against its own banked baseline; the bundle figures are measured from the built dist/assets.",
+  "moduleGraph": {
+    "command": "node scripts/lint-module-graph.mjs",
+    "exitCode": 0,
+    "stdout": [
+      "lint:module-graph OK [runtime edges only; 687 files scanned]: render->ui 6, io->render 5, export->render 6, report->render 3, main.ts 114, Viewer.ts 75, 0 cycles (1 fewer than baseline; run --update to bank it)."
+    ],
+    "stderr": []
+  },
+  "bundle": {
+    "command": "node scripts/check-bundle-budget.mjs",
+    "exitCode": 0,
+    "stdout": [
+      "Bundle budget (live build):",
+      "  ✓           index                    354 KiB / 776 KiB (warn 700)  (46%)",
+      "  ✓           vendor-three-webgpu      789 KiB / 1100 KiB  (72%)",
+      "  ✓           vendor-pdf               410 KiB / 512 KiB  (80%)",
+      "  ✓           Viewer                   234 KiB / 740 KiB (warn 710)  (32%)",
+      "  ✓           lazDecode                611 KiB / 700 KiB (warn 670)  (87%)",
+      "  ✓           eptLaszipWorker          348 KiB / 395 KiB (warn 380)  (88%)",
+      "  ✓           copcWorker               334 KiB / 385 KiB (warn 370)  (87%)",
+      "✓ All budgeted chunks within ceiling."
+    ],
+    "stderr": []
+  }
+}

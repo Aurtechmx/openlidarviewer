@@ -46,8 +46,13 @@ describe('the profile chart offers a working way into the focus view', () => {
     expect(rule('.olv-mp-chart-expand')).toMatch(/cursor:\s*pointer/);
   });
 
-  it('gives it an accessible name that names the measurement', () => {
-    expect(PANEL).toMatch(/ariaLabel: `Expand profile \$\{s\.name\} to a focus view`/);
+  it('gives it an accessible name that names the measurement, and only what it opens', () => {
+    // Two destinations now, so two names — and every one of them names the row
+    // it belongs to. The wrapper and the button share the one expression, so
+    // the picture and its corner control cannot promise different things.
+    const names = PANEL.match(/`Expand profile \$\{s\.name\}[^`]*`/g) ?? [];
+    expect(names).toHaveLength(2);
+    expect(PANEL.match(/ariaLabel: expandName,/g) ?? []).toHaveLength(2);
   });
 
   it('opens the same focus view the chart click opens', () => {

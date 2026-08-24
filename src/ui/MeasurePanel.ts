@@ -265,6 +265,18 @@ export interface MeasurePanelCallbacks {
    * Optional: without it the profile panel renders exactly as before, inert.
    */
   onStationHover?: (id: string | null, stationIndex: number | null) => void;
+  /**
+   * Open the docked Profile Workbench for one measurement, resolving true when
+   * a dock was mounted and false when it was not.
+   *
+   * The panel treats false as "use the surface you already have": `ResultFocus`
+   * opens instead, so Expand works whether or not the workbench chunk arrives,
+   * whether or not this viewport carries a dock, and whether or not the host
+   * wired the callback at all. The panel decides nothing about which
+   * measurements qualify — the host owns that rule — and never learns what a
+   * dock, a stage or a Viewer is.
+   */
+  openProfileWorkbench?: (summary: MeasurementSummary) => Promise<boolean>;
 }
 
 /**
@@ -776,14 +788,43 @@ export class MeasurePanel {
   }
 
   /**
+   * Expand, for a profile row.
+   *
+   * The docked workbench is the surface when the host offers one and it opens;
+   * `ResultFocus` is the surface otherwise. The choice is made per press rather
+   * than once at construction, because a viewport can narrow and a chunk can
+   * fail between one Expand and the next.
+   */
+  private _openProfileFocus(s: MeasurementSummary, trigger: HTMLElement): void {
+    if (!s.profileChart || s.profileChart.length < 2) return;
+    const dock = this._cb.openProfileWorkbench;
+    if (!dock) {
+      this._openResultFocus(s, trigger);
+      return;
+    }
+    // A refusal, a failed chunk load and a host that threw on the way to the
+    // plot are the same event here: all three leave Expand with the focus view
+    // it has always had. The rejection arm is not decoration — the host runs
+    // the whole extraction and render pass behind this promise.
+    void dock(s).then(
+      (opened) => {
+        if (!opened) this._openResultFocus(s, trigger);
+      },
+      () => this._openResultFocus(s, trigger),
+    );
+  }
+
+  /**
    * Escalate a profile result into the shared focus surface — the same chart,
    * stats and full station table the dock renders, given room to read. Pure
    * presentation: every node comes from the existing renderers/builders
    * (`renderProfileChart`, `profileSummaryRows`, `buildStationTable`) and the
    * export buttons reuse the panel's own CSV / PDF paths, so nothing here can
    * disagree with the in-dock numbers. `ResultFocus` owns the chrome + a11y.
+   *
+   * Also the fallback for every case the workbench declines.
    */
-  private _openProfileFocus(s: MeasurementSummary, trigger: HTMLElement): void {
+  private _openResultFocus(s: MeasurementSummary, trigger: HTMLElement): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const samples = s.profileChart;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
@@ -1225,12 +1266,23 @@ export class MeasurePanel {
       // result in the shared focus surface. An always-visible corner badge marks
       // it interactive — the faint header-row icon it replaces stayed invisible
       // until hovered, so nobody found it.
+      // What Expand opens is not one surface any more, so the promise it makes
+      // is not one sentence any more. A wide viewport with a stage gets the
+      // docked section workbench, which carries neither the station table nor
+      // the export buttons; everything else keeps the focus view, which does.
+      // A host that wired no workbench at all can still promise only the one.
+      const expandName = this._cb.openProfileWorkbench
+        ? `Expand profile ${s.name}: a docked section workbench on a wide viewport, a focus view otherwise`
+        : `Expand profile ${s.name} to a focus view`;
+      const expandTitle = this._cb.openProfileWorkbench
+        ? `Expand ${s.name}: a docked section workbench on a wide viewport, otherwise a focus view with the station table and export`
+        : `Expand ${s.name} full size, with the station table and export`;
       const chartWrap = el(
         'div',
         {
           className: 'olv-mp-chart-wrap',
-          title: `Expand ${s.name} to a focus view`,
-          ariaLabel: `Expand profile ${s.name} to a focus view`,
+          title: expandTitle,
+          ariaLabel: expandName,
         },
         [chart],
       );
@@ -1263,8 +1315,8 @@ export class MeasurePanel {
       const chartExpand = el('button', {
         className: 'olv-mp-chart-expand',
         unsafeHtml: ICON_EXPAND,
-        title: `Open ${s.name} full size, with the station table and export`,
-        ariaLabel: `Expand profile ${s.name} to a focus view`,
+        title: expandTitle,
+        ariaLabel: expandName,
       });
       chartExpand.addEventListener('click', (e) => {
         e.stopPropagation();

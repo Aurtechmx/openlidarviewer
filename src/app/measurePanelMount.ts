@@ -19,11 +19,14 @@
 
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
-import { loadMeasurePanel } from '../lazyChunks';
+import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 
 import type { MeasurePanel } from '../ui/MeasurePanel';
 import type { Viewer } from '../render/Viewer';
 import type { CrsService } from '../geo/CrsService';
+import type { MeasurementSummary } from '../render/measure/MeasureController';
+import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
+import type { WorkbenchSectionScene } from './profileWorkbenchSection';
 
 /** Constructor pulled through the lazy chunk — the panel's real class. */
 type MeasurePanelCtor = Awaited<ReturnType<typeof loadMeasurePanel>>['MeasurePanel'];
@@ -41,6 +44,12 @@ export interface MeasurePanelMountDeps {
   exportSession: () => unknown;
   handleFile: (file: File) => unknown;
   recordUsage: (category: 'measurement', kind: string) => void;
+  /**
+   * The stage the docked Profile Workbench shares its box with. Absent — the
+   * bare and embed layouts, which build no stage — leaves the profile Expand
+   * control opening `ResultFocus`, exactly as it did before the dock existed.
+   */
+  workbenchStage?: { root: HTMLElement };
 }
 
 /** The Measurements-panel mount controller `main.ts` drives. */
@@ -72,6 +81,18 @@ export interface MeasurePanelMount {
  */
 export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePanelMount {
   let panel: MeasurePanel | null = null;
+  // One launcher for the whole mount, so a second Expand replaces the dock the
+  // first one left rather than stacking on it. Memoised rather than built here:
+  // the whole assembly — stage adapter, launcher, section renderer — rides a
+  // dynamic import, so none of it weighs on the startup shell and none of it
+  // loads before a profile's Expand control is pressed.
+  const workbenchStage = deps.workbenchStage;
+  let workbench: Promise<ProfileWorkbenchLauncher> | null = null;
+  // The resolved launcher, held beside the promise so the dock can be closed
+  // synchronously from a lifecycle hook that has no promise to wait on.
+  let launcher: ProfileWorkbenchLauncher | null = null;
+  // The measurement the open dock is plotting, or null when none is.
+  let dockedId: string | null = null;
   let ready: Promise<MeasurePanel> | null = null;
   let mountElement: ((el: HTMLElement) => void) | null = null;
   // Desired panel state, mirrored so a panel mounted a beat AFTER a scan event
@@ -81,11 +102,79 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   // High-water mark for measurement count — used to detect new placements.
   let lastMeasurementCount = 0;
 
+  /**
+   * The live scene, as the section presenter reads it.
+   *
+   * Every member is a thunk: the layers, the resident streaming nodes and the
+   * resolved CRS all change under an open dock, so a section is a snapshot of
+   * the moment Expand was pressed rather than of the moment this was built.
+   */
+  function workbenchScene(): WorkbenchSectionScene {
+    return {
+      profile: (id) => {
+        const m = deps.getViewer().measure.getMeasurements().find((x) => x.id === id);
+        const a = m?.points[0];
+        const b = m?.points[1];
+        return a && b ? { a, b, corridorWidth: m?.profileCorridorWidth ?? null } : null;
+      },
+      // The generator, never the run-to-completion `section()`: the walk tests
+      // every point of every eligible layer, and the presenter spreads it
+      // across frames so the dock stays usable while a dense cloud is read.
+      sectionChunks: (request) => deps.getViewer().profileSeam.sectionChunks(request),
+      metresPerUnit: () => {
+        const crs = deps.crsService.context();
+        return crs.linearUnitKnown === true ? crs.linearUnitToMetres : null;
+      },
+      devicePixelRatio: () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio),
+    };
+  }
+
+  /**
+   * Close the dock, if one is open.
+   *
+   * A dock plots one measurement's corridor over one scene. Neither survives
+   * the measurement being deleted or the scene being replaced, and a dock left
+   * behind keeps both its plot and its `calc(100% - Npx)` claim on the stage.
+   */
+  function closeWorkbench(): void {
+    dockedId = null;
+    launcher?.close();
+  }
+
+  /** Expand, for a profile row. False means the panel keeps `ResultFocus`. */
+  function openWorkbench(summary: MeasurementSummary): Promise<boolean> {
+    if (!workbenchStage) return Promise.resolve(false);
+    workbench ??= loadProfileWorkbenchRuntime().then(({ createProfileWorkbenchRuntime }) => {
+      launcher = createProfileWorkbenchRuntime({ stage: workbenchStage, scene: workbenchScene() });
+      return launcher;
+    });
+    return workbench.then(
+      async (live) => {
+        const opened = await live.open({ id: summary.id, kind: summary.kind, name: summary.name });
+        if (opened) dockedId = summary.id;
+        return opened;
+      },
+      (error) => {
+        // A memoised rejection would make every later press fall back too, so
+        // the next Expand gets a fresh attempt at the chunk.
+        workbench = null;
+        launcher = null;
+        console.error('OpenLiDARViewer: the profile workbench failed to load.', error);
+        return false;
+      },
+    );
+  }
+
   /** Construct the panel; the controller drives its measurement list. */
   function construct(Ctor: MeasurePanelCtor): MeasurePanel {
     const viewer = deps.getViewer();
     return new Ctor({
-      onDelete: (id) => viewer.measure.removeMeasurement(id),
+      onDelete: (id) => {
+        // The dock plots THIS measurement's corridor, and a deleted
+        // measurement has none left to plot.
+        if (id === dockedId) closeWorkbench();
+        viewer.measure.removeMeasurement(id);
+      },
       onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
       onExport: () => void deps.exportSession(),
       // Route through the single file router so the Import button, the Open
@@ -144,6 +233,10 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       onProfileResample: (id, params) => viewer.measure.resampleProfile(id, params),
       // Profile-station hover → highlight the matching scene dot; repaint only when the dot changed.
       onStationHover: (id, i) => { if (viewer.measure.setHoveredStation(id, i)) viewer.requestFrame(); },
+      // Expand, for a profile row: the docked workbench when the shell offered
+      // a stage and the launcher accepts, `ResultFocus` on every refusal. The
+      // panel is told only true or false, so it never learns what a dock is.
+      openProfileWorkbench: workbenchStage ? openWorkbench : undefined,
     });
   }
 
@@ -192,8 +285,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
    * first-mounts share the single in-flight promise, and the double-construct
    * guard means only one panel is ever built. After construction it inserts into
    * the DOM (via the registered mount hook) and hydrates the tracked state.
+   *
+   * Also where a scan load reaches the dock: this is the call every reveal
+   * makes, and a section of the previous scene is not a section of this one.
    */
   function ensure(): Promise<MeasurePanel> {
+    closeWorkbench();
     if (panel) return Promise.resolve(panel);
     if (ready) return ready;
     ready = loadMeasurePanel().then(({ MeasurePanel: Ctor }) => {
@@ -231,6 +328,9 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       panel?.setVisible(true);
     },
     hide() {
+      // The reset-to-empty-state path: no scan is open, so there is no scene
+      // for a docked section to be a section OF.
+      closeWorkbench();
       panel?.setVisible(false);
       desiredVisible = false;
     },

@@ -12,7 +12,12 @@
  * with a synthetic COPC and a fake decoder.
  */
 
-import type { Box6, VoxelKey } from '../../io/copc/copcTypes';
+import type { Box6 } from '../../io/copc/copcTypes';
+import {
+  forEachAncestorId,
+  parentLookupFromStore,
+  type ParentLookup,
+} from './streamingHierarchy';
 import { GpuUploadQueue } from '../gpuUploadQueue';
 import type { ChunkDecoder, DecodedChunk } from '../../io/copc/copcChunkDecode';
 import type { StreamingSource } from './StreamingSource';
@@ -256,37 +261,26 @@ export interface SchedulerOptions {
   now?: () => number;
 }
 
-/** Compact key for an ancestor-protection set — `${depth}/${x}/${y}/${z}`. */
-function voxelKeyString(k: VoxelKey): string {
-  return `${k.depth}/${k.x}/${k.y}/${k.z}`;
-}
-
 /**
- * The compact key of a voxel's parent, or `null` for the root. Children at
- * depth d collapse to their parent at depth d-1 by right-shifting each axis
- * coordinate — the COPC hierarchy is a regular octree.
+ * Build the set of *ancestor ids* of every resident node. A node whose own id
+ * appears in this set is a parent of at least one resident node, and it is
+ * protected from eviction until its descendants leave too.
+ *
+ * Ancestry comes from each record's `parentId`, not from shifting its voxel
+ * key. The two agree exactly on a regular octree, which is what COPC, EPT and
+ * the OLV tile store are; the difference is that a hierarchy which is not an
+ * octree still answers. The one behavioural distinction is that the key walk
+ * climbed to depth 0 through cells that may hold no node, while this one stops
+ * where the hierarchy stops. Only ids of nodes that exist are ever tested
+ * against the set, so the phantom entries the key walk added were never read.
  */
-function parentKeyString(k: VoxelKey): string | null {
-  if (k.depth === 0) return null;
-  return `${k.depth - 1}/${k.x >> 1}/${k.y >> 1}/${k.z >> 1}`;
-}
-
-/**
- * Build the set of *ancestor* keys of every resident node. A node whose own
- * key appears in this set is a parent of at least one resident node, and
- * it protects it from eviction until its descendants leave too.
- */
-function buildAncestorProtection(nodes: readonly StreamingNode[]): Set<string> {
+function buildAncestorProtection(
+  nodes: readonly StreamingNode[],
+  parentOf: ParentLookup,
+): Set<string> {
   const set = new Set<string>();
   for (const n of nodes) {
-    let { x, y, z } = n.record.key;
-    const depth = n.record.key.depth;
-    for (let d = depth - 1; d >= 0; d--) {
-      x >>= 1;
-      y >>= 1;
-      z >>= 1;
-      set.add(`${d}/${x}/${y}/${z}`);
-    }
+    forEachAncestorId(n.record.id, parentOf, (ancestorId) => set.add(ancestorId));
   }
   return set;
 }
@@ -318,22 +312,17 @@ function residentIdSet(store: { residentNodes(): IterableIterator<StreamingNode>
  */
 export function buildRefiningCandidateIds(
   scored: readonly { readonly node: StreamingNode; readonly candidate: ScoredCandidate }[],
+  parentOf: ParentLookup,
 ): Set<string> {
-  // key -> candidate id, so an ancestor walk can ask "is this ancestor itself a
-  // candidate?" without rebuilding ids per level.
-  const idByKey = new Map<string, string>();
-  for (const s of scored) idByKey.set(voxelKeyString(s.node.record.key), s.candidate.id);
+  // The candidate ids, so an ancestor walk can ask "is this ancestor itself a
+  // candidate?" without rescanning the list per level.
+  const candidateIds = new Set<string>();
+  for (const s of scored) candidateIds.add(s.candidate.id);
   const refining = new Set<string>();
   for (const s of scored) {
-    const key = s.node.record.key;
-    let { x, y, z } = key;
-    for (let d = key.depth - 1; d >= 0; d--) {
-      x >>= 1;
-      y >>= 1;
-      z >>= 1;
-      const ancestorId = idByKey.get(`${d}/${x}/${y}/${z}`);
-      if (ancestorId !== undefined) refining.add(ancestorId);
-    }
+    forEachAncestorId(s.node.record.id, parentOf, (ancestorId) => {
+      if (candidateIds.has(ancestorId)) refining.add(ancestorId);
+    });
   }
   return refining;
 }
@@ -344,22 +333,20 @@ export function buildRefiningCandidateIds(
  * these "still-wanted" siblings gets one extra window of grace, on the bet
  * that a flicker-orbit pulling one sibling will likely pull the others next.
  */
-function buildWantedParentKeys(
+function buildWantedParentIds(
   wanted: ReadonlySet<string>,
   cloud: StreamingSource,
 ): Set<string> {
   const set = new Set<string>();
   for (const id of wanted) {
-    const node = cloud.octree.store.get(id);
-    if (!node) continue;
-    const pk = parentKeyString(node.record.key);
-    if (pk !== null) set.add(pk);
+    const parentId = cloud.octree.store.get(id)?.record.parentId;
+    if (parentId !== undefined) set.add(parentId);
   }
   return set;
 }
 
 /**
- * The keys of every node that has finer detail arriving inside its subtree.
+ * The ids of every node that has finer detail arriving inside its subtree.
  *
  * A resident node is "refined away" when the level below it is on its way in:
  * either it has itself left the wanted set while a finer descendant stayed in
@@ -377,21 +364,22 @@ function buildWantedParentKeys(
  * the flag it is handed, and an ancestor walk that silently marked nothing
  * would leave the exemption inert while every unit test still passed.
  */
-export function buildRefinedAwayKeys(
+export function buildRefinedAwayIds(
   wanted: ReadonlySet<string>,
   cloud: StreamingSource,
 ): Set<string> {
   const store = cloud.octree.store;
-  // The wanted nodes, resolved once, plus their keys — the ancestor walk below
-  // needs to ask "is this ancestor itself wanted?" and a key set answers that
-  // without rebuilding an id per level.
+  const parentOf = parentLookupFromStore(store);
+  // The wanted nodes, resolved once. The ancestor walk below asks "is this
+  // ancestor itself wanted?", and only a wanted id that resolves to a node can
+  // ever be an ancestor, so the resolved ids are the set to test against.
   const wantedNodes: StreamingNode[] = [];
-  const wantedKeys = new Set<string>();
+  const wantedResolved = new Set<string>();
   for (const id of wanted) {
     const node = store.get(id);
     if (!node) continue;
     wantedNodes.push(node);
-    wantedKeys.add(voxelKeyString(node.record.key));
+    wantedResolved.add(node.record.id);
   }
 
   const set = new Set<string>();
@@ -400,14 +388,9 @@ export function buildRefinedAwayKeys(
     // those ancestors are what is holding the budget it needs. One that has
     // already arrived supersedes only the ancestors the selector has dropped.
     const pending = node.state !== 'resident';
-    let { x, y, z } = node.record.key;
-    for (let d = node.record.key.depth - 1; d >= 0; d--) {
-      x >>= 1;
-      y >>= 1;
-      z >>= 1;
-      const key = `${d}/${x}/${y}/${z}`;
-      if (pending || !wantedKeys.has(key)) set.add(key);
-    }
+    forEachAncestorId(node.record.id, parentOf, (ancestorId) => {
+      if (pending || !wantedResolved.has(ancestorId)) set.add(ancestorId);
+    });
   }
   return set;
 }
@@ -1010,7 +993,7 @@ export class StreamingScheduler {
         sticky
           ? {
               resident: residentIdSet(store),
-              refining: buildRefiningCandidateIds(freshScored),
+              refining: buildRefiningCandidateIds(freshScored, parentLookupFromStore(store)),
               stickyMargin: this._stickyMargin,
             }
           : {},
@@ -1053,10 +1036,10 @@ export class StreamingScheduler {
     // shares one consistent timestamp.
     const nowTs = wallNow;
     const residents = store.resident();
-    const protection = buildAncestorProtection(residents);
+    const protection = buildAncestorProtection(residents, parentLookupFromStore(store));
     // Sibling-retention bonus. Children of a wanted parent get a
     // retention bonus over orphan deferred nodes.
-    const wantedParentKeys = buildWantedParentKeys(wanted, this._cloud);
+    const wantedParentIds = buildWantedParentIds(wanted, this._cloud);
 
     for (const node of residents) {
       const id = node.record.id;
@@ -1094,7 +1077,7 @@ export class StreamingScheduler {
         this._deferredEvictAt.delete(id);
         continue;
       }
-      if (protection.has(voxelKeyString(node.record.key))) {
+      if (protection.has(node.record.id)) {
         // Parent of a resident — reschedule one window. The child eviction
         // on a later tick frees the parent for eviction *then*.
         //
@@ -1108,8 +1091,8 @@ export class StreamingScheduler {
         this._deferredEvictAt.set(id, nowTs + this._evictDeferMs);
         continue;
       }
-      const parentKey = parentKeyString(node.record.key);
-      if (parentKey !== null && wantedParentKeys.has(parentKey)) {
+      const parentId = node.record.parentId;
+      if (parentId !== undefined && wantedParentIds.has(parentId)) {
         // Sibling still wanted — keep it warm for one more window.
         this._deferredEvictAt.set(id, nowTs + this._evictDeferMs);
         continue;
@@ -1168,7 +1151,7 @@ export class StreamingScheduler {
       // The one input that costs a walk of the wanted set. Built here rather
       // than per tick, because this branch is the only reader and it is cold:
       // a settled camera inside the hysteresis band never pays for it.
-      const refinedAwayKeys = buildRefinedAwayKeys(wanted, this._cloud);
+      const refinedAwayIds = buildRefinedAwayIds(wanted, this._cloud);
       const candidates: EvictionCandidate[] = [];
       for (const node of store.residentNodes()) {
         const centre = boxCentre(this._localBoundsFor(node));
@@ -1182,7 +1165,7 @@ export class StreamingScheduler {
           // which is the same answer, because the camera has not moved.
           visible: node.score > 0,
           wanted: wanted.has(node.record.id),
-          supersededByFiner: refinedAwayKeys.has(voxelKeyString(node.record.key)),
+          supersededByFiner: refinedAwayIds.has(node.record.id),
           residentSinceMs: node.residentSinceMs,
         });
       }
