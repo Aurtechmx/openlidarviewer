@@ -2137,3 +2137,34 @@ datasets:
     knownLimitations: "Synthetic epoch pairs on one-metre square grids with a single global level of detection. Each pair carries the gain and loss volume computed from its construction, so the set verifies integration and thresholding rather than the accuracy of any surface fed into them. Co-registration error is absent by construction and is not exercised."
     storage: committed
     localPath: validation/external-oracles/change/fixtures.json
+
+  - datasetId: OLV-DS-076-GEODESY-UTM-FIXTURES
+    title: "Thirty-six WGS-84 geodetic coordinates covering ordinary, edge and exception UTM cases"
+    sourceUrl: validation/external-oracles/geodesy/fixtures.json
+    landingPage: validation/external-oracles/README.md
+    licence: MIT
+    licenceUrl: https://github.com/Aurtechmx/openlidarviewer/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-08-24
+    sourceSha256: c1d802a18f4ee5f1eb1dd6d33d677e2a5008e4c117e165c267cc6a46289b2752
+    sourceBytes: 4571
+    format: other
+    pointCount: 36
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: "EPSG:4326 WGS 84 geographic"
+    verticalCrs: not-applicable
+    horizontalUnits: degree
+    verticalUnits: not-applicable
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: OpenLiDARViewer contributors
+    citation: "OpenLiDARViewer geodesy fixture matrix, validation/external-oracles/geodesy/fixtures.json."
+    knownLimitations: "A frozen list of latitude and longitude pairs written as exact decimal literals, nothing more. It carries no reference easting or northing of its own, so it settles nothing on its own; the answers come from the two oracle stacks recorded beside it. Latitudes stay inside the UTM domain of 80S to 84N, so refusal outside that band is not exercised here. No elevation is present and no datum other than WGS 84 appears."
+    storage: committed
+    localPath: validation/external-oracles/geodesy/fixtures.json

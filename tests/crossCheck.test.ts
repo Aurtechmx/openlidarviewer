@@ -133,7 +133,11 @@ describe('reference manifest honesty', () => {
     // PDAL readers.e57 over a CC-BY terrestrial scan
     // (e57PdalCrossDecode.test.ts), compared as an exact quantised integer sum
     // rather than a summary statistic.
-    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST'];
+    // CRS-UTM-PROJECTION is the WGS-84 UTM projection against PROJ cs2cs and
+    // GeographicLib GeoConvert over 36 frozen coordinates
+    // (geodesyOracleAgreement.test.ts), with the two references agreeing with
+    // each other far inside the gate.
+    const E4 = ['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST', 'CRS-UTM-PROJECTION'];
     expect(REFERENCE_SLOTS.length).toBeGreaterThan(0);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(E4);

@@ -889,7 +889,7 @@ describe('the status vocabulary', () => {
 });
 
 describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
-  it('still lists every claim slot, with twelve references supplied', () => {
+  it('still lists every claim slot, with thirteen references supplied', () => {
     expect(REFERENCE_SLOTS.map((s) => s.claimId)).toEqual([
       'DTM',
       'DSM',
@@ -909,9 +909,10 @@ describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
       // study manifest whose protocol was frozen in an earlier commit.
       'CHANGE-RASTER',
       'CHANGE-VOLUME',
+      'CRS-UTM-PROJECTION',
     ]);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
-    expect(supplied).toEqual(['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST']);
+    expect(supplied).toEqual(['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST', 'CRS-UTM-PROJECTION']);
   });
 
   it('allReferencesPending keeps its behaviour', () => {

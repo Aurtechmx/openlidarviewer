@@ -1,0 +1,100 @@
+{
+ "schemaVersion": 1,
+ "studyId": "CRS-UTM-PROJ-GEOGRAPHICLIB-THIRTYSIX-FIXTURES",
+ "claimId": "CRS-UTM-PROJECTION",
+ "example": false,
+ "notes": [
+  "The residual takes both signs across the fixture set, which is what a truncated series expansion leaves. It is not an offset in one direction and is not described as one.",
+  "The two oracles agree with each other to 2.0e-9 m in easting and 1.9e-9 m in northing. That is six orders below the gate, which is what lets the candidate residual be attributed to the candidate.",
+  "Zone and hemisphere are checked against GeographicLib alone, because GeoConvert applies the UTM exception rules itself. cs2cs is told which EPSG code to use, and that code is built from the GeographicLib zone, so the PROJ leg measures projection arithmetic against a target the candidate cannot move.",
+  "One datum stands on both sides. Nothing here exercises a datum transformation, a transformation grid, a vertical reference or an ECEF conversion."
+ ],
+ "protocolRef": {
+  "protocolId": "PROTO-CRS-UTM-PROJ-GEOGRAPHICLIB",
+  "digest": "sha256:0767e6512dce74853cedbbf86301f4923d3536ee52869f301d3da5a578a782e3"
+ },
+ "candidate": {
+  "revision": "899716907d3375790450dd1d42d71f7956f66bba",
+  "version": "0.6.6",
+  "algorithmVersion": "v0.6.6"
+ },
+ "reference": {
+  "tool": "PROJ and GeographicLib",
+  "version": "PROJ 9.8.1, GeographicLib 2.7",
+  "containerDigest": null,
+  "containerPinning": "not-executed",
+  "containerPinningNote": "A container digest is the pin this record would prefer. Both tools were installed from Homebrew into the host environment rather than pulled as images, so no digest exists to record. The resolved executable paths (/opt/homebrew/bin/GeoConvert and /opt/homebrew/bin/cs2cs), the version each tool reports and the exact command lines stand in for it, and all three are captured in the reference output.",
+  "executablePath": "/opt/homebrew/bin/GeoConvert",
+  "commandLine": "GeoConvert -u -p 9 ; cs2cs -f %.9f EPSG:4326 EPSG:<326|327><zone>",
+  "platform": "darwin-arm64"
+ },
+ "datasets": [
+  {
+   "datasetId": "OLV-DS-076-GEODESY-UTM-FIXTURES",
+   "description": "Thirty-six WGS-84 latitude and longitude pairs written as exact decimal literals: ordinary mid-latitudes in both hemispheres, the equator on the prime meridian, points either side of a zone edge, the four corners of the widened Norway zone 32V with a point just outside each limit, and the Svalbard exception zones 31X, 33X, 35X and 37X.",
+   "path": "validation/external-oracles/geodesy/fixtures.json",
+   "sha256": "c1d802a18f4ee5f1eb1dd6d33d677e2a5008e4c117e165c267cc6a46289b2752"
+  }
+ ],
+ "parameterSets": [
+  {
+   "id": "PS-UTM-WGS84-ZONE-AUTO",
+   "description": "WGS 84 in and WGS 84 UTM out, with the zone chosen by the published UTM rule including the Norway and Svalbard exceptions, and coordinates printed to nine decimal places on both sides.",
+   "candidateParameters": {
+    "function": "latLonToUtm",
+    "module": "src/geo/UtmConverter.ts",
+    "datum": "WGS 84",
+    "zoneRule": "published UTM rule with the Norway and Svalbard exceptions"
+   },
+   "referenceParameters": {
+    "geoconvert": "GeoConvert -u -p 9, zone chosen by GeographicLib",
+    "cs2cs": "cs2cs -f %.9f EPSG:4326 to EPSG:326zz or EPSG:327zz, zone supplied from the GeographicLib result",
+    "precision": "9 decimal places"
+   }
+  }
+ ],
+ "metrics": {
+  "toleranceAbs": 0.0015,
+  "toleranceUnit": "metre, on easting and on northing, against each oracle separately",
+  "minimumComparableCells": 120,
+  "requiredWithinToleranceFraction": 1
+ },
+ "result": {
+  "comparableCells": 144,
+  "skippedCells": 0,
+  "withinToleranceFraction": 1,
+  "maxAbsDiff": 0.0009521
+ },
+ "status": "agree",
+ "statusReason": "Zone and hemisphere match GeographicLib on all 36 fixtures, the exception zones included. All 144 coordinate comparisons, easting and northing against each of the two oracles, fall inside the registered 1.5 mm gate, the largest being 4.531e-4 m in easting and 9.521e-4 m in northing. Nothing was widened.",
+ "rawArtifacts": [
+  {
+   "path": "validation/external-oracles/geodesy/fixtures.json",
+   "sha256": "c1d802a18f4ee5f1eb1dd6d33d677e2a5008e4c117e165c267cc6a46289b2752",
+   "role": "candidate-input"
+  },
+  {
+   "path": "validation/external-oracles/geodesy/references/oracle-utm.json",
+   "sha256": "2322f2d3ed8d68c01f2b721c22673daa6a5630a404d594a29ea4299bcb5bbb2a",
+   "role": "reference-output"
+  }
+ ],
+ "derivedArtifacts": [],
+ "scope": {
+  "supported": [
+   {
+    "datasetId": "OLV-DS-076-GEODESY-UTM-FIXTURES",
+    "parameterSetId": "PS-UTM-WGS84-ZONE-AUTO"
+   }
+  ],
+  "unsupported": [
+   "Datum transformation. WGS 84 stands on both sides of every comparison, so no datum shift is exercised.",
+   "PROJ transformation grids, none of which a same-datum projection consults.",
+   "Vertical reference. No height enters or leaves latLonToUtm.",
+   "ECEF and other geocentric conversions, which this function does not perform.",
+   "Latitudes outside the UTM domain of 80S to 84N, where refusal is covered by unit tests rather than by an oracle.",
+   "Accuracy against a surveyed monument. Agreement between three implementations is not a field measurement."
+  ]
+ },
+ "protocolDigest": "sha256:e15b16931853e1dc6c929254abce7e92effa6f65f04ad4900ce40d2276c7cba1"
+}
