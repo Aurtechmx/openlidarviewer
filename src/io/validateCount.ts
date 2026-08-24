@@ -13,13 +13,20 @@
  * hold could plausibly decompress to.
  *
  * The bound is deliberately loose — `minBytesPerPoint` is a conservative
- * floor (callers pass 1 byte/point for compressed streams), because the
- * goal is blocking absurd allocations, not byte-exact validation. A real
- * file is never within orders of magnitude of the limit; a header lying
- * about its count by 1000x is. Mirrors the silent clamp `loadLas.ts`
- * applies to uncompressed records, but throws instead of clamping:
+ * floor, because the goal is blocking absurd allocations, not byte-exact
+ * validation. A real file is never within orders of magnitude of the limit; a
+ * header lying about its count by 1000x is. Mirrors the silent clamp
+ * `loadLas.ts` applies to uncompressed records, but throws instead of clamping:
  * a compressed stream whose header wildly disagrees with its payload
  * cannot be partially trusted the way fixed-length records can.
+ *
+ * For a LAZ stream the floor comes from {@link compressedBytesPerPointFloor},
+ * which derives it from the point record length rather than fixing it at one
+ * byte. One byte per point is a different compression ratio for every point
+ * format: 20x for PDRF 0's twenty-byte record and 36x for PDRF 7's thirty-six,
+ * so the guard was strictest on exactly the formats that carry least. Deriving
+ * the floor from the record makes the admitted ratio the same everywhere and
+ * keeps the allocation bound where it was.
  *
  * Throws the typed {@link LoadError} (`malformed-file`) so the toast
  * explains the failure clearly. The message also contains the word
@@ -33,6 +40,66 @@
 import { LoadError } from './loadErrors';
 
 /**
+ * Smallest floor the guard will use, whatever a caller passes.
+ *
+ * A zero or negative floor makes the bound vacuous, which is the one thing this
+ * guard must never be. A hundredth of a byte per point still refuses a header
+ * claiming a trillion points behind a kilobyte.
+ */
+export const MIN_BYTES_PER_POINT_FLOOR = 0.01;
+
+/**
+ * Compression ratio above which a LAZ stream is treated as impossible.
+ *
+ * A judgement, not a measurement, and worth saying so. The one figure available
+ * here is a committed 120,000-point PDRF 7 fixture at 14.8x, which is a single
+ * synthetic file. `laz-perf` ships a decoder only, so nothing in this tree can
+ * compress content and report what ratio LAZ actually reaches; settling the
+ * number would take a corpus of real files measured with an encoder.
+ *
+ * What the choice IS grounded in is the bound it leaves behind. This guard is a
+ * sanity check against a header lying by orders of magnitude, not a memory
+ * guarantee: the real ceilings are the per-node point cap and the preflight
+ * memory plan. At one byte per point the output arrays a header could force
+ * ranged from 19x the input bytes for PDRF 0 to 33x for PDRF 3, varying by
+ * format for no reason anyone chose. At `recordLength / 50` the multiple is
+ * 45x to 49x for every format. That is looser, by 1.4x to 2.5x depending on
+ * format, and it is uniform, and it buys back a class of legitimate
+ * high-compression LAZ the flat byte refused.
+ *
+ * Degenerate content is where that matters: a node whose points share one
+ * classification, one intensity and a near-constant coordinate delta feeds the
+ * arithmetic coder almost no entropy, and a bare-earth node on a plane can pass
+ * 30x without being malformed in any way.
+ */
+export const MAX_LAZ_COMPRESSION_RATIO = 50;
+
+/**
+ * Floor used when a record length is missing or nonsense.
+ *
+ * One byte per point, which is what every LAZ caller passed before the floor
+ * was derived from the record. A header can declare a zero record length,
+ * nothing upstream rejects it, and falling back to
+ * {@link MIN_BYTES_PER_POINT_FLOOR} there would leave the guard a hundred times
+ * weaker than the flat byte it replaced, on exactly the malformed input it
+ * exists for. This change must never be looser than what it replaced.
+ */
+export const UNKNOWN_RECORD_BYTES_PER_POINT = 1;
+
+/**
+ * The bytes-per-point floor for a LAZ stream of the given record length.
+ *
+ * Callers pass the uncompressed point record length from the LAS header, so the
+ * floor scales with what a point actually carries.
+ */
+export function compressedBytesPerPointFloor(pointRecordLength: number): number {
+  if (!Number.isFinite(pointRecordLength) || pointRecordLength <= 0) {
+    return UNKNOWN_RECORD_BYTES_PER_POINT;
+  }
+  return pointRecordLength / MAX_LAZ_COMPRESSION_RATIO;
+}
+
+/**
  * Validate a header-declared point/record count against the bytes that
  * actually back it. Returns the count unchanged when plausible; throws
  * a `malformed-file` {@link LoadError} when the count is not a safe
@@ -41,9 +108,10 @@ import { LoadError } from './loadErrors';
  *
  * @param declared        The count the file's header claims.
  * @param bytesAvailable  The bytes actually present (compressed or raw).
- * @param minBytesPerPoint Conservative floor on bytes consumed per point.
- *                         Clamped to at least 1 — a 0 floor would make the
- *                         bound vacuous.
+ * @param minBytesPerPoint Conservative floor on bytes consumed per point. May
+ *                         be fractional for a compressed stream; clamped to
+ *                         {@link MIN_BYTES_PER_POINT_FLOOR}, because a zero or
+ *                         negative floor would make the bound vacuous.
  * @param context         Loader name for the error message ("LAZ",
  *                        "COPC node", "E57 CompressedVector", …).
  */
@@ -62,14 +130,16 @@ export function validateDeclaredPointCount(
       `malformed ${context}: invalid declared point count (${declared}).`,
     );
   }
-  const floor = Math.max(1, minBytesPerPoint);
+  const floor = Number.isFinite(minBytesPerPoint)
+    ? Math.max(MIN_BYTES_PER_POINT_FLOOR, minBytesPerPoint)
+    : MIN_BYTES_PER_POINT_FLOOR;
   const plausibleMax = Math.floor(Math.max(0, bytesAvailable) / floor);
   if (declared > plausibleMax) {
     throw new LoadError(
       'malformed-file',
       `malformed ${context}: header declares ${declared.toLocaleString('en-US')} points, ` +
         `but only ${bytesAvailable.toLocaleString('en-US')} bytes are available ` +
-        `(at least ${floor} byte(s) per point expected).`,
+        `(at least ${floor.toFixed(2)} byte(s) per point expected).`,
     );
   }
   return declared;

@@ -20,7 +20,10 @@
 
 import type { createLazPerf } from 'laz-perf';
 import { LoadError } from '../loadErrors';
-import { validateDeclaredPointCount } from '../validateCount';
+import {
+  validateDeclaredPointCount,
+  compressedBytesPerPointFloor,
+} from '../validateCount';
 import type { ChunkDecodeMetadata } from './copcChunkDecode';
 
 /** The instantiated laz-perf WASM module. */
@@ -51,12 +54,12 @@ export function decompressChunk(
   meta: ChunkDecodeMetadata,
 ): Uint8Array {
   // Allocation guard — bound the node's declared count by its compressed
-  // bytes (1 byte/point is far below any genuine LAZ stream) and by the
-  // practical node ceiling BEFORE sizing the output buffer below.
+  // bytes, at a floor derived from the record length rather than a flat byte,
+  // and by the practical node ceiling BEFORE sizing the output buffer below.
   const pointCount = validateDeclaredPointCount(
     meta.pointCount,
     chunk.byteLength,
-    1,
+    compressedBytesPerPointFloor(meta.pointRecordLength),
     'COPC node',
   );
   if (pointCount > MAX_NODE_POINTS) {
