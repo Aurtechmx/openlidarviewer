@@ -904,6 +904,11 @@ describe('REFERENCE_SLOTS stays the compact runtime summary', () => {
       'VRM',
       'MEAS-PROFILE',
       'E57-INGEST',
+      // The two change slots carry a committed GRASS reference and still read
+      // `pending`: the comparison ran and agreed, but promoting a claim needs a
+      // study manifest whose protocol was frozen in an earlier commit.
+      'CHANGE-RASTER',
+      'CHANGE-VOLUME',
     ]);
     const supplied = REFERENCE_SLOTS.filter((s) => s.status === 'supplied').map((s) => s.claimId);
     expect(supplied).toEqual(['DTM', 'DSM', 'CHM', 'SLOPE-RASTER', 'ASPECT-RASTER', 'HILLSHADE', 'CONTOURS', 'MEAS-AREA', 'TPI', 'VRM', 'MEAS-PROFILE', 'E57-INGEST']);
