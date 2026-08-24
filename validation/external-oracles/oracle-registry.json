@@ -250,6 +250,125 @@
         "The host currently carries R 4.6.1. The existing profile study cites 4.4.1, so a study must record the version it actually ran.",
         "The existing profile study cites R 4.4.1. Both versions are recorded by the studies that ran them rather than one being retired."
       ]
+    },
+    {
+      "oracleId": "cloudcompare-2.13.2",
+      "name": "CloudCompare",
+      "version": "2.13.2",
+      "executables": [
+        "CloudCompare"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation",
+        "alternative-algorithm-family"
+      ],
+      "domains": [
+        "cloud-to-cloud-distance",
+        "change-detection",
+        "nearest-neighbour",
+        "point-cloud-registration",
+        "e57-decode",
+        "las-decode"
+      ],
+      "lineageGroup": "cloudcompare",
+      "implementationLanguage": "C++",
+      "license": "GPL-2.0-or-later",
+      "architecture": "darwin-arm64",
+      "installationMethod": "application bundle at /Applications/CloudCompare.app, command line entry point /Applications/CloudCompare.app/Contents/MacOS/CloudCompare",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Nearest-neighbour and cloud-to-cloud distance come from CCCoreLib, its own octree and distance code, which shares no source with GDAL, PROJ, PDAL or GRASS. That is the part of CloudCompare this registry treats as an independent leg.",
+        "The bundle ships libgdal.34 and libproj.25 in Contents/Frameworks. Any raster read, raster write or coordinate transformation done through CloudCompare is gdal or proj lineage, not a second leg against the registered gdal-3.13.1 or proj-9.8.1 entries.",
+        "The bundle ships PCL 1.14 (libpcl_features, libpcl_registration, libpcl_surface and others) behind the QPCL and QPCL_IO plugins. Anything cited from those plugins, including PCL normal estimation and PCL registration, is pcl lineage and may not be summed with pcl-1.15.1.",
+        "The E57 reader is the QE57_IO plugin over libxerces-c, and the LAS reader is QLAS_IO over liblaszip. Whether either shares source with the libE57Format path that pdal-2.10.2 uses was not established here, so an E57 or LAS decode leg from CloudCompare is recorded as unknown independence rather than as an independent leg."
+      ],
+      "limitations": [
+        "C2C_DIST picks its octree subdivision level automatically when none is given, and the level it picks is a function of the two clouds. The run recorded here reported \"Octree level (auto): 6\". A study must record the level and any -MAX_DIST, -SPLIT_XYZ or local-model option, because a different level changes which neighbours are searched and therefore the distances reported.",
+        "Default C2C distance is point to nearest point, not point to surface. Against a sampled surface it carries a sampling bias that grows with point spacing, so it is not interchangeable with a local-model or M3C2 distance without saying which was run.",
+        "M3C2 answers a different question than raster differencing: it measures along local normals with its own projection and normal scales. It belongs in a study as alternative-algorithm-family, scored against truth, never as a conformance gate on a raster volume.",
+        "Requires the cocoa Qt platform plugin. The bundle ships no offscreen plugin, so the binary aborts under QT_QPA_PLATFORM=offscreen and cannot run on a headless CI worker as installed.",
+        "Run from a host application bundle rather than a digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
+    },
+    {
+      "oracleId": "pcl-1.15.1",
+      "name": "Point Cloud Library",
+      "version": "1.15.1",
+      "executables": [
+        "pcl_normal_estimation",
+        "pcl_icp",
+        "pcl_outlier_removal",
+        "pcl_voxel_grid"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation",
+        "alternative-algorithm-family"
+      ],
+      "domains": [
+        "normals",
+        "point-cloud-registration",
+        "outlier-removal",
+        "voxel-downsampling",
+        "nearest-neighbour"
+      ],
+      "lineageGroup": "pcl",
+      "implementationLanguage": "C++",
+      "license": "BSD-3-Clause",
+      "architecture": "darwin-arm64",
+      "installationMethod": "homebrew, keg /opt/homebrew/Cellar/pcl/1.15.1_8",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "CloudCompare 2.13.2 bundles PCL 1.14 behind its QPCL plugin. A PCL normal or registration result obtained through CloudCompare and one obtained from these binaries are one lineage. Only CCCoreLib routines make CloudCompare a separate leg.",
+        "Neighbour search runs through FLANN (libflann_cpp) rather than PCL source. Any other FLANN-based neighbour search shares that dependency, so a pure nearest-neighbour comparison is weaker evidence than a normals or registration comparison where the estimator itself is PCL code.",
+        "Whether the registered pdal-2.10.2 image was built with its optional PCL-backed plugins was not checked here. Until it is, a study pairing PDAL and PCL on a routine PDAL could be delegating must record that independence is unestablished rather than assume it.",
+        "Independent of GDAL, PROJ and GRASS: PCL links neither for the routines above."
+      ],
+      "limitations": [
+        "pcl_normal_estimation gives a normal an arbitrary sign unless a viewpoint is set. It defaults to the origin, so a comparison against a candidate that orients normals by a different convention must compare unsigned angle or state the orientation rule on both sides.",
+        "Passing -radius on an organized dataset silently switches the estimator: the value is reused as the smoothing size of IntegralImageNormalEstimation instead of a neighbourhood radius, and the result is then a different algorithm than the unorganized path. The tool prints both interpretations, and a study must record which one ran.",
+        "The command line tools read and write PCD. PCD carries no CRS, so any georeferencing is lost on the round trip and the leg speaks to geometry in the file frame only.",
+        "PCD ascii and the default binary form store coordinates as float32, which puts a quantization floor under any comparison on large absolute coordinates.",
+        "Run from the host toolchain rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
+    },
+    {
+      "oracleId": "octave-11.3.0",
+      "name": "GNU Octave",
+      "version": "11.3.0",
+      "executables": [
+        "octave",
+        "octave-cli"
+      ],
+      "roleCapabilities": [
+        "original-algorithm-reference",
+        "independent-statistical-recalculation",
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "matlab-reference-code",
+        "statistics",
+        "numerical-linear-algebra",
+        "signal-processing"
+      ],
+      "lineageGroup": "octave",
+      "implementationLanguage": "C++/Fortran/Octave",
+      "license": "GPL-3.0-or-later",
+      "architecture": "darwin-arm64",
+      "installationMethod": "homebrew, /opt/homebrew/bin/octave",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Its strongest role is running an author's own MATLAB code released alongside a paper. Doing so makes the comparison original-algorithm-reference rather than one more implementation, but only when the published code is the code that ran. A study must cite the exact script and its provenance, because Octave is the interpreter and not the algorithm.",
+        "Where no author code is involved, Octave is an independent recalculation of a formula outside the candidate's language and runtime, in the same sense as r-4.6.1 but a separate codebase from it.",
+        "On this host Octave and R both link the same /opt/homebrew/opt/openblas libopenblas.0.dylib. Elementwise statistics such as RMSE, quantiles and NMAD are unaffected, but a dense linear algebra result (least squares, eigen decomposition, matrix inverse) obtained from Octave and from R shares a BLAS and LAPACK path and is not two independent legs.",
+        "Octave also links ARPACK and SuiteSparse for eigen and sparse routines. The same caution applies to any leg resting on those."
+      ],
+      "limitations": [
+        "MATLAB compatibility is high but not total, and it is toolbox dependent. Core language and base library functions match closely; anything from a MATLAB toolbox is absent unless the corresponding Octave Forge package is installed. On this host only image 2.20.0 is installed, and exist('regionprops') returns 0, so a reference script calling a Statistics, Mapping or Curve Fitting toolbox function will error rather than return a wrong number.",
+        "Where a function exists in both, defaults may still differ (integer division and rounding rules, printf handling of some conversions, do-until and other Octave-only syntax that MATLAB will not run). A study running author code must record that the script executed unmodified, or list every edit made to it.",
+        "Octave's quantile default is method 5, and its median on even-length samples interpolates. src/validation/checkpointAccuracy.ts takes the nearest rank, so a study comparing them must name the convention on each side, as the r-4.6.1 entry already requires.",
+        "Validates arithmetic only. A correct recomputation says nothing about whether the underlying model is calibrated against real terrain.",
+        "Run from the host toolchain rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
     }
   ]
 }
