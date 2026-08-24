@@ -1082,3 +1082,131 @@ the normal gate never regenerates or diffs it (the writer is gated behind
 improve against, and so a reviewer can read the shape of the problem — evictions,
 thrash events, queue-wait tail — before any fix is written.
 
+
+---
+
+## Profile section measurement
+
+`npm run benchmark:profile-section` puts the v0.6.7 profile section against the two
+performance targets it was written to, both of which had been stated and never
+measured: no unbroken main-thread extraction task above 100 ms on a typical
+dataset, and hit-test latency that stays inside a frame.
+
+The harness is `tests/benchmark/profileSection.test.ts`, the record schema is
+`benchmarks/performance/profileSectionRecord.ts`, and the scene comes from
+`benchmarks/fixtures/profileSectionCloud.ts`. It drives the shipped modules,
+`extractProfileSection`, `extractProfileSectionChunks`, `selectProfileSectionLod`
+and `profileHitTest`, with nothing under `src/` altered.
+
+### The scene
+
+Points come from the R4 additive recurrence on the generalised golden ratio phi4,
+the real root of x^5 = x + 1, with the conventional 0.5 offset. Four dimensions:
+two place the return, one chooses its class, one carries the ground noise and the
+canopy depth. There is no pseudo-random source anywhere in the generator, so a
+given point count always produces the same bytes, and the low-discrepancy point
+set is what makes a corridor's accepted count a function of the corridor's area
+rather than of where a random stream happened to clump.
+
+Heights come from `groundElevationAt` over the surface `syntheticCloud.ts`
+already ships, so both fixtures sample the same landscape. Returns are dealt
+round-robin across four sources at 4 returns per square metre, each source in its
+own float32 buffer read into the project frame through a float64 offset, which is
+the arrangement the section seam hands the extractor. Every source spans the whole
+tile, so the bounds pre-test skips nothing and every source point is examined.
+The corridor is the one a caller gets by supplying no width at all:
+`AUTO_CORRIDOR_FRACTION` of the section length. The section line crosses the tile,
+so almost every return goes through the full corridor test rather than the cheap
+chainage reject.
+
+### What was measured
+
+One warm-up and five recorded runs per series, on an Apple M3 Max under Node
+v26.7.0, darwin 25.5.0, at revision f98d42dd. The durations below are wall-clock
+on that host and will differ on another one. The counts, the accepted totals and
+the derived footprints will not.
+
+| source points | accepted | whole-run median ms | chunked total median ms | longest slice median ms | longest slice max ms | peak buffers MiB | derived transient MiB |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,000,000 | 95,896 | 41.801 | 44.342 | 4.582 | 4.627 | 12.3 | 9.0 |
+| 5,000,000 | 479,442 | 169.924 | 182.591 | 4.589 | 5.495 | 39.8 | 38.4 |
+| 10,000,000 | 958,877 | 339.924 | 352.122 | 4.529 | 5.455 | 79.5 | 76.8 |
+| 25,000,000 | 2,397,156 | 846.856 | 860.030 | 7.844 | 9.248 | 271.4 | 271.4 |
+
+Whole-run interquartile ranges were 0.14, 0.81, 1.25 and 3.05 ms, at most 0.5 % of
+the median at any size, and the record carries every raw value. A slice is one
+`next()` call on the generator, which is exactly one uninterrupted task. The
+largest slice is always the final one, because it carries `finish()`, the
+copy-out that sizes the section arrays.
+
+Peak memory is read two ways, because one counter is not enough here.
+
+Process RSS reads near zero at the large sizes: the process already holds the
+source buffers and satisfies the extraction out of pages it has not returned. Live
+ArrayBuffer bytes follow the section arrays themselves, and land within 4 % of the
+footprint derived from the accepted count and the builder array widths from 5M
+source points upward. At 1M they run 37 % above it, because that run is short
+enough that the storage the builder's last doubling released was still live when
+the reading was taken. Both are deltas above a post-collection baseline, so they
+need `npm run benchmark:profile-section:gc`; without `--expose-gc` the baseline
+still holds the previous repeat's garbage and the delta understates the transient.
+
+Selection, index build and hover, at a display cap of 200,000. No module on this
+revision states a cap: `selectProfileSectionLod` takes it from its caller, and
+`src/` does not yet call it.
+
+| section returns | LOD selection median ms | LOD selection max ms | index build median ms | slowest of 4,000 hovers ms |
+| --- | --- | --- | --- | --- |
+| 479,442 | 134.815 | 151.612 | 5.968 | 0.045 |
+| 958,877 | 233.946 | 241.997 | 3.563 | 0.042 |
+| 2,397,156 | 546.131 | 548.820 | 4.485 | 0.062 |
+
+### Against the targets
+
+The chunked extraction path meets its target at every size measured: the longest
+uninterrupted task is 9.2 ms at 25M source points, ten times inside the 100 ms
+bound, and it grows with the chunk rather than with the scene. Against that,
+`extractProfileSection` misses the target from 5M source points upward. That helper
+drives the generator to completion without returning to its caller, so the whole
+of it is one uninterrupted task: 179 ms at 5M, 349 ms at 10M, 862 ms at 25M. Which
+target a section meets is therefore a property of the caller. A host that calls
+the wrapper has no chunking, whatever the generator underneath it offers.
+
+Hit-testing meets its target with room to spare. The slowest of 4,000 hovers at
+200,000 displayed points was 0.062 ms against a 16.7 ms frame, and the index build
+is 3.6 to 6.0 ms, a fifth to a third of a frame and paid once per section rather
+than per hover.
+
+`selectProfileSectionLod` misses the 100 ms bound at every section above roughly
+400,000 returns, reaching 549 ms at 2.4M. Selection cost follows the section size,
+not the cap, at close to 0.23 microseconds per return, and the module has no yield
+seam of its own: the whole selection is one uninterrupted task. The stated target
+names extraction, so this is the same 100 ms read against the neighbouring stage,
+with the threshold unchanged and the stage it is read against stated in the
+record's `verdicts` and `notes`.
+
+### Running it
+
+```
+# Writes docs/validation/profile-section-baseline.json
+npm run benchmark:profile-section
+
+# The same run with --expose-gc, which the memory columns need
+npm run benchmark:profile-section:gc
+
+# The always-on contract + honesty test (part of the normal gate)
+npx vitest run tests/benchmark/profileSection.test.ts
+```
+
+### The committed baseline
+
+`docs/validation/profile-section-baseline.json` is one recorded run, tagged with
+the revision it measured. It is a measured-on-this-machine artifact, not a
+reproducibility hash: timings never repeat exactly, so the normal gate never
+regenerates or diffs it, and the writer is gated behind `PROFILE_SECTION_WRITE=1`.
+
+Every verdict in it is derived from a measurement by `recomputeVerdicts`, and
+`validateProfileSectionRecord` refuses a record whose stored verdicts disagree
+with that recomputation or whose thresholds are not the two constants the targets
+are stated as. A record carrying a measurement over the line and a threshold
+widened to fit it does not validate.

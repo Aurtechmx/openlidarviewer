@@ -70,6 +70,8 @@
     "benchmark:seeds": "vitest run tests/benchmark/seedSensitivity.test.ts --testTimeout=1800000",
     "benchmark:frame:compare": "vitest run tests/benchmark/frameRecord.test.ts",
     "benchmark:streaming-nav": "STREAMING_NAV_WRITE=1 vitest run tests/benchmark/streamingNav.test.ts --testTimeout=600000",
+    "benchmark:profile-section": "PROFILE_SECTION_WRITE=1 vitest run tests/benchmark/profileSection.test.ts --testTimeout=3600000 --reporter=verbose",
+    "benchmark:profile-section:gc": "BENCHMARK_FORCE_GC=1 npm run benchmark:profile-section",
     "benchmark:clean-clone": "node scripts/verify-clean-clone.mjs",
     "benchmark:clean-clone:install": "node scripts/verify-clean-clone.mjs --install",
     "benchmark:publication:quick": "node scripts/publication-battery.mjs quick",
