@@ -44,7 +44,7 @@ import { fileURLToPath } from 'node:url';
 // to exist), so the lint would print success having read zero files. A gate
 // that passes vacuously is worse than one that fails, hence fileURLToPath.
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science', 'src/geo/context'];
+const LAYERS = ['src/terrain', 'src/validation', 'src/analysis', 'src/science', 'src/geo/context', 'src/geo/frame'];
 
 /** A specifier that reaches into the UI layer or pulls in three.js. */
 function isBanned(spec) {

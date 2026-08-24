@@ -2173,9 +2173,9 @@ export class Viewer {
 
   /** Configure navigation and clip planes for a streaming cloud's extent. */
   private _configureForStreaming(cloud: StreamingSource): void {
-    // COPC + EPT are both LAS-derived (EPT writes binary tiles via LAS
-    // conventions) — always Z-up.
-    this._worldUp.set(0, 0, 1);
+    // Render up comes from the source's frame. COPC, EPT and the tile store
+    // are LAS-derived and report Z; a rotating frame reports its tangent up.
+    this._worldUp.fromArray(cloud.frame.renderWorldUp());
     this._nav.setWorldUp(this._worldUp);
 
     const b = cloud.localBounds();

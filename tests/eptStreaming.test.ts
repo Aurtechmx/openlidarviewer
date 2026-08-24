@@ -311,6 +311,16 @@ test('EptStreamingPointCloud.open round-trips the fixture into a streaming sourc
   );
   expect(cloud.kind).toBe('ept');
   expect(cloud.name).toBe('ept-tiny');
+  // The frame and the render origin must describe the same conversion; a
+  // consumer reconstructs a source coordinate through one or the other.
+  expect(cloud.frame.isTranslationOnly).toBe(true);
+  expect(cloud.frame.renderOrigin).toEqual([...cloud.renderOrigin]);
+  expect(cloud.frame.renderToSourcePoint([1.5, -2.25, 30.125])).toEqual([
+    1.5 + cloud.renderOrigin[0],
+    -2.25 + cloud.renderOrigin[1],
+    30.125 + cloud.renderOrigin[2],
+  ]);
+  expect(cloud.frame.renderWorldUp()).toEqual([0, 0, 1]);
   expect(cloud.sourcePointCount).toBe(100);
   expect(cloud.dataType).toBe('binary');
   expect(cloud.maxDepth()).toBe(0);

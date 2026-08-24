@@ -22,6 +22,7 @@
  */
 
 import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
+import type { SpatialFrame } from '../../geo/frame/spatialFrame';
 import type { ChunkDecodeMetadata } from '../../io/copc/copcChunkDecode';
 import type { StreamingNode } from './StreamingNode';
 import type { NodeCounts, StreamingNodeStore } from './StreamingNodeStore';
@@ -131,6 +132,18 @@ export interface StreamingSource {
   readonly name: string;
   /** Render origin every node is recentred against (float64-stable). */
   readonly renderOrigin: [number, number, number];
+  /**
+   * How a source coordinate becomes a render coordinate, and back.
+   *
+   * Every format streamed today recentres and does not rotate, so this is a
+   * translated-cartesian frame built on {@link renderOrigin} and the two agree
+   * exactly. A consumer that reconstructs a source coordinate should go through
+   * the frame rather than adding the origin, because a source in a geocentric
+   * frame needs a rotation that no offset can express, and the frame is where
+   * that arrives. `frame.isTranslationOnly` is how a caller that cannot yet do
+   * so refuses rather than reporting a coordinate off by hundreds of metres.
+   */
+  readonly frame: SpatialFrame;
   /** The runtime octree — nodes, state, scoring inputs. */
   readonly octree: StreamingOctreeView;
   /**

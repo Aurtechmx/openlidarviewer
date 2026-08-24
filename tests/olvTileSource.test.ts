@@ -108,6 +108,18 @@ function makeSource(reader: TileStoreReader, tiles: TileBytesReader) {
 }
 
 describe('OlvTileSource', () => {
+  it('reports a frame that agrees with its render origin', async () => {
+    const { reader, tiles } = await buildReader(2000);
+    const source = makeSource(reader, tiles);
+    const o = source.renderOrigin;
+    expect(source.frame.isTranslationOnly).toBe(true);
+    expect(source.frame.renderOrigin).toEqual([o[0], o[1], o[2]]);
+    expect(source.frame.renderWorldUp()).toEqual([0, 0, 1]);
+    expect(source.frame.renderToSourcePoint([1.5, -2.25, 30.125]))
+      .toEqual([1.5 + o[0], -2.25 + o[1], 30.125 + o[2]]);
+    expect(source.frame.sourceToRenderPoint([o[0], o[1], o[2]])).toEqual([0, 0, 0]);
+  });
+
   it('presents the stored pyramid as a streaming octree', async () => {
     const { reader, tiles, pointCount } = await buildReader(5000);
     const source = makeSource(reader, tiles);

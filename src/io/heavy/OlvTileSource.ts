@@ -41,6 +41,7 @@ import type {
   StreamingSource,
 } from '../../render/streaming/StreamingSource';
 import type { TileStoreReader } from './tileStore';
+import { createTranslatedFrame, type SpatialFrame } from '../../geo/frame/spatialFrame';
 
 /**
  * Node ids carry a one-character prefix because the root's octant path is the
@@ -194,6 +195,12 @@ export class OlvTileSource implements StreamingSource {
   readonly name: string;
   /** The recentring origin the build stored — world = local + this. */
   readonly renderOrigin: [number, number, number];
+  /**
+   * The source-to-render conversion. A recentring with no rotation: this format
+   * is LAS-derived and Z-up, so render up is the source's own +Z.
+   */
+  readonly frame: SpatialFrame;
+
   readonly octree: OlvTileOctree;
 
   private readonly _store: TileStoreReader;
@@ -210,6 +217,7 @@ export class OlvTileSource implements StreamingSource {
     this._close = options.close;
     const o = options.store.manifest.origin;
     this.renderOrigin = [o[0], o[1], o[2]];
+    this.frame = createTranslatedFrame(this.renderOrigin);
     this.octree = new OlvTileOctree(options.store);
   }
 

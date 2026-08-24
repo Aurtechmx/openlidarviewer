@@ -25,6 +25,7 @@ import type {
   StreamingSource,
   StreamingSourceKind,
 } from './StreamingSource';
+import { createTranslatedFrame, type SpatialFrame } from '../../geo/frame/spatialFrame';
 
 /** The render origin — the floored octree-cube centre, shared by every node. */
 function pickRenderOrigin(
@@ -50,6 +51,12 @@ export class StreamingPointCloud implements StreamingSource {
   readonly octree: StreamingOctree;
   /** The render origin every node is recentred against (float64-stable). */
   readonly renderOrigin: [number, number, number];
+  /**
+   * The source-to-render conversion. A recentring with no rotation: this format
+   * is LAS-derived and Z-up, so render up is the source's own +Z.
+   */
+  readonly frame: SpatialFrame;
+
   /** The display name — the file name. */
   readonly name: string;
   /** File-level RGB bit-depth, captured from the first decoded RGB chunk; see
@@ -65,6 +72,7 @@ export class StreamingPointCloud implements StreamingSource {
     this.source = source;
     this.octree = octree;
     this.renderOrigin = renderOrigin;
+    this.frame = createTranslatedFrame(renderOrigin);
     this.name = name;
   }
 
