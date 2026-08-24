@@ -163,8 +163,15 @@ export interface SyntheticCloud {
   readonly datasetId: string;
 }
 
-/** The default surface. Fractions of the extent — see the header for why. */
-const SURFACE: SurfaceModel = {
+/**
+ * The default surface. Fractions of the extent — see the header for why.
+ *
+ * Exported so a second fixture can evaluate the SAME landscape through
+ * {@link groundElevationAt} instead of restating these nine amplitudes. Two
+ * copies of the constants would let the two fixtures drift apart while both
+ * still claimed to be sampling "the synthetic tile".
+ */
+export const SURFACE: SurfaceModel = {
   tiltFraction: 0.025,
   hillFraction: 0.04,
   hillSigmaFraction: 0.18,
