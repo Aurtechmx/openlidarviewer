@@ -75,7 +75,7 @@
   },
   {
    "path": "validation/external-oracles/geodesy/references/oracle-utm.json",
-   "sha256": "2322f2d3ed8d68c01f2b721c22673daa6a5630a404d594a29ea4299bcb5bbb2a",
+   "sha256": "55fd465f74533eeee7f49ac7bb3916c071a678339c358f71c6def31a0a2d5b43",
    "role": "reference-output"
   }
  ],
