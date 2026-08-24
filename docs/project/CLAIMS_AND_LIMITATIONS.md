@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Thirteen products are at E4. Five are algorithm checks against GDAL:
+- Fifteen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -128,6 +128,19 @@ discrete properties a test pins (byte-identity, exact inverses).
   fixtures carry WGS 84 on both sides, so no datum transformation and no PROJ
   transformation grid is exercised, and the function takes no height, so vertical
   reference and ECEF are outside what was measured.
+- `HOLDOUT-RMSE` and `NVA-VVA` are the fourteenth and fifteenth, and they are
+  statistics rather than products of a surface. Base R 4.6.1 recomputed them over
+  six frozen residual vectors: bias, RMSE and the maximum absolute residual agree
+  to about 4.4×10⁻¹⁶ over eighteen comparisons, and the 95 percent figure, 1.96
+  times that RMSE, agrees to about 8.9×10⁻¹⁶ over six, both under a 1×10⁻¹²
+  tolerance. That establishes the formula is computed correctly outside
+  TypeScript, including that RMSE is the raw second moment rather than a standard
+  deviation. It establishes nothing about accuracy: both claims still require E5,
+  the held-out points still come from the same source as the interpolated ones,
+  and the tolerance was adopted alongside the result rather than preregistered.
+  Median, NMAD and P95 are excluded because R interpolates at type 7 while
+  `checkpointAccuracy` takes the nearest rank, a difference the study records
+  rather than resolves.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-ACCURACY-STATS-R-RESIDUALS",
+  "example": false,
+  "title": "The accuracy statistics recomputed in base R over frozen residual vectors",
+  "question": "Does checkpointAccuracy compute bias, RMSE and the maximum absolute residual, and does the NVA figure derived as 1.96 times that RMSE, agree with an independent base-R recomputation over six frozen residual vectors, and with the closed forms four of them carry?",
+  "recordWrittenOn": "2026-08-24",
+  "referenceTool": "R",
+  "referenceVersion": "4.6.1",
+  "claims": [
+    {
+      "claimId": "HOLDOUT-RMSE",
+      "datasetIds": [
+        "OLV-DS-077-SYNTHETIC-ACCURACY-RESIDUALS"
+      ],
+      "parameterSetIds": [
+        "PS-ACCURACY-POOLED-RMSE"
+      ],
+      "metrics": {
+        "toleranceAbs": 1e-12,
+        "toleranceUnit": "m",
+        "minimumComparableCells": 18,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "Both sides read the same exact decimal literals and both accumulate in double, so the only arithmetic difference left is summation order over at most a hundred terms, which is bounded by a few multiples of 2.2e-16 on quantities of order 1 to 100. 1e-12 sits several orders above that floor and far below any vertical accuracy figure a reader would act on, so a difference above it would be a formula difference and not round-off. The tolerance is never widened to reach agreement.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-24",
+        "witnessCommit": "5a382283f3527b5ae0507902b984218b45cbb2a6",
+        "witness": "The commit that added the residual fixtures, the R script and tests/statisticsRAgreement.test.ts, where the 1e-12 tolerance appears as the constant TOL. The tolerance and the reference output arrive together in that commit, so no commit shows the tolerance while the comparison had no result.",
+        "resultLandedOn": "2026-08-24",
+        "resultCommit": "5a382283f3527b5ae0507902b984218b45cbb2a6"
+      }
+    },
+    {
+      "claimId": "NVA-VVA",
+      "datasetIds": [
+        "OLV-DS-077-SYNTHETIC-ACCURACY-RESIDUALS"
+      ],
+      "parameterSetIds": [
+        "PS-ACCURACY-NVA95"
+      ],
+      "metrics": {
+        "toleranceAbs": 1e-12,
+        "toleranceUnit": "m",
+        "minimumComparableCells": 6,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "Both sides read the same exact decimal literals and both accumulate in double, so the only arithmetic difference left is summation order over at most a hundred terms, which is bounded by a few multiples of 2.2e-16 on quantities of order 1 to 100. 1e-12 sits several orders above that floor and far below any vertical accuracy figure a reader would act on, so a difference above it would be a formula difference and not round-off. The tolerance is never widened to reach agreement.",
+      "freeze": {
+        "status": "adopted-with-result",
+        "on": "2026-08-24",
+        "witnessCommit": "5a382283f3527b5ae0507902b984218b45cbb2a6",
+        "witness": "The commit that added the residual fixtures, the R script and tests/statisticsRAgreement.test.ts, where the 1e-12 tolerance appears as the constant TOL. The tolerance and the reference output arrive together in that commit, so no commit shows the tolerance while the comparison had no result.",
+        "resultLandedOn": "2026-08-24",
+        "resultCommit": "5a382283f3527b5ae0507902b984218b45cbb2a6"
+      }
+    }
+  ],
+  "decisionRule": "The study reports agreement only on the quantities that carry no order statistic: bias, RMSE, the maximum absolute residual, and the NVA figure derived from RMSE. Median, NMAD and P95 depend on a quantile convention, R interpolates at type 7 and checkpointAccuracy takes the nearest rank, and the difference is recorded rather than counted as agreement or as error. Where a closed form exists it is scored first, because two programs computing the same wrong statistic agree perfectly.",
+  "notes": [
+    "Base R only, so the reference depends on nothing beyond the R build recorded here.",
+    "The study found two quantile conventions inside this repository: src/terrain/quantile.ts interpolates and src/validation/checkpointAccuracy.ts takes the nearest rank. Reconciling them is a change to a validation module and is outside this protocol."
+  ],
+  "digest": "sha256:01cc03f30dda6f6986f28a633de61682e67be2fa3fed544f6c22cdb149288393"
+}

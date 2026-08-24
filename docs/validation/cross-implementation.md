@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Thirteen products are at E4. Five are algorithm checks against GDAL:
+Fifteen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -46,6 +46,20 @@ included. `cs2cs` is handed an EPSG code built from the GeographicLib zone rathe
 than from the candidate, so the projection arithmetic is measured against a
 target the candidate cannot move.
 
+The fourteenth and fifteenth are statistics rather than products of a surface:
+`HOLDOUT-RMSE` and `NVA-VVA`, against base R 4.6.1 over six frozen residual
+vectors. Bias, RMSE and the maximum absolute residual agree to about 4.4×10⁻¹⁶
+over eighteen comparisons, and the 95 percent figure, 1.96 times that RMSE,
+agrees to about 8.9×10⁻¹⁶ over six, both under a 1×10⁻¹² tolerance. What that
+establishes is that the formula is computed correctly outside TypeScript,
+including that RMSE is the raw second moment rather than a standard deviation.
+It establishes nothing about accuracy: both claims still require E5, the
+held-out points still come from the same source as the interpolated ones, and
+the tolerance was adopted alongside the result rather than preregistered.
+Median, NMAD and P95 are excluded because R interpolates at type 7 while
+`checkpointAccuracy` takes the nearest rank, a difference the study records
+rather than resolves.
+
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
@@ -60,10 +74,14 @@ target the candidate cannot move.
 | `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
 | `CRS-UTM-PROJECTION` | PROJ 9.8.1 `cs2cs` + GeographicLib 2.7 `GeoConvert` | `tests/geodesyOracleAgreement.test.ts` | 36 fixtures × 2 coordinates × 2 oracles | 4.531×10⁻⁴ m easting, 9.521×10⁻⁴ m northing | 1.5×10⁻³ m |
+| `HOLDOUT-RMSE` | base R 4.6.1 (bias, RMSE, max absolute residual) | `tests/statisticsRAgreement.test.ts` | 18 comparisons over 6 residual vectors | 4.4×10⁻¹⁶ m | 1×10⁻¹² m |
+| `NVA-VVA` | base R 4.6.1 (1.96 × pooled RMSE) | `tests/statisticsRAgreement.test.ts` | 6 comparisons over 6 residual vectors | 8.9×10⁻¹⁶ m | 1×10⁻¹² m |
 
-Every tolerance above except the last was registered in `REFERENCE_SLOTS` before
-the references were generated. The UTM tolerance was written in the same change
-as its first result, so its protocol records `adopted-with-result` rather than
+Every tolerance above except the last three was registered in `REFERENCE_SLOTS`
+before the references were generated. The two R tolerances were written in the
+same change as their first result, so their protocol records
+`adopted-with-result` rather than `preregistered`. The UTM tolerance was written
+in the same change as its first result, so its protocol records `adopted-with-result` rather than
 `preregistered`. It was still set from the physical question and not from the
 number that came back: a grid coordinate a reader treats as exact has to agree
 with an independent implementation well inside the millimetre survey practice
