@@ -126,6 +126,11 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         return crs.linearUnitKnown === true ? crs.linearUnitToMetres : null;
       },
       devicePixelRatio: () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio),
+      // The scene NOW, for a section that is a snapshot. A return is followed
+      // back by the identity it was recorded under, never by matching
+      // coordinates, so the seam is asked for one specific source point.
+      locateReturn: (ref, out) => deps.getViewer().profileSeam.locateReturn(ref, out),
+      crs: () => deps.crsService.current() ?? undefined,
     };
   }
 
@@ -145,7 +150,18 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   function openWorkbench(summary: MeasurementSummary): Promise<boolean> {
     if (!workbenchStage) return Promise.resolve(false);
     workbench ??= loadProfileWorkbenchRuntime().then(({ createProfileWorkbenchRuntime }) => {
-      launcher = createProfileWorkbenchRuntime({ stage: workbenchStage, scene: workbenchScene() });
+      launcher = createProfileWorkbenchRuntime({
+        stage: workbenchStage,
+        scene: workbenchScene(),
+        markerHost: () => deps.getViewer().derivedLayerHost(),
+        // The pose pair, not a focus call: the workbench composes the move so
+        // the arithmetic stays testable, and so the only way here is the
+        // deliberate action on a clicked selection.
+        camera: {
+          pose: () => deps.getViewer().getCameraPose(),
+          apply: (pose) => deps.getViewer().applyCameraPose(pose),
+        },
+      });
       return launcher;
     });
     return workbench.then(
