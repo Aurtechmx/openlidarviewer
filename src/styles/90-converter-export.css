@@ -159,7 +159,12 @@
 
 @media (max-width: 767px) {
   .olv-bc-overlay { padding: 0; align-items: stretch; }
+  /* `100vh` on mobile Safari counts the dynamic toolbar, so a full-height
+     dialog runs under the browser chrome and its last row cannot be reached.
+     `dvh` tracks the visible area; the plain `vh` line stays first as the
+     fallback for engines without it. Same pattern as the phone sheet. */
   .olv-bc-dialog { max-width: none; max-height: 100vh; border-radius: 0; padding: var(--space-2xl); }
+  .olv-bc-dialog { max-height: min(100dvh, 100vh); }
 }
 
 /* In-project Export / Convert panel — converter controls in the left column. */
