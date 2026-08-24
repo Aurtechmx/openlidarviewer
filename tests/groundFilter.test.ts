@@ -226,3 +226,152 @@ describe('surfaceSlope', () => {
     expect(surfaceSlope(step, cols, rows, 1)[2]).toBeGreaterThan(0);
   });
 });
+
+describe('opening mode', () => {
+  /**
+   * Ground that genuinely falls away across the window ladder, with no object on
+   * it at all. Every return is bare earth, so any cell either mode marks is a
+   * false object. 61x61 cells so the radius ladder has room to run.
+   */
+  function slopingScene(maxWindowCells: number): {
+    points: TerrainPoint[];
+    params: GroundFilterParams;
+  } {
+    const points: TerrainPoint[] = [];
+    const n = 61;
+    for (let iy = 0; iy < n; iy++) {
+      for (let ix = 0; ix < n; ix++) {
+        // Curvature in both axes, the same rolling form the PDAL study scenes
+        // use, so no straight-line fit hides it and every return is bare earth.
+        const z =
+          100 +
+          3 * Math.sin((2 * Math.PI * ix) / 25) * Math.cos((2 * Math.PI * iy) / 31) +
+          0.02 * ix;
+        points.push({ x: ix, y: iy, z });
+      }
+    }
+    return {
+      points,
+      params: {
+        cellSizeM: 1,
+        maxWindowCells,
+        slope: 0.15,
+        elevationThresholdM: 0.5,
+        scalingFactorM: 0,
+        maxElevationThresholdM: Infinity,
+      },
+    };
+  }
+
+  it('defaults to cut-surface, so an omitted mode changes nothing', () => {
+    const { points, params } = slopingScene(8);
+    const implicit = classifyGroundSmrf(points, params);
+    const explicit = classifyGroundSmrf(points, { ...params, openingMode: 'cut-surface' });
+    expect(Array.from(implicit.isGround)).toEqual(Array.from(explicit.isGround));
+    expect(Array.from(implicit.groundSurface)).toEqual(Array.from(explicit.groundSurface));
+    expect(implicit.objectCellCount).toBe(explicit.objectCellCount);
+  });
+
+  it('defaults to a square structuring element', () => {
+    const { points, params } = slopingScene(8);
+    const implicit = classifyGroundSmrf(points, params);
+    const explicit = classifyGroundSmrf(points, { ...params, structuringElement: 'square' });
+    expect(Array.from(implicit.groundSurface)).toEqual(Array.from(explicit.groundSurface));
+  });
+
+  it('object-mask marks far fewer cells than cut-surface on object-free curved ground', () => {
+    // Every return here is bare earth. cut-surface re-opens a surface it already
+    // lowered, so the drops compound and the ladder cuts ground that never held
+    // anything; object-mask measures each radius against the previous opening.
+    const { points, params } = slopingScene(12);
+    const cut = classifyGroundSmrf(points, { ...params, openingMode: 'cut-surface' });
+    const mask = classifyGroundSmrf(points, { ...params, openingMode: 'object-mask' });
+    expect(cut.objectCellCount).toBeGreaterThan(10 * (mask.objectCellCount + 1));
+    // and the classification follows. Not every return: object-mask still marks
+    // a handful of cells where the rolling surface turns fastest, so the claim
+    // is that it recovers nearly all of this ground, not all of it.
+    expect(mask.groundPointCount).toBeGreaterThan(cut.groundPointCount);
+    expect(mask.groundPointCount / points.length).toBeGreaterThan(0.99);
+    expect(cut.groundPointCount / points.length).toBeLessThan(0.9);
+  });
+
+  it('object-mask still finds a building, and refills its cells from the ground around it', () => {
+    const points: TerrainPoint[] = [];
+    const n = 41;
+    for (let iy = 0; iy < n; iy++) {
+      for (let ix = 0; ix < n; ix++) {
+        const roofed = ix >= 18 && ix <= 22 && iy >= 18 && iy <= 22;
+        // Roofed cells carry ONLY the roof return: the ground under them is occluded.
+        points.push({ x: ix, y: iy, z: roofed ? 8 : 0 });
+      }
+    }
+    const params: GroundFilterParams = {
+      cellSizeM: 1,
+      maxWindowCells: 10,
+      slope: 0.15,
+      elevationThresholdM: 0.5,
+      scalingFactorM: 0,
+      maxElevationThresholdM: Infinity,
+      openingMode: 'object-mask',
+    };
+    const r = classifyGroundSmrf(points, params);
+    const centre = 20 * r.cols + 20;
+    expect(r.objectCells[centre]).toBe(1);
+    // Interpolated back to the surrounding bare earth, not left at roof height.
+    expect(r.groundSurface[centre]).toBeCloseTo(0, 5);
+    // and the roof returns are not ground.
+    let roofGround = 0;
+    for (let i = 0; i < points.length; i++) if (points[i].z === 8 && r.isGround[i] === 1) roofGround++;
+    expect(roofGround).toBe(0);
+  });
+
+  it('reports objectCells consistently with the surface the cut-surface mode wrote', () => {
+    const { points, params } = slopingScene(6);
+    const r = classifyGroundSmrf(points, { ...params, openingMode: 'cut-surface' });
+    let marked = 0;
+    for (let i = 0; i < r.objectCells.length; i++) marked += r.objectCells[i];
+    expect(marked).toBe(r.objectCellCount);
+    expect(r.objectCells.length).toBe(r.cols * r.rows);
+  });
+
+  it('falls back with a warning on an unrecognised mode or element', () => {
+    const { points, params } = slopingScene(4);
+    const bad = classifyGroundSmrf(points, {
+      ...params,
+      openingMode: 'nonsense' as unknown as 'cut-surface',
+      structuringElement: 'hexagon' as unknown as 'square',
+    });
+    const good = classifyGroundSmrf(points, params);
+    expect(bad.warnings.some((w) => w.includes('openingMode invalid'))).toBe(true);
+    expect(bad.warnings.some((w) => w.includes('structuringElement invalid'))).toBe(true);
+    expect(Array.from(bad.groundSurface)).toEqual(Array.from(good.groundSurface));
+  });
+});
+
+describe('diamond structuring element', () => {
+  it('reaches fewer cells than the box, so a pit spreads less far', () => {
+    const cols = 15;
+    const rows = 15;
+    const grid = new Float32Array(cols * rows).fill(0);
+    grid[7 * cols + 7] = 9;
+    grid[3 * cols + 11] = -4;
+    const diamond = morphOpen(grid, cols, rows, 3, 'diamond');
+    const square = morphOpen(grid, cols, rows, 3, 'square');
+    expect(diamond[7 * cols + 7]).toBeCloseTo(0, 5); // spike removed by both
+    let diamondBelow = 0;
+    let squareBelow = 0;
+    for (let i = 0; i < grid.length; i++) {
+      if (diamond[i] < -0.001) diamondBelow++;
+      if (square[i] < -0.001) squareBelow++;
+    }
+    expect(diamondBelow).toBeLessThan(squareBelow);
+  });
+
+  it('removes an isolated spike like the square element', () => {
+    const cols = 7;
+    const rows = 7;
+    const grid = new Float32Array(cols * rows).fill(2);
+    grid[3 * cols + 3] = 20;
+    expect(morphOpen(grid, cols, rows, 1, 'diamond')[3 * cols + 3]).toBeCloseTo(2, 5);
+  });
+});
