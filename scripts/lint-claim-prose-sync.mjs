@@ -100,6 +100,26 @@ export function releaseVersionOf(rel) {
   return m ? m[1] : null;
 }
 
+/**
+ * Whether git can answer questions about this tree at all.
+ *
+ * An extracted archive has no `.git`, and the release gate runs there. Without
+ * this the missing tag looks identical to a release that has not been tagged
+ * yet, and a versioned document gets held to the live register in the one
+ * environment where it can never match: the archive ships the register of the
+ * moment beside release notes describing an earlier count.
+ */
+function gitUsable(cwd = ROOT) {
+  try {
+    execFileSync('git', ['rev-parse', '--git-dir'], {
+      cwd, stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Whether the repository has a tag by that name. */
 function tagExists(tag, cwd = ROOT) {
   try {
@@ -146,8 +166,16 @@ export function e4CountAtTag(tag, cwd = ROOT) {
 export function expectedCountFor(rel, liveCount, deps = {}) {
   const hasTag = deps.tagExists ?? tagExists;
   const atTag = deps.e4CountAtTag ?? e4CountAtTag;
+  const hasGit = deps.gitUsable ?? gitUsable;
   const version = releaseVersionOf(rel);
   if (version === null) return { count: liveCount, basis: 'the register' };
+
+  // Order matters. A missing tag means "not released yet" only when git could
+  // have told us; with no git at all it means nothing, and treating the two the
+  // same held every release document to the live count inside the archive.
+  if (!hasGit()) {
+    return { count: null, basis: 'skipped, no git history to read the release tag from' };
+  }
   if (!hasTag(version)) {
     return { count: liveCount, basis: `the register, because ${version} is not tagged yet` };
   }

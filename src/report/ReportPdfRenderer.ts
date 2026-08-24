@@ -35,6 +35,7 @@ import { buildIdentityLabel } from '../build/buildIdentity';
 import { describeAnnotationGroups } from '../render/annotate/annotationClustering';
 import type { AnnotationType } from '../render/annotate/types';
 import type { FindingTier, ReportFinding, ReportInspectionSummary } from './ReportFindings';
+import { pdfInfoDate } from '../pdfInfoDate';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Layout constants — letter portrait, 0.6 inch margins.
@@ -113,7 +114,13 @@ export async function renderReportPdf(
   doc.setAuthor(inputs.branding.author ?? 'OpenLiDARViewer');
   doc.setCreator(`OpenLiDARViewer Report Engine v${buildIdentityLabel()}`);
   doc.setProducer('pdf-lib (lazy chunk)');
-  doc.setCreationDate(new Date());
+  // Pin the Info-dictionary dates from the cover's own export timestamp.
+  // pdf-lib defaults CreationDate and ModDate to the wall clock at `create()`,
+  // so two identical builds either side of a second boundary stop being
+  // byte-identical. See src/pdfInfoDate.ts.
+  const infoStamp = pdfInfoDate(inputs.cover.exportedAt);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
 
   const helvetica = await doc.embedFont(StandardFonts.Helvetica);
   const helveticaBold = await doc.embedFont(StandardFonts.HelveticaBold);
