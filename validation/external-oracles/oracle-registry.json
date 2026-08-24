@@ -219,9 +219,9 @@
       ]
     },
     {
-      "oracleId": "r-4.4.1",
+      "oracleId": "r-4.6.1",
       "name": "R",
-      "version": "4.4.1",
+      "version": "4.6.1",
       "executables": [
         "Rscript",
         "R"
@@ -242,11 +242,13 @@
       "installationMethod": "homebrew",
       "sourceRevision": null,
       "independenceNotes": [
-        "Recomputes statistics outside the candidate's language and runtime, which is what makes it independent of a TypeScript implementation of the same formula."
+        "Recomputes statistics outside the candidate's language and runtime, which is what makes it independent of a TypeScript implementation of the same formula.",
+        "Its quantile default is type 7, which interpolates. src/validation/checkpointAccuracy.ts takes the nearest rank, so median, NMAD and P95 differ on even-length samples. A study comparing them must name the convention on each side."
       ],
       "limitations": [
         "Validates arithmetic only. A correct recomputation says nothing about whether the underlying error model is calibrated against real terrain.",
-        "The host currently carries R 4.6.1. The existing profile study cites 4.4.1, so a study must record the version it actually ran."
+        "The host currently carries R 4.6.1. The existing profile study cites 4.4.1, so a study must record the version it actually ran.",
+        "The existing profile study cites R 4.4.1. Both versions are recorded by the studies that ran them rather than one being retired."
       ]
     }
   ]

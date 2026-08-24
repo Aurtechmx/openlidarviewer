@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "validation/external-oracles/statistics/r/accuracy-stats.R",
+  "oracleId": "r-4.6.1",
+  "rVersion": "R version 4.6.1 (2026-06-24)",
+  "quantileType": 7,
+  "nva95Multiplier": 1.96,
+  "note": "Base R only. rmse is sqrt(mean(r^2)), not sd(): sd divides by n-1 and removes the mean, and neither belongs in an accuracy figure.",
+  "results": [
+    {"caseId":"S01-symmetric-closed-form","n":5,"bias":                 0,"rmse":1.4142135623730951,"medianResidual":                 0,"nmad":1.4825999999999999,"p95AbsResidual":                 2,"p95AbsResidualNearestRank":                 2,"p90AbsResidual":                 2,"maxAbsResidual":                 2,"nva95":2.7718585822512662},
+    {"caseId":"S02-constant-bias","n":20,"bias":              0.25,"rmse":              0.25,"medianResidual":              0.25,"nmad":                 0,"p95AbsResidual":              0.25,"p95AbsResidualNearestRank":              0.25,"p90AbsResidual":              0.25,"maxAbsResidual":              0.25,"nva95":0.48999999999999999},
+    {"caseId":"S03-bias-plus-spread","n":20,"bias":                 2,"rmse":2.2360679774997898,"medianResidual":                 2,"nmad":1.4825999999999999,"p95AbsResidual":                 3,"p95AbsResidualNearestRank":                 3,"p90AbsResidual":                 3,"maxAbsResidual":                 3,"nva95":4.3826932358995876},
+    {"caseId":"S04-single-outlier","n":20,"bias":                 5,"rmse":22.360679774997898,"medianResidual":                 0,"nmad":                 0,"p95AbsResidual":5.0000000000000711,"p95AbsResidualNearestRank":                 0,"p90AbsResidual":                 0,"maxAbsResidual":               100,"nva95":43.826932358995876},
+    {"caseId":"S05-asymmetric-100","n":100,"bias":-0.30350000000000005,"rmse":2.2939300338066113,"medianResidual":0.41999999999999998,"nmad":0.43736699999999995,"p95AbsResidual":6.3349999999999982,"p95AbsResidualNearestRank":6.2999999999999998,"p90AbsResidual":2.8700000000000059,"maxAbsResidual":9.8000000000000007,"nva95":4.4961028662609577},
+    {"caseId":"S06-percentile-convention","n":10,"bias":               5.5,"rmse":6.2048368229954285,"medianResidual":               5.5,"nmad":3.7064999999999997,"p95AbsResidual":9.5499999999999989,"p95AbsResidualNearestRank":                10,"p90AbsResidual":9.0999999999999996,"maxAbsResidual":                10,"nva95":12.161480173071039}
+  ]
+}
+
