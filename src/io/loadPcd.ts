@@ -19,7 +19,25 @@
 
 import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
 import { PointCloud } from '../model/PointCloud';
-import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import type { CloudMetadata } from '../model/PointCloud';
+import {
+  sanitizeAndRecenter,
+  withLoadWarning,
+  outputRecordFor,
+  RECORD_DROPPED,
+  RECORD_NOT_WITNESSED,
+  type CompactionWitness,
+} from './sanitizeCloud';
+import {
+  CellState,
+  NO_RECORD,
+  cellIndexOf,
+  pcdCellFromOrdinal,
+  tallyCellStates,
+  type AcquisitionPose,
+  type OrganizedRangeFrame,
+  type OrganizedRangeSet,
+} from '../model/OrganizedRange';
 
 /** Round and clamp a value into the 0–255 byte range. */
 function clampByte(v: number): number {
@@ -35,6 +53,24 @@ function clampU16(v: number): number {
   return Math.round(v);
 }
 
+/**
+ * The acquisition viewpoint a PCD header declares.
+ *
+ * PCD writes it as `tx ty tz qw qx qy qz`: a translation followed by a
+ * quaternion whose SCALAR COMPONENT COMES FIRST. The scalar-first order is
+ * carried in the field names rather than a comment, because the alternative —
+ * a four-number tuple — reads identically whichever convention produced it.
+ */
+interface PcdViewpoint {
+  readonly translation: readonly [number, number, number];
+  readonly rotation: {
+    readonly w: number;
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+}
+
 /** The subset of PCD header facts the f64 position path needs. */
 interface PcdHeaderFacts {
   /** Body encoding — `ascii`, `binary` or `binary_compressed`. */
@@ -45,6 +81,17 @@ interface PcdHeaderFacts {
   types: string[];
   counts: number[];
   points: number;
+  /** Declared columns. For an unorganized cloud this is the whole point count. */
+  width: number;
+  /** Declared rows. `1` for an unorganized cloud. */
+  height: number;
+  /**
+   * The declared viewpoint, or `undefined` when the header carries no
+   * VIEWPOINT line. The default `0 0 0 1 0 0 0` and an absent line are kept
+   * apart: one is the file stating where the sensor was, the other is the file
+   * saying nothing.
+   */
+  viewpoint?: PcdViewpoint;
   /** Offset of the first body byte (matches PCDLoader's `headerLen`). */
   bodyOffset: number;
 }
@@ -112,10 +159,10 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
     types: [],
     counts: [],
     points: 0,
+    width: 0,
+    height: 0,
     bodyOffset: m.index + m[0].length,
   };
-  let width = 0;
-  let height = 0;
   for (const raw of probe.slice(0, m.index).split(/\r?\n/)) {
     const line = raw.trim();
     if (line === '' || line.startsWith('#')) continue;
@@ -126,12 +173,23 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
     else if (key === 'TYPE') facts.types = tok.slice(1).map((t) => t.toUpperCase());
     else if (key === 'COUNT') facts.counts = tok.slice(1).map(Number);
     else if (key === 'POINTS') facts.points = Number(tok[1]);
-    else if (key === 'WIDTH') width = Number(tok[1]);
-    else if (key === 'HEIGHT') height = Number(tok[1]);
+    else if (key === 'WIDTH') facts.width = Number(tok[1]);
+    else if (key === 'HEIGHT') facts.height = Number(tok[1]);
+    else if (key === 'VIEWPOINT') {
+      const v = tok.slice(1, 8).map(Number);
+      // A partial or non-numeric VIEWPOINT is not a viewpoint. Reading it as
+      // one would place the sensor at a position the file never gave.
+      if (v.length === 7 && v.every((n) => Number.isFinite(n))) {
+        facts.viewpoint = {
+          translation: [v[0], v[1], v[2]],
+          rotation: { w: v[3], x: v[4], y: v[5], z: v[6] },
+        };
+      }
+    }
   }
   // COUNT is optional and defaults to 1 per field; POINTS to WIDTH × HEIGHT.
   if (facts.counts.length === 0) facts.counts = facts.fields.map(() => 1);
-  if (!(facts.points > 0)) facts.points = width * height;
+  if (!(facts.points > 0)) facts.points = facts.width * facts.height;
   return facts;
 }
 
@@ -139,12 +197,14 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
  * Re-read the x/y/z columns of a PCD body in double precision, for the
  * encodings that actually carry it: ascii text, and binary records whose
  * x/y/z are 8-byte floats. Returns interleaved global coordinates, or `null`
- * when the source is single-precision (nothing to save) or the header cannot
- * be resolved — the caller then uses PCDLoader's positions.
+ * when the source is single-precision (nothing to save) — the caller then uses
+ * PCDLoader's positions.
+ *
+ * Returning a non-null array is also the ONLY evidence in this module that OLV
+ * walked the record stream itself. {@link loadPcd} reads it that way when it
+ * decides whether cell-to-record identity can be claimed.
  */
-function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
-  const facts = parsePcdHeaderFacts(buffer);
-  if (!facts) return null;
+function extractPcdPositionsF64(buffer: ArrayBuffer, facts: PcdHeaderFacts): Float64Array | null {
   const { fields, sizes, types, counts } = facts;
   if (sizes.length !== fields.length || counts.length !== fields.length) return null;
   const xi = fields.indexOf('x');
@@ -240,6 +300,134 @@ function extractPcdPositionsF64(buffer: ArrayBuffer): Float64Array | null {
   return null;
 }
 
+/** What the header claims about organization, once the records have their say. */
+type PcdOrganization =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'refused'; readonly warning: string }
+  | { readonly kind: 'grid'; readonly width: number; readonly height: number };
+
+/**
+ * Decide whether an organized grid can be recorded for this file.
+ *
+ * A declared grid is a CLAIM, and the sidecar costs about nine bytes per cell,
+ * so the claim is never what sizes the allocation. The bound is the DECODED
+ * RECORD COUNT: the grid is accepted only when `WIDTH × HEIGHT` equals the
+ * number of records the file actually supplied, which is also the only case
+ * where a cell has a record to correspond to. A header reading `100000 1000`
+ * over an 87-byte body therefore allocates nothing, rather than 900 MB.
+ *
+ * `HEIGHT > 1` is PCL's own test for an organized dataset (`PointCloud::at`
+ * throws `UnorganizedPointCloudException` below it), so a HEIGHT of 1 is an
+ * ordinary unorganized cloud and not a one-row grid.
+ */
+function pcdOrganization(facts: PcdHeaderFacts, decodedCount: number): PcdOrganization {
+  const { width, height } = facts;
+  if (!Number.isInteger(width) || !Number.isInteger(height)) return { kind: 'none' };
+  if (!(width > 0) || !(height > 1)) return { kind: 'none' };
+  const cells = width * height;
+  if (!Number.isSafeInteger(cells) || cells !== decodedCount) {
+    return {
+      kind: 'refused',
+      warning:
+        `The header declares an organized ${width} × ${height} grid ` +
+        `(${cells} cells), and ${decodedCount} records were read from the file. ` +
+        `No acquisition grid is recorded: a grid the records contradict cannot ` +
+        `be mapped to them without inventing the correspondence.`,
+    };
+  }
+  return { kind: 'grid', width, height };
+}
+
+/**
+ * Build the acquisition grid for a file whose records line up with its header.
+ *
+ * `linked` is what separates the two encodings families. For ascii and 8-byte
+ * float binary bodies OLV walks the records itself, so ordinal `i` in the grid
+ * IS display record `i`, and the linkage is exact. For 4-byte float binary and
+ * `binary_compressed` bodies both the count and the ORDER come from three.js's
+ * PCDLoader, which OLV does not test record for record; inferring an ordering
+ * from it would be exactly the invented correspondence this sidecar exists to
+ * prevent. Those files keep the topology and the pose and claim no identity.
+ */
+function buildPcdFrame(
+  grid: { readonly width: number; readonly height: number },
+  global: Float64Array,
+  viewpoint: PcdViewpoint | undefined,
+  linked: boolean,
+): OrganizedRangeFrame {
+  const { width, height } = grid;
+  const cells = width * height;
+  const cellState = new Uint8Array(cells).fill(CellState.NOT_DECODED);
+  const cellToRecord = new Int32Array(cells).fill(NO_RECORD);
+  if (linked) {
+    for (let i = 0; i < cells; i++) {
+      const cell = pcdCellFromOrdinal(i, width);
+      const ci = cellIndexOf(cell.row, cell.column, width);
+      const finite =
+        Number.isFinite(global[i * 3]) &&
+        Number.isFinite(global[i * 3 + 1]) &&
+        Number.isFinite(global[i * 3 + 2]);
+      // A non-finite record is SOURCE_INVALID: the file holds a record here and
+      // declares it unusable. It is NOT a no-return. PCD has no no-return
+      // semantics — nothing in the format says the sensor looked along a
+      // direction and got nothing back — so this loader must never produce
+      // CellState.NO_RETURN, whatever a cell's contents look like.
+      cellState[ci] = finite ? CellState.VALID_RETURN : CellState.SOURCE_INVALID;
+      if (finite) cellToRecord[ci] = i;
+    }
+  }
+  const pose: AcquisitionPose | undefined = viewpoint
+    ? {
+        worldTranslation: viewpoint.translation,
+        // PCD declares one viewpoint and no second, scanner-frame position, so
+        // there is no `localPosition` here to be readable or malformed.
+        localPositionSource: 'not-applicable',
+        rotation: viewpoint.rotation,
+        rotationSource: 'source-declared',
+      }
+    : undefined;
+  return {
+    id: 'pcd-grid',
+    sourceKind: 'pcd-organized',
+    width,
+    height,
+    cellState,
+    cellToRecord,
+    acquisitionPose: pose,
+    linkage: linked
+      ? { kind: 'exact' }
+      : { kind: 'unavailable', reason: 'source-record-identity-unavailable' },
+    diagnostics: tallyCellStates(cellState),
+  };
+}
+
+/**
+ * Rewrite a frame's record indices from pre-sanitation to display indices.
+ *
+ * Returns `null` when the witness cannot answer for an index the frame claims,
+ * which the caller turns into the honest degrade rather than a guess.
+ */
+function remapPcdFrame(
+  frame: OrganizedRangeFrame,
+  witness: CompactionWitness,
+): OrganizedRangeFrame | null {
+  const cellState = new Uint8Array(frame.cellState);
+  const cellToRecord = new Int32Array(frame.cellToRecord);
+  for (let ci = 0; ci < cellToRecord.length; ci++) {
+    const source = cellToRecord[ci];
+    if (source === NO_RECORD) continue;
+    const output = outputRecordFor(witness, source);
+    if (output === RECORD_NOT_WITNESSED) return null;
+    if (output === RECORD_DROPPED) {
+      cellToRecord[ci] = NO_RECORD;
+      cellState[ci] = CellState.NOT_DECODED;
+      continue;
+    }
+    cellToRecord[ci] = output;
+  }
+  return { ...frame, cellState, cellToRecord, diagnostics: tallyCellStates(cellState) };
+}
+
 /**
  * Load a `.pcd` point cloud into a `PointCloud`.
  *
@@ -297,9 +485,14 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
   //    lost by staging them, and both encodings then share one recentring path.
   // The row-count guard keeps the f64 re-read honest: if it ever disagrees
   // with what PCDLoader decoded, PCDLoader's rows win.
-  const reread = extractPcdPositionsF64(buffer);
+  const facts = parsePcdHeaderFacts(buffer);
+  const reread = facts ? extractPcdPositionsF64(buffer, facts) : null;
+  // True only when OLV walked the record stream itself and reached the same
+  // record count PCDLoader did. Cell-to-record identity is claimed on this and
+  // nothing else.
+  const walkedRecords = reread?.length === count * 3;
   let global: Float64Array;
-  if (reread?.length === count * 3) {
+  if (walkedRecords && reread) {
     global = reread;
   } else {
     global = new Float64Array(count * 3);
@@ -359,7 +552,55 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
   // ascii one the literal token — and recentre the survivors. `count` stays the
   // DECODED count: the file really did hold that many records, and the warning
   // is where the exclusion is reported.
-  const clean = sanitizeAndRecenter(global, { colors, intensity, classification, normals });
+  // Header facts and grid VALIDATION apply to every encoding; only the record
+  // identity inside the frame depends on which body OLV can walk.
+  const organization = facts ? pcdOrganization(facts, count) : { kind: 'none' as const };
+  let metadata: CloudMetadata | undefined;
+  if (organization.kind === 'refused') {
+    metadata = withLoadWarning(metadata, organization.warning);
+  }
+  const frame =
+    organization.kind === 'grid'
+      ? buildPcdFrame(organization, global, facts?.viewpoint, walkedRecords)
+      : undefined;
+
+  const clean = sanitizeAndRecenter(
+    global,
+    { colors, intensity, classification, normals },
+    // The witness costs an Int32Array only when something was actually
+    // dropped, and it is the only way a linked grid survives compaction.
+    { witness: frame !== undefined && walkedRecords },
+  );
+
+  // Sanitation compacts survivors, so any drop shifts every record index after
+  // the first casualty. The witness turns that shift into an answerable
+  // question instead of a reason to disown the grid.
+  let organizedRange: OrganizedRangeSet | undefined;
+  if (frame) {
+    const remapped =
+      frame.linkage.kind !== 'exact' ||
+      clean.excludedCount === 0 ||
+      !clean.witness ||
+      clean.witness.sourceCount !== count
+        ? null
+        : remapPcdFrame(frame, clean.witness);
+    const usable =
+      frame.linkage.kind !== 'exact' || clean.excludedCount === 0
+        ? frame
+        : (remapped ?? {
+            ...frame,
+            cellToRecord: new Int32Array(frame.cellToRecord.length).fill(NO_RECORD),
+            linkage: {
+              kind: 'unavailable',
+              reason: 'source-record-identity-unavailable',
+            } as const,
+          });
+    organizedRange = {
+      kind: 'organized-range',
+      frames: [usable],
+      organization: 'organized-grid',
+    };
+  }
 
   return new PointCloud({
     positions: clean.positions,
@@ -367,11 +608,12 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
     intensity: clean.attributes.intensity,
     classification: clean.attributes.classification,
     normals: clean.attributes.normals,
+    organizedRange,
     origin: clean.origin,
     sourceFormat: 'pcd',
     name,
     decodedPointCount: count,
-    metadata: withLoadWarning(undefined, clean.warning),
+    metadata: withLoadWarning(metadata, clean.warning),
   });
 }
 

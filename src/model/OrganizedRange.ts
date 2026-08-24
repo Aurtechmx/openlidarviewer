@@ -112,8 +112,30 @@ export interface AcquisitionPose {
   readonly localPosition?: readonly [number, number, number];
   /** Row-major, translation in row 3, matching the PTX layout. Four rows of four. */
   readonly transform?: readonly (readonly number[])[];
-  /** Whether `localPosition` was readable, or the header line was malformed. */
-  readonly localPositionSource: 'source-declared' | 'unreadable';
+  /**
+   * Whether `localPosition` was readable, the header line was malformed, or
+   * the format carries no such second position at all (PCD, which declares one
+   * viewpoint and nothing else).
+   */
+  readonly localPositionSource: 'source-declared' | 'unreadable' | 'not-applicable';
+  /**
+   * Acquisition orientation, where the format declares one as a quaternion.
+   *
+   * PCD's VIEWPOINT is `tx ty tz qw qx qy qz`, so the rotation arrives already
+   * decomposed and there is nothing to gain by composing a 4x4 from it. The
+   * components are NAMED rather than stored in an array precisely because the
+   * order is the trap: PCD writes w first, three.js and most maths libraries
+   * write it last, and a positional four-tuple makes the two indistinguishable
+   * at every call site.
+   */
+  readonly rotation?: {
+    readonly w: number;
+    readonly x: number;
+    readonly y: number;
+    readonly z: number;
+  };
+  /** Present only when `rotation` is, and only ever because the file said so. */
+  readonly rotationSource?: 'source-declared';
 }
 
 /**
@@ -182,6 +204,28 @@ export function ptxCellFromOrdinal(
   rows: number,
 ): { readonly row: number; readonly column: number } {
   return { row: ordinal % rows, column: Math.floor(ordinal / rows) };
+}
+
+/**
+ * PCD orders an organized dataset like an image: row by row, so the COLUMN is
+ * the fast axis and the ordinal advances ACROSS a row. This is the opposite of
+ * PTX, which is why both conventions are named functions rather than inline
+ * arithmetic.
+ *
+ * PCL is the authority for both halves of this. Its header defines
+ * `PointCloud::at(column, row)` as `points[row * width + column]`, and gates
+ * organized access on `height > 1` — the same test this loader applies. The
+ * format tutorial gives WIDTH as "the total number of points in a row" and
+ * HEIGHT as "the total number of rows".
+ *
+ * A test pins the mapping against a non-square grid, where a transposition
+ * cannot hide.
+ */
+export function pcdCellFromOrdinal(
+  ordinal: number,
+  width: number,
+): { readonly row: number; readonly column: number } {
+  return { row: Math.floor(ordinal / width), column: ordinal % width };
 }
 
 /**
