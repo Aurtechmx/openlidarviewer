@@ -57,6 +57,51 @@ const versionOf = {
   'geographiclib-2.7': () => run('GeoConvert', ['--version'], undefined),
 };
 
+/**
+ * The coordinate operation PROJ selects for a source and target, as PROJ names
+ * it rather than as the caller assumes.
+ *
+ * Recording only the numbers leaves the record unable to explain itself. Two
+ * PROJ builds can return different eastings for the same request because they
+ * chose different candidate operations, and without the operation identity that
+ * shows up as an unexplained change in a committed reference. `projinfo`
+ * summary prints `<code>, <name>, <accuracy>, <area of use>` per candidate.
+ *
+ * The accuracy field is the second reason to keep this. A same-datum projection
+ * reports `0 m` because no transformation grid is involved; a datum shift would
+ * report the grid's accuracy instead, so this field is where a future study
+ * would notice that a grid had silently entered the path.
+ */
+const operationCache = new Map();
+/**
+ * Resolved through `which` once, so the spawn names an absolute path rather
+ * than leaning on whatever PATH happens to hold, and so the record says which
+ * binary actually answered.
+ */
+const PROJINFO = resolveExe('projinfo');
+function projOperationFor(sourceCrs, targetCrs) {
+  const key = `${sourceCrs}->${targetCrs}`;
+  if (operationCache.has(key)) return operationCache.get(key);
+
+  const r = spawnSync(PROJINFO, ['-s', sourceCrs, '-t', targetCrs, '-o', 'PROJ', '--summary'], {
+    encoding: 'utf8',
+  });
+  const text = r.stdout ?? '';
+  const candidates = text.split('\n').filter((l) => /^\s*EPSG:|^\s*unknown id/.test(l));
+  const first = candidates[0]?.trim() ?? null;
+  const parts = first ? first.split(',').map((s) => s.trim()) : [];
+
+  const op = {
+    selected: parts[0] ?? null,
+    name: parts[1] ?? null,
+    accuracy: parts[2] ?? null,
+    candidateCount: candidates.length,
+    raw: first,
+  };
+  operationCache.set(key, op);
+  return op;
+}
+
 const protocol = JSON.parse(readFileSync(resolve(HERE, 'protocol.json'), 'utf8'));
 const fixturesRaw = readFileSync(resolve(HERE, 'fixtures.json'), 'utf8');
 const { fixtures } = JSON.parse(fixturesRaw);
@@ -89,7 +134,12 @@ for (const f of fixtures) {
   const epsg = (geo.hemisphere === 'S' ? 32700 : 32600) + geo.zone;
   const projRaw = run('cs2cs', ['-f', `%.${METRE_DIGITS}f`, 'EPSG:4326', `EPSG:${epsg}`], `${line}\n`);
   const parts = projRaw.split(/\s+/);
-  const proj = { easting: Number(parts[0]), northing: Number(parts[1]), epsg };
+  const proj = {
+    easting: Number(parts[0]),
+    northing: Number(parts[1]),
+    epsg,
+    operation: projOperationFor('EPSG:4326', `EPSG:${epsg}`),
+  };
 
   if (!Number.isFinite(proj.easting) || !Number.isFinite(proj.northing)) {
     throw new Error(`cs2cs output not understood for ${f.id}: ${JSON.stringify(projRaw)}`);
@@ -140,6 +190,11 @@ const record = {
       versionOutput: versionOf['proj-9.8.1'](),
       commandLine: `cs2cs -f %.${METRE_DIGITS}f EPSG:4326 EPSG:<326|327><zone>`,
       zoneSource: 'geographiclib-2.7',
+      operationSource: 'projinfo -s EPSG:4326 -t EPSG:<zone> -o PROJ --summary',
+      operationExecutablePath: PROJINFO,
+      operationsSelected: [...operationCache.entries()]
+        .map(([pair, op]) => ({ pair, selected: op.selected, name: op.name, accuracy: op.accuracy, candidates: op.candidateCount }))
+        .sort((a, b) => a.pair.localeCompare(b.pair)),
     },
   ],
   oracleAgreement: {

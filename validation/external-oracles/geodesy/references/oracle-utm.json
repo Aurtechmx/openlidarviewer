@@ -24,7 +24,151 @@
       "executablePath": "/opt/homebrew/bin/cs2cs",
       "versionOutput": "Rel. 9.8.1, April 10th, 2026",
       "commandLine": "cs2cs -f %.9f EPSG:4326 EPSG:<326|327><zone>",
-      "zoneSource": "geographiclib-2.7"
+      "zoneSource": "geographiclib-2.7",
+      "operationSource": "projinfo -s EPSG:4326 -t EPSG:<zone> -o PROJ --summary",
+      "operationExecutablePath": "/opt/homebrew/bin/projinfo",
+      "operationsSelected": [
+        {
+          "pair": "EPSG:4326->EPSG:32601",
+          "selected": "EPSG:16001",
+          "name": "UTM zone 1N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32602",
+          "selected": "EPSG:16002",
+          "name": "UTM zone 2N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32606",
+          "selected": "EPSG:16006",
+          "name": "UTM zone 6N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32630",
+          "selected": "EPSG:16030",
+          "name": "UTM zone 30N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32631",
+          "selected": "EPSG:16031",
+          "name": "UTM zone 31N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32632",
+          "selected": "EPSG:16032",
+          "name": "UTM zone 32N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32633",
+          "selected": "EPSG:16033",
+          "name": "UTM zone 33N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32634",
+          "selected": "EPSG:16034",
+          "name": "UTM zone 34N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32635",
+          "selected": "EPSG:16035",
+          "name": "UTM zone 35N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32637",
+          "selected": "EPSG:16037",
+          "name": "UTM zone 37N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32638",
+          "selected": "EPSG:16038",
+          "name": "UTM zone 38N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32654",
+          "selected": "EPSG:16054",
+          "name": "UTM zone 54N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32660",
+          "selected": "EPSG:16060",
+          "name": "UTM zone 60N",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32701",
+          "selected": "EPSG:16101",
+          "name": "UTM zone 1S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32717",
+          "selected": "EPSG:16117",
+          "name": "UTM zone 17S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32719",
+          "selected": "EPSG:16119",
+          "name": "UTM zone 19S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32737",
+          "selected": "EPSG:16137",
+          "name": "UTM zone 37S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32738",
+          "selected": "EPSG:16138",
+          "name": "UTM zone 38S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32758",
+          "selected": "EPSG:16158",
+          "name": "UTM zone 58S",
+          "accuracy": "0 m",
+          "candidates": 1
+        },
+        {
+          "pair": "EPSG:4326->EPSG:32759",
+          "selected": "EPSG:16159",
+          "name": "UTM zone 59S",
+          "accuracy": "0 m",
+          "candidates": 1
+        }
+      ]
     }
   ],
   "oracleAgreement": {
@@ -49,6 +193,13 @@
         "easting": 440290.458054358,
         "northing": 4474257.38200618,
         "epsg": 32630,
+        "operation": {
+          "selected": "EPSG:16030",
+          "name": "UTM zone 30N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16030, UTM zone 30N, 0 m, Between 6°W and 0°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "440290.458054358\t4474257.382006180 0.000000000"
       },
       "oracleSpread": {
@@ -72,6 +223,13 @@
         "easting": 344846.720310103,
         "northing": 6297700.155609685,
         "epsg": 32719,
+        "operation": {
+          "selected": "EPSG:16119",
+          "name": "UTM zone 19S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16119, UTM zone 19S, 0 m, Between 72°W and 66°W, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "344846.720310103\t6297700.155609685 0.000000000"
       },
       "oracleSpread": {
@@ -95,6 +253,13 @@
         "easting": 708213.95060223,
         "northing": 5707224.542591996,
         "epsg": 32630,
+        "operation": {
+          "selected": "EPSG:16030",
+          "name": "UTM zone 30N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16030, UTM zone 30N, 0 m, Between 6°W and 0°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "708213.950602230\t5707224.542591996 0.000000000"
       },
       "oracleSpread": {
@@ -118,6 +283,13 @@
         "easting": 514278.715113269,
         "northing": 8683355.469470505,
         "epsg": 32633,
+        "operation": {
+          "selected": "EPSG:16033",
+          "name": "UTM zone 33N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16033, UTM zone 33N, 0 m, Between 12°E and 18°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "514278.715113269\t8683355.469470505 0.000000000"
       },
       "oracleSpread": {
@@ -141,6 +313,13 @@
         "easting": 263553.973898793,
         "northing": 5012670.495301086,
         "epsg": 32759,
+        "operation": {
+          "selected": "EPSG:16159",
+          "name": "UTM zone 59S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16159, UTM zone 59S, 0 m, Between 168°E and 174°E, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "263553.973898793\t5012670.495301086 0.000000000"
       },
       "oracleSpread": {
@@ -164,6 +343,13 @@
         "easting": 166021.443080541,
         "northing": 0,
         "epsg": 32631,
+        "operation": {
+          "selected": "EPSG:16031",
+          "name": "UTM zone 31N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16031, UTM zone 31N, 0 m, Between 0°E and 6°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "166021.443080541\t0.000000000 0.000000000"
       },
       "oracleSpread": {
@@ -187,6 +373,13 @@
         "easting": 126049.970712682,
         "northing": 6222336.335316707,
         "epsg": 32632,
+        "operation": {
+          "selected": "EPSG:16032",
+          "name": "UTM zone 32N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16032, UTM zone 32N, 0 m, Between 6°E and 12°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "126049.970712682\t6222336.335316707 0.000000000"
       },
       "oracleSpread": {
@@ -210,6 +403,13 @@
         "easting": 642314.748628135,
         "northing": 7089106.258590283,
         "epsg": 32632,
+        "operation": {
+          "selected": "EPSG:16032",
+          "name": "UTM zone 32N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16032, UTM zone 32N, 0 m, Between 6°E and 12°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "642314.748628135\t7089106.258590283 0.000000000"
       },
       "oracleSpread": {
@@ -233,6 +433,13 @@
         "easting": 312445.531262948,
         "northing": 6199017.379109598,
         "epsg": 32632,
+        "operation": {
+          "selected": "EPSG:16032",
+          "name": "UTM zone 32N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16032, UTM zone 32N, 0 m, Between 6°E and 12°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "312445.531262948\t6199017.379109598 0.000000000"
       },
       "oracleSpread": {
@@ -256,6 +463,13 @@
         "easting": 353304.772733445,
         "northing": 7100467.049381648,
         "epsg": 32632,
+        "operation": {
+          "selected": "EPSG:16032",
+          "name": "UTM zone 32N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16032, UTM zone 32N, 0 m, Between 6°E and 12°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "353304.772733445\t7100467.049381648 0.000000000"
       },
       "oracleSpread": {
@@ -279,6 +493,13 @@
         "easting": 494422.233257532,
         "northing": 6651415.405760061,
         "epsg": 32631,
+        "operation": {
+          "selected": "EPSG:16031",
+          "name": "UTM zone 31N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16031, UTM zone 31N, 0 m, Between 0°E and 6°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "494422.233257532\t6651415.405760061 0.000000000"
       },
       "oracleSpread": {
@@ -302,6 +523,13 @@
         "easting": 332705.17887555,
         "northing": 6655205.483634564,
         "epsg": 32633,
+        "operation": {
+          "selected": "EPSG:16033",
+          "name": "UTM zone 33N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16033, UTM zone 33N, 0 m, Between 12°E and 18°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "332705.178875550\t6655205.483634564 0.000000000"
       },
       "oracleSpread": {
@@ -325,6 +553,13 @@
         "easting": 703202.508927769,
         "northing": 7998893.256688047,
         "epsg": 32631,
+        "operation": {
+          "selected": "EPSG:16031",
+          "name": "UTM zone 31N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16031, UTM zone 31N, 0 m, Between 0°E and 6°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "703202.508927769\t7998893.256688047 0.000000000"
       },
       "oracleSpread": {
@@ -348,6 +583,13 @@
         "easting": 672275.051070392,
         "northing": 7996086.92526526,
         "epsg": 32633,
+        "operation": {
+          "selected": "EPSG:16033",
+          "name": "UTM zone 33N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16033, UTM zone 33N, 0 m, Between 12°E and 18°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "672275.051070392\t7996086.925265260 0.000000000"
       },
       "oracleSpread": {
@@ -371,6 +613,13 @@
         "easting": 453588.98252801,
         "northing": 8659161.997324847,
         "epsg": 32635,
+        "operation": {
+          "selected": "EPSG:16035",
+          "name": "UTM zone 35N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16035, UTM zone 35N, 0 m, Between 24°E and 30°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "453588.982528010\t8659161.997324847 0.000000000"
       },
       "oracleSpread": {
@@ -394,6 +643,13 @@
         "easting": 428943.960190907,
         "northing": 9320633.034823881,
         "epsg": 32637,
+        "operation": {
+          "selected": "EPSG:16037",
+          "name": "UTM zone 37N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16037, UTM zone 37N, 0 m, Between 36°E and 42°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "428943.960190907\t9320633.034823881 0.000000000"
       },
       "oracleSpread": {
@@ -417,6 +673,13 @@
         "easting": 465325.890324335,
         "northing": 7978066.024242989,
         "epsg": 32634,
+        "operation": {
+          "selected": "EPSG:16034",
+          "name": "UTM zone 34N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16034, UTM zone 34N, 0 m, Between 18°E and 24°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "465325.890324335\t7978066.024242989 0.000000000"
       },
       "oracleSpread": {
@@ -440,6 +703,13 @@
         "easting": 326931.734075442,
         "northing": 8332368.952478562,
         "epsg": 32633,
+        "operation": {
+          "selected": "EPSG:16033",
+          "name": "UTM zone 33N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16033, UTM zone 33N, 0 m, Between 12°E and 18°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "326931.734075442\t8332368.952478562 0.000000000"
       },
       "oracleSpread": {
@@ -463,6 +733,13 @@
         "easting": 326931.734075441,
         "northing": 8332368.952478562,
         "epsg": 32635,
+        "operation": {
+          "selected": "EPSG:16035",
+          "name": "UTM zone 35N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16035, UTM zone 35N, 0 m, Between 24°E and 30°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "326931.734075441\t8332368.952478562 0.000000000"
       },
       "oracleSpread": {
@@ -486,6 +763,13 @@
         "easting": 326931.734075441,
         "northing": 8332368.952478562,
         "epsg": 32637,
+        "operation": {
+          "selected": "EPSG:16037",
+          "name": "UTM zone 37N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16037, UTM zone 37N, 0 m, Between 36°E and 42°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "326931.734075441\t8332368.952478562 0.000000000"
       },
       "oracleSpread": {
@@ -509,6 +793,13 @@
         "easting": 171071.263941313,
         "northing": 1106908.854243142,
         "epsg": 32601,
+        "operation": {
+          "selected": "EPSG:16001",
+          "name": "UTM zone 1N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16001, UTM zone 1N, 0 m, Between 180°W and 174°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "171071.263941313\t1106908.854243142 0.000000000"
       },
       "oracleSpread": {
@@ -532,6 +823,13 @@
         "easting": 828928.626320911,
         "northing": 1106908.853244455,
         "epsg": 32660,
+        "operation": {
+          "selected": "EPSG:16060",
+          "name": "UTM zone 60N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16060, UTM zone 60N, 0 m, Between 174°E and 180°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "828928.626320911\t1106908.853244455 0.000000000"
       },
       "oracleSpread": {
@@ -555,6 +853,13 @@
         "easting": 476664.431622053,
         "northing": 9328498.812320234,
         "epsg": 32635,
+        "operation": {
+          "selected": "EPSG:16035",
+          "name": "UTM zone 35N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16035, UTM zone 35N, 0 m, Between 24°E and 30°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "476664.431622053\t9328498.812320234 0.000000000"
       },
       "oracleSpread": {
@@ -578,6 +883,13 @@
         "easting": 443803.937588575,
         "northing": 1117013.41529605,
         "epsg": 32701,
+        "operation": {
+          "selected": "EPSG:16101",
+          "name": "UTM zone 1S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16101, UTM zone 1S, 0 m, Between 180°W to 174°W, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "443803.937588575\t1117013.415296050 0.000000000"
       },
       "oracleSpread": {
@@ -601,6 +913,13 @@
         "easting": 500000,
         "northing": 9999999.889469953,
         "epsg": 32738,
+        "operation": {
+          "selected": "EPSG:16138",
+          "name": "UTM zone 38S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16138, UTM zone 38S, 0 m, Between 42°E and 48°E, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "500000.000000000\t9999999.889469953 0.000000000"
       },
       "oracleSpread": {
@@ -624,6 +943,13 @@
         "easting": 500000,
         "northing": 0.110530046,
         "epsg": 32638,
+        "operation": {
+          "selected": "EPSG:16038",
+          "name": "UTM zone 38N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16038, UTM zone 38N, 0 m, Between 42°E and 48°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "500000.000000000\t0.110530046 0.000000000"
       },
       "oracleSpread": {
@@ -647,6 +973,13 @@
         "easting": 500000,
         "northing": 4982950.400226551,
         "epsg": 32601,
+        "operation": {
+          "selected": "EPSG:16001",
+          "name": "UTM zone 1N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16001, UTM zone 1N, 0 m, Between 180°W and 174°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "500000.000000000\t4982950.400226551 0.000000000"
       },
       "oracleSpread": {
@@ -670,6 +1003,13 @@
         "easting": 263553.973898793,
         "northing": 4987329.504698914,
         "epsg": 32602,
+        "operation": {
+          "selected": "EPSG:16002",
+          "name": "UTM zone 2N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16002, UTM zone 2N, 0 m, Between 174°W and 168°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "263553.973898793\t4987329.504698914 0.000000000"
       },
       "oracleSpread": {
@@ -693,6 +1033,13 @@
         "easting": 377855.775951769,
         "northing": 3948874.392162377,
         "epsg": 32654,
+        "operation": {
+          "selected": "EPSG:16054",
+          "name": "UTM zone 54N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16054, UTM zone 54N, 0 m, Between 138°E and 144°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "377855.775951769\t3948874.392162377 0.000000000"
       },
       "oracleSpread": {
@@ -716,6 +1063,13 @@
         "easting": 544805.097450885,
         "northing": 3927029.884698997,
         "epsg": 32719,
+        "operation": {
+          "selected": "EPSG:16119",
+          "name": "UTM zone 19S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16119, UTM zone 19S, 0 m, Between 72°W and 66°W, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "544805.097450885\t3927029.884698997 0.000000000"
       },
       "oracleSpread": {
@@ -739,6 +1093,13 @@
         "easting": 781861.457455945,
         "northing": 9980007.56688849,
         "epsg": 32717,
+        "operation": {
+          "selected": "EPSG:16117",
+          "name": "UTM zone 17S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16117, UTM zone 17S, 0 m, Between 84°W and 78°W, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "781861.457455945\t9980007.566888491 0.000000000"
       },
       "oracleSpread": {
@@ -762,6 +1123,13 @@
         "easting": 257634.501826332,
         "northing": 9857079.966030994,
         "epsg": 32737,
+        "operation": {
+          "selected": "EPSG:16137",
+          "name": "UTM zone 37S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16137, UTM zone 37S, 0 m, Between 36°E and 42°E, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "257634.501826332\t9857079.966030994 0.000000000"
       },
       "oracleSpread": {
@@ -785,6 +1153,13 @@
         "easting": 344247.206470396,
         "northing": 6790536.871328588,
         "epsg": 32606,
+        "operation": {
+          "selected": "EPSG:16006",
+          "name": "UTM zone 6N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16006, UTM zone 6N, 0 m, Between 150°W and 144°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "344247.206470396\t6790536.871328588 0.000000000"
       },
       "oracleSpread": {
@@ -808,6 +1183,13 @@
         "easting": 539641.28463391,
         "northing": 1358704.046071654,
         "epsg": 32758,
+        "operation": {
+          "selected": "EPSG:16158",
+          "name": "UTM zone 58S",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16158, UTM zone 58S, 0 m, Between 162°E and 168°E, southern hemisphere between 80°S and equator, onshore and offshore."
+        },
         "raw": "539641.284633910\t1358704.046071654 0.000000000"
       },
       "oracleSpread": {
@@ -831,6 +1213,13 @@
         "easting": 166021.443191969,
         "northing": 0.000110683,
         "epsg": 32631,
+        "operation": {
+          "selected": "EPSG:16031",
+          "name": "UTM zone 31N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16031, UTM zone 31N, 0 m, Between 0°E and 6°E, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "166021.443191969\t0.000110683 0.000000000"
       },
       "oracleSpread": {
@@ -854,6 +1243,13 @@
         "easting": 736445.947285804,
         "northing": 4987329.501778169,
         "epsg": 32630,
+        "operation": {
+          "selected": "EPSG:16030",
+          "name": "UTM zone 30N",
+          "accuracy": "0 m",
+          "candidateCount": 1,
+          "raw": "EPSG:16030, UTM zone 30N, 0 m, Between 6°W and 0°W, northern hemisphere between equator and 84°N, onshore and offshore."
+        },
         "raw": "736445.947285804\t4987329.501778169 0.000000000"
       },
       "oracleSpread": {
