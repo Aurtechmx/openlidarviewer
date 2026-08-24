@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "GEODESY-UTM-PROJ-GEOGRAPHICLIB-2026-08",
+  "quantity": "WGS-84 geodetic latitude/longitude to UTM zone, hemisphere, easting and northing.",
+  "candidate": {
+    "function": "latLonToUtm",
+    "module": "src/geo/UtmConverter.ts",
+    "note": "The production function the point inspector reads. No formula is reproduced in the harness."
+  },
+  "oracles": [
+    {
+      "oracleId": "proj-9.8.1",
+      "role": "independent-same-quantity-implementation",
+      "invocation": "cs2cs -f %.9f EPSG:4326 EPSG:<326|327><zone>",
+      "zoneSource": "geographiclib-2.7",
+      "zoneSourceReason": "cs2cs is told which zone to project into, and the zone comes from GeographicLib rather than from the candidate, so the reference outputs stay a fixed target when the candidate changes. This leg therefore measures projection arithmetic; zone selection is covered by the GeographicLib leg."
+    },
+    {
+      "oracleId": "geographiclib-2.7",
+      "role": "independent-same-quantity-implementation",
+      "invocation": "GeoConvert -u -p 9",
+      "zoneSource": "oracle",
+      "zoneSourceReason": "GeoConvert applies the UTM zone exceptions itself, so its zone and hemisphere are an independent check on utmZoneFor."
+    }
+  ],
+  "oracleIndependence": "PROJ and GeographicLib share no transverse-Mercator code and are separate lineage groups. Their mutual agreement is reported so a reader can separate oracle disagreement from candidate error.",
+  "metrics": {
+    "zoneAgreement": "Exact match of zone and hemisphere against GeographicLib. Any mismatch fails.",
+    "toleranceAbs": 0.0015,
+    "toleranceUnit": "metre",
+    "toleranceBasis": "Set from the physical question rather than from the observed result: a UTM grid coordinate that a reader treats as exact must agree with an independent implementation well inside the millimetre that survey practice rounds to. 1.5 mm is the gate; the measured maximum is recorded separately and is not what set this number.",
+    "requiredWithinToleranceFraction": 1,
+    "minimumFixtures": 30
+  },
+  "decisionRule": "Every fixture must agree with BOTH oracles within toleranceAbs on easting and northing, and with GeographicLib exactly on zone and hemisphere. One failure fails the study.",
+  "scopeLimits": [
+    "UTM only. This protocol does not touch datum transformation, vertical reference, or ECEF, none of which latLonToUtm performs.",
+    "WGS-84 in and WGS-84 UTM out, so no datum shift is exercised and no PROJ transformation grid is involved.",
+    "Latitude is confined to the UTM domain of 80S to 84N. Refusal outside it is covered by tests/utmDomain rather than by an oracle."
+  ],
+  "freezeStatus": "adopted-with-result",
+  "freezeStatusReason": "The fixture matrix and the tolerance were written before the oracles were run, but both were committed in the same change as the first result, so this record does not claim preregistration."
+}

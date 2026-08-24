@@ -55,6 +55,8 @@ jobs:
         run: npm run lint:claim-register
       - name: Dataset-citation lint (one dataset per ordinal, every cited id resolves)
         run: npm run lint:dataset-citations
+      - name: Oracle-registry lint (every cited oracle registered, no lineage double-counted)
+        run: npm run lint:oracle-registry
       - name: No source files git-ignored
         run: npm run lint:no-ignored-src
       - name: No git-ignored path is tracked (local tooling committed by `git add -A`)

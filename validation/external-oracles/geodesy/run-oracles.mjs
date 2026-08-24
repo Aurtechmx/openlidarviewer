@@ -1,0 +1,160 @@
+#!/usr/bin/env node
+/**
+ * run-oracles.mjs — capture the PROJ and GeographicLib answers for the frozen
+ * UTM fixture matrix.
+ *
+ * This is an oracle-generation job, not a repository gate. It runs the two
+ * external programs, records what they were and what they said, and writes
+ * references/oracle-utm.json. tests/geodesyOracleAgreement.test.ts then reads
+ * that committed file and compares OLV against it, so ordinary CI verifies the
+ * candidate on a machine that has neither program installed.
+ *
+ * The candidate never enters this file. It captures oracles only, which is what
+ * keeps the reference outputs usable as a fixed target: a reference that had to
+ * be regenerated whenever OLV changed would not be a reference.
+ *
+ * GeographicLib picks the zone, because it applies the UTM zone exceptions from
+ * the standard. PROJ is then asked for that same zone, so the PROJ leg measures
+ * projection arithmetic while the GeographicLib leg also covers zone selection.
+ *
+ * Usage:  node validation/external-oracles/geodesy/run-oracles.mjs
+ */
+
+import { execFileSync, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = resolve(dirname(fileURLToPath(import.meta.url)));
+const ROOT = resolve(HERE, '../../..');
+const REFS = resolve(HERE, 'references');
+
+/** Coordinates go to both tools as fixed decimals: GeoConvert refuses 1e-9. */
+const DEGREE_DIGITS = 12;
+/** Nine decimals of a metre is far below any disagreement worth reporting. */
+const METRE_DIGITS = 9;
+
+const sha256 = (s) => createHash('sha256').update(s).digest('hex');
+
+const run = (exe, args, input) => {
+  const r = execFileSync(exe, args, { input, encoding: 'utf8' });
+  return r.trim();
+};
+
+/** `which`, resolved once so the exact path lands in the record. */
+const resolveExe = (name) => run('/usr/bin/which', [name], undefined);
+
+const versionOf = {
+  // PROJ has no --version. Every CLI prints its release banner to stderr as the
+  // first line of usage, and `-h` reaches it without consuming stdin.
+  'proj-9.8.1': () => {
+    const r = spawnSync('cs2cs', ['-h'], { encoding: 'utf8' });
+    const banner = `${r.stderr ?? ''}${r.stdout ?? ''}`.split('\n')[0].trim();
+    if (!/\d/.test(banner)) throw new Error(`cs2cs printed no version banner: ${JSON.stringify(banner)}`);
+    return banner;
+  },
+  'geographiclib-2.7': () => run('GeoConvert', ['--version'], undefined),
+};
+
+const protocol = JSON.parse(readFileSync(resolve(HERE, 'protocol.json'), 'utf8'));
+const fixturesRaw = readFileSync(resolve(HERE, 'fixtures.json'), 'utf8');
+const { fixtures } = JSON.parse(fixturesRaw);
+
+if (fixtures.length < protocol.metrics.minimumFixtures) {
+  throw new Error(
+    `protocol requires ${protocol.metrics.minimumFixtures} fixtures, matrix has ${fixtures.length}`,
+  );
+}
+
+/** GeoConvert -u: "<zone><n|s> <easting> <northing>", zone possibly zero-padded. */
+const parseGeoConvert = (out) => {
+  const m = /^(\d+)\s*([nsNS])\s+([\d.+-]+)\s+([\d.+-]+)$/.exec(out);
+  if (!m) throw new Error(`GeoConvert output not understood: ${JSON.stringify(out)}`);
+  return {
+    zone: Number(m[1]),
+    hemisphere: m[2].toLowerCase() === 's' ? 'S' : 'N',
+    easting: Number(m[3]),
+    northing: Number(m[4]),
+  };
+};
+
+const results = [];
+for (const f of fixtures) {
+  const line = `${f.lat.toFixed(DEGREE_DIGITS)} ${f.lon.toFixed(DEGREE_DIGITS)}`;
+
+  const geoRaw = run('GeoConvert', ['-u', '-p', String(METRE_DIGITS)], `${line}\n`);
+  const geo = parseGeoConvert(geoRaw);
+
+  const epsg = (geo.hemisphere === 'S' ? 32700 : 32600) + geo.zone;
+  const projRaw = run('cs2cs', ['-f', `%.${METRE_DIGITS}f`, 'EPSG:4326', `EPSG:${epsg}`], `${line}\n`);
+  const parts = projRaw.split(/\s+/);
+  const proj = { easting: Number(parts[0]), northing: Number(parts[1]), epsg };
+
+  if (!Number.isFinite(proj.easting) || !Number.isFinite(proj.northing)) {
+    throw new Error(`cs2cs output not understood for ${f.id}: ${JSON.stringify(projRaw)}`);
+  }
+
+  results.push({
+    id: f.id,
+    lat: f.lat,
+    lon: f.lon,
+    input: line,
+    geographiclib: { ...geo, raw: geoRaw },
+    proj: { ...proj, raw: projRaw },
+    /** What the two oracles differ by. Separates oracle spread from candidate error. */
+    oracleSpread: {
+      eastingM: proj.easting - geo.easting,
+      northingM: proj.northing - geo.northing,
+    },
+  });
+}
+
+const spreadE = Math.max(...results.map((r) => Math.abs(r.oracleSpread.eastingM)));
+const spreadN = Math.max(...results.map((r) => Math.abs(r.oracleSpread.northingM)));
+
+const record = {
+  schemaVersion: 1,
+  protocolId: protocol.protocolId,
+  generatedBy: 'validation/external-oracles/geodesy/run-oracles.mjs',
+  fixturesSha256: `sha256:${sha256(fixturesRaw)}`,
+  fixtureCount: results.length,
+  environment: {
+    platform: `${process.platform}-${process.arch}`,
+    nodeVersion: process.version,
+    locale: process.env.LC_ALL ?? process.env.LANG ?? 'unset',
+  },
+  oracles: [
+    {
+      oracleId: 'geographiclib-2.7',
+      role: 'independent-same-quantity-implementation',
+      executablePath: resolveExe('GeoConvert'),
+      versionOutput: versionOf['geographiclib-2.7'](),
+      commandLine: `GeoConvert -u -p ${METRE_DIGITS}`,
+      zoneSource: 'oracle',
+    },
+    {
+      oracleId: 'proj-9.8.1',
+      role: 'independent-same-quantity-implementation',
+      executablePath: resolveExe('cs2cs'),
+      versionOutput: versionOf['proj-9.8.1'](),
+      commandLine: `cs2cs -f %.${METRE_DIGITS}f EPSG:4326 EPSG:<326|327><zone>`,
+      zoneSource: 'geographiclib-2.7',
+    },
+  ],
+  oracleAgreement: {
+    maxAbsEastingM: spreadE,
+    maxAbsNorthingM: spreadN,
+    note: 'PROJ against GeographicLib over the same fixtures. Two separate lineages, so this bounds how much of any candidate residual could be oracle disagreement rather than candidate error.',
+  },
+  results,
+};
+
+mkdirSync(REFS, { recursive: true });
+const out = resolve(REFS, 'oracle-utm.json');
+writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
+
+console.log(
+  `run-oracles: wrote ${results.length} fixture(s) to ${out.slice(ROOT.length + 1)}\n` +
+    `  oracle spread: max |dE| ${spreadE.toExponential(3)} m, max |dN| ${spreadN.toExponential(3)} m`,
+);
