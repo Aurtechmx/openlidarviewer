@@ -150,7 +150,8 @@
     "lint:worker-registry": "node scripts/lint-worker-registry.mjs",
     "lint:claim-prose-sync": "node scripts/lint-claim-prose-sync.mjs",
     "lint:dataset-citations": "node scripts/lint-dataset-citations.mjs",
-    "verify:reference-reproducibility": "node scripts/verify-reference-reproducibility.mjs"
+    "verify:reference-reproducibility": "node scripts/verify-reference-reproducibility.mjs",
+    "lint:pr-hygiene": "node scripts/pr-hygiene.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

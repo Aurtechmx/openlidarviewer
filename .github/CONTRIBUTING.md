@@ -50,6 +50,34 @@ specs run via `npm run test:e2e`.
 Keep the module boundaries intact: one file per format or concern, and
 analysis modules must not import the renderer.
 
+### Branching, and reading your own diff
+
+Cut every branch from current `main`. Branching from another open PR is
+sometimes the only sensible thing to do, and when you do it, say so on the
+`Stacked on:` line, because it changes how the branch has to be landed.
+
+The reason it matters is squash merging. When the parent PR is squashed, its
+commits are replaced by one new commit that your branch has never seen, so
+they never become ancestors of `main` and they keep showing up in your review
+surface. One branch here arrived at 103 commits and 56 files, of which 48 were
+byte-identical to `main`: eight files of work behind forty-eight files of
+noise. Rebasing onto current `main` removes them. `npm run lint:pr-hygiene`
+reports the count, and CI runs it on every PR.
+
+Two diffs answer two different questions, and mixing them up is how a healthy
+branch gets mistaken for a broken one:
+
+```bash
+git diff --name-only origin/main...HEAD   # what a reviewer sees
+git diff --name-only origin/main   HEAD   # how the two trees differ right now
+```
+
+Three dots is measured from where you branched, so it is your work. Two dots
+compares the trees as they stand, so on a branch that is merely behind it also
+counts every file `main` has gained since. A large two-dot diff means you are
+behind. A file that appears in the three-dot diff while being identical between
+`main` and your head means that work is already upstream.
+
 ## Testing policy
 
 New functionality ships with automated tests covering it. This is a
