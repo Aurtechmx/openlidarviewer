@@ -36,7 +36,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { writeFileSync, readFileSync, existsSync, realpathSync } from 'node:fs';
-import { resolve, dirname, delimiter } from 'node:path';
+import { resolve, dirname, relative, isAbsolute, delimiter } from 'node:path';
 import { platform, arch } from 'node:process';
 
 /** Where the Dockerfile bakes the identity of the image itself. */
@@ -215,6 +215,16 @@ function main() {
   // directory does not exist stops the run rather than being written blind.
   const target = process.argv[2] ? resolve(process.argv[2]) : null;
   if (target) {
+    // Canonicalising a path from argv says what it points at; it does not say
+    // the caller was allowed to point there. The resolved target is held
+    // inside the directory the run was started in, so a parent segment names
+    // a refusal rather than a file outside the tree.
+    const rel = relative(process.cwd(), target);
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+      process.stderr.write(`refusing to write outside ${process.cwd()}: ${target}\n`);
+      process.exitCode = 1;
+      return;
+    }
     if (!existsSync(dirname(target))) {
       process.stderr.write(`no such directory for output: ${dirname(target)}\n`);
       process.exitCode = 1;
