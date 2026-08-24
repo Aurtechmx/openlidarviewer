@@ -1,0 +1,60 @@
+# Structural check on what a pull request shows a reviewer.
+#
+# Separate from ci.yml because it needs the full history (`fetch-depth: 0`) that
+# the other jobs deliberately do without, and because it reads the pull request
+# rather than the tree. It is read-only: it never comments, labels, or merges.
+#
+# Deliberately absent from the release gate, which runs against an unpacked
+# archive with no `.git` at all.
+name: PR hygiene
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-hygiene-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    # Draft PRs are work in progress; the queue is not what they are for.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The whole point: merge-base, three-dot diffs and merge counts do not
+          # exist in a shallow clone.
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch the base branch
+        run: git fetch --no-tags origin "+refs/heads/${BASE}:refs/remotes/origin/${BASE}"
+        env:
+          BASE: ${{ github.event.pull_request.base.ref }}
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+
+      - name: Count open non-draft PRs
+        id: queue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json isDraft --jq '[.[] | select(.isDraft == false)] | length')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: PR hygiene
+        run: node scripts/pr-hygiene.mjs
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_OPEN_COUNT: ${{ steps.queue.outputs.count }}
