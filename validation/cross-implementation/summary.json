@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 16,
-  "countedStudies": 15,
+  "studiesRead": 18,
+  "countedStudies": 17,
   "byStatus": {
-    "agree": 14,
+    "agree": 16,
     "partial": 1
   },
   "byClaim": {
@@ -158,6 +158,18 @@
         "PS-HORN-HILLSHADE-AZ315-ALT45"
       ]
     },
+    "HOLDOUT-RMSE": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS"
+      ],
+      "parameterSetIds": [
+        "PS-ACCURACY-POOLED-RMSE"
+      ]
+    },
     "MEAS-AREA": {
       "studies": 1,
       "byStatus": {
@@ -183,6 +195,18 @@
         "PS-PROFILE-P25-RAMP",
         "PS-PROFILE-P25-SCATTER-CLASSIFIED",
         "PS-PROFILE-P50-RAMP"
+      ]
+    },
+    "NVA-VVA": {
+      "studies": 1,
+      "byStatus": {
+        "agree": 1
+      },
+      "datasetIds": [
+        "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS"
+      ],
+      "parameterSetIds": [
+        "PS-ACCURACY-NVA95"
       ]
     },
     "SLOPE-RASTER": {
@@ -224,10 +248,10 @@
     }
   },
   "agreement": {
-    "denominator": 15,
+    "denominator": 17,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 14,
-    "fraction": 0.9333333333333333
+    "agree": 16,
+    "fraction": 0.9411764705882353
   },
   "excludedFromCounts": [
     {

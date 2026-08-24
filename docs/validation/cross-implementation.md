@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Twelve products are at E4. Five are algorithm checks against GDAL:
+Fourteen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -37,7 +37,15 @@ no order statistic. The twelfth is a reader rather than an algorithm:
 `E57-INGEST`, against PDAL 2.10.2 `readers.e57` over every point of a public
 CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
 `nor:` namespaced surface normals, and colour) as an exact quantised integer sum
-at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
+at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive. The
+thirteenth and fourteenth are statistics rather than products of a surface:
+`HOLDOUT-RMSE` and `NVA-VVA`, recomputed in base R 4.6.1 over six frozen
+residual vectors, four of which carry values computed from their construction.
+R is the second implementation here because it is not TypeScript: its numerics,
+its quantile machinery and its accumulation order are its own. The comparison
+covers the quantities that carry no order statistic, so median, NMAD and P95 sit
+outside it: R interpolates at type 7 and `checkpointAccuracy` takes the nearest
+rank, and the study records that difference rather than resolving it.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -52,9 +60,14 @@ at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
 | `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
+| `HOLDOUT-RMSE` | base R 4.6.1 bias, `sqrt(mean(r²))`, max (+ closed forms on four cases) | `tests/statisticsRAgreement.test.ts` | 18 comparisons (6 cases) | 4.4×10⁻¹⁶ | 1×10⁻¹² |
+| `NVA-VVA` | base R 4.6.1 `1.96 * sqrt(mean(r²))` | `tests/statisticsRAgreement.test.ts` | 6 comparisons (6 cases) | 8.9×10⁻¹⁶ | 1×10⁻¹² |
 
 Every tolerance above was registered in `REFERENCE_SLOTS` before the references
-were generated. Each reference output, the exact command, the tool version and the
+were generated, with one exception stated as such: the two statistics rows carry
+no reference slot, and their 1×10⁻¹² was fixed in the same commit that produced
+the R output, so their protocol records the freeze as adopted with the result
+rather than as a preregistration. Each reference output, the exact command, the tool version and the
 checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a
 plane linear interpolation is exact and the tolerance measures cross-implementation

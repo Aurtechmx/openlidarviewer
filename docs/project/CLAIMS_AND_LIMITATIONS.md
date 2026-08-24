@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Twelve products are at E4. Five are algorithm checks against GDAL:
+- Fourteen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -115,6 +115,19 @@ discrete properties a test pins (byte-identity, exact inverses).
   a scanner-native write, so vendor extension blocks, multi-scan files and
   spherical coordinates are untested. Intensity sits outside the comparison
   because PDAL rescales it by 65535/(max − min) without subtracting the minimum.
+- `HOLDOUT-RMSE` and `NVA-VVA` are the thirteenth and fourteenth, and what
+  moved is the arithmetic, not the accuracy figure. The residual statistics were
+  recomputed in base R 4.6.1 over six frozen residual vectors, four of which
+  carry values computed from their construction. Bias, RMSE and the maximum
+  absolute residual agree to 4.4×10⁻¹⁶ over eighteen comparisons, and the 95
+  percent figure, 1.96 times that RMSE, agrees to 8.9×10⁻¹⁶ over six. The R leg
+  pins the formula, including that RMSE is `sqrt(mean(r²))` and not a standard
+  deviation. It does not touch the sampling: both claims still require E5,
+  because the held-out points come from the same source as the interpolated
+  ones and the project has no independent checkpoints. Median, NMAD and P95 are
+  outside the comparison, because R interpolates its quantiles at type 7 and
+  `checkpointAccuracy` takes the nearest rank; the study records the difference
+  rather than reconciling it.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

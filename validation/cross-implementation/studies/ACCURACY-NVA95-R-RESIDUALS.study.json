@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "studyId": "ACCURACY-NVA95-R-RESIDUALS",
+  "claimId": "NVA-VVA",
+  "example": false,
+  "notes": [
+    "The candidate derives the NVA figure in computeVerticalAccuracy from the same pooled RMSE, so agreeing on RMSE is what makes the derived figure agree; the leg exists to pin the multiplier and the derivation, not to re-measure RMSE.",
+    "The tolerance and the reference output landed in the same commit, so the freeze is recorded as adopted-with-result rather than as a preregistration."
+  ],
+  "protocolDigest": "sha256:a0f982041ae6d23fef44c19c1c20fcfbf0f7b24fd653dc0a835fde079a51e458",
+  "protocolRef": {
+    "protocolId": "PROTO-ACCURACY-STATS-R-RESIDUALS",
+    "digest": "sha256:edb0f6dea1910e18264b6d5a55f3e27b04261fc86aee3973b234db36dca2adc6"
+  },
+  "candidate": {
+    "revision": "5a382283f3527b5ae0507902b984218b45cbb2a6",
+    "version": "0.6.6",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "R",
+    "version": "R version 4.6.1 (2026-06-24)",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container was pulled for this reference. The script is base R only, so the reference surface is the R build itself, and the resolved executable path, the version string R reported and the exact command line stand in for a digest.",
+    "executablePath": "/opt/homebrew/bin/Rscript",
+    "commandLine": "Rscript validation/external-oracles/statistics/r/accuracy-stats.R validation/external-oracles/statistics/residuals.csv validation/external-oracles/statistics/references/r-accuracy.json",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS",
+      "description": "Six residual vectors written as exact decimal literals: a symmetric five-value set, a constant offset, bias plus spread, a single gross outlier among nineteen zeros, a hundred asymmetric values from an explicit rule, and ten values where the 95th percentile falls between samples. Four carry values computed from the construction.",
+      "path": "validation/external-oracles/statistics/residuals.json",
+      "sha256": "62055751407ee4acbe0706441b5d945132157b2df5c9eedf8867b9e84a8efbe7"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-ACCURACY-NVA95",
+      "description": "The NVA figure at 95 percent, 1.96 times the pooled RMSE, over each of the six fixture cases. One quantity across six cases gives six comparisons.",
+      "candidateParameters": {
+        "function": "checkpointAccuracy then computeVerticalAccuracy",
+        "minSample": 1,
+        "multiplier": 1.96,
+        "quantities": [
+          "nva95"
+        ]
+      },
+      "referenceParameters": {
+        "script": "accuracy-stats.R",
+        "nva95": "1.96 * sqrt(mean(r^2))"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 1e-12,
+    "toleranceUnit": "m",
+    "minimumComparableCells": 6,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All six comparisons are within the registered 1e-12, the largest difference being 8.88e-16, and R reproduces 1.96 times its own RMSE to the same bound on every case, so the multiplier cannot drift apart from the statistic it multiplies. The registered scope is the derivation only: the comparison reaches the arithmetic and stops short of the sampling assumption the ASPRS figure rests on, which no recomputation can test.",
+  "result": {
+    "comparableCells": 6,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 8.881784197001252e-16,
+    "rmse": 3.6259732146947156e-16,
+    "meanDiff": 1.4802973661668753e-16
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/external-oracles/statistics/residuals.json",
+      "sha256": "62055751407ee4acbe0706441b5d945132157b2df5c9eedf8867b9e84a8efbe7",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/external-oracles/statistics/residuals.csv",
+      "sha256": "e38cb7a919519538a9db925768ef1336c7720c0a18b00a515a72e2d99d3e93c3",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/external-oracles/statistics/r/accuracy-stats.R",
+      "sha256": "43a1af6480fee4d97cf37b9a906a15f4ce02ed86d8603f17b7ba02c46cab5623",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/external-oracles/statistics/references/r-accuracy.json",
+      "sha256": "2bf3ff030bdf1461ed99161e7331374fffd54ee5ce81b14d2bdc27e0551a3671",
+      "role": "reference-output"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS",
+        "parameterSetId": "PS-ACCURACY-NVA95"
+      }
+    ],
+    "unsupported": [
+      "The normal-theory assumption behind the 1.96 multiplier. Agreement on the arithmetic says nothing about whether a residual distribution justifies it.",
+      "ASPRS NVA and VVA as specified, which presume independent checkpoints. The fixtures are residual vectors and carry no checkpoint provenance.",
+      "How a residual vector is produced. The comparison starts at the residuals.",
+      "Real terrain and real returns. Every fixture value is an exact decimal literal.",
+      "Accuracy against ground truth. Agreement with R is agreement on arithmetic."
+    ]
+  }
+}

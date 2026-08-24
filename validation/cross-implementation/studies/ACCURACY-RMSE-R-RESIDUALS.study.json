@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "studyId": "ACCURACY-RMSE-R-RESIDUALS",
+  "claimId": "HOLDOUT-RMSE",
+  "example": false,
+  "notes": [
+    "The residual vector is the fixture, deliberately. Deriving it from a point cloud would let a disagreement be a difference in how two programs interpolated a surface rather than a difference between the estimators under test.",
+    "Four of the six cases carry closed forms, and both sides are scored against those before they are compared to each other.",
+    "The tolerance and the reference output landed in the same commit, so the freeze is recorded as adopted-with-result rather than as a preregistration."
+  ],
+  "protocolDigest": "sha256:d0d6a75f7cc00b177115a221cc66c0c3847cc0a4c819fa3fb7fa80abbdb5a535",
+  "protocolRef": {
+    "protocolId": "PROTO-ACCURACY-STATS-R-RESIDUALS",
+    "digest": "sha256:edb0f6dea1910e18264b6d5a55f3e27b04261fc86aee3973b234db36dca2adc6"
+  },
+  "candidate": {
+    "revision": "5a382283f3527b5ae0507902b984218b45cbb2a6",
+    "version": "0.6.6",
+    "algorithmVersion": "v0.4.x"
+  },
+  "reference": {
+    "tool": "R",
+    "version": "R version 4.6.1 (2026-06-24)",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container was pulled for this reference. The script is base R only, so the reference surface is the R build itself, and the resolved executable path, the version string R reported and the exact command line stand in for a digest.",
+    "executablePath": "/opt/homebrew/bin/Rscript",
+    "commandLine": "Rscript validation/external-oracles/statistics/r/accuracy-stats.R validation/external-oracles/statistics/residuals.csv validation/external-oracles/statistics/references/r-accuracy.json",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS",
+      "description": "Six residual vectors written as exact decimal literals: a symmetric five-value set, a constant offset, bias plus spread, a single gross outlier among nineteen zeros, a hundred asymmetric values from an explicit rule, and ten values where the 95th percentile falls between samples. Four carry values computed from the construction.",
+      "path": "validation/external-oracles/statistics/residuals.json",
+      "sha256": "62055751407ee4acbe0706441b5d945132157b2df5c9eedf8867b9e84a8efbe7"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-ACCURACY-POOLED-RMSE",
+      "description": "The pooled bias, RMSE and maximum absolute residual over each fixture case, with minSample 1 so every case reports. Residual is measured minus reference, so each fixture value enters as a measurement against a zero reference. Three quantities across six cases give eighteen comparisons.",
+      "candidateParameters": {
+        "function": "checkpointAccuracy",
+        "minSample": 1,
+        "quantities": [
+          "bias",
+          "rmse",
+          "maxAbsResidual"
+        ],
+        "usage": "independent"
+      },
+      "referenceParameters": {
+        "script": "accuracy-stats.R",
+        "bias": "mean(r)",
+        "rmse": "sqrt(mean(r^2))",
+        "maxAbsResidual": "max(abs(r))"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 1e-12,
+    "toleranceUnit": "m",
+    "minimumComparableCells": 18,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All eighteen comparisons across the six cases are within the registered 1e-12, the largest difference being 4.44e-16. The registered parameter set is deliberately the convention-free half of the module output. Median, NMAD and P95 are excluded because they are not comparable without naming a quantile convention: R interpolates at type 7, the candidate takes the nearest rank, and on the ten-value case the two medians are 5.5 and 5. Compared against R computed under the candidate own nearest-rank convention the P95 agrees everywhere, which places that gap in the definition and not in the arithmetic. Nothing was widened.",
+  "result": {
+    "comparableCells": 18,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 4.440892098500626e-16,
+    "rmse": 1.0467283057891834e-16,
+    "meanDiff": 2.4671622769447922e-17
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/external-oracles/statistics/residuals.json",
+      "sha256": "62055751407ee4acbe0706441b5d945132157b2df5c9eedf8867b9e84a8efbe7",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/external-oracles/statistics/residuals.csv",
+      "sha256": "e38cb7a919519538a9db925768ef1336c7720c0a18b00a515a72e2d99d3e93c3",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/external-oracles/statistics/r/accuracy-stats.R",
+      "sha256": "43a1af6480fee4d97cf37b9a906a15f4ce02ed86d8603f17b7ba02c46cab5623",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/external-oracles/statistics/references/r-accuracy.json",
+      "sha256": "2bf3ff030bdf1461ed99161e7331374fffd54ee5ce81b14d2bdc27e0551a3671",
+      "role": "reference-output"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS",
+        "parameterSetId": "PS-ACCURACY-POOLED-RMSE"
+      }
+    ],
+    "unsupported": [
+      "Median, NMAD and P95 as reported by the module, which depend on a quantile convention the two implementations do not share. The difference is recorded and not resolved here.",
+      "How a residual vector is produced. The comparison starts at the residuals, so interpolation, ground classification and gridding are all outside it.",
+      "Checkpoint independence. The fixtures are residual vectors, and nothing about where they came from is modelled.",
+      "Real terrain and real returns. Every fixture value is an exact decimal literal.",
+      "Accuracy against ground truth. Agreement with R is agreement on arithmetic."
+    ]
+  }
+}

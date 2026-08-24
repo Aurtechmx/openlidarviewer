@@ -704,10 +704,11 @@ claims:
     algorithm: Conditional point-wise interpolation holdout
     algorithmVersion: v0.4.x
     claim: "RMSE of held-out points against the interpolated surface — an INTERNAL diagnostic, not independent checkpoint accuracy."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/holdoutRmse.test.ts]
-    supportingDatasets: [analytic surfaces]
+    supportingTests: [tests/holdoutRmse.test.ts, tests/statisticsRAgreement.test.ts]
+    supportingDatasets: [analytic surfaces, frozen residual vectors with a base-R recomputation]
+    supportingStudies: [ACCURACY-RMSE-R-RESIDUALS]
     units: [metres]
     crsDatum: metric
     assumptions: ["point-wise holdout is optimistic vs spatially-blocked (Phase 4)"]
@@ -715,26 +716,31 @@ claims:
     exportAllowed: true
     userLabel: "Conditional point-wise interpolation holdout"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
     approvedClaim: "Internal holdout RMSE against known synthetic surfaces."
     prohibitedClaim: ["independent checkpoint accuracy", "field accuracy", "spatially-blocked error (pending)"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS
+          parameterSetId: PS-ACCURACY-POOLED-RMSE
       unsupported:
         - "Independent checkpoint accuracy. The held-out points come from the same source as the points interpolated."
         - "Any figure corrected for spatial autocorrelation, which inflates the apparent accuracy of a point-wise holdout."
         - "Real terrain. The evidence is analytic surfaces."
+        - "The reported median, NMAD and P95. The R comparison leaves them out because the two sides do not share a quantile convention: R interpolates at type 7 and src/validation/checkpointAccuracy.ts takes the nearest rank, so the median of ten values 1..10 is 5.5 on one side and 5 on the other. The study records the difference and does not reconcile it."
+    scopeNote: "What the R leg raises is the computation, not the accuracy figure. ACCURACY-RMSE-R-RESIDUALS shows that RMSE is the raw second moment, sqrt(mean(r^2)) and not a standard deviation, and that bias, RMSE and the maximum absolute residual agree with a base-R recomputation to 4.44e-16 over eighteen comparisons on the frozen residual fixtures, four of which carry closed forms. requiredEvidence stays at E5 because the held-out points still come from the same source as the interpolated ones, and no recomputation can change that."
 
   - claimId: NVA-VVA
     product: NVA/VVA-style vertical accuracy
     algorithm: NVA/VVA formula (1.96 x RMSEz) on INTERNAL holdout
     algorithmVersion: v0.4.x
     claim: "NVA/VVA-STYLE statistic derived from internal holdout — not an independent checkpoint accuracy assessment."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/verticalAccuracy.test.ts]
-    supportingDatasets: [analytic surfaces]
+    supportingTests: [tests/verticalAccuracy.test.ts, tests/statisticsRAgreement.test.ts]
+    supportingDatasets: [analytic surfaces, frozen residual vectors with a base-R recomputation]
+    supportingStudies: [ACCURACY-NVA95-R-RESIDUALS]
     units: [metres]
     crsDatum: "Vertical; no datum transformation."
     assumptions: ["ASPRS NVA/VVA presume INDEPENDENT checkpoints; we have none"]
@@ -742,16 +748,20 @@ claims:
     exportAllowed: true
     userLabel: "NVA-style / VVA-style internal holdout statistic"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
     approvedClaim: "NVA/VVA-style statistic from internal holdout."
     prohibitedClaim: ["ASPRS NVA/VVA compliance", "independent checkpoint accuracy"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-076-SYNTHETIC-ACCURACY-RESIDUALS
+          parameterSetId: PS-ACCURACY-NVA95
       unsupported:
         - "ASPRS NVA/VVA compliance, which presumes independent checkpoints this project does not have."
         - "Real terrain. The statistic is computed on an internal holdout over analytic surfaces."
         - "Any statement about vertical datum, which is not transformed."
+        - "The normal-theory assumption the 1.96 multiplier rests on. The R leg reproduces the multiplication, not the distribution that would justify it."
+    scopeNote: "ACCURACY-NVA95-R-RESIDUALS shows that the 95 percent figure is 1.96 times the pooled RMSE and that the product agrees with a base-R recomputation to 8.88e-16 over the six frozen residual fixtures. That is the derivation checked in a second language, not a vertical accuracy assessment; requiredEvidence stays at E5 because the statistic is still computed on an internal holdout with no independent checkpoints."
 
   - claimId: QUALITY-LEVEL
     product: USGS Quality-Level comparison
