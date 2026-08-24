@@ -21,6 +21,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { ProfileChartSample } from '../src/render/measure/types';
+import type { VerticalReference } from '../src/geo/height';
 import {
   buildProfileCsv,
   computeProfileSummary,
@@ -130,25 +131,25 @@ describe('formatStation', () => {
 
 describe('profileSummaryRows', () => {
   it('metric rows carry the hand-computed values', () => {
-    const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'metric');
+    const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'metric', 'orthometric');
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
     // Length is a distance → adaptive 5-sig-fig precision ("50.000 m").
     expect(byLabel.get('Length')).toBe('50.000 m');
-    expect(byLabel.get('Elevation gain / loss')).toBe('+2.0000 m / −2.0000 m');
+    expect(byLabel.get('Height gain / loss')).toBe('+2.0000 m / −2.0000 m');
     expect(byLabel.get('Avg grade')).toBe('6.00%');
     expect(byLabel.get('Max grade')).toBe('20.00%');
     expect(byLabel.get('Steepest section')).toBe('0+000.00 → 0+010.00 (20.00%)');
-    expect(byLabel.get('Highest point')).toBe('14.00 m @ 0+040.00');
-    expect(byLabel.get('Lowest point')).toBe('10.00 m @ 0+000.00');
+    expect(byLabel.get('Highest elevation')).toBe('14.00 m @ 0+040.00');
+    expect(byLabel.get('Lowest elevation')).toBe('10.00 m @ 0+000.00');
   });
 
   it('imperial rows convert lengths and stationing', () => {
-    const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'imperial');
+    const rows = profileSummaryRows(computeProfileSummary(FIXTURE), 'imperial', 'orthometric');
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
     // 50 m = 164.04 ft; 14 m = 45.93 ft; grades are unit-free.
     expect(byLabel.get('Length')).toBe('164.04 ft');
     expect(byLabel.get('Avg grade')).toBe('6.00%');
-    expect(byLabel.get('Highest point')).toBe('45.93 ft @ 1+31.23');
+    expect(byLabel.get('Highest elevation')).toBe('45.93 ft @ 1+31.23');
   });
 
   it('an empty profile renders honest dashes', () => {
@@ -158,17 +159,18 @@ describe('profileSummaryRows', () => {
         { distance: 10, height: NaN },
       ]),
       'metric',
+      'orthometric',
     );
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
-    expect(byLabel.get('Elevation gain / loss')).toBe('—');
+    expect(byLabel.get('Height gain / loss')).toBe('—');
     expect(byLabel.get('Steepest section')).toBe('—');
-    expect(byLabel.get('Highest point')).toBe('—');
+    expect(byLabel.get('Highest elevation')).toBe('—');
   });
 });
 
 describe('buildProfileCsv', () => {
   it('metric CSV: one row per station, gaps blank, counts carried', () => {
-    const csv = buildProfileCsv(FIXTURE, 'metric');
+    const csv = buildProfileCsv(FIXTURE, 'metric', 'orthometric');
     const lines = csv.trimEnd().split('\n');
     expect(lines[0]).toBe('station,chainage_m,elevation_m,points,grade_to_next_pct');
     expect(lines).toHaveLength(1 + FIXTURE.length);
@@ -184,7 +186,7 @@ describe('buildProfileCsv', () => {
   });
 
   it('imperial CSV converts chainage and elevation and says so in the header', () => {
-    const csv = buildProfileCsv(FIXTURE, 'imperial');
+    const csv = buildProfileCsv(FIXTURE, 'imperial', 'orthometric');
     const lines = csv.trimEnd().split('\n');
     expect(lines[0]).toBe('station,chainage_ft,elevation_ft,points,grade_to_next_pct');
     // 10 m = 32.81 ft chainage; 12 m elevation = 39.370 ft; grade unit-free.
@@ -198,6 +200,7 @@ describe('buildProfileCsv', () => {
         { distance: 10, height: 2 },
       ],
       'metric',
+      'orthometric',
     );
     const lines = csv.trimEnd().split('\n');
     expect(lines[1]).toBe('0+000.00,0.00,1.000,,10.00');
@@ -299,7 +302,7 @@ describe('profileStationRows (v0.4.5, B5 — shared row model)', () => {
 
   it('the CSV is exactly these rows joined — panel table and export cannot diverge', () => {
     const rows = profileStationRows(FIXTURE, 'metric');
-    const lines = buildProfileCsv(FIXTURE, 'metric').trimEnd().split('\n');
+    const lines = buildProfileCsv(FIXTURE, 'metric', 'orthometric').trimEnd().split('\n');
     rows.forEach((r, i) => {
       expect(lines[i + 1]).toBe(
         `${r.station},${r.chainage},${r.elevation},${r.points},${r.grade}`,
@@ -373,12 +376,12 @@ describe('profile display surfaces print SOURCE elevations', () => {
 
   it('the summary rows locate the extremes at their real elevations', () => {
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(SOURCE), 'metric').map((r) => [r.label, r.value]),
+      profileSummaryRows(computeProfileSummary(SOURCE), 'metric', 'orthometric').map((r) => [r.label, r.value]),
     );
-    expect(byLabel.get('Lowest point')).toBe('348.93 m @ 0+000.00');
+    expect(byLabel.get('Lowest elevation')).toBe('348.93 m @ 0+000.00');
     // 418.165 is an exact decimal tie that IEEE-754 holds as 418.16499…, so
     // it rounds down. The elevation is right; the last digit is arithmetic.
-    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
   });
 
   it('an elevation never degrades into centimetres or kilometres', () => {
@@ -391,10 +394,11 @@ describe('profile display surfaces print SOURCE elevations', () => {
         { distance: 10, height: 1200 },
       ]),
       'metric',
+      'orthometric',
     );
     const byLabel = new Map(rows.map((r) => [r.label, r.value]));
-    expect(byLabel.get('Lowest point')).toBe('0.40 m @ 0+000.00');
-    expect(byLabel.get('Highest point')).toBe('1200.00 m @ 0+010.00');
+    expect(byLabel.get('Lowest elevation')).toBe('0.40 m @ 0+000.00');
+    expect(byLabel.get('Highest elevation')).toBe('1200.00 m @ 0+010.00');
   });
 
   it('the station table and the CSV agree with the panel', () => {
@@ -402,18 +406,18 @@ describe('profile display surfaces print SOURCE elevations', () => {
     expect(rows[0].elevation).toBe('348.927');
     expect(rows[1].elevation).toBe(''); // the gap
     expect(rows[2].elevation).toBe('418.165');
-    const lines = buildProfileCsv(SOURCE, 'metric').trimEnd().split('\n');
+    const lines = buildProfileCsv(SOURCE, 'metric', 'orthometric').trimEnd().split('\n');
     expect(lines[1]).toBe(`0+000.00,0.00,${rows[0].elevation},12,`);
     expect(lines[3]).toBe(`0+343.98,343.98,${rows[2].elevation},9,`);
   });
 
   it('imperial converts the restored elevation, it does not re-datum it', () => {
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(SOURCE), 'imperial').map((r) => [r.label, r.value]),
+      profileSummaryRows(computeProfileSummary(SOURCE), 'imperial', 'orthometric').map((r) => [r.label, r.value]),
     );
     // 348.927 m = 1144.77 ft; 418.165 m = 1371.93 ft.
-    expect(byLabel.get('Lowest point')).toBe('1144.77 ft @ 0+00.00');
-    expect(byLabel.get('Highest point')).toBe('1371.93 ft @ 11+28.54');
+    expect(byLabel.get('Lowest elevation')).toBe('1144.77 ft @ 0+00.00');
+    expect(byLabel.get('Highest elevation')).toBe('1371.93 ft @ 11+28.54');
   });
 
   it('an extreme is always located at one of the series own stations', () => {
@@ -460,16 +464,16 @@ describe('a refused datum degrades to local heights, visibly', () => {
 
   it('the summary names the extremes as local heights instead of elevations', () => {
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(LOCAL), 'metric', false).map((r) => [
+      profileSummaryRows(computeProfileSummary(LOCAL), 'metric', 'local').map((r) => [
         r.label,
         r.value,
       ]),
     );
-    expect(byLabel.get('Highest point (local height)')).toBe('-411.87 m @ 0+343.98');
-    expect(byLabel.get('Lowest point (local height)')).toBe('-481.10 m @ 0+000.00');
+    expect(byLabel.get('Highest height (local frame)')).toBe('-411.87 m @ 0+343.98');
+    expect(byLabel.get('Lowest height (local frame)')).toBe('-481.10 m @ 0+000.00');
     // The elevation wording must be gone — that is the whole visible signal.
-    expect(byLabel.has('Highest point')).toBe(false);
-    expect(byLabel.has('Lowest point')).toBe(false);
+    expect(byLabel.has('Highest elevation')).toBe(false);
+    expect(byLabel.has('Lowest elevation')).toBe(false);
   });
 
   it('every delta reads identically with and without a datum', () => {
@@ -483,17 +487,17 @@ describe('a refused datum degrades to local heights, visibly', () => {
       s.lengthM,
     ];
     expect(deltas(without)).toEqual(deltas(withDatum));
-    const rowsOf = (known: boolean, samples: ProfileChartSample[]) =>
-      new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', known).map((r) => [r.label, r.value]));
-    const a = rowsOf(true, scaleProfileSamples(LOCAL, 1, 830.03));
-    const b = rowsOf(false, scaleProfileSamples(LOCAL, 1, null));
-    for (const label of ['Length', 'Elevation gain / loss', 'Avg grade', 'Max grade', 'Steepest section']) {
+    const rowsOf = (reference: VerticalReference, samples: ProfileChartSample[]) =>
+      new Map(profileSummaryRows(computeProfileSummary(samples), 'metric', reference).map((r) => [r.label, r.value]));
+    const a = rowsOf('orthometric', scaleProfileSamples(LOCAL, 1, 830.03));
+    const b = rowsOf('local', scaleProfileSamples(LOCAL, 1, null));
+    for (const label of ['Length', 'Height gain / loss', 'Avg grade', 'Max grade', 'Steepest section']) {
       expect(b.get(label)).toBe(a.get(label));
     }
   });
 
   it('the CSV renames the column rather than blanking it — a blank means no coverage', () => {
-    const csv = buildProfileCsv(LOCAL, 'metric', false);
+    const csv = buildProfileCsv(LOCAL, 'metric', 'local');
     const lines = csv.trimEnd().split('\n');
     expect(lines[0]).toBe('station,chainage_m,local_height_m,points,grade_to_next_pct');
     // The values are real and must stay: blanking them would claim the corridor
@@ -502,19 +506,139 @@ describe('a refused datum degrades to local heights, visibly', () => {
     expect(lines[2]).toBe('0+171.99,171.99,,0,'); // the genuine gap, still blank
   });
 
-  it('a known datum keeps every label and header exactly as it was', () => {
+  it('a declared orthometric datum keeps every label and header as it was', () => {
     const known = scaleProfileSamples(LOCAL, 1, 830.03);
     const byLabel = new Map(
-      profileSummaryRows(computeProfileSummary(known), 'metric', true).map((r) => [r.label, r.value]),
+      profileSummaryRows(computeProfileSummary(known), 'metric', 'orthometric').map((r) => [
+        r.label,
+        r.value,
+      ]),
     );
-    expect(byLabel.get('Highest point')).toBe('418.16 m @ 0+343.98');
-    expect(buildProfileCsv(known, 'metric', true).split('\n')[0]).toBe(
+    expect(byLabel.get('Highest elevation')).toBe('418.16 m @ 0+343.98');
+    expect(buildProfileCsv(known, 'metric', 'orthometric').split('\n')[0]).toBe(
       'station,chainage_m,elevation_m,points,grade_to_next_pct',
     );
-    // Defaulted, the surfaces behave exactly as they did before the gate.
-    expect(profileSummaryRows(computeProfileSummary(known), 'metric')).toEqual(
-      profileSummaryRows(computeProfileSummary(known), 'metric', true),
+  });
+
+  it('agreeing render origins alone buy nothing — that flag is not a datum', () => {
+    // The pre-fix surfaces reached this state through `profileDatumKnown === true`
+    // and printed the elevation wording. The origins agreeing is what makes the
+    // heights restorable; the datum being declared is a separate fact.
+    const known = scaleProfileSamples(LOCAL, 1, 830.03);
+    const byLabel = new Map(
+      profileSummaryRows(computeProfileSummary(known), 'metric', 'unknown').map((r) => [
+        r.label,
+        r.value,
+      ]),
     );
-    expect(buildProfileCsv(known, 'metric')).toBe(buildProfileCsv(known, 'metric', true));
+    expect(byLabel.get('Highest height (datum unknown)')).toBe('418.16 m @ 0+343.98');
+    expect(byLabel.has('Highest elevation')).toBe(false);
+    expect(buildProfileCsv(known, 'metric', 'unknown').split('\n')[0]).toBe(
+      'station,chainage_m,height_datum_unknown_m,points,grade_to_next_pct',
+    );
+  });
+});
+
+/**
+ * The datum gate, re-cut against a resolved vertical reference.
+ *
+ * `profileDatumKnown` reports that the scene's render origins agree. It never
+ * said a vertical datum exists, so a boolean gate defaulting to `true` printed
+ * "Elevation" over heights whose reference was undeclared. Both display
+ * builders now take an explicit {@link VerticalReference} and take every
+ * heading from `heightLabel`, where only `orthometric` yields "Elevation".
+ *
+ * The argument is REQUIRED on purpose: the old default was fail-open, so a
+ * caller that forgot it got the strongest claim on the page.
+ */
+describe('height headings follow the resolved vertical reference', () => {
+  const rowsFor = (reference: VerticalReference) =>
+    new Map(
+      profileSummaryRows(computeProfileSummary(FIXTURE), 'metric', reference).map((r) => [
+        r.label,
+        r.value,
+      ]),
+    );
+
+  it('only an orthometric reference earns the word elevation', () => {
+    expect(rowsFor('orthometric').has('Highest elevation')).toBe(true);
+    expect(rowsFor('orthometric').has('Lowest elevation')).toBe(true);
+  });
+
+  it('an undeclared datum names the extremes as heights of unknown datum', () => {
+    const rows = rowsFor('unknown');
+    expect(rows.get('Highest height (datum unknown)')).toBe('14.00 m @ 0+040.00');
+    expect(rows.get('Lowest height (datum unknown)')).toBe('10.00 m @ 0+000.00');
+  });
+
+  it('NO row label says elevation when the datum is undeclared', () => {
+    for (const label of rowsFor('unknown').keys()) {
+      expect(label.toLowerCase()).not.toContain('elevation');
+    }
+  });
+
+  it('the same holds for every reference that is not orthometric', () => {
+    for (const reference of ['ellipsoidal', 'depth', 'local', 'unknown'] as VerticalReference[]) {
+      for (const label of rowsFor(reference).keys()) {
+        expect(label.toLowerCase()).not.toContain('elevation');
+      }
+    }
+  });
+
+  it('an ellipsoidal height is named one — not silently promoted to elevation', () => {
+    expect(rowsFor('ellipsoidal').has('Highest ellipsoidal height')).toBe(true);
+    expect(rowsFor('local').has('Highest height (local frame)')).toBe(true);
+    expect(rowsFor('depth').has('Highest depth')).toBe(true);
+  });
+
+  it('the gain / loss row is a difference, so it names no reference at all', () => {
+    for (const reference of ['orthometric', 'unknown', 'local'] as VerticalReference[]) {
+      expect(rowsFor(reference).get('Height gain / loss')).toBe('+2.0000 m / −2.0000 m');
+    }
+  });
+
+  it('every value is identical across references — only the wording moves', () => {
+    const values = (reference: VerticalReference) =>
+      profileSummaryRows(computeProfileSummary(FIXTURE), 'metric', reference).map((r) => r.value);
+    expect(values('unknown')).toEqual(values('orthometric'));
+    expect(values('local')).toEqual(values('orthometric'));
+  });
+});
+
+describe('the station CSV column names the reference it actually has', () => {
+  const header = (reference: VerticalReference, system: 'metric' | 'imperial' = 'metric') =>
+    buildProfileCsv(FIXTURE, system, reference).split('\n')[0];
+
+  it('orthometric keeps the elevation column', () => {
+    expect(header('orthometric')).toBe('station,chainage_m,elevation_m,points,grade_to_next_pct');
+  });
+
+  it('an undeclared datum never writes an elevation column', () => {
+    expect(header('unknown')).toBe(
+      'station,chainage_m,height_datum_unknown_m,points,grade_to_next_pct',
+    );
+    expect(header('unknown')).not.toContain('elevation');
+  });
+
+  it('each remaining reference gets its own honest column token', () => {
+    expect(header('local')).toContain('local_height_m');
+    expect(header('ellipsoidal')).toContain('ellipsoidal_height_m');
+    expect(header('depth')).toContain('depth_m');
+    for (const reference of ['local', 'ellipsoidal', 'depth'] as VerticalReference[]) {
+      expect(header(reference)).not.toContain('elevation');
+    }
+  });
+
+  it('the unit suffix rides along in imperial', () => {
+    expect(header('unknown', 'imperial')).toBe(
+      'station,chainage_ft,height_datum_unknown_ft,points,grade_to_next_pct',
+    );
+    expect(header('orthometric', 'imperial')).toContain('elevation_ft');
+  });
+
+  it('the rows are untouched by the reference — only the header moves', () => {
+    const body = (reference: VerticalReference) =>
+      buildProfileCsv(FIXTURE, 'metric', reference).split('\n').slice(1).join('\n');
+    expect(body('unknown')).toBe(body('orthometric'));
   });
 });

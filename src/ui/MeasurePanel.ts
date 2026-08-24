@@ -37,6 +37,13 @@ import {
   profileSummaryRows,
   type ProfileStationRow,
 } from '../render/measure/profileSummary';
+// What surface a profile's heights are measured from. `profileDatumKnown`
+// answers a different question — whether the loaded clouds share a render
+// origin — so every heading resolves through here instead, and takes its word
+// from `heightLabel`, where only an orthometric reference reads "Elevation".
+import { resolveProfileVerticalReference } from '../render/measure/profileVerticalReference';
+import { heightLabel } from '../geo/height';
+import type { VerticalReference } from '../geo/height';
 // Straight-polyline path builder shared with the profile PDF so the chart and
 // the sheet draw the same geometry. Pure string assembly, no dependencies.
 import { profilePolylinePath } from '../render/measure/profilePath';
@@ -781,8 +788,31 @@ export class MeasurePanel {
   }
 
   /**
+   * The surface this profile's heights are measured from.
+   *
+   * Resolved rather than assumed. The summary carries `profileDatumKnown`,
+   * which reports that the loaded clouds agree on a render origin — the fact
+   * that makes a stored local height restorable, not a declared datum. Reading
+   * it as a datum is what printed "Elevation" over heights no source ever tied
+   * to a sea-level surface. The measurement's provenance record answers when
+   * it has an answer; otherwise the datum the CRS service resolved is
+   * classified, and an unrecognised one stays `unknown`.
+   *
+   * The CRS is read at RENDER time, like the PDF header, so a late CRS
+   * confirmation or a user override reaches the headings on the next update.
+   */
+  private _verticalReference(s: MeasurementSummary): VerticalReference {
+    const ctx = this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null;
+    return resolveProfileVerticalReference({
+      datumKnown: s.profileDatumKnown,
+      provenance: s.profileProvenance,
+      verticalDatum: ctx?.verticalDatum ?? null,
+    });
+  }
+
+  /**
    * Download the profile's station data as a CSV (station, chainage, ground
-   * elevation, corridor point count, grade-to-next), in the active unit
+   * height, corridor point count, grade-to-next), in the active unit
    * system. Synchronous — the builder is pure string assembly, so unlike the
    * PDF there is no chunk to load and no busy state to manage. v0.4.5,
    * closing the "no profile CSV, station table PDF-only" audit gap.
@@ -790,7 +820,7 @@ export class MeasurePanel {
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
-    const csv = buildProfileCsv(s.profileChart, system, s.profileDatumKnown !== false);
+    const csv = buildProfileCsv(s.profileChart, system, this._verticalReference(s));
     triggerDownload(new Blob([csv], { type: 'text/csv' }), `${safeFileName(s.name)}-profile.csv`);
   }
 
@@ -836,6 +866,7 @@ export class MeasurePanel {
     const samples = s.profileChart;
     const system = this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
     const datumKnown = s.profileDatumKnown !== false;
+    const reference = this._verticalReference(s);
     const storedVex = Number(storageGet(PROFILE_VEX_KEY));
     const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10) ? storedVex : 1;
 
@@ -852,7 +883,7 @@ export class MeasurePanel {
           className: 'olv-rf-stats',
           ariaLabel: `Profile summary for ${s.name}`,
         });
-        for (const row of profileSummaryRows(computeProfileSummary(samples), system, datumKnown)) {
+        for (const row of profileSummaryRows(computeProfileSummary(samples), system, reference)) {
           stats.append(
             el('div', { className: 'olv-rf-stat' }, [
               el('dt', { className: 'olv-rf-stat-label', text: row.label }),
@@ -869,7 +900,7 @@ export class MeasurePanel {
           stationRows,
           unitLabel,
           s.name,
-          datumKnown ? 'Elevation' : 'Local height',
+          heightLabel(reference),
         );
         build();
         const stations = el('div', { className: 'olv-rf-stations' }, [
@@ -1445,11 +1476,12 @@ export class MeasurePanel {
       // its value (the chart itself stays decorative/aria-hidden).
       const summary = computeProfileSummary(s.profileChart);
       const datumKnown = s.profileDatumKnown !== false;
+      const reference = this._verticalReference(s);
       const summaryList = el('dl', {
         className: 'olv-mp-profile-summary',
         ariaLabel: `Profile summary for ${s.name}`,
       });
-      for (const row of profileSummaryRows(summary, system, datumKnown)) {
+      for (const row of profileSummaryRows(summary, system, reference)) {
         summaryList.append(
           el('div', { className: 'olv-mp-summary-row' }, [
             el('dt', { className: 'olv-mp-summary-label', text: row.label }),
@@ -1466,7 +1498,7 @@ export class MeasurePanel {
       // a real table in the DOM acting as the accessible source of truth.
       const stationRows = profileStationRows(s.profileChart, system);
       const unitLabel = system === 'metric' ? 'm' : 'ft';
-      const heightHeader = datumKnown ? 'Elevation' : 'Local height';
+      const heightHeader = heightLabel(reference);
       // Lazy <tbody> (v0.6 perf): the station table is collapsed by default and
       // most measurements are never expanded, yet a dense profile carries one
       // row per sample — building every <tr>/<td> up front spends DOM work on a
@@ -1585,7 +1617,7 @@ export class MeasurePanel {
         text: 'CSV',
         title:
           `Export ${s.name} station data as CSV — ` +
-          'station, chainage, ground elevation, corridor point count, grade.',
+          'station, chainage, ground height, corridor point count, grade.',
         ariaLabel: `Export profile ${s.name} station data as CSV`,
       });
       csvBtn.addEventListener('click', () => {
@@ -1686,7 +1718,7 @@ function buildStationTable(
   stationRows: readonly ProfileStationRow[],
   unitLabel: string,
   name: string,
-  heightHeader = 'Elevation',
+  heightHeader: string,
   coupling?: StationHoverCoupling,
   rowChainages?: readonly number[],
 ): { table: HTMLElement; build: () => void } {
