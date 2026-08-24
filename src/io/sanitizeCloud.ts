@@ -73,6 +73,52 @@ const ATTRIBUTE_WIDTH: Record<keyof CloudAttributes, number> = {
 
 const ATTRIBUTE_KEYS = Object.keys(ATTRIBUTE_WIDTH) as (keyof CloudAttributes)[];
 
+/**
+ * What the compaction did to record identity, for a caller that has to keep an
+ * index into the PRE-sanitation records meaningful afterwards.
+ *
+ * The direction is deliberate. A forward table (output index to input index)
+ * describes the same compaction, but every caller that holds a source index —
+ * an organized-range grid, a per-record sidecar — would have to search it to
+ * find where its record went. The question actually being asked is "where did
+ * source record i land, if it landed at all", so the table is stored that way
+ * and answered in one read.
+ *
+ * `identity` is not an optimisation detail leaking out: it is the common case,
+ * and representing it as a shape rather than as a filled table is what lets a
+ * clean cloud request the witness and still allocate nothing.
+ */
+export type CompactionWitness =
+  | { readonly kind: 'identity'; readonly sourceCount: number }
+  | {
+      readonly kind: 'compacted';
+      readonly sourceCount: number;
+      /** Length `sourceCount`. Output index, or {@link RECORD_DROPPED}. */
+      readonly sourceToOutput: Int32Array;
+    };
+
+/** The source record did not survive sanitation and has no output index. */
+export const RECORD_DROPPED = -1;
+
+/**
+ * Where source record `sourceIndex` ended up, or {@link RECORD_DROPPED}.
+ *
+ * An index outside the witnessed range is `RECORD_DROPPED` rather than a
+ * throw or a wrapped read: a caller asking about a record the witness never
+ * covered has no answer, and that is the same fact.
+ */
+export function outputRecordFor(witness: CompactionWitness, sourceIndex: number): number {
+  if (sourceIndex < 0 || sourceIndex >= witness.sourceCount) return RECORD_DROPPED;
+  if (witness.kind === 'identity') return sourceIndex;
+  return witness.sourceToOutput[sourceIndex];
+}
+
+/** Opt-in extras a caller can ask sanitation for. */
+export interface SanitizeOptions {
+  /** Record how source indices map onto output indices. Off by default. */
+  readonly witness?: boolean;
+}
+
 /** A cloud recentred and cleared of unplaceable points. */
 export interface SanitizedCloud<A extends CloudAttributes> {
   /** Interleaved xyz in local coordinates, survivors only. */
@@ -85,6 +131,8 @@ export interface SanitizedCloud<A extends CloudAttributes> {
   excludedCount: number;
   /** What was excluded and why, for `metadata.loadWarnings`; absent when nothing was. */
   warning?: string;
+  /** Present exactly when the caller asked for it. */
+  witness?: CompactionWitness;
 }
 
 /** A cloud cleared of unplaceable points, for positions that are already local. */
@@ -93,6 +141,8 @@ export interface SanitizedLocalCloud<A extends CloudAttributes> {
   attributes: A;
   excludedCount: number;
   warning?: string;
+  /** Present exactly when the caller asked for it. */
+  witness?: CompactionWitness;
 }
 
 /** Allocate an array of the same kind as `src`, for the compacted copy. */
@@ -126,7 +176,8 @@ function exclusionWarning(excluded: number, total: number): string {
 function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
   coords: C,
   attributes: A,
-): { coords: C; attributes: A; excludedCount: number } {
+  wantWitness: boolean,
+): { coords: C; attributes: A; excludedCount: number; witness?: CompactionWitness } {
   // A trailing partial record means the decoder and the buffer disagree about
   // the point count; there is no honest way to guess the missing components.
   // `PointCloud` refuses the same shape at construction — refuse it earlier,
@@ -163,7 +214,16 @@ function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
       kept++;
     }
   }
-  if (kept === count) return { coords, attributes, excludedCount: 0 };
+  if (kept === count) {
+    // Nothing moved, so the witness is the identity map — and saying that costs
+    // no table, which is what keeps an ordinary cloud on the free path.
+    return {
+      coords,
+      attributes,
+      excludedCount: 0,
+      witness: wantWitness ? { kind: 'identity', sourceCount: count } : undefined,
+    };
+  }
 
   if (kept === 0) {
     throw new LoadError(
@@ -175,6 +235,9 @@ function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
 
   const keptCoords = like(coords, kept * 3);
   for (const slot of slots) slot.out = like(slot.src, kept * slot.width);
+  // Seeded as dropped so the write loop only has to record survivors: a source
+  // index the loop never reaches is, by construction, one that did not survive.
+  const sourceToOutput = wantWitness ? new Int32Array(count).fill(RECORD_DROPPED) : undefined;
 
   // One loop, one index: positions and every attribute advance together, which
   // is what makes the lockstep guarantee structural rather than a convention
@@ -185,6 +248,7 @@ function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
     const y = coords[i * 3 + 1];
     const z = coords[i * 3 + 2];
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    if (sourceToOutput) sourceToOutput[i] = w;
     keptCoords[w * 3] = x;
     keptCoords[w * 3 + 1] = y;
     keptCoords[w * 3 + 2] = z;
@@ -201,7 +265,12 @@ function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
   const filtered = { ...attributes };
   const writable = filtered as unknown as Record<string, NumericArray>;
   for (const slot of slots) writable[slot.key] = slot.out;
-  return { coords: keptCoords, attributes: filtered, excludedCount: count - kept };
+  return {
+    coords: keptCoords,
+    attributes: filtered,
+    excludedCount: count - kept,
+    witness: sourceToOutput ? { kind: 'compacted', sourceCount: count, sourceToOutput } : undefined,
+  };
 }
 
 /**
@@ -215,14 +284,18 @@ function compactValidRecords<C extends Coordinates, A extends CloudAttributes>(
 export function sanitizeAndRecenter<A extends CloudAttributes>(
   global: Float64Array,
   attributes: A,
+  options: SanitizeOptions = {},
 ): SanitizedCloud<A> {
-  const valid = compactValidRecords(global, attributes);
+  const valid = compactValidRecords(global, attributes, options.witness === true);
   if (valid.coords.length === 0) {
     return {
       positions: new Float32Array(0),
       origin: [0, 0, 0],
       attributes: valid.attributes,
       excludedCount: 0,
+      // An empty witness, never `undefined`: a caller must be able to tell an
+      // empty cloud apart from a witness it did not ask for.
+      witness: valid.witness,
     };
   }
 
@@ -244,6 +317,7 @@ export function sanitizeAndRecenter<A extends CloudAttributes>(
     excludedCount: valid.excludedCount,
     warning:
       valid.excludedCount > 0 ? exclusionWarning(valid.excludedCount, total) : undefined,
+    witness: valid.witness,
   };
 }
 
@@ -255,15 +329,17 @@ export function sanitizeAndRecenter<A extends CloudAttributes>(
 export function sanitizeLocalCloud<A extends CloudAttributes>(
   positions: Float32Array,
   attributes: A,
+  options: SanitizeOptions = {},
 ): SanitizedLocalCloud<A> {
   const total = positions.length / 3;
-  const valid = compactValidRecords(positions, attributes);
+  const valid = compactValidRecords(positions, attributes, options.witness === true);
   return {
     positions: valid.coords,
     attributes: valid.attributes,
     excludedCount: valid.excludedCount,
     warning:
       valid.excludedCount > 0 ? exclusionWarning(valid.excludedCount, total) : undefined,
+    witness: valid.witness,
   };
 }
 

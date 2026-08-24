@@ -171,10 +171,11 @@ describe('a truncated block', () => {
 
 describe('linkage fails closed when records are dropped after the grid is built', () => {
   it('reports identity unavailable rather than shipping shifted indices', async () => {
-    // A coordinate that survives the point reader but overflows the transform
-    // is removed by sanitation, which compacts survivors and shifts every index
-    // after it. Nothing remaps cellToRecord yet, so the only honest answer is
-    // that the identity is gone. The grid itself stays true.
+    // Either outcome is acceptable here and both are pinned: if sanitation
+    // removed a record the compaction witness must have remapped the rest, and
+    // if it did not, exact linkage was true all along. What must never happen
+    // is a shifted index presented as exact. The grid itself stays true either
+    // way, which is the separation being guarded.
     const body = [
       header(1, 3),
       '1 0 0 0.5',
@@ -186,6 +187,7 @@ describe('linkage fails closed when records are dropped after the grid is built'
     if (f.linkage.kind === 'unavailable') {
       expect(f.linkage.reason).toBe('source-record-identity-unavailable');
       expect(f.cellToRecord[0]).toBe(NO_RECORD);
+      expect(recordForCell(f, 0, 0).ok).toBe(false);
       // The topology survives the loss of linkage. That separation is the point.
       expect(f.diagnostics.stateCounts[CellState.VALID_RETURN]).toBeGreaterThan(0);
       expect(f.geometricRange![0]).toBeCloseTo(1, 6);
@@ -194,5 +196,65 @@ describe('linkage fails closed when records are dropped after the grid is built'
       expect(f.linkage.kind).toBe('exact');
       expect(recordForCell(f, 0, 0).ok).toBe(true);
     }
+  });
+});
+
+describe('linkage survives a record dropped in the middle of the grid', () => {
+  // The translation is what makes this a real overflow. The point reader only
+  // sees the scanner-local token, which is finite here; the world coordinate is
+  // finite + finite = Infinity, so sanitation removes the SECOND of four
+  // records and every index after it shifts down by one.
+  const body = [
+    header(1, 4, 1e308, 0, 0),
+    '1 0 0 0.5',      // ordinal 0 -> record 0
+    '1e308 0 0 0.5',  // ordinal 1 -> record 1, overflows the transform
+    '0 0 5 0.5',      // ordinal 2 -> record 2, becomes record 1
+    '0 0 9 0.5',      // ordinal 3 -> record 3, becomes record 2
+  ].join('\n');
+
+  it('drops exactly the overflowing record', async () => {
+    const pc = await loadPtx(ptx(body));
+    expect(pc.pointCount).toBe(3);
+  });
+
+  it('keeps exact linkage rather than degrading the whole set', async () => {
+    const f = (await loadPtx(ptx(body))).organizedRange!.frames[0];
+    expect(f.linkage.kind).toBe('exact');
+  });
+
+  it('resolves a cell after the casualty to the right point, by coordinate', async () => {
+    // The index alone cannot catch an off-by-one: 1 and 2 are both plausible
+    // answers here. The z coordinate at the resolved record can only match one.
+    const pc = await loadPtx(ptx(body));
+    const f = pc.organizedRange!.frames[0];
+    const third = recordForCell(f, 2, 0);
+    expect(third.ok).toBe(true);
+    if (third.ok) expect(pc.positions[third.record * 3 + 2]).toBeCloseTo(5, 4);
+    const fourth = recordForCell(f, 3, 0);
+    expect(fourth.ok).toBe(true);
+    if (fourth.ok) expect(pc.positions[fourth.record * 3 + 2]).toBeCloseTo(9, 4);
+    const first = recordForCell(f, 0, 0);
+    expect(first.ok).toBe(true);
+    if (first.ok) expect(pc.positions[first.record * 3 + 2]).toBeCloseTo(0, 4);
+  });
+
+  it('says the dropped cell was not decoded, not that nothing came back', async () => {
+    // The scanner did get a return here. The pipeline is what discarded it, and
+    // calling that a no-return would report a decoding limit as a measurement.
+    const f = (await loadPtx(ptx(body))).organizedRange!.frames[0];
+    const ci = cellIndexOf(1, 0, 1);
+    expect(f.cellState[ci]).toBe(CellState.NOT_DECODED);
+    expect(f.cellToRecord[ci]).toBe(NO_RECORD);
+    expect(recordForCell(f, 1, 0).ok).toBe(false);
+    expect(f.diagnostics.stateCounts[CellState.NOT_DECODED]).toBe(1);
+    expect(f.diagnostics.stateCounts[CellState.NO_RETURN]).toBe(0);
+    expect(f.diagnostics.stateCounts[CellState.VALID_RETURN]).toBe(3);
+  });
+
+  it('keeps the geometric range of the dropped cell, which is still true', async () => {
+    const f = (await loadPtx(ptx(body))).organizedRange!.frames[0];
+    // Float32 cannot hold 1e308, but the cell must still carry a range rather
+    // than the NaN that means "nothing was measured here".
+    expect(Number.isNaN(f.geometricRange![cellIndexOf(1, 0, 1)])).toBe(false);
   });
 });

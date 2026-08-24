@@ -16,7 +16,13 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import { sanitizeAndRecenter, withLoadWarning } from './sanitizeCloud';
+import {
+  sanitizeAndRecenter,
+  withLoadWarning,
+  outputRecordFor,
+  RECORD_DROPPED,
+  type CompactionWitness,
+} from './sanitizeCloud';
 import {
   CellState,
   NO_RECORD,
@@ -28,6 +34,61 @@ import {
   type OrganizedRangeFrame,
   type OrganizedRangeSet,
 } from '../model/OrganizedRange';
+
+/**
+ * Rewrite one frame's `cellToRecord` from pre-sanitation record indices to the
+ * indices the display cloud actually holds.
+ *
+ * Returns `null` when the witness cannot answer for a record the frame claims,
+ * which the caller turns into the honest degrade. Guessing here would be the
+ * one failure this whole sidecar exists to prevent: an index that is present,
+ * plausible, and points at another return.
+ *
+ * A cell whose record did not survive becomes NOT_DECODED. The scanner did get
+ * a return there — the geometric range still proves it — so NO_RETURN would
+ * report a decoding loss as an instrument observation. NOT_DECODED says what is
+ * true: a record exists in the file and this session did not carry it through.
+ */
+function remapFrame(
+  frame: OrganizedRangeFrame,
+  witness: CompactionWitness,
+): OrganizedRangeFrame | null {
+  const cellState = new Uint8Array(frame.cellState);
+  const cellToRecord = new Int32Array(frame.cellToRecord);
+  for (let ci = 0; ci < cellToRecord.length; ci++) {
+    const source = cellToRecord[ci];
+    if (source === NO_RECORD) continue;
+    if (source < 0 || source >= witness.sourceCount) return null;
+    const output = outputRecordFor(witness, source);
+    if (output === RECORD_DROPPED) {
+      cellToRecord[ci] = NO_RECORD;
+      cellState[ci] = CellState.NOT_DECODED;
+      continue;
+    }
+    cellToRecord[ci] = output;
+  }
+  return { ...frame, cellState, cellToRecord, diagnostics: tallyCellStates(cellState) };
+}
+
+/**
+ * Remap every frame, or none of them.
+ *
+ * A set where one frame links exactly and another silently lost its identity
+ * would be read as uniformly trustworthy, so a single unanswerable frame sends
+ * the whole set down the degrade path.
+ */
+function remapFrames(
+  frames: readonly OrganizedRangeFrame[],
+  witness: CompactionWitness,
+): OrganizedRangeFrame[] | null {
+  const out: OrganizedRangeFrame[] = [];
+  for (const frame of frames) {
+    const next = remapFrame(frame, witness);
+    if (next === null) return null;
+    out.push(next);
+  }
+  return out;
+}
 
 /** A parsed 4×4 PTX transform — four rows of four numbers. */
 type Mat4 = [number[], number[], number[], number[]];
@@ -348,32 +409,33 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
   // transform is applied after that check, so this is where a world coordinate
   // that overflowed the block's matrix is caught — and where the survivors get
   // their floored-min origin.
-  const clean = sanitizeAndRecenter(global, { colors, intensity });
+  const clean = sanitizeAndRecenter(global, { colors, intensity }, { witness: true });
 
   // Sanitation compacts survivors, so any drop shifts every record index after
-  // the first casualty and silently invalidates `cellToRecord`. Until the
-  // sanitation witness exists to remap them, the honest answer is to say the
-  // identity is gone rather than to ship indices that now point at the wrong
-  // returns. The topology itself survives: cell state, geometric range and the
-  // per-setup poses are all still true, which is the whole reason linkage is a
-  // separate fact from the grid.
-  const organizedRange: OrganizedRangeSet | undefined =
+  // the first casualty. The witness is what turns that shift into an answerable
+  // question: it says where each source record landed, or that it landed
+  // nowhere, so the grid can be rewritten instead of disowned.
+  //
+  // The degrade below stays. It is still the correct behaviour whenever the
+  // witness cannot cover what the frames claim, and it is what a future caller
+  // that does not ask for a witness would get.
+  const remapped =
+    clean.excludedCount === 0 || !clean.witness || clean.witness.sourceCount !== count
+      ? null
+      : remapFrames(frames, clean.witness);
+
+  const built: OrganizedRangeSet | undefined =
     frames.length === 0
       ? undefined
-      : clean.excludedCount === 0
-        ? {
-            kind: 'organized-range',
-            frames,
-            organization: frames.length > 1 ? 'multi-grid' : 'organized-grid',
-          }
-        : withLinkageUnavailable(
-            {
-              kind: 'organized-range',
-              frames,
-              organization: frames.length > 1 ? 'multi-grid' : 'organized-grid',
-            },
-            'source-record-identity-unavailable',
-          );
+      : {
+          kind: 'organized-range',
+          frames: remapped ?? frames,
+          organization: frames.length > 1 ? 'multi-grid' : 'organized-grid',
+        };
+  const organizedRange =
+    built === undefined || clean.excludedCount === 0 || remapped !== null
+      ? built
+      : withLinkageUnavailable(built, 'source-record-identity-unavailable');
 
   return new PointCloud({
     positions: clean.positions,
