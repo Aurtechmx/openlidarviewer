@@ -18,6 +18,7 @@
  * pass over zero records certifies nothing while looking exactly like a pass
  * that certified something.
  */
+// lint-dataset-citations: synthetic-ids — the ids below are fixtures, not records.
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';

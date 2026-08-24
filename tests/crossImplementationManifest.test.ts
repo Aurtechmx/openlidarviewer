@@ -19,6 +19,7 @@
  * meaning when the register landed. Naming the register keeps each case a
  * function of its arguments, and lets both modes be covered on purpose.
  */
+// lint-dataset-citations: synthetic-ids — the ids below are fixtures, not records.
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
