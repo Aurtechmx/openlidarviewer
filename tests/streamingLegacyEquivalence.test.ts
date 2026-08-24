@@ -151,7 +151,14 @@ interface FixtureRecord {
   fixture: string;
   sourceKind: string;
   nodeCount: number;
-  sourcePoints: number;
+  /**
+   * Null where the source cannot say. COPC reads its total from the LAS header
+   * and EPT from `ept.json`, so both always know; a 3D Tiles tileset names
+   * content URIs rather than point totals. Recording null rather than zero is
+   * the whole point of the nullable type: zero is a real answer meaning an
+   * empty source.
+   */
+  sourcePoints: number | null;
   hierarchyComplete: boolean;
   budgets: { pointBudget: number; maxConcurrentDecodes: number; chunkCacheBytes: number };
   /** Local cube half-span the camera path was scaled by. */
@@ -611,8 +618,14 @@ describe('streaming scheduler baseline', () => {
 
     for (const f of doc.fixtures) {
       // The budget bit: the source is bigger than the budget, and no tick ever
-      // wanted the whole hierarchy.
-      expect(f.sourcePoints).toBeGreaterThan(f.budgets.pointBudget);
+      // wanted the whole hierarchy. A source that cannot state its total is
+      // asserted as unknown rather than coerced to a number, because coercing
+      // is the defect this nullable type exists to prevent.
+      if (f.sourcePoints === null) {
+        expect(f.sourceKind, 'only a source that cannot count reports null').toBe('tiles');
+      } else {
+        expect(f.sourcePoints).toBeGreaterThan(f.budgets.pointBudget);
+      }
       expect(Math.max(...f.trace.map((t) => t.wantedIds.length))).toBeLessThan(f.nodeCount);
       // Ancestry is present and read: a protected set formed, and the tree is
       // deeper than one level.
