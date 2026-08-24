@@ -202,8 +202,14 @@ export interface ReferenceSlot {
    * statistical reduction where the geometry comes from GDAL/OGR and the
    * per-station quantile from R; one slot holds one label, and the study
    * manifest carries the full pipeline.
+   *
+   * This union is a short display label, not the authority on which oracles
+   * exist. That lives in `validation/external-oracles/oracle-registry.json`,
+   * which also records lineage, licence and permitted role, and which the
+   * browser bundle must never parse. A new label is added here only when a slot
+   * actually ships, so the runtime carries no name it cannot show a result for.
    */
-  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R';
+  readonly referenceTool: 'PDAL' | 'GDAL' | 'CloudCompare' | 'SAGA' | 'R' | 'GRASS';
   /** Absolute agreement tolerance in the product's unit. */
   readonly toleranceAbs: number;
   /** Unit label for the tolerance, for docs / reports. */
@@ -275,6 +281,23 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // cannot absorb one wrong point: at 1.79 M points a single value would have to
   // be wrong by ~1.79 m to move the mean past this same number.
   { claimId: 'E57-INGEST', referenceTool: 'PDAL', toleranceAbs: 1e-6, unit: 'm', status: 'supplied' },
+  // Per-cell epoch difference and the gain/loss volumes above the level of
+  // detection, against GRASS `r.mapcalc` and `r.univar` over eight frozen epoch
+  // pairs that also carry closed-form volumes. The tolerance is relative rather
+  // than absolute because it comes from the candidate's storage: `ChangeGrid`
+  // holds Float32, so a Δz that is not binary-exact carries about 1e-6 relative
+  // error per cell into the sum, and the four fixtures whose Δz IS binary-exact
+  // agree with GRASS to the last digit while the other four do not. GRASS
+  // computes in double and reproduces every closed-form volume exactly, so the
+  // whole residual is the candidate's and is bounded at 7e-6 relative.
+  //
+  // Both read `pending` although the reference outputs ARE committed. The
+  // comparison has run and agreed; what it does not yet have is a study
+  // manifest whose protocol was frozen in an EARLIER commit, which is what this
+  // repository requires before a claim moves. Promoting on a protocol committed
+  // beside its own result would be a freeze in name only.
+  { claimId: 'CHANGE-RASTER', referenceTool: 'GRASS', toleranceAbs: 1e-5, unit: 'relative', status: 'pending' },
+  { claimId: 'CHANGE-VOLUME', referenceTool: 'GRASS', toleranceAbs: 1e-5, unit: 'relative', status: 'pending' },
 ] as const;
 
 /** True only when EVERY reference slot is still pending — false since SLOPE-RASTER, ASPECT-RASTER and HILLSHADE reached E4. */

@@ -19,9 +19,21 @@
       "oracleId": "proj-9.8.1",
       "name": "PROJ",
       "version": "9.8.1",
-      "executables": ["cs2cs", "projinfo", "cct", "geod"],
-      "roleCapabilities": ["independent-same-quantity-implementation"],
-      "domains": ["crs-transformation", "utm", "geodetic", "datum"],
+      "executables": [
+        "cs2cs",
+        "projinfo",
+        "cct",
+        "geod"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "crs-transformation",
+        "utm",
+        "geodetic",
+        "datum"
+      ],
       "lineageGroup": "proj",
       "implementationLanguage": "C/C++",
       "license": "MIT",
@@ -41,9 +53,21 @@
       "oracleId": "geographiclib-2.7",
       "name": "GeographicLib",
       "version": "2.7",
-      "executables": ["GeoConvert", "CartConvert", "GeodSolve"],
-      "roleCapabilities": ["independent-same-quantity-implementation"],
-      "domains": ["utm", "geodetic", "ecef", "local-cartesian", "geodesic"],
+      "executables": [
+        "GeoConvert",
+        "CartConvert",
+        "GeodSolve"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "utm",
+        "geodetic",
+        "ecef",
+        "local-cartesian",
+        "geodesic"
+      ],
       "lineageGroup": "geographiclib",
       "implementationLanguage": "C++",
       "license": "MIT",
@@ -51,7 +75,7 @@
       "installationMethod": "homebrew",
       "sourceRevision": null,
       "independenceNotes": [
-        "Karney's own implementation, independent of PROJ. Its transverse Mercator is exact to round-off rather than a truncated Krüger series, which is why it is the stronger of the two for a projection-accuracy bound.",
+        "Karney's own implementation, independent of PROJ. Its transverse Mercator is exact to round-off rather than a truncated Kr\u00fcger series, which is why it is the stronger of the two for a projection-accuracy bound.",
         "Applies the UTM zone exceptions (Norway 32V, Svalbard 31X/33X/35X/37X) from the UTM definition, so it validates zone selection and not only projection arithmetic."
       ],
       "limitations": [
@@ -63,12 +87,19 @@
       "oracleId": "pdal-2.10.2",
       "name": "PDAL",
       "version": "2.10.2",
-      "executables": ["pdal"],
+      "executables": [
+        "pdal"
+      ],
       "roleCapabilities": [
         "same-algorithm-independent-implementation",
         "independent-same-quantity-implementation"
       ],
-      "domains": ["ground-filter", "rasterize", "e57-decode", "las-decode"],
+      "domains": [
+        "ground-filter",
+        "rasterize",
+        "e57-decode",
+        "las-decode"
+      ],
       "lineageGroup": "pdal",
       "implementationLanguage": "C++",
       "license": "BSD-3-Clause",
@@ -87,9 +118,23 @@
       "oracleId": "gdal-3.13.1",
       "name": "GDAL",
       "version": "3.13.1",
-      "executables": ["gdaldem", "gdal_contour", "gdal_translate", "ogrinfo"],
-      "roleCapabilities": ["independent-same-quantity-implementation"],
-      "domains": ["slope", "aspect", "hillshade", "contours", "raster-io", "planar-area"],
+      "executables": [
+        "gdaldem",
+        "gdal_contour",
+        "gdal_translate",
+        "ogrinfo"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "slope",
+        "aspect",
+        "hillshade",
+        "contours",
+        "raster-io",
+        "planar-area"
+      ],
       "lineageGroup": "gdal",
       "implementationLanguage": "C++",
       "license": "MIT",
@@ -105,12 +150,60 @@
       ]
     },
     {
+      "oracleId": "grass-8.5.0",
+      "name": "GRASS GIS",
+      "version": "8.5.0",
+      "executables": [
+        "grass",
+        "r.in.xyz",
+        "r.mapcalc",
+        "r.univar",
+        "r.volume",
+        "r.slope.aspect",
+        "r.contour"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "raster-algebra",
+        "change-detection",
+        "change-volume",
+        "raster-gridding",
+        "slope",
+        "aspect",
+        "contours"
+      ],
+      "lineageGroup": "grass",
+      "implementationLanguage": "C",
+      "license": "GPL-2.0-or-later",
+      "architecture": "osx-arm64",
+      "installationMethod": "conda-forge, env olv-oracles",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Its own raster engine and map algebra, sharing no code with GDAL or PDAL. GRASS links PROJ for coordinate operations, so a GRASS REPROJECTION leg would share the proj lineage; raster algebra and cell statistics do not.",
+        "r.mapcalc propagates null the way the candidate propagates NaN, so a cell absent from either epoch is comparable in neither without any special handling on either side.",
+        "Computes in double, so on the change fixtures it reproduces the closed-form volumes exactly while the candidate carries float32 storage error."
+      ],
+      "limitations": [
+        "r.in.xyz reduces per cell with no neighbourhood radius, so it is an exact-cell oracle and not a substitute for a radius-based writer where that is the quantity under test.",
+        "Run from the host conda environment rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
+    },
+    {
       "oracleId": "saga-7.8.2",
       "name": "SAGA GIS",
       "version": "7.8.2",
-      "executables": ["saga_cmd"],
-      "roleCapabilities": ["independent-same-quantity-implementation"],
-      "domains": ["vrm", "terrain-derivatives"],
+      "executables": [
+        "saga_cmd"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "vrm",
+        "terrain-derivatives"
+      ],
       "lineageGroup": "saga",
       "implementationLanguage": "C++",
       "license": "GPL-2.0-or-later",
@@ -129,9 +222,19 @@
       "oracleId": "r-4.4.1",
       "name": "R",
       "version": "4.4.1",
-      "executables": ["Rscript", "R"],
-      "roleCapabilities": ["independent-statistical-recalculation"],
-      "domains": ["statistics", "rmse", "intervals", "profile-reduction"],
+      "executables": [
+        "Rscript",
+        "R"
+      ],
+      "roleCapabilities": [
+        "independent-statistical-recalculation"
+      ],
+      "domains": [
+        "statistics",
+        "rmse",
+        "intervals",
+        "profile-reduction"
+      ],
       "lineageGroup": "r",
       "implementationLanguage": "C/Fortran/R",
       "license": "GPL-2.0-or-later",

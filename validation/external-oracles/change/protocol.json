@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "CHANGE-GRASS-MAPCALC-2026-08",
+  "claims": ["CHANGE-RASTER", "CHANGE-VOLUME"],
+  "quantity": "Per-cell elevation change between two aligned epochs, and the gain and loss volumes integrated over cells whose change exceeds the level of detection.",
+  "candidate": {
+    "function": "detectChange",
+    "module": "src/terrain/change/changeDetection.ts",
+    "note": "The production function. The harness serializes inputs and reads outputs; it reproduces no part of the difference or the sum."
+  },
+  "oracles": [
+    {
+      "oracleId": "grass-8.5.0",
+      "role": "independent-same-quantity-implementation",
+      "invocation": "r.mapcalc \"d = eb - ea\"; r.mapcalc \"gain = if(d > lod, d, null())\"; r.mapcalc \"loss = if(d < -lod, -d, null())\"; r.univar -g",
+      "parameterEquivalence": "The same level of detection, the same strict inequality, and the same exclusion of cells absent from either epoch. GRASS null and candidate NaN propagate identically, so neither side needs special handling to agree on which cells are comparable."
+    }
+  ],
+  "truth": {
+    "kind": "analytic-truth",
+    "note": "Every fixture carries closed-form gain and loss volumes computed from its construction. Both implementations are scored against truth first; their agreement with each other is reported second, because two programs summing the same wrong cells agree perfectly."
+  },
+  "metrics": {
+    "volumeRelativeTolerance": 0.00001,
+    "volumeAbsoluteFloorM3": 1e-9,
+    "toleranceBasis": "Derived from the candidate's storage, not from the observed result. ChangeGrid.values is a Float32Array, so a Δz that is not binary-exact carries roughly 1e-6 relative error per cell into the sum. The gate sits about an order of magnitude above float32 epsilon. GRASS computes in double and is held to 1e-6 m³ absolute against truth, a far tighter bound than the candidate.",
+    "cellCountsExact": true,
+    "cellCountsExactReason": "Gained, lost and comparable cell counts are integers produced by the same threshold rule on both sides, so any disagreement is a rule difference rather than arithmetic and must fail.",
+    "requiredPassingFraction": 1,
+    "minimumCases": 8
+  },
+  "decisionRule": "Every case must agree with GRASS and with closed-form truth on gain volume, loss volume, gained cells, lost cells and comparable cells. One failure fails the study.",
+  "scopeLimits": [
+    "Metre grids with one-metre square cells and a single global level of detection. Per-cell LoD95 is a separate future quantity and is not exercised.",
+    "Aligned epochs only. Co-registration error, resampling and CRS mismatch are refused by the production path rather than measured here.",
+    "Synthetic surfaces with closed-form volumes. This is cross-implementation and analytic evidence, not field validation: no surveyed volume is involved, so it cannot support E5.",
+    "Cut and fill are integrated as a cell-centre Riemann sum, which is the registered quantity; it is not a TIN or prism volume and must not be compared to one."
+  ],
+  "freezeStatus": "adopted-with-result",
+  "freezeStatusReason": "The fixture matrix, the LoD and the tolerance basis were written before GRASS was run, but all three were committed alongside the first result, so this record does not claim preregistration."
+}
