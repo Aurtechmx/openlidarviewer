@@ -3,15 +3,17 @@
  *
  * WHAT THIS IS. A measurement, not a change. It drives the real
  * `extractProfileSection` / `extractProfileSectionChunks`,
- * `selectProfileSectionLod` and `profileHitTest` over a deterministic scene
- * shaped the way the section seam hands one over, and puts the numbers against
+ * `selectProfileSectionLod` / `selectProfileSectionLodChunks` and
+ * `profileHitTest` over a deterministic scene shaped the way the section seam
+ * hands one over, and puts the numbers against
  * the two targets the profile section was written to: no unbroken main-thread
  * extraction task above 100 ms, and hit-test latency inside a frame. Nothing
  * under `src/` is touched. Every seam used here is one the viewer already
  * calls.
  *
- * WHY THE CHUNKED PATH IS MEASURED SLICE BY SLICE. The extractor is a
- * generator that yields every `chunkSize` points, and the target is about the
+ * WHY THE CHUNKED PATHS ARE MEASURED SLICE BY SLICE. The extractor is a
+ * generator that yields every `chunkSize` points and the selection is a
+ * generator that yields every `chunkSize` steps, and the target is about the
  * longest UNINTERRUPTED task, not the total. Total wall time says nothing
  * about whether the thread was ever handed back. So the harness times each
  * `next()` call on its own: one slice is exactly one uninterrupted task, and
@@ -20,11 +22,12 @@
  * that sizes the section arrays — the single largest allocation the
  * extraction makes, and a stall like any other.
  *
- * WHY `extractProfileSection` IS REPORTED SEPARATELY. That helper drives the
- * generator to completion without returning to its caller, so the whole of it
- * is one uninterrupted task. Reporting only the chunked slices would hide the
- * fact that the convenience wrapper cannot satisfy the target at any size
- * where the work takes longer than the target allows.
+ * WHY THE RUN-TO-COMPLETION HELPERS ARE REPORTED SEPARATELY.
+ * `extractProfileSection` and `selectProfileSectionLod` drive their generators
+ * to completion without returning to the caller, so the whole of each is one
+ * uninterrupted task. Reporting only the chunked slices would hide the fact
+ * that a convenience wrapper cannot satisfy the target at any size where the
+ * work takes longer than the target allows.
  *
  * WHAT THIS RUNTIME CANNOT SEE. Wall-clock numbers here are this machine's.
  * They are a property of the CPU, the Node build and the load at the time, not
@@ -95,7 +98,10 @@ import {
   type ProfileSectionSourceView,
 } from '../../src/render/measure/profileSectionExtract';
 import type { ProfileSectionPoints } from '../../src/render/measure/profileSectionBuilder';
-import { selectProfileSectionLod } from '../../src/render/measure/profileSectionLod';
+import {
+  selectProfileSectionLod,
+  selectProfileSectionLodChunks,
+} from '../../src/render/measure/profileSectionLod';
 import {
   buildProfileHitTestIndex,
   queryProfileHitTest,
@@ -126,18 +132,24 @@ const LADDER: ReadonlyArray<{ readonly id: string; readonly pointCount: number }
 /**
  * The display cap the selection is measured at.
  *
- * No module on this revision states one: `selectProfileSectionLod` takes the
- * cap from its caller and nothing in `src/` calls it yet. 200,000 is the
- * figure the hit-test suite already treats as a full display, and the LOD
- * module's own header calls a quarter of a million "already past what the
- * section view draws" — so this sits just inside the largest display the
- * module anticipates, which is where a selection is slowest.
+ * The shipped cap is `MAX_DRAWN_RETURNS`, 120,000. This is measured at
+ * 200,000 instead: the larger and therefore slower of the two, the figure the
+ * hit-test suite already treats as a full display, and the one the recorded
+ * baseline was taken at, so the two records can be read against each other.
+ * The LOD module's own header calls a quarter of a million "already past what
+ * the section view draws", so this sits just inside the largest display the
+ * module anticipates.
  */
 const DISPLAY_CAP = 200_000;
 const CAP_BASIS =
-  'no shipped constant states a display cap on this revision; 200,000 is the displayed count ' +
-  'tests/profileHitTest.test.ts measures its query cost at, and sits just under the quarter of a ' +
-  'million profileSectionLod.ts names as past what the section view draws';
+  'the shipped cap is MAX_DRAWN_RETURNS (120,000) in src/app/profileWorkbenchSection.ts; 200,000 ' +
+  'is measured here instead because it is the larger and therefore slower of the two, it is the ' +
+  'displayed count tests/profileHitTest.test.ts measures its query cost at, and it keeps these ' +
+  'figures comparable with the recorded baseline. Selection cost follows the section rather than ' +
+  'the cap, so the two differ by little';
+
+/** Steps the selection takes between yields: the module default. */
+const LOD_CHUNK_SIZE = 65_536;
 
 /** The chart the hit-test index is built over. Matches the shipped cost test. */
 const CANVAS_W = 960;
@@ -475,6 +487,47 @@ function queryBatch(
   };
 }
 
+/** One chunked selection, sliced the way `runChunked` slices an extraction. */
+interface ChunkedSelection {
+  readonly indices: Uint32Array;
+  readonly totalMs: number;
+  /** One entry per `next()` call, including the final one. */
+  readonly sliceMs: readonly number[];
+}
+
+/**
+ * Drive the selection generator by hand, timing every `next()`.
+ *
+ * Same rule as the extraction: one slice is one uninterrupted task, and the
+ * largest of them is the number the target speaks about. A total says nothing
+ * about whether the thread was ever handed back.
+ */
+function runChunkedSelection(section: ProfileSectionPoints): ChunkedSelection {
+  const iterator = selectProfileSectionLodChunks(section, {
+    cap: DISPLAY_CAP,
+    chunkSize: LOD_CHUNK_SIZE,
+  });
+  const starts: (bigint | null)[] = [];
+  const ends: (bigint | null)[] = [];
+  let indices: Uint32Array | null = null;
+  for (;;) {
+    const from = readMonotonicNs();
+    const step = iterator.next();
+    const to = readMonotonicNs();
+    starts.push(from);
+    ends.push(to);
+    if (step.done) {
+      indices = step.value;
+      break;
+    }
+  }
+  return {
+    indices: indices!,
+    totalMs: msBetween(starts[0]!, ends[ends.length - 1]!),
+    sliceMs: starts.map((from, i) => msBetween(from, ends[i]!)),
+  };
+}
+
 /** Measure selection, index build and hover query over one section. */
 function measureDisplay(
   sizeId: string,
@@ -482,6 +535,7 @@ function measureDisplay(
 ): ProfileSectionDisplayResult {
   for (let w = 0; w < WARMUP_RUNS; w++) {
     const warm = selectProfileSectionLod(section, { cap: DISPLAY_CAP });
+    runChunkedSelection(section);
     const index = buildProfileHitTestIndex({
       section,
       displayed: warm,
@@ -502,7 +556,32 @@ function measureDisplay(
     displayed = selected;
   }
 
+  const lodChunkedTotalMs: number[] = [];
+  const lodLongestSliceMs: number[] = [];
+  let lastSelection: ChunkedSelection | null = null;
+  for (let r = 0; r < RECORDED_RUNS; r++) {
+    const run = runChunkedSelection(section);
+    lodChunkedTotalMs.push(run.totalMs);
+    lodLongestSliceMs.push(Math.max(...run.sliceMs));
+    lastSelection = run;
+  }
+
   const selection = displayed!;
+  // The two selection paths run the same passes in the same order, so they
+  // must choose the same returns. A disagreement would mean the chunked
+  // column describes a different answer rather than the same one, spread out.
+  const chunkedSelection = lastSelection!;
+  if (chunkedSelection.indices.length !== selection.length) {
+    throw new Error(
+      `the two selection paths disagreed at ${sizeId}: ${chunkedSelection.indices.length} vs ${selection.length}`,
+    );
+  }
+  for (let k = 0; k < selection.length; k++) {
+    if (chunkedSelection.indices[k] !== selection[k]) {
+      throw new Error(`the two selection paths disagreed at ${sizeId}, index ${k}`);
+    }
+  }
+
   const projection = projectionFor(section, selection);
   const buildMs: number[] = [];
   let index: ProfileHitTestIndex | null = null;
@@ -539,6 +618,12 @@ function measureDisplay(
     selectedPoints: selection.length,
     capBasis: CAP_BASIS,
     lodSelectMs: measuredTiming(lodSelectMs),
+    lodChunkSize: LOD_CHUNK_SIZE,
+    lodChunkYields: chunkedSelection.sliceMs.length - 1,
+    lodChunkedTotalMs: measuredTiming(lodChunkedTotalMs),
+    lodLongestSliceMs: measuredTiming(lodLongestSliceMs),
+    lodSliceMs: measuredTiming(chunkedSelection.sliceMs),
+    lodSliceSampleRun: RECORDED_RUNS,
     hitTestBuildMs: measuredTiming(buildMs),
     hitTestQueryBatchMs: measuredTiming(batchMs),
     hitTestQueryMs: measuredTiming(sampleQueryMs),
@@ -569,9 +654,10 @@ const NOTES: readonly string[] = [
   'The chunked slices include the final next(), which carries builder.finish() — the copy-out that sizes the section arrays, and the largest single allocation an extraction makes.',
   'The corridor half-width is the one a caller gets by supplying no width: AUTO_CORRIDOR_FRACTION of the section length. The accepted count therefore grows with the tile, and is not a fixed fraction of the source.',
   'Every source spans the whole tile, so the bounds pre-test skips nothing and every source point is examined. A spatially tiled scene would let the pre-test reject most of the scan.',
-  'No module on this revision states a display cap; selectProfileSectionLod takes it from its caller and src/ does not yet call it. The cap measured here is stated in `display.capBasis`.',
-  'The stated 100 ms target names extraction. The `lod-select` verdict applies that same number, unchanged, to selectProfileSectionLod: the stage next to extraction on the same thread, and the one stage in the section path with no yield seam at all. The threshold was not moved, only the stage it is read against.',
-  'The environment block reports a dirty working tree at capture. What differed from the named revision was this harness, its fixture and this record; nothing under src/ did, so the modules measured are the ones that revision ships.',
+  'The shipped display cap is MAX_DRAWN_RETURNS in src/app/profileWorkbenchSection.ts. The cap measured here is stated in `display.capBasis`.',
+  'The stated 100 ms target names extraction. The two `lod-select` verdicts apply that same number, unchanged, to selectProfileSectionLod: the stage next to extraction on the same thread. The threshold was not moved, only the stage it is read against.',
+  'Selection is measured the way extraction is, in two columns. selectProfileSectionLod drives the generator to completion without returning to its caller, so the whole of it is one uninterrupted task; selectProfileSectionLodChunks is timed one next() at a time, and the largest of those slices is what the target speaks about.',
+  'The environment block reports a dirty working tree at capture. What differed from the named revision is the change this record measures: the selection\u2019s yield seam in src/render/measure/profileSectionLod.ts, the workbench wiring that pumps it, and this harness.',
   'Peak memory is reported twice. RSS is the process-level figure and reads 0 wherever the transient fitted in pages the process already held; live ArrayBuffer bytes track the section arrays themselves. The derived footprints are arithmetic over the accepted count, not a sample.',
 ];
 
@@ -657,7 +743,8 @@ function renderTable(record: ProfileSectionRecord): string {
           `| ${d.sizeId} | ${d.sectionPoints} | ${name} | ${num(series.summary.median)} | ${num(series.summary.iqr)} | ${num(series.summary.max)} |`,
         );
       };
-      row(`LOD selection at cap ${d.cap}`, d.lodSelectMs);
+      row(`LOD selection at cap ${d.cap}, run to completion`, d.lodSelectMs);
+      row(`LOD selection longest slice, chunk ${d.lodChunkSize}`, d.lodLongestSliceMs);
       row(`hit-test build over ${d.selectedPoints}`, d.hitTestBuildMs);
       row(`hover batch of ${d.queriesPerBatch}`, d.hitTestQueryBatchMs);
       row('one hover', d.hitTestQueryMs);

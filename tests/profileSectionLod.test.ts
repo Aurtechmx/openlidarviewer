@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   selectProfileSectionLod,
+  selectProfileSectionLodChunks,
   profileSectionLodGrid,
   profileSectionLodCell,
   type ProfileSectionLodInput,
+  type ProfileSectionLodOptions,
 } from '../src/render/measure/profileSectionLod';
 
 /**
@@ -751,5 +753,137 @@ describe('profileSectionLod: degenerate sections', () => {
     const sel = selectProfileSectionLod(s, { cap: 400 });
     expect(sel.length).toBe(400);
     expect(new Set(Array.from(sel)).size).toBe(400);
+  });
+});
+
+/**
+ * The seam that lets a caller spread a selection across frames.
+ *
+ * Two things are pinned here, and they pull against each other. The walk has
+ * to hand the thread back often enough to be worth having — a generator that
+ * yields once at the end is not a seam — and handing it back must not change
+ * a single index of the answer. So every property the module is built on is
+ * re-checked on a walk pumped one step at a time, and the chunk size is
+ * varied over four orders of magnitude with the bytes compared exactly.
+ */
+describe('profileSectionLod: the yield seam', () => {
+  /** Canopy over ground, with a rare class and a rare second scan. */
+  function mixed(total: number): Section {
+    const rows = { chainage: [] as number[], height: [] as number[], slot: [] as number[], cls: [] as number[] };
+    const rand = lcg(4242);
+    for (let i = 0; i < total; i++) {
+      // Drawn rather than laid on the index, so a stride cannot alias onto a
+      // stratum and appear to preserve it.
+      const ground = rand() < 0.05;
+      const rare = rand() < 0.0016;
+      const second = rand() < 0.001;
+      rows.chainage.push(rand() * 200);
+      rows.height.push(ground ? rand() * 0.1 : 2 + rand() * 20);
+      rows.slot.push(second ? 1 : 0);
+      rows.cls.push(rare ? NOISE : ground ? GROUND : CANOPY);
+    }
+    return makeSection(rows);
+  }
+
+  /** Drive the generator by hand, keeping every progress value it yielded. */
+  function pumped(
+    section: ProfileSectionLodInput,
+    options: ProfileSectionLodOptions,
+  ): { indices: Uint32Array; progress: number[] } {
+    const it = selectProfileSectionLodChunks(section, options);
+    const progress: number[] = [];
+    let step = it.next();
+    while (!step.done) {
+      progress.push(step.value);
+      step = it.next();
+    }
+    return { indices: step.value, progress };
+  }
+
+  const section = mixed(60_000);
+  const CAP = 3000;
+
+  it('chooses the same returns wherever the thread is handed back', () => {
+    const want = selectProfileSectionLod(section, { cap: CAP });
+    expect(want.length).toBe(CAP);
+    for (const chunkSize of [1, 97, 5000, 64_000, undefined]) {
+      const got = pumped(section, { cap: CAP, chunkSize }).indices;
+      expect(Array.from(got)).toEqual(Array.from(want));
+    }
+    // And with a keep set, which is the state most easily lost at a boundary.
+    const keep = [3, 4, section.count - 1];
+    const wantKept = selectProfileSectionLod(section, { cap: CAP, keep });
+    for (const chunkSize of [1, 97, 5000]) {
+      const got = pumped(section, { cap: CAP, keep, chunkSize }).indices;
+      expect(Array.from(got)).toEqual(Array.from(wantKept));
+    }
+  });
+
+  it('spends the whole cap on a walk pumped one step at a time', () => {
+    const { indices } = pumped(section, { cap: CAP, chunkSize: 1 });
+    expect(indices.length).toBe(CAP);
+    expect(new Set(Array.from(indices)).size).toBe(CAP);
+    // Ascending, so the result is still an index list a renderer can read
+    // straight through.
+    expect(Array.from(indices)).toEqual(Array.from(indices).slice().sort((a, b) => a - b));
+  });
+
+  it('keeps the stratum floors on a walk pumped one step at a time', () => {
+    const { indices } = pumped(section, { cap: CAP, chunkSize: 1 });
+    // The floors are what a chunk boundary inside the floor stage would cost:
+    // the ground band, the rare class and the second scan are all minorities.
+    assertGroundLine(indices, section, 250);
+    assertClassFloor(indices, section, NOISE, 90);
+    assertSlotFloor(indices, section, 1, 50);
+    // A stride over the same section, which is what the floors exist to beat.
+    const stride = uniformStride(section.count, CAP);
+    expect(() => assertGroundLine(stride, section, 250)).toThrow();
+    expect(() => assertClassFloor(stride, section, NOISE, 90)).toThrow();
+    expect(() => assertSlotFloor(stride, section, 1, 50)).toThrow();
+    // Exactly what the run-to-completion path draws from each, not merely some.
+    const whole = selectProfileSectionLod(section, { cap: CAP });
+    for (const cls of [GROUND, CANOPY, NOISE]) {
+      expect(countClass(indices, section.classification, cls)).toBe(
+        countClass(whole, section.classification, cls),
+      );
+    }
+  });
+
+  it('carries the forced keeps across every boundary', () => {
+    const keep = [3, 4, 19_999, section.count - 1];
+    const { indices } = pumped(section, { cap: CAP, keep, chunkSize: 1 });
+    assertContains(indices, keep);
+    expect(indices.length).toBe(CAP);
+  });
+
+  it('hands the thread back at least every chunk, and more often as the chunk shrinks', () => {
+    const coarse = pumped(section, { cap: CAP, chunkSize: 20_000 });
+    const fine = pumped(section, { cap: CAP, chunkSize: 2_000 });
+    // A generator that yielded once at the end would satisfy nothing here.
+    expect(coarse.progress.length).toBeGreaterThan(4);
+    expect(fine.progress.length).toBeGreaterThan(coarse.progress.length);
+    // Progress only ever goes forward, and never by more than one chunk: the
+    // gap between two yields is the work one uninterrupted task carries.
+    let previous = 0;
+    for (const at of coarse.progress) {
+      expect(at).toBeGreaterThan(previous);
+      expect(at - previous).toBeLessThanOrEqual(20_000);
+      previous = at;
+    }
+  });
+
+  it('runs the generator to completion in the convenience wrapper', () => {
+    const keep = [1, 2, 3];
+    const direct = selectProfileSectionLod(section, { cap: CAP, keep });
+    const byHand = pumped(section, { cap: CAP, keep, chunkSize: 64_000 }).indices;
+    expect(Array.from(direct)).toEqual(Array.from(byHand));
+  });
+
+  it('yields nothing it cannot finish: empty, under-cap and zero-cap sections', () => {
+    const small = mixed(500);
+    expect(pumped(small, { cap: 5000, chunkSize: 1 }).indices.length).toBe(500);
+    expect(pumped(small, { cap: 0, chunkSize: 1 }).indices.length).toBe(0);
+    const empty = makeSection({ chainage: [], height: [], slot: [], cls: [] });
+    expect(pumped(empty, { cap: 100, chunkSize: 1 }).indices.length).toBe(0);
   });
 });

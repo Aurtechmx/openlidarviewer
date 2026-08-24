@@ -627,11 +627,16 @@ describe('the presenter says why, rather than showing an empty plot', () => {
     ]);
   });
 
-  it('subsamples at a fixed stride past the cap, and keeps every return under it', () => {
-    expect(drawIndices(0)).toHaveLength(0);
-    expect([...drawIndices(5, 10)]).toEqual([0, 1, 2, 3, 4]);
-    // 10 of 25 requested → stride 3, a deterministic every-third return.
-    expect([...drawIndices(25, 10)]).toEqual([0, 3, 6, 9, 12, 15, 18, 21, 24]);
+  it('keeps every return under the cap, and stratifies the section above it', () => {
+    expect(drawIndices(sectionWithOutlierAtIndexOne(0))).toHaveLength(0);
+    expect([...drawIndices(sectionWithOutlierAtIndexOne(5), 10)]).toEqual([0, 1, 2, 3, 4]);
+    // 10 of 25: the cap is spent, in ascending index, and the one return that
+    // sits away from the rest holds a stratum of its own rather than being
+    // whatever a stride happened to land on.
+    const capped = [...drawIndices(sectionWithOutlierAtIndexOne(25), 10)];
+    expect(capped).toHaveLength(10);
+    expect(capped).toEqual([...capped].sort((a, b) => a - b));
+    expect(capped).toContain(1);
   });
 });
 
@@ -706,8 +711,9 @@ describe('the plot is redrawn whenever its box changes', () => {
 
 describe('the span figures describe the corridor, not the drawn subset', () => {
   it('measures the spans over every accepted return past the display cap', () => {
-    // 120 002 accepted → stride 2 → the odd indices are drawn by nothing, and
-    // this section keeps its only extremes at index 1.
+    // 120 002 accepted against a cap of 120 000, so two returns are left out
+    // and a span read off the drawn subset alone could differ from the
+    // corridor's.
     const section = sectionWithOutlierAtIndexOne(120_002);
     const canvas = new FakeCanvas();
     canvas.clientWidth = 800;
@@ -720,12 +726,15 @@ describe('the span figures describe the corridor, not the drawn subset', () => {
       },
       metresPerUnit: () => null,
       devicePixelRatio: () => 1,
+      // A section this size outlasts one slice of the display selection, so
+      // the remaining slices are run here rather than on a frame callback.
+      scheduleSlice: (run) => run(),
       observeCanvasSize: () => () => {},
     });
     const rows = rec.detail[0]!;
     // The cap really did bite, so the two sets genuinely differ here.
     expect(figure(rows, 'Returns in corridor')).toBe('120002');
-    expect(figure(rows, 'Drawn')).toBe('60001');
+    expect(figure(rows, 'Drawn')).toBe('120000');
     expect(figure(rows, 'Chainage span')).toBe(axisSpanCaption(100, null));
     expect(figure(rows, 'Height span')).toBe(axisSpanCaption(50, null));
     // What the drawn subset alone would have claimed.
@@ -768,6 +777,42 @@ describe('the corridor is walked across frames', () => {
     expect(pulled).toBe(4);
     expect(rec.detail).toHaveLength(1);
     expect(rec.status.at(-1)).toBe('Showing 64 returns.');
+  });
+
+  it('pumps the display selection across frames under the same budget', () => {
+    const canvas = new FakeCanvas();
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 300;
+    const rec = sectionHandle(canvas);
+    const queued: (() => void)[] = [];
+    let clock = 0;
+    presentWorkbenchSection(rec.handle, 'p1', {
+      profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
+      // The corridor answers at once; what follows is the selection over it.
+      sectionChunks: function* () {
+        return sectionWithOutlierAtIndexOne(120_002);
+      },
+      metresPerUnit: () => null,
+      devicePixelRatio: () => 1,
+      // Every reading advances the clock, so a slice ends after a step or two
+      // whatever the machine underneath is doing.
+      now: () => (clock += SLICE_BUDGET_MS / 2),
+      scheduleSlice: (run) => queued.push(run),
+      observeCanvasSize: () => () => {},
+    });
+    // The section is in hand and the panel still has nothing to show: the
+    // selection over 120 002 returns did not fit in the first slice.
+    expect(rec.detail).toHaveLength(0);
+    expect(queued).toHaveLength(1);
+
+    let slices = 0;
+    while (queued.length > 0) {
+      slices++;
+      queued.shift()!();
+    }
+    expect(slices).toBeGreaterThan(1);
+    expect(rec.detail).toHaveLength(1);
+    expect(figure(rec.detail[0]!, 'Drawn')).toBe('120000');
   });
 
   it('abandons a walk still in flight when the dock goes', () => {
