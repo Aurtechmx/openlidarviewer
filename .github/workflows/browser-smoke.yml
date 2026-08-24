@@ -33,6 +33,12 @@ jobs:
         run: ./node_modules/.bin/playwright install --with-deps webkit
       - name: Boot smoke on WebKit
         run: ./node_modules/.bin/playwright test --project=webkit tests/e2e/smoke.spec.ts
+      # The same engine at a phone viewport, with touch and an iPhone user
+      # agent. It runs in the WebKit job because the browser is already
+      # installed here; a separate job would download it twice to prove the
+      # layout of a page this one just booted.
+      - name: Mobile viewport contract on iPhone WebKit
+        run: ./node_modules/.bin/playwright test --project=webkit-mobile
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
