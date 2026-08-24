@@ -1,0 +1,865 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "GEODESY-UTM-PROJ-GEOGRAPHICLIB-2026-08",
+  "generatedBy": "validation/external-oracles/geodesy/run-oracles.mjs",
+  "fixturesSha256": "sha256:c1d802a18f4ee5f1eb1dd6d33d677e2a5008e4c117e165c267cc6a46289b2752",
+  "fixtureCount": 36,
+  "environment": {
+    "platform": "darwin-arm64",
+    "nodeVersion": "v26.7.0",
+    "locale": "unset"
+  },
+  "oracles": [
+    {
+      "oracleId": "geographiclib-2.7",
+      "role": "independent-same-quantity-implementation",
+      "executablePath": "/opt/homebrew/bin/GeoConvert",
+      "versionOutput": "GeoConvert: GeographicLib version 2.7",
+      "commandLine": "GeoConvert -u -p 9",
+      "zoneSource": "oracle"
+    },
+    {
+      "oracleId": "proj-9.8.1",
+      "role": "independent-same-quantity-implementation",
+      "executablePath": "/opt/homebrew/bin/cs2cs",
+      "versionOutput": "Rel. 9.8.1, April 10th, 2026",
+      "commandLine": "cs2cs -f %.9f EPSG:4326 EPSG:<326|327><zone>",
+      "zoneSource": "geographiclib-2.7"
+    }
+  ],
+  "oracleAgreement": {
+    "maxAbsEastingM": 2.0372681319713593e-9,
+    "maxAbsNorthingM": 1.862645149230957e-9,
+    "note": "PROJ against GeographicLib over the same fixtures. Two separate lineages, so this bounds how much of any candidate residual could be oracle disagreement rather than candidate error."
+  },
+  "results": [
+    {
+      "id": "F01-madrid",
+      "lat": 40.4168,
+      "lon": -3.7038,
+      "input": "40.416800000000 -3.703800000000",
+      "geographiclib": {
+        "zone": 30,
+        "hemisphere": "N",
+        "easting": 440290.458054359,
+        "northing": 4474257.38200618,
+        "raw": "30n 440290.458054359 4474257.382006180"
+      },
+      "proj": {
+        "easting": 440290.458054358,
+        "northing": 4474257.38200618,
+        "epsg": 32630,
+        "raw": "440290.458054358\t4474257.382006180 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": -9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F02-santiago",
+      "lat": -33.4489,
+      "lon": -70.6693,
+      "input": "-33.448900000000 -70.669300000000",
+      "geographiclib": {
+        "zone": 19,
+        "hemisphere": "S",
+        "easting": 344846.720310104,
+        "northing": 6297700.155609684,
+        "raw": "19s 344846.720310104 6297700.155609684"
+      },
+      "proj": {
+        "easting": 344846.720310103,
+        "northing": 6297700.155609685,
+        "epsg": 32719,
+        "raw": "344846.720310103\t6297700.155609685 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": -1.0477378964424133e-9,
+        "northingM": 9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F03-greenwich",
+      "lat": 51.4778,
+      "lon": -0.0015,
+      "input": "51.477800000000 -0.001500000000",
+      "geographiclib": {
+        "zone": 30,
+        "hemisphere": "N",
+        "easting": 708213.950602231,
+        "northing": 5707224.542591996,
+        "raw": "30n 708213.950602231 5707224.542591996"
+      },
+      "proj": {
+        "easting": 708213.95060223,
+        "northing": 5707224.542591996,
+        "epsg": 32630,
+        "raw": "708213.950602230\t5707224.542591996 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": -9.313225746154785e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F04-longyearbyen",
+      "lat": 78.2232,
+      "lon": 15.6267,
+      "input": "78.223200000000 15.626700000000",
+      "geographiclib": {
+        "zone": 33,
+        "hemisphere": "N",
+        "easting": 514278.715113268,
+        "northing": 8683355.469470507,
+        "raw": "33n 514278.715113268 8683355.469470507"
+      },
+      "proj": {
+        "easting": 514278.715113269,
+        "northing": 8683355.469470505,
+        "epsg": 32633,
+        "raw": "514278.715113269\t8683355.469470505 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": -1.862645149230957e-9
+      }
+    },
+    {
+      "id": "F05-otago",
+      "lat": -45,
+      "lon": 168,
+      "input": "-45.000000000000 168.000000000000",
+      "geographiclib": {
+        "zone": 59,
+        "hemisphere": "S",
+        "easting": 263553.973898792,
+        "northing": 5012670.495301086,
+        "raw": "59s 263553.973898792 5012670.495301086"
+      },
+      "proj": {
+        "easting": 263553.973898793,
+        "northing": 5012670.495301086,
+        "epsg": 32759,
+        "raw": "263553.973898793\t5012670.495301086 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F06-origin",
+      "lat": 0,
+      "lon": 0,
+      "input": "0.000000000000 0.000000000000",
+      "geographiclib": {
+        "zone": 31,
+        "hemisphere": "N",
+        "easting": 166021.44308054,
+        "northing": 0,
+        "raw": "31n 166021.443080540 0.000000000"
+      },
+      "proj": {
+        "easting": 166021.443080541,
+        "northing": 0,
+        "epsg": 32631,
+        "raw": "166021.443080541\t0.000000000 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0186340659856796e-9,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F07-norway-sw",
+      "lat": 56,
+      "lon": 3,
+      "input": "56.000000000000 3.000000000000",
+      "geographiclib": {
+        "zone": 32,
+        "hemisphere": "N",
+        "easting": 126049.970712682,
+        "northing": 6222336.335316707,
+        "raw": "32n 126049.970712682 6222336.335316707"
+      },
+      "proj": {
+        "easting": 126049.970712682,
+        "northing": 6222336.335316707,
+        "epsg": 32632,
+        "raw": "126049.970712682\t6222336.335316707 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F08-norway-ne",
+      "lat": 63.9,
+      "lon": 11.9,
+      "input": "63.900000000000 11.900000000000",
+      "geographiclib": {
+        "zone": 32,
+        "hemisphere": "N",
+        "easting": 642314.748628134,
+        "northing": 7089106.258590285,
+        "raw": "32n 642314.748628134 7089106.258590285"
+      },
+      "proj": {
+        "easting": 642314.748628135,
+        "northing": 7089106.258590283,
+        "epsg": 32632,
+        "raw": "642314.748628135\t7089106.258590283 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.313225746154785e-10,
+        "northingM": -1.862645149230957e-9
+      }
+    },
+    {
+      "id": "F09-norway-below",
+      "lat": 55.9,
+      "lon": 6,
+      "input": "55.900000000000 6.000000000000",
+      "geographiclib": {
+        "zone": 32,
+        "hemisphere": "N",
+        "easting": 312445.531262948,
+        "northing": 6199017.379109597,
+        "raw": "32n 312445.531262948 6199017.379109597"
+      },
+      "proj": {
+        "easting": 312445.531262948,
+        "northing": 6199017.379109598,
+        "epsg": 32632,
+        "raw": "312445.531262948\t6199017.379109598 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F10-norway-above",
+      "lat": 64,
+      "lon": 6,
+      "input": "64.000000000000 6.000000000000",
+      "geographiclib": {
+        "zone": 32,
+        "hemisphere": "N",
+        "easting": 353304.772733445,
+        "northing": 7100467.049381648,
+        "raw": "32n 353304.772733445 7100467.049381648"
+      },
+      "proj": {
+        "easting": 353304.772733445,
+        "northing": 7100467.049381648,
+        "epsg": 32632,
+        "raw": "353304.772733445\t7100467.049381648 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F11-norway-west",
+      "lat": 60,
+      "lon": 2.9,
+      "input": "60.000000000000 2.900000000000",
+      "geographiclib": {
+        "zone": 31,
+        "hemisphere": "N",
+        "easting": 494422.233257532,
+        "northing": 6651415.405760061,
+        "raw": "31n 494422.233257532 6651415.405760061"
+      },
+      "proj": {
+        "easting": 494422.233257532,
+        "northing": 6651415.405760061,
+        "epsg": 32631,
+        "raw": "494422.233257532\t6651415.405760061 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F12-norway-east",
+      "lat": 60,
+      "lon": 12,
+      "input": "60.000000000000 12.000000000000",
+      "geographiclib": {
+        "zone": 33,
+        "hemisphere": "N",
+        "easting": 332705.178875549,
+        "northing": 6655205.483634563,
+        "raw": "33n 332705.178875549 6655205.483634563"
+      },
+      "proj": {
+        "easting": 332705.17887555,
+        "northing": 6655205.483634564,
+        "epsg": 32633,
+        "raw": "332705.178875550\t6655205.483634564 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F13-svalbard-31x",
+      "lat": 72,
+      "lon": 8.9,
+      "input": "72.000000000000 8.900000000000",
+      "geographiclib": {
+        "zone": 31,
+        "hemisphere": "N",
+        "easting": 703202.508927768,
+        "northing": 7998893.256688046,
+        "raw": "31n 703202.508927768 7998893.256688046"
+      },
+      "proj": {
+        "easting": 703202.508927769,
+        "northing": 7998893.256688047,
+        "epsg": 32631,
+        "raw": "703202.508927769\t7998893.256688047 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0477378964424133e-9,
+        "northingM": 9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F14-svalbard-33x",
+      "lat": 72,
+      "lon": 20,
+      "input": "72.000000000000 20.000000000000",
+      "geographiclib": {
+        "zone": 33,
+        "hemisphere": "N",
+        "easting": 672275.051070391,
+        "northing": 7996086.92526526,
+        "raw": "33n 672275.051070391 7996086.925265260"
+      },
+      "proj": {
+        "easting": 672275.051070392,
+        "northing": 7996086.92526526,
+        "epsg": 32633,
+        "raw": "672275.051070392\t7996086.925265260 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0477378964424133e-9,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F15-svalbard-35x",
+      "lat": 78,
+      "lon": 25,
+      "input": "78.000000000000 25.000000000000",
+      "geographiclib": {
+        "zone": 35,
+        "hemisphere": "N",
+        "easting": 453588.98252801,
+        "northing": 8659161.997324849,
+        "raw": "35n 453588.982528010 8659161.997324849"
+      },
+      "proj": {
+        "easting": 453588.98252801,
+        "northing": 8659161.997324847,
+        "epsg": 32635,
+        "raw": "453588.982528010\t8659161.997324847 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": -1.862645149230957e-9
+      }
+    },
+    {
+      "id": "F16-svalbard-37x",
+      "lat": 83.9,
+      "lon": 33,
+      "input": "83.900000000000 33.000000000000",
+      "geographiclib": {
+        "zone": 37,
+        "hemisphere": "N",
+        "easting": 428943.960190906,
+        "northing": 9320633.034823881,
+        "raw": "37n 428943.960190906 9320633.034823881"
+      },
+      "proj": {
+        "easting": 428943.960190907,
+        "northing": 9320633.034823881,
+        "epsg": 32637,
+        "raw": "428943.960190907\t9320633.034823881 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F17-svalbard-below",
+      "lat": 71.9,
+      "lon": 20,
+      "input": "71.900000000000 20.000000000000",
+      "geographiclib": {
+        "zone": 34,
+        "hemisphere": "N",
+        "easting": 465325.890324334,
+        "northing": 7978066.02424299,
+        "raw": "34n 465325.890324334 7978066.024242990"
+      },
+      "proj": {
+        "easting": 465325.890324335,
+        "northing": 7978066.024242989,
+        "epsg": 32634,
+        "raw": "465325.890324335\t7978066.024242989 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0477378964424133e-9,
+        "northingM": -9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F18-svalbard-9deg",
+      "lat": 75,
+      "lon": 9,
+      "input": "75.000000000000 9.000000000000",
+      "geographiclib": {
+        "zone": 33,
+        "hemisphere": "N",
+        "easting": 326931.734075441,
+        "northing": 8332368.952478562,
+        "raw": "33n 326931.734075441 8332368.952478562"
+      },
+      "proj": {
+        "easting": 326931.734075442,
+        "northing": 8332368.952478562,
+        "epsg": 32633,
+        "raw": "326931.734075442\t8332368.952478562 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F19-svalbard-21deg",
+      "lat": 75,
+      "lon": 21,
+      "input": "75.000000000000 21.000000000000",
+      "geographiclib": {
+        "zone": 35,
+        "hemisphere": "N",
+        "easting": 326931.734075441,
+        "northing": 8332368.952478562,
+        "raw": "35n 326931.734075441 8332368.952478562"
+      },
+      "proj": {
+        "easting": 326931.734075441,
+        "northing": 8332368.952478562,
+        "epsg": 32635,
+        "raw": "326931.734075441\t8332368.952478562 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F20-svalbard-33deg",
+      "lat": 75,
+      "lon": 33,
+      "input": "75.000000000000 33.000000000000",
+      "geographiclib": {
+        "zone": 37,
+        "hemisphere": "N",
+        "easting": 326931.734075441,
+        "northing": 8332368.952478562,
+        "raw": "37n 326931.734075441 8332368.952478562"
+      },
+      "proj": {
+        "easting": 326931.734075441,
+        "northing": 8332368.952478562,
+        "epsg": 32637,
+        "raw": "326931.734075441\t8332368.952478562 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F21-zone1-west",
+      "lat": 10,
+      "lon": -180,
+      "input": "10.000000000000 -180.000000000000",
+      "geographiclib": {
+        "zone": 1,
+        "hemisphere": "N",
+        "easting": 171071.263941312,
+        "northing": 1106908.854243143,
+        "raw": "01n 171071.263941312 1106908.854243143"
+      },
+      "proj": {
+        "easting": 171071.263941313,
+        "northing": 1106908.854243142,
+        "epsg": 32601,
+        "raw": "171071.263941313\t1106908.854243142 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": -9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F22-zone60-east",
+      "lat": 10,
+      "lon": 179.999999,
+      "input": "10.000000000000 179.999999000000",
+      "geographiclib": {
+        "zone": 60,
+        "hemisphere": "N",
+        "easting": 828928.62632091,
+        "northing": 1106908.853244455,
+        "raw": "60n 828928.626320910 1106908.853244455"
+      },
+      "proj": {
+        "easting": 828928.626320911,
+        "northing": 1106908.853244455,
+        "epsg": 32660,
+        "raw": "828928.626320911\t1106908.853244455 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.313225746154785e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F23-north-limit",
+      "lat": 83.999999,
+      "lon": 25,
+      "input": "83.999999000000 25.000000000000",
+      "geographiclib": {
+        "zone": 35,
+        "hemisphere": "N",
+        "easting": 476664.431622053,
+        "northing": 9328498.812320234,
+        "raw": "35n 476664.431622053 9328498.812320234"
+      },
+      "proj": {
+        "easting": 476664.431622053,
+        "northing": 9328498.812320234,
+        "epsg": 32635,
+        "raw": "476664.431622053\t9328498.812320234 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F24-south-limit",
+      "lat": -79.999999,
+      "lon": -179.9,
+      "input": "-79.999999000000 -179.900000000000",
+      "geographiclib": {
+        "zone": 1,
+        "hemisphere": "S",
+        "easting": 443803.937588574,
+        "northing": 1117013.41529605,
+        "raw": "01s 443803.937588574 1117013.415296050"
+      },
+      "proj": {
+        "easting": 443803.937588575,
+        "northing": 1117013.41529605,
+        "epsg": 32701,
+        "raw": "443803.937588575\t1117013.415296050 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F25-equator-south",
+      "lat": -0.000001,
+      "lon": 45,
+      "input": "-0.000001000000 45.000000000000",
+      "geographiclib": {
+        "zone": 38,
+        "hemisphere": "S",
+        "easting": 500000,
+        "northing": 9999999.889469953,
+        "raw": "38s 500000.000000000 9999999.889469953"
+      },
+      "proj": {
+        "easting": 500000,
+        "northing": 9999999.889469953,
+        "epsg": 32738,
+        "raw": "500000.000000000\t9999999.889469953 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F26-equator-north",
+      "lat": 0.000001,
+      "lon": 45,
+      "input": "0.000001000000 45.000000000000",
+      "geographiclib": {
+        "zone": 38,
+        "hemisphere": "N",
+        "easting": 500000,
+        "northing": 0.110530046,
+        "raw": "38n 500000.000000000 0.110530046"
+      },
+      "proj": {
+        "easting": 500000,
+        "northing": 0.110530046,
+        "epsg": 32638,
+        "raw": "500000.000000000\t0.110530046 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F27-central-meridian",
+      "lat": 45,
+      "lon": -177,
+      "input": "45.000000000000 -177.000000000000",
+      "geographiclib": {
+        "zone": 1,
+        "hemisphere": "N",
+        "easting": 500000,
+        "northing": 4982950.400226552,
+        "raw": "01n 500000.000000000 4982950.400226552"
+      },
+      "proj": {
+        "easting": 500000,
+        "northing": 4982950.400226551,
+        "epsg": 32601,
+        "raw": "500000.000000000\t4982950.400226551 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": -9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F28-zone-edge-6deg",
+      "lat": 45,
+      "lon": -174,
+      "input": "45.000000000000 -174.000000000000",
+      "geographiclib": {
+        "zone": 2,
+        "hemisphere": "N",
+        "easting": 263553.973898792,
+        "northing": 4987329.504698914,
+        "raw": "02n 263553.973898792 4987329.504698914"
+      },
+      "proj": {
+        "easting": 263553.973898793,
+        "northing": 4987329.504698914,
+        "epsg": 32602,
+        "raw": "263553.973898793\t4987329.504698914 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.89530235528946e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F29-far-east",
+      "lat": 35.6762,
+      "lon": 139.6503,
+      "input": "35.676200000000 139.650300000000",
+      "geographiclib": {
+        "zone": 54,
+        "hemisphere": "N",
+        "easting": 377855.775951768,
+        "northing": 3948874.392162377,
+        "raw": "54n 377855.775951768 3948874.392162377"
+      },
+      "proj": {
+        "easting": 377855.775951769,
+        "northing": 3948874.392162377,
+        "epsg": 32654,
+        "raw": "377855.775951769\t3948874.392162377 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0477378964424133e-9,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F30-far-south",
+      "lat": -54.8019,
+      "lon": -68.303,
+      "input": "-54.801900000000 -68.303000000000",
+      "geographiclib": {
+        "zone": 19,
+        "hemisphere": "S",
+        "easting": 544805.097450885,
+        "northing": 3927029.884698997,
+        "raw": "19s 544805.097450885 3927029.884698997"
+      },
+      "proj": {
+        "easting": 544805.097450885,
+        "northing": 3927029.884698997,
+        "epsg": 32719,
+        "raw": "544805.097450885\t3927029.884698997 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F31-quito",
+      "lat": -0.1807,
+      "lon": -78.4678,
+      "input": "-0.180700000000 -78.467800000000",
+      "geographiclib": {
+        "zone": 17,
+        "hemisphere": "S",
+        "easting": 781861.457455944,
+        "northing": 9980007.56688849,
+        "raw": "17s 781861.457455944 9980007.566888491"
+      },
+      "proj": {
+        "easting": 781861.457455945,
+        "northing": 9980007.56688849,
+        "epsg": 32717,
+        "raw": "781861.457455945\t9980007.566888491 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 9.313225746154785e-10,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F32-nairobi",
+      "lat": -1.2921,
+      "lon": 36.8219,
+      "input": "-1.292100000000 36.821900000000",
+      "geographiclib": {
+        "zone": 37,
+        "hemisphere": "S",
+        "easting": 257634.501826331,
+        "northing": 9857079.966030994,
+        "raw": "37s 257634.501826331 9857079.966030994"
+      },
+      "proj": {
+        "easting": 257634.501826332,
+        "northing": 9857079.966030994,
+        "epsg": 32737,
+        "raw": "257634.501826332\t9857079.966030994 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0186340659856796e-9,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F33-anchorage",
+      "lat": 61.2181,
+      "lon": -149.9003,
+      "input": "61.218100000000 -149.900300000000",
+      "geographiclib": {
+        "zone": 6,
+        "hemisphere": "N",
+        "easting": 344247.206470394,
+        "northing": 6790536.871328589,
+        "raw": "06n 344247.206470394 6790536.871328589"
+      },
+      "proj": {
+        "easting": 344247.206470396,
+        "northing": 6790536.871328588,
+        "epsg": 32606,
+        "raw": "344247.206470396\t6790536.871328588 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 2.0372681319713593e-9,
+        "northingM": -9.313225746154785e-10
+      }
+    },
+    {
+      "id": "F34-mcmurdo",
+      "lat": -77.8419,
+      "lon": 166.6863,
+      "input": "-77.841900000000 166.686300000000",
+      "geographiclib": {
+        "zone": 58,
+        "hemisphere": "S",
+        "easting": 539641.28463391,
+        "northing": 1358704.046071654,
+        "raw": "58s 539641.284633910 1358704.046071654"
+      },
+      "proj": {
+        "easting": 539641.28463391,
+        "northing": 1358704.046071654,
+        "epsg": 32758,
+        "raw": "539641.284633910\t1358704.046071654 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 0,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F35-sub-microdegree",
+      "lat": 1e-9,
+      "lon": 1e-9,
+      "input": "0.000000001000 0.000000001000",
+      "geographiclib": {
+        "zone": 31,
+        "hemisphere": "N",
+        "easting": 166021.443191968,
+        "northing": 0.000110683,
+        "raw": "31n 166021.443191968 0.000110683"
+      },
+      "proj": {
+        "easting": 166021.443191969,
+        "northing": 0.000110683,
+        "epsg": 32631,
+        "raw": "166021.443191969\t0.000110683 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": 1.0186340659856796e-9,
+        "northingM": 0
+      }
+    },
+    {
+      "id": "F36-negative-zero-lon",
+      "lat": 45,
+      "lon": -0.000001,
+      "input": "45.000000000000 -0.000001000000",
+      "geographiclib": {
+        "zone": 30,
+        "hemisphere": "N",
+        "easting": 736445.947285805,
+        "northing": 4987329.501778169,
+        "raw": "30n 736445.947285805 4987329.501778169"
+      },
+      "proj": {
+        "easting": 736445.947285804,
+        "northing": 4987329.501778169,
+        "epsg": 32630,
+        "raw": "736445.947285804\t4987329.501778169 0.000000000"
+      },
+      "oracleSpread": {
+        "eastingM": -1.0477378964424133e-9,
+        "northingM": 0
+      }
+    }
+  ]
+}

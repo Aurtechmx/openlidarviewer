@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "purpose": "The single machine-readable statement of which external implementations this project is allowed to cite as oracles, and what each one is scientifically entitled to say. scripts/lint-oracle-registry.mjs refuses a study that names an oracleId absent from this file, and refuses a study whose claimed role is not among that oracle's roleCapabilities.",
+  "whyLineageMatters": "Two programs are not two independent implementations when they wrap the same library. A study that counts them twice reports a corroboration it does not have. `lineageGroup` is the field that makes double counting visible: oracles sharing a lineageGroup may corroborate each other, and may never be summed as independent legs.",
+  "roleDefinitions": {
+    "analytic-truth": "A closed-form value. Outranks every implementation.",
+    "generator-truth": "Labels assigned when a synthetic scene was constructed. Truth for that scene only.",
+    "field-ground-truth": "Independently surveyed reality. The only role that can support E5.",
+    "original-algorithm-reference": "The implementation the published algorithm was released as. Requires that the candidate implements the same stages.",
+    "same-algorithm-independent-implementation": "A separate codebase implementing the same published algorithm.",
+    "independent-same-quantity-implementation": "A separate codebase computing the same mathematical quantity by its own route.",
+    "alternative-algorithm-family": "A different algorithm answering a related question. Scored against truth, never used as a conformance gate.",
+    "standard-conformance-validator": "Decides whether an artifact satisfies a format specification. Says nothing about numerical accuracy.",
+    "independent-statistical-recalculation": "Recomputes a statistic outside the candidate's language and runtime.",
+    "same-lineage-corroboration": "Shares an implementation family with another registered oracle. A compatibility check, never a second independent leg."
+  },
+  "oracles": [
+    {
+      "oracleId": "proj-9.8.1",
+      "name": "PROJ",
+      "version": "9.8.1",
+      "executables": ["cs2cs", "projinfo", "cct", "geod"],
+      "roleCapabilities": ["independent-same-quantity-implementation"],
+      "domains": ["crs-transformation", "utm", "geodetic", "datum"],
+      "lineageGroup": "proj",
+      "implementationLanguage": "C/C++",
+      "license": "MIT",
+      "architecture": "darwin-arm64",
+      "installationMethod": "homebrew",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "GDAL links PROJ for coordinate operations, so a GDAL reprojection leg and a PROJ leg share this lineage and must not be counted as two.",
+        "Independent of GeographicLib: different codebase, different series formulation, no shared transverse-Mercator code."
+      ],
+      "limitations": [
+        "Transformation accuracy depends on which datum grids are installed. A study must record the operation PROJ selected, not only the numbers it printed.",
+        "Run from the host toolchain rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
+    },
+    {
+      "oracleId": "geographiclib-2.7",
+      "name": "GeographicLib",
+      "version": "2.7",
+      "executables": ["GeoConvert", "CartConvert", "GeodSolve"],
+      "roleCapabilities": ["independent-same-quantity-implementation"],
+      "domains": ["utm", "geodetic", "ecef", "local-cartesian", "geodesic"],
+      "lineageGroup": "geographiclib",
+      "implementationLanguage": "C++",
+      "license": "MIT",
+      "architecture": "darwin-arm64",
+      "installationMethod": "homebrew",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Karney's own implementation, independent of PROJ. Its transverse Mercator is exact to round-off rather than a truncated Krüger series, which is why it is the stronger of the two for a projection-accuracy bound.",
+        "Applies the UTM zone exceptions (Norway 32V, Svalbard 31X/33X/35X/37X) from the UTM definition, so it validates zone selection and not only projection arithmetic."
+      ],
+      "limitations": [
+        "GeoConvert refuses exponential-notation input, so fixtures serialize coordinates as fixed decimals.",
+        "Run from the host toolchain rather than the digest-pinned oracle image, so reproducibility rests on the recorded version string."
+      ]
+    },
+    {
+      "oracleId": "pdal-2.10.2",
+      "name": "PDAL",
+      "version": "2.10.2",
+      "executables": ["pdal"],
+      "roleCapabilities": [
+        "same-algorithm-independent-implementation",
+        "independent-same-quantity-implementation"
+      ],
+      "domains": ["ground-filter", "rasterize", "e57-decode", "las-decode"],
+      "lineageGroup": "pdal",
+      "implementationLanguage": "C++",
+      "license": "BSD-3-Clause",
+      "architecture": "linux-64",
+      "installationMethod": "conda-forge, pinned by validation/oracles/conda-linux-64.lock",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "filters.smrf is an independent implementation of Pingel et al. 2013. OLV implements a documented SUBSET of those stages, so the two are same-algorithm only over the stages both implement; the study must say which.",
+        "PDAL's E57 reader links libE57Format. Any other libE57Format-based reader shares this lineage."
+      ],
+      "limitations": [
+        "writers.gdal with a radius below half the cell size tests cell indexing and origin, not neighbourhood semantics."
+      ]
+    },
+    {
+      "oracleId": "gdal-3.13.1",
+      "name": "GDAL",
+      "version": "3.13.1",
+      "executables": ["gdaldem", "gdal_contour", "gdal_translate", "ogrinfo"],
+      "roleCapabilities": ["independent-same-quantity-implementation"],
+      "domains": ["slope", "aspect", "hillshade", "contours", "raster-io", "planar-area"],
+      "lineageGroup": "gdal",
+      "implementationLanguage": "C++",
+      "license": "MIT",
+      "architecture": "linux-64",
+      "installationMethod": "conda-forge, pinned by validation/oracles/conda-linux-64.lock",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Links PROJ for coordinate operations. A GDAL reprojection result and a PROJ result are one lineage, not two.",
+        "gdaldem slope/aspect implement Horn, which is the formula OLV registers; that is what makes them same-quantity rather than alternative-family."
+      ],
+      "limitations": [
+        "The host toolchain currently carries GDAL 3.13.3. Any study citing 3.13.1 must come from the pinned image, which is what scripts/verify-oracle-versions.mjs enforces."
+      ]
+    },
+    {
+      "oracleId": "saga-7.8.2",
+      "name": "SAGA GIS",
+      "version": "7.8.2",
+      "executables": ["saga_cmd"],
+      "roleCapabilities": ["independent-same-quantity-implementation"],
+      "domains": ["vrm", "terrain-derivatives"],
+      "lineageGroup": "saga",
+      "implementationLanguage": "C++",
+      "license": "GPL-2.0-or-later",
+      "architecture": "darwin-arm64",
+      "installationMethod": "not on PATH; validation/cross-implementation/studies/VRM-SAGA-ANALYTIC.study.json records the exact executable the existing leg ran from",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Independent of GDAL for the vector-ruggedness quantity."
+      ],
+      "limitations": [
+        "Not resolvable on PATH on the current host, so new SAGA legs are pending until it is installed.",
+        "conda-forge publishes no SAGA package for linux-64, so it cannot join the pinned image as things stand."
+      ]
+    },
+    {
+      "oracleId": "r-4.4.1",
+      "name": "R",
+      "version": "4.4.1",
+      "executables": ["Rscript", "R"],
+      "roleCapabilities": ["independent-statistical-recalculation"],
+      "domains": ["statistics", "rmse", "intervals", "profile-reduction"],
+      "lineageGroup": "r",
+      "implementationLanguage": "C/Fortran/R",
+      "license": "GPL-2.0-or-later",
+      "architecture": "darwin-arm64",
+      "installationMethod": "homebrew",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Recomputes statistics outside the candidate's language and runtime, which is what makes it independent of a TypeScript implementation of the same formula."
+      ],
+      "limitations": [
+        "Validates arithmetic only. A correct recomputation says nothing about whether the underlying error model is calibrated against real terrain.",
+        "The host currently carries R 4.6.1. The existing profile study cites 4.4.1, so a study must record the version it actually ran."
+      ]
+    }
+  ]
+}
