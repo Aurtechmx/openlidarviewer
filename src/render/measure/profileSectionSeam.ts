@@ -177,9 +177,37 @@ export interface ProfileSectionSeam {
   sectionChunks(req: ProfileSectionRequest): Generator<number, ProfileSectionResult | null, void>;
   /** {@link sectionChunks} run to completion. */
   section(req: ProfileSectionRequest): ProfileSectionResult | null;
+  /**
+   * Read one source point's CURRENT project-frame coordinate, by the identity
+   * a section recorded for it.
+   *
+   * The counterpart to {@link sectionChunks}: the section is a snapshot, this
+   * is the scene now. It exists so a consumer can follow a return back to the
+   * scan WITHOUT matching coordinates — a corridor's returns sit within a few
+   * metres of each other, so a nearest-position lookup answers with a
+   * neighbour more often than not.
+   *
+   * `evicted` is reserved for a streaming node that is no longer resident, the
+   * one way a source routinely disappears under a section that is still on
+   * screen. Everything else that yields no coordinate is `unavailable`. A
+   * missing source is never reported as `linked`.
+   */
+  locateReturn(ref: ProfileReturnRef, out: Float64Array): ProfileReturnLocation;
   /** Refuse every outstanding and future extraction. Permanent. */
   abandon(): void;
 }
+
+/** One source point, addressed the way a section records it. */
+export interface ProfileReturnRef {
+  readonly kind: 'static' | 'resident';
+  /** Layer id for a static source; octree node key for a resident one. */
+  readonly id: string;
+  /** The point's index in its own source. */
+  readonly pointIndex: number;
+}
+
+/** Whether a recorded return still has a live coordinate, and if not, why. */
+export type ProfileReturnLocation = 'linked' | 'evicted' | 'unavailable';
 
 /**
  * A channel is used only when its length agrees with the point count it is
@@ -403,9 +431,67 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     };
   }
 
+  /**
+   * The current coordinate of one recorded source point.
+   *
+   * Reads the SAME accessors an extraction reads, so a return the section
+   * accepted and a marker placed on it can never come from different scenes.
+   * Static layers go through {@link integrableClouds}, the seam's one
+   * eligibility rule: a layer hidden since the section was taken is off the
+   * screen, and a marker on it would point into a scan the user cannot see.
+   *
+   * Residency is decided by the node KEY, never by arrival order or by the
+   * buffer's contents. A key no resident node carries is `evicted`; a key that
+   * is still resident but holds no coordinate at that index is `unavailable`.
+   */
+  function locateReturn(ref: ProfileReturnRef, out: Float64Array): ProfileReturnLocation {
+    // The SAME walk an extraction runs, so a return the section accepted and a
+    // marker placed on it can never come from different scenes. Static layers
+    // come through `integrableClouds`: a layer hidden since the section was
+    // taken is off the screen, and a marker on it would point into a scan the
+    // user cannot see.
+    const { statics, residents } = walkScene(deps);
+    const index = ref.pointIndex;
+    const usable = (pos: Float32Array): boolean =>
+      Number.isInteger(index) && index >= 0 && index * 3 + 2 < pos.length;
+    const base = index * 3;
+
+    if (ref.kind === 'resident') {
+      // Residency is decided by the node KEY, never by arrival order or by
+      // what a buffer happens to hold.
+      for (const { node, pos } of residents) {
+        if (node.key !== ref.id) continue;
+        if (!usable(pos)) return 'unavailable';
+        out[0] = pos[base]!;
+        out[1] = pos[base + 1]!;
+        out[2] = pos[base + 2]!;
+        return 'linked';
+      }
+      // A stream the host is not combining is not an eviction: the node may
+      // well still be loaded, and saying it was evicted would name the wrong
+      // reason for the missing mark.
+      return deps.streamingMayCombine(statics.length) ? 'evicted' : 'unavailable';
+    }
+
+    for (const { layer, pos } of statics) {
+      if (layer.id !== ref.id) continue;
+      if (!usable(pos)) return 'unavailable';
+      // Folded exactly once, through the same helper the extraction's reader
+      // uses, so a mounted layer's mark lands where its returns were read from
+      // rather than at its unplaced source position.
+      const [dx, dy, dz] = accumulatorOffset(layer.placement);
+      out[0] = pos[base]! + dx;
+      out[1] = pos[base + 1]! + dy;
+      out[2] = pos[base + 2]! + dz;
+      return 'linked';
+    }
+    return 'unavailable';
+  }
+
   return {
     sampleSeries,
     sectionChunks,
+    locateReturn,
     section(req) {
       const it = sectionChunks(req);
       let step = it.next();
