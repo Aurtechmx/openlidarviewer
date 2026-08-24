@@ -13,7 +13,7 @@
     {
       "oracleId": "grass-8.5.0",
       "role": "independent-same-quantity-implementation",
-      "executablePath": "/Users/ssid02/.olv-oracles/envs/olv-oracles/bin/grass",
+      "executablePath": "/opt/homebrew/bin/grass",
       "versionOutput": "GRASS 8.5.0",
       "commandLine": "r.mapcalc \"d = eb - ea\" ; r.mapcalc gain/loss with the same LoD rule ; r.univar -g"
     }

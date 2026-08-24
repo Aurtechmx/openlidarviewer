@@ -1,0 +1,66 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-CHANGE-GRASS-MAPCALC",
+ "example": false,
+ "title": "Per-cell epoch difference and above-threshold volumes against GRASS r.mapcalc and closed-form integrals",
+ "question": "Does detectChange agree with GRASS 8.5.0 r.mapcalc and r.univar on the per-cell elevation difference and on the gain and loss volumes above a single global level of detection, over eight synthetic epoch pairs whose volumes are known in closed form?",
+ "recordWrittenOn": "2026-08-24",
+ "referenceTool": "GRASS",
+ "referenceVersion": "8.5.0",
+ "claims": [
+  {
+   "claimId": "CHANGE-RASTER",
+   "datasetIds": [
+    "OLV-DS-075-CHANGE-EPOCH-PAIRS"
+   ],
+   "parameterSetIds": [
+    "PS-CHANGE-LOD-005-CELL-1M"
+   ],
+   "metrics": {
+    "toleranceAbs": 0.00001,
+    "toleranceUnit": "relative to the compared volume, with a 1e-9 m3 absolute floor",
+    "minimumComparableCells": 2000,
+    "requiredWithinToleranceFraction": 1
+   },
+   "toleranceDerivation": "The tolerance comes from the candidate's storage rather than from the observed result. ChangeGrid.values is a Float32Array, so an elevation is held to a 24-bit mantissa and a difference of two similar values loses several of those bits to the shared exponent. A per-cell change that is not exactly representable in binary therefore carries a relative error of order 1e-6 into every term of the sum. The fixtures show exactly that split: the cases whose change is a binary-exact 0.5, 1.0, 1.5 or 2.0 agree with the reference to the last printed digit, while 1.2, 0.06 and 0.1x do not. A relative gate an order of magnitude above float32 epsilon separates that from a real difference, and an absolute floor of 1e-9 m3 covers the cases whose correct answer is zero, where a relative gate is meaningless. GRASS computes in double and reproduces every closed-form volume to within 1e-6 m3, so it is held to that far tighter bound and the whole residual is attributable to the candidate. Gained, lost and comparable cell counts are integers produced by the same threshold rule on both sides, so they must match exactly; any disagreement there is a rule difference rather than arithmetic.",
+   "freeze": {
+    "status": "adopted-with-result",
+    "on": "2026-08-24",
+    "witnessCommit": "8bfec1620480b8b78c1e4e30eb5260d1daa98e82",
+    "witness": "The fixture matrix, the level of detection and the tolerance basis were written before GRASS was run, and the witness commit carries validation/external-oracles/change/protocol.json stating all three. They landed in the same commit as the first result, so this is adopted with the result and is not a preregistration.",
+    "resultCommit": "b35503706564d6c85aa77f8cfe439ca007b43f2a",
+    "resultLandedOn": "2026-08-24"
+   }
+  },
+  {
+   "claimId": "CHANGE-VOLUME",
+   "datasetIds": [
+    "OLV-DS-075-CHANGE-EPOCH-PAIRS"
+   ],
+   "parameterSetIds": [
+    "PS-CHANGE-LOD-005-CELL-1M"
+   ],
+   "metrics": {
+    "toleranceAbs": 0.00001,
+    "toleranceUnit": "relative to the compared volume, with a 1e-9 m3 absolute floor",
+    "minimumComparableCells": 2000,
+    "requiredWithinToleranceFraction": 1
+   },
+   "toleranceDerivation": "The tolerance comes from the candidate's storage rather than from the observed result. ChangeGrid.values is a Float32Array, so an elevation is held to a 24-bit mantissa and a difference of two similar values loses several of those bits to the shared exponent. A per-cell change that is not exactly representable in binary therefore carries a relative error of order 1e-6 into every term of the sum. The fixtures show exactly that split: the cases whose change is a binary-exact 0.5, 1.0, 1.5 or 2.0 agree with the reference to the last printed digit, while 1.2, 0.06 and 0.1x do not. A relative gate an order of magnitude above float32 epsilon separates that from a real difference, and an absolute floor of 1e-9 m3 covers the cases whose correct answer is zero, where a relative gate is meaningless. GRASS computes in double and reproduces every closed-form volume to within 1e-6 m3, so it is held to that far tighter bound and the whole residual is attributable to the candidate. Gained, lost and comparable cell counts are integers produced by the same threshold rule on both sides, so they must match exactly; any disagreement there is a rule difference rather than arithmetic.",
+   "freeze": {
+    "status": "adopted-with-result",
+    "on": "2026-08-24",
+    "witnessCommit": "8bfec1620480b8b78c1e4e30eb5260d1daa98e82",
+    "witness": "The fixture matrix, the level of detection and the tolerance basis were written before GRASS was run, and the witness commit carries validation/external-oracles/change/protocol.json stating all three. They landed in the same commit as the first result, so this is adopted with the result and is not a preregistration.",
+    "resultCommit": "b35503706564d6c85aa77f8cfe439ca007b43f2a",
+    "resultLandedOn": "2026-08-24"
+   }
+  }
+ ],
+ "decisionRule": "Every case must agree with GRASS and with the closed-form volume on gain volume, loss volume, gained cells, lost cells and comparable cells. One failure fails the study. Truth is scored first and the agreement between implementations second, because two programs summing the same wrong cells agree perfectly.",
+ "notes": [
+  "Parameter equivalence is exact: the same level of detection, the same strict inequality, and the same exclusion of cells absent from either epoch. GRASS null and the candidate's NaN propagate identically, so neither side needs special handling to agree on which cells are comparable.",
+  "Scope is metre grids with one-metre square cells and a single global level of detection. Per-cell LoD95 is a separate quantity and is not exercised. No surveyed volume is involved, so this cannot support E5."
+ ],
+ "digest": "sha256:747e408a70ef42b8db069a874565551d59cad4963ddaac7ac05ae73f8ad81635"
+}
