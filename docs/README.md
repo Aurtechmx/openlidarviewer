@@ -103,8 +103,8 @@ The whole collection lives in [validation/](validation/), and these are the entr
 Every version keeps four documents: release notes, validation report,
 reproducibility record, known limitations. All 49 sit in
 [releases/](releases/). The current set is linked below. Older readiness and
-audit reports are archived in [_audit/](_audit/), where the links inside have
-been left to rot honestly rather than being rewritten after the fact.
+audit reports are kept in an internal audit directory that stays in the
+repository and out of the released archive, so they are not linked here.
 
 | Document | What it covers |
 | --- | --- |
@@ -113,17 +113,17 @@ been left to rot honestly rather than being rewritten after the fact.
 | [releases/REPRODUCIBILITY_v0.6.6.md](releases/REPRODUCIBILITY_v0.6.6.md) | How to rebuild the release and reproduce its figures. |
 | [release/RELEASE_ASSETS.md](release/RELEASE_ASSETS.md) | What ships with a release, and how each asset is produced. |
 | [release/ERRATUM_v0.6.2.md](release/ERRATUM_v0.6.2.md) | A correction to a published release, kept in the open. |
-| [project/RELEASE_CHECKLIST.md](project/RELEASE_CHECKLIST.md) | The steps a release goes through before it is tagged. |
+
+The release checklist, which lists the steps a release goes through before it is
+tagged, is an internal process document. It stays in the repository and is not
+part of the released archive.
 
 ## Historical plans
 
-These describe work that was planned under an older version. They are kept as a
-record of how a decision was reached, and they are not current documentation.
-
-| Document | Written for |
-| --- | --- |
-| [gate2-per-cloud-filter-plan.md](gate2-per-cloud-filter-plan.md) | v0.5.6 |
-| [v0.5.7-plan.md](v0.5.7-plan.md) | v0.5.7 |
-| [v0.5.7-object-e57-capture-lens.md](v0.5.7-object-e57-capture-lens.md) | v0.5.7 |
-| [architecture/v0.5.8-cleanup-plan.md](architecture/v0.5.8-cleanup-plan.md) | v0.5.8 |
-| [architecture/float64-frame-migration-plan.md](architecture/float64-frame-migration-plan.md) | v0.6 development, superseded in place |
+Five planning documents describe work scoped under older versions: the gate 2
+per-cloud filter plan (v0.5.6), two v0.5.7 plans covering the release scope and
+the object and E57 capture lens, the v0.5.8 cleanup plan, and the Float64 frame
+migration plan superseded during v0.6 development. All five are superseded and
+none of them is current documentation. They are internal engineering notes,
+kept in the repository and in history, and left out of the released archive, so
+this index describes them rather than linking to them.
