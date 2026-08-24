@@ -307,7 +307,7 @@ export function sanitizeAndRecenter<A extends CloudAttributes>(
       origin: [0, 0, 0],
       attributes: valid.attributes,
       excludedCount: 0,
-      // An empty witness, never `undefined`: a caller must be able to tell an
+      // An empty witness rather than `undefined`, when one was requested: a caller must be able to tell an
       // empty cloud apart from a witness it did not ask for.
       witness: valid.witness,
     };

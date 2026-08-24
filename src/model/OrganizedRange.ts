@@ -16,9 +16,10 @@
  * the processing path destroys that identity, the frame says so through
  * `linkage` rather than reconstructing a plausible answer.
  *
- * Pure and DOM-free by design: every value here is a number or a typed array,
- * so the model is testable under Node and can cross a worker boundary by
- * transfer rather than by structured clone.
+ * Pure and DOM-free by design, so the model is testable under Node. The bulk
+ * of each frame is typed arrays, which cross a worker boundary by transfer
+ * rather than by structured clone; the acquisition pose is a handful of plain
+ * numbers per setup and is cloned.
  */
 
 /**
@@ -262,4 +263,27 @@ export function withLinkageUnavailable(
       linkage: { kind: 'unavailable', reason } as const,
     })),
   };
+}
+
+/**
+ * Every transferable buffer in a set, derived from the frames themselves.
+ *
+ * Deliberately not a hand-written list of field names. The worker's transfer
+ * list was enumerated per field, so adding one array to `OrganizedRangeFrame`
+ * would have sent it across the boundary by structured clone: correct, silent,
+ * and at exactly the copying cost the transfer list exists to avoid. Reading
+ * the frame's own values means a new array is included by construction.
+ *
+ * `acquisitionPose.transform` is nested plain arrays rather than a typed array,
+ * so it is cloned. That is a handful of numbers per setup and not worth a
+ * representation change.
+ */
+export function organizedRangeTransferables(set: OrganizedRangeSet): ArrayBuffer[] {
+  const out: ArrayBuffer[] = [];
+  for (const frame of set.frames) {
+    for (const value of Object.values(frame)) {
+      if (ArrayBuffer.isView(value)) out.push(value.buffer as ArrayBuffer);
+    }
+  }
+  return out;
 }

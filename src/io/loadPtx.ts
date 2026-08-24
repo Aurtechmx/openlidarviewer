@@ -278,36 +278,55 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
     i += HEADER_LINES;
 
     const total = cols * rows;
+    // A declared grid is a CLAIM, and the sidecar costs nine bytes per cell.
+    // Nothing above validates the claim against the file, so an 87-byte header
+    // reading `100000 1000` asked for 900 MB before a single point line was
+    // read, and a larger lie threw a bare RangeError out of the typed-array
+    // constructor rather than a categorised load error. `lines.length` is a
+    // sound upper bound: no block can hold more cells than the file has lines,
+    // so a grid larger than that is not backed by any record. A legitimately
+    // truncated block stays well inside it and keeps its topology.
+    const gridIsBacked = Number.isSafeInteger(total) && total <= lines.length;
+    if (!gridIsBacked) {
+      blockWarnings.push(
+        `Block ${blockIndex}: the header declares a ${cols}×${rows} grid ` +
+          `(${total} cells), which the file cannot supply from ${lines.length} ` +
+          `lines. The points are read, and no acquisition grid is recorded for ` +
+          `this block: a declaration the records contradict is not evidence.`,
+      );
+    }
     // Seeded with SOURCE_RECORD_MISSING so a block that runs out of lines
     // leaves its unread tail saying exactly that, with no second pass.
-    const cellState = new Uint8Array(total).fill(CellState.SOURCE_RECORD_MISSING);
-    const cellToRecord = new Int32Array(total).fill(NO_RECORD);
-    const geometricRange = new Float32Array(total).fill(Number.NaN);
+    const cells = gridIsBacked ? total : 0;
+    const cellState = new Uint8Array(cells).fill(CellState.SOURCE_RECORD_MISSING);
+    const cellToRecord = new Int32Array(cells).fill(NO_RECORD);
+    const geometricRange = new Float32Array(cells).fill(Number.NaN);
     let p = 0;
     for (; p < total && i < lines.length; p++, i++) {
       // The ordinal advances on every path below, including the skips, so the
       // cell address is sound even for a line that produced no point.
       const cell = ptxCellFromOrdinal(p, rows);
-      const ci = cellIndexOf(cell.row, cell.column, cols);
+      // `-1` when the grid was refused above, which every write below skips.
+      const ci = gridIsBacked ? cellIndexOf(cell.row, cell.column, cols) : -1;
 
       const tok = tokenize(lines.at(i));
       if (tok.length < 4) {
         // A malformed line is a defect in the file, not a statement about the
         // scene. It is NOT a no-return, and collapsing the two would report a
         // parse failure as an instrument observation.
-        cellState[ci] = CellState.SOURCE_INVALID;
+        if (ci >= 0) cellState[ci] = CellState.SOURCE_INVALID;
         continue;
       }
       const lx = Number(tok[0]);
       const ly = Number(tok[1]);
       const lz = Number(tok[2]);
       if (!Number.isFinite(lx) || !Number.isFinite(ly) || !Number.isFinite(lz)) {
-        cellState[ci] = CellState.SOURCE_INVALID;
+        if (ci >= 0) cellState[ci] = CellState.SOURCE_INVALID;
         continue;
       }
       // A 0 0 0 sample marks an empty grid cell (no laser return) — not a point.
       if (lx === 0 && ly === 0 && lz === 0) {
-        cellState[ci] = CellState.NO_RETURN;
+        if (ci >= 0) cellState[ci] = CellState.NO_RETURN;
         continue;
       }
 
@@ -316,9 +335,19 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       // large world coordinates and lose most of the precision to
       // cancellation, and it would make the value depend on the registration
       // being correct.
-      geometricRange[ci] = Math.hypot(lx, ly, lz);
-      cellState[ci] = CellState.VALID_RETURN;
-      cellToRecord[ci] = xs.length;
+      if (ci >= 0) {
+        // Computed in double, then stored as float32. A range beyond the
+        // float32 maximum saturates to Infinity, which is not a distance: the
+        // field's absent value is NaN, and leaving Infinity there would put a
+        // number that reads as a measurement next to a VALID_RETURN state.
+        // Float32 spacing is about 6e-5 m at 1 km and 5e-4 m at 10 km, below
+        // the ranging noise of any instrument writing PTX, so the narrowing
+        // itself costs nothing a reader could notice.
+        const r = Math.hypot(lx, ly, lz);
+        geometricRange[ci] = Math.fround(r) === Number.POSITIVE_INFINITY ? Number.NaN : r;
+        cellState[ci] = CellState.VALID_RETURN;
+        cellToRecord[ci] = xs.length;
+      }
 
       // world = [x y z 1] · M — points are row vectors in the scanner frame.
       const wx = lx * m[0][0] + ly * m[1][0] + lz * m[2][0] + m[3][0];
@@ -350,6 +379,7 @@ export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<
       );
     }
 
+    if (!gridIsBacked) continue;
     frames.push({
       id: `setup-${blockIndex}`,
       sourceKind: 'ptx-grid',

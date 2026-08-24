@@ -145,3 +145,35 @@ describe('degrading linkage', () => {
     expect(set.frames[0].cellToRecord[3]).toBe(3);
   });
 });
+
+describe('worker transferables', () => {
+  it('finds every typed array in every frame, without naming one', async () => {
+    const { organizedRangeTransferables } = await import('../src/model/OrganizedRange');
+    const set: OrganizedRangeSet = {
+      kind: 'organized-range',
+      frames: [
+        { ...frameFixture(), geometricRange: new Float32Array(6) },
+        { ...frameFixture(), id: 'setup-2' },
+      ],
+      organization: 'multi-grid',
+    };
+    // Frame one has cellState, cellToRecord and geometricRange; frame two has
+    // the first two. Counting rather than listing is the point: the helper
+    // reads the frame's own values, so an array added later is carried without
+    // anyone remembering to update a list.
+    expect(organizedRangeTransferables(set)).toHaveLength(5);
+  });
+
+  it('picks up an array the type did not have when the helper was written', async () => {
+    const { organizedRangeTransferables } = await import('../src/model/OrganizedRange');
+    const withExtra = { ...frameFixture(), somethingNew: new Uint16Array(3) };
+    const set = {
+      kind: 'organized-range',
+      frames: [withExtra],
+      organization: 'organized-grid',
+    } as unknown as OrganizedRangeSet;
+    // This is the regression the hand-written list could not have caught: the
+    // new array crosses by transfer rather than by a silent clone.
+    expect(organizedRangeTransferables(set)).toHaveLength(3);
+  });
+});

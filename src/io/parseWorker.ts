@@ -11,6 +11,7 @@ import type { LoadErrorCategory } from './loadErrors';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate, LoadStage } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
+import { organizedRangeTransferables } from '../model/OrganizedRange';
 
 interface ParseRequest {
   buffer: ArrayBuffer;
@@ -78,12 +79,10 @@ ctx.onmessage = (event: MessageEvent): void => {
       // The organized-range sidecar is several typed arrays PER FRAME, so it is
       // transferred rather than cloned: a 10 M cell grid would otherwise be
       // copied across the boundary, which is the cost this list exists to
-      // avoid. Structured clone would still WORK, silently, at that price.
-      for (const f of cloud.organizedRange?.frames ?? []) {
-        transfer.push(f.cellState.buffer as ArrayBuffer);
-        transfer.push(f.cellToRecord.buffer as ArrayBuffer);
-        if (f.geometricRange) transfer.push(f.geometricRange.buffer as ArrayBuffer);
-        if (f.sourceRange) transfer.push(f.sourceRange.buffer as ArrayBuffer);
+      // avoid. Derived from the frames rather than enumerated here, so a new
+      // array on a frame cannot quietly fall back to a clone.
+      if (cloud.organizedRange) {
+        transfer.push(...organizedRangeTransferables(cloud.organizedRange));
       }
 
       ctx.postMessage(

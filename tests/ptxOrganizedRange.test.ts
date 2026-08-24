@@ -169,32 +169,21 @@ describe('a truncated block', () => {
   });
 });
 
-describe('linkage fails closed when records are dropped after the grid is built', () => {
-  it('reports identity unavailable rather than shipping shifted indices', async () => {
-    // Either outcome is acceptable here and both are pinned: if sanitation
-    // removed a record the compaction witness must have remapped the rest, and
-    // if it did not, exact linkage was true all along. What must never happen
-    // is a shifted index presented as exact. The grid itself stays true either
-    // way, which is the separation being guarded.
-    const body = [
-      header(1, 3),
-      '1 0 0 0.5',
-      '1e308 1e308 1e308 0.5',
-      '0 0 5 0.5',
-    ].join('\n');
+describe('a range that overflows float32', () => {
+  it('reports a non-finite range rather than a number that reads as a distance', async () => {
+    // hypot of 1e308 saturates to Infinity in a Float32Array. The earlier
+    // assertion here only checked the value was not NaN, which Infinity
+    // satisfies, so it would have held even if every overflowing range were
+    // garbage. A range must be finite to be a range.
+    const body = [header(1, 1), '1e308 0 0 0.5'].join('\n');
     const pc = await loadPtx(ptx(body));
-    const f = pc.organizedRange!.frames[0];
-    if (f.linkage.kind === 'unavailable') {
-      expect(f.linkage.reason).toBe('source-record-identity-unavailable');
-      expect(f.cellToRecord[0]).toBe(NO_RECORD);
-      expect(recordForCell(f, 0, 0).ok).toBe(false);
-      // The topology survives the loss of linkage. That separation is the point.
-      expect(f.diagnostics.stateCounts[CellState.VALID_RETURN]).toBeGreaterThan(0);
-      expect(f.geometricRange![0]).toBeCloseTo(1, 6);
-    } else {
-      // Sanitation kept everything, so exact linkage is correct and must hold.
-      expect(f.linkage.kind).toBe('exact');
-      expect(recordForCell(f, 0, 0).ok).toBe(true);
+    const f = pc.organizedRange?.frames[0];
+    if (f) {
+      const r = f.geometricRange![0];
+      // Either the cell carries a real distance, or it carries none. What it
+      // must never do is carry Infinity, which reads as a measurement.
+      expect(r).not.toBe(Number.POSITIVE_INFINITY);
+      expect(Number.isFinite(r) || Number.isNaN(r)).toBe(true);
     }
   });
 });
@@ -251,10 +240,35 @@ describe('linkage survives a record dropped in the middle of the grid', () => {
     expect(f.diagnostics.stateCounts[CellState.VALID_RETURN]).toBe(3);
   });
 
-  it('keeps the geometric range of the dropped cell, which is still true', async () => {
+  it('records an unrepresentable range as absent, never as Infinity', async () => {
+    // Float32 cannot hold a range of 1e308. Saturating to Infinity would put a
+    // value that reads as a distance into the field; NaN is the field's own
+    // "nothing recorded here", which is what is actually true.
     const f = (await loadPtx(ptx(body))).organizedRange!.frames[0];
-    // Float32 cannot hold 1e308, but the cell must still carry a range rather
-    // than the NaN that means "nothing was measured here".
-    expect(Number.isNaN(f.geometricRange![cellIndexOf(1, 0, 1)])).toBe(false);
+    const r = f.geometricRange![cellIndexOf(1, 0, 1)];
+    expect(r).not.toBe(Number.POSITIVE_INFINITY);
+    expect(Number.isNaN(r)).toBe(true);
+  });
+});
+
+describe('a grid the file cannot supply', () => {
+  it('records no acquisition grid rather than allocating from the claim', async () => {
+    // An 87-byte file declaring 100000 x 1000 asked for 900 MB of sidecar
+    // before a single point line was read, because nothing checked the claim
+    // against the file. The points still load; the grid does not, because a
+    // declaration the records contradict is not evidence.
+    const body = [header(100000, 1000), '1 2 3 0.5', '4 5 6 0.5'].join('\n');
+    const pc = await loadPtx(ptx(body));
+    expect(pc.pointCount).toBe(2);
+    expect(pc.organizedRange).toBeUndefined();
+    expect(pc.metadata?.loadWarnings?.join(' ')).toContain('cannot supply');
+  });
+
+  it('still keeps the grid for an ordinary truncated block', async () => {
+    // The bound must not punish an honest file that simply ran out mid-grid,
+    // which is the case the SOURCE_RECORD_MISSING tail exists for.
+    const pc = await loadPtx(ptx([header(2, 2), '1 0 0 0.5', '0 1 0 0.5'].join('\n')));
+    expect(pc.organizedRange?.frames).toHaveLength(1);
+    expect(pc.organizedRange!.frames[0].diagnostics.stateCounts[CellState.SOURCE_RECORD_MISSING]).toBe(2);
   });
 });

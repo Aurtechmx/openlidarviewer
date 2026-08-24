@@ -1,5 +1,6 @@
 import { PointCloud } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
+import { withLinkageUnavailable } from '../model/OrganizedRange';
 
 /**
  * Voxel-grid stride for packing a 3-D voxel index into one numeric Map key.
@@ -181,6 +182,16 @@ export function voxelDownsample(cloud: PointCloud, voxelSize: number): PointClou
     loadStride: cloud.loadStride,
     // Provenance metadata is independent of point count — carry it through.
     metadata: cloud.metadata,
+    // The acquisition grid survives; the link from a cell to a display point
+    // does not. Every output point here is a centroid of several source
+    // returns, so no cell names a return any more, and `withLinkageUnavailable`
+    // both says so and clears the stale indices. Dropping the sidecar entirely
+    // would be safe but wasteful: the grid, its validity states and its ranges
+    // are all still true of the source, and losing them is the reason a
+    // reduced scan used to become uninspectable.
+    organizedRange: cloud.organizedRange
+      ? withLinkageUnavailable(cloud.organizedRange, 'voxel-centroids')
+      : undefined,
   });
 }
 
