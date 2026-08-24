@@ -366,8 +366,16 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
     sourceName(): string {
       const streaming = host.streaming();
       if (streaming) return streaming.cloud.name;
-      const first = visibleEntries()[0];
-      return first?.cloud.name ?? 'scan';
+      // Every other figure on the scan-report card is answered over the visible
+      // entries: Points sums them, the extent is their union, the CRS is the
+      // first that declares one. The name was the exception, and named only the
+      // first visible layer, so a card covering three scans read as a card
+      // about one of them. Naming the count alongside it keeps the name useful
+      // for identification while saying the figures cover more.
+      const visible = visibleEntries();
+      if (visible.length === 0) return 'scan';
+      const first = visible[0]!.cloud.name;
+      return visible.length === 1 ? first : `${first} + ${visible.length - 1} more`;
     },
     sourcePointCount(): number {
       const streaming = host.streaming();
