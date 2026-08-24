@@ -20,6 +20,7 @@
 
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { ContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
+import { pdfInfoDate } from '../../pdfInfoDate';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -98,6 +99,16 @@ export async function buildContourStudioPdf(model: ContourPdfModel): Promise<Uin
   doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
+  // the wall clock at `create()`, so two identical builds either side of a
+  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
+  // The model carries its timestamp only as rendered title-block text, so
+  // there is no structured date to source from here. The page still prints
+  // "Generated ...", and the Info dictionary takes the epoch rather than the
+  // clock.
+  const infoStamp = pdfInfoDate(undefined);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 

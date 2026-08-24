@@ -25,6 +25,7 @@ import type { ObjectMetrics } from '../../terrain/objectMetrics';
 import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
+import { pdfInfoDate } from '../../pdfInfoDate';
 
 export interface SpaceReportPdfInput {
   readonly space: SpaceMetrics | null;
@@ -73,6 +74,12 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   doc.setTitle(content.title, { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
+  // the wall clock at `create()`, so two identical builds either side of a
+  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
+  const infoStamp = pdfInfoDate(input.generatedAt);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
