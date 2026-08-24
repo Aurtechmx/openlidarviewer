@@ -75,6 +75,16 @@ ctx.onmessage = (event: MessageEvent): void => {
       if (cloud.returnCount) transfer.push(cloud.returnCount.buffer as ArrayBuffer);
       if (cloud.pointSourceId) transfer.push(cloud.pointSourceId.buffer as ArrayBuffer);
       if (cloud.gpsTime) transfer.push(cloud.gpsTime.buffer as ArrayBuffer);
+      // The organized-range sidecar is several typed arrays PER FRAME, so it is
+      // transferred rather than cloned: a 10 M cell grid would otherwise be
+      // copied across the boundary, which is the cost this list exists to
+      // avoid. Structured clone would still WORK, silently, at that price.
+      for (const f of cloud.organizedRange?.frames ?? []) {
+        transfer.push(f.cellState.buffer as ArrayBuffer);
+        transfer.push(f.cellToRecord.buffer as ArrayBuffer);
+        if (f.geometricRange) transfer.push(f.geometricRange.buffer as ArrayBuffer);
+        if (f.sourceRange) transfer.push(f.sourceRange.buffer as ArrayBuffer);
+      }
 
       ctx.postMessage(
         {
@@ -89,6 +99,7 @@ ctx.onmessage = (event: MessageEvent): void => {
             returnCount: cloud.returnCount,
             pointSourceId: cloud.pointSourceId,
             gpsTime: cloud.gpsTime,
+            organizedRange: cloud.organizedRange,
             origin: cloud.origin,
             sourceFormat: cloud.sourceFormat,
             name: cloud.name,

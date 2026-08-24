@@ -1,5 +1,6 @@
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsInfo } from '../io/crs';
+import type { OrganizedRangeSet } from './OrganizedRange';
 
 /**
  * One source-metadata field exactly as the file declared it. `value` is
@@ -94,6 +95,7 @@ export interface CloudMetadata {
 
 /** Options accepted by the `PointCloud` constructor. */
 export interface PointCloudOptions {
+
   /** Interleaved xyz positions in local (recentered) coordinates. */
   positions: Float32Array;
   /** Optional interleaved rgb color, one byte per channel. */
@@ -112,6 +114,16 @@ export interface PointCloudOptions {
   pointSourceId?: Uint16Array;
   /** Optional per-point LAS GPS time, in the file's GPS-time encoding. */
   gpsTime?: Float64Array;
+  /**
+   * Source acquisition topology, when the format carried one.
+   *
+   * A DEDICATED field rather than a member of `metadata`, deliberately.
+   * `voxelDownsample` forwards `metadata` wholesale to the reduced cloud, so a
+   * sidecar living there would arrive at a cloud of centroids still claiming
+   * its links are exact, with nothing to notice. Standing alone, any reduction
+   * has to name it to carry it.
+   */
+  organizedRange?: OrganizedRangeSet;
   /** The integer world-space origin that was subtracted from the positions. */
   origin: [number, number, number];
   /** Which file format this cloud was loaded from. */
@@ -168,6 +180,8 @@ export class PointCloud {
   readonly returnCount?: Uint8Array;
   readonly pointSourceId?: Uint16Array;
   readonly gpsTime?: Float64Array;
+  /** Source acquisition topology. See {@link PointCloudOptions.organizedRange}. */
+  readonly organizedRange?: OrganizedRangeSet;
   /**
    * The world-space origin subtracted from the positions at load time.
    *
@@ -257,6 +271,7 @@ export class PointCloud {
     this.returnCount = options.returnCount;
     this.pointSourceId = options.pointSourceId;
     this.gpsTime = options.gpsTime;
+    this.organizedRange = options.organizedRange;
     this.origin = options.origin;
     // A COPY, deliberately. Nothing in this class writes either origin any
     // more, but the caller still holds a reference to its own array — a copy
