@@ -25,7 +25,7 @@ import { join } from 'node:path';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { collectHygieneProblems, observeBranch, REDUNDANT_LIMIT } from '../scripts/pr-hygiene.mjs';
+import { collectHygieneProblems, collectNarrationProblems, observeBranch, REDUNDANT_LIMIT } from '../scripts/pr-hygiene.mjs';
 
 interface Report { errors: string[]; warnings: string[] }
 
@@ -222,5 +222,69 @@ describe('observeBranch — measured against real history', () => {
     const o = observeBranch('main', 'merger', { allowedBases: ['main'] }, dir) as { mergeCommits: string[] };
     expect(o.mergeCommits.length).toBe(1);
     expect(ids(run({ ...o, baseRef: 'main', allowedBases: ['main'] }).errors)).toContain('H2');
+  });
+});
+
+/**
+ * H7 — process narration in the authored text.
+ *
+ * A PR body and a commit message are permanent, and they are read by someone
+ * deciding whether to trust the change. An account of the author's attempts,
+ * doubts or instructions belongs in neither. Nothing else in the pipeline
+ * catches it: the prose gate reads documents rather than commit messages, and
+ * the archive gate never sees a PR body at all.
+ *
+ * The cases that matter most here are the NEGATIVES. A rule that fires on
+ * ordinary software description would be argued with and then switched off,
+ * which leaves the project worse than having no rule.
+ */
+describe('H7 process narration', () => {
+  const flagged = (s: string) => collectNarrationProblems(s).length > 0;
+
+  it('passes text that describes the software', () => {
+    for (const ok of [
+      'Pins the Info dictionary dates so two identical builds reproduce.',
+      'The reader found nine dimensions agreed exactly over 1.79 M points.',
+      'Agreement between implementations is not accuracy against surveyed truth.',
+      'GRASS computes in double and reproduces every closed-form volume.',
+      'Every case must agree with the closed form and with the reference.',
+    ]) {
+      expect(flagged(ok), ok).toBe(false);
+    }
+  });
+
+  it('flags an account of how the change was reached', () => {
+    for (const bad of [
+      'I first tried a merge, then rebased onto main.',
+      'We initially assumed the tolerance had been preregistered.',
+      'Actually the digest has to follow the file.',
+      'As requested, the gate is now stricter.',
+      'The user asked for a linear history.',
+      'Let me know whether the tolerance should move.',
+      'A sub-agent verified the reference.',
+      'Left a TODO for the landscape case.',
+    ]) {
+      expect(flagged(bad), bad).toBe(true);
+    }
+  });
+
+  it('exempts fenced code, inline code and quoted lines', () => {
+    // A pasted diff, log or quoted error legitimately contains any wording.
+    // Flagging those would push authors to stop pasting the evidence that
+    // makes a pull request reviewable, which is the opposite of the intent.
+    expect(flagged('```\nI tried this and it failed\n```')).toBe(false);
+    expect(flagged('> I first tried a merge')).toBe(false);
+    expect(flagged('The flag `--let-me-through` is rejected.')).toBe(false);
+  });
+
+  it('names the source so the author knows which text to fix', () => {
+    const [problem] = collectNarrationProblems('As requested, done.', 'the PR body');
+    expect(problem).toContain('the PR body');
+    expect(problem).toContain('H7');
+  });
+
+  it('reads empty and missing text as nothing to report', () => {
+    expect(collectNarrationProblems('')).toEqual([]);
+    expect(collectNarrationProblems(undefined as unknown as string)).toEqual([]);
   });
 });

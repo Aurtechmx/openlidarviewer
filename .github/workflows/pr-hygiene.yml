@@ -58,3 +58,8 @@ jobs:
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_OPEN_COUNT: ${{ steps.queue.outputs.count }}
+          # The body is read for process narration. Passed through the
+          # environment rather than interpolated into the run script, so a
+          # body containing quotes or shell metacharacters cannot alter the
+          # command.
+          PR_BODY: ${{ github.event.pull_request.body }}
