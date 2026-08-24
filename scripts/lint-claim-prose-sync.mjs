@@ -26,11 +26,21 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { parseRegister, VALID_LEVELS } from './lint-claim-register.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-/** Truth documents that describe the evidence state and must not contradict it. */
+/**
+ * Truth documents that describe the evidence state and must not contradict it.
+ *
+ * A document under `docs/releases/` carrying a version describes THAT release.
+ * Its E4 count was true at that tag and stays true; holding it to the live
+ * register would make the lint demand that a shipped, archived record be
+ * rewritten every time a claim is promoted afterwards. So a versioned release
+ * document is compared against the register AT ITS OWN TAG. See
+ * {@link expectedCountFor}.
+ */
 const TRUTH_DOCS = [
   // The release notes and validation report state the E4 count to the public and
   // were NOT scanned, which is half of why "Ten products are now at E4" survived
@@ -84,9 +94,71 @@ function e4FromRegister() {
   return { ids, count: ids.length };
 }
 
+/** `docs/releases/<anything>_v1.2.3.md` -> "v1.2.3", else null. */
+export function releaseVersionOf(rel) {
+  const m = /^docs\/releases\/.*_(v\d+\.\d+\.\d+)\.md$/.exec(rel);
+  return m ? m[1] : null;
+}
+
+/** Whether the repository has a tag by that name. */
+function tagExists(tag, cwd = ROOT) {
+  try {
+    execFileSync('git', ['rev-parse', '--verify', `refs/tags/${tag}`], {
+      cwd, stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The E4 count in the register as it stood at `tag`, or null when unreadable. */
+export function e4CountAtTag(tag, cwd = ROOT) {
+  try {
+    const yaml = execFileSync('git', ['show', `${tag}:docs/validation/claim-register.yaml`], {
+      cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 1 << 24,
+    });
+    const levels = [...VALID_LEVELS];
+    const e4Rank = levels.indexOf('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    return parseRegister(yaml).filter((c) => {
+      const r = levels.indexOf(c.current);
+      return r !== -1 && r >= e4Rank;
+    }).length;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The count a document must agree with, and why.
+ *
+ * WHAT THIS DELIBERATELY STILL CATCHES. The failure this lint exists for is a
+ * release document understating the count at the moment it ships: "Ten products
+ * are now at E4" survived past twelve. A release document for a version with no
+ * tag yet is the release being PREPARED, so it is held to the live register and
+ * that failure is caught exactly as before. Only an already-tagged release is
+ * read against its own tag, and only because it is then a historical record
+ * rather than a description of main.
+ *
+ * When git cannot answer, a tagged document is skipped rather than failed. An
+ * extracted archive has no history, and the release gate runs there.
+ */
+export function expectedCountFor(rel, liveCount, deps = {}) {
+  const hasTag = deps.tagExists ?? tagExists;
+  const atTag = deps.e4CountAtTag ?? e4CountAtTag;
+  const version = releaseVersionOf(rel);
+  if (version === null) return { count: liveCount, basis: 'the register' };
+  if (!hasTag(version)) {
+    return { count: liveCount, basis: `the register, because ${version} is not tagged yet` };
+  }
+  const tagged = atTag(version);
+  if (tagged === null) return { count: null, basis: `unreadable at tag ${version}` };
+  return { count: tagged, basis: `the register at tag ${version}` };
+}
+
 function collectProseProblems(count) {
   const problems = [];
-  const expectedWord = NUMBER_WORDS[count] ?? String(count);
+  const skipped = [];
   // A count word paired with an E4 / cross-implementation claim in one sentence.
   const any = `(?:${COUNT_ALTERNATION}|${COUNT_DIGITS})`;
   const countClaim = new RegExp(
@@ -100,6 +172,14 @@ function collectProseProblems(count) {
   for (const rel of TRUTH_DOCS) {
     const abs = resolve(ROOT, rel);
     if (!existsSync(abs)) continue;
+
+    const { count: docCount, basis } = expectedCountFor(rel, count);
+    if (docCount === null) {
+      skipped.push(`${rel}: ${basis}`);
+      continue;
+    }
+    const docExpectedWord = NUMBER_WORDS[docCount] ?? String(docCount);
+
     const text = readFileSync(abs, 'utf8');
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
@@ -109,9 +189,9 @@ function collectProseProblems(count) {
       const re = new RegExp(countClaim.source, 'gi');
       while ((m = re.exec(line)) !== null) {
         const word = (m[1] ?? m[2] ?? '').toLowerCase();
-        if (word && word !== expectedWord && word !== String(count)) {
+        if (word && word !== docExpectedWord && word !== String(docCount)) {
           problems.push(
-            `${rel}:${i + 1} says "${word}" next to an E4 / cross-implementation claim, but the register has ${count} E4 product(s) ("${expectedWord}"). Update the prose to match the register.`,
+            `${rel}:${i + 1} says "${word}" next to an E4 / cross-implementation claim, but ${basis} has ${docCount} E4 product(s) ("${docExpectedWord}"). Update the prose to match it.`,
           );
         }
       }
@@ -120,18 +200,18 @@ function collectProseProblems(count) {
       //    "other than" / "except" / "besides" exempts the line.
       const allSlotsPending =
         /every reference slot\b(?![^.\n]*\b(?:other than|except|besides|apart from)\b)[^.\n]*\bpending\b/i;
-      if (count > 0 && allSlotsPending.test(line)) {
+      if (docCount > 0 && allSlotsPending.test(line)) {
         problems.push(
-          `${rel}:${i + 1} says every reference slot is pending, but the register supplies ${count} (${e4Ids.join(', ')}). Remove the obsolete absolute.`,
+          `${rel}:${i + 1} says every reference slot is pending, but ${basis} supplies ${docCount}. Remove the obsolete absolute.`,
         );
       }
     }
   }
-  return problems;
+  return { problems, skipped };
 }
 
 const { ids: e4Ids, count } = e4FromRegister();
-const problems = collectProseProblems(count);
+const { problems, skipped } = collectProseProblems(count);
 
 if (problems.length > 0) {
   console.error('lint:claim-prose-sync FAILED — truth documents disagree with the claim register:\n');
