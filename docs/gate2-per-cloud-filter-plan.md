@@ -1,5 +1,12 @@
 # Gate 2 — Per-cloud elevation/intensity filtering (implementation plan)
 
+> Historical document. This was written during v0.5.6 as an internal
+> implementation plan, and the project now ships v0.6.6. The work it describes
+> has either landed under a different shape or been dropped, and the branch its
+> status line names is long gone. It is kept as a record of how the per-cloud
+> filtering problem was framed at the time, not as current documentation. For
+> what the viewer does today, start from [README.md](README.md).
+
 Status: **Stage A done** (on branch `feat/v0.5.6-gate2-percloud`); Stages B–D
 pending. This is a device-verified plan for the one remaining correctness gate
 from the v0.5.6 filter review. It is device-untestable in CI (WebGPU shader-graph
