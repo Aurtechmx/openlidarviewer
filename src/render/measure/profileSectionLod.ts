@@ -33,6 +33,16 @@
  * Selection is a pure function of the section's values and the cap. No
  * randomness is involved and no iteration order of a hash container reaches
  * the result.
+ *
+ * THE SELECTION IS A GENERATOR. Cost follows the SECTION, not the cap: every
+ * pass here walks all the accepted returns, so a section of a few million
+ * holds the thread for as long as the extraction that produced it. It yields
+ * the number of steps taken so far every `chunkSize` steps, the way
+ * `profileSectionExtract` yields the count examined, so a caller can spread it
+ * across frames without this module knowing anything about the host's
+ * scheduler. Where the walk hands the thread back changes nothing about what
+ * it returns: every pass keeps its state outside the loop it yields from, so
+ * a resumed pass carries on at the step it stopped at.
  */
 
 /**
@@ -63,6 +73,13 @@ export interface ProfileSectionLodOptions {
    * where the result is longer than the cap.
    */
   readonly keep?: ArrayLike<number> | null;
+  /**
+   * Steps taken between yields.
+   *
+   * A pacing knob and nothing else: it decides where the walk hands the
+   * thread back, never which returns are chosen.
+   */
+  readonly chunkSize?: number;
 }
 
 /** The chainage x height grid the strata sit on. */
@@ -132,43 +149,88 @@ const FLOOR_SHARE = 0.25;
 const MAX_AXIS = 4096;
 const MAX_CELLS = 262144;
 
+/** Steps taken between yields when a caller states none. */
+const DEFAULT_CHUNK = 65536;
+
+/**
+ * Where one selection has got to.
+ *
+ * Carried across the passes so a chunk boundary falls where the work is,
+ * rather than at whichever pass happened to be running. `since` is read at
+ * the head of a pass and written back at its tail; nothing else touches it.
+ */
+interface LodPump {
+  /** Steps between yields. */
+  readonly chunk: number;
+  /** Steps taken since the last yield. */
+  since: number;
+  /** Steps yielded so far. */
+  done: number;
+}
+
+function lodPump(chunkSize: number | undefined): LodPump {
+  const chunk = Number.isFinite(chunkSize) && (chunkSize as number) > 0 ? Math.floor(chunkSize as number) : DEFAULT_CHUNK;
+  return { chunk, since: 0, done: 0 };
+}
+
 function clampInt(v: number, lo: number, hi: number): number {
   if (!Number.isFinite(v)) return lo;
   return Math.min(hi, Math.max(lo, Math.round(v)));
 }
 
 /** Smallest and largest finite entry, or `null` when there is none. */
-function finiteRange(values: ArrayLike<number>, n: number): [number, number] | null {
+function* finiteRangeChunks(
+  values: ArrayLike<number>,
+  n: number,
+  pump: LodPump,
+): Generator<number, [number, number] | null, void> {
   let lo = Infinity;
   let hi = -Infinity;
+  let since = pump.since;
   for (let i = 0; i < n; i++) {
     const v = values[i]!;
-    if (!Number.isFinite(v)) continue;
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
+    if (Number.isFinite(v)) {
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    if (++since >= pump.chunk) {
+      pump.done += since;
+      since = 0;
+      yield pump.done;
+    }
   }
+  pump.since = since;
   return lo <= hi ? [lo, hi] : null;
 }
 
 /** Range left after `HEIGHT_TRIM` of the returns is dropped from each tail. */
-function trimmedRange(
+function* trimmedRangeChunks(
   values: ArrayLike<number>,
   n: number,
   lo: number,
   hi: number,
-): [number, number] {
+  pump: LodPump,
+): Generator<number, [number, number], void> {
   const span = hi - lo;
   if (!(span > 0)) return [lo, hi];
   const hist = new Uint32Array(TRIM_BINS);
   const scale = TRIM_BINS / span;
   let counted = 0;
+  let since = pump.since;
   for (let i = 0; i < n; i++) {
     const v = values[i]!;
-    if (!Number.isFinite(v)) continue;
-    const b = Math.min(TRIM_BINS - 1, Math.max(0, Math.floor((v - lo) * scale)));
-    hist[b]! += 1;
-    counted++;
+    if (Number.isFinite(v)) {
+      const b = Math.min(TRIM_BINS - 1, Math.max(0, Math.floor((v - lo) * scale)));
+      hist[b]! += 1;
+      counted++;
+    }
+    if (++since >= pump.chunk) {
+      pump.done += since;
+      since = 0;
+      yield pump.done;
+    }
   }
+  pump.since = since;
   if (counted === 0) return [lo, hi];
   const drop = counted * HEIGHT_TRIM;
   let loBin = 0;
@@ -188,21 +250,23 @@ function trimmedRange(
 }
 
 /**
- * Lay out the grid the strata sit on.
+ * Lay out the grid the strata sit on, yielding as the three passes over the
+ * section run.
  *
  * Cells are square in section units so a metre of chainage and a metre of
  * height are stratified alike, and there are about `cap` of them so one
  * return per occupied cell roughly spends the budget. A degenerate axis
  * collapses to a single column or row rather than to a zero-width cell.
  */
-export function profileSectionLodGrid(
+function* profileSectionLodGridChunks(
   points: ProfileSectionLodInput,
   cap: number,
-): ProfileSectionLodGrid {
+  pump: LodPump,
+): Generator<number, ProfileSectionLodGrid, void> {
   const n = Math.max(0, Math.min(points.count, points.chainage.length, points.height.length));
-  const xr = finiteRange(points.chainage, n) ?? [0, 0];
-  const rawY = finiteRange(points.height, n) ?? [0, 0];
-  const yr = trimmedRange(points.height, n, rawY[0], rawY[1]);
+  const xr = (yield* finiteRangeChunks(points.chainage, n, pump)) ?? [0, 0];
+  const rawY = (yield* finiteRangeChunks(points.height, n, pump)) ?? [0, 0];
+  const yr = yield* trimmedRangeChunks(points.height, n, rawY[0], rawY[1], pump);
 
   const cells = clampInt(Math.max(1, cap), 1, MAX_CELLS);
   const spanX = xr[1] - xr[0];
@@ -231,6 +295,17 @@ export function profileSectionLodGrid(
     minHeight: yr[0],
     maxHeight: yr[1],
   };
+}
+
+/** Run {@link profileSectionLodGridChunks} to completion. */
+export function profileSectionLodGrid(
+  points: ProfileSectionLodInput,
+  cap: number,
+): ProfileSectionLodGrid {
+  const it = profileSectionLodGridChunks(points, cap, lodPump(undefined));
+  let step = it.next();
+  while (!step.done) step = it.next();
+  return step.value;
 }
 
 function axisBin(v: number, lo: number, hi: number, n: number): number {
@@ -292,31 +367,66 @@ function spreadKey(ix: number, iy: number, bitsX: number, bitsY: number): number
 }
 
 /** One flag per return, set for every `keep` entry that addresses one. */
-function forcedFlags(keep: ArrayLike<number> | null | undefined, n: number): Uint8Array {
+function* forcedFlagsChunks(
+  keep: ArrayLike<number> | null | undefined,
+  n: number,
+  pump: LodPump,
+): Generator<number, Uint8Array, void> {
   const flags = new Uint8Array(n);
   if (!keep) return flags;
+  let since = pump.since;
   for (let k = 0; k < keep.length; k++) {
     const i = keep[k]!;
     if (Number.isInteger(i) && i >= 0 && i < n) flags[i] = 1;
+    if (++since >= pump.chunk) {
+      pump.done += since;
+      since = 0;
+      yield pump.done;
+    }
   }
+  pump.since = since;
   return flags;
 }
 
-function flaggedIndices(flags: Uint8Array, n: number, total: number): Uint32Array {
+function* flaggedIndicesChunks(
+  flags: Uint8Array,
+  n: number,
+  total: number,
+  pump: LodPump,
+): Generator<number, Uint32Array, void> {
   const out = new Uint32Array(total);
   let w = 0;
-  for (let i = 0; i < n; i++) if (flags[i] === 1) out[w++] = i;
+  let since = pump.since;
+  for (let i = 0; i < n; i++) {
+    if (flags[i] === 1) out[w++] = i;
+    if (++since >= pump.chunk) {
+      pump.done += since;
+      since = 0;
+      yield pump.done;
+    }
+  }
+  pump.since = since;
   return out;
 }
 
-function ascendingRun(n: number): Uint32Array {
+function* ascendingRunChunks(n: number, pump: LodPump): Generator<number, Uint32Array, void> {
   const out = new Uint32Array(n);
-  for (let i = 0; i < n; i++) out[i] = i;
+  let since = pump.since;
+  for (let i = 0; i < n; i++) {
+    out[i] = i;
+    if (++since >= pump.chunk) {
+      pump.done += since;
+      since = 0;
+      yield pump.done;
+    }
+  }
+  pump.since = since;
   return out;
 }
 
 /**
- * Choose at most `cap` returns to draw, as ascending indices into `points`.
+ * Choose at most `cap` returns to draw, yielding the steps taken so far, and
+ * return them as ascending indices into `points`.
  *
  * The result is a pure function of the section's values, the cap and the keep
  * set. `points` is never written.
@@ -326,22 +436,34 @@ function ascendingRun(n: number): Uint32Array {
  * stratum rarest first, then one return at a time from each occupied grid
  * cell in spread order, repeating until the budget is gone.
  */
-export function selectProfileSectionLod(
+export function* selectProfileSectionLodChunks(
   points: ProfileSectionLodInput,
   options: ProfileSectionLodOptions,
-): Uint32Array {
+): Generator<number, Uint32Array, void> {
+  const pump = lodPump(options.chunkSize);
   const n = Math.max(0, Math.min(points.count, points.chainage.length, points.height.length));
   if (n === 0) return new Uint32Array(0);
 
   const cap = Number.isFinite(options.cap) ? Math.max(0, Math.floor(options.cap)) : 0;
-  if (n <= cap) return ascendingRun(n);
+  if (n <= cap) return yield* ascendingRunChunks(n, pump);
 
-  const selected = forcedFlags(options.keep, n);
+  const selected = yield* forcedFlagsChunks(options.keep, n, pump);
   let taken = 0;
-  for (let i = 0; i < n; i++) if (selected[i] === 1) taken++;
-  if (cap <= 0 || taken >= cap) return flaggedIndices(selected, n, taken);
+  {
+    let since = pump.since;
+    for (let i = 0; i < n; i++) {
+      if (selected[i] === 1) taken++;
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
+  }
+  if (cap <= 0 || taken >= cap) return yield* flaggedIndicesChunks(selected, n, taken, pump);
 
-  const grid = profileSectionLodGrid(points, cap);
+  const grid = yield* profileSectionLodGridChunks(points, cap, pump);
   const nx = grid.nx;
   const ny = grid.ny;
   const chainage = points.chainage;
@@ -354,9 +476,18 @@ export function selectProfileSectionLod(
   // other's digits.
   const strataKey = (i: number): number => slot[i]! * 256 + (cls ? cls[i]! : 0);
   const strataSize = new Map<number, number>();
-  for (let i = 0; i < n; i++) {
-    const k = strataKey(i);
-    strataSize.set(k, (strataSize.get(k) ?? 0) + 1);
+  {
+    let since = pump.since;
+    for (let i = 0; i < n; i++) {
+      const k = strataKey(i);
+      strataSize.set(k, (strataSize.get(k) ?? 0) + 1);
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
   }
   // Ranked by how few returns a stratum holds, then by key. A cap can leave
   // fewer floor slots than there are strata, and the floors exist for the
@@ -377,34 +508,79 @@ export function selectProfileSectionLod(
   };
 
   const sizes = new Map<number, number>();
-  for (let i = 0; i < n; i++) {
-    const k = bucketOf(i);
-    sizes.set(k, (sizes.get(k) ?? 0) + 1);
+  {
+    let since = pump.since;
+    for (let i = 0; i < n; i++) {
+      const k = bucketOf(i);
+      sizes.set(k, (sizes.get(k) ?? 0) + 1);
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
   }
 
   const bitsX = bitsFor(nx);
   const bitsY = bitsFor(ny);
-  const order = Array.from(sizes.keys()).map((key) => {
-    const cell = Math.floor(key / groupCount);
-    const ix = cell % nx;
-    const iy = (cell - ix) / nx;
-    return { key, group: key - cell * groupCount, spread: spreadKey(ix, iy, bitsX, bitsY) };
-  });
+  const bucketKeys = Array.from(sizes.keys());
+  const order: { key: number; group: number; spread: number }[] = new Array(bucketKeys.length);
+  {
+    let since = pump.since;
+    for (let b = 0; b < bucketKeys.length; b++) {
+      const key = bucketKeys[b]!;
+      const cell = Math.floor(key / groupCount);
+      const ix = cell % nx;
+      const iy = (cell - ix) / nx;
+      order[b] = { key, group: key - cell * groupCount, spread: spreadKey(ix, iy, bitsX, bitsY) };
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
+  }
+  // The sort is the one step here that cannot be resumed part-way, so the
+  // thread is handed back immediately before it rather than carrying an
+  // accumulated chunk into it.
+  pump.done += pump.since;
+  pump.since = 0;
+  yield pump.done;
   order.sort((a, b) => a.spread - b.spread || a.group - b.group || a.key - b.key);
 
   const bucketCount = order.length;
   const rank = new Map<number, number>();
   const starts = new Uint32Array(bucketCount + 1);
-  for (let b = 0; b < bucketCount; b++) {
-    rank.set(order[b]!.key, b);
-    starts[b + 1] = starts[b]! + sizes.get(order[b]!.key)!;
+  {
+    let since = pump.since;
+    for (let b = 0; b < bucketCount; b++) {
+      rank.set(order[b]!.key, b);
+      starts[b + 1] = starts[b]! + sizes.get(order[b]!.key)!;
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
   }
   const members = new Uint32Array(n);
   const write = starts.slice(0, bucketCount);
-  for (let i = 0; i < n; i++) {
-    const b = rank.get(bucketOf(i))!;
-    members[write[b]!] = i;
-    write[b]! += 1;
+  {
+    let since = pump.since;
+    for (let i = 0; i < n; i++) {
+      const b = rank.get(bucketOf(i))!;
+      members[write[b]!] = i;
+      write[b]! += 1;
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
+      }
+    }
+    pump.since = since;
   }
 
   // Returns inside a bucket sit in ascending index, so a permuted input draws
@@ -429,32 +605,74 @@ export function selectProfileSectionLod(
 
   const perStratum = Math.max(1, Math.floor((cap * FLOOR_SHARE) / groupCount));
   const strataBuckets: number[][] = Array.from({ length: groupCount }, () => []);
-  for (let b = 0; b < bucketCount; b++) strataBuckets[order[b]!.group]!.push(b);
-
-  for (let g = 0; g < groupCount && taken < cap; g++) {
-    const buckets = strataBuckets[g]!;
-    let got = 0;
-    let moved = true;
-    while (moved && got < perStratum && taken < cap) {
-      moved = false;
-      for (let j = 0; j < buckets.length && got < perStratum && taken < cap; j++) {
-        if (takeFrom(buckets[j]!) < 0) continue;
-        got++;
-        taken++;
-        moved = true;
+  {
+    let since = pump.since;
+    for (let b = 0; b < bucketCount; b++) {
+      strataBuckets[order[b]!.group]!.push(b);
+      if (++since >= pump.chunk) {
+        pump.done += since;
+        since = 0;
+        yield pump.done;
       }
     }
+    pump.since = since;
   }
 
-  let moved = true;
-  while (moved && taken < cap) {
-    moved = false;
-    for (let b = 0; b < bucketCount && taken < cap; b++) {
-      if (takeFrom(b) < 0) continue;
-      taken++;
-      moved = true;
+  {
+    let since = pump.since;
+    for (let g = 0; g < groupCount && taken < cap; g++) {
+      const buckets = strataBuckets[g]!;
+      let got = 0;
+      let moved = true;
+      while (moved && got < perStratum && taken < cap) {
+        moved = false;
+        for (let j = 0; j < buckets.length && got < perStratum && taken < cap; j++) {
+          if (takeFrom(buckets[j]!) >= 0) {
+            got++;
+            taken++;
+            moved = true;
+          }
+          if (++since >= pump.chunk) {
+            pump.done += since;
+            since = 0;
+            yield pump.done;
+          }
+        }
+      }
     }
+    pump.since = since;
   }
 
-  return flaggedIndices(selected, n, taken);
+  {
+    let since = pump.since;
+    let moved = true;
+    while (moved && taken < cap) {
+      moved = false;
+      for (let b = 0; b < bucketCount && taken < cap; b++) {
+        if (takeFrom(b) >= 0) {
+          taken++;
+          moved = true;
+        }
+        if (++since >= pump.chunk) {
+          pump.done += since;
+          since = 0;
+          yield pump.done;
+        }
+      }
+    }
+    pump.since = since;
+  }
+
+  return yield* flaggedIndicesChunks(selected, n, taken, pump);
+}
+
+/** Run {@link selectProfileSectionLodChunks} to completion. */
+export function selectProfileSectionLod(
+  points: ProfileSectionLodInput,
+  options: ProfileSectionLodOptions,
+): Uint32Array {
+  const it = selectProfileSectionLodChunks(points, options);
+  let step = it.next();
+  while (!step.done) step = it.next();
+  return step.value;
 }

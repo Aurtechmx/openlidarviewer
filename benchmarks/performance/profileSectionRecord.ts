@@ -190,7 +190,27 @@ export interface ProfileSectionDisplayResult {
   /** Where the cap came from, since no shipped constant states one. */
   readonly capBasis: string;
 
+  /**
+   * `selectProfileSectionLod` run to completion.
+   *
+   * That helper drives the selection generator without returning to its
+   * caller, so the whole of it is ONE uninterrupted main-thread task, exactly
+   * as `wholeRunMs` is for extraction.
+   */
   readonly lodSelectMs: TimingSeries;
+  /** Steps the selection takes between yields. */
+  readonly lodChunkSize: number;
+  /** Yields the chunked selection produced. */
+  readonly lodChunkYields: number;
+  /** `selectProfileSectionLodChunks` driven to completion, end to end. */
+  readonly lodChunkedTotalMs: TimingSeries;
+  /** The longest single slice of the chunked selection, one value per repeat. */
+  readonly lodLongestSliceMs: TimingSeries;
+  /** Every slice of one recorded repeat, so the tail is visible. */
+  readonly lodSliceMs: TimingSeries;
+  /** Which repeat `lodSliceMs` came from, 1-based. */
+  readonly lodSliceSampleRun: number;
+
   readonly hitTestBuildMs: TimingSeries;
   /** One batch of `queriesPerBatch` hovers, per repeat. */
   readonly hitTestQueryBatchMs: TimingSeries;
@@ -338,9 +358,9 @@ export function recomputeVerdicts(
   for (const display of displays) {
     if (display.lodSelectMs.status === 'measured') {
       // The stated target names EXTRACTION. Selection is the stage next to it
-      // on the same thread, with no yield seam of its own, so the same 100 ms
-      // is applied to it here — the bound is unchanged, only the stage it is
-      // read against is stated openly. See the record's notes.
+      // on the same thread, so the same 100 ms is applied to it here — the
+      // bound is unchanged, only the stage it is read against is stated
+      // openly. See the record's notes.
       const worst = display.lodSelectMs.summary.max;
       out.push({
         id: `lod-select-${display.sizeId}`,
@@ -348,6 +368,17 @@ export function recomputeVerdicts(
         thresholdMs: MAIN_THREAD_SLICE_TARGET_MS,
         observedMs: worst,
         observedAt: `selectProfileSectionLod at cap ${display.cap} over ${display.sectionPoints} returns`,
+        met: worst <= MAIN_THREAD_SLICE_TARGET_MS,
+      });
+    }
+    if (display.lodLongestSliceMs.status === 'measured') {
+      const worst = display.lodLongestSliceMs.summary.max;
+      out.push({
+        id: `lod-select-slice-${display.sizeId}`,
+        target: `${sliceTarget} (applied to selection, which the target does not name)`,
+        thresholdMs: MAIN_THREAD_SLICE_TARGET_MS,
+        observedMs: worst,
+        observedAt: `longest selection slice at cap ${display.cap} over ${display.sectionPoints} returns, chunk ${display.lodChunkSize}`,
         met: worst <= MAIN_THREAD_SLICE_TARGET_MS,
       });
     }
@@ -430,11 +461,19 @@ export function validateProfileSectionRecord(rec: ProfileSectionRecord): Profile
   for (const display of rec.displays) {
     for (const series of [
       display.lodSelectMs,
+      display.lodChunkedTotalMs,
+      display.lodLongestSliceMs,
+      display.lodSliceMs,
       display.hitTestBuildMs,
       display.hitTestQueryBatchMs,
       display.hitTestQueryMs,
     ] as const) {
       checkTiming(series, problems);
+    }
+    if (display.lodLongestSliceMs.status === 'measured') {
+      if (display.lodLongestSliceMs.summary.count < MIN_RECORDED_RUNS) {
+        problems.push('too-few-recorded-runs');
+      }
     }
   }
 
