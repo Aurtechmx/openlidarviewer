@@ -18,10 +18,12 @@
  * the plot is drawn from also appears in the detail rows the panel renders as
  * text. That is the same rule the panel itself applies to a selected return.
  *
- * THE CORRIDOR IS WALKED ACROSS FRAMES. `sectionChunks` yields the count
- * examined so far, and the walk here consumes it under a millisecond budget,
- * so a dense cloud does not hold the main thread with the dock already mounted
- * and empty.
+ * THE CORRIDOR IS WALKED ACROSS FRAMES, AND SO IS THE DISPLAY SELECTION.
+ * `sectionChunks` yields the count examined so far and
+ * `selectProfileSectionLodChunks` yields the steps it has taken; both are
+ * consumed here under the same millisecond budget and through the same
+ * scheduler, so neither a dense cloud nor the section it produces holds the
+ * main thread with the dock already mounted and empty.
  *
  * THE PLOT REDRAWS WHEN ITS BOX CHANGES. A dock restored collapsed has no
  * canvas box at all, a splitter drag changes it, and so does a window resize;
@@ -48,6 +50,10 @@ import {
   type ProfileSurface,
 } from '../render/measure/profileSectionRenderer';
 import { axisSpanCaption } from '../render/measure/profileAxes';
+import {
+  selectProfileSectionLod,
+  selectProfileSectionLodChunks,
+} from '../render/measure/profileSectionLod';
 
 import type { ProfileWorkbenchDetailRow } from '../ui/ProfileWorkbench';
 import type {
@@ -61,18 +67,29 @@ import type { Vec3 } from '../render/measure/types';
  *
  * A corridor around one line is small by construction, but a dense scan can
  * still put more returns in it than a plot a few hundred pixels tall can
- * distinguish. Beyond this the section is subsampled at a fixed stride —
- * deterministic, so the same section draws the same picture every time.
+ * distinguish. Beyond this the section is stratified by
+ * `selectProfileSectionLod`, which spends the budget per occupied region of
+ * the section rather than per return, so a thin ground band and a rare class
+ * both survive a cap that a stride would have thinned them out of. The
+ * selection is a pure function of the section and the cap, so the same
+ * section draws the same picture every time.
  */
 export const MAX_DRAWN_RETURNS = 120_000;
 
 /** The colour mode a section opens in. Height is the one every scan carries. */
 export const DEFAULT_SECTION_COLOUR_MODE: ProfileColourMode = 'height';
 
-/** Points the seam examines between yields. */
+/** Points the seam examines, and steps the selection takes, between yields. */
 export const SECTION_CHUNK_SIZE = 64_000;
 
-/** Milliseconds one slice of the corridor walk may hold the main thread. */
+/**
+ * Milliseconds one slice may hold the main thread.
+ *
+ * One budget for both stages. The corridor walk and the display selection run
+ * back to back on the same thread over the same section, so a budget that
+ * covered only the first would leave the second free to stall exactly the
+ * frame the first was broken up to protect.
+ */
 export const SLICE_BUDGET_MS = 8;
 
 /** What the panel says while the corridor is still being walked. */
@@ -96,21 +113,12 @@ export interface WorkbenchCanvas {
   getContext(id: '2d'): ProfileRenderingContext | null;
 }
 
-/** Indices `0 … count-1`, subsampled at a fixed stride past the cap. */
-export function drawIndices(count: number, cap: number = MAX_DRAWN_RETURNS): Uint32Array {
-  const n = Number.isFinite(count) && count > 0 ? Math.floor(count) : 0;
-  if (n === 0) return new Uint32Array(0);
-  const limit = Math.max(1, Math.floor(cap));
-  if (n <= limit) {
-    const all = new Uint32Array(n);
-    for (let i = 0; i < n; i++) all[i] = i;
-    return all;
-  }
-  const stride = Math.ceil(n / limit);
-  const kept = Math.ceil(n / stride);
-  const out = new Uint32Array(kept);
-  for (let k = 0, i = 0; k < kept; k++, i += stride) out[k] = i;
-  return out;
+/** The returns a section draws: every one under the cap, a stratified sample above it. */
+export function drawIndices(
+  section: ProfileSectionResult,
+  cap: number = MAX_DRAWN_RETURNS,
+): Uint32Array {
+  return selectProfileSectionLod(section.points, { cap, chunkSize: SECTION_CHUNK_SIZE });
 }
 
 /**
@@ -175,6 +183,14 @@ export interface ComposeSectionOptions {
   /** Render units to the unit `unitSuffix` names. Absent or non-finite ⇒ 1. */
   readonly unitScale?: number;
   readonly colourMode?: ProfileColourMode;
+  /**
+   * The returns to draw, when the caller has already chosen them.
+   *
+   * The presenter walks {@link selectProfileSectionLodChunks} across frames
+   * and hands the answer over here, so the selection is not paid twice.
+   * Absent, this composes the same selection in one pass.
+   */
+  readonly indices?: Uint32Array;
 }
 
 /**
@@ -193,7 +209,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     Number.isFinite(options.unitScale) && (options.unitScale as number) > 0
       ? (options.unitScale as number)
       : 1;
-  const indices = drawIndices(section.points.count);
+  const indices = options.indices ?? drawIndices(section);
   const colours = new Uint8Array(indices.length * 3);
   const colouring = colourProfileSection(
     {
@@ -378,17 +394,14 @@ export function presentWorkbenchSection(
   const now = scene.now ?? Date.now;
   const schedule = scene.scheduleSlice ?? scheduleFrame;
 
-  function finish(section: ProfileSectionResult | null): void {
-    if (!section) {
-      handle.setStatus('No layer is currently eligible for a section.');
-      return;
-    }
+  function finish(section: ProfileSectionResult, indices: Uint32Array): void {
     // A unit is stated only alongside the scale that reaches it: a section is
     // measured in the scan's own render units, and a foot-CRS scan labelled
     // "m" without the factor would read as metres it never was.
     const metres = scene.metresPerUnit();
     const plot = prepareWorkbenchSection({
       section,
+      indices,
       canvas: handle.canvas as unknown as WorkbenchCanvas,
       devicePixelRatio: scene.devicePixelRatio(),
       unitSuffix: metres === null ? null : 'm',
@@ -403,14 +416,34 @@ export function presentWorkbenchSection(
     });
   }
 
+  // The second stage: set once the corridor walk has answered, and pumped by
+  // the same loop under the same budget.
+  let section: ProfileSectionResult | null = null;
+  let select: Generator<number, Uint32Array, void> | null = null;
+
   function slice(): void {
     if (stopped) return;
     const start = now();
     for (;;) {
-      const step = walk.next();
-      if (step.done) {
-        finish(step.value);
-        return;
+      if (select) {
+        const chosen = select.next();
+        if (chosen.done) {
+          finish(section!, chosen.value);
+          return;
+        }
+      } else {
+        const step = walk.next();
+        if (step.done) {
+          if (!step.value) {
+            handle.setStatus('No layer is currently eligible for a section.');
+            return;
+          }
+          section = step.value;
+          select = selectProfileSectionLodChunks(section.points, {
+            cap: MAX_DRAWN_RETURNS,
+            chunkSize: SECTION_CHUNK_SIZE,
+          });
+        }
       }
       if (now() - start >= SLICE_BUDGET_MS) break;
     }

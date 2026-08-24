@@ -1095,8 +1095,9 @@ dataset, and hit-test latency that stays inside a frame.
 The harness is `tests/benchmark/profileSection.test.ts`, the record schema is
 `benchmarks/performance/profileSectionRecord.ts`, and the scene comes from
 `benchmarks/fixtures/profileSectionCloud.ts`. It drives the shipped modules,
-`extractProfileSection`, `extractProfileSectionChunks`, `selectProfileSectionLod`
-and `profileHitTest`, with nothing under `src/` altered.
+`extractProfileSection`, `extractProfileSectionChunks`,
+`selectProfileSectionLod`, `selectProfileSectionLodChunks` and
+`profileHitTest`.
 
 ### The scene
 
@@ -1122,18 +1123,19 @@ chainage reject.
 ### What was measured
 
 One warm-up and five recorded runs per series, on an Apple M3 Max under Node
-v26.7.0, darwin 25.5.0, at revision f98d42dd. The durations below are wall-clock
-on that host and will differ on another one. The counts, the accepted totals and
-the derived footprints will not.
+v26.7.0, darwin 25.5.0, at revision 3565dbd5 with the selection's yield seam in
+the working tree. The durations below are wall-clock on that host and will
+differ on another one. The counts, the accepted totals and the derived
+footprints will not.
 
 | source points | accepted | whole-run median ms | chunked total median ms | longest slice median ms | longest slice max ms | peak buffers MiB | derived transient MiB |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1,000,000 | 95,896 | 41.801 | 44.342 | 4.582 | 4.627 | 12.3 | 9.0 |
-| 5,000,000 | 479,442 | 169.924 | 182.591 | 4.589 | 5.495 | 39.8 | 38.4 |
-| 10,000,000 | 958,877 | 339.924 | 352.122 | 4.529 | 5.455 | 79.5 | 76.8 |
-| 25,000,000 | 2,397,156 | 846.856 | 860.030 | 7.844 | 9.248 | 271.4 | 271.4 |
+| 1,000,000 | 95,896 | 30.183 | 30.638 | 3.364 | 3.411 | 12.3 | 9.0 |
+| 5,000,000 | 479,442 | 120.215 | 127.090 | 3.091 | 4.068 | 39.8 | 38.4 |
+| 10,000,000 | 958,877 | 243.026 | 248.981 | 3.400 | 4.260 | 79.5 | 76.8 |
+| 25,000,000 | 2,397,156 | 595.858 | 607.763 | 6.098 | 6.143 | 271.4 | 271.4 |
 
-Whole-run interquartile ranges were 0.14, 0.81, 1.25 and 3.05 ms, at most 0.5 % of
+Whole-run interquartile ranges were 1.04, 0.32, 3.19 and 0.78 ms, at most 1.3 % of
 the median at any size, and the record carries every raw value. A slice is one
 `next()` call on the generator, which is exactly one uninterrupted task. The
 largest slice is always the final one, because it carries `finish()`, the
@@ -1151,39 +1153,58 @@ the reading was taken. Both are deltas above a post-collection baseline, so they
 need `npm run benchmark:profile-section:gc`; without `--expose-gc` the baseline
 still holds the previous repeat's garbage and the delta understates the transient.
 
-Selection, index build and hover, at a display cap of 200,000. No module on this
-revision states a cap: `selectProfileSectionLod` takes it from its caller, and
-`src/` does not yet call it.
+Selection, index build and hover, at a display cap of 200,000. The shipped cap
+is `MAX_DRAWN_RETURNS`, 120,000, in `src/app/profileWorkbenchSection.ts`; the
+larger figure is measured here because it is the slower of the two and because
+the recorded baseline was taken at it. Selection is reported in the same two
+columns as extraction: `selectProfileSectionLod` run to completion, which is one
+uninterrupted task, and the longest single slice of
+`selectProfileSectionLodChunks` at a chunk of 65,536 steps.
 
-| section returns | LOD selection median ms | LOD selection max ms | index build median ms | slowest of 4,000 hovers ms |
-| --- | --- | --- | --- | --- |
-| 479,442 | 134.815 | 151.612 | 5.968 | 0.045 |
-| 958,877 | 233.946 | 241.997 | 3.563 | 0.042 |
-| 2,397,156 | 546.131 | 548.820 | 4.485 | 0.062 |
+| section returns | run to completion, median ms | run to completion, max ms | longest slice median ms | longest slice max ms | slices | index build median ms | slowest of 4,000 hovers ms |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 479,442 | 102.219 | 108.186 | 20.233 | 20.648 | 68 | 4.099 | 0.033 |
+| 958,877 | 173.108 | 178.495 | 24.905 | 26.247 | 127 | 2.530 | 0.083 |
+| 2,397,156 | 381.401 | 389.434 | 28.743 | 28.832 | 303 | 2.723 | 0.031 |
+
+The longest slice is not the largest chunk of returns. It is the one that carries
+the sort of the occupied buckets into spread order, the single step of the
+selection that cannot be resumed part-way; the walk hands the thread back
+immediately before it so that step stands alone.
 
 ### Against the targets
 
 The chunked extraction path meets its target at every size measured: the longest
-uninterrupted task is 9.2 ms at 25M source points, ten times inside the 100 ms
+uninterrupted task is 6.1 ms at 25M source points, sixteen times inside the 100 ms
 bound, and it grows with the chunk rather than with the scene. Against that,
 `extractProfileSection` misses the target from 5M source points upward. That helper
 drives the generator to completion without returning to its caller, so the whole
-of it is one uninterrupted task: 179 ms at 5M, 349 ms at 10M, 862 ms at 25M. Which
+of it is one uninterrupted task: 127 ms at 5M, 247 ms at 10M, 605 ms at 25M. Which
 target a section meets is therefore a property of the caller. A host that calls
 the wrapper has no chunking, whatever the generator underneath it offers.
 
 Hit-testing meets its target with room to spare. The slowest of 4,000 hovers at
-200,000 displayed points was 0.062 ms against a 16.7 ms frame, and the index build
-is 3.6 to 6.0 ms, a fifth to a third of a frame and paid once per section rather
+200,000 displayed points was 0.083 ms against a 16.7 ms frame, and the index build
+is 2.5 to 4.1 ms, a sixth to a quarter of a frame and paid once per section rather
 than per hover.
 
-`selectProfileSectionLod` misses the 100 ms bound at every section above roughly
-400,000 returns, reaching 549 ms at 2.4M. Selection cost follows the section size,
-not the cap, at close to 0.23 microseconds per return, and the module has no yield
-seam of its own: the whole selection is one uninterrupted task. The stated target
-names extraction, so this is the same 100 ms read against the neighbouring stage,
-with the threshold unchanged and the stage it is read against stated in the
-record's `verdicts` and `notes`.
+Selection reads the same way as extraction. The chunked path meets the bound at
+every section measured: the longest uninterrupted task is 28.8 ms over 2,397,156
+returns. It grows far more slowly than the section does: five times the returns
+buy 40 % more slice, because what sets the longest one is the bucket sort and not
+the number of returns. `selectProfileSectionLod` run to completion still misses
+the bound at every section measured, 108 ms over 479,442 returns and 389 ms over
+2,397,156, for the same reason `extractProfileSection` does: the helper never
+returns to its caller. Selection cost follows the section size rather than the
+cap, at 0.16 to 0.23 microseconds per return across the ladder. The stated
+target names extraction, so this is the same 100 ms read against the
+neighbouring stage, with the threshold unchanged and the stage it is read
+against stated in the record's `verdicts` and `notes`.
+
+The docked workbench pumps both stages through one scheduler under one budget,
+`SLICE_BUDGET_MS` in `src/app/profileWorkbenchSection.ts`, so the section a user
+opens is walked and then thinned across frames rather than in two blocking
+passes.
 
 ### Running it
 
