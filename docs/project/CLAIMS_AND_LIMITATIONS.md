@@ -64,7 +64,7 @@ discrete properties a test pins (byte-identity, exact inverses).
 
 ## What the software currently claims
 
-- Fourteen products are at E4. Five are algorithm checks against GDAL:
+- Sixteen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their preregistered tolerances (0.5° for slope
@@ -128,6 +128,21 @@ discrete properties a test pins (byte-identity, exact inverses).
   outside the comparison, because R interpolates its quantiles at type 7 and
   `checkpointAccuracy` takes the nearest rank; the study records the difference
   rather than reconciling it.
+- `CHANGE-RASTER` and `CHANGE-VOLUME` are the fifteenth and sixteenth. Over
+  eight synthetic two-epoch grid pairs at one metre, `detectChange` agrees with
+  GRASS 8.5.0 `r.mapcalc` and `r.univar` on the per-cell difference, on the gain
+  and loss volumes and on the gained, lost and comparable cell counts, and each
+  pair also reproduces the volume computed from its construction. Both sides
+  select the same 3007 comparable cells, including the pair with holes in one
+  epoch, and the largest relative difference is 7×10⁻⁶ against a 1×10⁻⁵ gate
+  derived from the candidate's Float32 storage rather than from the observed
+  residual. GRASS computes in double and reproduces every closed-form volume to
+  within 1×10⁻⁶ m³, so the residual is the candidate's alone. The scope is
+  one-metre metre-CRS grids under a single global level of detection: per-cell
+  LoD95 is not exercised, co-registration error is absent by construction, and
+  both claims stay at E5 because no surveyed change is involved. The protocol
+  freeze is adopted-with-result rather than a preregistration, and names its
+  witness commit.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

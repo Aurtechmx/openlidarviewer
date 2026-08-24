@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Fourteen products are at E4. Five are algorithm checks against GDAL:
+Sixteen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -45,7 +45,16 @@ R is the second implementation here because it is not TypeScript: its numerics,
 its quantile machinery and its accumulation order are its own. The comparison
 covers the quantities that carry no order statistic, so median, NMAD and P95 sit
 outside it: R interpolates at type 7 and `checkpointAccuracy` takes the nearest
-rank, and the study records that difference rather than resolving it.
+rank, and the study records that difference rather than resolving it. The
+fifteenth and sixteenth are the change pair: `CHANGE-RASTER` and
+`CHANGE-VOLUME`, against GRASS 8.5.0 `r.mapcalc` and `r.univar` over eight
+synthetic two-epoch grid pairs at one metre. Parameter equivalence is exact,
+the same level of detection, the same strict inequality, and the same exclusion
+of cells absent from either epoch, and GRASS null and the candidate's NaN
+propagate identically, so neither side needs special handling to agree on which
+cells are comparable. Each pair also carries the gain and loss volume computed
+from its construction, so truth is scored first and the agreement between
+implementations second.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -62,12 +71,21 @@ rank, and the study records that difference rather than resolving it.
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
 | `HOLDOUT-RMSE` | base R 4.6.1 bias, `sqrt(mean(r²))`, max (+ closed forms on four cases) | `tests/statisticsRAgreement.test.ts` | 18 comparisons (6 cases) | 4.4×10⁻¹⁶ | 1×10⁻¹² |
 | `NVA-VVA` | base R 4.6.1 `1.96 * sqrt(mean(r²))` | `tests/statisticsRAgreement.test.ts` | 6 comparisons (6 cases) | 8.9×10⁻¹⁶ | 1×10⁻¹² |
+| `CHANGE-RASTER` | GRASS 8.5.0 `r.mapcalc` difference and threshold | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
+| `CHANGE-VOLUME` | GRASS 8.5.0 `r.univar` gain/loss (+ closed form on all eight pairs) | `tests/changeGrassAgreement.test.ts` | 8 pairs, gain and loss volume and cell counts | 7×10⁻⁶ relative (counts exact) | 1×10⁻⁵ relative, 1×10⁻⁹ m³ floor |
 
 Every tolerance above was registered in `REFERENCE_SLOTS` before the references
 were generated, with one exception stated as such: the two statistics rows carry
 no reference slot, and their 1×10⁻¹² was fixed in the same commit that produced
 the R output, so their protocol records the freeze as adopted with the result
-rather than as a preregistration. Each reference output, the exact command, the tool version and the
+rather than as a preregistration. The two change rows are the same kind of
+exception, and their tolerance is derived rather than fitted: `ChangeGrid.values`
+is a `Float32Array`, so a difference of two similar elevations carries a relative
+error of order 1×10⁻⁶, and the gate sits an order of magnitude above float32
+epsilon with a 1×10⁻⁹ m³ absolute floor for the cases whose correct answer is
+zero. GRASS computes in double and reproduces every closed-form volume to within
+1×10⁻⁶ m³, so the residual is attributable to the candidate; the cell counts are
+integers from the same threshold rule on both sides and must match exactly. Each reference output, the exact command, the tool version and the
 checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a
 plane linear interpolation is exact and the tolerance measures cross-implementation
