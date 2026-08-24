@@ -31,7 +31,13 @@ import { loadProfileWorkbench } from '../src/lazyChunks';
 import { createProfileWorkbenchLauncher } from '../src/app/profileWorkbenchLauncher';
 import { createProfileWorkbenchStage } from '../src/app/profileWorkbenchStage';
 import { dockOccupiedHeight, defaultDockHeight } from '../src/ui/profileWorkbenchDock';
-import { drawIndices, presentWorkbenchSection } from '../src/app/profileWorkbenchSection';
+import {
+  drawIndices,
+  presentWorkbenchSection,
+  SECTION_WORKING_STATUS,
+  SLICE_BUDGET_MS,
+} from '../src/app/profileWorkbenchSection';
+import { axisSpanCaption } from '../src/render/measure/profileAxes';
 import type {
   ProfileWorkbenchHandle,
   ProfileWorkbenchHost,
@@ -40,6 +46,8 @@ import type {
   ProfileWorkbenchModule,
   ProfileWorkbenchStage,
 } from '../src/app/profileWorkbenchLauncher';
+import type { WorkbenchSectionScene } from '../src/app/profileWorkbenchSection';
+import type { ProfileSectionResult } from '../src/render/measure/profileSectionSeam';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const readSource = (rel: string): string => readFileSync(resolve(REPO, rel), 'utf8');
@@ -237,6 +245,127 @@ function fakeModule(): { module: ProfileWorkbenchModule; mounts: ProfileWorkbenc
 }
 
 const PROFILE = { id: 'p1', kind: 'profile', name: 'Section A' };
+
+/** A scene walk that finds no eligible layer, in one step. */
+function* emptyWalk(): Generator<number, ProfileSectionResult | null, void> {
+  return null;
+}
+
+/** A recording 2D context, reduced to what the section renderer writes. */
+function recordingContext(): {
+  fills: number;
+  clears: number;
+  fillStyle: string;
+  strokeStyle: string;
+  lineWidth: number;
+  globalAlpha: number;
+  setTransform(): void;
+  clearRect(): void;
+  fillRect(): void;
+  beginPath(): void;
+  moveTo(): void;
+  lineTo(): void;
+  stroke(): void;
+} {
+  return {
+    fills: 0,
+    clears: 0,
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 0,
+    globalAlpha: 1,
+    setTransform(): void {},
+    clearRect(): void {
+      this.clears++;
+    },
+    fillRect(): void {
+      this.fills++;
+    },
+    beginPath(): void {},
+    moveTo(): void {},
+    lineTo(): void {},
+    stroke(): void {},
+  };
+}
+
+/** A canvas whose CSS box the test moves, as the dock's own body would. */
+class FakeCanvas {
+  width = 0;
+  height = 0;
+  clientWidth = 0;
+  clientHeight = 0;
+  readonly ctx = recordingContext();
+  getContext(): ReturnType<typeof recordingContext> {
+    return this.ctx;
+  }
+}
+
+/**
+ * A section whose extremes sit at index 1 only.
+ *
+ * Past the display cap the stride keeps the even indices, so index 1 is
+ * drawn by nothing — which is exactly what makes a span computed off the
+ * drawn subset differ from the corridor's real extent.
+ */
+function sectionWithOutlierAtIndexOne(count: number): ProfileSectionResult {
+  const chainage = new Float32Array(count);
+  const height = new Float64Array(count);
+  chainage[1] = 100;
+  height[1] = 50;
+  return {
+    points: {
+      count,
+      chainage,
+      height,
+      lateralOffset: new Float32Array(count),
+      sourceSlot: new Uint16Array(count),
+      pointIndex: new Uint32Array(count),
+      channelPresence: new Uint8Array(count),
+    },
+    frame: null as never,
+    band: 2,
+    scope: 'static' as never,
+    scopeLabel: 'One loaded layer.',
+    streamingComplete: null,
+    sources: [],
+    generation: 1,
+    aborted: false,
+    skippedSlots: [],
+    examined: count,
+  };
+}
+
+/** A handle that records what the presenter told it, over a given canvas. */
+function sectionHandle(canvas: FakeCanvas): {
+  handle: Parameters<typeof presentWorkbenchSection>[0];
+  scope: string[];
+  status: string[];
+  detail: (readonly { label: string; value: string }[] | null)[];
+} {
+  const scope: string[] = [];
+  const status: string[] = [];
+  const detail: (readonly { label: string; value: string }[] | null)[] = [];
+  return {
+    handle: {
+      canvas: canvas as unknown as HTMLCanvasElement,
+      setScope: (t) => scope.push(t),
+      setStatus: (t) => status.push(t),
+      setDetail: (rows) => detail.push(rows),
+    },
+    scope,
+    status,
+    detail,
+  };
+}
+
+/** Read one labelled figure out of the rows the presenter handed over. */
+function figure(
+  rows: readonly { label: string; value: string }[] | null,
+  label: string,
+): string | undefined {
+  return rows?.find((r) => r.label === label)?.value;
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -475,7 +604,7 @@ describe('the presenter says why, rather than showing an empty plot', () => {
     const rec = recordingHandle();
     presentWorkbenchSection(rec.handle, 'p1', {
       profile: () => null,
-      section: () => null,
+      sectionChunks: emptyWalk,
       metresPerUnit: () => null,
       devicePixelRatio: () => 1,
     });
@@ -487,11 +616,15 @@ describe('the presenter says why, rather than showing an empty plot', () => {
     const rec = recordingHandle();
     presentWorkbenchSection(rec.handle, 'p1', {
       profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
-      section: () => null,
+      sectionChunks: emptyWalk,
       metresPerUnit: () => null,
       devicePixelRatio: () => 1,
     });
-    expect(rec.status).toEqual(['No layer is currently eligible for a section.']);
+    // The working line first: the dock is mounted before the walk answers.
+    expect(rec.status).toEqual([
+      SECTION_WORKING_STATUS,
+      'No layer is currently eligible for a section.',
+    ]);
   });
 
   it('subsamples at a fixed stride past the cap, and keeps every return under it', () => {
@@ -499,5 +632,210 @@ describe('the presenter says why, rather than showing an empty plot', () => {
     expect([...drawIndices(5, 10)]).toEqual([0, 1, 2, 3, 4]);
     // 10 of 25 requested → stride 3, a deterministic every-third return.
     expect([...drawIndices(25, 10)]).toEqual([0, 3, 6, 9, 12, 15, 18, 21, 24]);
+  });
+});
+
+describe('the plot is redrawn whenever its box changes', () => {
+  /** A scene over one small section, with the canvas box under test control. */
+  function sceneOver(
+    section: ProfileSectionResult,
+    observe: (canvas: HTMLCanvasElement, onChange: () => void) => () => void,
+  ): WorkbenchSectionScene {
+    return {
+      profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
+      sectionChunks: function* () {
+        return section;
+      },
+      metresPerUnit: () => null,
+      devicePixelRatio: () => 2,
+      observeCanvasSize: observe,
+    };
+  }
+
+  it('leaves a collapsed dock unsized, then draws the plot when it is expanded', () => {
+    const canvas = new FakeCanvas();
+    let notify = (): void => {};
+    const rec = sectionHandle(canvas);
+    // A dock restored from a persisted `collapsed: true` has `display: none`
+    // on its body, so the canvas reads 0x0 at the moment the section lands.
+    const dispose = presentWorkbenchSection(
+      rec.handle,
+      'p1',
+      sceneOver(sectionWithOutlierAtIndexOne(64), (_c, cb) => {
+        notify = cb;
+        return () => {};
+      }),
+    );
+    // Nothing was sized off a box with no area: a one-device-pixel backing
+    // store is what an expand would otherwise be showing.
+    expect(canvas.width).toBe(0);
+    expect(canvas.height).toBe(0);
+    expect(canvas.ctx.fills).toBe(0);
+    // The figures are there regardless — the readable half never waited on a box.
+    expect(rec.detail).toHaveLength(1);
+
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 300;
+    notify();
+    expect(canvas.width).toBe(1600);
+    expect(canvas.height).toBe(600);
+    expect(canvas.ctx.fills).toBeGreaterThan(0);
+
+    // A splitter drag is the same event: a taller box, a taller backing store.
+    canvas.clientHeight = 500;
+    notify();
+    expect(canvas.height).toBe(1000);
+
+    dispose();
+  });
+
+  it('releases the size subscription when the dock goes', () => {
+    const canvas = new FakeCanvas();
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 300;
+    const released = vi.fn();
+    const dispose = presentWorkbenchSection(
+      sectionHandle(canvas).handle,
+      'p1',
+      sceneOver(sectionWithOutlierAtIndexOne(64), () => released),
+    );
+    dispose();
+    expect(released).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the span figures describe the corridor, not the drawn subset', () => {
+  it('measures the spans over every accepted return past the display cap', () => {
+    // 120 002 accepted → stride 2 → the odd indices are drawn by nothing, and
+    // this section keeps its only extremes at index 1.
+    const section = sectionWithOutlierAtIndexOne(120_002);
+    const canvas = new FakeCanvas();
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 300;
+    const rec = sectionHandle(canvas);
+    presentWorkbenchSection(rec.handle, 'p1', {
+      profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
+      sectionChunks: function* () {
+        return section;
+      },
+      metresPerUnit: () => null,
+      devicePixelRatio: () => 1,
+      observeCanvasSize: () => () => {},
+    });
+    const rows = rec.detail[0]!;
+    // The cap really did bite, so the two sets genuinely differ here.
+    expect(figure(rows, 'Returns in corridor')).toBe('120002');
+    expect(figure(rows, 'Drawn')).toBe('60001');
+    expect(figure(rows, 'Chainage span')).toBe(axisSpanCaption(100, null));
+    expect(figure(rows, 'Height span')).toBe(axisSpanCaption(50, null));
+    // What the drawn subset alone would have claimed.
+    expect(figure(rows, 'Chainage span')).not.toBe(axisSpanCaption(0, null));
+  });
+});
+
+describe('the corridor is walked across frames', () => {
+  it('yields the main thread between chunks and finishes on the scheduler', () => {
+    const canvas = new FakeCanvas();
+    canvas.clientWidth = 800;
+    canvas.clientHeight = 300;
+    const rec = sectionHandle(canvas);
+    const queued: (() => void)[] = [];
+    let clock = 0;
+    let pulled = 0;
+    presentWorkbenchSection(rec.handle, 'p1', {
+      profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
+      sectionChunks: function* () {
+        for (let i = 0; i < 4; i++) {
+          pulled++;
+          clock += SLICE_BUDGET_MS;
+          yield i * 1000;
+        }
+        return sectionWithOutlierAtIndexOne(64);
+      },
+      metresPerUnit: () => null,
+      devicePixelRatio: () => 1,
+      now: () => clock,
+      scheduleSlice: (run) => queued.push(run),
+      observeCanvasSize: () => () => {},
+    });
+    // The dock is mounted and saying what it is doing; the scan is not done.
+    expect(rec.status).toEqual([SECTION_WORKING_STATUS]);
+    expect(pulled).toBe(1);
+    expect(queued).toHaveLength(1);
+    expect(rec.detail).toHaveLength(0);
+
+    while (queued.length > 0) queued.shift()!();
+    expect(pulled).toBe(4);
+    expect(rec.detail).toHaveLength(1);
+    expect(rec.status.at(-1)).toBe('Showing 64 returns.');
+  });
+
+  it('abandons a walk still in flight when the dock goes', () => {
+    const canvas = new FakeCanvas();
+    const rec = sectionHandle(canvas);
+    const queued: (() => void)[] = [];
+    let clock = 0;
+    let pulled = 0;
+    const signals: { aborted: boolean }[] = [];
+    const dispose = presentWorkbenchSection(rec.handle, 'p1', {
+      profile: () => ({ a: [0, 0, 0], b: [10, 0, 0], corridorWidth: null }),
+      sectionChunks: function* (request) {
+        signals.push(request.signal as { aborted: boolean });
+        // Long enough that the walk is unquestionably still in flight after
+        // one slice, bounded so a presenter that stopped yielding ends up
+        // failing an assertion rather than hanging the suite.
+        for (let i = 0; i < 1000; i++) {
+          pulled++;
+          clock += SLICE_BUDGET_MS;
+          yield pulled;
+        }
+        return sectionWithOutlierAtIndexOne(8);
+      },
+      metresPerUnit: () => null,
+      devicePixelRatio: () => 1,
+      now: () => clock,
+      scheduleSlice: (run) => queued.push(run),
+    });
+    expect(pulled).toBe(1);
+    dispose();
+    expect(signals[0]!.aborted).toBe(true);
+    queued.shift()!();
+    expect(pulled).toBe(1);
+    expect(rec.detail).toHaveLength(0);
+  });
+});
+
+describe('a fill that throws leaves no dock behind', () => {
+  it('hands the stage back and answers false', async () => {
+    const rig = stageRig({ containerHeight: 900 });
+    const module = await loadProfileWorkbench();
+    const onPresentFailure = vi.fn();
+    const launcher = createProfileWorkbenchLauncher({
+      load: () => Promise.resolve(module),
+      stage: rig.stage,
+      present: () => {
+        throw new Error('the scene went away mid-extraction');
+      },
+      onPresentFailure,
+    });
+    await expect(launcher.open(PROFILE)).resolves.toBe(false);
+    expect(launcher.handle).toBeNull();
+    expect(onPresentFailure).toHaveBeenCalledTimes(1);
+    expect(rig.stageEl.style.height).toBe('');
+    expect(rig.subscriptions).toHaveLength(0);
+  });
+
+  it('runs the release a fill handed back when the dock closes', async () => {
+    const { module } = fakeModule();
+    const release = vi.fn();
+    const launcher = createProfileWorkbenchLauncher({
+      load: () => Promise.resolve(module),
+      stage: stageRig().stage,
+      present: () => release,
+    });
+    await launcher.open(PROFILE);
+    expect(release).not.toHaveBeenCalled();
+    launcher.close();
+    expect(release).toHaveBeenCalledTimes(1);
   });
 });

@@ -208,10 +208,10 @@ function profileSummary(id = 'p1', name = 'Section A'): MeasurementSummary {
   return { id, kind: 'profile', name, value: '70.00 m', profileChart };
 }
 
-/** Mount a panel and hand back its Expand button. */
+/** Mount a panel and hand back its Expand button and the chart wrapper. */
 function mountPanel(
   openProfileWorkbench?: (s: MeasurementSummary) => Promise<boolean>,
-): { panel: MeasurePanel; expand: FakeEl } {
+): { panel: MeasurePanel; expand: FakeEl; wrap: FakeEl } {
   const panel = new MeasurePanel({
     onDelete: () => {},
     onRename: () => {},
@@ -224,7 +224,9 @@ function mountPanel(
   const root = panel.element as unknown as FakeEl;
   const expand = root.querySelector('button.olv-mp-chart-expand');
   expect(expand).not.toBeNull();
-  return { panel, expand: expand! };
+  const wrap = root.querySelector('div.olv-mp-chart-wrap');
+  expect(wrap).not.toBeNull();
+  return { panel, expand: expand!, wrap: wrap! };
 }
 
 /** Let the panel's `.then` on the workbench promise run. */
@@ -296,5 +298,87 @@ describe('Expand falls back to ResultFocus on every refusal', () => {
     await settle();
     expect(openProfileWorkbench).toHaveBeenCalledTimes(2);
     expect(openResultFocus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a rejected open is a refusal, not an unhandled rejection', () => {
+  it('falls back to ResultFocus when the host REJECTS', async () => {
+    // The host runs the extraction, the colour pass and the render behind this
+    // promise. Any of them can throw, and a control that only handled `false`
+    // left the user with nothing at all.
+    const { expand } = mountPanel(() => Promise.reject(new Error('scene went away')));
+    expand.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settle();
+    expect(openResultFocus).toHaveBeenCalledTimes(1);
+    expect(openResultFocus.mock.calls[0]![0]).toMatchObject({ title: 'Section A' });
+  });
+
+  it('falls back when the launcher’s own fill throws, and mounts no empty dock', async () => {
+    const container = new FakeEl('div');
+    const stage: ProfileWorkbenchStage = {
+      host: () =>
+        ({
+          container: () => container as unknown as HTMLElement,
+          stageHeight: () => 900,
+          onStageResize: () => () => {},
+          notifyDockHeight: () => {},
+        }) as ProfileWorkbenchHost,
+      canDock: () => true,
+      release: () => {},
+    };
+    const launcher = createProfileWorkbenchLauncher({
+      load: () =>
+        Promise.resolve({
+          mountProfileWorkbench: (host) => {
+            const element = new FakeEl('section');
+            host.container().append(element as unknown as HTMLElement);
+            return {
+              element: element as unknown as HTMLElement,
+              canvas: new FakeEl('canvas') as unknown as HTMLCanvasElement,
+              height: () => 300,
+              collapsed: () => false,
+              setCollapsed: () => {},
+              setScope: () => {},
+              setStatus: () => {},
+              setDetail: () => {},
+              close: () => element.remove(),
+            };
+          },
+        }),
+      stage,
+      present: () => {
+        throw new Error('no section to draw');
+      },
+      onPresentFailure: () => {},
+    });
+    const { expand } = mountPanel((s) => launcher.open({ id: s.id, kind: s.kind, name: s.name }));
+    expand.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settle();
+    expect(launcher.handle).toBeNull();
+    expect(container.children).toHaveLength(0);
+    expect(openResultFocus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('the Expand control names the surface it actually opens', () => {
+  it('says a dock on a wide viewport and a focus view otherwise, when one is offered', () => {
+    const { expand, wrap } = mountPanel(() => Promise.resolve(true));
+    for (const node of [expand, wrap]) {
+      const name = node.getAttribute('aria-label')!;
+      expect(name).toContain('docked section workbench');
+      expect(name).toContain('wide viewport');
+      expect(node.title).toContain('docked section workbench');
+    }
+    // The dock carries neither, so only the focus-view half may promise them.
+    expect(wrap.title).toContain('otherwise a focus view with the station table and export');
+    expect(wrap.getAttribute('aria-label')).not.toContain('station table');
+  });
+
+  it('promises the focus view alone when no host wired a workbench', () => {
+    const { expand, wrap } = mountPanel();
+    for (const node of [expand, wrap]) {
+      expect(node.getAttribute('aria-label')).toBe('Expand profile Section A to a focus view');
+      expect(node.title).not.toContain('workbench');
+    }
   });
 });

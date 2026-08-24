@@ -2,7 +2,7 @@
  * profileWorkbenchSection.ts
  *
  * What the docked workbench shows: the returns inside a measured corridor,
- * drawn once, with the figures that describe them as text beside the plot.
+ * with the figures that describe them as text beside the plot.
  *
  * The section comes off `profileSectionSeam`, the one place a profile reads
  * the scene, so the workbench and the chart in the Measurements panel are
@@ -17,6 +17,16 @@
  * A canvas states nothing an assistive technology can read, so every figure
  * the plot is drawn from also appears in the detail rows the panel renders as
  * text. That is the same rule the panel itself applies to a selected return.
+ *
+ * THE CORRIDOR IS WALKED ACROSS FRAMES. `sectionChunks` yields the count
+ * examined so far, and the walk here consumes it under a millisecond budget,
+ * so a dense cloud does not hold the main thread with the dock already mounted
+ * and empty.
+ *
+ * THE PLOT REDRAWS WHEN ITS BOX CHANGES. A dock restored collapsed has no
+ * canvas box at all, a splitter drag changes it, and so does a window resize;
+ * a picture drawn once at the first of those sizes is blank or stretched at
+ * every later one.
  *
  * DRAWS ONLY WHAT A CONTEXT ALLOWS. `getContext('2d')` returns null in a test
  * double and in a browser that refuses another context; the composition still
@@ -59,6 +69,15 @@ export const MAX_DRAWN_RETURNS = 120_000;
 /** The colour mode a section opens in. Height is the one every scan carries. */
 export const DEFAULT_SECTION_COLOUR_MODE: ProfileColourMode = 'height';
 
+/** Points the seam examines between yields. */
+export const SECTION_CHUNK_SIZE = 64_000;
+
+/** Milliseconds one slice of the corridor walk may hold the main thread. */
+export const SLICE_BUDGET_MS = 8;
+
+/** What the panel says while the corridor is still being walked. */
+export const SECTION_WORKING_STATUS = 'Reading the returns inside this corridor.';
+
 /** Splat and station weights the dock opens at, in CSS pixels. */
 const SECTION_STYLE = {
   pointSizePx: 2,
@@ -94,18 +113,24 @@ export function drawIndices(count: number, cap: number = MAX_DRAWN_RETURNS): Uin
   return out;
 }
 
-/** The extent of the drawn returns, in section space. */
+/**
+ * The extent of the section, over EVERY accepted return.
+ *
+ * Not over the drawn subset. The display cap decides how much of a dense
+ * corridor is worth splatting, and a span derived from it understates the
+ * corridor by however much the stride skipped — while sitting in the same
+ * list as "Returns in corridor: N". A figure presented as a property of the
+ * section has to be measured over the section.
+ */
 function boundsOf(
   section: ProfileSectionResult,
-  indices: Uint32Array,
 ): { minChainage: number; maxChainage: number; minHeight: number; maxHeight: number } {
   let minC = Infinity;
   let maxC = -Infinity;
   let minH = Infinity;
   let maxH = -Infinity;
-  const { chainage, height } = section.points;
-  for (let k = 0; k < indices.length; k++) {
-    const i = indices[k]!;
+  const { chainage, height, count } = section.points;
+  for (let i = 0; i < count; i++) {
     const c = chainage[i]!;
     const h = height[i]!;
     if (c < minC) minC = c;
@@ -129,6 +154,13 @@ export interface WorkbenchSectionView {
   readonly drawn: number;
 }
 
+/** A composed section, with the means to draw it again at a new size. */
+export interface WorkbenchSectionPlot {
+  readonly view: WorkbenchSectionView;
+  /** Draw at the canvas's current box. A box with no area draws nothing. */
+  draw(): void;
+}
+
 export interface ComposeSectionOptions {
   readonly section: ProfileSectionResult;
   readonly canvas: WorkbenchCanvas;
@@ -146,14 +178,15 @@ export interface ComposeSectionOptions {
 }
 
 /**
- * Draw `section` onto `canvas` and describe what was drawn.
+ * Compose `section` against `canvas`, draw it once, and hand back both the
+ * description and the means to draw it again.
  *
  * The description is produced whether or not a drawing context was available,
  * because it is the readable half of the same information — a workbench that
  * reported nothing when the plot could not be drawn would leave the reader
  * with an empty panel and no reason for it.
  */
-export function composeWorkbenchSection(options: ComposeSectionOptions): WorkbenchSectionView {
+export function prepareWorkbenchSection(options: ComposeSectionOptions): WorkbenchSectionPlot {
   const { section, canvas } = options;
   const unit = options.unitSuffix ?? null;
   const scale =
@@ -171,32 +204,41 @@ export function composeWorkbenchSection(options: ComposeSectionOptions): Workben
     colours,
   );
 
-  const bounds = boundsOf(section, indices);
-  const viewport: ProfileViewport = {
-    width: canvas.clientWidth,
-    height: canvas.clientHeight,
-    devicePixelRatio: options.devicePixelRatio ?? 1,
-  };
-  // `fit` claims no ratio, which is the honest mode for a plot whose box the
-  // user drags: a stated exaggeration would need both unit scales AND a box
-  // that does not change under it.
-  const view = fitProfileView(bounds, viewport, { kind: 'fit' }, {
-    horizontalToMetres: null,
-    verticalToMetres: null,
-  });
+  const bounds = boundsOf(section);
+  const devicePixelRatio = options.devicePixelRatio ?? 1;
 
   const ctx = canvas.getContext('2d');
-  if (ctx && view) {
-    const surface: ProfileSurface = {
-      ctx,
-      setBackingSize: (deviceWidth, deviceHeight) => {
-        canvas.width = deviceWidth;
-        canvas.height = deviceHeight;
-      },
-    };
-    // Drawn immediately rather than through a scheduler: this runs once per
-    // open, and the panel has nothing to show until it has.
-    const renderer = new ProfileSectionRenderer(surface, (draw) => draw());
+  const surface: ProfileSurface | null = ctx
+    ? {
+        ctx,
+        setBackingSize: (deviceWidth, deviceHeight) => {
+          canvas.width = deviceWidth;
+          canvas.height = deviceHeight;
+        },
+      }
+    : null;
+  // Drawn through the immediate scheduler: every draw here is already a
+  // response to something that happened, and the panel has nothing to show
+  // until it has run.
+  const renderer = surface ? new ProfileSectionRenderer(surface, (draw) => draw()) : null;
+
+  function draw(): void {
+    if (!renderer) return;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    // A collapsed dock's body is `display: none`, so its canvas reads 0x0.
+    // Sizing a backing store from that leaves one device pixel of plot behind,
+    // and one device pixel is what an expand would then be showing.
+    if (!(width > 0) || !(height > 0)) return;
+    const viewport: ProfileViewport = { width, height, devicePixelRatio };
+    // `fit` claims no ratio, which is the honest mode for a plot whose box the
+    // user drags: a stated exaggeration would need both unit scales AND a box
+    // that does not change under it.
+    const view = fitProfileView(bounds, viewport, { kind: 'fit' }, {
+      horizontalToMetres: null,
+      verticalToMetres: null,
+    });
+    if (!view) return;
     renderer.setFrame({
       scene: { points: section.points, indices, colours, stations: null },
       view,
@@ -205,6 +247,8 @@ export function composeWorkbenchSection(options: ComposeSectionOptions): Workben
     });
     renderer.renderNow();
   }
+
+  draw();
 
   const detail: ProfileWorkbenchDetailRow[] = [
     { label: 'Returns in corridor', value: String(section.points.count) },
@@ -229,7 +273,15 @@ export function composeWorkbenchSection(options: ComposeSectionOptions): Workben
         ? `Showing ${indices.length} of ${section.points.count} returns.`
         : `Showing ${section.points.count} returns.`;
 
-  return { scope: section.scopeLabel, status, detail, drawn: indices.length };
+  return {
+    view: { scope: section.scopeLabel, status, detail, drawn: indices.length },
+    draw,
+  };
+}
+
+/** {@link prepareWorkbenchSection}, for a caller that draws only once. */
+export function composeWorkbenchSection(options: ComposeSectionOptions): WorkbenchSectionView {
+  return prepareWorkbenchSection(options).view;
 }
 
 /** What the presenter needs to read a section out of the live scene. */
@@ -240,18 +292,51 @@ export interface WorkbenchSectionScene {
     b: Vec3;
     corridorWidth: number | null;
   } | null;
-  section(request: ProfileSectionRequest): ProfileSectionResult | null;
+  /**
+   * The corridor walk, yielding the count examined so far.
+   *
+   * The generator rather than the run-to-completion `section()`: every point
+   * of every eligible layer is tested, and doing that in one pass freezes the
+   * app with the dock already mounted and empty.
+   */
+  sectionChunks(
+    request: ProfileSectionRequest,
+  ): Generator<number, ProfileSectionResult | null, void>;
   /** Render units to metres, or null when the frame cannot state a unit. */
   metresPerUnit(): number | null;
   devicePixelRatio(): number;
+  /** Run the next slice of the walk. Absent ⇒ a frame callback. */
+  scheduleSlice?(run: () => void): void;
+  /** Milliseconds elapsed, for the slice budget. Absent ⇒ `Date.now`. */
+  now?(): number;
+  /** Watch the plot's box. Absent ⇒ a `ResizeObserver` on the canvas. */
+  observeCanvasSize?(canvas: HTMLCanvasElement, onChange: () => void): () => void;
+}
+
+/** A frame if the host has one, a task otherwise. */
+function scheduleFrame(run: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => run());
+  else setTimeout(run, 0);
+}
+
+/** A `ResizeObserver` where there is one; an inert subscription otherwise. */
+function observeElementSize(canvas: HTMLCanvasElement, onChange: () => void): () => void {
+  if (typeof ResizeObserver !== 'function') return () => {};
+  const observer = new ResizeObserver(() => onChange());
+  observer.observe(canvas);
+  return () => observer.disconnect();
 }
 
 /**
- * Draw one measurement's section into a mounted dock.
+ * Draw one measurement's section into a mounted dock, and keep it drawn.
  *
  * Every refusal leaves the panel with a sentence rather than an empty plot: a
  * measurement whose endpoints are gone says so, and a scene with no eligible
  * layer says that instead of drawing nothing and explaining nothing.
+ *
+ * The returned function releases the size subscription and abandons a walk
+ * still in flight, so a dock replaced or closed mid-extraction stops working
+ * for a plot nobody is looking at.
  */
 export function presentWorkbenchSection(
   handle: {
@@ -262,33 +347,76 @@ export function presentWorkbenchSection(
   },
   id: string,
   scene: WorkbenchSectionScene,
-): void {
+): () => void {
+  let stopped = false;
+  let releaseSize: (() => void) | null = null;
+  // The seam reads this on every chunk boundary, so abandoning the walk costs
+  // one more chunk rather than the rest of the scene.
+  const signal = { aborted: false };
+
+  function dispose(): void {
+    stopped = true;
+    signal.aborted = true;
+    releaseSize?.();
+    releaseSize = null;
+  }
+
   const profile = scene.profile(id);
   if (!profile) {
     handle.setStatus('This profile no longer has two endpoints to section.');
-    return;
+    return dispose;
   }
-  const section = scene.section({
+
+  handle.setStatus(SECTION_WORKING_STATUS);
+  const walk = scene.sectionChunks({
     a: profile.a,
     b: profile.b,
     corridorWidth: profile.corridorWidth,
+    chunkSize: SECTION_CHUNK_SIZE,
+    signal,
   });
-  if (!section) {
-    handle.setStatus('No layer is currently eligible for a section.');
-    return;
+  const now = scene.now ?? Date.now;
+  const schedule = scene.scheduleSlice ?? scheduleFrame;
+
+  function finish(section: ProfileSectionResult | null): void {
+    if (!section) {
+      handle.setStatus('No layer is currently eligible for a section.');
+      return;
+    }
+    // A unit is stated only alongside the scale that reaches it: a section is
+    // measured in the scan's own render units, and a foot-CRS scan labelled
+    // "m" without the factor would read as metres it never was.
+    const metres = scene.metresPerUnit();
+    const plot = prepareWorkbenchSection({
+      section,
+      canvas: handle.canvas as unknown as WorkbenchCanvas,
+      devicePixelRatio: scene.devicePixelRatio(),
+      unitSuffix: metres === null ? null : 'm',
+      unitScale: metres ?? 1,
+    });
+    handle.setScope(plot.view.scope);
+    handle.setStatus(plot.view.status);
+    handle.setDetail(plot.view.detail);
+    const observe = scene.observeCanvasSize ?? observeElementSize;
+    releaseSize = observe(handle.canvas, () => {
+      if (!stopped) plot.draw();
+    });
   }
-  // A unit is stated only alongside the scale that reaches it: a section is
-  // measured in the scan's own render units, and a foot-CRS scan labelled "m"
-  // without the factor would read as metres it never was.
-  const metres = scene.metresPerUnit();
-  const view = composeWorkbenchSection({
-    section,
-    canvas: handle.canvas as unknown as WorkbenchCanvas,
-    devicePixelRatio: scene.devicePixelRatio(),
-    unitSuffix: metres === null ? null : 'm',
-    unitScale: metres ?? 1,
-  });
-  handle.setScope(view.scope);
-  handle.setStatus(view.status);
-  handle.setDetail(view.detail);
+
+  function slice(): void {
+    if (stopped) return;
+    const start = now();
+    for (;;) {
+      const step = walk.next();
+      if (step.done) {
+        finish(step.value);
+        return;
+      }
+      if (now() - start >= SLICE_BUDGET_MS) break;
+    }
+    schedule(slice);
+  }
+
+  slice();
+  return dispose;
 }

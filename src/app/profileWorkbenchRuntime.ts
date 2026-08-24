@@ -31,9 +31,9 @@ export interface ProfileWorkbenchRuntimeDeps {
   /** The live scene, read at open time so a dock is a snapshot of that moment. */
   scene: WorkbenchSectionScene;
   /**
-   * Told about a rejected panel chunk. Defaults to a console record: the user
-   * already has the focus view, so nothing about the failure is otherwise
-   * visible in the app.
+   * Told about a rejected panel chunk, or a fill that threw. Defaults to a
+   * console record: the user already has the focus view, so nothing about the
+   * failure is otherwise visible in the app.
    */
   onLoadFailure?: (error: unknown) => void;
 }
@@ -56,6 +56,11 @@ export function createProfileWorkbenchRuntime(
       deps.onLoadFailure ??
       ((error) => {
         console.error('OpenLiDARViewer: the profile workbench panel failed to load.', error);
+      }),
+    onPresentFailure:
+      deps.onLoadFailure ??
+      ((error) => {
+        console.error('OpenLiDARViewer: the profile workbench section failed to draw.', error);
       }),
   });
 }

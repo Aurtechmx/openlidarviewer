@@ -802,12 +802,16 @@ export class MeasurePanel {
       this._openResultFocus(s, trigger);
       return;
     }
-    // The workbench answers a boolean, never a rejection: a refusal and a
-    // failed chunk load are the same event here, and both leave Expand with
-    // the focus view it has always had.
-    void dock(s).then((opened) => {
-      if (!opened) this._openResultFocus(s, trigger);
-    });
+    // A refusal, a failed chunk load and a host that threw on the way to the
+    // plot are the same event here: all three leave Expand with the focus view
+    // it has always had. The rejection arm is not decoration — the host runs
+    // the whole extraction and render pass behind this promise.
+    void dock(s).then(
+      (opened) => {
+        if (!opened) this._openResultFocus(s, trigger);
+      },
+      () => this._openResultFocus(s, trigger),
+    );
   }
 
   /**
@@ -1262,12 +1266,23 @@ export class MeasurePanel {
       // result in the shared focus surface. An always-visible corner badge marks
       // it interactive — the faint header-row icon it replaces stayed invisible
       // until hovered, so nobody found it.
+      // What Expand opens is not one surface any more, so the promise it makes
+      // is not one sentence any more. A wide viewport with a stage gets the
+      // docked section workbench, which carries neither the station table nor
+      // the export buttons; everything else keeps the focus view, which does.
+      // A host that wired no workbench at all can still promise only the one.
+      const expandName = this._cb.openProfileWorkbench
+        ? `Expand profile ${s.name}: a docked section workbench on a wide viewport, a focus view otherwise`
+        : `Expand profile ${s.name} to a focus view`;
+      const expandTitle = this._cb.openProfileWorkbench
+        ? `Expand ${s.name}: a docked section workbench on a wide viewport, otherwise a focus view with the station table and export`
+        : `Expand ${s.name} full size, with the station table and export`;
       const chartWrap = el(
         'div',
         {
           className: 'olv-mp-chart-wrap',
-          title: `Expand ${s.name} to a focus view`,
-          ariaLabel: `Expand profile ${s.name} to a focus view`,
+          title: expandTitle,
+          ariaLabel: expandName,
         },
         [chart],
       );
@@ -1300,8 +1315,8 @@ export class MeasurePanel {
       const chartExpand = el('button', {
         className: 'olv-mp-chart-expand',
         unsafeHtml: ICON_EXPAND,
-        title: `Open ${s.name} full size, with the station table and export`,
-        ariaLabel: `Expand profile ${s.name} to a focus view`,
+        title: expandTitle,
+        ariaLabel: expandName,
       });
       chartExpand.addEventListener('click', (e) => {
         e.stopPropagation();

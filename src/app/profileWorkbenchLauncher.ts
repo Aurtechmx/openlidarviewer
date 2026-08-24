@@ -62,10 +62,21 @@ export interface ProfileWorkbenchLauncherDeps {
   /** The lazy seam. A rejection is a fallback, never an error the user sees. */
   load: () => Promise<ProfileWorkbenchModule>;
   stage: ProfileWorkbenchStage;
-  /** Fill the freshly mounted dock. Called once per successful open. */
-  present?: (handle: ProfileWorkbenchHandle, request: ProfileWorkbenchLaunchRequest) => void;
+  /**
+   * Fill the freshly mounted dock. Called once per successful open.
+   *
+   * May return a release function, which runs when that dock is closed or
+   * replaced: filling a dock subscribes to things (the plot's box, a walk
+   * still in flight) that outlive the call and must not outlive the panel.
+   */
+  present?: (
+    handle: ProfileWorkbenchHandle,
+    request: ProfileWorkbenchLaunchRequest,
+  ) => void | (() => void);
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
+  /** Told about a `present` that threw, for the same reason. */
+  onPresentFailure?: (error: unknown) => void;
 }
 
 export interface ProfileWorkbenchLauncher {
@@ -89,6 +100,7 @@ export function createProfileWorkbenchLauncher(
   deps: ProfileWorkbenchLauncherDeps,
 ): ProfileWorkbenchLauncher {
   let handle: ProfileWorkbenchHandle | null = null;
+  let release: (() => void) | null = null;
   // Every mount takes a token. The panel's own `onClose` clears the field only
   // while its token is still the live one, so a dock closed by the mount that
   // replaced it cannot null out its successor.
@@ -98,6 +110,8 @@ export function createProfileWorkbenchLauncher(
     const open = handle;
     handle = null;
     generation++;
+    release?.();
+    release = null;
     open?.close();
     if (open) deps.stage.release();
   }
@@ -130,11 +144,22 @@ export function createProfileWorkbenchLauncher(
         // mount that replaced it must not hand back the successor's height.
         if (token !== generation) return;
         handle = null;
+        release?.();
+        release = null;
         deps.stage.release();
       },
     });
     handle = mounted;
-    deps.present?.(mounted, request);
+    try {
+      release = deps.present?.(mounted, request) ?? null;
+    } catch (error) {
+      // A dock nobody could fill is worse than no dock: it holds its share of
+      // the stage over a plot that was never drawn. Hand the stage back and
+      // answer false, so the caller opens the surface it always had.
+      deps.onPresentFailure?.(error);
+      close();
+      return false;
+    }
     return true;
   }
 
