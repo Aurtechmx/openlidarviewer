@@ -1,0 +1,100 @@
+{
+ "schemaVersion": 1,
+ "studyId": "CHANGE-VOLUME-GRASS-MAPCALC-EIGHT-PAIRS",
+ "claimId": "CHANGE-VOLUME",
+ "example": false,
+ "notes": [
+  "The tolerance is relative because the candidate stores elevations as Float32. It was derived from that representation and not fitted to the result; the protocol states the derivation.",
+  "GRASS reproduces all eight closed-form volumes to within 1e-6 m3, so the residual is the candidate's alone and is bounded at 7e-6 relative.",
+  "Truth is scored first. Two programs summing the same wrong cells would agree perfectly, so agreement between implementations is reported second.",
+  "This study is complete and its claim is NOT promoted. lint:claim-prose-sync requires the v0.6.6 release documents to state the live E4 count, so a promotion here would rewrite what a shipped release said its evidence was. Twelve was true for v0.6.6. Scoping a versioned release document to the register at its own tag is a separate change, and making it inside the change that benefits from it is the wrong order."
+ ],
+ "protocolRef": {
+  "protocolId": "PROTO-CHANGE-GRASS-MAPCALC",
+  "digest": "sha256:747e408a70ef42b8db069a874565551d59cad4963ddaac7ac05ae73f8ad81635"
+ },
+ "candidate": {
+  "revision": "b35503706564d6c85aa77f8cfe439ca007b43f2a",
+  "version": "0.6.6",
+  "algorithmVersion": "v0.5.x"
+ },
+ "reference": {
+  "tool": "GRASS",
+  "version": "8.5.0",
+  "containerDigest": null,
+  "containerPinning": "not-executed",
+  "containerPinningNote": "A container digest is the pin this record wants. GRASS was installed from conda-forge into a host environment rather than pulled as an image, so no digest exists to record; the resolved executable path, the version GRASS reports and the exact command line stand in for it.",
+  "executablePath": "/opt/homebrew/bin/grass",
+  "commandLine": "r.mapcalc \"d = eb - ea\" ; r.mapcalc gain/loss with the same LoD rule ; r.univar -g",
+  "platform": "darwin-arm64"
+ },
+ "datasets": [
+  {
+   "datasetId": "OLV-DS-075-CHANGE-EPOCH-PAIRS",
+   "description": "Eight synthetic two-epoch grid pairs at one metre: uniform lift, block uplift, block excavation, near-cancelling cut and fill, sub-threshold, just above threshold, holes in one epoch, and a per-cell ramp. Each carries the gain and loss volume computed from its construction.",
+   "path": "validation/external-oracles/change/fixtures.json",
+   "sha256": "76bc1276ba470bc7ce3ca2f2de9ac139e0e4ebaf152765cf08e14fad1f239bb7"
+  }
+ ],
+ "parameterSets": [
+  {
+   "id": "PS-CHANGE-LOD-005-CELL-1M",
+   "description": "One-metre square cells, a single global level of detection of 0.05 m, strict inequality on both sides, and a cell absent from either epoch treated as not comparable.",
+   "candidateParameters": {
+    "function": "detectChange",
+    "levelOfDetectionM": 0.05,
+    "horizontalUnitToMetres": 1,
+    "cellSizeM": 1
+   },
+   "referenceParameters": {
+    "mapcalcDifference": "d = eb - ea",
+    "mapcalcGain": "gain = if(d > 0.05, d, null())",
+    "mapcalcLoss": "loss = if(d < -0.05, -d, null())",
+    "reduction": "r.univar -g"
+   }
+  }
+ ],
+ "metrics": {
+  "toleranceAbs": 0.00001,
+  "toleranceUnit": "relative to the compared volume, with a 1e-9 m3 absolute floor",
+  "minimumComparableCells": 2000,
+  "requiredWithinToleranceFraction": 1
+ },
+ "result": {
+  "comparableCells": 3007,
+  "skippedCells": 0,
+  "withinToleranceFraction": 1,
+  "maxAbsDiff": 0.000007
+ },
+ "status": "agree",
+ "statusReason": "All eight pairs agree with GRASS r.univar on gain and loss volume and on the gained and lost cell counts, and with the closed-form volume each pair was built from. The largest relative difference is 7e-6, inside the registered 1e-5. Nothing was widened.",
+ "rawArtifacts": [
+  {
+   "path": "validation/external-oracles/change/fixtures.json",
+   "sha256": "76bc1276ba470bc7ce3ca2f2de9ac139e0e4ebaf152765cf08e14fad1f239bb7",
+   "role": "candidate-input"
+  },
+  {
+   "path": "validation/external-oracles/change/references/grass-change.json",
+   "sha256": "fadb411ed47e016b903e2c51d91b2d392c085361010f772b34fde0b3ac234a67",
+   "role": "reference-output"
+  }
+ ],
+ "derivedArtifacts": [],
+ "scope": {
+  "supported": [
+   {
+    "datasetId": "OLV-DS-075-CHANGE-EPOCH-PAIRS",
+    "parameterSetId": "PS-CHANGE-LOD-005-CELL-1M"
+   }
+  ],
+  "unsupported": [
+   "Per-cell LoD95. One global level of detection is applied and cells are treated independently.",
+   "Real epoch pairs. The evidence is synthetic and cross-implementation, not field validation.",
+   "Registration error, which propagates into every cell and is absent by construction here.",
+   "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were measured.",
+   "Agreement with GRASS is not accuracy against a surveyed volume."
+  ]
+ },
+ "protocolDigest": "sha256:5c5754c846e73b2146cb426b24762f5df47d475d2c96127811089bce6c268aef"
+}
