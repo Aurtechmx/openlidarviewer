@@ -72,6 +72,26 @@ describe('precision refusal — coverage of the deliverable set', () => {
     expect(resolveExportDecision('contour.pdf', ctx({ precision: null })).status).toBe('validated');
   });
 
+  it('blocks every deliverable when the scan declares no measurable extent', () => {
+    // A streaming source whose declared data box collapses to a point and that
+    // offers no octree cube to fall back on. Before the frame check this minted
+    // a granted permit (reach 0, a 1.4e-45 m step, grade `fine`), so a terrain
+    // report could be stamped from a frame that was never established.
+    const permit = scanPrecisionPermit({
+      streaming: {
+        renderOrigin: [0, 0, 0],
+        dataBounds: () => [0, 0, 0, 0, 0, 0],
+      },
+      crs: METRE,
+    });
+    expect(permit).not.toBeNull();
+    expect(permit!.ok).toBe(false);
+    for (const reg of SCIENTIFIC_EXPORTERS) {
+      const decision = resolveExportDecision(reg.exporterId, ctx({ precision: permit }));
+      expect(decision.status, reg.exporterId).toBe('blocked');
+    }
+  });
+
   it('reports the launch failure first when both a launch and precision block', () => {
     // "There is no usable surface" answers the question more fundamentally than
     // "the surface would be too coarse", so it must not be masked.
