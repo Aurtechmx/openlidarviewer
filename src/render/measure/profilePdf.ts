@@ -76,6 +76,7 @@ import type { ProfileProvenance } from './profileProvenance';
 // reader can discover which surface a height was measured from.
 import { heightLabel, heightReferenceNote, verticalReferenceFromDatum } from '../../geo/height';
 import type { VerticalReference } from '../../geo/height';
+import { pdfInfoDate } from '../../pdfInfoDate';
 
 /** Same constant the format/summary modules keep module-local. */
 const FEET_PER_METRE = 3.280839895013123;
@@ -276,6 +277,12 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
+  // the wall clock at `create()`, so two identical builds either side of a
+  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
+  const infoStamp = pdfInfoDate(input.generatedAt);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const mono = await doc.embedFont(StandardFonts.Courier);
