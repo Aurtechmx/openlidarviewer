@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Twelve products are at E4. Five are algorithm checks against GDAL:
+Thirteen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -37,7 +37,14 @@ no order statistic. The twelfth is a reader rather than an algorithm:
 `E57-INGEST`, against PDAL 2.10.2 `readers.e57` over every point of a public
 CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
 `nor:` namespaced surface normals, and colour) as an exact quantised integer sum
-at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
+at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive. The
+thirteenth is a coordinate conversion: `CRS-UTM-PROJECTION`, against PROJ 9.8.1
+`cs2cs` and GeographicLib 2.7 `GeoConvert` over 36 frozen WGS-84 coordinates.
+The two legs answer different questions. GeoConvert applies the UTM zone rules
+itself, so it is the independent check on zone selection, exception zones
+included. `cs2cs` is handed an EPSG code built from the GeographicLib zone rather
+than from the candidate, so the projection arithmetic is measured against a
+target the candidate cannot move.
 
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
@@ -52,9 +59,21 @@ at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive.
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
 | `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
+| `CRS-UTM-PROJECTION` | PROJ 9.8.1 `cs2cs` + GeographicLib 2.7 `GeoConvert` | `tests/geodesyOracleAgreement.test.ts` | 36 fixtures × 2 coordinates × 2 oracles | 4.531×10⁻⁴ m easting, 9.521×10⁻⁴ m northing | 1.5×10⁻³ m |
 
-Every tolerance above was registered in `REFERENCE_SLOTS` before the references
-were generated. Each reference output, the exact command, the tool version and the
+Every tolerance above except the last was registered in `REFERENCE_SLOTS` before
+the references were generated. The UTM tolerance was written in the same change
+as its first result, so its protocol records `adopted-with-result` rather than
+`preregistered`. It was still set from the physical question and not from the
+number that came back: a grid coordinate a reader treats as exact has to agree
+with an independent implementation well inside the millimetre survey practice
+rounds to. The two references agree with each other to 2×10⁻⁹ m over the same
+fixtures, six orders below the gate, which is what makes the residual the
+candidate's own rather than a disagreement between the references. That residual
+changes sign across the fixture set, so it is series truncation and not an offset
+in one direction. WGS 84 stands on both sides of every comparison, so no datum
+transformation is exercised and no PROJ transformation grid is consulted, and
+`latLonToUtm` takes no height, so vertical reference and ECEF are outside it. Each reference output, the exact command, the tool version and the
 checksums are committed beside its input. The three GDAL rasters share one DEM,
 each pinning it by hash; contours use their own tilted-plane DEM, because on a
 plane linear interpolation is exact and the tolerance measures cross-implementation
