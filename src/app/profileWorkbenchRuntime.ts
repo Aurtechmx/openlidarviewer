@@ -21,15 +21,36 @@ import { createProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
 import { createStageProfileWorkbench } from './profileWorkbenchStage';
 import { presentWorkbenchSection } from './profileWorkbenchSection';
 import { loadProfileWorkbench } from '../lazyChunks';
+import { ProfileLinkOverlay } from '../render/ProfileLinkOverlay';
+import { focusPoseOnPoint } from '../render/measure/profilePointLink';
 
 import type { ProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
 import type { WorkbenchSectionScene } from './profileWorkbenchSection';
+import type { ProfileLinkOverlayHost } from '../render/ProfileLinkOverlay';
+import type { ProfileCameraPose } from '../render/measure/profilePointLink';
 
 export interface ProfileWorkbenchRuntimeDeps {
   /** The stage the dock shares its box with. */
   stage: { root: HTMLElement };
   /** The live scene, read at open time so a dock is a snapshot of that moment. */
   scene: WorkbenchSectionScene;
+  /**
+   * Scene membership for the 3D mark — `viewer.derivedLayerHost()`.
+   *
+   * Held here rather than on the scene because building the mark needs three,
+   * and this module is the first one on the path that is already behind a
+   * dynamic import. Absent leaves the link 2D only.
+   */
+  markerHost?: () => ProfileLinkOverlayHost;
+  /**
+   * Read and write the camera, for the deliberate focus action on a CLICKED
+   * selection. Absent means the workbench simply has no focus action; nothing
+   * else changes, and no hover has a path here either way.
+   */
+  camera?: {
+    pose(): ProfileCameraPose;
+    apply(pose: { position: [number, number, number]; target: [number, number, number] }): void;
+  };
   /**
    * Told about a rejected panel chunk, or a fill that threw. Defaults to a
    * console record: the user already has the focus view, so nothing about the
@@ -48,10 +69,40 @@ export interface ProfileWorkbenchRuntimeDeps {
 export function createProfileWorkbenchRuntime(
   deps: ProfileWorkbenchRuntimeDeps,
 ): ProfileWorkbenchLauncher {
+  // ONE overlay for the runtime, built on first use and reused by every dock.
+  // A per-dock overlay would need the launcher to remember to dispose the
+  // previous one, which is exactly the "stale mark left in the scene" bug.
+  let overlay: ProfileLinkOverlay | null = null;
+  const markerHost = deps.markerHost;
+  const camera = deps.camera;
+
+  const scene: WorkbenchSectionScene = {
+    ...deps.scene,
+    ...(markerHost
+      ? {
+          markLinkedReturn: (marker): void => {
+            if (!marker) {
+              overlay?.show(null);
+              return;
+            }
+            overlay ??= new ProfileLinkOverlay(markerHost());
+            overlay.show({ position: marker.position, mode: marker.mode, size: marker.size });
+          },
+        }
+      : {}),
+    ...(camera
+      ? {
+          focusPoint: (position): void => {
+            camera.apply(focusPoseOnPoint(camera.pose(), position));
+          },
+        }
+      : {}),
+  };
+
   return createProfileWorkbenchLauncher({
     load: () => loadProfileWorkbench(),
     stage: createStageProfileWorkbench(deps.stage),
-    present: (handle, request) => presentWorkbenchSection(handle, request.id, deps.scene),
+    present: (handle, request) => presentWorkbenchSection(handle, request.id, scene),
     onLoadFailure:
       deps.onLoadFailure ??
       ((error) => {

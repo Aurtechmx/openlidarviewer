@@ -5010,7 +5010,29 @@ body[data-theme="high-contrast"] .olv-mode-reset::after {
   display: flex; gap: var(--space-md); min-height: 0; flex: 1;
   padding: 0 var(--space-md) var(--space-sm);
 }
-.olv-workbench-canvas { flex: 1; min-width: 0; display: block; }
+/* The plot column: the picture, the crosshair over it, and the one-line
+   readout under it. The wrapper is what flexes; the two canvases are stacked,
+   so the crosshair can be redrawn without touching the splats beneath it. */
+.olv-workbench-plotwrap {
+  flex: 1; min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.olv-workbench-plot { position: relative; flex: 1; min-height: 0; }
+.olv-workbench-canvas,
+.olv-workbench-overlay {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%; display: block;
+}
+/* Decoration only: it never receives the pointer, so the events the plot
+   listens for are the ones the reader aimed at the plot. */
+.olv-workbench-overlay { pointer-events: none; }
+.olv-workbench-canvas { cursor: crosshair; }
+.olv-workbench-readout {
+  min-height: 1.2em; padding-top: var(--space-2xs);
+  font-size: var(--text-xs); color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 /* The exact figures for the selected return. A canvas is a picture; this is
    the readable half of the same information, so it never collapses away. */
 .olv-workbench-detail {

@@ -40,7 +40,7 @@ import {
 } from '../render/measure/profileColour';
 import {
   fitProfileView,
-  type ProfileViewport,
+  profileDataToScreen,
 } from '../render/measure/profileViewTransform';
 import {
   ProfileSectionRenderer,
@@ -48,13 +48,35 @@ import {
   type ProfileSurface,
 } from '../render/measure/profileSectionRenderer';
 import { axisSpanCaption } from '../render/measure/profileAxes';
+import {
+  buildProfileHitTestIndex,
+  queryProfileHitTest,
+} from '../render/measure/profileHitTest';
+import { buildProfilePointDetail } from '../render/measure/profilePointDetail';
+import {
+  profileDetailSources,
+  profileHoverReadout,
+  profileLinkStatusText,
+  profileMarkerSize,
+  profileReturnIdentity,
+} from '../render/measure/profilePointLink';
+import { drawProfileLinkOverlay } from '../render/measure/profileLinkOverlay2d';
+import { pointVerticalReference } from '../render/pointInfo';
+import { createProfileLinkController } from './profileLinkController';
 
 import type { ProfileWorkbenchDetailRow } from '../ui/ProfileWorkbench';
+import type { ProfileHitTestIndex } from '../render/measure/profileHitTest';
+import type { ProfileView, ProfileViewport } from '../render/measure/profileViewTransform';
+import type { ProfileLinkOverlayContext } from '../render/measure/profileLinkOverlay2d';
+import type { ProfileLinkController, ProfileLinkMarker } from './profileLinkController';
 import type {
+  ProfileReturnLocation,
+  ProfileReturnRef,
   ProfileSectionRequest,
   ProfileSectionResult,
 } from '../render/measure/profileSectionSeam';
 import type { Vec3 } from '../render/measure/types';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 
 /**
  * Most returns drawn at once.
@@ -154,11 +176,30 @@ export interface WorkbenchSectionView {
   readonly drawn: number;
 }
 
+/** The placement the last draw used, so a hit-test can agree with the picture. */
+export interface WorkbenchPlotFrame {
+  readonly view: ProfileView;
+  readonly viewport: ProfileViewport;
+}
+
 /** A composed section, with the means to draw it again at a new size. */
 export interface WorkbenchSectionPlot {
   readonly view: WorkbenchSectionView;
+  /** The section indices actually drawn, in draw order. */
+  readonly indices: Uint32Array;
   /** Draw at the canvas's current box. A box with no area draws nothing. */
   draw(): void;
+  /**
+   * The view and viewport the last successful draw used, or null when nothing
+   * has been drawn.
+   *
+   * Published rather than kept private because a hit-test has to be built over
+   * the SAME placement the picture was drawn with. Re-deriving it from the
+   * canvas would be a second `fitProfileView` call that a resize between the
+   * two could make disagree, and a hover would then name a return the reader
+   * is not pointing at.
+   */
+  frame(): WorkbenchPlotFrame | null;
 }
 
 export interface ComposeSectionOptions {
@@ -222,6 +263,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
   // until it has run.
   const renderer = surface ? new ProfileSectionRenderer(surface, (draw) => draw()) : null;
 
+  let lastFrame: WorkbenchPlotFrame | null = null;
+
   function draw(): void {
     if (!renderer) return;
     const width = canvas.clientWidth;
@@ -246,6 +289,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       style: SECTION_STYLE,
     });
     renderer.renderNow();
+    lastFrame = { view, viewport };
   }
 
   draw();
@@ -275,7 +319,9 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
 
   return {
     view: { scope: section.scopeLabel, status, detail, drawn: indices.length },
+    indices,
     draw,
+    frame: () => lastFrame,
   };
 }
 
@@ -311,6 +357,46 @@ export interface WorkbenchSectionScene {
   now?(): number;
   /** Watch the plot's box. Absent ⇒ a `ResizeObserver` on the canvas. */
   observeCanvasSize?(canvas: HTMLCanvasElement, onChange: () => void): () => void;
+  /**
+   * The CURRENT project-frame coordinate of one recorded source point.
+   *
+   * `viewer.profileSeam.locateReturn`. Absent leaves the plot exactly as it
+   * was before this existed: hover and click still read the section, and no
+   * mark is placed in 3D, because there is nothing to route the identity
+   * through.
+   */
+  locateReturn?(ref: ProfileReturnRef, out: Float64Array): ProfileReturnLocation;
+  /** Place or clear the 3D mark. Absent ⇒ the link is 2D only. */
+  markLinkedReturn?(marker: (ProfileLinkMarker & { readonly size: number }) | null): void;
+  /**
+   * Move the camera onto a point.
+   *
+   * Reached ONLY from a deliberate focus action on a clicked selection. A
+   * hover has no path to it, which is why it is not part of the marker call.
+   */
+  focusPoint?(position: readonly [number, number, number]): void;
+  /** Resolved CRS of the section frame, for the height wording. */
+  crs?(): ResolvedCrs | undefined;
+  /** Subscribe to pointer input on the plot. Absent ⇒ DOM listeners. */
+  observePointer?(canvas: HTMLCanvasElement, handlers: WorkbenchPointerHandlers): () => void;
+  /** One frame for the pointer flush. Absent ⇒ a frame callback. */
+  schedulePointerFlush?(run: () => void): void;
+}
+
+/** What the plot does with pointer input, independent of how it arrives. */
+export interface WorkbenchPointerHandlers {
+  move(xPx: number, yPx: number): void;
+  leave(): void;
+  click(xPx: number, yPx: number): void;
+  /**
+   * The deliberate focus gesture: lock the return under the pointer AND move
+   * the camera onto it.
+   *
+   * A separate entry from `click` because the camera is exactly what a hover
+   * must never do. Hover and click each have their own way in, and only this
+   * one reaches a camera at all.
+   */
+  focus(xPx: number, yPx: number): void;
 }
 
 /** A frame if the host has one, a task otherwise. */
@@ -341,15 +427,18 @@ function observeElementSize(canvas: HTMLCanvasElement, onChange: () => void): ()
 export function presentWorkbenchSection(
   handle: {
     canvas: HTMLCanvasElement;
+    overlay?: HTMLCanvasElement;
     setScope(text: string): void;
     setStatus(text: string): void;
     setDetail(rows: readonly ProfileWorkbenchDetailRow[] | null): void;
+    setReadout?(text: string | null): void;
   },
   id: string,
   scene: WorkbenchSectionScene,
 ): () => void {
   let stopped = false;
   let releaseSize: (() => void) | null = null;
+  let link: SectionPointLink | null = null;
   // The seam reads this on every chunk boundary, so abandoning the walk costs
   // one more chunk rather than the rest of the scene.
   const signal = { aborted: false };
@@ -359,6 +448,10 @@ export function presentWorkbenchSection(
     signal.aborted = true;
     releaseSize?.();
     releaseSize = null;
+    // Takes the 3D mark with it: a dock that is gone must not leave a cross
+    // standing in the scene over a section nobody can see any more.
+    link?.release();
+    link = null;
   }
 
   const profile = scene.profile(id);
@@ -397,9 +490,21 @@ export function presentWorkbenchSection(
     handle.setScope(plot.view.scope);
     handle.setStatus(plot.view.status);
     handle.setDetail(plot.view.detail);
+    link = attachSectionPointLink({
+      plot,
+      section,
+      handle,
+      scene,
+      unitToMetres: metres,
+      devicePixelRatio: scene.devicePixelRatio(),
+    });
     const observe = scene.observeCanvasSize ?? observeElementSize;
     releaseSize = observe(handle.canvas, () => {
-      if (!stopped) plot.draw();
+      if (stopped) return;
+      plot.draw();
+      // The plot's placement just changed, so the hit index built over the
+      // previous one would answer for pixels that now hold different returns.
+      link?.invalidate();
     });
   }
 
@@ -419,4 +524,270 @@ export function presentWorkbenchSection(
 
   slice();
   return dispose;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Point linkage: the section plot to the return it names in 3D
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Pixel radius a hover reaches.
+ *
+ * Wide enough that a single return is catchable with an ordinary pointer, and
+ * narrow enough that the nearest-with-deterministic-tie-break rule in
+ * `queryProfileHitTest` is deciding between neighbours rather than between
+ * halves of the plot.
+ */
+export const HIT_RADIUS_PX = 8;
+
+/** The row the detail list carries for the state of the 3D link. */
+export const LINK_ROW_LABEL = '3D link';
+
+/** What the plot needs to link its returns to the scene. */
+export interface SectionPointLinkOptions {
+  readonly plot: WorkbenchSectionPlot;
+  readonly section: ProfileSectionResult;
+  readonly handle: {
+    canvas: HTMLCanvasElement;
+    overlay?: HTMLCanvasElement;
+    setDetail(rows: readonly ProfileWorkbenchDetailRow[] | null): void;
+    setReadout?(text: string | null): void;
+  };
+  readonly scene: WorkbenchSectionScene;
+  /** Metres per section unit, or null when the frame cannot state one. */
+  readonly unitToMetres: number | null;
+  readonly devicePixelRatio: number;
+}
+
+/** A live linkage, and the means to take it down. */
+export interface SectionPointLink {
+  readonly controller: ProfileLinkController;
+  /** Rebuild the hit-test index and repaint. Call after the plot redraws. */
+  invalidate(): void;
+  release(): void;
+}
+
+/** A frame if the host has one, a task otherwise. */
+function schedulePointerFrame(run: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => run());
+  else setTimeout(run, 0);
+}
+
+/**
+ * Bind pointer input on the plot with plain DOM listeners.
+ *
+ * `offsetX/offsetY` is the plot's own coordinate space, which is what the hit
+ * index and the draw transform are both stated in; a client coordinate would
+ * need the canvas rectangle and would be wrong for one frame after any scroll
+ * or dock resize that has not laid out yet.
+ */
+function observePointerOnCanvas(
+  canvas: HTMLCanvasElement,
+  handlers: WorkbenchPointerHandlers,
+): () => void {
+  const at = (ev: Event): { x: number; y: number } => {
+    const p = ev as PointerEvent;
+    return { x: p.offsetX, y: p.offsetY };
+  };
+  const onMove = (ev: Event): void => {
+    const p = at(ev);
+    handlers.move(p.x, p.y);
+  };
+  const onLeave = (): void => handlers.leave();
+  const onClick = (ev: Event): void => {
+    const p = at(ev);
+    handlers.click(p.x, p.y);
+  };
+  // Double click, not a modifier: the camera move is the one action here that
+  // changes the 3D view, so it takes a gesture nobody performs by accident
+  // while reading along the section.
+  const onDoubleClick = (ev: Event): void => {
+    const p = at(ev);
+    handlers.focus(p.x, p.y);
+  };
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerleave', onLeave);
+  canvas.addEventListener('pointercancel', onLeave);
+  canvas.addEventListener('click', onClick);
+  canvas.addEventListener('dblclick', onDoubleClick);
+  return () => {
+    canvas.removeEventListener('pointermove', onMove);
+    canvas.removeEventListener('pointerleave', onLeave);
+    canvas.removeEventListener('pointercancel', onLeave);
+    canvas.removeEventListener('click', onClick);
+    canvas.removeEventListener('dblclick', onDoubleClick);
+  };
+}
+
+/** The detail rows for one locked return, with the state of its 3D link. */
+function lockedDetailRows(
+  detail: ReturnType<typeof buildProfilePointDetail>,
+  state: ProfileReturnLocation,
+): ProfileWorkbenchDetailRow[] {
+  const rows: ProfileWorkbenchDetailRow[] = [];
+  if (detail) {
+    for (const row of detail.rows) {
+      // A row the return does not carry keeps its label and says so. Dropping
+      // it would make an absent channel indistinguishable from one the section
+      // never had, which is the distinction the descriptor exists to hold.
+      rows.push({ label: row.label, value: row.known && row.value !== null ? row.value : 'unknown' });
+    }
+  }
+  rows.push({ label: LINK_ROW_LABEL, value: profileLinkStatusText(state) });
+  return rows;
+}
+
+/**
+ * Wire hover and click on the section plot to the return they name in 3D.
+ *
+ * Returns null when the host offers no way to resolve a return, in which case
+ * the plot behaves exactly as it did before: it draws, it reports its figures,
+ * and it takes no pointer input at all.
+ *
+ * EVERY ROUTE IS BY IDENTITY. A pointer position picks a section INDEX through
+ * the screen-cell index; the index becomes a slot, a source kind, a source id
+ * and that source's own point index; the scene is asked for THAT point. No
+ * step of it compares coordinates, so two returns a millimetre apart in a
+ * corridor are never confused for one another.
+ */
+export function attachSectionPointLink(
+  options: SectionPointLinkOptions,
+): SectionPointLink | null {
+  const { plot, section, handle, scene } = options;
+  const locateReturn = scene.locateReturn;
+  if (!locateReturn) return null;
+
+  const points = section.points;
+  const reference = pointVerticalReference(scene.crs?.());
+  const unitToMetres = options.unitToMetres ?? undefined;
+  // The card reads its world coordinates through the SAME locator the marker
+  // uses, so an evicted node blanks the coordinate rows instead of showing
+  // where the point used to be.
+  const locator = (
+    identity: { kind: 'static' | 'resident'; sourceId: string; pointIndex: number },
+    out: Float64Array,
+  ): ProfileReturnLocation =>
+    locateReturn(
+      { kind: identity.kind, id: identity.sourceId, pointIndex: identity.pointIndex },
+      out,
+    );
+  const detailSources = profileDetailSources(section.sources, locator);
+  const markerSize = profileMarkerSize(section.band);
+
+  let index: ProfileHitTestIndex | null = null;
+
+  /** The hit index for the CURRENT drawn frame, rebuilt only when it changed. */
+  function ensureIndex(): ProfileHitTestIndex | null {
+    if (index) return index;
+    const frame = plot.frame();
+    if (!frame) return null;
+    index = buildProfileHitTestIndex({
+      section: points,
+      displayed: plot.indices,
+      widthPx: frame.viewport.width,
+      heightPx: frame.viewport.height,
+      // The affine restated from `profileDataToScreen`: same origin, same
+      // scales, same sign flip on height. The two cannot drift because the
+      // view they read is the one the draw recorded.
+      projection: {
+        chainageAtOrigin: frame.view.centreChainage,
+        heightAtOrigin: frame.view.centreHeight,
+        originXPx: frame.viewport.width / 2,
+        originYPx: frame.viewport.height / 2,
+        pxPerChainage: frame.view.pxPerChainage,
+        pxPerHeight: frame.view.pxPerHeight,
+      },
+      cellSizePx: HIT_RADIUS_PX * 2,
+    });
+    return index;
+  }
+
+  function paint(
+    hover: { x: number; y: number } | null,
+    locked: { x: number; y: number } | null,
+  ): void {
+    const overlay = handle.overlay;
+    if (!overlay) return;
+    const ctx = overlay.getContext('2d') as ProfileLinkOverlayContext | null;
+    if (!ctx) return;
+    const width = overlay.clientWidth;
+    const height = overlay.clientHeight;
+    if (!(width > 0) || !(height > 0)) return;
+    const dpr = options.devicePixelRatio > 0 ? options.devicePixelRatio : 1;
+    const deviceWidth = Math.max(1, Math.round(width * dpr));
+    const deviceHeight = Math.max(1, Math.round(height * dpr));
+    // Assigning either dimension clears the surface, so it is written only on
+    // a real change; the draw below clears it anyway.
+    if (overlay.width !== deviceWidth) overlay.width = deviceWidth;
+    if (overlay.height !== deviceHeight) overlay.height = deviceHeight;
+    drawProfileLinkOverlay(ctx, {
+      widthPx: width,
+      heightPx: height,
+      devicePixelRatio: dpr,
+      hover,
+      locked,
+    });
+  }
+
+  const controller = createProfileLinkController({
+    query: (x, y) => {
+      const live = ensureIndex();
+      return live ? queryProfileHitTest(live, x, y, HIT_RADIUS_PX) : null;
+    },
+    project: (i, out) => {
+      const frame = plot.frame();
+      if (!frame || i < 0 || i >= points.count) return false;
+      profileDataToScreen(frame.view, frame.viewport, points.chainage[i]!, points.height[i]!, out);
+      return Number.isFinite(out[0]!) && Number.isFinite(out[1]!);
+    },
+    identify: (i) => profileReturnIdentity(points, section.sources, i),
+    locate: (identity, out) => locator(identity, out),
+    readout: (i) =>
+      profileHoverReadout(points, i, { reference, unitToMetres }),
+    detail: (i) =>
+      buildProfilePointDetail(points, i, {
+        sources: detailSources,
+        crs: scene.crs?.(),
+        ...(unitToMetres === undefined ? {} : { unitToMetres }),
+      }),
+    schedule: scene.schedulePointerFlush ?? schedulePointerFrame,
+    paint,
+    mark: (marker) => {
+      scene.markLinkedReturn?.(marker ? { ...marker, size: markerSize } : null);
+    },
+    present: (state) => {
+      // The hover line, then the locked one: a pointer that has left the plot
+      // leaves the selection's own line standing rather than an empty strip.
+      handle.setReadout?.(state.hover?.readout ?? state.locked?.readout ?? null);
+      // With nothing selected the list returns to the section's own figures,
+      // which is what the panel showed before anything was clicked.
+      handle.setDetail(
+        state.locked ? lockedDetailRows(state.detail, state.locked.state) : plot.view.detail,
+      );
+    },
+    ...(scene.focusPoint ? { focus: scene.focusPoint } : {}),
+  });
+
+  const observe = scene.observePointer ?? observePointerOnCanvas;
+  const release = observe(handle.canvas, {
+    move: (x, y) => controller.pointerMove(x, y),
+    leave: () => controller.pointerLeave(),
+    click: (x, y) => controller.click(x, y),
+    focus: (x, y) => {
+      controller.click(x, y);
+      controller.focusSelection();
+    },
+  });
+
+  return {
+    controller,
+    invalidate: () => {
+      index = null;
+      controller.refresh();
+    },
+    release: () => {
+      release();
+      controller.dispose();
+    },
+  };
 }

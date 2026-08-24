@@ -87,6 +87,16 @@ export interface ProfileWorkbenchOptions {
 export interface ProfileWorkbenchHandle {
   readonly element: HTMLElement;
   readonly canvas: HTMLCanvasElement;
+  /**
+   * The surface the hover crosshair and the selection box are drawn on,
+   * stacked over the plot.
+   *
+   * OPTIONAL, so a handle built by an older double still satisfies the type.
+   * A separate canvas because a section can hold a hundred thousand splats:
+   * moving a crosshair by redrawing the plot would put every one of them
+   * through `fillRect` on each hover frame.
+   */
+  readonly overlay?: HTMLCanvasElement;
   /** Occupied height in pixels, as the dock module derives it. */
   height(): number;
   collapsed(): boolean;
@@ -97,6 +107,14 @@ export interface ProfileWorkbenchHandle {
   setStatus(text: string): void;
   /** The selected return's figures, as text. Null clears the selection. */
   setDetail(rows: readonly ProfileWorkbenchDetailRow[] | null): void;
+  /**
+   * The one-line readout for the return under the pointer. Null clears it.
+   *
+   * Separate from `setStatus`, which is a polite live region: a line that
+   * changes on every hover would have a screen reader announcing the plot
+   * continuously while the pointer crosses it.
+   */
+  setReadout?(text: string | null): void;
   close(): void;
 }
 
@@ -132,7 +150,9 @@ class ProfileWorkbench {
   private readonly _scope: HTMLElement;
   private readonly _status: HTMLElement;
   private readonly _detail: HTMLElement;
+  private readonly _readout: HTMLElement;
   private readonly _canvas: HTMLCanvasElement;
+  private readonly _overlay: HTMLCanvasElement;
   private readonly _collapseBtn: HTMLButtonElement;
   private readonly _teardown: (() => void)[] = [];
   private _state: DockState;
@@ -190,11 +210,25 @@ class ProfileWorkbench {
     this._canvas.setAttribute('role', 'img');
     this._canvas.setAttribute('aria-label', CANVAS_DESCRIPTION);
 
+    // Decoration over a picture: the crosshair states nothing the readout and
+    // the detail rows do not already state as text, so it is hidden from
+    // assistive technology rather than announced as a second image.
+    this._overlay = el('canvas', { className: 'olv-workbench-overlay' });
+    this._overlay.setAttribute('aria-hidden', 'true');
+
     this._detail = el('div', { className: 'olv-workbench-detail' });
     this._detail.setAttribute('aria-label', 'Selected return');
     this.setDetail(null);
 
-    const body = el('div', { className: 'olv-workbench-body' }, [this._canvas, this._detail]);
+    // Not a live region. The pointer crosses hundreds of returns in a sweep,
+    // and announcing each one would talk over everything else.
+    this._readout = el('div', { className: 'olv-workbench-readout' });
+
+    const plot = el('div', { className: 'olv-workbench-plot' }, [this._canvas, this._overlay]);
+    const body = el('div', { className: 'olv-workbench-body' }, [
+      el('div', { className: 'olv-workbench-plotwrap' }, [plot, this._readout]),
+      this._detail,
+    ]);
 
     this._root = el('section', { className: 'olv-workbench' }, [
       this._splitter,
@@ -233,6 +267,7 @@ class ProfileWorkbench {
     return {
       element: this._root,
       canvas: this._canvas,
+      overlay: this._overlay,
       height: () => dockOccupiedHeight(this._state, this._limits()),
       collapsed: () => this._state.collapsed,
       setCollapsed: (v: boolean) => this.setCollapsed(v),
@@ -243,6 +278,9 @@ class ProfileWorkbench {
         this._status.textContent = t;
       },
       setDetail: (rows) => this.setDetail(rows),
+      setReadout: (t: string | null) => {
+        this._readout.textContent = t ?? '';
+      },
       close: () => this.close(),
     };
   }
