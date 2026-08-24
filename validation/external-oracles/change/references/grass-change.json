@@ -1,0 +1,463 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "CHANGE-GRASS-MAPCALC-2026-08",
+  "generatedBy": "validation/external-oracles/change/run-grass.mjs",
+  "fixturesSha256": "sha256:76bc1276ba470bc7ce3ca2f2de9ac139e0e4ebaf152765cf08e14fad1f239bb7",
+  "caseCount": 8,
+  "levelOfDetectionM": 0.05,
+  "environment": {
+    "platform": "darwin-arm64",
+    "nodeVersion": "v26.7.0"
+  },
+  "oracles": [
+    {
+      "oracleId": "grass-8.5.0",
+      "role": "independent-same-quantity-implementation",
+      "executablePath": "/Users/ssid02/.olv-oracles/envs/olv-oracles/bin/grass",
+      "versionOutput": "GRASS 8.5.0",
+      "commandLine": "r.mapcalc \"d = eb - ea\" ; r.mapcalc gain/loss with the same LoD rule ; r.univar -g"
+    }
+  ],
+  "results": [
+    {
+      "id": "C01-uniform-lift",
+      "comparableCells": 400,
+      "gainedCells": 400,
+      "lostCells": 0,
+      "gainVolumeM3": 200,
+      "lossVolumeM3": 0,
+      "maxGainM": 0.5,
+      "maxLossM": 0.5,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 400,
+          "null_cells": 0,
+          "cells": 400,
+          "min": 0.5,
+          "max": 0.5,
+          "range": 0,
+          "mean": 0.5,
+          "mean_of_abs": 0.5,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 200
+        },
+        "gain": {
+          "n": 400,
+          "null_cells": 0,
+          "cells": 400,
+          "min": 0.5,
+          "max": 0.5,
+          "range": 0,
+          "mean": 0.5,
+          "mean_of_abs": 0.5,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 200
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 400,
+          "cells": 400,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    },
+    {
+      "id": "C02-block-uplift",
+      "comparableCells": 400,
+      "gainedCells": 20,
+      "lostCells": 0,
+      "gainVolumeM3": 40,
+      "lossVolumeM3": 0,
+      "maxGainM": 2,
+      "maxLossM": 0,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 400,
+          "null_cells": 0,
+          "cells": 400,
+          "min": 0,
+          "max": 2,
+          "range": 2,
+          "mean": 0.1,
+          "mean_of_abs": 0.1,
+          "stddev": 0.435889894354067,
+          "variance": 0.19,
+          "coeff_var": 435.889894354067,
+          "sum": 40
+        },
+        "gain": {
+          "n": 20,
+          "null_cells": 380,
+          "cells": 400,
+          "min": 2,
+          "max": 2,
+          "range": 0,
+          "mean": 2,
+          "mean_of_abs": 2,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 40
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 400,
+          "cells": 400,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    },
+    {
+      "id": "C03-block-excavation",
+      "comparableCells": 400,
+      "gainedCells": 0,
+      "lostCells": 25,
+      "gainVolumeM3": 0,
+      "lossVolumeM3": 37.5,
+      "maxGainM": 0,
+      "maxLossM": -1.5,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 400,
+          "null_cells": 0,
+          "cells": 400,
+          "min": -1.5,
+          "max": 0,
+          "range": 1.5,
+          "mean": -0.09375,
+          "mean_of_abs": 0.09375,
+          "stddev": 0.363092188706945,
+          "variance": 0.1318359375,
+          "coeff_var": -387.298334620742,
+          "sum": -37.5
+        },
+        "gain": {
+          "n": 0,
+          "null_cells": 400,
+          "cells": 400,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        },
+        "loss": {
+          "n": 25,
+          "null_cells": 375,
+          "cells": 400,
+          "min": 1.5,
+          "max": 1.5,
+          "range": 0,
+          "mean": 1.5,
+          "mean_of_abs": 1.5,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 37.5
+        }
+      }
+    },
+    {
+      "id": "C04-cut-fill-net-zero",
+      "comparableCells": 576,
+      "gainedCells": 36,
+      "lostCells": 36,
+      "gainVolumeM3": 43.1999999999996,
+      "lossVolumeM3": 43.1999999999996,
+      "maxGainM": 1.19999999999999,
+      "maxLossM": -1.19999999999999,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 576,
+          "null_cells": 0,
+          "cells": 576,
+          "min": -1.19999999999999,
+          "max": 1.19999999999999,
+          "range": 2.39999999999998,
+          "mean": 0,
+          "mean_of_abs": 0.149999999999999,
+          "stddev": 0.424264068711924,
+          "variance": 0.179999999999997,
+          "coeff_var": 0,
+          "sum": 0
+        },
+        "gain": {
+          "n": 36,
+          "null_cells": 540,
+          "cells": 576,
+          "min": 1.19999999999999,
+          "max": 1.19999999999999,
+          "range": 0,
+          "mean": 1.19999999999999,
+          "mean_of_abs": 1.19999999999999,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 43.1999999999996
+        },
+        "loss": {
+          "n": 36,
+          "null_cells": 540,
+          "cells": 576,
+          "min": 1.19999999999999,
+          "max": 1.19999999999999,
+          "range": 0,
+          "mean": 1.19999999999999,
+          "mean_of_abs": 1.19999999999999,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 43.1999999999996
+        }
+      }
+    },
+    {
+      "id": "C05-sub-lod",
+      "comparableCells": 256,
+      "gainedCells": 0,
+      "lostCells": 0,
+      "gainVolumeM3": 0,
+      "lossVolumeM3": 0,
+      "maxGainM": 0.0399999999999991,
+      "maxLossM": 0.0399999999999991,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 256,
+          "null_cells": 0,
+          "cells": 256,
+          "min": 0.0399999999999991,
+          "max": 0.0399999999999991,
+          "range": 0,
+          "mean": 0.0399999999999991,
+          "mean_of_abs": 0.0399999999999991,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 10.2399999999998
+        },
+        "gain": {
+          "n": 0,
+          "null_cells": 256,
+          "cells": 256,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 256,
+          "cells": 256,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    },
+    {
+      "id": "C06-just-above-lod",
+      "comparableCells": 256,
+      "gainedCells": 256,
+      "lostCells": 0,
+      "gainVolumeM3": 15.3600000000001,
+      "lossVolumeM3": 0,
+      "maxGainM": 0.0600000000000005,
+      "maxLossM": 0.0600000000000005,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 256,
+          "null_cells": 0,
+          "cells": 256,
+          "min": 0.0600000000000005,
+          "max": 0.0600000000000005,
+          "range": 0,
+          "mean": 0.0600000000000005,
+          "mean_of_abs": 0.0600000000000005,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 15.3600000000001
+        },
+        "gain": {
+          "n": 256,
+          "null_cells": 0,
+          "cells": 256,
+          "min": 0.0600000000000005,
+          "max": 0.0600000000000005,
+          "range": 0,
+          "mean": 0.0600000000000005,
+          "mean_of_abs": 0.0600000000000005,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 15.3600000000001
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 256,
+          "cells": 256,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    },
+    {
+      "id": "C07-holes",
+      "comparableCells": 319,
+      "gainedCells": 33,
+      "lostCells": 0,
+      "gainVolumeM3": 33,
+      "lossVolumeM3": 0,
+      "maxGainM": 1,
+      "maxLossM": 0,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 319,
+          "null_cells": 5,
+          "cells": 324,
+          "min": 0,
+          "max": 1,
+          "range": 1,
+          "mean": 0.103448275862069,
+          "mean_of_abs": 0.103448275862069,
+          "stddev": 0.304543478149236,
+          "variance": 0.0927467300832342,
+          "coeff_var": 294.392028877595,
+          "sum": 33
+        },
+        "gain": {
+          "n": 33,
+          "null_cells": 291,
+          "cells": 324,
+          "min": 1,
+          "max": 1,
+          "range": 0,
+          "mean": 1,
+          "mean_of_abs": 1,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 33
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 324,
+          "cells": 324,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    },
+    {
+      "id": "C08-ramp",
+      "comparableCells": 400,
+      "gainedCells": 380,
+      "lostCells": 0,
+      "gainVolumeM3": 380,
+      "lossVolumeM3": 0,
+      "maxGainM": 1.9,
+      "maxLossM": 0,
+      "meanAbsChangeM": null,
+      "rawUnivar": {
+        "d": {
+          "n": 400,
+          "null_cells": 0,
+          "cells": 400,
+          "min": 0,
+          "max": 1.9,
+          "range": 1.9,
+          "mean": 0.95,
+          "mean_of_abs": 0.95,
+          "stddev": 0.57662812973354,
+          "variance": 0.3325,
+          "coeff_var": 60.6976978666884,
+          "sum": 380
+        },
+        "gain": {
+          "n": 380,
+          "null_cells": 20,
+          "cells": 400,
+          "min": 0.1,
+          "max": 1.9,
+          "range": 1.8,
+          "mean": 1,
+          "mean_of_abs": 1,
+          "stddev": 0.547722557505166,
+          "variance": 0.3,
+          "coeff_var": 54.7722557505166,
+          "sum": 380
+        },
+        "loss": {
+          "n": 0,
+          "null_cells": 400,
+          "cells": 400,
+          "min": 0,
+          "max": 0,
+          "range": 0,
+          "mean": 0,
+          "mean_of_abs": 0,
+          "stddev": 0,
+          "variance": 0,
+          "coeff_var": 0,
+          "sum": 0
+        }
+      }
+    }
+  ]
+}
