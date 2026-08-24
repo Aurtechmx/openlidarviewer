@@ -33,6 +33,7 @@ import {
   type TerrainReportContent,
   type TerrainReportContentOptions,
 } from '../../terrain/export/terrainReportContent';
+import { pdfInfoDate } from '../../pdfInfoDate';
 
 const INK = rgb(0.12, 0.14, 0.18);
 const DIM = rgb(0.42, 0.46, 0.52);
@@ -83,7 +84,8 @@ function isContent(x: unknown): x is TerrainReportContent {
  * Build the Terrain Intelligence Report PDF and return its bytes. Accepts either
  * a pre-built {@link TerrainReportContent} (preferred when the caller already
  * assembled it) or a raw {@link AnalyseContoursResult} + provenance options
- * (assembled here). Pure given a fixed `generatedAt`.
+ * (assembled here). Pure: it carries no timestamp, and its Info-dictionary
+ * dates are pinned rather than read from the clock.
  */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
@@ -100,6 +102,12 @@ export async function buildTerrainReportPdf(
   doc.setTitle(content.title, { showInWindowTitleBar: true });
   doc.setLanguage('en-US');
   doc.setAuthor('OpenLiDARViewer');
+  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
+  // the wall clock at `create()`, so two identical builds either side of a
+  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
+  const infoStamp = pdfInfoDate(undefined);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
 
