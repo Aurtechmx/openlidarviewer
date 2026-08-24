@@ -1,20 +1,28 @@
 {
   "schemaVersion": 1,
   "protocolId": "RASTERIZE-GRASS-RINXYZ-2026-08",
-  "claims": ["DTM", "DSM"],
+  "claims": [
+    "DTM",
+    "DSM"
+  ],
   "quantity": "Per-cell reduction of a scattered point cloud onto a fixed grid: the mean and the minimum of the returns in a cell for the terrain side, and the maximum for the surface side, together with the number of returns each cell received.",
   "whyThisStudyExists": "The DTM and DSM claims already carry a PDAL writers.gdal leg, and that leg was run with radius 0.45 against resolution 1. A search radius below half the cell size means each output cell sees essentially the one return that belongs to it, and the fixtures were built one return per cell centre to make that exact. That comparison is a real test of grid origin, cell indexing and row order, and its own record says so. It is not a test of how either side reduces MANY returns inside one cell, because there were never many. This study puts about nine returns in every cell and asks a rasteriser from a different lineage the same question.",
   "candidate": [
     {
       "function": "rasterizeDtm",
       "module": "src/terrain/ground/rasterizeDtm.ts",
-      "aggregations": ["mean", "min"],
+      "aggregations": [
+        "mean",
+        "min"
+      ],
       "note": "The production function, given an all-ones ground mask so every return is offered. The harness serialises inputs and reads outputs; it reproduces no part of the binning or the reduction."
     },
     {
       "function": "buildDsm",
       "module": "src/terrain/surface/buildDsm.ts",
-      "aggregations": ["max"],
+      "aggregations": [
+        "max"
+      ],
       "note": "The production surface rasteriser, which takes the highest return per cell. rasterizeDtm has no max mode, so the surface side is the function that actually ships it."
     }
   ],
@@ -40,14 +48,19 @@
     "whyThisDensity": "Nine returns per cell is where mean, min and max are three different numbers. At one return per cell they collapse into one number and the comparison silently degenerates into the indexing test this study was written to go beyond."
   },
   "metrics": {
-    "toleranceAbsM": 0.00005,
+    "toleranceAbsM": 5e-05,
     "toleranceUnit": "metre",
     "toleranceBasis": "Derived from the candidate's storage, not from any observed residual. DemRaster.z and SurfaceGrid.z are Float32Array, so an elevation is held to a 24-bit mantissa. Every fixture elevation sits under 128 m, where one float32 step is 7.63e-6 m. The gate sits about six steps above that. GRASS computes and reports in double, so anything larger than a few float32 steps is a semantic difference rather than rounding.",
     "cellCountsExact": true,
     "cellCountsExactReason": "Returns per cell and which cells are empty are integers produced by the same binning rule on both sides. A disagreement there is a rule difference, not arithmetic, and must fail.",
     "requiredWithinToleranceFraction": 1,
     "minimumComparableCells": 6000,
-    "reported": ["maxAbsDiff", "rmse", "signedBias", "withinToleranceFraction"]
+    "reported": [
+      "maxAbsDiff",
+      "rmse",
+      "signedBias",
+      "withinToleranceFraction"
+    ]
   },
   "decisionRule": "For each scene and each of mean, min and max, every comparable cell must lie within the registered tolerance, and the per-cell return counts and the empty-cell set must match exactly. One failure fails the study.",
   "scopeLimits": [
@@ -60,5 +73,103 @@
     "Synthetic fixtures generated from an explicit rule. No external dataset is cited and no licence is relied on."
   ],
   "freezeStatus": "preregistered",
-  "freezeStatusReason": "toleranceAbsM, the decision rule, the required fraction and the exact-count rule were written into this file and committed before any residual was computed. The reference JSON was generated first, but nothing compared it to the candidate until the tolerance was fixed."
+  "freezeStatusReason": "toleranceAbsM, the decision rule, the required fraction and the exact-count rule were written into this file and committed before any residual was computed. The reference JSON was generated first, but nothing compared it to the candidate until the tolerance was fixed.",
+  "measured": {
+    "recordedAfterTheRun": true,
+    "note": "Added after the comparison ran. toleranceAbsM above is unchanged from the commit that registered it; nothing here widened it.",
+    "grassVersion": "GRASS 8.5.0",
+    "comparableCells": 19020,
+    "withinToleranceFraction": 1,
+    "worstCellOverTheWholeStudy": {
+      "maxAbsDiffM": 3.813766213056624e-06,
+      "asFloat32Steps": "about half a float32 step at these elevations, where one step is 7.63e-06 m",
+      "scene": "R01-tilted-plane",
+      "reduction": "min"
+    },
+    "perScene": {
+      "R01-tilted-plane": {
+        "mean": {
+          "comparableCells": 1599,
+          "maxAbsDiffM": 3.8100406527519226e-06,
+          "rmseM": 2.2260799695673217e-06,
+          "signedBiasM": -4.225756964000353e-09
+        },
+        "min": {
+          "comparableCells": 1599,
+          "maxAbsDiffM": 3.813766213056624e-06,
+          "rmseM": 2.2024268985674204e-06,
+          "signedBiasM": -6.219942173931845e-08
+        },
+        "max": {
+          "comparableCells": 1599,
+          "maxAbsDiffM": 3.8137655025138884e-06,
+          "rmseM": 2.2204155039589446e-06,
+          "signedBiasM": -2.0696554261798353e-08
+        }
+      },
+      "R02-rolling-incommensurate": {
+        "mean": {
+          "comparableCells": 1600,
+          "maxAbsDiffM": 3.7033719308965374e-06,
+          "rmseM": 1.1842960931463588e-06,
+          "signedBiasM": -1.7595459524955002e-08
+        },
+        "min": {
+          "comparableCells": 1600,
+          "maxAbsDiffM": 3.782968562404676e-06,
+          "rmseM": 1.1663615975453813e-06,
+          "signedBiasM": -8.530635930092955e-08
+        },
+        "max": {
+          "comparableCells": 1600,
+          "maxAbsDiffM": 3.8052524331533277e-06,
+          "rmseM": 1.250356850545404e-06,
+          "signedBiasM": 1.5226348253349896e-08
+        }
+      },
+      "R03-ridge-with-canopy": {
+        "mean": {
+          "comparableCells": 1598,
+          "maxAbsDiffM": 1.9062831100313815e-06,
+          "rmseM": 8.803892772490897e-07,
+          "signedBiasM": -6.088893354472908e-09
+        },
+        "min": {
+          "comparableCells": 1598,
+          "maxAbsDiffM": 1.8980353573283537e-06,
+          "rmseM": 7.624831950903236e-07,
+          "signedBiasM": -4.5646566309849255e-09
+        },
+        "max": {
+          "comparableCells": 1598,
+          "maxAbsDiffM": 1.9054855471267729e-06,
+          "rmseM": 9.974010913618053e-07,
+          "signedBiasM": -2.9582805291774763e-09
+        }
+      },
+      "R04-variable-density": {
+        "mean": {
+          "comparableCells": 1543,
+          "maxAbsDiffM": 3.8072065962069246e-06,
+          "rmseM": 2.1620289387899386e-06,
+          "signedBiasM": -1.7563933137307772e-08
+        },
+        "min": {
+          "comparableCells": 1543,
+          "maxAbsDiffM": 3.8135200952638115e-06,
+          "rmseM": 2.2182213458101e-06,
+          "signedBiasM": 6.242152494672185e-08
+        },
+        "max": {
+          "comparableCells": 1543,
+          "maxAbsDiffM": 3.813573655975233e-06,
+          "rmseM": 2.212303610988817e-06,
+          "signedBiasM": -1.6155170493790776e-08
+        }
+      }
+    },
+    "biasReading": "Signed bias is candidate minus GRASS. It is between -8.6e-08 m and +6.2e-08 m and takes both signs across the twelve scene-reduction pairs, which is what round-to-nearest float32 storage of a double looks like. No direction is claimed: at this magnitude the bias is two orders of magnitude below a single float32 step and is not evidence of a systematic offset either way.",
+    "binningResult": "Per-cell return counts match exactly on all 6400 cells of all four scenes, and the two sides name the same 60 empty cells. That is the neighbourhood result the existing PDAL leg could not produce, because its fixtures held one return per cell.",
+    "whatWouldHaveShownADisagreement": "A different half-open convention on a cell edge, a different rule for which cell an origin-line point belongs to, a row order read the wrong way, or an accumulation order that mattered would each exceed the tolerance by orders of magnitude. None appeared."
+  }
 }

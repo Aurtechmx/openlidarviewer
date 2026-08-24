@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * run-grass.mjs — capture GRASS `r.in.xyz` for each frozen scene.
+ * run-grass.mjs: capture GRASS `r.in.xyz` for each frozen scene.
  *
  * An oracle-generation job, not a repository gate. It writes
  * references/grass-rasterize.json, and tests/rasterizeGrassAgreement.test.ts
