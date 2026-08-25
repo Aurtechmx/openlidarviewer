@@ -242,6 +242,27 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
         deps.syncLassoButton();
       },
     },
+    {
+      id: 'tool.lasso-selection-basis',
+      title: 'Lasso selection basis',
+      section: 'Tools',
+      hint: 'Whether a lasso measures every depth along the ray or only the surfaces the camera can see.',
+      keywords: ['occlusion', 'hidden', 'behind', 'depth', 'through', 'visible', 'volume'],
+      run: () => {
+        // Two different measurements of the same drawn shape, so the toast
+        // names the one now armed rather than reporting a setting changed.
+        const next =
+          deps.lassoVolumeTool.selectionBasis === 'occluded-excluded'
+            ? 'through-surfaces'
+            : 'occluded-excluded';
+        deps.lassoVolumeTool.selectionBasis = next;
+        deps.showLassoToast(
+          next === 'occluded-excluded'
+            ? 'Lasso measures visible surfaces only — points hidden behind nearer ones are left out.'
+            : 'Lasso measures all depths along the ray — points behind a surface are included.',
+        );
+      },
+    },
   );
 
   // Workflow recorder — Start / Stop+Save / Open a file.

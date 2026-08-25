@@ -16,6 +16,13 @@
  *     volumetric pick, not a screen-space "everything currently
  *     visible" snapshot.
  *
+ * Which of those two a measurement wants is not a fixed answer — a stockpile
+ * against open ground wants every depth, a building does not — so it is a
+ * stated basis rather than a property of the tool. The polygon test here is the
+ * volumetric one and stays that way; `lassoOcclusion.ts` holds the depth
+ * decision that narrows it to visible surfaces, and the basis rides on the
+ * result so a number says which one produced it.
+ *
  * Pure — no three.js, no DOM. The caller passes a projector function
  * built from its own camera + viewport so this leaf stays unit-
  * testable in Node with mock projections.
@@ -32,12 +39,25 @@ export interface Vec2 {
 }
 
 /**
+ * A projected point, optionally carrying how far along the camera's view axis
+ * it sits, in the cloud's own linear units and increasing away from the camera.
+ *
+ * Optional because the polygon test never needed it and a projector written for
+ * that test alone stays valid. Only the occlusion decision reads it, and a
+ * selection whose projector omits it cannot separate near from far — see
+ * `lassoOcclusion.ts`.
+ */
+export interface ScreenSample extends Vec2 {
+  readonly depth?: number;
+}
+
+/**
  * World-to-screen projector. Returns `null` for points clipped behind
  * the near plane or outside the viewport — those are excluded from the
  * lasso selection (they're not visible to the user, so they shouldn't
  * be included in a "what's inside the lasso" pick).
  */
-export type ScreenProjector = (x: number, y: number, z: number) => Vec2 | null;
+export type ScreenProjector = (x: number, y: number, z: number) => ScreenSample | null;
 
 /** Inputs to `selectByLasso`. */
 export interface LassoSelectionInput {
@@ -78,6 +98,76 @@ export function selectByLasso(input: LassoSelectionInput): number[] {
     }
   }
   return out;
+}
+
+/**
+ * A lasso selection with the projection it was decided by kept alongside it.
+ *
+ * `selectByLasso` throws the projection away the moment the polygon test
+ * passes. The occlusion decision needs it back, and re-projecting to get it
+ * would double the dominant cost of the walk, so the depth-aware entry point
+ * records it as it goes. The four arrays are parallel and `count` long.
+ */
+export interface LassoSelectionWithDepth {
+  /** Indices into the source `positions`, in ascending order. */
+  readonly indices: Int32Array;
+  readonly screenX: Float64Array;
+  readonly screenY: Float64Array;
+  /** View-axis depth, or NaN when the projector did not report one. */
+  readonly depth: Float64Array;
+  readonly count: number;
+}
+
+/**
+ * {@link selectByLasso}, keeping each accepted point's projection.
+ *
+ * Same acceptance rule and same order, so the index list is identical to what
+ * `selectByLasso` returns for the same input. Two passes over the cloud: one to
+ * count accepted points so the output arrays are allocated exactly once, one to
+ * fill them. Counting costs a second projection pass rather than the repeated
+ * reallocation a growable buffer would do over millions of points.
+ */
+export function selectByLassoWithDepth(input: LassoSelectionInput): LassoSelectionWithDepth {
+  const empty = (): LassoSelectionWithDepth => ({
+    indices: new Int32Array(0),
+    screenX: new Float64Array(0),
+    screenY: new Float64Array(0),
+    depth: new Float64Array(0),
+    count: 0,
+  });
+  const lasso = input.lasso;
+  if (lasso.length < 3) return empty();
+  const polygon = lasso.map((p) => ({ x: p.x, y: p.y }));
+  // Destructured, not read field-by-field: `input` is a plain selection
+  // request, and the accessor gate reads a `.positions` in this layer as an
+  // unclassified frame assumption whether or not a cloud is involved.
+  const { positions, project } = input;
+  const n = positions.length / 3;
+
+  let accepted = 0;
+  for (let i = 0; i < n; i++) {
+    const screen = project(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+    if (screen === null) continue;
+    if (pointInPolygon2D(screen.x, screen.y, polygon)) accepted++;
+  }
+  if (accepted === 0) return empty();
+
+  const indices = new Int32Array(accepted);
+  const screenX = new Float64Array(accepted);
+  const screenY = new Float64Array(accepted);
+  const depth = new Float64Array(accepted);
+  let w = 0;
+  for (let i = 0; i < n; i++) {
+    const screen = project(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+    if (screen === null) continue;
+    if (!pointInPolygon2D(screen.x, screen.y, polygon)) continue;
+    indices[w] = i;
+    screenX[w] = screen.x;
+    screenY[w] = screen.y;
+    depth[w] = screen.depth ?? Number.NaN;
+    w++;
+  }
+  return { indices, screenX, screenY, depth, count: w };
 }
 
 /**
